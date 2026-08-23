@@ -1,9 +1,14 @@
 """Unit tests for server-owned shopping-list totals (state-ownership Type B).
 
-These pin that `compute_list_totals` reproduces the browser's old
-`primaryListStats` math (`priceOfLine` / `savingsOfLine` / `chosenOfferFor` in
-`shoppingList.ts`) exactly — moving the cross-line SUM to the server must not
-change the displayed numbers.
+These pin the cross-line aggregation in `compute_list_totals`: what counts
+toward the total, what counts toward "remaining", and how savings accumulate.
+
+They originally also pinned the actual→offer price ladder, because that ladder
+was inlined in `_line_price`. It has since moved up into the handler (it now
+runs actual→historic→offer and lands on `estimated_unit_price`), so the fixture
+below applies it when building a line — the same way the handler does — and
+these tests stay about the aggregation. The ladder's own rules are covered in
+`test_shopping_list_store_breakdown.py` and by the store-card e2e path.
 """
 from datetime import datetime
 from uuid import uuid4
@@ -22,6 +27,21 @@ def _offer(price_now, price_was, *, is_selected=False):
 
 def _line(*, quantity=1, is_ticked=False, actual_unit_price=None,
           selected_product_id=None, offers=()):
+    # Mirror the handler's money ladder so the DTO looks like one the endpoint
+    # would actually emit. No historic rung here — these fixtures have no prior
+    # purchase — so it reduces to actual→offer, which is what these cases mean.
+    _offers = list(offers)
+    # Same rule as `_chosen_offer`: the flagged offer wins, else the first
+    # (the API pre-sorts them cheapest-first).
+    _chosen = next(
+        (o for o in _offers if o.is_selected), _offers[0] if _offers else None,
+    )
+    if actual_unit_price is not None:
+        _estimate, _source = float(actual_unit_price), "actual"
+    elif _chosen is not None and _chosen.price_now is not None:
+        _estimate, _source = _chosen.price_now, "offer"
+    else:
+        _estimate, _source = None, "none"
     return ShoppingListLineDto(
         # `product_id` became required on the DTO when Cart
         # Button Chunk 3 added the standalone-product anchor. These
@@ -33,7 +53,8 @@ def _line(*, quantity=1, is_ticked=False, actual_unit_price=None,
         quantity=quantity, is_ticked=is_ticked, selected_product_id=selected_product_id,
         sequence=0, added_via="manual", added_at=datetime(2026, 1, 1),
         actual_unit_price=actual_unit_price, purchased_store_id=None,
-        purchased_store_name=None, offers=list(offers),
+        purchased_store_name=None, offers=_offers,
+        estimated_unit_price=_estimate, estimate_source=_source,
     )
 
 

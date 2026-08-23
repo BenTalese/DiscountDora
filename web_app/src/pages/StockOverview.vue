@@ -677,6 +677,10 @@
     import StockItemRow from 'src/components/stock/StockItemRow.vue';
     import StockLevelDot from 'src/components/stock/StockLevelDot.vue';
     import ListTransition from 'src/components/transitions/ListTransition.vue';
+    // FU-572: the bulk paths write list membership and levels straight to the
+    // server, so they invalidate the verdict cache themselves — the per-item
+    // helpers that used to do it for them are no longer in the loop.
+    import { invalidateBuyVerdict } from 'src/composables/useBuyVerdict';
     import { useFilterPanelExpanded } from 'src/composables/useFilterPanelExpanded';
     import { useLogPrice } from 'src/composables/useLogPrice';
     import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
@@ -702,7 +706,6 @@
     import { useRecipeStore } from 'src/stores/recipeStore';
     import { useShoppingListStore } from 'src/stores/shoppingListStore';
     import ShoppingListApiService from 'src/services/api/shoppingListApiService';
-    import { useShoppingListActions } from 'src/composables/useShoppingListActions';
     import { useStockItemStore } from 'src/stores/stockItemStore';
     import { useStockLevelStore } from 'src/stores/stockLevelStore';
     import { usePantryBeliefs } from 'src/composables/usePantryBeliefs';
@@ -806,7 +809,6 @@
     const pantryBeliefs = usePantryBeliefs();
     const locationStore = useLocationStore();
     const shoppingListStore = useShoppingListStore();
-    const slActions = useShoppingListActions();
     const shoppingListApi = new ShoppingListApiService();
     const recipeStore = useRecipeStore();
 
@@ -1056,15 +1058,41 @@
         if (bulkSelection.value.size === 0) return;
         bulkBusy.value = true;
         try {
-            // pass silent so per-item toasts don't storm; one summary at the end.
             const ids = [...bulkSelection.value];
-            for (const id of ids) await actions.addToList(id, null, { silent: true });
+            // The first item goes through `addToList` because resolving the
+            // quick-add target is the interactive bit — it may find no draft,
+            // or prompt when several exist. It returns the list it landed on,
+            // which is exactly what the rest of the batch needs (that return
+            // value is documented for this caller). Silent so the per-item
+            // toast doesn't precede the summary.
+            const listId = await actions.addToList(ids[0]!, null, { silent: true });
+            if (!listId) return; // no draft, or the user cancelled the picker.
+
+            const rest = ids.slice(1);
+            let added = 1;
+            let already = 0;
+            if (rest.length > 0) {
+                const result = await shoppingListApi.bulkAddLinesAsync(listId, rest);
+                added += result.added;
+                already += result.already_on_list;
+            }
+            await shoppingListStore.refreshAsync();
+            ids.forEach((id) => invalidateBuyVerdict(id));
             $q.notify({
                 type: 'positive',
                 position: 'bottom-right',
-                message: `Added ${ids.length} item${ids.length === 1 ? '' : 's'} to your list.`,
+                message: already > 0
+                    ? `Added ${added} to your list, ${already} already on it.`
+                    : `Added ${added} item${added === 1 ? '' : 's'} to your list.`,
             });
             cancelBulk();
+        } catch (err) {
+            $q.notify({
+                type: 'negative',
+                position: 'bottom-right',
+                message: 'Could not add all items.',
+                caption: toastCaption(err),
+            });
         } finally {
             bulkBusy.value = false;
         }
@@ -1072,17 +1100,40 @@
 
     async function bulkRestock() {
         if (bulkSelection.value.size === 0) return;
+        // Same "most-stocked level" definition `useStockItemActions.markRestocked`
+        // uses (lowest sequence). Resolved once here rather than per item.
+        const top = stockLevels.value[0];
+        if (!top) {
+            $q.notify({
+                type: 'negative',
+                position: 'bottom-right',
+                message: 'No stock levels configured.',
+            });
+            return;
+        }
         bulkBusy.value = true;
         try {
-            // silent per-item, one summary toast.
             const ids = [...bulkSelection.value];
-            for (const id of ids) await actions.markRestocked(id, { silent: true });
+            const { updated_count } = await stockItemApi.bulkSetLevelAsync(
+                ids, top.stock_level_id,
+            );
+            // The bulk endpoint writes server-side, so the store's rows are
+            // stale until refetched — one refresh for the batch.
+            await stockItemStore.getStockItemsAsync();
+            ids.forEach((id) => invalidateBuyVerdict(id));
             $q.notify({
                 type: 'positive',
                 position: 'bottom-right',
-                message: `Marked ${ids.length} item${ids.length === 1 ? '' : 's'} restocked.`,
+                message: `Marked ${updated_count} item${updated_count === 1 ? '' : 's'} restocked.`,
             });
             cancelBulk();
+        } catch (err) {
+            $q.notify({
+                type: 'negative',
+                position: 'bottom-right',
+                message: 'Could not restock.',
+                caption: toastCaption(err),
+            });
         } finally {
             bulkBusy.value = false;
         }
@@ -1108,53 +1159,44 @@
     }
     async function onBulkMarkAsWasted(reason: WasteReason) {
         if (bulkSelection.value.size === 0) return;
-        // Snapshot ids + their expiry state BEFORE any await — the
-        // store may re-fetch and mutate rows mid-flight (matches the
-        // per-row pattern in StockItemRow.onMarkAsWasted).
-        const targets = [...bulkSelection.value].map((id) => {
-            const row = stockItems.value.find(
-                (i) => i.stock_item_id === id,
-            );
-            return {
-                stock_item_id: id,
-                original_expiry: row?.expiry_date ?? null,
-            };
-        });
+        const ids = [...bulkSelection.value];
         bulkBusy.value = true;
-        const succeeded: Array<{
+        // 2026-08-22 feedback: this used to be up to THREE sequential
+        // requests per selected item (log, clear the expiry, re-read the
+        // row) — the slowest thing on the bulk bar by a wide margin. One
+        // call now does the lot, and the server echoes each item's previous
+        // expiry back so Undo can still put it right.
+        let succeeded: Array<{
             event_id: string;
             stock_item_id: string;
             original_expiry: string | null;
         }> = [];
         try {
-            for (const t of targets) {
-                try {
-                    const { event_id } = await wasteApi.logEventAsync({
-                        stock_item_id: t.stock_item_id,
-                        reason,
-                    });
-                    if (t.original_expiry) {
-                        await stockItemStore.updateStockItemAsync({
-                            stock_item_id: t.stock_item_id,
-                            expiry_date: null,
-                        });
-                    }
-                    succeeded.push({
-                        event_id,
-                        stock_item_id: t.stock_item_id,
-                        original_expiry: t.original_expiry,
-                    });
-                } catch {
-                    // Swallow per-item failure — the summary toast reports
-                    // the discrepancy so a network blip on one item doesn't
-                    // abandon the rest of the batch.
-                }
-            }
+            const result = await wasteApi.logEventsBulkAsync({
+                stock_item_ids: ids,
+                reason,
+            });
+            succeeded = result.events.map((e) => ({
+                event_id: e.event_id,
+                stock_item_id: e.stock_item_id,
+                original_expiry: e.previous_expiry_date,
+            }));
+            // The expiry clears happened server-side, so the store's copies
+            // are stale — one refresh for the whole batch.
+            await stockItemStore.getStockItemsAsync();
+        } catch (err) {
+            $q.notify({
+                type: 'negative',
+                position: 'bottom-right',
+                message: 'Could not log any as wasted.',
+                caption: toastCaption(err),
+            });
+            return;
         } finally {
             bulkBusy.value = false;
         }
         const okCount = succeeded.length;
-        const failCount = targets.length - okCount;
+        const failCount = ids.length - okCount;
         if (okCount === 0) {
             $q.notify({
                 type: 'negative',
@@ -1177,15 +1219,16 @@
                 handler: () => {
                     void (async () => {
                         try {
-                            for (const s of succeeded) {
-                                await wasteApi.deleteEventAsync(s.event_id);
-                                if (s.original_expiry) {
-                                    await stockItemStore.updateStockItemAsync({
-                                        stock_item_id: s.stock_item_id,
-                                        expiry_date: s.original_expiry,
-                                    });
-                                }
-                            }
+                            // Deletes and expiry restores in one call — the
+                            // server only restores where a date was echoed,
+                            // so items that never had an expiry don't gain one.
+                            await wasteApi.deleteEventsBulkAsync({
+                                events: succeeded.map((s) => ({
+                                    event_id: s.event_id,
+                                    restore_expiry_date: s.original_expiry,
+                                })),
+                            });
+                            await stockItemStore.getStockItemsAsync();
                             $q.notify({
                                 type: 'positive',
                                 position: 'bottom-right',
@@ -1257,8 +1300,25 @@
         bulkBusy.value = true;
         try {
             const ids = [...bulkSelection.value];
-            await slActions.addItems(listId, ids.map((id) => ({ stock_item_id: id })));
+            const { added, already_on_list } =
+                await shoppingListApi.bulkAddLinesAsync(listId, ids);
+            await shoppingListStore.refreshAsync();
+            ids.forEach((id) => invalidateBuyVerdict(id));
+            $q.notify({
+                type: 'positive',
+                position: 'bottom-right',
+                message: already_on_list > 0
+                    ? `${added} added, ${already_on_list} already on list.`
+                    : `${added} added.`,
+            });
             cancelBulk();
+        } catch (err) {
+            $q.notify({
+                type: 'negative',
+                position: 'bottom-right',
+                message: 'Could not add all items.',
+                caption: toastCaption(err),
+            });
         } finally {
             bulkBusy.value = false;
         }
@@ -1270,19 +1330,23 @@
         if (!listId) return;
         bulkBusy.value = true;
         try {
-            const list = await stockOverviewExportRemoveHelper(listId);
-            const selected = bulkSelection.value;
-            const linesToDelete = list.lines.filter(
-                (l) => l.stock_item_id && selected.has(l.stock_item_id),
-            );
-            for (const line of linesToDelete) {
-                await shoppingListApi.deleteLineAsync(listId, line.line_id);
-            }
+            // Was: fetch the list detail, work out which lines match the
+            // selection, then DELETE each one. The bulk endpoint takes stock
+            // item ids and is a no-op per item that isn't on the list, so
+            // both the detail read and the loop are gone — `removed_count`
+            // is the honest number.
+            const ids = [...bulkSelection.value];
+            const { removed_count } =
+                await shoppingListApi.bulkRemoveByStockItemAsync(listId, ids);
             await shoppingListStore.refreshAsync();
+            ids.forEach((id) => invalidateBuyVerdict(id));
+            const listName = shoppingListStore.summaries.find(
+                (s) => s.shopping_list_id === listId,
+            )?.display_name ?? 'list';
             $q.notify({
                 type: 'positive',
                 position: 'bottom-right',
-                message: `Removed ${linesToDelete.length} from "${list.display_name ?? list.name ?? 'list'}".`,
+                message: `Removed ${removed_count} from "${listName}".`,
             });
             cancelBulk();
         } catch (err) {
@@ -1297,12 +1361,6 @@
         }
     }
 
-    // Thin wrapper so the remove handler can fetch the list lines without
-    // pulling another API instance into the file scope.
-    async function stockOverviewExportRemoveHelper(listId: string) {
-        return await shoppingListApi.getDetailAsync(listId);
-    }
-
     // ── Bulk move location ───────────────────────────────────────────────
     const moveDialogOpen = ref(false);
     function openMoveDialog() {
@@ -1312,9 +1370,7 @@
         if (bulkSelection.value.size === 0) return;
         bulkBusy.value = true;
         try {
-            for (const id of bulkSelection.value) {
-                await stockItemApi.moveAsync(id, locationId);
-            }
+            await stockItemApi.bulkMoveAsync([...bulkSelection.value], locationId);
             await stockItemStore.getStockItemsAsync();
             $q.notify({
                 type: 'positive',

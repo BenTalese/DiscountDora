@@ -15,6 +15,106 @@ semver — major bumps signal schema or breaking-config changes.
 - **Nutrition now carries vitamins and minerals (2026-08-17).** Answering "what else can be pulled?": a linked food's **Details** table gained an optional **"Vitamins & minerals"** block, collapsed until you open it, with **potassium, calcium, iron, magnesium, zinc, vitamins A, C, D, E and B12, folate, cholesterol, trans fat and the mono/polyunsaturated fats** — fifteen more nutrients, all of which USDA and Open Food Facts already carry. As before, **only what the source actually stated appears**: a nutrient it didn't state has no row, and if a food knows none of them the whole block is absent rather than empty. **Existing foods show nothing here until you re-run the import** under Settings → Admin → Nutrition — the values were never downloaded, so there's nothing to backfill from.
 
 ### Changed
+- **Shopping lists know what things actually cost you (2026-08-23).** A list's
+  prices used to come from linked product offers, so unless you'd gone to the
+  trouble of loading product data your totals were mostly zero. Dora already
+  records what you paid every time you finish a shop — she now **uses it**. A
+  line is priced from **what you last paid for that item**, falling back to an
+  offer only when she's never seen you buy it. The two are never mixed up: the
+  line's price is yours, and an offer sits beside it as its own chip —
+  *"Online offer: $2.90 at Coles"* — which tells you there's a deal without
+  quietly changing what the shop is expected to cost.
+- **A new "Where you'll spend it" card on every list (2026-08-23).** Splits the
+  shop by store: *Coles 11 items · $52.30 · Aldi 4 items · $19.40*, with the
+  headline gap called out — *"$32.90 more at Coles than Aldi"*. It works
+  **without any product data**, because Dora resolves the store from the item's
+  usual store, or from where you actually bought it last time. Where she has no
+  price she says so (*"3 items unpriced, not counted"*) rather than showing a
+  total that's quietly short, and the whole card is absent if you don't use
+  stores at all.
+- **The list header is one card instead of a floating cluster (2026-08-23).**
+  Progress, item count, shop day and the money now sit together in a single
+  card that's always there — it used to be a ring and three lines of text
+  hovering at the top-right that vanished entirely when the list was empty,
+  which is exactly when a new list needs explaining. It also says when the
+  total is an estimate: *"2 from what you last paid"*.
+- **Order your list four ways, and reorder it with your thumb (2026-08-23).**
+  The grouping control moved out of the toolbar (where it was the main reason
+  the toolbar overflowed on a phone) and onto the list itself, with a fourth
+  option: **Location · Group · Store · Manual**. Anything without a value for
+  the chosen field drops into a trailing **Unsorted** section instead of
+  disappearing, and an option nothing on the list can use is greyed out with the
+  reason rather than doing nothing when tapped. Manual ordering now has **up/down
+  arrows** next to the drag handle, so reordering works on a touchscreen.
+- **Mid-shop, ticked items leave the list (2026-08-23).** They used to sink to
+  the bottom of their section, still there, still to scroll past. Now the list
+  shrinks as you shop, so what's left is what you can see.
+- **Offline is read-only, and says so (2026-08-23).** Dora used to buffer a
+  handful of changes when she couldn't reach the server and replay them later.
+  In practice that covered only six kinds of change, only if you'd already loaded
+  the page and didn't reload, and the banner had to keep walking back what it
+  promised. It's gone. When you're offline — or Dora's server is unreachable —
+  **you can still look around** at everything recently loaded, and the banner
+  says exactly that: *"Can't reach Dora — you can look around, but not make
+  changes."* Anything you try to change fails there and then, undoes itself, and
+  tells you, instead of being stored up and quietly promised. No more "queued"
+  counter, and no more wondering whether that tick actually landed.
+
+### Fixed
+- **Signing out now clears cached pantry data from the device (2026-08-23).**
+  Pages you'd visited were cached so the app still works without a connection —
+  but that cache survived signing out, so on a shared device the next person to
+  sign in could be shown the previous person's pantry, lists and recipes. It's
+  now wiped on sign-out and whenever a session ends.
+- **Sous Chef stops clipping the start of what she says (2026-08-23).** Three
+  separate causes, all in the same complaint. The browser voice was being
+  cancelled and re-queued in the same breath, which Chrome punishes by eating a
+  random amount of the front of the sentence. The neural voice could start
+  playing before it had finished decoding. And the microphone, which reopens
+  itself every time it goes quiet, was grabbing the audio focus at the exact
+  moment she started talking — so she got cut off by her own ears. The mic now
+  waits until she's finished before reopening, which does **not** cost you
+  interrupting: saying "next" over the top of her still works, because the mic
+  that's already open keeps listening. If it's still clipping, the "?" button now
+  tells you which voice is actually speaking — the neural one or the browser
+  fallback — which is the first thing worth knowing.
+- **Sous Chef reads you the first step (2026-08-23).** With the voice on,
+  entering cook mode said nothing at all until you pressed Next — so the one
+  step you're most likely to want read aloud, before your hands are dirty, was
+  the one step it skipped. It now announces step 1 as soon as the recipe loads.
+  If you tap through to step 2 before it's ready, it stays quiet rather than
+  talking over you.
+
+### Changed
+- **Image quality is its own settings page (2026-08-23).** How Dora encodes the
+  photos you upload — the quality dial and the longest-edge cap — was living at
+  the bottom of **Backup & restore**, a page about snapshotting your install. It
+  now has its own entry, **Image quality**, under Settings → Admin → Install,
+  next to Region & locale and Hosting. Nothing about the settings themselves
+  changed: same two dials, same defaults, still applied only to new uploads with
+  existing images left alone.
+- **Bulk actions on the stock list are one trip to the server, not one per item
+  (2026-08-22).** Selecting twenty things and logging them as waste used to send
+  up to sixty requests, one after another, each waiting for the last — the toast
+  arrived long after you'd moved on. Every action on the bulk bar now sends a
+  single request for the whole selection: **log waste** (and its **Undo**), **add
+  to your list**, **add to a chosen list**, **mark restocked**, **remove from
+  list** and **move**. Nothing about what they *do* has changed — an item already
+  on the list is still skipped rather than duplicated, restocking still records
+  the level change and can still auto-add, and Undo still puts each item's expiry
+  date back exactly where it was (and doesn't invent one for items that never had
+  a date).
+- **The expiry menu tells you the expiry date (2026-08-22).** Opening the expiry
+  shortcuts on a stock row showed three "push by N days" options with nothing
+  saying what they'd be pushing *from*. The date now sits at the top of the menu,
+  above a divider, in your region's format — and the menu **stays open** as you
+  push, so you can watch the date move and tap again to stack another few days.
+  Clear expiry and Log waste still close it.
+- **The "this level might be wrong" marker is easier to spot (2026-08-22).** The
+  dashes used to sit on the edge of the level box, eating into the colour. They
+  now form a ring just outside it, with a small gap — the level's colour is a
+  solid block again, and the marker reads as something added rather than
+  something missing.
 - **The stock item page, ten small things (2026-08-21).** The **buy verdict** card now
   wears the same shape as the "Dora thinks" card above it — one surface instead of a card
   inside a card, tinted by the verdict, with the summary line as the disclosure and the

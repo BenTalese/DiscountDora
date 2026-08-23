@@ -114,6 +114,31 @@ export default class StockItemApiService {
             destination_location_id: destinationLocationId
         });
 
+    /** Bulk-bar counterparts to `moveAsync` / the level PATCH. One request
+     *  for the whole selection instead of one per item — see
+     *  `dora_api/features/stock_items/bulk_operations.py` for why the server
+     *  still runs the same per-item rules underneath. */
+    bulkMoveAsync = async (
+        stockItemIds: string[],
+        destinationLocationId: string | null,
+    ): Promise<{ moved_count: number; missing_ids: string[] }> =>
+        await this.httpClient.post<{ moved_count: number; missing_ids: string[] }>(
+            '/stock-items/bulk-move',
+            {
+                stock_item_ids: stockItemIds,
+                destination_location_id: destinationLocationId,
+            },
+        );
+
+    bulkSetLevelAsync = async (
+        stockItemIds: string[],
+        stockLevelId: string,
+    ): Promise<{ updated_count: number; failed_ids: string[] }> =>
+        await this.httpClient.post<{ updated_count: number; failed_ids: string[] }>(
+            '/stock-items/bulk-set-level',
+            { stock_item_ids: stockItemIds, stock_level_id: stockLevelId },
+        );
+
     addSubstituteAsync = async (
         stockItemID: string,
         substituteID: string,

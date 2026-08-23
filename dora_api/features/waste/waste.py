@@ -301,6 +301,214 @@ def delete_waste_event(event_id: UUID):
     return no_content()
 
 
+# ── /api/waste/events/bulk ───────────────────────────────────────────────
+#
+# 2026-08-22 owner feedback: "bulk actions seem to be performed one item at
+# a time and it can be slow. noticed this on log waste." Bulk waste was the
+# worst offender in the app — the SPA fired up to THREE sequential requests
+# per selected item (log the event, PATCH the expiry away, re-read the row),
+# so a 20-item selection cost 60 round-trips before the toast appeared.
+#
+# These two endpoints collapse that to one request each way. They orchestrate
+# the existing single-item handlers rather than writing their own SQL: waste
+# capture and expiry clearing both have side effects with owners
+# (`StockItemExpiryEvent` emission lives in `UpdateStockItemHandler`), and a
+# second implementation of "clear an expiry" is exactly the drift R-003
+# exists to stop. What the caller saves is latency, which is what was slow.
+
+_MAX_BULK_IDS = 500
+
+
+class BulkLogWasteRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    stock_item_ids: List[UUID] = Field(min_length=1, max_length=_MAX_BULK_IDS)
+    reason: str = Field(min_length=1, max_length=32)
+    # Matches the single-item row flow, which clears the expiry once the
+    # thing is in the bin. Off is supported for callers that only want the
+    # signal recorded.
+    clear_expiry: bool = True
+
+
+@dataclass(slots=True)
+class BulkLoggedEvent:
+    event_id: UUID
+    stock_item_id: UUID
+    # The expiry this call cleared, or None if there was nothing to clear.
+    # Echoed back so the Undo path can put it right where it was — the
+    # event row itself doesn't store it.
+    previous_expiry_date: str | None
+
+
+@dataclass(slots=True)
+class BulkLogWasteResponse:
+    invalid_reason: bool = False
+    logged: List[BulkLoggedEvent] = None  # type: ignore[assignment]
+    missing_ids: List[UUID] = None  # type: ignore[assignment]
+
+    def __post_init__(self):
+        if self.logged is None:
+            self.logged = []
+        if self.missing_ids is None:
+            self.missing_ids = []
+
+
+class BulkLogWasteHandler:
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
+
+    def handle(self, request: BulkLogWasteRequest) -> BulkLogWasteResponse:
+        if request.reason not in WASTE_REASON_VALUES:
+            return BulkLogWasteResponse(invalid_reason=True)
+
+        # Deferred so the module-level import graph stays acyclic —
+        # `update_stock_item` reaches into shopping lists for its auto-add
+        # hook, and this module is imported from there indirectly.
+        from dora_api.features.stock_items.update_stock_item import (
+            UpdateStockItemHandler, UpdateStockItemRequest,
+        )
+
+        log_handler = LogWasteEventHandler(self.repository)
+        update_handler = UpdateStockItemHandler(self.repository)
+        logged: list[BulkLoggedEvent] = []
+        missing: list[UUID] = []
+
+        for stock_item_id in request.stock_item_ids:
+            # Read the expiry BEFORE logging: the clear below wipes it, and
+            # the Undo payload needs the old value.
+            item: StockItem | None = self.repository.get(StockItem).by_id(stock_item_id)
+            if item is None:
+                missing.append(stock_item_id)
+                continue
+            previous_expiry = item.expiry_date
+
+            response = log_handler.handle(LogWasteEventRequest(
+                stock_item_id=stock_item_id,
+                reason=request.reason,
+            ))
+            if response.event_id is None:
+                missing.append(stock_item_id)
+                continue
+
+            if request.clear_expiry and previous_expiry is not None:
+                update_handler.handle(
+                    UpdateStockItemRequest(expiry_date=None), stock_item_id,
+                )
+
+            logged.append(BulkLoggedEvent(
+                event_id=response.event_id,
+                stock_item_id=stock_item_id,
+                previous_expiry_date=(
+                    previous_expiry.isoformat() if previous_expiry else None
+                ),
+            ))
+
+        return BulkLogWasteResponse(logged=logged, missing_ids=missing)
+
+
+@WASTE_ROUTER.route("/events/bulk", methods=["POST"])
+@has_request_body(BulkLogWasteRequest)
+def bulk_log_waste_events():
+    _Logger = logging.getLogger(__name__)
+    _Request: BulkLogWasteRequest = get_request_body()
+    _Response = BulkLogWasteHandler(SqlAlchemyRepository()).handle(_Request)
+    if _Response.invalid_reason:
+        return bad_request(
+            f"Invalid reason '{_Request.reason}'. Allowed: "
+            f"{sorted(WASTE_REASON_VALUES)}"
+        )
+    _Logger.info(
+        "Bulk-logged %d of %d waste event(s) (reason=%s)",
+        len(_Response.logged), len(_Request.stock_item_ids), _Request.reason,
+    )
+    return ok({
+        "events": [
+            {
+                "event_id": str(e.event_id),
+                "stock_item_id": str(e.stock_item_id),
+                "previous_expiry_date": e.previous_expiry_date,
+            }
+            for e in _Response.logged
+        ],
+        "missing_ids": [str(i) for i in _Response.missing_ids],
+    })
+
+
+# ── /api/waste/events/bulk-delete ────────────────────────────────────────
+#
+# The Undo half. POST rather than DELETE because it carries a body, and
+# idempotent for the same reason the single-item delete is: the toast can
+# fire twice. Restoring the expiry is the caller's choice per event — it
+# passes back what the bulk log told it, so an item that had no expiry
+# before doesn't grow one on undo.
+
+class BulkDeleteWasteEntry(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    event_id: UUID
+    restore_expiry_date: date | None = None
+
+
+class BulkDeleteWasteRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    events: List[BulkDeleteWasteEntry] = Field(min_length=1, max_length=_MAX_BULK_IDS)
+
+
+@dataclass(slots=True)
+class BulkDeleteWasteResponse:
+    deleted_count: int = 0
+    restored_count: int = 0
+
+
+class BulkDeleteWasteHandler:
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
+
+    def handle(self, request: BulkDeleteWasteRequest) -> BulkDeleteWasteResponse:
+        from dora_api.features.stock_items.update_stock_item import (
+            UpdateStockItemHandler, UpdateStockItemRequest,
+        )
+
+        update_handler = UpdateStockItemHandler(self.repository)
+        deleted = 0
+        restored = 0
+
+        for entry in request.events:
+            event: StockItemWasteEvent | None = (
+                self.repository.get(StockItemWasteEvent).by_id(entry.event_id)
+            )
+            if event is None:
+                # Already gone — no-op, same as the single-item delete.
+                continue
+            stock_item_id = event.stock_item_id
+            self.repository.remove(event)
+            self.repository.save_changes()
+            deleted += 1
+
+            if entry.restore_expiry_date is not None and stock_item_id is not None:
+                update_handler.handle(
+                    UpdateStockItemRequest(expiry_date=entry.restore_expiry_date),
+                    stock_item_id,
+                )
+                restored += 1
+
+        return BulkDeleteWasteResponse(deleted_count=deleted, restored_count=restored)
+
+
+@WASTE_ROUTER.route("/events/bulk-delete", methods=["POST"])
+@has_request_body(BulkDeleteWasteRequest)
+def bulk_delete_waste_events():
+    _Logger = logging.getLogger(__name__)
+    _Request: BulkDeleteWasteRequest = get_request_body()
+    _Response = BulkDeleteWasteHandler(SqlAlchemyRepository()).handle(_Request)
+    _Logger.info(
+        "Bulk-deleted %d of %d waste event(s); restored %d expiry date(s)",
+        _Response.deleted_count, len(_Request.events), _Response.restored_count,
+    )
+    return ok({
+        "deleted_count": _Response.deleted_count,
+        "restored_count": _Response.restored_count,
+    })
+
+
 # ── /api/waste/insights ──────────────────────────────────────────────────
 
 # Slim shape (C-waste): two answers only — what gets wasted often, and

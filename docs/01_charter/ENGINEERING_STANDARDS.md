@@ -1811,6 +1811,125 @@ exceptions, which still must be commented) · **Source** (where it was establish
   verify pane. Extends D-007/B10, which state the same thing for *dismissal* of
   a blocking surface; this rule generalises it to all state.
 
+### R-051 — A bulk endpoint loops the single-item handler; it removes round-trips, not rules
+- **Rule:** when a client is looping an API call over a selection, the fix is a
+  bulk endpoint — and that endpoint **calls the existing single-item handler**
+  once per item, in-process, rather than re-deriving the operation as a set
+  query. Write the set query only when the operation is a bare field assignment
+  with **no** history rows, timestamps, derived events or hooks. Never duplicate
+  a rule that already has an owner just to make a batch faster (this is R-003
+  applied to the bulk case). Where undoing the batch needs to know what changed,
+  the endpoint **echoes that state back**; the client does not snapshot it.
+  Cap the id list explicitly (`Field(min_length=1, max_length=N)`), report
+  per-item misses as data (`missing_ids` / `failed_ids`) rather than failing the
+  batch, and fail the whole request only for an error that is the same answer for
+  every item (an unknown target list, an unknown level).
+- **Why:** the slowness a user reports is **latency** — N sequential HTTP
+  round-trips, each with its own await — not the database work, which is
+  invisible to them. Collapsing the round-trips fixes what was reported; rewriting
+  the rules as set queries risks the semantics for a win nobody asked for. Bulk
+  waste was the worst case: three requests per item, so a 20-item selection sent
+  60 serial requests, and the "obvious" set-shaped rewrite would have needed its
+  own copy of expiry-event classification, level-change history, consumption
+  recording and the auto-add hook.
+- **Violation signal:**
+  - A `for` loop in a `.vue` file or composable with an `await api.…` inside it.
+  - A bulk handler that reads or writes columns the single-item handler manages
+    (a timestamp, a history table, an event row).
+  - A bulk endpoint that returns only a count when its caller needs to undo it.
+- **Carve-outs (must be commented, naming the rule):**
+  - A pure set write with no side effects — `bulk-move` (one FK), `bulk-tick`
+    (one boolean), `stocktake/bulk-check` (a single `UPDATE … WHERE id IN`).
+  - A caller whose per-item command is richer than the bulk request model keeps
+    looping until the model is widened; do **not** branch inside the caller on
+    "is this batch simple enough" (R-019).
+- **Source:** ADR-047; stock-overview bulk bar, 2026-08-22. Six endpoints added
+  (`stock-items/bulk-move`, `stock-items/bulk-set-level`, `waste/events/bulk`,
+  `waste/events/bulk-delete`, `shopping-lists/<id>/lines/bulk-add`,
+  `shopping-lists/<id>/lines/bulk-remove-by-stock-item`); commits-per-item
+  remains open as FU-713.
+
+### R-052 — Offline is read-only: cache reads, never buffer writes
+- **Rule:** when the server is unreachable, the client may serve **cached reads**
+  and must **refuse writes**. A failed mutation surfaces as a failure — the
+  optimistic UI rolls back and the user is told — and is never stored for later
+  replay. Do not add a mutation queue, a pending-changes ledger, client-generated
+  entity ids for offline creates, or client-side conflict resolution. Copy must
+  not promise syncing: the banner says what is true ("you can look around, but
+  not make changes") and nothing more. A cache that holds user content is
+  **evicted on sign-out and on 401**, because it is keyed by URL and knows
+  nothing about who it belonged to.
+- **Why:** the queue this replaced was 372 lines plus 649 lines of tests serving
+  **three** call sites, and it carried hazards none of those three needed:
+  replay was at-least-once with no server-side idempotency (the
+  `X-Request-Id: replay-…` header was sent and ignored), the conflict pile was
+  invisible to the user, and it had already failed silently once — `replayOnce`
+  used bare axios without the CSRF header, so every drain 403'd, was
+  misclassified as non-network, and burned the queue into conflicts that nothing
+  surfaced. Reads are a different risk class entirely: no conflict semantics, and
+  the worst case is staleness. So keep the half with no downside and delete the
+  half that can lose data. This is also the Anti-creep tiebreak applied to a real
+  case — the honest small feature beat the impressive one.
+- **Violation signal:**
+  - A `catch` that swallows a network error and reports success to the UI.
+  - Any localStorage/IndexedDB key holding pending mutations, deltas or conflicts.
+  - Copy containing "will sync", "queued", or "when you're back online".
+  - A retry/backoff policy applied to POST/PATCH/PUT/DELETE (a write that may
+    already have landed must not be replayed blind — see `axiosHttpClient`).
+- **Carve-outs (must be commented, naming the rule):**
+  - **Read caching is explicitly in scope**, not a carve-out: the `NetworkFirst`
+    rule over `/api/**` GETs in `quasar.config.ts` is the offline story.
+  - Genuinely idempotent, user-invisible telemetry (client logs) may retry.
+  - If a future surface truly needs offline writes, it needs server-side
+    idempotency keys **first**, plus its own ADR reversing this one — not a
+    quiet queue reintroduced beside it.
+- **Source:** owner decision 2026-08-23, after a measurement of the existing
+  queue (see ADR-048). Removed `useOfflineQueue.ts`, both its spec files, the
+  three `tryWithQueue` call sites and the banner's queued-count; added
+  `apiResponseCache.clearApiResponseCache()` on logout/401. Reversed FU-718
+  ("widen the offline queue"), which had been logged in the opposite direction
+  before the code was counted.
+
+### R-053 — A derived display value ships with its provenance, and is resolved once, server-side
+- **Rule:** when a displayed value is chosen by a **ladder** (try A, else B, else
+  C — a "prefill", "estimate", "resolved store", "effective date", "display
+  name"), the server resolves it and returns **both the value and a field naming
+  which rung produced it**. The client renders; it does not re-run the ladder,
+  and it does not infer the source by testing which input happens to be non-null.
+  Aggregates over those values are server-owned too (R-003) — a client that sums
+  a ladder it did not compute cannot be trusted to agree with the server that did.
+- **Why:** ladders are domain rules, so a client copy is a second definition that
+  drifts (R-003). Two concrete costs, both real here. First, the client's copy of
+  the shopping-line ladder was `actual → offer`, which **hard-required product
+  data**: a user who had never linked a product saw `$0.00` totals even though
+  Dora had recorded exactly what they last paid — the rule's *inputs* silently
+  became a feature gate. Second, without a source field the UI cannot be honest:
+  "$5.50" and "~$5.50, what you last paid" are different claims, and a client
+  reduced to guessing from `actual_unit_price != null` will get it wrong the
+  moment a rung is inserted. Provenance is also what lets a *later* rung be added
+  without touching a single call site.
+- **Violation signal:**
+  - A client function whose body is an `if/else-if` chain over DTO fields
+    reproducing a precedence the server already applied.
+  - A DTO exposing every rung's raw input but no resolved value (the client is
+    being asked to decide), or a resolved value with no source (the UI is being
+    asked to guess).
+  - UI copy that states a number's origin based on a null-check rather than a
+    field the server set.
+- **Carve-outs (must be commented, naming the rule):**
+  - **Pure display math on an already-resolved value stays on the client** —
+    `estimated_unit_price × quantity` is formatting, not a domain rule
+    (state-ownership Type C). The line is: choosing *which* number, server;
+    multiplying or formatting *that* number, client.
+- **Established by:** the shopping-list money ladder
+  (`actual → last paid → offer`) and store ladder
+  (`purchased → usual → last-paid's store → offer's store`), 2026-08-23. Note the
+  two ladders order intent and history **oppositely** on purpose — history beats
+  intent for money ("what you really paid" outranks an advertised price), intent
+  beats history for store ("where I plan to buy" outranks where I last did) —
+  which is exactly the kind of decision that cannot survive being re-derived in a
+  second place. See ADR-049.
+
 ## ADR process (evaluate every task)
 
 At the end of each work unit, ask: **did this task make or rely on a decision that
@@ -3102,6 +3221,121 @@ one-off, or purely product/UX decisions (those go to the Charter check + worklog
   R-050 makes checkable. Does not change the reduced-motion kill-switch, which
   is already CSS-only and paint-independent.
 - **Promotes rule:** R-050.
+
+### ADR-047 — A bulk endpoint orchestrates the single-item handlers; it buys round-trips, not commits (promotes R-051)
+- **Date / task:** 2026-08-22 (stock-overview bulk-action work)
+- **Status:** accepted
+- **Context:** Owner feedback — "bulk actions seem to be performed one item at a
+  time and it can be slow. noticed this on log waste." Every action on the stock
+  overview's bulk bar was an N-request loop issued from the browser, sequentially
+  awaited; bulk waste was three requests per item (log, PATCH the expiry away,
+  re-read the row), so twenty items cost sixty serial round-trips. The obvious
+  fix — a bulk endpoint that writes the set directly — was the wrong one for most
+  of these actions. A level change is not a column write: it stamps
+  `stock_level_last_updated` and `last_checked_at`, appends a `StockLevelChange`,
+  may record a `ConsumptionEvent`, and may fire the auto-add hook. Clearing an
+  expiry emits a classified `StockItemExpiryEvent`. Removing a list line cascades
+  nested product lines. A set-shaped rewrite would have been a second copy of
+  every one of those rules, and the copies drift the first time either side moves.
+- **Decision:** a bulk endpoint's job is to remove **round-trips**, not to
+  re-derive the domain. It loops the existing single-item handler in-process
+  unless the operation is genuinely a bare field write with no history, no
+  timestamps and no hooks — `bulk-move` qualifies and is two queries and one
+  commit; `bulk-set-level`, `bulk-add`, `bulk-remove-by-stock-item` and the two
+  waste endpoints do not, and delegate. Where the client needs state back to undo
+  the batch (each item's cleared expiry), the endpoint echoes it rather than the
+  client snapshotting it — the server is the one that knows what it changed.
+- **Consequences:** the latency win is real and complete (N round-trips → 1),
+  the database work is not — a 40-item bulk restock is still 40 commits, logged
+  as FU-713 with the fix named (an explicit `commit: bool` on the inner handlers,
+  never an implicit unit-of-work). Behaviour is identical to the per-item path by
+  construction, so the existing per-item tests remain the coverage for the rules
+  and the bulk tests only pin the new contract (counts, echoed ids, undo payload).
+  Callers that pass richer per-item commands than the bulk request model accepts
+  keep looping until the model is widened — see FU-714; branching on "is this
+  batch simple enough" was rejected as the implicit cleverness R-019 forbids.
+- **Promotes rule:** R-051.
+
+### ADR-048 — Offline is read-only; the write queue is deleted, not widened (promotes R-052)
+- **Date / task:** 2026-08-23 (owner feedback: "can we make the majority of
+  actions work offline?")
+- **Status:** accepted. **Reverses the direction of FU-718.**
+- **Context:** the owner asked to *widen* offline support so the banner could
+  promise that most actions sync on reconnect. Costing that out first is what
+  changed the answer. The existing `useOfflineQueue` was **372 lines plus 649
+  lines of spec for three call sites** (two in `stockItemStore`, one in
+  `ShoppingListDetail`) — six declared mutation kinds, three used. Widening it
+  meant taking on server-side idempotency keys, client-generated entity ids so
+  creates could queue, chained create-then-edit replay, and a conflict UI. And
+  the existing queue was not merely unfinished, it was hazardous: replay was
+  at-least-once against a server that ignored the `X-Request-Id` it was already
+  sending, the conflict pile had no UI at all, and it had already failed
+  silently once (bare axios without the CSRF header → every drain 403'd →
+  misclassified as non-network → the whole queue burned into invisible
+  conflicts). Meanwhile the *read* side — a `NetworkFirst` Workbox rule over
+  `/api/**` GETs — was quietly doing the valuable work with no conflict
+  semantics at all. The two halves had opposite risk profiles.
+- **Decision:** offline is **read-only**. Keep and own the read cache; delete
+  the write queue entirely. Writes fail loudly with rollback. The banner states
+  the constraint and promises nothing. Because the read cache now *is* the
+  offline story, its cross-user leak stopped being theoretical and was fixed in
+  the same unit (evict on sign-out and on 401).
+- **Consequences:** loses mid-shop ticking without signal — the one genuinely
+  valuable offline write, and the reason the queue existed. Accepted: it only
+  ever worked in a narrow window (already in the app, page data loaded, no
+  reload), the honest alternative was a promise the code could not keep, and the
+  dominant real-world failure here is *seconds* of VPN intermittency, which
+  retry and a read cache absorb without a queue. Also deletes the "which
+  mutation kinds are queueable?" question that every new write surface used to
+  have to answer. Anyone reversing this needs idempotency keys first and an ADR
+  superseding this one — not a queue quietly reintroduced beside it.
+- **Promotes rule:** R-052.
+
+### ADR-049 — Price and store are resolved by a server-side ladder that ships its own provenance (promotes R-053)
+- **Date:** 2026-08-23. **Context:** the shopping-list redesign needed a per-line
+  price and a per-line store for a new "where you'll spend it" breakdown. Both
+  had more than one possible source, and the owner's constraint was that
+  **product offers are a power-user feature most installs will never populate** —
+  so a design that only worked with scraped product data was not acceptable.
+- **Decision:** resolve both on the server as explicit ladders, and return the
+  resolved value *plus* the rung that produced it.
+  - **Money:** `actual_unit_price` → the item's **last actual purchase** →
+    the chosen offer → nothing. Exposed as `estimated_unit_price` +
+    `estimate_source`.
+  - **Store:** `purchased_store_id` → the item's **`usual_store_id`** → the
+    **store of the last purchase** → the chosen offer's store → nothing. Exposed
+    as `resolved_store_id` / `resolved_store_name`.
+  - `by_store[]` (the aggregate) is server-owned, and reports `line_count` and
+    `priced_line_count` separately so the UI can admit an unpriced remainder
+    rather than showing a total that is quietly short.
+- **Why this shape:** two pieces of the domain already existed and were being
+  wasted. `StockItemPriceObservation` carries a `store_id` and is **auto-harvested
+  from every finished list**, so two shops give any user their own
+  store-attributed price history with no products involved; and
+  `StockItem.usual_store_id` already existed with a comment saying it drives
+  shopping-list grouping. The existing till prefill *already* ranked "from your
+  last receipt" above "from {store} offer" — history-first was established
+  precedent, so the ladders extend it rather than inventing a rule.
+- **Why the two ladders disagree about intent vs history:** money asks "what will
+  this cost me", where what you actually paid beats an advertised price; store
+  asks "where do I *plan* to buy this", where an explicit tag beats where you
+  happened to shop last time. The orders are opposite **on purpose**, which is
+  the strongest argument for resolving them in exactly one place.
+- **Offers are never the line's displayed price.** They render as their own
+  *"Online offer: $2.90 at Coles"* chip and contribute to no total, so the store
+  card and budget stay in one currency: money the user has actually spent. The
+  offer survives only as the ladder's **last resort** when there is no purchase
+  history at all — without it, a products-only user with no history would see
+  zero totals.
+- **Consequences:** `priceOfLine` (client) and `_line_price` (server) both stopped
+  re-deriving the ladder and now read `estimated_unit_price`; three test suites
+  that pinned the old `actual → offer` precedence at the client/aggregate layer
+  were rewritten rather than patched, because the rule moved rather than changed.
+  Adding a rung later (a recency guard on history, say) is now a one-file change
+  with no call-site churn. **Amending a finished list must also update the
+  harvested observation** (joined by `shopping_list_line_id`) or a corrected typo
+  keeps poisoning every future estimate — tracked as FU-726.
+- **Promotes rule:** R-053.
 
 ## Known fixes / things to try
 

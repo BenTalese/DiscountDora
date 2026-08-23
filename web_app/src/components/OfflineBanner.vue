@@ -11,12 +11,7 @@
                 size="18px"
                 class="q-mr-sm"
             />
-            <span class="offline-banner-text">
-                {{ message }}
-                <span v-if="queuedCount > 0" class="offline-banner-queue">
-                    · {{ queuedCount }} change{{ queuedCount === 1 ? '' : 's' }} queued
-                </span>
-            </span>
+            <span class="offline-banner-text">{{ message }}</span>
             <q-space />
             <BaseButton
                 variant="ghost"
@@ -34,26 +29,19 @@
 <script lang="ts" setup>
     import BaseButton from 'src/components/BaseButton.vue';
     import { useNetworkStatus } from 'src/composables/useNetworkStatus';
-    import { useOfflineQueue } from 'src/composables/useOfflineQueue';
     import { computed } from 'vue';
 
     const { online, apiReachable, isFullyOnline, reconnecting, retryNow } =
         useNetworkStatus();
-    const { queuedCount } = useOfflineQueue();
 
-    // Copy is deliberately narrow. It used to promise "Some actions are
-    // queued" / "Most actions still work", which overstated it — only six
-    // mutation kinds queue (stock levels, opened/restocked, expiry
-    // push/clear, ticking a list line: the mid-shop set). Everything else
-    // fails loudly on purpose, and telling someone their new recipe will
-    // "sync later" when it won't is worse than saying nothing.
+    // Offline is READ-ONLY (owner decision 2026-08-23). The write queue that
+    // used to back this banner is gone, so the copy makes no promise about
+    // syncing — it says what's true (you can look, you can't change) and
+    // nothing more. Two variants because the distinction is actionable: your
+    // own connection is your problem to fix, an unreachable server is Dora's.
     const message = computed(() => {
-        if (!online.value) {
-            return "You're offline. Stock changes and ticking items off a list still work — they'll sync when you're back.";
-        }
-        if (!apiReachable.value) {
-            return "We can't reach the server. Stock changes and ticking items off a list still work — they'll sync when we reconnect.";
-        }
+        if (!online.value) return "You're offline — you can look around, but not make changes.";
+        if (!apiReachable.value) return "Can't reach Dora — you can look around, but not make changes.";
         return '';
     });
 </script>
@@ -77,10 +65,6 @@
     .offline-banner-text {
         flex: 1;
         min-width: 0;
-    }
-    .offline-banner-queue {
-        opacity: 0.85;
-        font-weight: 400;
     }
     .offline-banner-enter-active,
     .offline-banner-leave-active {

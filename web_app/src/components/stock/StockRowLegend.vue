@@ -58,7 +58,7 @@
                     aria-hidden="true"
                 />
                 <span class="stock-row-legend__text">
-                    Dashed edge — this level may be out of date. Open the level
+                    Dashed ring — this level may be out of date. Open the level
                     picker and it says why: Dora disagrees with it, or it's due
                     a stocktake count.
                 </span>
@@ -170,12 +170,23 @@
     }
     /* Same recipe as `.stock-row__level-btn--uncertain`, at legend scale, on
        a stocked-green fill so it's clear the marker rides an ordinary level
-       rather than replacing it. Stays at 2px where the row went to 3px: the
-       swatch is 16px against the row's 32px, and a 3px dashed border on a
-       16px box is nearly solid. */
+       rather than replacing it. Like the row, the dashes sit on a ring
+       OUTSIDE the swatch with a gap (2026-08-22 feedback), so the fill stays
+       an unbroken block. Halved against the row — 2px dashes, 1px gap, on a
+       16px swatch against the row's 32px — because the row's 3px/2px on a
+       box this small reads as nearly solid. The extra 3px of bleed is why
+       the swatch needs its own margin below. */
     .stock-row-legend__swatch--uncertain {
         background: var(--q-positive);
+        position: relative;
+        margin: 3px;
+    }
+    .stock-row-legend__swatch--uncertain::after {
+        content: '';
+        position: absolute;
+        inset: -3px;
         border: 2px dashed color-mix(in srgb, var(--text-primary) 65%, transparent);
+        border-radius: calc(var(--radius-sm, 4px) + 3px);
     }
 
     /* Row-treatment swatches — a mini row (28×18) carrying the same

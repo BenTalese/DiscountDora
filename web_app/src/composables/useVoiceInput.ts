@@ -67,7 +67,24 @@ export type UseVoiceInputOptions = {
     /** Fires once per final result. The caller decides what to do with
      *  it (append to a prompt, dispatch a command, etc.). */
     onFinal?: (text: string) => void;
+    /** Continuous mode only. When this returns true, hold off the automatic
+     *  `onend` restart until it goes false (or the safety cap elapses).
+     *
+     *  Cook mode passes speech-output's `busy` (FU-723): on Android, *opening*
+     *  the mic shifts audio focus, and a recognizer restart landing in the same
+     *  moment a clip starts playing can eat the front of that clip. Deferring
+     *  the restart — rather than stopping the recognizer while Dora talks —
+     *  keeps **barge-in** working: an already-open mic still hears "next" over
+     *  the top of her narration, which is the whole point of hands-free. Only
+     *  the re-open is deferred. */
+    deferRestartWhile?: () => boolean;
 };
+
+/** Safety cap on `deferRestartWhile`. If a caller's predicate never goes false
+ *  (a stuck utterance, a promise that never settles), restart anyway rather
+ *  than leaving the user's mic dead for the rest of the session. */
+const RESTART_DEFER_MAX_MS = 10_000;
+const RESTART_DEFER_POLL_MS = 150;
 
 export function useVoiceInput(options: UseVoiceInputOptions = {}) {
     const continuous = options.continuous ?? false;
@@ -90,6 +107,42 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
     // `intentionalStop` distinguishes a user-requested stop from a
     // browser-side `onend` (which we restart in continuous mode).
     let intentionalStop = false;
+
+    // Pending deferred-restart timer, so a user-requested stop (or a teardown)
+    // can cancel a restart that hasn't fired yet.
+    let restartTimer: ReturnType<typeof setTimeout> | null = null;
+
+    function clearRestartTimer() {
+        if (restartTimer !== null) {
+            clearTimeout(restartTimer);
+            restartTimer = null;
+        }
+    }
+
+    /** Poll `deferRestartWhile` until it clears, then restart the recognizer.
+     *  Gives up (and restarts anyway) after RESTART_DEFER_MAX_MS. */
+    function deferredRestart(r: SpeechRecognitionLike, waitedMs = 0) {
+        clearRestartTimer();
+        restartTimer = setTimeout(() => {
+            restartTimer = null;
+            // The user stopped listening, or moved on, while we waited.
+            if (intentionalStop || !listening.value) {
+                listening.value = false;
+                intentionalStop = false;
+                return;
+            }
+            const next = waitedMs + RESTART_DEFER_POLL_MS;
+            if (options.deferRestartWhile?.() && next < RESTART_DEFER_MAX_MS) {
+                deferredRestart(r, next);
+                return;
+            }
+            try {
+                r.start();
+            } catch {
+                listening.value = false;
+            }
+        }, RESTART_DEFER_POLL_MS);
+    }
 
     function buildRecognition(): SpeechRecognitionLike | null {
         if (!ctor) return null;
@@ -127,6 +180,13 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
             // In continuous mode the browser may stop after a long
             // silence. Restart unless the user asked to stop.
             if (continuous && !intentionalStop && listening.value) {
+                if (options.deferRestartWhile?.()) {
+                    // Dora is mid-utterance — wait her out, then restart.
+                    // Keeps the mic closed only across the moment that would
+                    // clip her audio, not for as long as she is talking.
+                    deferredRestart(r);
+                    return;
+                }
                 try {
                     r.start();
                     return;
@@ -173,6 +233,9 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
 
     function stop() {
         intentionalStop = true;
+        // Kill any pending deferred restart, or the mic would reopen moments
+        // after the user asked it to stop.
+        clearRestartTimer();
         if (recognition) {
             try {
                 recognition.stop();
@@ -193,6 +256,7 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
     // in the browser chrome.
     onBeforeUnmount(() => {
         if (listening.value) stop();
+        clearRestartTimer();
         recognition = null;
     });
 

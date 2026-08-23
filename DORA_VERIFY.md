@@ -22,6 +22,56 @@ top-to-bottom.
 
 ---
 
+## Shopping list — plan face redesign (2026-08-23)
+Agent drove the draft + mid-shop lists in a live browser and confirmed: trip
+card, store card, all four ordering modes, Unsorted placement, offer chips
+separate from the line price, ticked-rows-leave mid-shop, and store-card totals
+reconciling with the trip card. These are the parts it could **not** reach.
+- [ ] **Mobile (375px):** the store card and the budget/insight banner each
+      collapse to one tappable line, and the first item is visible without
+      scrolling. Desktop keeps both expanded. (The preview pane wouldn't resize.)
+- [ ] **Toolbar at 375px and 1280px:** no horizontal scroll, page title doesn't
+      wrap to "Shopping / lists". Refresh deals and Select now live in **More**.
+- [ ] **Up/down reorder arrows** in Manual mode: press on the first/last row is
+      disabled, a move persists across a reload, and it doesn't fight drag.
+- [ ] **A list with no locations, groups or stores at all:** those three ordering
+      options are greyed out with a tooltip saying why, and Manual is selected.
+- [ ] **Themes:** trip card, store card and the store colour dots read correctly
+      in Pesto Dark and Cherry Cola Dark (the store dots use `--chart-1..5`).
+
+## Offline is read-only (2026-08-23)
+- [ ] **Kill the VPN mid-session:** the banner reads "Can't reach Dora — you can
+      look around, but not make changes", and pages you'd already visited still
+      render.
+- [ ] **Try a change while it's down** (stock level, tick a list line): it fails,
+      the optimistic change undoes itself, and you're told. Nothing says "queued".
+- [ ] **Reconnect:** no phantom changes replay, and Retry restores normal use.
+- [ ] **Sign out, sign in as another user:** no trace of the first user's pantry
+      or lists, including on pages visited while signed in as them.
+
+## Cook mode voice (2026-08-23) — origin FU-722
+Needs a real phone + the VPN hop; can't be walked from a dev pane. Do these in
+order — the engine reading is what makes the rest interpretable.
+- [ ] **Sous Chef "?" popover → "Voice:" line** reads Piper or Browser fallback.
+- [ ] **Sous Chef on, enter cook mode:** step 1 is announced without pressing
+      Next.
+- [ ] **Does the sentence start still get clipped?** Three candidate causes were
+      closed (FU-722/FU-723); if it still clips, that's new information.
+- [ ] **Barge-in still works:** say "next" while she's mid-sentence and it's
+      heard (the mic-restart fix must not have muted listening).
+- [ ] **Same clipping in Dora chat?** No continuous mic there, so clipping in
+      chat too points at the engine rather than the mic.
+
+## Settings: Image quality is its own page (2026-08-23)
+- [ ] **Settings → Admin → Install → Image quality** loads, shows current
+      quality + longest-edge, Save persists, and the toast fires.
+- [ ] **Backup & restore** no longer shows an image card and its retention +
+      storage-path Save still works.
+- [ ] **On the server, after fixing `deploy-dora.sh`'s `--exclude='data'` →
+      `--exclude='/data'` and redeploying:** the backups list loads and an
+      Import upload succeeds (FU-717 — both were 404 because the deploy deleted
+      `dora_api/features/data/`).
+
 ## Stock item detail feedback batch (2026-08-21)
 Everything here is a desktop / running-app observation — the agent's pane can't
 mount `#/stock/<id>` at all, and the peek is desktop-only (`$q.screen` reads 0
@@ -49,6 +99,29 @@ in the pane), so none of it could be walked live.
       either "no QR endpoint at …" or "that stock item no longer exists" (FU-648).
 - [ ] **Add substitute dialog:** no box icon before the names; the right-hand
       button is a green chain link.
+
+## Stock overview: expiry menu, uncertainty ring, bulk endpoints (2026-08-22)
+None of this could be driven live — port 5170 was held by another session's
+backend running pre-change code. Backend suite (1936) and frontend (502) are green.
+
+- [ ] **Expiry menu** (an item that has an expiry): the menu opens with the date
+      at the top above a divider, in your locale's format. Tapping "Push expiry
+      by 1 day" leaves the menu **open** and the header date moves; tap again and
+      it moves again. "Clear expiry" and "Log waste" still close it.
+- [ ] **Uncertainty ring**: the dashed marker is now a ring *outside* the level
+      box with a 2px gap, and the level colour is an unbroken block. Check it
+      isn't clipped by the row, top or bottom, and on a phone (≤599px) that it
+      doesn't crowd the item name.
+- [ ] **Legend + help copy** match: `StockRowLegend`'s uncertain swatch is also a
+      ring-with-gap, and the attention-rules dialog heading reads "A dashed ring
+      around the level".
+- [ ] **Bulk bar, one round-trip each** — with devtools Network open, select
+      ~10 items and run each of: Log waste (+ Undo), Add to list…, Add to your
+      list, Mark restocked, Remove from list, Move. Each should fire **one**
+      bulk POST plus one refresh, not N requests. Log waste in particular used
+      to fire up to 3 per item.
+- [ ] **Bulk waste Undo restores correctly**: items that had an expiry get the
+      same date back; items that had none must not gain one.
 
 ## Price history: reported dark-mode tooltip — origin FU-708
 Reported in the PRODUCT HISTORY feedback (PH7) and **not reproduced in a static

@@ -11,6 +11,7 @@
 // band for a date the client already holds, not a domain rule the server
 // owns — the alert/attention engine has its own server-side definition, and
 // this one only decides which icon to draw.
+import { formatDate } from 'src/composables/useDateFormat';
 import { ICONS } from 'src/style/icons';
 
 export type ExpiryTone = 'none' | 'ok' | 'soon' | 'expired';
@@ -41,6 +42,10 @@ export function expiryIndicatorFor(
     expiryDate: string | null | undefined,
 ): ExpiryIndicator {
     const tone = expiryToneFor(expiryDate);
+    // D-006: the date is user-facing here (tooltip, and the expiry menu's
+    // header reuses this same string), so it goes through the one formatting
+    // authority rather than echoing the raw ISO value.
+    const when = formatDate(expiryDate);
     switch (tone) {
         case 'expired':
             return {
@@ -48,7 +53,7 @@ export function expiryIndicatorFor(
                 icon: ICONS.error,
                 colour: 'negative',
                 cssClass: null,
-                tooltip: `Expired ${expiryDate}`,
+                tooltip: `Expired ${when}`,
             };
         case 'soon':
             return {
@@ -56,7 +61,7 @@ export function expiryIndicatorFor(
                 icon: ICONS.event_busy,
                 colour: 'warning',
                 cssClass: null,
-                tooltip: `Expires ${expiryDate}`,
+                tooltip: `Expires ${when}`,
             };
         case 'ok':
             return {
@@ -64,7 +69,7 @@ export function expiryIndicatorFor(
                 icon: ICONS.event_available,
                 colour: 'positive',
                 cssClass: null,
-                tooltip: `Expires ${expiryDate}`,
+                tooltip: `Expires ${when}`,
             };
         case 'none':
         default:

@@ -375,66 +375,6 @@
             </div>
         </SettingsSection>
 
-        <hr class="settings-divider" />
-
-        <!-- install-wide image compression. Applied at upload
-             time via the shared `processImageFile` helper; every surface
-             (stock items, recipes, products, avatars, receipts, store
-             logos) picks these up automatically. Forward-only — existing
-             images are not re-encoded. -->
-        <SettingsSection>
-            <template #title>Image compression</template>
-            <template #description>
-                Applied when new images are uploaded — existing images are
-                unchanged. Lower quality + smaller dimensions ⇒ less disk over time.
-            </template>
-
-            <SettingsRow
-                label="JPEG/WebP quality"
-                help="30 = strong compression (visible loss); 85 (default) is visually indistinguishable from the original; 100 = no compression, large files."
-            >
-                <q-slider
-                    v-model="imageQualityInput"
-                    :min="30"
-                    :max="100"
-                    :step="1"
-                    label
-                    label-always
-                    color="primary"
-                    style="min-width: 220px"
-                />
-            </SettingsRow>
-            <SettingsRow
-                label="Longest edge (px)"
-                help="Photos larger than this on their longest side are scaled down before encode. 1920 (default) is Full-HD; 1280 is a disk-conscious floor."
-            >
-                <q-input
-                    v-model.number="imageMaxDimensionInput"
-                    type="number"
-                    outlined
-                    dense
-                    :min="512"
-                    :max="8192"
-                    style="max-width: 140px"
-                />
-            </SettingsRow>
-            <div class="settings-actions">
-                <BaseButton
-                    variant="ghost"
-                    label="Discard"
-                    :disable="!imageSettingsDirty"
-                    @click="resetImageSettings"
-                />
-                <BaseButton
-                    variant="primary"
-                    :icon="ICONS.save"
-                    label="Save"
-                    :loading="savingImageSettings"
-                    :disable="!imageSettingsDirty || savingImageSettings"
-                    @click="onSaveImageSettings"
-                />
-            </div>
-        </SettingsSection>
     </div>
 </template>
 
@@ -451,7 +391,6 @@
     import { computed, onMounted, ref } from 'vue';
     import { useChunkedUpload } from 'src/composables/useChunkedUpload';
     import { csrfHeader, resolveBaseURL } from 'src/services/api/axiosHttpClient';
-    import { refreshImagePolicy } from 'src/composables/useImagePolicy';
     import { useAuthStore } from 'src/stores/authStore';
 
     const $q = useQuasar();
@@ -484,15 +423,6 @@
     const retentionInput = ref<number>(5);
     const storagePathInput = ref<string>('');
     const savingSettings = ref(false);
-
-    // install-wide image compression knobs, loaded alongside the
-    // backup settings so admins see the whole storage picture in one
-    // place. Saved via the same PATCH /app-settings endpoint.
-    const imageQuality = ref<number>(85);
-    const imageMaxDimension = ref<number>(1920);
-    const imageQualityInput = ref<number>(85);
-    const imageMaxDimensionInput = ref<number>(1920);
-    const savingImageSettings = ref(false);
 
     const inspecting = ref(false);
     const restoring = ref(false);
@@ -976,13 +906,6 @@
             storagePath.value = String(settings.backup_storage_path ?? '');
             retentionInput.value = retentionCount.value;
             storagePathInput.value = storagePath.value;
-            // image compression settings live on the same
-            // /app-settings payload; hydrate their inputs from the same
-            // response so both cards render current state after mount.
-            imageQuality.value = Number(settings.image_quality ?? 85);
-            imageMaxDimension.value = Number(settings.image_max_dimension ?? 1920);
-            imageQualityInput.value = imageQuality.value;
-            imageMaxDimensionInput.value = imageMaxDimension.value;
         } catch (err) {
             $q.notify({
                 type: 'negative',
@@ -993,59 +916,6 @@
         }
     }
 
-    // image compression dirty check + save. Kept as its own
-    // section (not folded into onSaveLibrarySettings) so the two cards
-    // save independently — an admin tweaking quality shouldn't have to
-    // also re-confirm the storage path.
-    const imageSettingsDirty = computed(() =>
-        imageQualityInput.value !== imageQuality.value
-        || imageMaxDimensionInput.value !== imageMaxDimension.value,
-    );
-    function resetImageSettings() {
-        imageQualityInput.value = imageQuality.value;
-        imageMaxDimensionInput.value = imageMaxDimension.value;
-    }
-    async function onSaveImageSettings() {
-        savingImageSettings.value = true;
-        try {
-            const baseUrl = resolveBaseURL();
-            const response = await fetch(`${baseUrl}/app-settings`, {
-                method: 'PATCH',
-                credentials: 'include',
-                headers: { 'Content-Type': 'application/json', ...csrfHeader() },
-                body: JSON.stringify({
-                    image_quality: Number(imageQualityInput.value),
-                    image_max_dimension: Number(imageMaxDimensionInput.value),
-                }),
-            });
-            const body = await response.json().catch(() => ({}));
-            if (!response.ok) {
-                throw new Error(body.detail ?? `Save failed (${response.status})`);
-            }
-            imageQuality.value = Number(imageQualityInput.value);
-            imageMaxDimension.value = Number(imageMaxDimensionInput.value);
-            // Kick the shared policy composable so subsequent uploads in
-            // *this* session pick up the new values without a page
-            // reload. Other tabs get it on their next health probe.
-            void refreshImagePolicy();
-            $q.notify({
-                type: 'positive',
-                position: 'bottom-right',
-                message: 'Image settings saved.',
-                caption: 'Applies to new uploads; existing images are unchanged.',
-                timeout: 3000,
-            });
-        } catch (err) {
-            $q.notify({
-                type: 'negative',
-                position: 'bottom-right',
-                message: "Couldn't save image settings.",
-                caption: err instanceof Error ? err.message : String(err),
-            });
-        } finally {
-            savingImageSettings.value = false;
-        }
-    }
     function resetLibrarySettings() {
         retentionInput.value = retentionCount.value;
         storagePathInput.value = storagePath.value;

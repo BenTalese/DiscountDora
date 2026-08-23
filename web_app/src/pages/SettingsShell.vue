@@ -215,6 +215,7 @@
         { path: '/settings/admin/system/region', label: 'Region & locale', icon: ICONS.language },
         { path: '/settings/admin/system/features', label: 'Features', icon: ICONS.tune },
         { path: '/settings/admin/system/hosting', label: 'Hosting', icon: ICONS.cloud_upload },
+        { path: '/settings/admin/system/images', label: 'Image quality', icon: ICONS.image },
     ];
 
     const adminKitchenDefaults: SettingsNavEntry[] = [

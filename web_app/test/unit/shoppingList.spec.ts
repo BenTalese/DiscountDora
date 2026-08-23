@@ -64,6 +64,15 @@ function line(overrides: Partial<ShoppingListLine> = {}): ShoppingListLine {
         deferred_by_budget: false,
         deferred_reason: null,
         has_substitutes: false,
+        stock_group_id: null,
+        stock_group_name: null,
+        estimated_unit_price: null,
+        estimate_source: 'none',
+        last_paid_unit_price: null,
+        last_paid_store_id: null,
+        last_paid_store_name: null,
+        resolved_store_id: null,
+        resolved_store_name: null,
         ...overrides,
     };
 }
@@ -162,38 +171,50 @@ describe('chosenOfferFor — selected offer with cheapest fallback', () => {
 
 // ── priceOfLine ─────────────────────────────────────────────────────────
 
+// The ladder that picks the unit price (actual → last paid → offer → none)
+// now lives on the server and arrives as `estimated_unit_price`; the client
+// only multiplies by quantity. These tests moved with it — they used to pin
+// the actual→offer fallback here, which was a second copy of a domain rule.
 describe('priceOfLine — per-line display price', () => {
-    it('multiplies the chosen offer price by quantity', () => {
-        const l = line({ quantity: 3, offers: [offer({ price_now: 2.5 })] });
+    it('multiplies the server-resolved estimate by quantity', () => {
+        const l = line({ quantity: 3, estimated_unit_price: 2.5 });
         expect(priceOfLine(l)).toBe(7.5);
     });
 
     it('defaults a null quantity to 1', () => {
-        const l = line({ quantity: null, offers: [offer({ price_now: 4 })] });
+        const l = line({ quantity: null, estimated_unit_price: 4 });
         expect(priceOfLine(l)).toBe(4);
     });
 
-    it('lets a user-entered actual price override any offer', () => {
-        const l = line({
-            quantity: 2,
-            actual_unit_price: 3,
-            offers: [offer({ price_now: 99 })],
-        });
-        expect(priceOfLine(l)).toBe(6);
-    });
-
-    it('honours the actual price even with no offers at all', () => {
-        const l = line({ quantity: 2, actual_unit_price: 1.25 });
-        expect(priceOfLine(l)).toBe(2.5);
-    });
-
-    it('is zero when there is no offer and no actual price', () => {
+    it('is zero when the server resolved no price', () => {
         expect(priceOfLine(line({ quantity: 5 }))).toBe(0);
     });
 
-    it('is zero when the chosen offer has no current price', () => {
-        const l = line({ offers: [offer({ price_now: null })] });
+    it('does not re-derive the ladder from offers', () => {
+        // An offer is present but the server resolved no estimate. The client
+        // must not "helpfully" fall back to the offer — that is precisely the
+        // duplicated rule this change removed, and it would let the two
+        // disagree about what a shop costs.
+        const l = line({ quantity: 2, offers: [offer({ price_now: 99 })] });
         expect(priceOfLine(l)).toBe(0);
+    });
+
+    it('does not re-derive the ladder from actual_unit_price either', () => {
+        // Same reasoning from the other end: `actual` is the top rung, but the
+        // server is what applies it. A line carrying an actual price with no
+        // resolved estimate is a server bug, not something to paper over here.
+        const l = line({ quantity: 2, actual_unit_price: 3 });
+        expect(priceOfLine(l)).toBe(0);
+    });
+
+    it('uses the estimate the server picked, whatever rung it came from', () => {
+        const l = line({
+            quantity: 2,
+            estimated_unit_price: 3,
+            estimate_source: 'historic',
+            offers: [offer({ price_now: 99 })],
+        });
+        expect(priceOfLine(l)).toBe(6);
     });
 });
 

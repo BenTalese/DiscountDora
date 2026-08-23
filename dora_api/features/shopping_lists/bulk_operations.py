@@ -9,6 +9,14 @@ Endpoints:
       Tick (or untick) a set of lines in one round-trip. Used by the
       multi-select "tick all selected" action on the detail page.
 
+  POST /api/shopping-lists/<id>/lines/bulk-add
+      Add a set of stock items to one list in one round-trip. Backs the
+      stock overview's "Add to list…" bulk action.
+
+  POST /api/shopping-lists/<id>/lines/bulk-remove-by-stock-item
+      The inverse — remove every line anchored on one of the given stock
+      items. Backs the overview's "Remove from list" bulk action.
+
   POST /api/shopping-lists/<id>/lines/reorder
       Persist a new line order. The request body lists line_ids in the
       desired order; the handler writes the `sequence` column accordingly.
@@ -18,7 +26,7 @@ from dataclasses import dataclass
 from typing import List
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from dora_api.domain.entities.shopping_list import ShoppingListLine
 from dora_api.features.routers import SHOPPING_LIST_ROUTER
@@ -82,6 +90,135 @@ def bulk_tick(shopping_list_id: UUID):
         f"updated {_Response.updated_count} of {len(_Request.line_ids)} requested"
     )
     return ok({"updated_count": _Response.updated_count})
+
+
+# ───── Bulk add / bulk remove by stock item ───────────────────────────────
+#
+# 2026-08-22 owner feedback ("bulk actions seem to be performed one item at a
+# time and it can be slow"). The stock overview's "Add to list…" and "Remove
+# from list" bulk actions both looped the single-line endpoints from the
+# browser, and the add path additionally refreshed the whole shopping-list
+# store on every iteration. These two collapse the loop to one round-trip.
+#
+# Both orchestrate the existing single-line handlers rather than writing
+# their own SQL — `AddLineHandler` de-dupes, resolves products and assigns
+# sequences, and `RemoveLineByStockItemHandler` cascades nested product
+# lines. Neither rule wants a second copy (R-003).
+
+class BulkAddLinesRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    stock_item_ids: List[UUID] = Field(min_length=1, max_length=500)
+
+
+@dataclass(slots=True)
+class BulkAddLinesResponse:
+    list_not_found: bool = False
+    added: int = 0
+    already_on_list: int = 0
+    failed_ids: List[UUID] = None  # type: ignore[assignment]
+
+    def __post_init__(self):
+        if self.failed_ids is None:
+            self.failed_ids = []
+
+
+class BulkAddLinesHandler:
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
+
+    def handle(self, request: BulkAddLinesRequest, shopping_list_id: UUID) -> BulkAddLinesResponse:
+        from dora_api.features.shopping_lists.manage_shopping_list_lines import (
+            AddLineHandler, AddLineRequest,
+        )
+
+        inner = AddLineHandler(self.repository)
+        response = BulkAddLinesResponse()
+        for stock_item_id in request.stock_item_ids:
+            result = inner.handle(
+                AddLineRequest(stock_item_id=stock_item_id), shopping_list_id,
+            )
+            # A missing list is the same answer for the whole set — bail
+            # rather than reporting it once per item.
+            if result.list_not_found:
+                return BulkAddLinesResponse(list_not_found=True)
+            if result.already_on_list:
+                response.already_on_list += 1
+            elif result.line_id is not None:
+                response.added += 1
+            else:
+                response.failed_ids.append(stock_item_id)
+        return response
+
+
+@SHOPPING_LIST_ROUTER.route("/<uuid:shopping_list_id>/lines/bulk-add", methods=["POST"])
+@has_request_body(BulkAddLinesRequest)
+def bulk_add_lines(shopping_list_id: UUID):
+    _Logger = logging.getLogger(__name__)
+    _Request: BulkAddLinesRequest = get_request_body()
+    _Response = BulkAddLinesHandler(SqlAlchemyRepository()).handle(_Request, shopping_list_id)
+    if _Response.list_not_found:
+        return not_found("ShoppingList", shopping_list_id)
+    _Logger.info(
+        f"Bulk-add on list {shopping_list_id}: added {_Response.added}, "
+        f"already-on {_Response.already_on_list}, "
+        f"failed {len(_Response.failed_ids)} of {len(_Request.stock_item_ids)}"
+    )
+    return ok({
+        "added": _Response.added,
+        "already_on_list": _Response.already_on_list,
+        "failed_ids": [str(i) for i in _Response.failed_ids],
+    })
+
+
+class BulkRemoveByStockItemRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    stock_item_ids: List[UUID] = Field(min_length=1, max_length=500)
+
+
+@dataclass(slots=True)
+class BulkRemoveByStockItemResponse:
+    list_not_found: bool = False
+    removed_count: int = 0
+
+
+class BulkRemoveByStockItemHandler:
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
+
+    def handle(
+        self, request: BulkRemoveByStockItemRequest, shopping_list_id: UUID,
+    ) -> BulkRemoveByStockItemResponse:
+        from dora_api.features.shopping_lists.manage_shopping_list_lines import \
+            RemoveLineByStockItemHandler
+
+        inner = RemoveLineByStockItemHandler(self.repository)
+        removed = 0
+        for stock_item_id in request.stock_item_ids:
+            result = inner.handle(shopping_list_id, stock_item_id)
+            if result.list_not_found:
+                return BulkRemoveByStockItemResponse(list_not_found=True)
+            if result.removed:
+                removed += 1
+        return BulkRemoveByStockItemResponse(removed_count=removed)
+
+
+@SHOPPING_LIST_ROUTER.route(
+    "/<uuid:shopping_list_id>/lines/bulk-remove-by-stock-item", methods=["POST"],
+)
+@has_request_body(BulkRemoveByStockItemRequest)
+def bulk_remove_lines_by_stock_item(shopping_list_id: UUID):
+    _Logger = logging.getLogger(__name__)
+    _Request: BulkRemoveByStockItemRequest = get_request_body()
+    _Response = BulkRemoveByStockItemHandler(SqlAlchemyRepository()).handle(
+        _Request, shopping_list_id,
+    )
+    if _Response.list_not_found:
+        return not_found("ShoppingList", shopping_list_id)
+    _Logger.info(
+        f"Bulk cart-remove on list {shopping_list_id}: removed "
+        f"{_Response.removed_count} of {len(_Request.stock_item_ids)} requested"
+    )
+    return ok({"removed_count": _Response.removed_count})
 
 
 # ───── Reorder ────────────────────────────────────────────────────────────

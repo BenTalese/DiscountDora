@@ -138,8 +138,10 @@ function newCorrelationId(): string {
 
 // ─── Retry policy ────────────────────────────────────────────────────
 // Spec: GET only, max 3 attempts, exponential backoff on network errors
-// and 502/503/504. Never retry POST/PUT/PATCH/DELETE (those are
-// the offline queue's job — see useOfflineQueue).
+// and 502/503/504. Never retry POST/PUT/PATCH/DELETE — a write that may
+// already have landed must not be replayed blind. Offline is read-only
+// (2026-08-23), so a failed write is reported to the user, never retried
+// behind their back.
 const RETRYABLE_STATUSES = new Set([502, 503, 504]);
 const MAX_RETRIES = 3;
 // The boot probes retry once, not three times. Three attempts at the full
@@ -185,8 +187,7 @@ export function readCsrfCookie(): string | null {
 
 // FU-571 — spreadable CSRF header for the handful of callers that bypass
 // this client (chunked uploads, import/backup inspect+commit, client logs,
-// TTS streaming — all raw `fetch` — plus `useOfflineQueue.replayOnce`, which
-// uses bare `axios` so a replay isn't re-enqueued by its own wrapper). The
+// TTS streaming — all raw `fetch`). The
 // interceptor below attaches this automatically; anything not going through
 // an AxiosHttpClient instance MUST spread it in or the FU-197 double-submit
 // defence 403s every mutating call. See R-047 — keep this list current, and

@@ -2,8 +2,8 @@
 //
 // Exposes reactive `online` (browser-level) and `apiReachable` (the dora_api
 // /health probe). Used by:
-//   - OfflineBanner: pin a red strip when either is false.
-//   - useOfflineQueue: drain pending mutations when apiReachable flips true.
+//   - OfflineBanner: pin a red strip when either is false. Offline is
+//     read-only (2026-08-23) — there is no write queue to drain any more.
 //   - Free-form code: any caller that wants to short-circuit before doing
 //     an expensive search or background fetch.
 //

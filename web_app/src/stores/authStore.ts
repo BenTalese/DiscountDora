@@ -7,6 +7,7 @@ import type {
     RegisterCommand,
     UpdateMeCommand
 } from 'src/services/api/authApiService';
+import { clearApiResponseCache } from 'src/services/api/apiResponseCache';
 import AuthApiService from 'src/services/api/authApiService';
 import { NormalisedApiError, setUnauthorizedHandler } from 'src/services/api/axiosHttpClient';
 import { clearAllListState } from 'src/composables/useListState';
@@ -146,6 +147,12 @@ export const useAuthStore = defineStore('auth', () => {
             // list-page UI shape. The fallout is minor (per-page view
             // knobs, no sensitive data) but honest is better.
             clearAllListState();
+            // The service worker's `dora-api` cache holds this user's actual
+            // content (pantry, lists, recipes) keyed by URL alone, with no
+            // idea who it belonged to. Now that offline is read-only, that
+            // cache IS the offline story and it outlives a sign-out — so drop
+            // it, or the next person on this device reads the last one's data.
+            void clearApiResponseCache();
         }
     };
 
@@ -157,6 +164,7 @@ export const useAuthStore = defineStore('auth', () => {
         // also mean "someone else's session started" on a shared device;
         // don't hand them the previous user's filter shape.
         clearAllListState();
+        void clearApiResponseCache();
     };
     setUnauthorizedHandler(handleSessionExpired);
 

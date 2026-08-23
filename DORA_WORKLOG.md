@@ -18,6 +18,406 @@ next.
 
 ---
 
+## 2026-08-23 — **Shopping-list redesign: critique, agreed three-face design, plan face built**
+**Status:** design agreed and recorded; **plan face built, green, and driven in a
+browser**. Run face and receipt face deferred as **FU-727** (the active next job).
+
+**Trigger:** owner asked for the recipe-detail treatment applied to the shopping
+list — open-ended, nothing off the table, pre-release so hard cutovers are fine.
+
+**The critique that drove it.** Five annotated defects on the current page, of
+which two are structural: **shopping mode is a costume, not a mode** (entering
+`SHOPPING` changed the checkbox size and added a footer, nothing else) and
+**DONE is DRAFT with everything disabled** (the data for a real receipt is all
+there and unused). Plus: the row carried **eleven interactive zones** with no
+hierarchy, the toolbar was 930px and never wrapped (a logged defect), the
+progress/money cluster was stranded (D-011), and price appeared twice per row in
+two grammars.
+
+**Agreed design — one list, three faces.** "Start shopping" becomes a change of
+*composition*, not just status. Plan face (edit), run face (aisle), receipt face
+(record). Direction C ("the trip") was parked except its store breakdown, which
+moved into the plan face.
+
+**Two findings changed the design more than the wireframes did:**
+- **`StockItem.usual_store_id` already exists** and its own comment says it drives
+  shopping-list grouping. So the store breakdown does **not** depend on scraped
+  offers — the owner's concern that products are a niche power-user feature.
+- **`StockItemPriceObservation` carries a `store_id` and is auto-harvested from
+  every finished list**, and the existing till prefill *already* ranks "from your
+  last receipt" above "from {store} offer". Historic-first was established
+  precedent, not a new idea.
+
+**Owner decisions (all locked):** sectioning = location · group · **store** ·
+manual with up/down arrows; ticked items collapse with undo; rail hidden on the
+run face; receipt read-only behind **Amend** (price/store/quantity, restock *not*
+re-applied — owner accepts the desync); no budget or suggestions mid-shop; mobile
+collapses the store card and insight slot, desktop keeps both open; and
+**history always wins over offers, never conflated** — the offer renders as its
+own *"Online offer: $2.90 at Coles"* chip and feeds no total.
+
+**What shipped:**
+- **Backend.** `ShoppingListLineDto` gained `stock_group_*`, `estimated_unit_price`
+  + `estimate_source`, `last_paid_*`, `resolved_store_*`. New `StoreSpendDto` and
+  `by_store[]` on the totals — **server-owned deliberately**, because it sums
+  across the collection (R-003). Both ladders resolve in the handler; the store
+  lookup was merged into one query covering purchased/usual/historic stores.
+- **`_line_price` and `priceOfLine` stopped re-deriving the ladder.** Both now
+  read `estimated_unit_price`. The client copy was a second definition of a domain
+  rule *and* hard-required product data — a user with no products got zeroes even
+  when Dora knew what they last paid.
+- **Frontend.** New `useLineSections` composable (4 modes, Unsorted fallback,
+  auto-disable, nesting, run-face hide-ticked) shared by both faces; new
+  `TripCard` and `StoreSpendCard`; toolbar slimmed to Quick add / More / CTA;
+  offer chips re-grammared; up/down reorder arrows sharing one `applyLineOrder`
+  with drag.
+
+**Decisions worth keeping:**
+- **Store is a peer sectioning mode everywhere**, not a run-face special case —
+  the auto-disable rule already greys it out on a single-store list, so no
+  face-specific branch was needed.
+- **`canReorder` gates on `effectiveMode === 'manual'`**, not `groupBy` — a stored
+  preference pointing at an empty field falls back to manual, and the affordance
+  must follow the fallback.
+- **The store card counts unpriced lines but doesn't sum them**, and says so.
+  Partial data is the normal case here, not an edge case.
+
+**Tests — three suites rewritten rather than patched, because the rule moved:**
+`priceOfLine`'s specs and `test_shopping_list_totals.py` pinned the actual→offer
+ladder *at the client/aggregate layer*, which is precisely what this change
+relocated. The totals fixture now applies the handler's ladder when building a
+DTO so those tests stay about aggregation; the frontend specs were rewritten to
+assert the client **does not** re-derive from offers or `actual_unit_price`.
+New: `test_shopping_list_store_breakdown.py` (7) and `useLineSections.spec.ts` (19).
+
+**Verification:** `vue-tsc` clean, eslint clean, **494 vitest**, **1943 pytest**
+(1 skipped, 1 xfailed — both pre-existing). Driven live: draft list shows trip
+card + store card with **$14.00 + $4.40 reconciling to the $18.40 trip total**;
+all four ordering modes produce correct sections with Unsorted last; store
+sectioning matches the store card exactly; mid-shop list shows 1 of 3 rows with
+the other two collapsed out.
+
+**Two browser scares that were the harness, not the code** — worth recording so
+the next agent doesn't chase them: the preview pane runs **backgrounded**
+(`document.visibilityState === 'hidden'`), which throttles `requestAnimationFrame`
+to never and **wedges Vue's `<Transition mode="out-in">` mid-leave** — the page
+renders as a permanent skeleton. Shimming rAF *while the page is unmounted*, then
+navigating in, renders fine. Screenshots also time out in this pane. Separately,
+serving a raw artifact fragment over `python -m http.server` gives no doctype and
+no charset, producing quirks-mode table bugs and mojibake that vanish under the
+real wrapper. **A `git stash` A/B test to check whether the wedge pre-existed was
+invalid** — HEAD's page imports the deleted `useOfflineQueue`, so it can't build;
+the working tree was mid-migration. Restored and diffed byte-identical.
+
+**Next up:** **FU-727** — run face, then receipt face (+ **FU-726**: amend must
+correct the harvested price observation, or a fixed typo keeps poisoning every
+future estimate).
+
+**Open questions for owner:** none blocking. The offer rung survives as the money
+ladder's *last resort* when there's no purchase history — without it a
+products-only user with no history would see zero totals. History always outranks
+it and the two are never shown in one grammar, which is what was asked for; flag
+it if that reading is wrong.
+
+---
+
+## 2026-08-23 — **Settings feedback: image quality split out; backups 404 investigated; offline widening deferred**
+**Status:** 1 of 3 items built and green; 1 investigated and logged as a
+non-reproducing finding; 1 deferred as needing a proposal.
+
+**Trigger:** owner feedback — two settings items + one cross-cutting ask.
+
+**What changed:**
+- **Image quality is its own settings page.** New
+  `pages/settings/AdminSystemImageSettings.vue` at
+  `/settings/admin/system/images`, nav entry **Image quality** in the Admin →
+  **Install** group after Hosting. The card was lifted wholesale out of
+  `AdminDataBackupRestore.vue` (template + the four refs + dirty/reset/save),
+  and the source page's `refreshImagePolicy` import went with it. Explicit
+  Save/Discard was kept rather than adopting the eager-save shape the sibling
+  System pages use — a `q-slider` drag would otherwise PATCH per pixel; that
+  reasoning is a comment in the new file.
+- **The new page goes through `AppSettingsApiService`, not raw `fetch`.**
+  `image_quality` / `image_max_dimension` were missing from the `AppSettings`
+  type, which is *why* the old card hand-rolled a `fetch`; both are now on the
+  type, so the page gets the axios client's correlation id, CSRF header and
+  `toastCaption(err)` error normalisation for free. The five surviving raw
+  `fetch` call sites on the backup page are logged as **FU-716** (R-005).
+
+**Decisions made:**
+- **Placed under Install, not Data & access.** The grouping question the shell's
+  own comment poses is "what am I here to change?" — this is what the install
+  *is* (how it encodes uploads), not data leaving/entering it. Backup & restore
+  stays in Data & access; the image card was only ever there because both write
+  to `/app-settings`.
+- **Did not widen the offline banner copy.** The owner asked to reword it to
+  "actions on the current page will sync up when we reconnect". That copy is only
+  true if the mechanism widens, and `OfflineBanner.vue:45` records that the copy
+  was *already* narrowed once from "Most actions still work" for precisely that
+  overstatement. Deferred as **FU-718** with the forks named (client-generated
+  ids for queued creates, chained create→edit replay, server idempotency keys,
+  the deliberately-online-only set, drain pacing). A proposal comes before code.
+
+**The backups 404 — SOLVED, and it was never in the app (FU-717).**
+`~/Desktop/deploy-dora.sh` rsyncs with `--exclude='data'`. An rsync pattern with
+no slashes matches the **basename at any depth**, so it skipped
+`dora_api/features/data/` along with the intended top-level `./data`, and
+`--delete` removed it from the server on every deploy — 15 files, including
+`backup_library.py`, `uploads.py` and `import_spreadsheet.py`. `DATA_ROUTER` is
+declared in `features/routers.py` (which survives), so it registered with **zero
+routes** and every `/api/data/*` path fell through to the app's own 404. Fix is
+one character: `--exclude='/data'`, anchored to the transfer root. Reproduced
+both ways in a scratch tree before reporting. The owner was told; the script is
+outside the repo and was **not edited**.
+
+Three wrong theories died on the way, each killed by evidence rather than
+abandoned: base-URL/proxy (dead once only *one* of the two `Promise.all` calls on
+mount toasted, and again once the 404 body was identified as the backend's own
+`api_response.py:191` string); stale image (dead once the Import *upload* failed
+too — `uploads.py` dates to 2026-05-25, so no plausible image age explains both);
+and the `walk_packages` silent-ImportError hole (dead because an **absent**
+directory yields no subpackage and no error to swallow). The lesson worth keeping:
+the decisive clue was the *pair* of failures, not either one alone.
+
+**Two follow-ups the post-mortem earned:** **FU-720** — nothing verifies the
+deployed route map, so a deploy deleted a whole feature and the app booted clean,
+healthcheck green, serving 404s; a boot assertion that every `*_ROUTER` has ≥1
+rule would have failed this loudly. **FU-719** — `_iter_submodules` passes no
+`onerror` to `walk_packages`, so a feature subpackage that *fails to import* is
+skipped silently (verified against the CPython source); not this bug, but the
+same invisible failure class, and one hardening pass covers both.
+
+**Superseded — what was established before the cause was found:**
+`GET /api/data/backups` is registered (confirmed in the built `app.url_map`),
+the live dev server answers it **401** unauthenticated — a missing rule would be
+404, so the rule matches — and driving the handler with an admin identity
+returned `200 {"items":[],...}`. The only 404 path that can reach this URL is
+`middleware.py:87 endpoint_not_found()`, which fires only when no rule matches,
+so the suspicion is `resolveBaseURL()` resolving somewhere that isn't the Flask
+origin (Capacitor build with no saved instance URL, a stale
+`dora.backendBaseUrl` in localStorage, or the Quasar dev origin). Logged as a
+non-reproducing finding per the standing rule; needs the owner's DevTools
+request URL. **Noticed on the way:** `data/dora.dev.db` has **no
+`alembic_version` table** and is missing `User.stocktake_last_session_at`, so
+any `User` load against that file raises — the running instance is drifted and
+its reports should be distrusted until it's reset.
+
+**Close-gate:** `vue-tsc` clean, **502 vitest passed** (44 files). Backend
+untouched. Standards: UI change checked against R-035/D-rules — reuses
+`SettingsSection` / `SettingsRow` / `BaseButton`, tokens only (`--space-2`,
+`color="primary"`), no new copy voice drift; the one violation touched
+(raw `fetch`) was reduced, not introduced, and the remainder is flagged as
+FU-716. No new ADR warranted.
+
+**Cook-mode voice feedback (2 items, added later same day):**
+- **First step never voiced — fixed, root cause definite.**
+  `watch(currentStepIndex, ...)` (`RecipeCookMode.vue:1368`) fires only on
+  *change*, and the index starts at 0, so entering cook mode with Sous Chef
+  already on announced nothing until Next. `immediate: true` on that watcher
+  would not have worked either — the steps arrive from an async fetch in
+  `onMounted`, so `currentStep` is `''` at mount. Fixed by watching `steps`
+  instead, firing once on first arrival, and only while still on index 0 so a
+  fast tap to step 2 isn't talked over.
+- **Clipped sentence starts — NOT diagnosed; two candidate fixes shipped
+  blind.** Server ruled out first: `POST /api/tts` buffers the whole WAV
+  (`subprocess.run` + `capture_output`, no streaming, no trim) and the default
+  voice leaves `pitch_semitones` at 0.0, so the ffmpeg pitch path — the only
+  place a malformed piped WAV header could arise — is never entered. That makes
+  it client-side. Shipped (a) removal of `speakBrowser`'s redundant second
+  `synth.cancel()` immediately before `speak()` (Chrome treats cancel as
+  internally async and clips the utterance queued in the same task — the exact
+  reported signature) plus a 120ms settle, and (b) a `canplay` wait +
+  `preload='auto'` before `audio.play()` on the Piper path. **Both are honest
+  hardening but unverified as the cause** — logged as **FU-722** with the
+  on-device questions that would actually settle it.
+- **Third candidate deliberately NOT fixed — FU-723.** `useVoiceInput`
+  auto-restarts `recognition.start()` on the browser's `onend`, with zero
+  coordination with speech output. On Android that mic-open shifts audio focus
+  and can eat the leading audio of a clip starting at the same moment — and it
+  alone explains "on mobile, in cook mode". The obvious fix (pause the mic while
+  speaking) **costs barge-in**, which is the whole point of hands-free, so it's
+  an owner decision, not a patch.
+- **Owner then asked for all of it fixed, so FU-723 was closed too — without
+  losing barge-in.** The key insight is that the race comes from *re-opening*
+  the mic (that is what shifts audio focus), not from the mic being open. So
+  `useVoiceInput` gained `deferRestartWhile: () => boolean` and cook mode passes
+  speech-output's new `busy` ref: the `onend` auto-restart is held (150ms poll,
+  10s safety cap) until the utterance ends, while an already-running recognizer
+  is never stopped. Saying "next" over her narration still works. `stop()` +
+  unmount clear a pending restart so the mic can't reopen after the user
+  switched it off. `busy` deliberately spans the Piper fetch and the browser
+  cancel-settle delay, not just audible playback, because the clip-risk window
+  opens before any sound does.
+- **Diagnosability closed.** `lastEngine` ('piper' | 'browser') is now tracked
+  and rendered in the Sous Chef popover as "Voice: Piper (server)" / "Voice:
+  Browser fallback". This was the missing instrument — the fallback was silent,
+  the engines clip for different reasons, and over a slow VPN a Piper timeout
+  falling back to the browser is likely, so the engine reading decides which
+  mechanism is in play. The verify block is ordered to take that reading first.
+- All three candidate causes are now closed, which changes what a failed retest
+  means: if it still clips, the cause is something none of us has considered and
+  FU-722 should be rewritten rather than extended.
+- `vue-tsc` clean, **502 vitest passed**, eslint clean.
+
+**Offline handling — direction reversed, queue deleted (added later same day):**
+The owner opened this as "widen offline sync", and **measuring it first is what
+changed the answer**: `useOfflineQueue` was 372 lines + 649 lines of spec serving
+**three** call sites (six mutation kinds declared, three used), and widening it
+meant taking on server idempotency keys, client-generated entity ids, chained
+create→edit replay and a conflict UI. It was also actively hazardous — replay was
+at-least-once against a server that ignored the `X-Request-Id` it already sent,
+the conflict pile had no UI, and it had failed silently once already (bare axios
+without the CSRF header → every drain 403'd → misclassified as non-network → the
+queue burned into invisible conflicts). The read side, by contrast, had no
+conflict semantics at all. Opposite risk profiles, so they got opposite fates.
+
+**Owner's call: offline is read-only.** Deleted `useOfflineQueue.ts`, both spec
+files, the three `tryWithQueue` call sites and the banner's queued-count — **~1,150
+lines net removed**. Kept the `NetworkFirst` read cache, which is now the entire
+offline story. Banner copy promises nothing: *"You're offline / Can't reach Dora —
+you can look around, but not make changes."* Two variants because the distinction
+is actionable (your connection vs. Dora's server); no separate page, per the
+owner's "keep it light".
+
+- **The one hazard was flagged before touching anything and handled:**
+  `tryWithQueue`'s contract was *"the UI was already optimistic, so treat queued
+  as success"*. Deleting the queue without addressing that would have left three
+  sites showing changes the server never heard about. `updateStockLevelAsync`
+  already registers a rollback that the global error handler runs on unhandled
+  rejection, and `onToggleTicked` already reloads canonical state in its `catch`
+  — so a network error now flows down the same path as any other rejection. That
+  was checked, not assumed.
+- **The cross-user cache leak was fixed in the same unit**, because it stopped
+  being theoretical the moment reads became the offline story: the `dora-api`
+  cache is keyed by URL with no notion of who owned the response, and sign-out is
+  a soft router push. New `apiResponseCache.clearApiResponseCache()` runs on
+  logout and on 401, matching FU-355's `clearAllListState()` precedent (higher
+  stakes — that leaked filter shapes, this leaked content).
+- **Three failing tests were deleted, not repaired.** All three asserted the
+  queued-path behaviour that no longer exists; one was replaced with a test of
+  what the method does now. Suite is 42 files / **475 tests** (down from 502 —
+  the 27 are the two deleted queue specs plus the three obsolete store tests).
+- **Standards close-gate:** promoted to **R-052 / ADR-048** — offline is
+  read-only, cache reads, never buffer writes, evict user content on sign-out.
+  Written specifically so the next agent who notices there's no queue doesn't
+  helpfully add one back; reversal now requires idempotency keys plus a
+  superseding ADR. FU-718 retired as reversed-by-decision.
+- **New finding, not fixed: FU-724** — `src-pwa/custom-service-worker.ts` is dead
+  code under `workboxMode: 'GenerateSW'`, and it is exactly the file someone would
+  open to change offline caching. Same invisible-failure family as FU-719/720.
+- `vue-tsc` clean, 475 vitest passed, eslint clean.
+
+**Next up:** owner fixes the rsync exclude and redeploys, then walks the
+`DORA_VERIFY.md` "Settings: Image quality" block. Then a call between FU-719 +
+FU-720 as one hardening pass, FU-716 (rewire the backup page off raw `fetch`),
+or `PROPOSAL_OFFLINE_ACTIONS.md` for FU-718.
+
+---
+
+## 2026-08-22 — **Stock-overview feedback batch: expiry menu, uncertainty ring, bulk endpoints**
+**Status:** complete for 3 of 4 items; the fourth (Needs-attention filter) was
+withdrawn by the owner mid-session and is logged as a finding. **Browser-verify
+is owed on all of it** — see below.
+
+**Trigger:** owner feedback list on the stock overview (4 items).
+
+**What changed:**
+- **Expiry menu context header** (`StockItemRow.vue`): the push-shortcut menu now
+  opens with the item's expiry date at the top, above a `<q-separator />` — the
+  same divider already used between the push group and the destructive group. The
+  header reuses `expiry.tooltip`, so the phrase has one author. **`auto-close` was
+  removed from the menu** so the header actually updates as you push: the owner's
+  "it should update when days are added" only means anything if the menu survives
+  the tap. `Clear expiry` and `Log waste` got `v-close-popup` so the two
+  destructive items still close. Styled to match `stock-row__belief-header` so the
+  row's two menus read as one family.
+- **`expiryIndicator.ts` now formats its dates** through `formatDate` (D-006). It
+  was echoing raw ISO into the tooltip, which would have sat one pixel from my
+  new locale-formatted header. Two hand-rolled copies of the same phrase survive
+  on the recipe pages — **FU-712**.
+- **Uncertainty marker moved off the box edge** (`StockItemRow.vue`,
+  `StockRowLegend.vue`, `AttentionRulesDialog.vue`). Owner picked from a rendered
+  comparison of ten treatments and asked for "the current dashed style but around
+  it with a tiny gap, like the old Dora thinks style" — i.e. the geometry of the
+  retired belief ring (`0 0 0 2px surface, 0 0 0 4px warning`), dashed. Drawn on
+  `::after` at `inset: -5px`, **not** `outline` (A6 owns that for focus) and not
+  `box-shadow` (can't be dashed — which is why the old ring was solid). Verified
+  Quasar's QBtn uses `:before` for elevation and leaves `:after` free. Drops to
+  2px dashes under 599px so the 5px bleed doesn't crowd the item name. The level
+  colour is now an unbroken 32px block, which is the other half of "not obvious
+  enough".
+- **Six bulk endpoints** (the big one). Every action on the bulk bar was an
+  N-request browser loop; bulk waste was three requests per item. Added
+  `POST /api/stock-items/bulk-move`, `/bulk-set-level`, `/api/waste/events/bulk`,
+  `/events/bulk-delete`, `/api/shopping-lists/<id>/lines/bulk-add` and
+  `/lines/bulk-remove-by-stock-item`, plus their API-service methods, and rewired
+  all six call sites in `StockOverview.vue`. Dead code removed:
+  `stockOverviewExportRemoveHelper` and the `useShoppingListActions` import.
+
+**Decisions made:**
+- **Bulk endpoints orchestrate the single-item handlers rather than writing set
+  queries** — promoted to **R-051 / ADR-047**. A level change stamps two
+  timestamps, appends `StockLevelChange`, may record a `ConsumptionEvent` and may
+  fire auto-add; clearing an expiry emits a classified `StockItemExpiryEvent`;
+  removing a line cascades nested product lines. Re-deriving any of that would be
+  a second copy of a rule with an owner. `bulk-move` is the one exception (bare FK,
+  no hooks) and writes the set directly. The honest framing: **the win is
+  round-trips, not commits** — a 40-item restock is still 40 commits (**FU-713**).
+- **Bulk waste echoes each item's previous expiry back to the client** so Undo
+  can restore it; the server is what knows what it cleared. Items that had no
+  expiry must not gain one on undo — pinned by a test.
+- **`bulkAddToPrimary` sends the first item through `actions.addToList`** and
+  bulk-adds the rest to the list it returns. Resolving the quick-add target is
+  the interactive part (no draft / ambiguous prompt), and that return value is
+  documented for exactly this caller.
+- **Declined** to branch `useShoppingListActions.addItems` onto the bulk endpoint
+  when "every command happens to be a bare stock_item_id" — that's the implicit
+  cleverness R-019 forbids. Logged as **FU-714** with the honest fix (widen the
+  endpoint's request model).
+
+**Files touched:** `dora_api/features/stock_items/bulk_operations.py` (new),
+`dora_api/features/waste/waste.py`, `dora_api/features/shopping_lists/bulk_operations.py`,
+`tests/e2e/dora_api/test_bulk_operations.py` (new, 17 tests),
+`web_app/src/components/stock/StockItemRow.vue`, `.../StockRowLegend.vue`,
+`web_app/src/components/help/AttentionRulesDialog.vue`,
+`web_app/src/helpers/expiryIndicator.ts`, `web_app/src/pages/StockOverview.vue`,
+`web_app/src/services/api/{waste,stockItem,shoppingList}ApiService.ts`,
+`CHANGELOG.md`, `DORA_VERIFY.md`, `DORA_FOLLOWUPS.md`,
+`docs/01_charter/ENGINEERING_STANDARDS.md`, this file.
+
+**Verification:**
+- Backend: **1936 passed**, 1 skipped, 1 xfailed (full `pytest tests`). The 17 new
+  bulk tests pass. This also clears the gap FU-699 flagged (previous session never
+  ran the full suite).
+- Frontend: `vue-tsc` **0 errors**; eslint clean on every touched file; **502
+  vitest passed**.
+- **NOT verified in a browser.** Port 5170 was held by another session's backend
+  running pre-change code (`POST /api/stock-items/bulk-move` → 404 against it), and
+  restarting another session's server isn't mine to do. Every item is queued in
+  `DORA_VERIFY.md` under "Stock overview: expiry menu, uncertainty ring, bulk
+  endpoints (2026-08-22)". The bulk items want devtools Network open — the point
+  is one request per action, and only the browser can show that.
+
+**Engineering-standards close-gate:** checked against R-002 (marker uses
+`color-mix` off `--text-primary` + `--radius-sm`, no literals), R-003 (the whole
+shape of the bulk work — see ADR-047), R-007 (`expiryIndicator` was the one
+out-of-scope touch; justified in-place and its leftovers logged as FU-712), R-013
++ R-023 (new tests use the in-process `api` fixture and `test__x__y` naming),
+R-019, R-031 (handlers take `repository: Repository`), R-032 (bulk move clears
+`_stock_location_id` directly, same documented `noload` trap), R-033 (`<uuid:>`
+converters), R-035/D-006 (dates now go through the formatting authority).
+**No unexplained violations.** ADR evaluation produced **ADR-047 → R-051**.
+
+**Next up:** owner walks the new `DORA_VERIFY.md` section. The bulk-bar network
+check is the one that matters — if any action still fires N requests, the wiring
+missed a call site.
+
+**Open questions for user:** none blocking. FU-713 (commits-per-item) and FU-714
+(`addItems` still loops elsewhere) are both judgement calls the owner may want to
+take now rather than opportunistically.
+
+---
+
 ## 2026-08-21 (later 4) — **Tidy-up: removed the committed editor temp file**
 **Status:** complete.
 

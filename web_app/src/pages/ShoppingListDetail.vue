@@ -19,31 +19,20 @@
                         >
                             <q-tooltip>Search every stock item and drop it onto this list</q-tooltip>
                         </BaseButton>
-                        <BaseSegmented
-                            v-model="groupBy"
-                            dense
-                            unelevated
-                            class="sld-group-toggle"
-                            :options="[
-                                { label: 'No grouping', value: 'none' },
-                                { label: 'Location', value: 'location' },
-                                { label: 'Store', value: 'store' },
-                            ]"
-                        />
-                        <BaseButton
-                            variant="ghost"
-                            :icon="ICONS.refresh"
-                            label="Refresh deals"
-                            :disable="!detail || detail.lines.length === 0"
-                            @click="onRefreshDeals"
-                        >
-                            <q-tooltip>Re-check linked product offers</q-tooltip>
-                        </BaseButton>
+                        <!-- The grouping segmented control, Refresh deals and
+                             Select all left the toolbar: it was 930px wide and
+                             never wrapped (clipping at "Store" on a phone and
+                             wrapping the page title at 1280px). Ordering is a
+                             *view* preference and now sits on the list header
+                             where the sections are; the other two are rare and
+                             live in More. Only Quick add, More and the one
+                             lifecycle CTA stay inline. -->
                         <BaseButton
                             v-if="detail && detail.lines.length > 0 && detail.status !== 'done'"
                             variant="ghost"
                             :icon="ICONS.checklist"
                             :label="bulkMode ? 'Done selecting' : 'Select'"
+                            class="gt-xs"
                             @click="bulkMode ? exitBulkMode() : enterBulkMode()"
                         >
                             <q-tooltip>Tick or untick a bunch at once</q-tooltip>
@@ -56,6 +45,29 @@
                             :icon="ICONS.more_horiz"
                         >
                             <q-list dense style="min-width: 230px">
+                                <q-item
+                                    clickable
+                                    v-close-popup
+                                    :disable="!detail || detail.lines.length === 0"
+                                    @click="onRefreshDeals"
+                                >
+                                    <q-item-section avatar><q-icon :name="ICONS.refresh" /></q-item-section>
+                                    <q-item-section>
+                                        <q-item-label>Refresh deals</q-item-label>
+                                        <q-item-label caption>Re-check linked product offers</q-item-label>
+                                    </q-item-section>
+                                </q-item>
+                                <q-item
+                                    v-if="detail && detail.lines.length > 0 && detail.status !== 'done'"
+                                    clickable
+                                    v-close-popup
+                                    class="lt-sm"
+                                    @click="bulkMode ? exitBulkMode() : enterBulkMode()"
+                                >
+                                    <q-item-section avatar><q-icon :name="ICONS.checklist" /></q-item-section>
+                                    <q-item-section>{{ bulkMode ? 'Done selecting' : 'Select several' }}</q-item-section>
+                                </q-item>
+                                <q-separator />
                                 <q-item
                                     clickable
                                     v-close-popup
@@ -278,66 +290,35 @@
                                     @keydown.esc.prevent="cancelName"
                                 />
                             </div>
-                            <div class="text-body2 dora-text-muted q-mt-xs">
-                                {{ detail.lines.length }} item{{ detail.lines.length === 1 ? '' : 's' }} ·
-                                {{ tickedCount }} ticked ·
+                            <div class="text-caption dora-text-muted q-mt-xs">
                                 Created {{ formatDate(detail.created_at) }}
                                 <span v-if="detail.status === 'done' && detail.completed_at">
                                     · Completed {{ formatDate(detail.completed_at) }}
                                 </span>
                             </div>
-                            <!-- S14: a proper button, not a text link.
-                                 Overdue/today fold into the button tone —
-                                 one signal instead of button + banner. -->
-                            <!-- ambiguous — dynamic color (positive/warning/undefined) with outline; no BaseButton variant covers all tones. Left as raw q-btn for review. -->
-                            <q-btn
-                                outline
-                                no-caps
-                                dense
-                                :icon="ICONS.event"
-                                :label="shopDayLabel"
-                                :color="shopDayTone"
-                                class="q-mt-sm q-px-sm"
-                                @click="openPlannedDateEditor"
-                            >
-                                <!-- extended tooltip explains what the
-                                     planned date drives beyond "next up". -->
-                                <q-tooltip>
-                                    Set the date you plan to shop this list. Helps
-                                    Dora prioritise which list is your "active" one
-                                    this week, and drives shop-day reminders if you
-                                    have them on.
-                                </q-tooltip>
-                            </q-btn>
                         </div>
-                        <div
-                            v-if="detail.lines.length > 0"
-                            class="col-auto row items-center q-gutter-md"
-                        >
-                            <q-circular-progress
-                                show-value
-                                :value="progressPct"
-                                size="76px"
-                                :thickness="0.18"
-                                color="positive"
-                                class="text-weight-medium"
-                            >
-                                {{ tickedCount }}/{{ detail.lines.length }}
-                            </q-circular-progress>
-                            <div class="text-body2">
-                                <div>
-                                    Remaining
-                                    <span class="text-weight-medium">{{ formatMoney(remainingTotal) }}</span>
-                                </div>
-                                <div>
-                                    Full list
-                                    <span class="text-weight-medium">{{ formatMoney(fullTotal) }}</span>
-                                </div>
-                                <div v-if="savingsTotal > 0" class="text-positive">
-                                    Savings {{ formatMoney(savingsTotal) }}
-                                </div>
-                            </div>
-                        </div>
+                    </div>
+
+                    <!-- Trip card + store card. These replace the old
+                         stranded doughnut-and-three-money-lines cluster that
+                         floated top-right with no container (D-011) and
+                         vanished at zero lines. -->
+                    <div class="column q-gutter-sm q-mb-md">
+                        <TripCard
+                            :line-count="detail.lines.length"
+                            :ticked-count="tickedCount"
+                            :remaining-total="remainingTotal"
+                            :full-total="fullTotal"
+                            :savings-total="savingsTotal"
+                            :estimated-count="estimatedLineCount"
+                            :shop-day-label="shopDayLabel"
+                            :shop-day-tone="shopDayCardTone"
+                            @edit-shop-day="openPlannedDateEditor"
+                        />
+                        <StoreSpendCard
+                            :buckets="detail.totals.by_store"
+                            :collapsible="$q.screen.lt.md"
+                        />
                     </div>
 
                     <!-- Bulk-select action bar — only while selecting. The
@@ -538,27 +519,48 @@
                     </q-card>
 
                     <template v-else>
+                        <!-- Ordering control. Lives on the list header, not the
+                             page toolbar — it belongs to the sections it
+                             reorders, and it was the widest offender in the
+                             toolbar overflow. A mode with no data anywhere is
+                             disabled with a reason rather than silently doing
+                             nothing when tapped. -->
+                        <div class="row items-center q-gutter-xs q-mb-sm sld-order-bar">
+                            <span class="text-caption dora-text-muted q-mr-xs">Order by</span>
+                            <BaseButton
+                                v-for="mode in SECTION_MODES"
+                                :key="mode"
+                                :variant="effectiveMode === mode ? 'secondary' : 'ghost'"
+                                dense
+                                size="sm"
+                                :label="SECTION_MODE_LABELS[mode]"
+                                :disable="!availableModes[mode]"
+                                @click="groupBy = mode"
+                            >
+                                <q-tooltip v-if="!availableModes[mode]">
+                                    Nothing on this list has a {{ SECTION_MODE_LABELS[mode].toLowerCase() }} set
+                                </q-tooltip>
+                            </BaseButton>
+                        </div>
+
                         <div
-                            v-for="group in lineGroups"
-                            :key="group.key"
+                            v-for="section in lineSections"
+                            :key="section.key"
                             class="q-mb-md"
                         >
                             <div
-                                v-if="groupBy !== 'none' && group.label"
+                                v-if="section.label"
                                 class="text-subtitle2 dora-text-muted q-mb-xs row items-center q-gutter-xs"
                             >
-                                <q-icon
-                                    :name="groupBy === 'location' ? 'place' : 'storefront'"
-                                    size="16px"
-                                />
-                                {{ group.label }}
+                                <q-icon :name="sectionIcon" size="16px" />
+                                {{ section.label }}
                                 <span class="text-caption">
-                                    ({{ group.lines.length }} item{{ group.lines.length === 1 ? '' : 's' }})
+                                    ({{ section.lines.length }} item{{ section.lines.length === 1 ? '' : 's' }})
                                 </span>
                             </div>
                             <q-list bordered separator>
                                 <q-item
-                                    v-for="line in nestedLinesFor(group)"
+                                    v-for="line in section.lines"
                                     :key="line.line_id"
                                     :class="{
                                         'shopping-line-ticked': line.is_ticked,
@@ -577,14 +579,47 @@
                                          this icon section just signals "you
                                          can grab here" via the shared handle
                                          class (grab cursor + sunken hover). -->
+                                    <!-- Reorder affordances. Drag is the fast
+                                         path on a pointer device; the arrows are
+                                         the only one that works with a thumb or
+                                         a keyboard, so both write the same
+                                         `sequence`. The grip stays decorative
+                                         (whole-row drag). -->
                                     <q-item-section
                                         v-if="canReorder"
                                         side
                                         top
                                         class="dora-dnd-handle"
                                     >
-                                        <q-icon :name="ICONS.drag_indicator" class="dora-text-muted" />
-                                        <q-tooltip>Drag to reorder</q-tooltip>
+                                        <div class="column items-center">
+                                            <BaseButton
+                                                variant="icon"
+                                                size="xs"
+                                                :icon="ICONS.collapse"
+                                                aria-label="Move up"
+                                                :disable="isFirstLine(line)"
+                                                @click="moveLine(line, -1)"
+                                            >
+                                                <q-tooltip>Move up</q-tooltip>
+                                            </BaseButton>
+                                            <q-icon
+                                                :name="ICONS.drag_indicator"
+                                                class="dora-text-muted"
+                                                size="16px"
+                                            >
+                                                <q-tooltip>Drag to reorder</q-tooltip>
+                                            </q-icon>
+                                            <BaseButton
+                                                variant="icon"
+                                                size="xs"
+                                                :icon="ICONS.expand"
+                                                aria-label="Move down"
+                                                :disable="isLastLine(line)"
+                                                @click="moveLine(line, 1)"
+                                            >
+                                                <q-tooltip>Move down</q-tooltip>
+                                            </BaseButton>
+                                        </div>
                                     </q-item-section>
                                     <q-item-section v-if="bulkMode" side top>
                                         <q-checkbox
@@ -684,53 +719,59 @@
                                                     {{ formatLocation(line.stock_location_breadcrumb, 'full') }}
                                                 </q-tooltip>
                                             </span>
-                                            <span v-if="line.offers.length > 0">
-                                                {{ line.offers.length }} store offer{{
-                                                    line.offers.length === 1 ? '' : 's'
-                                                }}
+                                            <!-- Where the money on this row came
+                                                 from. An estimate off past
+                                                 purchases is marked as such so a
+                                                 rough number is never mistaken
+                                                 for one the user typed. -->
+                                            <span
+                                                v-if="line.estimate_source === 'historic' && line.last_paid_store_name"
+                                                class="dora-text-muted"
+                                            >
+                                                last paid at {{ line.last_paid_store_name }}
                                             </span>
-                                            <span v-else class="dora-text-muted">
-                                                No linked products
+                                            <span
+                                                v-else-if="line.estimate_source === 'historic'"
+                                                class="dora-text-muted"
+                                            >
+                                                from what you last paid
                                             </span>
                                         </q-item-label>
+                                        <!-- Online offers, kept deliberately
+                                             apart from the row's own price.
+                                             They answer a different question
+                                             ("there's a deal on this") and feed
+                                             no total — the line price, the store
+                                             card and the budget all run on what
+                                             the user has actually paid. Showing
+                                             both in one grammar was the original
+                                             sin: two near-identical prices,
+                                             200px apart, meaning different
+                                             things. -->
                                         <div
                                             v-if="line.offers.length > 0"
-                                            class="row q-gutter-xs q-mt-xs"
+                                            class="row q-gutter-xs q-mt-xs items-center"
                                         >
                                             <q-chip
                                                 v-for="offer in line.offers"
                                                 :key="offer.product_id"
                                                 dense
+                                                square
+                                                size="sm"
                                                 :outline="!isChosen(line, offer.product_id)"
-                                                :color="
-                                                    isChosen(line, offer.product_id)
-                                                        ? 'primary'
-                                                        : undefined
-                                                "
-                                                :text-color="
-                                                    isChosen(line, offer.product_id)
-                                                        ? 'white'
-                                                        : undefined
-                                                "
+                                                class="sld-offer-chip"
+                                                :class="{ 'sld-offer-chip--chosen': isChosen(line, offer.product_id) }"
+                                                :icon="ICONS.local_offer"
                                                 clickable
                                                 :disable="detail.status === 'done'"
                                                 @click="onPickOffer(line.line_id, offer.product_id)"
                                             >
-                                                <q-icon
-                                                    name="storefront"
-                                                    size="14px"
-                                                    class="q-mr-xs"
-                                                />
-                                                {{ offer.store_name }} ·
+                                                Online offer:
                                                 {{ offer.price_now != null ? formatMoney(offer.price_now) : '—' }}
+                                                at {{ offer.store_name }}
                                                 <span
                                                     v-if="offerSavings(offer) > 0"
-                                                    class="q-ml-xs offer-savings"
-                                                    :class="
-                                                        isChosen(line, offer.product_id)
-                                                            ? 'text-amber-2'
-                                                            : 'text-positive'
-                                                    "
+                                                    class="q-ml-xs offer-savings text-positive"
                                                 >
                                                     save {{ formatMoney(offerSavings(offer)) }}
                                                 </span>
@@ -740,6 +781,7 @@
                                                     <span v-if="offer.price_was != null && offer.price_now != null">
                                                         · RRP {{ formatMoney(offer.price_was) }}
                                                     </span>
+                                                    · Tap to buy this one — it becomes the line's store
                                                 </q-tooltip>
                                             </q-chip>
                                         </div>
@@ -1295,8 +1337,13 @@
     import AppSkeleton from 'src/components/AppSkeleton.vue';
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseDropdown from 'src/components/BaseDropdown.vue';
-    import BaseSegmented from 'src/components/BaseSegmented.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
+    import TripCard from 'src/components/shoppingList/TripCard.vue';
+    import StoreSpendCard from 'src/components/shoppingList/StoreSpendCard.vue';
+    import {
+        SECTION_MODES, SECTION_MODE_LABELS, useLineSections, isNestedChild,
+        isProductOnly, type SectionMode,
+    } from 'src/composables/useLineSections';
     import FadeTransition from 'src/components/transitions/FadeTransition.vue';
     import NewListDialog from 'src/components/dialogs/NewListDialog.vue';
     import PutAwayDialog from 'src/components/dialogs/PutAwayDialog.vue';
@@ -1317,9 +1364,7 @@
     import { useQuickAdd } from 'src/composables/useQuickAdd';
     import { useShoppingListExport } from 'src/composables/useShoppingListExport';
     import { useShortcut } from 'src/composables/useShortcut';
-    import { tryWithQueue } from 'src/composables/useOfflineQueue';
     import { useWakeLock } from 'src/composables/useWakeLock';
-    import { resolveBaseURL } from 'src/services/api/axiosHttpClient';
     import {
         chosenOfferFor,
         priceOfLine,
@@ -1393,9 +1438,14 @@
     // groupBy is a *view* preference the user re-uses across lists; a
     // per-list scope would silently reset the moment they open a new
     // list, defeating the point.
-    type GroupByMode = 'none' | 'location' | 'store';
+    // Four peer modes now (Location / Group / Store / Manual) — see
+    // `useLineSections`. "None" is gone: it was really "manual sequence order"
+    // wearing a name that implied absence, and keeping both would have made
+    // Manual look like a second no-op. Store moved here from the old toolbar
+    // segmented control; the auto-disable rule means a single-store list greys
+    // it out rather than showing one pointless section.
     const { groupBy } = useListState('shopping-list-detail', () => ({
-        groupBy: ref<GroupByMode>('none'),
+        groupBy: ref<SectionMode>('manual'),
     }));
 
     // ── Lifecycle: start / finish ────────────────────────────────────
@@ -1542,15 +1592,16 @@
     }
 
     // ── Drag-to-reorder ───────────────────────────────────────────────
-    // Reorder is only available when the list isn't done AND isn't
-    // mid-shop AND there's no grouping active (reordering *within* a
-    // group would be confusing — disable the affordance rather than try
-    // to be smart).
+    // Reordering only means something in Manual mode: in every other mode the
+    // section order is derived from a field, so dragging a row would either be
+    // ignored or silently rewrite a sequence the user can't see. `effectiveMode`
+    // rather than `groupBy`, so a stored preference pointing at an empty field
+    // (which falls back to manual) still gets the affordance.
     const canReorder = computed(() =>
         !!detail.value
             && detail.value.status !== 'done'
             && detail.value.status !== 'shopping'
-            && groupBy.value === 'none'
+            && effectiveMode.value === 'manual'
             && !bulkMode.value
     );
 
@@ -1573,45 +1624,38 @@
             if (fromIdx < 0 || toIdx < 0) return;
             ids.splice(fromIdx, 1);
             ids.splice(toIdx, 0, draggedId);
-
-            // Optimistic local update so the UI reflects the move
-            // immediately; if the server call fails we reload.
-            const lookup = new Map(lines.map((l) => [l.line_id, l]));
-            const reordered = ids
-                .map((id, idx) => {
-                    const line = lookup.get(id);
-                    if (!line) return null;
-                    line.sequence = idx;
-                    return line;
-                })
-                .filter((l): l is NonNullable<typeof l> => l !== null);
-            detail.value.lines = reordered;
-
-            void (async () => {
-                try {
-                    await api.reorderLinesAsync(listId.value, ids);
-                } catch (err) {
-                    await load();
-                    $q.notify({
-                        type: 'negative',
-                        position: 'bottom-right',
-                        message: 'Could not reorder.',
-                        caption: toastCaption(err),
-                    });
-                }
-            })();
+            applyLineOrder(ids);
         },
     });
 
-    // ── Line grouping ────────────────────────────────────────────────
-    // One flat list, or one bucket per stock location, or one bucket per
-    // chosen merchant. "No location" / "No merchant" lines drop into a
-    // labelled bucket at the end so they don't vanish.
-    type LineGroup = { key: string; label: string | null; lines: ShoppingListLine[] };
+    /** Optimistically apply a new line order and persist it. Shared by the
+     *  drag handler and the up/down arrows so there is one definition of what
+     *  reordering does — and one place a failure reloads canonical state. */
+    function applyLineOrder(ids: string[]): void {
+        if (!detail.value) return;
+        const lookup = new Map(detail.value.lines.map((l) => [l.line_id, l]));
+        detail.value.lines = ids
+            .map((id, idx) => {
+                const line = lookup.get(id);
+                if (!line) return null;
+                line.sequence = idx;
+                return line;
+            })
+            .filter((l): l is NonNullable<typeof l> => l !== null);
 
-    function locationKeyFor(line: ShoppingListLine): string {
-        if (line.stock_location_breadcrumb.length === 0) return '__no_location__';
-        return line.stock_location_breadcrumb.join(' › ');
+        void (async () => {
+            try {
+                await api.reorderLinesAsync(listId.value, ids);
+            } catch (err) {
+                await load();
+                $q.notify({
+                    type: 'negative',
+                    position: 'bottom-right',
+                    message: 'Could not reorder.',
+                    caption: toastCaption(err),
+                });
+            }
+        })();
     }
 
     // deferred-by-budget lines render under their own collapsible
@@ -1619,6 +1663,47 @@
     const baseLines = computed(() =>
         (detail.value?.lines ?? []).filter((l) => !l.deferred_by_budget),
     );
+
+    // Sectioning for both faces. Mid-shop, ticked lines leave their section
+    // entirely so the list shrinks as you shop; on the plan face they stay put
+    // and dim. `effectiveMode` falls back to manual when the stored preference
+    // points at a field this list doesn't populate.
+    const {
+        sections: lineSections,
+        orderedLines: sectionOrderedLines,
+        availableModes,
+        effectiveMode,
+    } = useLineSections(baseLines, groupBy, {
+        hideTicked: computed(() => detail.value?.status === 'shopping'),
+    });
+
+    // Arrow reordering. Moves within the *visible* manual run rather than the
+    // raw `detail.lines` array, so a deferred-by-budget line sitting between
+    // two visible rows can't swallow a press and make the row appear stuck.
+    function isFirstLine(line: ShoppingListLine): boolean {
+        return sectionOrderedLines.value[0]?.line_id === line.line_id;
+    }
+    function isLastLine(line: ShoppingListLine): boolean {
+        return sectionOrderedLines.value.at(-1)?.line_id === line.line_id;
+    }
+    function moveLine(line: ShoppingListLine, delta: -1 | 1): void {
+        const visible = sectionOrderedLines.value;
+        const from = visible.findIndex((l) => l.line_id === line.line_id);
+        const to = from + delta;
+        if (from < 0 || to < 0 || to >= visible.length) return;
+        // Reorder the visible run, then splice it back over the full line
+        // order so hidden lines keep their relative positions.
+        const movedIds = visible.map((l) => l.line_id);
+        movedIds.splice(from, 1);
+        movedIds.splice(to, 0, line.line_id);
+        const visibleSet = new Set(movedIds);
+        let cursor = 0;
+        const ids = (detail.value?.lines ?? []).map((l) =>
+            visibleSet.has(l.line_id) ? movedIds[cursor++]! : l.line_id
+        );
+        applyLineOrder(ids);
+    }
+
     const deferredLines = computed(() =>
         (detail.value?.lines ?? []).filter((l) => l.deferred_by_budget),
     );
@@ -1800,103 +1885,11 @@
         });
     }
 
-    // Mid-shop, ticked lines sink to the bottom of their group (still
-    // visible, struck through) so the remaining work floats up. Array sort
-    // is stable, so the user's sequence is preserved within each half.
-    function sinkTickedWhileShopping(lines: ShoppingListLine[]): ShoppingListLine[] {
-        if (detail.value?.status !== 'shopping') return lines;
-        return [...lines].sort((a, b) => Number(a.is_ticked) - Number(b.is_ticked));
-    }
-
-    const lineGroups = computed<LineGroup[]>(() => {
-        const lines = baseLines.value;
-        if (groupBy.value === 'none') {
-            return [{ key: 'all', label: null, lines: sinkTickedWhileShopping(lines) }];
-        }
-        const buckets = new Map<string, LineGroup>();
-        for (const line of lines) {
-            let key: string;
-            let label: string;
-            if (groupBy.value === 'store') {
-                const chosen = chosenOfferFor(line);
-                key = chosen?.store_name ?? '__no_store__';
-                label = chosen?.store_name ?? 'No store linked';
-            } else {
-                key = locationKeyFor(line);
-                label = key === '__no_location__' ? 'No location set' : key;
-            }
-            if (!buckets.has(key)) buckets.set(key, { key, label, lines: [] });
-            buckets.get(key)!.lines.push(line);
-        }
-        // Sort lines inside each bucket alphabetically — within a bucket,
-        // sequence is irrelevant because grouping has already broken the
-        // shopper's manual ordering.
-        for (const bucket of buckets.values()) {
-            bucket.lines.sort((a, b) =>
-                a.stock_item_name.localeCompare(b.stock_item_name)
-            );
-            bucket.lines = sinkTickedWhileShopping(bucket.lines);
-        }
-        return [...buckets.values()].sort((a, b) => {
-            const aMissing = a.key.startsWith('__');
-            const bMissing = b.key.startsWith('__');
-            if (aMissing && !bMissing) return 1;
-            if (!aMissing && bMissing) return -1;
-            return (a.label ?? '').localeCompare(b.label ?? '');
-        });
-    });
-
-    // nested display. A line with both `stock_item_id` and
-    // `product_id` set is a *nested* product under the matching
-    // stock-item line; a line with only `product_id` is a *standalone*
-    // product-only line. `nestedLinesFor` reorders a group so each parent
-    // is immediately followed by its nested children, and `isNestedChild`
-    // drives the CSS indent on the child rows.
-    function nestedLinesFor(group: LineGroup): ShoppingListLine[] {
-        const lines = group.lines;
-        // Map stock_item_id -> parent (product_id IS NULL, stock_item_id set)
-        const parentByStockItem = new Map<string, ShoppingListLine>();
-        for (const l of lines) {
-            if (l.stock_item_id && !l.product_id) {
-                parentByStockItem.set(l.stock_item_id, l);
-            }
-        }
-        // Group children by parent line id
-        const childrenByParent = new Map<string, ShoppingListLine[]>();
-        const orphans: ShoppingListLine[] = [];
-        for (const l of lines) {
-            if (l.stock_item_id && l.product_id) {
-                const parent = parentByStockItem.get(l.stock_item_id);
-                if (parent) {
-                    const bucket = childrenByParent.get(parent.line_id) ?? [];
-                    bucket.push(l);
-                    childrenByParent.set(parent.line_id, bucket);
-                    continue;
-                }
-            }
-            // Either: parent-style line (placed by main loop below) OR
-            // standalone product-only line OR a nested child whose parent
-            // isn't in this group — keep at natural position.
-            orphans.push(l);
-        }
-        // Stable rebuild: walk the original ordering of `orphans` (which
-        // already contains every parent and every uncoupled line in
-        // sequence). For each parent, splice its children immediately
-        // after.
-        const out: ShoppingListLine[] = [];
-        for (const l of orphans) {
-            out.push(l);
-            const kids = childrenByParent.get(l.line_id);
-            if (kids) out.push(...kids);
-        }
-        return out;
-    }
-    function isNestedChild(line: ShoppingListLine): boolean {
-        return !!(line.stock_item_id && line.product_id);
-    }
-    function isProductOnly(line: ShoppingListLine): boolean {
-        return !line.stock_item_id && !!line.product_id;
-    }
+    // Sectioning, nesting and the ticked-line policy all moved into
+    // `useLineSections` so the plan and run faces share one implementation
+    // (R-001). The old version lived here as `lineGroups` + `nestedLinesFor`
+    // and sank ticked rows to the bottom of their group mid-shop; the run face
+    // now removes them from view entirely, which is the point of the redesign.
 
     const tickedCount = computed(() =>
         (detail.value?.lines ?? []).filter((l) => l.is_ticked).length
@@ -1997,12 +1990,30 @@
         }
         return `Shop day: ${formatDate(d)}`;
     });
-    const shopDayTone = computed<string | undefined>(() => {
+    // The trip card takes the *meaning*, not a Quasar colour name, so the
+    // component owns how "overdue" looks (R-002 — no palette names crossing a
+    // component boundary). This replaced a `shopDayTone` that returned
+    // 'positive'/'warning' strings straight into a q-btn `color` prop.
+    const shopDayCardTone = computed<'overdue' | 'today' | null>(() => {
         const d = detail.value?.planned_shop_date ?? null;
-        if (!d || detail.value?.status === 'done') return undefined;
-        if (d === todayIso()) return 'positive';
-        if (daysFromToday(d) < 0) return 'warning';
-        return undefined;
+        if (!d || detail.value?.status === 'done') return null;
+        if (d === todayIso()) return 'today';
+        return daysFromToday(d) < 0 ? 'overdue' : null;
+    });
+
+    // How many active lines are priced from history rather than something the
+    // user typed for this trip — the trip card says so out loud.
+    const estimatedLineCount = computed(() =>
+        baseLines.value.filter((l) => l.estimate_source === 'historic').length
+    );
+
+    const sectionIcon = computed(() => {
+        switch (effectiveMode.value) {
+            case 'location': return ICONS.place;
+            case 'store': return ICONS.storefront;
+            case 'group': return ICONS.category;
+            default: return ICONS.list;
+        }
     });
 
     function openPlannedDateEditor() {
@@ -2240,7 +2251,10 @@
     }
 
     // ── Keyboard shortcuts ────────────────────────────────────────────
-    const orderedLines = computed(() => lineGroups.value.flatMap((g) => g.lines));
+    // Focus walks render order, so it reads from the same sectioned list the
+    // template draws — including the run face's hidden-when-ticked filtering,
+    // which keeps arrow-key focus from landing on a row that isn't on screen.
+    const orderedLines = sectionOrderedLines;
     const focusedLineId = ref<string | null>(null);
     // Shop-mode merge (M14): 'u' unticks the most recent tick from this
     // session — the in-store "oops, wrong item" key.
@@ -2420,27 +2434,15 @@
 
     async function onToggleTicked(lineId: string, value: boolean) {
         // Optimistic flip so the checkbox feels instant; if the request
-        // fails we re-load the canonical state. Network errors specifically
-        // are absorbed into the offline queue so ticking-off mid-shop keeps
-        // working while we hunt for signal.
+        // fails we re-load the canonical state. Offline is read-only
+        // (2026-08-23), so a network failure is a plain failure here — the
+        // tick is undone and said so, rather than being buffered and
+        // promised.
         const line = detail.value?.lines.find((l) => l.line_id === lineId);
         if (line) line.is_ticked = value;
         if (value) recentTickStack.value.push(lineId);
         try {
-            const result = await tryWithQueue(
-                () => api.updateLineAsync(listId.value, lineId, { is_ticked: value }),
-                {
-                    url: `${resolveBaseURL()}/shopping-lists/${listId.value}/lines/${lineId}`,
-                    method: 'PATCH',
-                    body: { is_ticked: value },
-                    kind: 'shopping_list_line_tick',
-                    label: value ? 'Tick item' : 'Untick item',
-                },
-            );
-            // If the request was queued, we keep the optimistic flip in
-            // place — no re-load until the queue drains and the server
-            // round-trip succeeds.
-            void result;
+            await api.updateLineAsync(listId.value, lineId, { is_ticked: value });
         } catch (err) {
             await load();
             $q.notify({

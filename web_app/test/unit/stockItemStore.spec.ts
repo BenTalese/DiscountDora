@@ -1,10 +1,11 @@
 // Store-layer coverage — stockItemStore, the richest client store: sorted
 // collection cache, optimistic stock-level swap with rollback registration,
-// offline-queue absorption (F3), canonical-row refetch, and the FU-511
-// auto-add toast that reaches across into the shopping-list store.
+// canonical-row refetch, and the FU-511 auto-add toast that reaches across
+// into the shopping-list store. (The offline-queue absorption this used to
+// cover went with the queue — offline is read-only as of 2026-08-23.)
 //
-// Mock boundary: the API service class, `tryWithQueue`, the shopping-list
-// store, `resolveBaseURL`, and Quasar's Notify. The rollback registry is
+// Mock boundary: the API service class, the shopping-list
+// store, and Quasar's Notify. The rollback registry is
 // deliberately REAL — the optimistic-rollback contract (register → stale
 // until the global error handler fires executeRollbacks → restored) is the
 // behaviour under test, so we drive the real registry from the test.
@@ -24,7 +25,6 @@ const m = vi.hoisted(() => ({
     createAsync: vi.fn(),
     updateAsync: vi.fn(),
     deleteAsync: vi.fn(),
-    tryWithQueue: vi.fn(),
     notify: vi.fn(),
     slRefreshAsync: vi.fn(),
     slSummaries: [] as Array<{ shopping_list_id: string; display_name: string }>,
@@ -38,12 +38,6 @@ vi.mock('src/services/api/stockItemApiService', () => ({
         updateAsync = m.updateAsync;
         deleteAsync = m.deleteAsync;
     },
-}));
-vi.mock('src/composables/useOfflineQueue', () => ({
-    tryWithQueue: m.tryWithQueue,
-}));
-vi.mock('src/services/api/axiosHttpClient', () => ({
-    resolveBaseURL: () => 'http://api.test',
 }));
 vi.mock('quasar', () => ({
     Notify: { create: m.notify },
@@ -84,11 +78,6 @@ beforeEach(() => {
     m.updateAsync.mockResolvedValue({});
     m.deleteAsync.mockResolvedValue(undefined);
     m.slRefreshAsync.mockResolvedValue(undefined);
-    // Default: online + no network error — behave like the real tryWithQueue
-    // happy path (run the attempt, pass result/rejection through).
-    m.tryWithQueue.mockImplementation(
-        (attempt: () => Promise<unknown>) => attempt(),
-    );
 });
 
 async function seedStore(items: StockItem[]) {
@@ -219,22 +208,11 @@ describe('stockItemStore — updateStockLevelAsync (optimistic + rollback)', () 
         expect(levelOf(store, 'SI-1')).toBe('LVL-good');
     });
 
-    it('keeps the optimistic level and skips the canonical refetch when queued offline', async () => {
-        const store = await seedStore([item('SI-1', 'Apple', 'LVL-good')]);
-        m.tryWithQueue.mockResolvedValueOnce({ queued: true, mutation: {} });
-
-        await store.updateStockLevelAsync({ stock_item_id: 'SI-1', stock_level_id: 'LVL-low' });
-
-        expect(levelOf(store, 'SI-1')).toBe('LVL-low'); // trusted until drain
-        expect(m.getAsync).not.toHaveBeenCalled();
-    });
-
     it('is a silent no-op for an id that is not in the cache', async () => {
         const store = await seedStore([item('SI-1', 'Apple')]);
 
         await store.updateStockLevelAsync({ stock_item_id: 'SI-404', stock_level_id: 'LVL-low' });
 
-        expect(m.tryWithQueue).not.toHaveBeenCalled();
         expect(m.updateAsync).not.toHaveBeenCalled();
     });
 
@@ -276,38 +254,19 @@ describe('stockItemStore — updateStockItemAsync (general PATCH)', () => {
         expect(store.stockItems.map((si) => si.name)).toEqual(['Banana', 'Zucchini']);
     });
 
-    it('classifies the PATCH so the offline-queue label reads naturally', async () => {
+    // Offline is read-only (2026-08-23): a network failure rejects like any
+    // other error, so there is no queued-path branch left to cover here. The
+    // PATCH-classification test that fed the queue's labels went with it.
+    it('passes the whole command through and does not leak the id into a second call', async () => {
         const store = await seedStore([item('SI-1', 'Apple')]);
         m.getAsync.mockResolvedValue(item('SI-1', 'Apple'));
 
         await store.updateStockItemAsync({ stock_item_id: 'SI-1', expiry_date: '2026-08-01' });
-        await store.updateStockItemAsync({ stock_item_id: 'SI-1', expiry_date: null });
-        await store.updateStockItemAsync({ stock_item_id: 'SI-1', is_open: true });
-        await store.updateStockItemAsync({ stock_item_id: 'SI-1', name: 'Apple sauce' });
 
-        const kinds = m.tryWithQueue.mock.calls.map(
-            (c) => (c[1] as { kind: string; label: string }),
-        );
-        expect(kinds[0]).toMatchObject({ kind: 'push_expiry', label: 'Push expiry' });
-        expect(kinds[1]).toMatchObject({ kind: 'clear_expiry', label: 'Clear expiry' });
-        expect(kinds[2]).toMatchObject({ kind: 'mark_open', label: 'Mark opened' });
-        expect(kinds[3]).toMatchObject({ kind: 'stock_level_update', label: 'Update stock item' });
-        // Replay URL must be absolute (queue drains hours later; FU comment
-        // in useOfflineQueue) and the id must NOT leak into the body.
-        expect(m.tryWithQueue.mock.calls[0]?.[1]).toMatchObject({
-            url: 'http://api.test/stock-items/SI-1',
-            method: 'PATCH',
-            body: { expiry_date: '2026-08-01' },
+        expect(m.updateAsync).toHaveBeenCalledWith({
+            stock_item_id: 'SI-1',
+            expiry_date: '2026-08-01',
         });
-    });
-
-    it('returns early on the queued path — optimistic UI, no canonical refetch', async () => {
-        const store = await seedStore([item('SI-1', 'Apple')]);
-        m.tryWithQueue.mockResolvedValueOnce({ queued: true, mutation: {} });
-
-        await store.updateStockItemAsync({ stock_item_id: 'SI-1', is_open: true });
-
-        expect(m.getAsync).not.toHaveBeenCalled();
-        expect(m.notify).not.toHaveBeenCalled();
+        expect(m.getAsync).toHaveBeenCalledWith('SI-1');
     });
 });

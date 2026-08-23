@@ -255,6 +255,31 @@ export default class ShoppingListApiService {
             command,
         );
 
+    /** Add a whole selection in one round-trip. De-duplication is the same
+     *  `AddLineHandler` rule the single-line endpoint uses — the server loops
+     *  it — so `already_on_list` counts what was skipped. */
+    bulkAddLinesAsync = async (
+        listId: string,
+        stockItemIds: string[],
+    ): Promise<{ added: number; already_on_list: number; failed_ids: string[] }> =>
+        await this.httpClient.post<
+            { added: number; already_on_list: number; failed_ids: string[] },
+            { stock_item_ids: string[] }
+        >(`/shopping-lists/${listId}/lines/bulk-add`, { stock_item_ids: stockItemIds });
+
+    /** The inverse. Idempotent per item, so `removed_count` is how many were
+     *  actually on the list — not how many ids were sent. */
+    bulkRemoveByStockItemAsync = async (
+        listId: string,
+        stockItemIds: string[],
+    ): Promise<{ removed_count: number }> =>
+        await this.httpClient.post<
+            { removed_count: number },
+            { stock_item_ids: string[] }
+        >(`/shopping-lists/${listId}/lines/bulk-remove-by-stock-item`, {
+            stock_item_ids: stockItemIds,
+        });
+
     updateLineAsync = async (listId: string, lineId: string, command: UpdateLineCommand): Promise<void> =>
         await this.httpClient.patch<void, UpdateLineCommand>(
             `/shopping-lists/${listId}/lines/${lineId}`,

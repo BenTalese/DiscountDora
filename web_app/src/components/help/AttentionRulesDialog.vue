@@ -108,8 +108,10 @@
                  (D-10) and the other two collapsed into one dashed edge
                  (D-5) — because to a reader they said the same thing, and a
                  row can't carry three ring vocabularies and stay
-                 readable. -->
-            <h6 class="q-mt-lg q-mb-sm">A dashed level box</h6>
+                 readable. 2026-08-22: that one marker moved back off the box
+                 edge to an offset ring (it wasn't loud enough inset), but it
+                 is still exactly one marker with one meaning. -->
+            <h6 class="q-mt-lg q-mb-sm">A dashed ring around the level</h6>
             <p class="text-body2 q-mb-sm dora-text-secondary">
                 One marker, one meaning: <strong>this number might be out of
                 date</strong>. The level's colour still tells you what's

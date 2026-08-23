@@ -111,6 +111,44 @@ export type ShoppingListLine = {
      *  substitute. Gates the "Swap with substitute" affordance so it isn't a
      *  dead-end. False for product-only lines. */
     has_substitutes: boolean;
+    /** The item's group, for the "Order by → Group" sectioning mode.
+     *  `null` ⇒ the line falls into the trailing "Unsorted" section. */
+    stock_group_id: string | null;
+    stock_group_name: string | null;
+    /** Server-resolved money ladder (R-003 — never re-derive this client-side):
+     *  `actual_unit_price` → last actual purchase → chosen offer → nothing.
+     *  History deliberately outranks offers: what you really paid is truer
+     *  than an advertised price, and it means a user with no products at all
+     *  still gets real totals. `estimate_source` names the rung so the UI can
+     *  label the number ("~$5.50, what you last paid") instead of flattening
+     *  every price into one grammar. */
+    estimated_unit_price: number | null;
+    estimate_source: 'actual' | 'historic' | 'offer' | 'none';
+    /** The last actual purchase itself, kept alongside the estimate so the
+     *  price editor can say "you last paid $5.50 at Aldi" even once the user
+     *  has typed an override for this trip. */
+    last_paid_unit_price: number | null;
+    last_paid_store_id: string | null;
+    last_paid_store_name: string | null;
+    /** Server-resolved store ladder: bought-this-trip → the item's usual store
+     *  (explicit intent) → the store of the last actual purchase → the chosen
+     *  offer's store. Intent beats history here — the reverse of the money
+     *  ladder — because this answers "where do I *plan* to buy it".
+     *  `null` ⇒ the "No store set" bucket. */
+    resolved_store_id: string | null;
+    resolved_store_name: string | null;
+};
+
+/** One bucket of the plan-face store breakdown. `store_id` is null for the
+ *  catch-all. `subtotal` sums only lines that resolved a price and
+ *  `priced_line_count` says how many did, so the card can admit "3 items
+ *  unpriced, not counted" rather than showing a confidently short total. */
+export type StoreSpend = {
+    store_id: string | null;
+    store_name: string;
+    line_count: number;
+    priced_line_count: number;
+    subtotal: number;
 };
 
 /** Server-owned list-level money/count aggregates (state-ownership Type B).
@@ -123,6 +161,11 @@ export type ShoppingListTotals = {
     unticked_count: number;
     ticked_count: number;
     line_count: number;
+    /** Ordered subtotal-desc with "No store set" forced last. Empty when no
+     *  active line resolved a real store — the card hides entirely rather than
+     *  rendering one meaningless row. Server-owned because it sums across the
+     *  collection (R-003). */
+    by_store: StoreSpend[];
 };
 
 /** FU-334 — receipt-photo attachment metadata. Bytes are never inlined;
@@ -208,15 +251,17 @@ export function chosenOfferFor(line: ShoppingListLine): LineProductOffer | null 
     return line.offers[0] ?? null;
 }
 
+// What this line is expected to cost. The ladder that picks the unit price
+// (actual → what you last paid → offer → nothing) is resolved server-side and
+// arrives as `estimated_unit_price`; this is only the quantity multiply, which
+// is display math the client is allowed to own (R-003 Type C).
+//
+// It used to re-implement the ladder here as actual→offer. That was a second
+// copy of a domain rule and it hard-required product data — a user with no
+// products got zeroes even when Dora knew exactly what they last paid.
 export function priceOfLine(line: ShoppingListLine): number {
-    const qty = line.quantity ?? 1;
-    // a user-entered actual price overrides any store offer.
-    if (line.actual_unit_price != null) {
-        return line.actual_unit_price * qty;
-    }
-    const offer = chosenOfferFor(line);
-    if (!offer || offer.price_now == null) return 0;
-    return offer.price_now * qty;
+    if (line.estimated_unit_price == null) return 0;
+    return line.estimated_unit_price * (line.quantity ?? 1);
 }
 
 // Savings vs the line's chosen offer's RRP (price_was). Zero when the offer

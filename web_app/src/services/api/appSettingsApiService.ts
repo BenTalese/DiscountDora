@@ -85,6 +85,11 @@ export type AppSettings = {
     email_enabled: boolean;
     audit_retention_days: number;
     public_url: string;
+    // install-wide image-encode policy, applied at upload time by the shared
+    // `processImageFile` helper. Owned by Settings → Install → Image quality;
+    // also mirrored on /api/health so non-admin clients read the same numbers.
+    image_quality: number;
+    image_max_dimension: number;
 };
 
 // the read DTO exposes `<field>_configured` bools; the

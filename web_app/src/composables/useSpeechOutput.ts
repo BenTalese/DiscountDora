@@ -115,6 +115,51 @@ function unlockAudioOnFirstGesture(): void {
     }
 }
 
+// How long to let a `speechSynthesis.cancel()` settle before queueing the next
+// utterance (see `speakBrowser`). Long enough for Chrome's internal cancel to
+// land, short enough that a "next step" tap still feels immediate.
+const BROWSER_CANCEL_SETTLE_MS = 120;
+// Cap on waiting for a decoded blob to become playable (see `whenPlayable`).
+// The blob is already fully in memory, so this should resolve in a frame or
+// two; the timeout only stops a browser that never fires the event from
+// leaving Dora mute.
+const AUDIO_READY_TIMEOUT_MS = 1500;
+
+/**
+ * Resolve once `audio` has buffered enough to play from its true start.
+ *
+ * Calling `play()` on a freshly constructed element can begin playback before
+ * the decoder is ready, and some mobile builds drop the leading samples rather
+ * than waiting — the reported "beginning of the sentence is cut off, random how
+ * much". The blob is already complete in memory (the server buffers the whole
+ * WAV and `res.blob()` awaits the full body), so this is a decode wait, not a
+ * network one, and normally costs a frame.
+ *
+ * Resolves rather than rejects on `error`/timeout: the caller's `play()` is a
+ * better place to surface a real failure, and a browser that never fires
+ * `canplay` must not leave Dora silent.
+ */
+function whenPlayable(audio: HTMLAudioElement): Promise<void> {
+    // HAVE_FUTURE_DATA or better — already safe to start.
+    if (audio.readyState >= 3) return Promise.resolve();
+    return new Promise<void>((resolve) => {
+        let settled = false;
+        const finish = () => {
+            if (settled) return;
+            settled = true;
+            audio.removeEventListener('canplaythrough', finish);
+            audio.removeEventListener('canplay', finish);
+            audio.removeEventListener('error', finish);
+            window.clearTimeout(timer);
+            resolve();
+        };
+        const timer = window.setTimeout(finish, AUDIO_READY_TIMEOUT_MS);
+        audio.addEventListener('canplaythrough', finish);
+        audio.addEventListener('canplay', finish);
+        audio.addEventListener('error', finish);
+    });
+}
+
 export function useSpeechOutput() {
     // register the iOS audio-unlock primer once per session on
     // the first `useSpeechOutput()` instantiation (which is early — the
@@ -126,6 +171,18 @@ export function useSpeechOutput() {
         typeof window !== 'undefined' && 'speechSynthesis' in window;
     const available = ref<boolean>(browserAvailable);
     const speaking = ref<boolean>(false);
+    // `speaking` is only true once audio is actually coming out. `busy` also
+    // covers the gap before that — the Piper fetch, and the browser path's
+    // cancel-settle delay — because callers that need to keep out of the way
+    // (cook mode holds the mic's auto-restart, FU-723) must do so for the whole
+    // utterance, not just its audible part. Cleared by cancel() and by every
+    // terminal outcome, with a caller-side timeout as the backstop.
+    const busy = ref<boolean>(false);
+    // Which engine last actually produced sound. The Piper→browser fallback is
+    // otherwise invisible, and the two engines have different failure
+    // modes — without this you cannot tell which one you are debugging
+    // (FU-722). Surfaced in cook mode's Sous Chef popover.
+    const lastEngine = ref<'piper' | 'browser' | null>(null);
 
     // If the browser already covers it, no need to probe. Otherwise ask the
     // server whether Piper is configured — when yes, flip `available` true so
@@ -161,17 +218,41 @@ export function useSpeechOutput() {
         }
     }
 
-    function speakBrowser(text: string) {
+    function speakBrowser(text: string, token: number) {
         if (!browserAvailable) return;
         const synth = window.speechSynthesis;
-        // Cancel any current utterance so the new one starts cleanly —
-        // letting them queue makes "next step" → "next step" stutter.
-        synth.cancel();
         const utter = new SpeechSynthesisUtterance(text);
-        utter.onstart = () => { speaking.value = true; };
-        utter.onend = () => { speaking.value = false; };
-        utter.onerror = () => { speaking.value = false; };
-        synth.speak(utter);
+        utter.onstart = () => {
+            speaking.value = true;
+            lastEngine.value = 'browser';
+        };
+        utter.onend = () => { speaking.value = false; busy.value = false; };
+        utter.onerror = () => { speaking.value = false; busy.value = false; };
+
+        // `cancel()` has already run (every path into here goes through
+        // `speak()` → `cancel()`), so the redundant second `synth.cancel()`
+        // that used to sit here is gone. It mattered: Chrome — Android
+        // especially — treats `cancel()` as asynchronous internally, and an
+        // utterance queued in the *same task* as the cancel that preceded it
+        // is clipped or dropped outright, by a varying amount. That is the
+        // signature of the reported "start of the sentence is missing, random
+        // how much" (candidate fix — see FU-722; the fallback path is silent
+        // about which engine spoke, so this is unconfirmed).
+        const start = () => {
+            // A newer speak()/cancel() while we were waiting wins.
+            if (token !== seq) return;
+            synth.speak(utter);
+        };
+        if (synth.speaking || synth.pending) {
+            window.setTimeout(start, BROWSER_CANCEL_SETTLE_MS);
+        } else {
+            start();
+        }
+    }
+
+    /** Clear `busy` unless a newer utterance has already claimed it. */
+    function releaseBusy(token: number) {
+        if (token === seq) busy.value = false;
     }
 
     /** Returns true when Piper handled the utterance (played, or was
@@ -183,15 +264,28 @@ export function useSpeechOutput() {
             if (token !== seq) return true; // superseded — don't play or fall back
             const url = URL.createObjectURL(blob);
             const audio = new Audio(url);
+            // `preload` is 'metadata' by default on some mobile builds, which is
+            // not enough to start cleanly from sample zero.
+            audio.preload = 'auto';
             currentAudio = audio;
             currentUrl = url;
-            audio.onplay = () => { speaking.value = true; };
+            audio.onplay = () => {
+                speaking.value = true;
+                lastEngine.value = 'piper';
+            };
             audio.onended = () => {
                 speaking.value = false;
+                releaseBusy(token);
                 if (currentAudio === audio) stopAudio();
             };
             audio.onpause = () => { speaking.value = false; };
-            audio.onerror = () => { speaking.value = false; };
+            audio.onerror = () => { speaking.value = false; releaseBusy(token); };
+            // Wait for the decoder before starting. There is already an `await`
+            // (the synth fetch) between the user's gesture and this point, so
+            // this adds no new iOS gesture-credit exposure — that is what the
+            // silent-WAV primer above exists for.
+            await whenPlayable(audio);
+            if (token !== seq) return true; // superseded while decoding
             await audio.play();
             return true;
         } catch {
@@ -204,6 +298,7 @@ export function useSpeechOutput() {
         if (!trimmed) return;
         cancel(); // bumps seq, stops any audio + synthesis
         const token = seq;
+        busy.value = true;
         const user = authStore.currentUser;
         const engine = user?.voice_engine ?? 'piper';
         const voiceId = user?.voice_id ?? 'amy';
@@ -211,11 +306,17 @@ export function useSpeechOutput() {
             void playPiper(trimmed, voiceId, token).then((handled) => {
                 // Only fall back if Piper failed AND we're still the current
                 // utterance (a newer speak()/cancel() would have bumped seq).
-                if (!handled && token === seq) speakBrowser(trimmed);
+                if (!handled && token === seq) speakBrowser(trimmed, token);
+                // Superseded-while-decoding returns `handled` with nothing
+                // playing, so `busy` would otherwise never clear. The newer
+                // utterance owns `seq`, so this is a no-op in that case.
+                else if (handled && !speaking.value && token === seq) {
+                    releaseBusy(token);
+                }
             });
             return;
         }
-        speakBrowser(trimmed);
+        speakBrowser(trimmed, token);
     }
 
     function cancel() {
@@ -223,6 +324,7 @@ export function useSpeechOutput() {
         stopAudio();
         if (browserAvailable) window.speechSynthesis.cancel();
         speaking.value = false;
+        busy.value = false;
     }
 
     // Stop talking when the component using us tears down — a Dora chat that
@@ -234,6 +336,8 @@ export function useSpeechOutput() {
     return {
         available,
         speaking,
+        busy,
+        lastEngine,
         speak,
         cancel,
     };

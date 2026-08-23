@@ -55,6 +55,328 @@ Resolved entries carry one extra line, and live in `DORA_FOLLOWUPS_RESOLVED.md`:
 
 # Open
 
+## [OPEN] FU-727 — Shopping-list redesign: run face and receipt face still to build
+- **Raised:** 2026-08-23 (shopping-list redesign, plan face landed)
+- **Type:** deferred job.
+- **What:** the agreed three-face redesign is one face in. **Plan face is
+  done and driven in a browser.** Still to build:
+  - **Run face** (`shopping`): dedicated big-tap-target rows with the whole row
+    as the target, an **undo toast** on tick, cleared sections collapsing to a
+    single "✓ all 4 picked" line, the rail hidden (reachable from ⋮), the
+    thumb-height price-capture sheet, and the remaining plan-face chrome
+    (drag handles, delete, buy hints, quantity steppers) stripped out. What
+    already works: ticked lines leave their section, the sticky footer, and
+    shared sectioning. Owner decided: **no budget banner, no suggestions, no
+    over-budget indicator** mid-shop.
+  - **Receipt face** (`done`): read-only itemised receipt with the store split,
+    photos and print, replacing today's disabled-plan-face rendering. **Amend**
+    button unlocks price / store / quantity only, with a banner stating the
+    restock is *not* re-applied.
+- **Why it stopped here:** the plan face is the surface users spend most time on
+  and it's independently shippable; the other two are separate compositions with
+  no shared blocking work left (the DTO and sectioning groundwork is in).
+- **Recommended resolution:** now / next session — this is the active workstream.
+- **Spec:** the agreed design + wireframes artifact (rev 3), and the decisions
+  recorded in the worklog entry for 2026-08-23.
+
+## [OPEN] FU-726 — Amending a finished list must also correct the harvested price observation
+- **Raised:** 2026-08-23 (shopping-list redesign)
+- **Type:** finding / design constraint for the receipt face.
+- **What:** finishing a list harvests a `StockItemPriceObservation` per line,
+  joined back by `shopping_list_line_id` (partial UNIQUE on that FK makes the
+  harvest idempotent). The agreed **Amend** flow lets the user correct a price
+  after the fact — but if it only writes `actual_unit_price` on the line, the
+  observation keeps the wrong number.
+- **Why it matters:** observations are now load-bearing, not just a "Your prices"
+  widget — they feed the money ladder's `historic` rung, every future line
+  estimate for that item, and the store card. A typo'd `$110.00` corrected on the
+  receipt would otherwise keep poisoning estimates indefinitely.
+- **Recommended resolution:** build it as part of the receipt face (FU-727) —
+  the amend handler updates the joined observation in the same unit of work.
+
+## [OPEN] FU-725 — Line-price ladder has no e2e coverage of the historic rung
+- **Raised:** 2026-08-23 (shopping-list redesign)
+- **Type:** test gap.
+- **What:** `compute_list_totals` + the store breakdown are unit-tested
+  (`tests/test_shopping_list_store_breakdown.py`, 7 cases) and the sectioning is
+  covered in `useLineSections.spec.ts` (19 cases). The **ladders themselves** —
+  actual→historic→offer for money, and purchased→usual→historic→offer for store —
+  run inside `GetShoppingListDetailHandler` and are only verified by having been
+  driven once in a browser against seed data.
+- **Why it matters:** these are exactly the "stable, low-churn domain contract"
+  the verification stance says is worth pinning, and a silent regression would
+  show up as *wrong money*, which is the least forgivable kind.
+- **Recommended resolution:** opportunistic — next time the detail handler is
+  touched. One e2e test per rung, asserting `estimate_source` and
+  `resolved_store_id`, would cover it.
+
+## [OPEN] FU-724 — `src-pwa/custom-service-worker.ts` is dead code, and it's the file you'd reach for
+- **Raised:** 2026-08-23 (offline read-only work)
+- **Type:** finding.
+- **What:** `web_app/src-pwa/custom-service-worker.ts` is never built. Its own
+  header says it is picked up "ONLY if `workboxMode` is set to `InjectManifest`",
+  and `quasar.config.ts:238` sets `workboxMode: 'GenerateSW'`. The service worker
+  that actually ships is generated from `extendGenerateSWOptions` in
+  `quasar.config.ts` (that's where the `/api/**` `NetworkFirst` rule and the
+  navigate-fallback live).
+- **Why it matters more than ordinary dead code:** now that **offline is
+  read-only (R-052)**, the read cache *is* the offline story — and the file a
+  future agent will open to change offline caching behaviour is the one named
+  `custom-service-worker.ts`. Edits there would have no effect, silently, with
+  no build error and no test failure. That's the same invisible-failure shape as
+  FU-719/FU-720.
+- **Why deferred:** deleting it is a one-liner but it's outside the scope of the
+  read-only change, and it's worth a moment's thought first: either delete it, or
+  switch to `InjectManifest` and move the runtime-caching rules into it (a real
+  choice — `GenerateSW` is the lower-friction route the config comment
+  deliberately picked, so deleting is the likely answer).
+- **Recommended resolution:** opportunistic. If deleting, leave a one-line
+  pointer comment in `quasar.config.ts` saying the SW is generated there, so the
+  next person looks in the right place.
+
+## [OPEN] FU-722 — voiced text loses the start of the sentence (unconfirmed; two candidate fixes shipped)
+- **Raised:** 2026-08-23 (cook-mode voice feedback)
+- **Type:** finding.
+- **What:** the owner reports Sous Chef "cuts out the beginning of the sentence
+  frequently — random how much gets cut", on mobile, over VPN, and suspects it
+  affects anywhere text is voiced. **Ruled out server-side:** `POST /api/tts`
+  buffers the entire WAV (`tts_synthesize.py:187` — `subprocess.run` +
+  `capture_output`, no streaming, no trim), `res.blob()` awaits the whole body,
+  and the default voice params leave `pitch_semitones` at 0.0 so the ffmpeg
+  pitch-shift path (the one place a malformed piped WAV header could appear) is
+  never entered. The audio leaving the server is complete and well-formed, so
+  this is client-side playback.
+- **Two candidate fixes shipped 2026-08-23** in `useSpeechOutput.ts`, both
+  correct hardening on their own merit but **neither confirmed to be the cause**:
+  (a) `speakBrowser` had a redundant second `synth.cancel()` immediately before
+  `synth.speak()` — Chrome/Android treat `cancel()` as internally async and clip
+  or drop an utterance queued in the same task, by a varying amount, which is
+  exactly the reported signature. Removed, plus a 120ms settle when something
+  was genuinely still speaking. (b) `playPiper` called `audio.play()` on a
+  freshly constructed element; now waits for `canplay`/`canplaythrough` (1.5s
+  cap) with `preload='auto'`, so playback can't start ahead of the decoder.
+  (c) the third candidate — recognizer restarts stealing audio focus
+  mid-playback, the only one that explains "mobile, in cook mode" — was fixed
+  too on 2026-08-23; see **FU-723 (resolved)**. All three candidates are now
+  addressed, so a retest that still clips means the cause is something none of
+  us has thought of yet.
+- **Diagnosability fixed 2026-08-23.** `useSpeechOutput` now tracks
+  `lastEngine` ('piper' | 'browser'), and cook mode's Sous Chef popover shows
+  **"Voice: Piper (server)"** or **"Voice: Browser fallback"** once she has
+  spoken. This was the missing instrument: the fallback was silent, the two
+  engines clip for different reasons, and over a slow VPN a Piper timeout
+  falling back to the browser is likely — so knowing which one spoke decides
+  which mechanism you are looking at.
+- **Why deferred:** unreproducible from this session — it needs a real phone, a
+  real VPN hop, and an ear. **A diagnosability gap makes it worse:** the Piper→
+  browser fallback is completely silent, so the owner cannot tell which engine
+  actually spoke, and the two engines have *different* clipping mechanisms. Over
+  a slow VPN a Piper timeout falling back to the browser voice is very likely,
+  which would mean the symptom he sees is (a), not (b).
+- **Recommended resolution:** now — confirm on the phone. **Open the Sous Chef
+  "?" popover first and note which engine is speaking**; that single fact
+  decides which of the three fixes was even relevant. Then: does it still clip?
+  Does it clip in **Dora chat** too (no continuous mic there, so chat-clipping
+  rules the FU-723 mechanism out and points at the engine)? If it still clips
+  with the engine known, that's new information and this entry should be rewritten
+  rather than extended — three plausible mechanisms have now been closed.
+
+## [OPEN] FU-721 — revive `.github/workflows/` (CI + Release) and prove they actually work
+- **Raised:** 2026-08-23 (owner request)
+- **Type:** deferred job.
+- **What:** both workflows are **fully commented out** — `ci.yml` (95 lines) and
+  `release.yml` (164 lines), every line prefixed `#`, to preserve GitHub
+  free-tier minutes during rapid Claude-assisted development. Uncomment them,
+  then treat them as untested code: they have never run in their current shape,
+  and the repo has moved under them for ~7 weeks (`ci.yml` last touched
+  2026-07-10, `release.yml` 2026-07-01). Reviving them blind would just trade a
+  silent gap for a red badge.
+- **Known-stale already found (2026-08-23, static read):**
+  - **CI pins Node 20 and that is now wrong.** `ci.yml`'s frontend job sets
+    `node-version: "20"`, but `package-lock.json` resolves
+    `@quasar/app-vite@2.6.0`, whose `engines.node` is `^30 || ^28 || ^26 || ^24
+    || ^22`. The `Dockerfile` already moved to NodeSource 22 for exactly this
+    reason. `web_app/package.json`'s own `engines.node` still lists `^20 || ^18`
+    and is the stale one — reconcile all three, don't copy the loosest.
+  - **`release.yml` has never been exercised at all** and is the riskier of the
+    two (it builds + publishes). It predates the P8-01 Dashy-Dora rename
+    landing, the Postgres-standard decision, and the current `dora.spec` /
+    packaging layout, so its artifact names, image refs and version handling all
+    need re-reading against today's reality rather than assumed-good.
+  - **Verified fine, so don't "fix" it:** `pytest` in CI needs **no** live
+    server. `tests/e2e/dora_api/conftest.py` calls `startup(is_test_env=True)`
+    and adapts `http://localhost:5170/...` URLs onto a Flask test client, and
+    `tests/db_backend.py` defaults to a throwaway SQLite file. A Postgres
+    service container is *optional* (`DORA_TEST_DB=postgres`) and worth adding
+    as a second matrix leg only if the SQLite-vs-Postgres divergence class
+    (FU-526 / FU-533) is judged worth the minutes.
+  - Both suites are green locally as of 2026-08-23 (backend 1936 passed,
+    frontend 502 vitest, `vue-tsc` clean), so a red CI on first run means the
+    workflow is wrong, not the code — a useful signal to keep in mind.
+- **Why deferred:** the standing policy is that these stay commented during
+  rapid development to protect the GitHub free tier, and that policy hasn't
+  changed yet — reviving them mid-stream would burn minutes on every push of a
+  branch that changes 20 times a day. This FU is the record of the debt, not a
+  licence to switch it on now.
+- **Recommended resolution:** when the feedback-polish stream slows, or at the
+  first real release — whichever comes first. It gates/pairs with **FU-405**
+  (ops/CI), which in turn gates FU-520 and FU-404, and it belongs with the
+  Phase-4 open-source release work (FU-406). Do CI first and let it go green on
+  a throwaway branch before touching `release.yml`; a broken release workflow is
+  discovered at the worst possible moment.
+
+## [OPEN] FU-720 — nothing verifies the deployed route map; a deploy can delete a feature silently
+- **Raised:** 2026-08-23 (FU-717 post-mortem)
+- **Type:** finding.
+- **What:** FU-717 was an rsync exclude (`--exclude='data'`, unanchored) deleting
+  `dora_api/features/data/` from the server on every deploy. The app then booted
+  **completely clean** — no warning, no error, healthcheck green — and served
+  `"Endpoint was not found."` for all 15 endpoints that had silently vanished.
+  There is no boot-time or post-deploy check that the route map is what the
+  build intended, so a whole feature can disappear and the only signal is a user
+  hitting a page weeks later.
+- **Why deferred:** wants a decision on shape before building. Options, cheapest
+  first: (a) log the registered route count per blueprint at boot, so
+  `DATA_ROUTER: 0 routes` is visible in `docker compose logs`; (b) a boot
+  assertion that every `*_ROUTER` in `features/routers.py` has ≥1 rule — a
+  blueprint with none is always a packaging bug, never intentional; (c) a
+  post-deploy smoke script that curls one known endpoint per blueprint. (b) is
+  the strongest per line of code and would have failed this deploy loudly at
+  startup. Pairs naturally with **FU-719** (same file, same class of silent
+  discovery failure) and belongs with the ops/CI work in FU-405.
+- **Recommended resolution:** opportunistic, or now alongside FU-719 — the two
+  are one small hardening pass over `startup.py` / `infrastructure/utils.py`.
+
+## [OPEN] FU-719 — `_iter_submodules` silently swallows a feature subpackage that fails to import
+- **Raised:** 2026-08-23 (chasing FU-717)
+- **Type:** finding (robustness / diagnosability).
+- **What:** route discovery is
+  `get_attributes_ending_with('router', 'dora_api.features')` →
+  `_iter_submodules` (`infrastructure/utils.py:47`), which calls
+  `pkgutil.walk_packages(pkg.__path__, prefix=...)` **with no `onerror`**.
+  Verified against the CPython source in this venv: when `walk_packages`
+  imports a subpackage to recurse into it, `except ImportError:` with
+  `onerror is None` **swallows the error and moves on**. So if any
+  `dora_api/features/<x>/__init__.py` fails to import, that entire feature's
+  modules are never yielded, its routes are never attached to the blueprint,
+  and **the app boots perfectly happily** — the blueprint still registers
+  (every `*_ROUTER` lives in `features/routers.py`, which is imported
+  independently), just with a hole in it. The user-visible result is exactly
+  FU-717's shape: some `/api/*` paths serve normally, others return the app's
+  own `"Endpoint was not found."` 404 (via the middleware for
+  POST/PATCH/DELETE, or `serve_spa.py:110`'s catch-all for GET), with nothing
+  in the logs. Non-package modules are imported by `_iter_submodules` itself
+  and *do* raise loudly, so this hole is subpackage-granular only.
+- **Not the cause of FU-717** (checked 2026-08-23): that turned out to be an
+  rsync exclude *deleting* `features/data/` off the server, and an absent
+  directory yields no subpackage and no ImportError — there was nothing for this
+  hole to swallow. It stays open on its own merit: the failure mode is real and
+  would be indistinguishable from FU-717 if it ever fires.
+- **Why deferred:** wants the owner's go-ahead — it's infrastructure the whole
+  app boots through, and the fix should be verified against a deliberately
+  broken feature package.
+- **Recommended resolution:** now, alongside **FU-720** (same file, same class of
+  silent discovery failure — one hardening pass covers both). Pass an
+  `onerror` that logs the module name + exception and **re-raises**: a feature
+  that can't import should fail the boot loudly, not serve a silently
+  incomplete API. Whatever the cause of FU-717, this is worth doing on its own
+  merit — it is the reason a whole-blueprint hole is invisible.
+
+## [OPEN] FU-716 — Backup & Restore page bypasses the API service layer
+- **Raised:** 2026-08-23 (image-quality settings split)
+- **Type:** finding (R-005 / portable data access + one HTTP client).
+- **What:** every call in `AdminDataBackupRestore.vue` is a hand-rolled `fetch`
+  with `credentials: 'include'` and a hand-assembled `csrfHeader()`, rather than
+  going through `AxiosHttpClient` / an api service. Consequences: no
+  `X-Request-Id` correlation id, so a failure like FU-717 has no matching server
+  log line to look up; no normalised error, so the toast caption is a raw
+  `Error: List failed (404)` instead of `toastCaption(err)`; and no shared retry
+  policy. `backup_retention_count` / `backup_storage_path` are also absent from
+  the `AppSettings` type, which is *why* the page reached for raw `fetch` in the
+  first place — `image_quality` / `image_max_dimension` were in the same boat
+  and were added to the type when the image card moved out (2026-08-23).
+- **Why deferred:** the current unit only moved the image card; rewiring five
+  more call sites (create / download / restore / delete / library settings,
+  two of which stream files) is its own change and wants its own verify.
+- **Recommended resolution:** opportunistic — fold in next time this page is
+  touched, or immediately after FU-717 is diagnosed, since the correlation id
+  is exactly what would have made FU-717 a five-minute answer.
+
+## [OPEN] FU-715 — reported "Needs attention filter is broken" did not reproduce
+- **Raised:** 2026-08-22 (stock-overview feedback batch)
+- **Type:** finding.
+- **What:** the owner reported the **Needs attention** chip as broken "since
+  recent changes", then on being asked for the symptom said "seems to work now,
+  skip". Logged rather than dropped, per the standing rule — a report from real
+  usage plus a static read that finds nothing is not proof it is fixed. What the
+  investigation *did* establish: `24ca1786` replaced the composite client-side
+  predicate with a bare `item.needs_attention === true` read
+  (`useStockFilters.ts:217`) and deliberately provides **no client fallback**, so
+  the chip matches nothing at all if the server field is absent — a stale API
+  build, a cached bundle, or any `StockItem` that reached the store without going
+  through `GET /stock-items` hydration. Two adjacent live gaps found on the way,
+  either of which could produce "it's broken" intermittently: (a) optimistic /
+  offline-queued mutations no longer recompute attention, so an essential item set
+  to Out doesn't enter the filter until a refetch (`stockItemStore.ts:133`,
+  `:177-181`); (b) the rule honours `AlertPreference` mutes but not
+  `AlertInteraction` snooze/dismiss, unlike the bell (`get_alerts.py:284-341`) —
+  so the chip and the bell disagree on a real install. Existing coverage is green
+  (35 `useStockFilters` unit tests, 69 backend attention tests).
+- **Why deferred:** owner said it works now; no reproduction to fix against.
+- **Recommended resolution:** confirm in browser — specifically after a bulk
+  action or an offline-queued edit, which is where (a) would bite. Cross-ref
+  [[FU-702]] (same coupling on the "Expiring soon" chip).
+
+## [OPEN] FU-714 — `useShoppingListActions.addItems` still loops; the bulk endpoint exists now
+- **Raised:** 2026-08-22 (bulk-endpoint work)
+- **Type:** leftover.
+- **What:** the stock overview's bulk paths were moved onto
+  `POST /api/shopping-lists/<id>/lines/bulk-add`, but `addItems`
+  (`useShoppingListActions.ts:41`) still `await`s `addLineAsync` per item. It has
+  ~16 call sites and several pass genuinely multi-item arrays — "add all missing
+  ingredients" on both recipe pages, `DoraChat`'s matched-items add, the
+  stock-item detail substitutes/related adds, `StocktakeRunner`, `QuickAddSheet`.
+  Those surfaces still pay one round-trip per item.
+- **Why deferred:** out of the reported scope (stock overview), and `addItems`
+  accepts full `AddLineCommand`s — product-anchored lines, quantities,
+  `selected_product_id` — which the bulk endpoint doesn't take. Doing it properly
+  means either widening the endpoint's request model or branching on "is every
+  command a bare stock_item_id", and the branch is the kind of implicit
+  cleverness R-019 warns about.
+- **Recommended resolution:** opportunistic — next time shopping-list adds are
+  touched. Widening `bulk-add` to accept the same line shape as `AddLineHandler`
+  is the cleaner of the two options.
+
+## [OPEN] FU-713 — bulk set-level and bulk add/remove commit once per item
+- **Raised:** 2026-08-22 (bulk-endpoint work)
+- **Type:** finding.
+- **What:** `bulk-set-level`, `bulk-add` and `bulk-remove-by-stock-item` loop the
+  existing single-item handlers server-side, and each of those ends in its own
+  `save_changes()`. So a 40-item bulk restock is 1 HTTP round-trip but 40 commits.
+  That was a deliberate trade — a level change stamps two timestamps, appends a
+  `StockLevelChange`, may record a `ConsumptionEvent` and may fire the auto-add
+  hook, and a second implementation of that would drift (R-003) — but it means
+  the win is latency, not database work. `bulk-move` does not have this shape; it
+  is two queries and one commit.
+- **Why deferred:** correctness first, and the reported symptom was latency.
+- **Recommended resolution:** when <a bulk action is measurably slow on a real
+  pantry>. The fix is to let the inner handlers defer their commit (an explicit
+  `commit: bool` argument, not an implicit unit-of-work), not to inline the rules.
+
+## [OPEN] FU-712 — `expiryIndicator` tooltips now format dates; check the two recipe pages don't drift
+- **Raised:** 2026-08-22 (expiry-menu work)
+- **Type:** leftover.
+- **What:** `expiryIndicatorFor` was echoing the raw ISO date into its tooltip
+  (a D-006 violation) and now routes through `formatDate`. `RecipeDetailPage.vue:1712`
+  and `RecipeDetailNext.vue:1311` build the *same* two phrases ("Expired {when}" /
+  "Expires {when}") by hand rather than calling the helper — three copies of one
+  sentence, which is how the ISO leak survived in the first place.
+- **Why deferred:** out of scope; those pages are mid-redesign (the Next variant
+  won the comparison) and folding them in now would collide.
+- **Recommended resolution:** opportunistic — when the recipe-page redesign
+  lands and one of the two files is deleted, point the survivor at
+  `expiryIndicatorFor`.
+
 ## [OPEN] FU-711 — "open / in-use" wording is now split across surfaces
 - **Raised:** 2026-08-21 (stock-item detail feedback batch)
 - **Type:** finding.

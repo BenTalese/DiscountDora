@@ -10,6 +10,189 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-718 — widen the offline queue so "most actions" really do work offline
+- **Raised:** 2026-08-23 (owner misc feedback)
+- **Type:** follow-up (needs a design proposal before any code).
+- **What:** the owner wants the offline banner to be able to say *"actions on
+  the current page will sync up when we reconnect"* — i.e. buffer the majority
+  of mutations while offline and replay them in order, gently rate-limited, on
+  reconnect. Today `useOfflineQueue.ts` covers exactly six retry-safe kinds
+  (`stock_level_update`, `shopping_list_line_tick`, `mark_open`,
+  `mark_restocked`, `push_expiry`, `clear_expiry`) and its header explicitly
+  excludes **creates, deletes, and anything that changes identity** because a
+  phantom item appearing hours later is worse than a loud failure. The banner
+  copy was *already* narrowed once from "Most actions still work" for exactly
+  that reason (`OfflineBanner.vue:45`), so widening the copy without widening
+  the mechanism would re-introduce the overstatement the narrowing fixed.
+- **Why deferred:** this is not a copy change — it's a design job with real
+  forks: (a) client-generated ids so creates can be queued and referenced by
+  later queued mutations (a create + an edit of that create must replay as a
+  chain); (b) what happens when a replay conflicts, now across more kinds than
+  the current conflict ledger was sized for; (c) idempotency keys server-side
+  so a half-drained queue replayed twice doesn't double-apply; (d) which
+  actions stay deliberately online-only (money, restores, admin/system writes,
+  anything destructive); (e) the drain pacing the owner asked for ("not too
+  rapidly") and its interaction with the existing per-user localStorage queue.
+  Charter check needed too: Effortless argues for it, Anti-creep argues for
+  keeping the excluded set small.
+- **Recommended resolution:** later — write `PROPOSAL_OFFLINE_ACTIONS.md`
+  (Wave-C shape, with the feedback coverage table) and get the forks decided
+  before touching `useOfflineQueue.ts`. Do **not** widen the banner copy until
+  the mechanism lands.
+- **State note:** RESOLVED 2026-08-23 — **closed by reversing it.** Costing the
+  widening out is what changed the answer: `useOfflineQueue` was 372 lines plus
+  649 lines of spec serving **three** call sites, and widening it meant taking
+  on server idempotency keys, client-generated entity ids, chained
+  create-then-edit replay and a conflict UI. The owner's call: **offline is
+  read-only**. The queue, both spec files, the three `tryWithQueue` call sites
+  and the banner's queued-count are deleted (~1,150 lines net); the read cache
+  stays and is now the whole offline story; the banner promises nothing. Promoted
+  to **R-052 / ADR-048** so this doesn't get re-litigated by the next agent who
+  notices there's no queue. The cross-user read-cache leak was fixed in the same
+  unit — it stopped being theoretical once reads became the offline story.
+
+## [RESOLVED] FU-723 — Dora listens while she speaks (continuous recognition vs speech output)
+- **Raised:** 2026-08-23 (cook-mode voice feedback)
+- **Type:** finding (needs a behaviour decision, not just a fix).
+- **What:** cook mode runs `useVoiceInput({ continuous: true })`, and
+  `useVoiceInput.ts:126` **auto-restarts** `recognition.start()` from the
+  browser's `onend` whenever the recognizer stops. Nothing coordinates that with
+  `useSpeechOutput` — there is no "don't listen while I'm talking" and no "don't
+  talk while the mic just opened". Two consequences: (1) on Android, opening the
+  mic shifts audio focus, and a media element starting playback in the same
+  moment can lose its leading audio — a live candidate for the reported
+  clipped-sentence-start (**FU-722**), and one that would explain why the owner
+  saw it *on mobile in cook mode*; (2) Dora can hear herself, so a step whose
+  text contains a command word is a self-trigger waiting to happen.
+- **Why deferred:** the obvious fix (pause recognition while `speaking` is true)
+  is a **behaviour change that costs barge-in** — saying "next" over the top of
+  her narration is exactly the hands-free move a cook wants, and muting the mic
+  while she talks removes it. The alternatives (duck instead of stop; keep
+  listening but ignore transcripts that match what she is currently saying;
+  restart the recognizer only on a debounce after playback ends) are real design
+  forks with different feels, so this wants an owner call before code.
+- **Recommended resolution:** now, if FU-722's on-device diagnosis points here;
+  otherwise later with the cook-mode voice pass. Decide barge-in first — the
+  answer determines the fix.
+- **State note:** RESOLVED 2026-08-23 — fixed **without** giving up barge-in,
+  which was the whole reason it needed a decision. The insight: the race is
+  caused by *re-opening* the mic (that is what shifts audio focus), not by the
+  mic being open. So `useVoiceInput` gained an optional
+  `deferRestartWhile: () => boolean`; cook mode passes speech-output's new
+  `busy` ref, and the `onend` auto-restart is held (150ms poll, 10s safety cap
+  after which it restarts regardless) until the utterance finishes. An
+  already-running recognizer is never stopped, so saying "next" over the top of
+  Dora still works. `stop()` and unmount clear a pending restart so the mic
+  can't reopen after the user switched it off. `busy` covers the whole
+  utterance, not just the audible part — it spans the Piper fetch and the
+  browser path's cancel-settle delay, because the clip-risk window opens before
+  any sound comes out. Self-hearing (a step whose text contains a command word)
+  was **not** addressed and is not currently reported; reopen separately if it
+  bites. `vue-tsc` clean, 502 vitest passed, eslint clean.
+
+## [RESOLVED] FU-717 — reported "Couldn't load backups. List failed (404)" did not reproduce
+- **Raised:** 2026-08-23 (owner settings feedback)
+- **Type:** finding.
+- **What:** the owner hit a 404 on Settings → Admin → Data → Backup & restore;
+  the toast comes from `loadLibrary()` in `AdminDataBackupRestore.vue`, which
+  `fetch`es `${resolveBaseURL()}/data/backups?size=200`. The endpoint could not
+  be made to 404 in this session: `GET /api/data/backups` **is** registered
+  (confirmed in the built `app.url_map`), the live dev server on :5170 answers
+  it `401` unauthenticated (i.e. the rule matches — a missing rule would be
+  404), and driving the handler directly with an admin identity returned
+  `200 {"items":[],"limit":200,"page":1,"total":0}`. Nothing in the handler or
+  the middleware can emit 404 for this path except
+  `middleware.py:87 endpoint_not_found()`, which only fires when no rule
+  matches at all. That points at the **base URL**, not the route: if
+  `resolveBaseURL()` resolves to something that isn't the Flask origin (a
+  Capacitor build with no saved instance URL, a stale saved
+  `dora.backendBaseUrl` in localStorage, or the Quasar dev origin) the request
+  lands somewhere with no `/data/backups` and 404s. Worth noting the local dev
+  instance is drifted independently: `data/dora.dev.db` has **no
+  `alembic_version` table** and is missing `User.stocktake_last_session_at`, so
+  any `User` load against it raises — a separate hazard, unrelated to this bug.
+- **Narrowed 2026-08-23 (owner: reliably reproducible, laptop *and* mobile, a
+  remote backend in both cases, not local dev).** That kills the base-URL
+  theory. `onMounted` fires `loadLibrary()` and `loadLibrarySettings()`
+  **together** (`AdminDataBackupRestore.vue:960`); a bad base URL 404s both and
+  raises **two** toasts, and the owner sees only *"Couldn't load backups."*
+  So `GET /api/app-settings` is being served on the same origin that 404s
+  `GET /api/data/backups` — the base URL is right and the route is genuinely
+  absent from the **deployed** backend. Leading theory is therefore a stale
+  artifact: `features/data/backup_library.py` (which owns all five `/backups`
+  routes) was added in `37165fc9` on **2026-07-02**, one day *after* the
+  frontend page that calls it (`1ffd202d`, 2026-07-01 — the `/data/backups`
+  path and the "List failed" copy are byte-identical to today's, so the client
+  is not the old one). A deployed backend built from anything before 07-02
+  serves `/api/app-settings` fine and 404s every `/backups` path.
+  Ruled out on the way: PyInstaller can't be dropping the module (`dora.spec`
+  does `collect_submodules("dora_api.features")`, and the blueprint walk
+  imports every module before `register_blueprint`); Flask `SERVER_NAME` /
+  `APPLICATION_ROOT` are set nowhere in the repo, so a Host-header mismatch
+  isn't rewriting matches; and a CORS or mixed-content failure throws in the
+  client rather than yielding a numeric 404.
+- **Narrowed again 2026-08-23 (owner: local dev fine, deployed server broken;
+  Import *upload* also fails with "Upload failed. Endpoint was not found.").**
+  That widens it past backups: the upload posts to `/api/data/uploads/start`
+  (`useChunkedUpload.ts:40`), so **two different modules' routes are missing at
+  once** — and `"Endpoint was not found."` is the *backend's* own string
+  (`api_response.py:191`), so the request reaches Flask and Flask matches no
+  rule. The fault is therefore "the deployed Flask has no rules under
+  `/api/data/*`", not a proxy or a base URL. Two live hypotheses:
+  **(A) the deployed image is stale.** `uploads.py` + `import_spreadsheet.py`
+  landed 2026-05-25 (`27442b1e`) and `backup_library.py` 2026-07-02
+  (`37165fc9`), so an image built before 2026-05-25 lacks the whole
+  data-management surface while every other route works. "I just deployed
+  current" doesn't rule this out — `docker compose up -d` without `--build`, or
+  a tag that didn't move, leaves the old image running.
+  **(B) the `features/data` subpackage fails to import in the container** and is
+  being skipped silently — see **FU-719**, which is a confirmed hole in
+  `_iter_submodules` that produces precisely this symptom with no boot error.
+  Ruled out on the way: nginx can't be the source (it listens on 5174 serving
+  the SPA, the `/api/` proxy block is commented out, and a `try_files` fallthrough
+  would return index.html/405, not the app's JSON 404); no `SERVER_NAME` /
+  `APPLICATION_ROOT` anywhere; no production gating on these routes
+  (`bootstrap()` → `register_routers()` is profile-independent); every
+  third-party import under `features/data` (ijson, openpyxl, PIL via
+  `qrcode[pil]`, sqlalchemy_utils) **is** in `requirements.txt`; and a hard
+  import crash is excluded because the API is demonstrably alive (a dead
+  gunicorn would refuse the connection — `startup.sh` backgrounds it with `&`
+  and `exec`s nginx, so the container survives an API that never booted).
+- **Why deferred:** the deployed instance is not reachable from this session.
+  Distinguishing A from B needs three read-only commands **inside the running
+  container** (they also bypass every proxy/base-URL variable):
+  `ls dora_api/features/data/` — no `backup_library.py` ⇒ **A, confirmed**;
+  `curl -si localhost:5170/api/data/backups`; and
+  `curl -si localhost:5170/api/data/import/templates` — if that 404s too, the
+  whole data surface is missing rather than just the newer half.
+- **Recommended resolution:** now — `curl -i http://<host>:5170/api/data/backups`
+  against the deployed backend. **401 ⇒ the route exists** and the fault is
+  client/proxy-side (chase it with DevTools → Network on the full request URL).
+  **404 ⇒ the deployed backend predates 2026-07-02**; rebuild and redeploy, and
+  the real follow-up becomes "why is the artifact seven weeks behind the
+  client?" — a shipped-frontend/shipped-backend version skew with nothing
+  detecting it, which is a build-pipeline gap worth its own FU (see FU-405 ops/CI).
+  Confirm alongside: does Settings → Admin → Data → **Import** work? It rides
+  the same `DATA_ROUTER`, so Import-works-plus-backups-404 pins the fault to
+  `backup_library.py` specifically rather than the whole blueprint.
+- **State note:** RESOLVED 2026-08-23 — **cause was the deploy script, not the
+  app.** `~/Desktop/deploy-dora.sh` rsyncs with `--exclude='data'`; an rsync
+  pattern containing no slashes matches the **basename at any depth**, so it
+  skipped `dora_api/features/data/` as well as the intended top-level `./data`,
+  and `--delete` removed it from the server on every deploy. That stripped 15
+  files — `backup_library.py`, `uploads.py`, `import_spreadsheet.py` and the
+  export/barcode/restore modules — so `DATA_ROUTER` (declared in
+  `features/routers.py`, which survives) registered with **zero** routes and
+  every `/api/data/*` path fell through to the 404. Reproduced both ways in a
+  scratch tree: `--exclude='data'` drops `dora_api/features/data/` entirely,
+  `--exclude='/data'` (anchored to the transfer root) keeps it. Fix is the
+  leading slash. Neither hypothesis A (stale image) nor B (FU-719's silent
+  ImportError swallow) was correct — with the directory *absent* there is no
+  subpackage to import and nothing to swallow, so FU-719 did not contribute
+  here; it remains open on its own merit. **The real gap this exposes** is that
+  nothing verifies the deployed route map: a deploy can silently delete a whole
+  feature and the app boots clean and serves 404s. Logged as FU-720.
+
 ## [RESOLVED] FU-696 — stray editor temp file committed-adjacent in `web_app/src/pages`
 - **Raised:** 2026-08-20 (DR-15 micro-motion pass).
 - **Type:** finding.

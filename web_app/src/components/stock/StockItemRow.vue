@@ -242,13 +242,30 @@
                 </q-popup-proxy>
 
                 <!-- Set → push-shortcut menu. -->
+                <!-- No `auto-close`: the header below states the item's expiry
+                     date, and the whole point of a push shortcut is watching
+                     that date move. Closing on the first tap would hide the
+                     feedback and force a reopen to stack a second push. The
+                     two destructive items still close, via `v-close-popup`. -->
                 <q-menu
                     v-else
-                    auto-close
                     transition-show="jump-down"
                     transition-hide="jump-up"
                 >
                     <q-list dense class="expiry-menu-list">
+                        <q-item-label header class="expiry-menu-header">
+                            <div class="row items-center no-wrap">
+                                <q-icon
+                                    :name="expiry.icon"
+                                    :color="expiry.colour ?? undefined"
+                                    :class="expiry.cssClass ?? undefined"
+                                    size="16px"
+                                    class="q-mr-xs"
+                                />
+                                {{ expiry.tooltip }}
+                            </div>
+                        </q-item-label>
+                        <q-separator />
                         <q-item clickable @click="actions.pushExpiry(item.stock_item_id, 1)">
                             <q-item-section
                                 avatar
@@ -277,7 +294,7 @@
                             <q-item-section>Push expiry by 14 days</q-item-section>
                         </q-item>
                         <q-separator />
-                        <q-item clickable class="text-negative" @click="clearExpiry">
+                        <q-item v-close-popup clickable class="text-negative" @click="clearExpiry">
                             <q-item-section
                                 avatar
                                 style="min-width: 0; padding-right: 8px"
@@ -286,7 +303,7 @@
                             </q-item-section>
                             <q-item-section>Clear expiry</q-item-section>
                         </q-item>
-                        <q-item clickable class="text-negative" @click="openMarkAsWasted">
+                        <q-item v-close-popup clickable class="text-negative" @click="openMarkAsWasted">
                             <q-item-section
                                 avatar
                                 style="min-width: 0; padding-right: 8px"
@@ -509,9 +526,10 @@
     const levelButtonStyle = computed(() => {
         // Empty-level fallback — dashed outline + page surface so the
         // button reads as "unset" without competing with a colour. When the
-        // level is ALSO uncertain the class's 3px dashed border owns the edge
-        // instead: an inline border would win the cascade and quietly render
-        // the uncertainty marker one pixel thinner than everywhere else.
+        // level is ALSO uncertain the box drops this border and lets the
+        // offset uncertainty ring speak alone: two dashed edges 2px apart
+        // read as one muddy smudge at 32px, and the ring is the louder of
+        // the two signals.
         if (levelSequence.value === null) {
             const surface = { background: 'var(--surface-component)' };
             if (levelUncertain.value) return surface;
@@ -788,6 +806,16 @@
         white-space: nowrap;
     }
 
+    /* Context header — same shape as the level picker's `stock-row__belief-header`
+       so the two row menus read as one family. States the date the push
+       shortcuts below are about; it re-renders as they move it. */
+    .expiry-menu-header {
+        color: var(--text-primary);
+        font-weight: 600;
+        line-height: 1.3;
+        padding-bottom: var(--space-2);
+    }
+
     .stock-row {
         /* 2026-08-15 feedback ("scrolling feels like it's snapping"): the
            row is now a FIXED height, not a min-height, and that height comes
@@ -931,31 +959,50 @@
     }
 
     /* ── One uncertainty marker (D-5) ───────────────────────────────────────
-       Replaces BOTH the stocktake pulse and the belief ring. Inset so it
-       reads as part of the box rather than a halo around it, and dashed
-       rather than hollow so the level's own colour still carries the level.
-       No animation, at any preference — there is nothing to honour under
+       Replaces BOTH the stocktake pulse and the belief ring. Dashed, so it
+       never competes with the level's own colour, and with no animation at
+       any preference — there is nothing to honour under
        `prefers-reduced-motion` because nothing moves.
 
-       2026-08-21 feedback: "the dashed effect looks a bit meh — bigger gaps,
-       1px thicker dashes, and the in-between should be transparent (currently
-       looks white or light blue)". Two of the three are just this rule:
+       2026-08-22 feedback: "it's not obvious enough — keep the dashed style
+       but put it around the box with a tiny gap, like the old Dora-thinks
+       ring". So the dashes move OFF the box edge and onto a `::after` ring
+       sitting 2px outside it, which is the geometry of the retired belief
+       ring (`box-shadow: 0 0 0 2px surface, 0 0 0 4px warning`) drawn in
+       dashes instead of solid. Two things get louder at once: the ring is
+       outside the silhouette rather than eating into it, and the level
+       colour goes back to a full, unbroken 32px block.
 
-         • **thicker + bigger gaps** — 2px → 3px. The browser derives both dash
-           length and gap from the border width (Chrome: dash ≈ 2× width, gap ≈
-           1× width), so one number moves both together. What it will NOT do is
-           let you set the dash:gap RATIO independently — that needs the border
-           replaced by a gradient overlay on an extra element, which was built,
-           measured, and then reverted on the owner's call: not worth an extra
-           DOM node per row and a shared mixin for a decorative marker. If the
-           proportions are ever genuinely wrong, that's the trade to reopen.
-         • **transparent in-between** — nothing to do with the border. The pale
-           colour was a separate `box-shadow: inset 0 0 0 1px
-           var(--surface-component)` on this rule, drawing a surface-toned ring
-           just inside the dashes. It's deleted, so the gaps show the level's
-           own colour, which is what the D-5 note above wanted all along. */
-    .stock-row__level-btn--uncertain {
+       Why `::after` and not `outline`/`box-shadow`:
+         • `outline` is spoken for — A6 makes the focus ring mandatory, and
+           one element cannot carry two.
+         • `box-shadow` cannot be dashed at all; that is what forced the old
+           ring to be solid.
+         • Quasar's QBtn already uses `:before` for its elevation shadow
+           (`quasar/src/components/btn/QBtn.sass`); `:after` is free.
+       The ring bleeds 5px past the button. The row is 56px painted with 6px
+       of vertical body padding, so it clears `overflow: hidden`; on phones
+       the body gap tightens to 8px, so the media query below drops the
+       dashes to 2px to keep daylight between the ring and the name.
+
+       Dash:gap RATIO is still not settable — the browser derives both from
+       the border width (Chrome: dash ≈ 2× width, gap ≈ 1× width). A gradient
+       overlay can do it, was built, measured and reverted on the owner's
+       call. Reopen that trade only if the proportions are genuinely wrong. */
+    .stock-row__level-btn--uncertain::after {
+        content: '';
+        position: absolute;
+        inset: -5px;
         border: 3px dashed color-mix(in srgb, var(--text-primary) 65%, transparent);
+        border-radius: calc(var(--radius-sm, 4px) + 5px);
+        pointer-events: none;
+    }
+    @media (max-width: 599px) {
+        .stock-row__level-btn--uncertain::after {
+            inset: -4px;
+            border-width: 2px;
+            border-radius: calc(var(--radius-sm, 4px) + 4px);
+        }
     }
 
     /* The stocktake pulse (PROPOSAL_STOCKTAKE_MODE §7) and the belief ring

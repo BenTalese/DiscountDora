@@ -92,6 +92,14 @@
                                         </q-item-section>
                                     </q-item>
                                 </q-list>
+                                <!-- FU-722 — which engine actually spoke. The
+                                     Piper→browser fallback is otherwise
+                                     invisible, and the two clip for different
+                                     reasons, so debugging "it cut the start
+                                     off" needs to start here. -->
+                                <div v-if="spokenWith" class="text-caption dora-text-muted q-mt-sm">
+                                    Voice: {{ spokenWith }}
+                                </div>
                             </q-card-section>
                         </q-card>
                     </q-menu>
@@ -688,6 +696,13 @@
     const speechEnabled = ref<boolean>(
         authStore.currentUser?.voice_output_enabled ?? false,
     );
+    // Null until she has actually spoken once this session.
+    const spokenWith = computed(() => {
+        const engine = speechOut.lastEngine.value;
+        if (engine === 'piper') return 'Piper (server)';
+        if (engine === 'browser') return 'Browser fallback';
+        return null;
+    });
 
     const voiceInput = useVoiceInput({
         continuous: true,
@@ -698,6 +713,11 @@
         onFinal(text) {
             handleVoiceCommand(text);
         },
+        // FU-723 — don't let the recognizer re-open the mic while Dora is
+        // mid-utterance; on Android that steals audio focus and can clip the
+        // front of what she's saying. Barge-in is unaffected: an already-open
+        // mic keeps hearing "next" over the top of her.
+        deferRestartWhile: () => speechOut.busy.value,
     });
     const listening = computed(() => voiceInput.listening.value);
     const speechRecognitionAvailable = computed(() => voiceInput.available.value);
@@ -1368,6 +1388,21 @@
     watch(currentStepIndex, () => {
         if (speechEnabled.value) speakCurrent();
     });
+
+    // Step 1 used to be silent. `currentStepIndex` starts at 0 and the watcher
+    // above only fires on *change*, so entering cook mode with Sous Chef already
+    // on announced nothing until you pressed Next — the one step you'd most want
+    // read to you while your hands are busy. `immediate: true` on that watcher
+    // wouldn't do it either: the steps arrive from an async fetch in onMounted,
+    // so at mount `currentStep` is still ''. Fire off the arrival of the steps
+    // instead, once, and only if we're still sitting on the first one (a fast
+    // tap to step 2 before the fetch lands must not be talked over).
+    let announcedFirstStep = false;
+    watch(steps, (next) => {
+        if (announcedFirstStep || next.length === 0) return;
+        announcedFirstStep = true;
+        if (speechEnabled.value && currentStepIndex.value === 0) speakCurrent();
+    }, { immediate: true });
 
     onMounted(async () => {
         // speechRecognitionAvailable is a computed off the composable

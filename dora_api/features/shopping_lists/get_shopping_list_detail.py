@@ -102,6 +102,49 @@ class ShoppingListLineDto:
     # up front instead of surfacing it as a dead-end that toasts "no
     # substitutes recorded" only after a tap. False for product-only lines.
     has_substitutes: bool = False
+    # ── Redesign: sectioning + the two ladders ────────────────────────────
+    # The stock item's group, for the "Order by → Group" sectioning mode.
+    # None ⇒ the line falls into the trailing "Unsorted" section.
+    stock_group_id: UUID | None = None
+    stock_group_name: str | None = None
+    # **Money ladder** (R-003 — resolved here, never re-derived client-side):
+    # `actual_unit_price` → the item's last actual purchase → the chosen
+    # offer → nothing. History beats offers deliberately: what you really
+    # paid is truer than an advertised price. `estimate_source` names the
+    # rung so the UI can label the number honestly ("~$5.50, what you last
+    # paid") instead of presenting every price in one flat grammar.
+    estimated_unit_price: float | None = None
+    estimate_source: str = "none"   # 'actual' | 'historic' | 'offer' | 'none'
+    # The last actual purchase itself, kept alongside the estimate so the
+    # price editor can say "you last paid $5.50 at Aldi" even when the user
+    # has already typed an override for this trip.
+    last_paid_unit_price: float | None = None
+    last_paid_store_id: UUID | None = None
+    last_paid_store_name: str | None = None
+    # **Store ladder**: bought-this-trip → the item's `usual_store_id`
+    # ("I buy this here" — explicit intent) → the store of the last actual
+    # purchase (where you happened to buy it) → the chosen offer's store.
+    # Intent beats history here, which is the reverse of the money ladder,
+    # because this answers "where do I *plan* to buy it".
+    # None ⇒ the "No store set" bucket in the breakdown + Store sectioning.
+    resolved_store_id: UUID | None = None
+    resolved_store_name: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class StoreSpendDto:
+    """One bucket of the plan-face store breakdown ("where you'll spend it").
+
+    `store_id` is None for the catch-all "No store set" bucket. `subtotal`
+    only sums lines that actually resolved a price, and `priced_line_count`
+    says how many did — the UI needs both so it can admit "3 items unpriced,
+    not counted" rather than presenting a confidently wrong total.
+    """
+    store_id: UUID | None
+    store_name: str
+    line_count: int
+    priced_line_count: int
+    subtotal: float
 
 
 @dataclass(frozen=True, slots=True)
@@ -112,6 +155,10 @@ class ShoppingListTotalsDto:
     `primaryListStats`); the server now owns the cross-line totals so the number
     can't silently disagree. Per-line *display* price stays a client concern
     (the accepted Type-C `priceOfLine` helper) — only the aggregate moved.
+
+    `by_store` is here rather than in the client for exactly that reason: it is
+    a cross-entity aggregate summed across a fetched collection, which R-003
+    puts on the server side of the line.
     """
     total_price: float        # full price of every line
     remaining_price: float    # price of un-ticked lines only ("still to grab")
@@ -119,6 +166,10 @@ class ShoppingListTotalsDto:
     unticked_count: int
     ticked_count: int
     line_count: int
+    # Ordered subtotal-desc, with the "No store set" bucket forced last.
+    # Empty when no active line resolved a store at all — the UI hides the
+    # whole card in that case rather than showing a single meaningless row.
+    by_store: List[StoreSpendDto] = field(default_factory=list)
 
 
 def _chosen_offer(line: 'ShoppingListLineDto') -> 'LineProductOfferDto | None':
@@ -132,15 +183,19 @@ def _chosen_offer(line: 'ShoppingListLineDto') -> 'LineProductOfferDto | None':
 
 
 def _line_price(line: 'ShoppingListLineDto') -> float:
-    """Port of `priceOfLine` (shoppingList.ts): a user-entered actual price wins,
-    else the chosen offer's `price_now`, times quantity."""
-    qty = line.quantity or 1
-    if line.actual_unit_price is not None:
-        return line.actual_unit_price * qty
-    offer = _chosen_offer(line)
-    if offer is None or offer.price_now is None:
+    """What this line is expected to cost: the resolved money-ladder estimate
+    times quantity.
+
+    The ladder itself is applied once, in the handler, and lands on
+    `estimated_unit_price` — this is only the quantity multiply. Before the
+    redesign the ladder was inlined here as actual→offer; it now runs
+    actual→historic→offer so a price you have actually paid outranks an
+    advertised one, and so a user with no products at all still gets real
+    totals off their own purchase history.
+    """
+    if line.estimated_unit_price is None:
         return 0.0
-    return offer.price_now * qty
+    return line.estimated_unit_price * (line.quantity or 1)
 
 
 def _line_savings(line: 'ShoppingListLineDto') -> float:
@@ -169,6 +224,8 @@ def compute_list_totals(lines: List['ShoppingListLineDto']) -> ShoppingListTotal
     total_savings = 0.0
     unticked = 0
     active_line_count = 0
+    # store_id (None = unassigned) → [name, line_count, priced_count, subtotal]
+    _Buckets: dict[UUID | None, list] = {}
     for line in lines:
         if line.deferred_by_budget:
             continue
@@ -179,6 +236,36 @@ def compute_list_totals(lines: List['ShoppingListLineDto']) -> ShoppingListTotal
         if not line.is_ticked:
             remaining_price += price
             unticked += 1
+        _Key = line.resolved_store_id
+        _Bucket = _Buckets.get(_Key)
+        if _Bucket is None:
+            _Bucket = [line.resolved_store_name or "No store set", 0, 0, 0.0]
+            _Buckets[_Key] = _Bucket
+        _Bucket[1] += 1
+        # An unpriced line still counts toward its store's item count — it is
+        # genuinely part of that shop — but must not silently contribute $0 to
+        # the subtotal, or the card would read as a confident total that is
+        # quietly short. `priced_line_count` is what lets the UI say so.
+        if line.estimated_unit_price is not None:
+            _Bucket[2] += 1
+            _Bucket[3] += price
+    _ByStore = [
+        StoreSpendDto(
+            store_id = sid,
+            store_name = b[0],
+            line_count = b[1],
+            priced_line_count = b[2],
+            subtotal = b[3],
+        )
+        for sid, b in _Buckets.items()
+    ]
+    # Biggest spend first, but the catch-all bucket always sorts last — it is
+    # a gap to fill, not a destination competing with the real stores.
+    _ByStore.sort(key = lambda s: (s.store_id is None, -s.subtotal, s.store_name.lower()))
+    # A breakdown needs at least one *real* store to be worth rendering; a
+    # lone "No store set" row tells the user nothing they didn't know.
+    if not any(s.store_id is not None for s in _ByStore):
+        _ByStore = []
     return ShoppingListTotalsDto(
         total_price = total_price,
         remaining_price = remaining_price,
@@ -186,6 +273,7 @@ def compute_list_totals(lines: List['ShoppingListLineDto']) -> ShoppingListTotal
         unticked_count = unticked,
         ticked_count = active_line_count - unticked,
         line_count = active_line_count,
+        by_store = _ByStore,
     )
 
 
@@ -256,6 +344,7 @@ class GetShoppingListDetailHandler:
                 self.repository.get(StockItem)
                 .include("stock_level")
                 .include("stock_location")
+                .include("stock_group")
                 .include("products")
                     .then_include("store")
                 .include("products")
@@ -319,24 +408,29 @@ class GetShoppingListDetailHandler:
                 loc.id: loc for loc in self.repository.get(StockLocation).all()
             }
 
-        # Resolve store names for any `purchased_store_id` overrides
-        # so the line DTO can render the chip without a second round-trip.
+        # Resolve store names for every store any ladder can land on:
+        # `purchased_store_id` overrides, the items' `usual_store_id`
+        # ("I buy this here"), and the stores of prior actual purchases.
+        # One lookup covers all three so neither ladder round-trips per line.
         _StoreNameLookup: dict[UUID, str] = {}
-        _PurchasedStoreIds = {
+        _WantedStoreIds: set[UUID] = {
             l.purchased_store_id for l in _Lines if l.purchased_store_id
         }
-        if _PurchasedStoreIds:
-            stores = self.repository.get(Store).all(
-                EntityField(Store, "id").in_(list(_PurchasedStoreIds))
-            )
-            _StoreNameLookup = {s.id: s.name for s in stores}
+        _WantedStoreIds |= {
+            s.usual_store_id for s in _StockItems.values() if s.usual_store_id
+        }
 
         # per-item prefill source: the most-recent
         # *actual purchase* of each stock item on a prior finished list, priced
         # via the shared actual→picked ladder. This is the honest per-item
         # number for the till editor; manual price observations are per-measure
         # (per-L/kg) and feed the "Your prices" widget, not this per-item field.
-        _PriorPurchaseByItem: dict[UUID, tuple[datetime, float]] = {}
+        #
+        # The tuple carries the store as well as the price, because this same
+        # lookup now feeds three things: the till prefill, the money ladder's
+        # `historic` rung, and the store ladder's "where you bought it last
+        # time" rung. (when, price, store_id)
+        _PriorPurchaseByItem: dict[UUID, tuple[datetime, float, UUID | None]] = {}
         if _StockItemIds:
             _PriorLines = self.repository.get(ShoppingListLine).all(
                 EntityField(ShoppingListLine, ShoppingListLine.Fields.STOCK_ITEM_ID).in_(_StockItemIds)
@@ -365,7 +459,22 @@ class GetShoppingListDetailHandler:
                     continue
                 prev = _PriorPurchaseByItem.get(l.stock_item_id)
                 if prev is None or completed > prev[0]:
-                    _PriorPurchaseByItem[l.stock_item_id] = (completed, paid)
+                    _PriorPurchaseByItem[l.stock_item_id] = (
+                        completed, paid, l.purchased_store_id,
+                    )
+
+        # Now that the prior purchases are known, resolve every store name in
+        # one query (see the _WantedStoreIds seed above).
+        _WantedStoreIds |= {
+            p[2] for p in _PriorPurchaseByItem.values() if p[2]
+        }
+        if _WantedStoreIds:
+            _StoreNameLookup = {
+                s.id: s.name
+                for s in self.repository.get(Store).all(
+                    EntityField(Store, "id").in_(list(_WantedStoreIds))
+                )
+            }
 
         def _breadcrumb_for(item: StockItem | None) -> List[str]:
             if item is None or item.stock_location is None:
@@ -411,25 +520,62 @@ class GetShoppingListDetailHandler:
                 else (_ProductNames.get(line.product_id, "(missing item)")
                       if line.product_id else "(missing item)")
             )
-            # D3 prefill: prior actual purchase (per-item) wins; else the
-            # line's chosen offer (selected, else cheapest). Source-labelled.
-            _prefill_price: float | None = None
-            _prefill_label: str | None = None
             _prior = (
                 _PriorPurchaseByItem.get(line.stock_item_id)
                 if line.stock_item_id else None
             )
+            _chosen = next(
+                (o for o in offers if o.is_selected),
+                offers[0] if offers else None,
+            )
+            # D3 prefill: prior actual purchase (per-item) wins; else the
+            # line's chosen offer (selected, else cheapest). Source-labelled.
+            _prefill_price: float | None = None
+            _prefill_label: str | None = None
             if _prior is not None:
                 _prefill_price = _prior[1]
                 _prefill_label = "from your last receipt"
-            else:
-                _chosen = next(
-                    (o for o in offers if o.is_selected),
-                    offers[0] if offers else None,
+            elif _chosen is not None and _chosen.price_now is not None:
+                _prefill_price = _chosen.price_now
+                _prefill_label = f"from {_chosen.store_name} offer"
+
+            # ── Money ladder ─────────────────────────────────────────────
+            # actual → historic → offer → none. Same precedence as the
+            # prefill above (history over offers), applied to the number the
+            # totals and the store card are built from.
+            _estimate: float | None = None
+            _estimate_source = "none"
+            if line.actual_unit_price is not None:
+                _estimate = float(line.actual_unit_price)
+                _estimate_source = "actual"
+            elif _prior is not None:
+                _estimate = _prior[1]
+                _estimate_source = "historic"
+            elif _chosen is not None and _chosen.price_now is not None:
+                _estimate = _chosen.price_now
+                _estimate_source = "offer"
+
+            # ── Store ladder ─────────────────────────────────────────────
+            # bought-this-trip → usual store (intent) → last purchase's store
+            # (history) → the chosen offer's store. Intent outranks history
+            # here; on the money ladder above it is the other way round.
+            _store_id: UUID | None = None
+            if line.purchased_store_id is not None:
+                _store_id = line.purchased_store_id
+            elif item is not None and item.usual_store_id is not None:
+                _store_id = item.usual_store_id
+            elif _prior is not None and _prior[2] is not None:
+                _store_id = _prior[2]
+            elif _chosen is not None:
+                _store_id = _chosen.store_id
+            _store_name = _StoreNameLookup.get(_store_id) if _store_id else None
+            # The offers list carries names the store lookup never saw (it is
+            # seeded from lines and items, not products), so fall back to the
+            # offer's own copy rather than dropping the line into "No store set".
+            if _store_id is not None and _store_name is None:
+                _store_name = next(
+                    (o.store_name for o in offers if o.store_id == _store_id), None,
                 )
-                if _chosen is not None and _chosen.price_now is not None:
-                    _prefill_price = _chosen.price_now
-                    _prefill_label = f"from {_chosen.store_name} offer"
             _LineDtos.append(ShoppingListLineDto(
                 line_id = line.id,
                 stock_item_id = line.stock_item_id,
@@ -471,6 +617,21 @@ class GetShoppingListDetailHandler:
                     str(line.stock_item_id) in _ItemsWithSubs
                     if line.stock_item_id else False
                 ),
+                stock_group_id = (
+                    item.stock_group.id if item and item.stock_group else None
+                ),
+                stock_group_name = (
+                    item.stock_group.name if item and item.stock_group else None
+                ),
+                estimated_unit_price = _estimate,
+                estimate_source = _estimate_source,
+                last_paid_unit_price = _prior[1] if _prior else None,
+                last_paid_store_id = _prior[2] if _prior else None,
+                last_paid_store_name = (
+                    _StoreNameLookup.get(_prior[2]) if _prior and _prior[2] else None
+                ),
+                resolved_store_id = _store_id,
+                resolved_store_name = _store_name,
             ))
 
         # receipt-photo metadata. Only fetched for non-draft lists

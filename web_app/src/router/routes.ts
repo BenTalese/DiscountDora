@@ -475,6 +475,13 @@ const routes: RouteRecordRaw[] = [
                         component: () => import('pages/settings/AdminSystemCookingSettings.vue'),
                         meta: { title: 'System: Cooking' }
                     },
+                    // 2026-08-23 owner feedback — image-encode knobs lifted out
+                    // of Backup & Restore onto their own page.
+                    {
+                        path: 'admin/system/images',
+                        component: () => import('pages/settings/AdminSystemImageSettings.vue'),
+                        meta: { title: 'System: Image quality' }
+                    },
                     {
                         // Old single System page → first System page.
                         path: 'admin/system',

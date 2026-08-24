@@ -55,6 +55,69 @@ Resolved entries carry one extra line, and live in `DORA_FOLLOWUPS_RESOLVED.md`:
 
 # Open
 
+## [OPEN] FU-733 — The preview pane could not paint this session; screenshots and Quasar popups were unverifiable
+- **Raised:** 2026-08-23 (recipe-view feedback batch)
+- **Type:** finding.
+- **What:** every `computer{action:"screenshot"}` timed out and
+  `requestAnimationFrame` never fired in the preview tab, so Quasar's
+  transition-driven surfaces (`q-menu` option lists, and therefore every
+  dropdown's contents) stayed stuck mid-enter at 0×0. Dialogs, layout, computed
+  styles and the DOM were all readable and were what this unit's verification
+  ran on; nothing *visual* was confirmed by eye. Restarting the tab, closing the
+  second tab and resizing all failed to recover it.
+- **Why deferred:** it's an environment fault, not app code — but it means
+  "verified" for this unit reads "verified structurally", and the next session
+  should know why there are no screenshots.
+- **Recommended resolution:** opportunistic — if it recurs, try a fresh preview
+  server rather than a fresh tab, and fall back to the real-Chrome surface.
+
+## [OPEN] FU-732 — Ingredient free-text flow has no automated cover; the Quasar slot trap that caused it is unguarded
+- **Raised:** 2026-08-23 (recipe-view feedback batch)
+- **Type:** finding.
+- **What:** the "Add ingredient doesn't allow free text" defect had a precise
+  cause: `QSelect.getAllOptions()` returns the `no-option` slot **instead of**
+  the whole option list — `before-options`/`after-options` included — so the
+  free-text action, offered only from `after-options`, disappeared exactly when
+  the filter matched nothing. Fixed by offering it from both slots. A component
+  spec was written to pin it and **abandoned**: the option menu never renders
+  under vitest's jsdom (Quasar's position engine needs `requestAnimationFrame`),
+  so the assertion could only ever have tested the mount, not the slot.
+- **Why deferred:** the remaining route is a Playwright spec, which the
+  2026-07-20 verification stance rules out for feature flows.
+- **Recommended resolution:** **confirm in browser** (also listed in
+  `DORA_VERIFY.md` → Cookbook / recipe page). If the same slot trap shows up a
+  third time, promote it to a "known fixes" entry in `ENGINEERING_STANDARDS.md`
+  rather than a test.
+
+## [OPEN] FU-731 — `time_of_day` and `kcal` are not in the masthead edit grid
+- **Raised:** 2026-08-23 (recipe-view feedback batch)
+- **Type:** leftover.
+- **What:** the masthead's edit face carries name, collection, cuisine, category,
+  serves, prep, cook, difficulty and when. **Per-serving kcal** is displayed as a
+  fact but is still only editable from the "Calories" disclosure below (and in
+  complex nutrition mode it's server-derived, so it isn't editable at all) — so
+  one visible fact doesn't flip with its neighbours.
+- **Why deferred:** scope — the owner's batch didn't name it, and the right
+  answer depends on whether simple-mode kcal should live in the masthead at all
+  now that the disclosure list is shorter.
+- **Recommended resolution:** opportunistic — next time the recipe masthead or
+  the nutrition mode split is touched.
+
+## [OPEN] FU-730 — Recipe-page masthead selects have no accessible name
+- **Raised:** 2026-08-23 (recipe-view feedback batch)
+- **Type:** finding.
+- **What:** in the masthead's edit face the five `BaseSelect`s (collection,
+  cuisine, category, difficulty, when) read as bare `generic` in the
+  accessibility tree — Quasar renders the label as a `div`, not a `<label for>`,
+  so nothing associates it. The `q-input`s beside them are fine. This is a
+  `BaseSelect`-wide trait, not specific to this page (the same shows on every
+  surface that uses it), which is why it isn't fixed inline here.
+- **Why deferred:** fixing it properly means giving `BaseSelect` an
+  `aria-labelledby` wired to its own label id, app-wide — a shared-component
+  change with ~72 call sites' worth of blast radius, not a recipe-page edit.
+- **Recommended resolution:** now-ish, as its own small unit — it is a
+  one-component fix with a broad win, and A6/axe coverage would catch it.
+
 ## [OPEN] FU-729 — Run/receipt faces have never been walked on a real phone
 - **Raised:** 2026-08-23 (FU-727 build)
 - **Type:** follow-up.

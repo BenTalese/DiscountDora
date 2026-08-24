@@ -23,27 +23,28 @@
                  One unit replacing the old page's breadcrumb row, heading row,
                  toolbar row, hero image and 11-field meta card. -->
             <div class="rn__masthead">
+                <!-- Same affordance as the profile picture: the picture *is*
+                     the control, hover reveals the pencil. With no photo yet a
+                     click goes straight to the file picker — there is only one
+                     thing it could mean. With one, it asks change-or-remove
+                     first (`manual`). -->
                 <ImageEditTile
-                    v-if="hasPhoto"
+                    ref="photoTile"
                     class="rn__photo"
-                    label="Change the recipe photo"
+                    :class="{ 'rn__photo--empty': !photoUrl }"
+                    :label="hasPhoto ? 'Change the recipe photo' : 'Add a recipe photo'"
                     shape="rounded"
-                    :width="0"
-                    :height="0"
+                    fill
+                    :manual="hasPhoto"
+                    @activate="photoDialogOpen = true"
                     @pick="onPickPhoto"
                 >
                     <img v-if="photoUrl" :src="photoUrl" alt="" class="rn__photoimg" />
-                    <div v-else class="rn__photoempty"></div>
+                    <div v-else class="rn__photoplaceholder">
+                        <q-icon :name="ICONS.photo_camera" size="28px" />
+                        <span>{{ hasPhoto ? 'Photo hidden' : 'Add a photo' }}</span>
+                    </div>
                 </ImageEditTile>
-                <button
-                    v-else
-                    type="button"
-                    class="rn__photo rn__photo--empty"
-                    @click="photoDialogOpen = true"
-                >
-                    <q-icon :name="ICONS.photo_camera" size="28px" />
-                    <span>Add a photo</span>
-                </button>
 
                 <div class="rn__identity">
                     <div class="rn__backrow">
@@ -54,107 +55,79 @@
                             to="/cookbook"
                             aria-label="Back to cookbook"
                         />
-                        <h1 class="rn__title">
-                            <InlineEditTarget class="rn__edit" label="Edit the recipe name">
-                                {{ form.name || 'Untitled recipe' }}
-                                <q-popup-edit
-                                    v-model="form.name"
-                                    v-slot="scope"
-                                    auto-save
-                                    :validate="(v) => !!(v || '').trim()"
-                                    @save="markDirty"
-                                >
-                                    <q-input
-                                        v-model="scope.value"
-                                        dense
-                                        autofocus
-                                        counter
-                                        maxlength="255"
-                                        label="Recipe name"
-                                        @keyup.enter="scope.set"
-                                    />
-                                </q-popup-edit>
-                            </InlineEditTarget>
+                        <h1 v-if="!headerEditing" class="rn__title">{{ form.name || 'Untitled recipe' }}</h1>
+                        <h1 v-else class="rn__title rn__title--edit">
+                            <q-input
+                                v-model="form.name"
+                                dense
+                                outlined
+                                autofocus
+                                maxlength="255"
+                                aria-label="Recipe name"
+                                @update:model-value="markDirty"
+                            />
                         </h1>
+                        <BaseButton
+                            class="rn__pencil"
+                            :variant="headerEditing ? 'secondary' : 'icon'"
+                            :icon="headerEditing ? ICONS.check : ICONS.edit"
+                            :label="headerEditing ? 'Done' : undefined"
+                            :aria-label="headerEditing ? 'Finish editing the recipe details' : 'Edit the recipe details'"
+                            :aria-pressed="headerEditing"
+                            :loading="headerEditing && saveState === 'saving'"
+                            @click="onToggleHeaderEdit"
+                        >
+                            <q-tooltip v-if="!headerEditing">Edit the recipe details</q-tooltip>
+                        </BaseButton>
                     </div>
 
-                    <div class="rn__eyebrow">
-                        <InlineEditTarget class="rn__edit" label="Edit the collection">
-                            {{ collectionName || 'No collection' }}
-                            <q-popup-edit v-model="form.recipe_collection_id" v-slot="scope" @save="markDirty">
-                                <BaseSelect
-                                    v-model="scope.value"
-                                    label="Collection"
-                                    :options="collectionOptions"
-                                    emit-value
-                                    map-options
-                                    clearable
-                                    autofocus
-                                    @update:model-value="scope.set"
-                                />
-                            </q-popup-edit>
-                        </InlineEditTarget>
+                    <!-- Read: a sentence. Edit: three fields on the same grid
+                         the facts use, so the block keeps its shape across the
+                         flip instead of every control resizing to its own
+                         longest option. -->
+                    <div v-if="!headerEditing" class="rn__eyebrow">
+                        <span>{{ collectionName || 'No collection' }}</span>
                         <span class="rn__dot">·</span>
-                        <InlineEditTarget class="rn__edit" label="Edit the cuisine">
-                            {{ cuisineName || 'Any cuisine' }}
-                            <q-popup-edit v-model="form.cuisine_id" v-slot="scope" @save="markDirty">
-                                <BaseSelect
-                                    v-model="scope.value"
-                                    label="Cuisine"
-                                    :options="cuisineOptions"
-                                    emit-value
-                                    map-options
-                                    clearable
-                                    autofocus
-                                    @update:model-value="scope.set"
-                                />
-                            </q-popup-edit>
-                        </InlineEditTarget>
+                        <span>{{ cuisineName || 'Any cuisine' }}</span>
                         <span class="rn__dot">·</span>
-                        <InlineEditTarget class="rn__edit" label="Edit the category">
-                            {{ categoryName || 'No category' }}
-                            <q-popup-edit v-model="form.category_id" v-slot="scope" @save="markDirty">
-                                <BaseSelect
-                                    v-model="scope.value"
-                                    label="Category"
-                                    :options="categoryOptions"
-                                    emit-value
-                                    map-options
-                                    clearable
-                                    autofocus
-                                    @update:model-value="scope.set"
-                                />
-                            </q-popup-edit>
-                        </InlineEditTarget>
+                        <span>{{ categoryName || 'No category' }}</span>
+                    </div>
+                    <div v-else class="rn__fields">
+                        <BaseSelect
+                            v-model="form.recipe_collection_id"
+                            label="Collection"
+                            :options="collectionOptions"
+                            emit-value map-options clearable
+                            @update:model-value="markDirty"
+                        />
+                        <BaseSelect
+                            v-model="form.cuisine_id"
+                            label="Cuisine"
+                            :options="cuisineOptions"
+                            emit-value map-options clearable
+                            @update:model-value="markDirty"
+                        />
+                        <BaseSelect
+                            v-model="form.category_id"
+                            label="Category"
+                            :options="categoryOptions"
+                            emit-value map-options clearable
+                            @update:model-value="markDirty"
+                        />
                     </div>
 
-                    <div class="rn__facts">
+                    <div v-if="!headerEditing" class="rn__facts">
                         <div class="rn__fact">
                             <span class="rn__factk">Serves</span>
-                            <InlineEditTarget class="rn__factv rn__edit" label="Edit the number of servings">
-                                {{ form.servings ?? '—' }}
-                                <q-popup-edit v-model.number="form.servings" v-slot="scope" auto-save @save="markDirty">
-                                    <q-input v-model.number="scope.value" type="number" min="1" dense autofocus label="Servings" @keyup.enter="scope.set" />
-                                </q-popup-edit>
-                            </InlineEditTarget>
+                            <span class="rn__factv">{{ form.servings ?? '—' }}</span>
                         </div>
                         <div class="rn__fact">
                             <span class="rn__factk">Prep</span>
-                            <InlineEditTarget class="rn__factv rn__edit" label="Edit the prep time">
-                                {{ form.prep_time_minutes ? form.prep_time_minutes + ' min' : '—' }}
-                                <q-popup-edit v-model.number="form.prep_time_minutes" v-slot="scope" auto-save @save="markDirty">
-                                    <q-input v-model.number="scope.value" type="number" min="0" dense autofocus label="Prep (min)" @keyup.enter="scope.set" />
-                                </q-popup-edit>
-                            </InlineEditTarget>
+                            <span class="rn__factv">{{ form.prep_time_minutes ? form.prep_time_minutes + ' min' : '—' }}</span>
                         </div>
                         <div class="rn__fact">
                             <span class="rn__factk">Cook</span>
-                            <InlineEditTarget class="rn__factv rn__edit" label="Edit the cook time">
-                                {{ form.cook_time_minutes ? form.cook_time_minutes + ' min' : '—' }}
-                                <q-popup-edit v-model.number="form.cook_time_minutes" v-slot="scope" auto-save @save="markDirty">
-                                    <q-input v-model.number="scope.value" type="number" min="0" dense autofocus label="Cook (min)" @keyup.enter="scope.set" />
-                                </q-popup-edit>
-                            </InlineEditTarget>
+                            <span class="rn__factv">{{ form.cook_time_minutes ? form.cook_time_minutes + ' min' : '—' }}</span>
                         </div>
                         <div v-if="totalMinutes !== null" class="rn__fact">
                             <span class="rn__factk">Total</span>
@@ -162,41 +135,47 @@
                         </div>
                         <div class="rn__fact">
                             <span class="rn__factk">Difficulty</span>
-                            <InlineEditTarget class="rn__factv rn__edit" label="Edit the difficulty">
-                                {{ form.difficulty || '—' }}
-                                <q-popup-edit v-model="form.difficulty" v-slot="scope" @save="markDirty">
-                                    <BaseSelect
-                                        v-model="scope.value"
-                                        label="Difficulty"
-                                        :options="DIFFICULTY_OPTIONS"
-                                        clearable
-                                        autofocus
-                                        @update:model-value="scope.set"
-                                    />
-                                </q-popup-edit>
-                            </InlineEditTarget>
+                            <span class="rn__factv">{{ form.difficulty || '—' }}</span>
                         </div>
                         <div class="rn__fact">
                             <span class="rn__factk">When</span>
-                            <InlineEditTarget class="rn__factv rn__edit" label="Edit the meal this suits">
-                                {{ form.time_of_day || '—' }}
-                                <q-popup-edit v-model="form.time_of_day" v-slot="scope" @save="markDirty">
-                                    <BaseSelect
-                                        v-model="scope.value"
-                                        label="Time of day"
-                                        :options="timeOfDayOptions"
-                                        clearable
-                                        autofocus
-                                        @update:model-value="scope.set"
-                                    />
-                                </q-popup-edit>
-                            </InlineEditTarget>
+                            <span class="rn__factv">{{ form.time_of_day || '—' }}</span>
                         </div>
-
                         <div v-if="headlineKcal !== null" class="rn__fact">
                             <span class="rn__factk">Per serving</span>
                             <span class="rn__factv">{{ headlineKcal }} kcal</span>
                         </div>
+                    </div>
+                    <div v-else class="rn__fields">
+                        <q-input
+                            v-model.number="form.servings"
+                            dense outlined type="number" min="1" label="Serves"
+                            @update:model-value="markDirty"
+                        />
+                        <q-input
+                            v-model.number="form.prep_time_minutes"
+                            dense outlined type="number" min="0" label="Prep (min)"
+                            @update:model-value="markDirty"
+                        />
+                        <q-input
+                            v-model.number="form.cook_time_minutes"
+                            dense outlined type="number" min="0" label="Cook (min)"
+                            @update:model-value="markDirty"
+                        />
+                        <BaseSelect
+                            v-model="form.difficulty"
+                            label="Difficulty"
+                            :options="DIFFICULTY_OPTIONS"
+                            clearable
+                            @update:model-value="markDirty"
+                        />
+                        <BaseSelect
+                            v-model="form.time_of_day"
+                            label="When"
+                            :options="timeOfDayOptions"
+                            clearable
+                            @update:model-value="markDirty"
+                        />
                     </div>
                 </div>
             </div>
@@ -284,28 +263,37 @@
                  Cells that have nothing to say don't render. -->
             <div class="rn__status">
                 <div
-                    class="rn__cell"
+                    class="rn__cell rn__cell--split"
                     :class="missingIngredients.length > 0 ? 'rn__cell--bad' : (cookableNow ? 'rn__cell--ok' : '')"
                 >
-                    <span class="rn__cellk">Right now</span>
-                    <span class="rn__cellv">{{ cookableHeadline }}</span>
-                    <!-- "You're missing two things, but you have a substitute
-                         for one" is a different answer to "you're missing two
-                         things", so it belongs in the cell that answers it. -->
-                    <span v-if="coverableCount > 0" class="rn__cellsub">
-                        {{ coverableCount === 1
-                            ? '1 has a substitute you already have'
-                            : `${coverableCount} have substitutes you already have` }}
-                    </span>
-                    <button
+                    <div class="rn__cellbody">
+                        <span class="rn__cellk">Right now</span>
+                        <span class="rn__cellv">{{ cookableHeadline }}</span>
+                        <!-- "You're missing two things, but you have a substitute
+                             for one" is a different answer to "you're missing two
+                             things", so it belongs in the cell that answers it. -->
+                        <span v-if="coverableCount > 0" class="rn__cellsub">
+                            {{ coverableCount === 1
+                                ? '1 has a substitute you already have'
+                                : `${coverableCount} have substitutes you already have` }}
+                        </span>
+                        <span v-if="missingIngredients.length === 0" class="rn__cellsub">
+                            {{ cookableCaption }}
+                        </span>
+                    </div>
+                    <!-- The cell's action, at the cell's edge — a real button on
+                         the right rather than a text link buried under the copy
+                         it belongs to. -->
+                    <BaseButton
                         v-if="missingIngredients.length > 0"
-                        type="button"
-                        class="rn__link"
+                        variant="secondary"
+                        :icon="ICONS.add_shopping_cart"
+                        :label="compact ? undefined : 'Add to a list'"
+                        aria-label="Add the missing ingredients to a shopping list"
                         @click="onAddMissingToList"
                     >
-                        Add {{ missingIngredients.length === 1 ? 'it' : 'them' }} to a list →
-                    </button>
-                    <span v-else class="rn__cellsub">{{ cookableCaption }}</span>
+                        <q-tooltip v-if="compact">Add the missing ingredients to a list</q-tooltip>
+                    </BaseButton>
                 </div>
 
                 <div v-if="atRiskCount > 0" class="rn__cell rn__cell--warn">
@@ -352,44 +340,87 @@
                         <div class="rn__sechead">
                             <h2 class="rn__sectitle" id="rnIng">Ingredients</h2>
                             <span class="rn__seccount">{{ form.ingredients.length }}</span>
+                            <!-- One switch for the whole list. Reading a recipe
+                                 and restructuring it are different jobs; the
+                                 read face carries only the shopping-list button
+                                 for what you're missing, and everything that
+                                 changes the list — add, edit, reorder, move
+                                 between sections, delete — appears together
+                                 under the pencil. -->
+                            <BaseButton
+                                class="rn__pencil"
+                                :variant="ingredientsEditing ? 'secondary' : 'icon'"
+                                :icon="ingredientsEditing ? ICONS.check : ICONS.edit"
+                                :label="ingredientsEditing ? 'Done' : undefined"
+                                :aria-label="ingredientsEditing ? 'Finish editing the ingredients' : 'Edit the ingredients'"
+                                :aria-pressed="ingredientsEditing"
+                                :loading="ingredientsEditing && saveState === 'saving'"
+                                @click="onToggleIngredientsEdit"
+                            >
+                                <q-tooltip v-if="!ingredientsEditing">Edit the ingredients</q-tooltip>
+                            </BaseButton>
                         </div>
 
                         <div class="rn__pane">
                             <template v-for="group in ingredientGroups" :key="group.key">
-                                <div v-if="group.name" class="rn__ingsec">{{ group.name }}</div>
+                                <div v-if="group.name && !ingredientsEditing" class="rn__ingsec">
+                                    {{ group.name }}
+                                </div>
+                                <div v-else-if="group.key !== 'main'" class="rn__secrow">
+                                    <q-input
+                                        :model-value="sectionNameOf(group.key)"
+                                        dense outlined
+                                        class="col"
+                                        placeholder="For the sauce"
+                                        :aria-label="`Section name for ${group.name}`"
+                                        @update:model-value="(v) => renameSection(group.key, String(v ?? ''))"
+                                    />
+                                    <BaseButton
+                                        variant="icon"
+                                        :icon="ICONS.arrow_upward"
+                                        :disable="!canMoveSection(group.key, -1)"
+                                        :aria-label="`Move section ${group.name} up`"
+                                        @click="moveSection(group.key, -1)"
+                                    />
+                                    <BaseButton
+                                        variant="icon"
+                                        :icon="ICONS.arrow_downward"
+                                        :disable="!canMoveSection(group.key, 1)"
+                                        :aria-label="`Move section ${group.name} down`"
+                                        @click="moveSection(group.key, 1)"
+                                    />
+                                    <BaseButton
+                                        variant="danger-icon"
+                                        :icon="ICONS.delete"
+                                        :aria-label="`Remove section ${group.name}`"
+                                        @click="removeSection(group.key)"
+                                    />
+                                </div>
                                 <ul class="rn__ing">
                                     <li
                                         v-for="row in group.rows"
                                         :key="row.client_id"
-                                        :class="{ 'rn__ing--lit': litIngredients.has(String(row.client_id)) }"
+                                        :class="{
+                                            'rn__ing--lit': litIngredients.has(String(row.client_id)),
+                                            'rn__ing--editing': ingredientsEditing,
+                                        }"
+                                        :role="ingredientsEditing ? 'button' : undefined"
+                                        :tabindex="ingredientsEditing ? 0 : undefined"
+                                        :aria-label="ingredientsEditing ? `Edit ${ingredientLabel(row)}` : undefined"
+                                        @click="ingredientsEditing && openRowEditor(String(row.client_id))"
+                                        @keydown.enter.prevent="ingredientsEditing && openRowEditor(String(row.client_id))"
+                                        @keydown.space.prevent="ingredientsEditing && openRowEditor(String(row.client_id))"
                                     >
-                                        <InlineEditTarget
-                                            class="rn__qty rn__edit"
-                                            :label="`Edit how much ${ingredientLabel(row)}`"
-                                        >
+                                        <!-- Quantity, unit, name, section, note and
+                                             the optional flag are one thing to a
+                                             cook, so the whole row opens one editor
+                                             rather than the quantity and the name
+                                             each owning their own popup. -->
+                                        <span class="rn__qty">
                                             {{ formatQuantity(row.quantity, row.unit) || '—' }}
-                                            <q-popup-edit v-model="row.quantity" v-slot="scope" auto-save @save="markDirty">
-                                                <div class="row q-gutter-sm items-center">
-                                                    <q-input v-model.number="scope.value" type="number" min="0" step="any" dense autofocus label="Qty" style="width: 90px" @keyup.enter="scope.set" />
-                                                    <q-input v-model="row.unit" dense label="Unit" style="width: 110px" @update:model-value="markDirty" />
-                                                </div>
-                                            </q-popup-edit>
-                                        </InlineEditTarget>
+                                        </span>
                                         <span class="rn__ingname">
-                                            <!-- Opens the whole row's editor rather
-                                                 than a bare stock-item picker: an
-                                                 ingredient also carries a free-text
-                                                 anchor, a section, an optional flag
-                                                 and a note, and all four were
-                                                 unreachable from this page. -->
-                                            <button
-                                                type="button"
-                                                class="rn__edit rn__ingbtn"
-                                                :aria-label="`Edit ${ingredientLabel(row)}`"
-                                                @click="openRowEditor(String(row.client_id))"
-                                            >
-                                                {{ ingredientLabel(row) }}
-                                            </button>
+                                            <span class="rn__ingtext">{{ ingredientLabel(row) }}</span>
                                             <q-chip v-if="row.is_optional" dense square size="sm" class="rn__chip">Optional</q-chip>
                                             <!-- A row with neither an item nor text is
                                                  the one thing that can refuse the save,
@@ -443,18 +474,38 @@
                                             />
                                             <span v-if="row.notes" class="rn__ingnote">{{ row.notes }}</span>
                                         </span>
-                                        <!-- Per-row quick action, revealed on hover/focus. -->
+                                        <!-- Always rendered, never hover-only: on a
+                                             phone there is no hover, and a control
+                                             that only exists once you've touched the
+                                             row can't be found by looking. -->
                                         <span class="rn__ingact">
+                                            <template v-if="ingredientsEditing">
+                                                <BaseButton
+                                                    variant="icon" dense
+                                                    :icon="ICONS.arrow_upward"
+                                                    :disable="!canMoveIngredient(String(row.client_id), -1)"
+                                                    :aria-label="`Move ${ingredientLabel(row)} up`"
+                                                    @click.stop="moveIngredient(String(row.client_id), -1)"
+                                                />
+                                                <BaseButton
+                                                    variant="icon" dense
+                                                    :icon="ICONS.arrow_downward"
+                                                    :disable="!canMoveIngredient(String(row.client_id), 1)"
+                                                    :aria-label="`Move ${ingredientLabel(row)} down`"
+                                                    @click.stop="moveIngredient(String(row.client_id), 1)"
+                                                />
+                                                <BaseButton
+                                                    variant="icon" dense
+                                                    class="rn__ingdel"
+                                                    :icon="ICONS.delete"
+                                                    :aria-label="`Remove ${ingredientLabel(row)}`"
+                                                    @click.stop="removeIngredient(String(row.client_id))"
+                                                />
+                                            </template>
                                             <AddToListButton
-                                                v-if="row.stock_item_id && isMissingItem(row.stock_item_id)"
+                                                v-else-if="row.stock_item_id && isMissingItem(row.stock_item_id)"
                                                 :stock-item-id="row.stock_item_id"
                                                 variant="row"
-                                            />
-                                            <BaseButton
-                                                variant="danger-icon" dense
-                                                :icon="ICONS.delete"
-                                                :aria-label="`Remove ${ingredientLabel(row)}`"
-                                                @click="removeIngredient(String(row.client_id))"
                                             />
                                         </span>
                                     </li>
@@ -463,9 +514,17 @@
                                      yet, and saying so is what makes it obvious
                                      where the ingredients go. -->
                                 <p v-if="group.rows.length === 0" class="rn__ingsecempty">
-                                    Nothing in this section yet — open an ingredient
-                                    and set its section.
+                                    Nothing in this section yet.
                                 </p>
+                                <BaseButton
+                                    v-if="ingredientsEditing && group.key !== 'main'"
+                                    variant="subtle"
+                                    class="rn__addsec"
+                                    dense
+                                    :icon="ICONS.add"
+                                    :label="`Add to ${group.name}`"
+                                    @click="addIngredient(group.key)"
+                                />
                             </template>
 
                             <p v-if="form.ingredients.length === 0" class="rn__empty">
@@ -473,12 +532,28 @@
                             </p>
                         </div>
 
+                        <div v-if="ingredientsEditing" class="rn__addrow">
+                            <BaseButton
+                                variant="subtle"
+                                class="rn__add"
+                                :icon="ICONS.add"
+                                label="Add section"
+                                @click="addSection"
+                            />
+                            <q-icon :name="ICONS.info_outline" size="18px" class="dora-text-secondary">
+                                <q-tooltip>
+                                    Sections group the list under headings — "For the
+                                    sauce", "To serve".
+                                </q-tooltip>
+                            </q-icon>
+                        </div>
                         <BaseButton
+                            v-if="ingredientsEditing"
                             variant="subtle"
                             class="rn__add"
                             :icon="ICONS.add"
                             label="Add ingredient"
-                            @click="addIngredient"
+                            @click="addIngredient()"
                         />
                     </section>
                 </div>
@@ -626,94 +701,6 @@
                     </div>
                 </q-expansion-item>
 
-                <!-- ── Organise ─────────────────────────────────────────
-                     The shape of the list, in the same place the method keeps
-                     the shape of its steps. Deliberately not drag-and-drop:
-                     the old page's handles doubled as drag-into-a-section, on
-                     the surface most likely to be used one-handed at a bench.
-                     ↑/↓ are keyboard-operable for free and can't fire by
-                     accident while scrolling. -->
-                <q-expansion-item
-                    v-model="detailOpen.sections"
-                    dense-toggle
-                    label="Organise ingredients"
-                    :caption="organiseCaption"
-                >
-                    <div class="rn__disc">
-                        <p class="rn__hintblock">
-                            Sections group the list under headings — "For the sauce",
-                            "To serve". A recipe with no sections shows one flat list.
-                        </p>
-
-                        <div v-for="(sec, i) in orderedSections" :key="sec.client_id" class="rn__secrow">
-                            <q-input
-                                v-model="sec.name"
-                                dense outlined
-                                class="col"
-                                placeholder="For the sauce"
-                                label="Section name"
-                                @update:model-value="markDirty"
-                            />
-                            <BaseButton
-                                variant="icon"
-                                :icon="ICONS.arrow_upward"
-                                :disable="i === 0"
-                                :aria-label="`Move section ${sec.name || i + 1} up`"
-                                @click="moveSection(sec.client_id, -1)"
-                            />
-                            <BaseButton
-                                variant="icon"
-                                :icon="ICONS.arrow_downward"
-                                :disable="i === orderedSections.length - 1"
-                                :aria-label="`Move section ${sec.name || i + 1} down`"
-                                @click="moveSection(sec.client_id, 1)"
-                            />
-                            <BaseButton
-                                variant="danger-icon"
-                                :icon="ICONS.delete"
-                                :aria-label="`Remove section ${sec.name || i + 1}`"
-                                @click="removeSection(sec.client_id)"
-                            />
-                        </div>
-                        <BaseButton
-                            variant="subtle"
-                            :icon="ICONS.add"
-                            label="Add section"
-                            @click="addSection"
-                        />
-
-                        <template v-if="form.ingredients.length > 1">
-                            <div class="rn__discsub">Order</div>
-                            <ol class="rn__order">
-                                <li v-for="(entry, i) in orderedIngredients" :key="entry.row.client_id">
-                                    <span class="rn__ordername">
-                                        {{ ingredientLabel(entry.row) }}
-                                        <span v-if="entry.section" class="rn__ordersec">{{ entry.section }}</span>
-                                    </span>
-                                    <BaseButton
-                                        variant="icon"
-                                        :icon="ICONS.arrow_upward"
-                                        :disable="i === 0"
-                                        :aria-label="`Move ${ingredientLabel(entry.row)} up`"
-                                        @click="moveIngredient(String(entry.row.client_id), -1)"
-                                    />
-                                    <BaseButton
-                                        variant="icon"
-                                        :icon="ICONS.arrow_downward"
-                                        :disable="i === orderedIngredients.length - 1"
-                                        :aria-label="`Move ${ingredientLabel(entry.row)} down`"
-                                        @click="moveIngredient(String(entry.row.client_id), 1)"
-                                    />
-                                </li>
-                            </ol>
-                            <p class="rn__hintblock">
-                                Which section an ingredient belongs to is set on the
-                                ingredient itself — tap its name in the list above.
-                            </p>
-                        </template>
-                    </div>
-                </q-expansion-item>
-
                 <q-expansion-item
                     v-if="moneyEnabled && showCostCell"
                     v-model="detailOpen.cost"
@@ -819,19 +806,6 @@
                         </q-list>
                     </div>
                 </q-expansion-item>
-
-                <q-expansion-item v-model="detailOpen.photo" dense-toggle label="Recipe photo" :caption="hasPhoto ? 'Set' : 'None'">
-                    <div class="rn__disc">
-                        <ImageUploadField
-                            :preview-url="photoUrl"
-                            :can-clear="hasPhoto"
-                            :name="form.name"
-                            alt="Recipe photo"
-                            @pick="onPickPhotoDataUrl"
-                            @clear="onClearPhoto"
-                        />
-                    </div>
-                </q-expansion-item>
             </div>
 
             <!-- The comparison hatch. Temporary — see FU-688. -->
@@ -889,15 +863,21 @@
             @confirm="onPickerConfirm"
         />
 
+        <!-- No preview: it opened from the photo, so the photo is already on
+             screen behind it. Two buttons, one decision. -->
         <BaseDialog v-model="photoDialogOpen" title="Recipe photo" closable card-style="min-width: 300px">
-            <q-card-section class="q-pt-none">
-                <ImageUploadField
-                    :preview-url="photoUrl"
-                    :can-clear="hasPhoto"
-                    :name="form.name"
-                    alt="Recipe photo"
-                    @pick="onPickPhotoDataUrl"
-                    @clear="onClearPhoto"
+            <q-card-section class="rn__photoacts">
+                <BaseButton
+                    variant="primary"
+                    :icon="ICONS.photo_camera"
+                    label="Change photo"
+                    @click="onChangePhoto"
+                />
+                <BaseButton
+                    variant="danger-ghost"
+                    :icon="ICONS.delete"
+                    label="Remove photo"
+                    @click="onRemovePhoto"
                 />
             </q-card-section>
         </BaseDialog>
@@ -940,7 +920,7 @@
      * All three step modes are supported. Only `structured` can highlight the
      * ingredients a step uses, because it's the only mode that stores the link.
      */
-    import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
+    import { computed, onBeforeUnmount, onMounted, reactive, ref, watch, type Ref } from 'vue';
     import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
     import { useQuasar } from 'quasar';
     import { storeToRefs } from 'pinia';
@@ -952,7 +932,6 @@
     import BaseSelect from 'src/components/BaseSelect.vue';
     import InlineEditTarget from 'src/components/InlineEditTarget.vue';
     import ImageEditTile from 'src/components/ImageEditTile.vue';
-    import ImageUploadField from 'src/components/ImageUploadField.vue';
     import MealStepper from 'src/components/recipes/MealStepper.vue';
     import RecipeNutritionCard from 'src/components/recipes/RecipeNutritionCard.vue';
     import RecipeStepImagesEditor from 'src/components/recipes/RecipeStepImagesEditor.vue';
@@ -1043,9 +1022,47 @@
     const imageVersion = ref(0);
     const litStep = ref<string | null>(null);
     const detailOpen = reactive({
-        tags: false, sections: false, cost: false,
-        nutrition: false, notes: false, kcal: false, versions: false, photo: false,
+        tags: false, cost: false,
+        nutrition: false, notes: false, kcal: false, versions: false,
     });
+
+    // ── Edit modes ──────────────────────────────────────────────────────
+    // Two independent pencils, one per block, replacing the page's original
+    // per-field `q-popup-edit`s. Those cost two clicks on every dropdown (one
+    // to summon the field, one to open it) and sized each control to its own
+    // longest option, so an empty Difficulty was a sliver. A block that flips
+    // whole keeps one grid across both states, and a select is a select.
+    //
+    // Scoped to the two blocks the owner named: the method's inline editing is
+    // prose, where a popup over the paragraph you're reading is the right
+    // shape. See ADR-051 / D-015.
+    const headerEditing = ref(false);
+    const ingredientsEditing = ref(false);
+
+    /** Leaving an edit mode commits, because the pencil reads as "done" — see
+     *  the Done label it wears while open. A failed save keeps the block open
+     *  so the error has something to point at. */
+    async function leaveEditMode(flag: Ref<boolean>) {
+        if (dirty.value) {
+            await onSave();
+            if (saveState.value === 'error') return;
+        }
+        flag.value = false;
+    }
+    async function onToggleHeaderEdit() {
+        if (!headerEditing.value) {
+            headerEditing.value = true;
+            return;
+        }
+        await leaveEditMode(headerEditing);
+    }
+    async function onToggleIngredientsEdit() {
+        if (!ingredientsEditing.value) {
+            ingredientsEditing.value = true;
+            return;
+        }
+        await leaveEditMode(ingredientsEditing);
+    }
 
     // ── Save ────────────────────────────────────────────────────────────
     // Inline editing, explicit commit. The page shipped with a 500ms debounced
@@ -1123,6 +1140,11 @@
             await loadRecipe();
             if (didImageChange) imageVersion.value++;
             dirty.value = false;
+            // A save is the end of an edit: both blocks go back to reading,
+            // whichever button asked for it (the Save button in the action row
+            // or either pencil).
+            headerEditing.value = false;
+            ingredientsEditing.value = false;
             saveState.value = 'saved';
             saveMessage.value = 'Saved';
             if (idleTimer) clearTimeout(idleTimer);
@@ -1148,6 +1170,8 @@
             imageDirty.value = false;
             stepImagesDirty.value = false;
             dirty.value = false;
+            headerEditing.value = false;
+            ingredientsEditing.value = false;
             saveState.value = 'idle';
         });
     }
@@ -1424,10 +1448,6 @@
     const orderedSections = computed(() =>
         [...form.sections].sort((a, b) => a.sequence - b.sequence));
 
-    const organiseCaption = computed(() => {
-        if (form.sections.length === 0) return 'One flat list';
-        return orderedSections.value.map((s) => s.name || 'Untitled').join(' · ');
-    });
     const costCaption = computed(() => {
         const r = recipe.value;
         if (!r) return '';
@@ -1451,7 +1471,9 @@
     }
 
     // ── Ingredient + section mutations ──────────────────────────────────
-    function addIngredient() {
+    /** `sectionClientId` is the group's own key, so "Add to For the sauce"
+     *  lands in that section instead of the flat list. */
+    function addIngredient(sectionClientId?: string) {
         form.ingredients.push({
             client_id: newClientId(),
             stock_item_id: null,
@@ -1459,7 +1481,7 @@
             quantity: null,
             unit: null,
             notes: null,
-            section_client_id: null,
+            section_client_id: sectionClientId ?? null,
             is_optional: false,
         } as IngredientForm);
         markDirty();
@@ -1481,14 +1503,48 @@
         markDirty();
     }
 
-    /** Ingredient order is array order — there is no `sequence` on the wire,
-     *  and arrays are sent with replace semantics — so a move is a splice. */
-    function moveIngredient(clientId: string, delta: -1 | 1) {
-        const from = form.ingredients.findIndex((i) => i.client_id === clientId);
+    /** Every position ↑/↓ can step through, in reading order. An **empty
+     *  section is a position too** (`row: null`) — otherwise a section you just
+     *  created is unreachable by the arrows, which is the one moment you most
+     *  want to move something into it. */
+    const ingredientStops = computed(() =>
+        ingredientGroups.value.flatMap((g) => (
+            g.rows.length > 0
+                ? g.rows.map((row) => ({ row: row as IngredientForm | null, groupKey: g.key }))
+                : [{ row: null as IngredientForm | null, groupKey: g.key }]
+        )));
+
+    function canMoveIngredient(clientId: string, delta: -1 | 1): boolean {
+        const from = ingredientStops.value.findIndex((e) => e.row?.client_id === clientId);
         const to = from + delta;
-        if (from < 0 || to < 0 || to >= form.ingredients.length) return;
-        const [row] = form.ingredients.splice(from, 1);
-        if (row) form.ingredients.splice(to, 0, row);
+        return from >= 0 && to >= 0 && to < ingredientStops.value.length;
+    }
+
+    /** One step in reading order. Ingredient order is array order — there is no
+     *  `sequence` on the wire and arrays are sent with replace semantics — so a
+     *  move within a section is a splice.
+     *
+     *  Crossing a section boundary is *only* a section change: the row is
+     *  already adjacent to that section in the array, so re-pointing it lands
+     *  it at the near edge (last of the section above / first of the section
+     *  below) without touching the order. That is what makes ↑/↓ the one
+     *  control for both jobs the owner asked them to do. */
+    function moveIngredient(clientId: string, delta: -1 | 1) {
+        const stops = ingredientStops.value;
+        const from = stops.findIndex((e) => e.row?.client_id === clientId);
+        const to = from + delta;
+        if (from < 0 || to < 0 || to >= stops.length) return;
+        const moving = stops[from]!;
+        const target = stops[to]!;
+        if (target.groupKey !== moving.groupKey) {
+            moving.row!.section_client_id = target.groupKey === 'main' ? null : target.groupKey;
+        } else {
+            const fromIdx = form.ingredients.findIndex((i) => i.client_id === clientId);
+            const toIdx = form.ingredients.findIndex((i) => i.client_id === target.row?.client_id);
+            if (fromIdx < 0 || toIdx < 0) return;
+            const [row] = form.ingredients.splice(fromIdx, 1);
+            if (row) form.ingredients.splice(toIdx, 0, row);
+        }
         markDirty();
     }
 
@@ -1543,34 +1599,48 @@
         markDirty();
     }
     function moveSection(clientId: string, delta: -1 | 1) {
-        const ordered = [...form.sections].sort((a, b) => a.sequence - b.sequence);
+        const ordered = orderedSections.value;
         const from = ordered.findIndex((s) => s.client_id === clientId);
         const to = from + delta;
         if (from < 0 || to < 0 || to >= ordered.length) return;
-        const [sec] = ordered.splice(from, 1);
-        if (sec) ordered.splice(to, 0, sec);
-        ordered.forEach((s, i) => { s.sequence = i; });
+        const next = [...ordered];
+        const [sec] = next.splice(from, 1);
+        if (sec) next.splice(to, 0, sec);
+        next.forEach((s, i) => { s.sequence = i; });
+        markDirty();
+    }
+    function canMoveSection(clientId: string, delta: -1 | 1): boolean {
+        const from = orderedSections.value.findIndex((s) => s.client_id === clientId);
+        const to = from + delta;
+        return from >= 0 && to >= 0 && to < orderedSections.value.length;
+    }
+    function sectionNameOf(clientId: string): string {
+        return form.sections.find((s) => s.client_id === clientId)?.name ?? '';
+    }
+    function renameSection(clientId: string, name: string) {
+        const sec = form.sections.find((s) => s.client_id === clientId);
+        if (!sec) return;
+        sec.name = name;
         markDirty();
     }
 
-    /** The flat, ordered ingredient list the organise disclosure walks —
-     *  reading order, so ↑/↓ mean what they look like they mean. */
-    const orderedIngredients = computed(() =>
-        ingredientGroups.value.flatMap((g) =>
-            g.rows.map((row) => ({ row, section: g.name }))));
-
     // ── Photo ───────────────────────────────────────────────────────────
+    // Every photo control lives on the photo itself. The page used to carry a
+    // second, fuller uploader in a disclosure at the very bottom, which is the
+    // last place you look for the picture at the top.
+    const photoTile = ref<InstanceType<typeof ImageEditTile> | null>(null);
+
     function onPickPhoto(image: { dataUrl: string }) {
         form.image = image.dataUrl;
         imageDirty.value = true;
         markDirty();
     }
-    function onPickPhotoDataUrl(dataUrl: string) {
-        form.image = dataUrl;
-        imageDirty.value = true;
-        markDirty();
+    function onChangePhoto() {
+        photoDialogOpen.value = false;
+        photoTile.value?.openPicker();
     }
-    function onClearPhoto() {
+    function onRemovePhoto() {
+        photoDialogOpen.value = false;
         form.image = null;
         imageDirty.value = true;
         markDirty();
@@ -1790,20 +1860,22 @@
         border: 1px solid var(--border-default);
     }
     .rn__photoimg { width: 100%; height: 100%; object-fit: cover; display: block; }
-    .rn__photoempty { width: 100%; height: 100%; background: var(--surface-sunken); }
-    .rn__photo--empty {
+    .rn__photo--empty { background: var(--surface-sunken); }
+    .rn__photo--empty:hover { border-color: var(--brand-primary); }
+    .rn__photoplaceholder {
         display: flex; flex-direction: column; align-items: center; justify-content: center;
         gap: var(--space-2, 8px);
-        background: var(--surface-sunken);
+        width: 100%; height: 100%;
         color: var(--text-muted);
-        cursor: pointer;
-        font: inherit;
         font-size: 0.875rem;
     }
-    .rn__photo--empty:hover { border-color: var(--brand-primary); color: var(--brand-primary); }
+    .rn__photoacts { display: flex; flex-direction: column; gap: var(--space-2, 8px); }
 
     .rn__identity { min-width: 0; }
     .rn__backrow { display: flex; align-items: center; gap: var(--space-2, 8px); }
+    /* `flex: 1` rather than content width: without it the title is sized to
+       its own text and wraps at the first opportunity even with half the row
+       empty beside it (the owner's desktop report). */
     .rn__title {
         font-family: var(--rn-display);
         font-size: 2rem;
@@ -1811,8 +1883,19 @@
         line-height: 1.15;
         letter-spacing: -0.01em;
         margin: 0;
+        flex: 1;
         min-width: 0;
-        text-wrap: balance;
+    }
+    .rn__title--edit { font-family: inherit; font-size: 1rem; font-weight: 400; }
+    .rn__pencil { flex: none; }
+
+    /* One grid for both halves of the edit face, so a select is as wide as
+       the cell it sits in rather than as wide as its longest option. */
+    .rn__fields {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+        gap: var(--space-3, 12px);
+        margin-top: var(--space-3, 12px);
     }
     .rn__eyebrow {
         display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2, 8px);
@@ -1879,6 +1962,15 @@
         display: flex; flex-direction: column; gap: 2px;
         position: relative;
     }
+    /* A cell that carries an action: copy on the left, the action on the
+       right edge where it can be reached without reading past it. */
+    .rn__cell--split {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--space-3, 12px);
+    }
+    .rn__cellbody { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
     /* Severity as an edge stripe rather than a washed cell: it survives both
        themes and doesn't drown the text it's qualifying (D-002/D-013). */
     .rn__cell--bad::before,
@@ -1953,15 +2045,23 @@
     .rn__ing { list-style: none; margin: 0; padding: 0; }
     .rn__ing li {
         display: grid;
-        grid-template-columns: auto 1fr;
+        grid-template-columns: auto 1fr auto;
         gap: var(--space-3, 12px);
-        align-items: baseline;
+        align-items: center;
         padding: var(--space-2, 8px);
+        min-height: 44px;
         border-bottom: 1px solid var(--divider);
         border-radius: var(--radius-sm, 4px);
         position: relative;
     }
     .rn__ing li:hover { background: var(--overlay-hover); }
+    /* Only the edit face is a target — in the read face the row is a line of
+       a recipe, and a pointer on it would promise something it doesn't do. */
+    .rn__ing--editing { cursor: pointer; }
+    .rn__ing--editing:focus-visible {
+        outline: 2px solid var(--brand-primary);
+        outline-offset: -2px;
+    }
     .rn__ing--lit {
         background: var(--brand-primary-soft) !important;
         box-shadow: inset 3px 0 0 0 var(--brand-primary);
@@ -1974,18 +2074,21 @@
     .rn__ingnote { display: block; font-size: 0.8125rem; color: var(--text-muted); }
     .rn__chip { margin-left: var(--space-1, 4px); }
     .rn__chip--unlinked { background: var(--surface-sunken); color: var(--text-muted); }
+    /* In-flow, always visible, no floating plate over the row — the plate was
+       there to stop hover-revealed buttons colliding with the text they
+       covered, which is a problem the third grid column doesn't have. */
     .rn__ingact {
-        position: absolute; right: var(--space-1, 4px); top: 50%;
-        transform: translateY(-50%);
         display: flex; align-items: center; gap: var(--space-1, 4px);
-        opacity: 0;
-        transition: opacity 120ms ease;
-        background: var(--surface-component);
-        border-radius: var(--radius-sm, 4px);
+        justify-self: end;
     }
-    .rn__ing li:hover .rn__ingact,
-    .rn__ing li:focus-within .rn__ingact { opacity: 1; }
+    .rn__ingdel { color: var(--semantic-negative); }
     .rn__add { margin-top: var(--space-3, 12px); width: 100%; }
+    .rn__addsec { margin: var(--space-2, 8px) 0 var(--space-3, 12px); }
+    .rn__addrow {
+        display: flex; align-items: center; gap: var(--space-2, 8px);
+        margin-top: var(--space-3, 12px);
+    }
+    .rn__addrow .rn__add { margin-top: 0; }
 
     /* Method — the v1 treatment the owner preferred: roomy rows, a filled
        brand-soft numeral, generous measure. */
@@ -2058,18 +2161,6 @@
         color: var(--text-secondary);
     }
 
-    /* The ingredient name is a real <button> (it opens the row editor), so it
-       has to be talked back out of looking like one — the row reads as a
-       recipe, not a form. `.rn__edit` supplies the hover/focus affordance. */
-    .rn__ingbtn {
-        appearance: none;
-        background: none;
-        border: 0;
-        font: inherit;
-        color: inherit;
-        text-align: left;
-    }
-
     .rn__ingsecempty {
         color: var(--text-muted);
         font-size: 0.8125rem;
@@ -2082,31 +2173,6 @@
         align-items: center;
         gap: var(--space-2, 8px);
         margin-bottom: var(--space-2, 8px);
-    }
-
-    .rn__discsub {
-        font-size: 0.75rem; font-weight: 700; letter-spacing: 0.06em;
-        text-transform: uppercase; color: var(--text-muted);
-        margin: var(--space-5, 20px) 0 var(--space-2, 8px);
-    }
-
-    .rn__order {
-        list-style: none;
-        margin: 0 0 var(--space-3, 12px);
-        padding: 0;
-    }
-    .rn__order li {
-        display: flex;
-        align-items: center;
-        gap: var(--space-2, 8px);
-        padding: var(--space-1, 4px) 0;
-        border-bottom: 1px solid var(--divider);
-    }
-    .rn__ordername { flex: 1; min-width: 0; }
-    .rn__ordersec {
-        margin-left: var(--space-2, 8px);
-        font-size: 0.75rem;
-        color: var(--text-muted);
     }
 
     /* ── Phone ────────────────────────────────────────────────────────── */

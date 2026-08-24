@@ -15,6 +15,53 @@ semver — major bumps signal schema or breaking-config changes.
 - **Nutrition now carries vitamins and minerals (2026-08-17).** Answering "what else can be pulled?": a linked food's **Details** table gained an optional **"Vitamins & minerals"** block, collapsed until you open it, with **potassium, calcium, iron, magnesium, zinc, vitamins A, C, D, E and B12, folate, cholesterol, trans fat and the mono/polyunsaturated fats** — fifteen more nutrients, all of which USDA and Open Food Facts already carry. As before, **only what the source actually stated appears**: a nutrient it didn't state has no row, and if a food knows none of them the whole block is absent rather than empty. **Existing foods show nothing here until you re-run the import** under Settings → Admin → Nutrition — the values were never downloaded, so there's nothing to backfill from.
 
 ### Changed
+- **Three small fixes on a stock item's page (2026-08-23).** The **buy-verdict
+  card's chevron and its one-tap button have swapped places** — the chevron is now
+  the last thing in the row, so it sits in the same spot whether or not that
+  verdict came with an action to take, instead of shuffling sideways as you move
+  between items. The **stock level picker is as wide as every other field** on the
+  overview rather than shrinking to fit whichever level name it's showing, with
+  the "Updated …" note moved underneath it — most noticeable on a phone. And the
+  **Opened** row's note says "this item" instead of "this packet", which was
+  wrong for everything you don't buy in a packet.
+- **The recipe page edits by the block now, not by the field (2026-08-23).**
+  Every value in the header used to be its own little pop-up editor, which meant
+  two clicks on every dropdown — one to summon the field, another to open it —
+  and each control came out whatever width its own text happened to need, so an
+  empty Difficulty was a sliver. There is now a **pencil** on the header: press
+  it and the whole block becomes real, evenly-sized fields; press it again (it
+  says **Done**) and it saves and goes back to reading. The recipe title no
+  longer wraps onto two lines when there is a screen's worth of room beside it.
+- **Ingredients have one edit mode instead of a disclosure at the bottom
+  (2026-08-23).** The "Organise ingredients" panel is gone. The ingredients
+  heading has its own pencil: press it and every row grows **↑ / ↓ and a delete**
+  — always visible, so they can be found and used on a phone — and the arrows
+  move a row **between sections**, not just up and down within one. **Add
+  section** (with a note explaining what sections are for) and **Add ingredient**
+  sit under the list, and each section has its own **Add to …**; a section can be
+  renamed, moved or removed in place. Tap anywhere on a row to edit the whole
+  thing — quantity, unit, name, section, note and optional — in one dialog,
+  instead of the quantity and the name each owning a separate pop-up. Out of edit
+  mode the list is just the list, with a shopping-list button on anything you're
+  missing.
+- **Typing an ingredient you don't stock now works (2026-08-23).** The picker
+  advertised free text but never offered it: the moment your typing matched
+  nothing in the pantry — which is exactly when you're adding something new — the
+  option vanished. Type a name and it offers **Use "…"**, then asks one question:
+  add it to your pantry so Dora can track it and shop for it, or keep it as plain
+  text in the recipe.
+- **Ingredient units come from a list (2026-08-23).** The unit box was free text
+  on this one screen while every other part of the app offered a proper unit
+  picker. It now offers the same list — and still takes a recipe's own words
+  ("pinch", "handful") if you type them. The optional/required switch reads
+  **"Optional — skip it and still cook"** in both positions, rather than changing
+  its own label as you flip it.
+- **The recipe photo is edited from the photo (2026-08-23).** It behaves like
+  your profile picture: hover it and it offers to change. With no photo yet, one
+  click goes straight to the file picker. With a photo, you get **Change photo**
+  and **Remove photo** — no preview of the picture you're already looking at. The
+  second, fuller photo panel at the bottom of the page is gone, and a photo you
+  set now actually appears in the header (it was being rendered at zero size).
 - **Shopping mode is now an actual mode (2026-08-23).** "Start shopping" used to
   make the tick boxes bigger and add a footer, and that was the whole of it — the
   same eleven buttons per row you use to *build* a list came shopping with you.

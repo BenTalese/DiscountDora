@@ -511,6 +511,13 @@ Quasar's raw defaults (casing, sizing, shadows) unstyled.
   unaffected. **What still holds** for a detail page: an explicit commit
   (D-019's carve-out — inline edit is fine, silent autosave is not) and a
   reading surface that isn't a wall of inputs. See ADR-045.
+- **Partially restored at block granularity (owner, 2026-08-23):** the recipe
+  page's per-field popups were reversed — they cost two clicks on every dropdown
+  and sized each control to its own content. A **region** with several editable
+  values now gets one read↔edit switch (masthead, ingredients), while the page
+  overall still reads as a document and prose still edits in place. The page-wide
+  form-as-detail the original clause banned stays banned. This is **R-055 /
+  ADR-051**; that rule, not this note, is the authority on the detail.
 
 ### D-016 — Interactive states are all defined and distinct
 - **Rule:** every interactive element defines **all** of: default, hover

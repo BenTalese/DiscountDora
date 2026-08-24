@@ -105,6 +105,14 @@ order — the engine reading is what makes the rest interpretable.
       Import upload succeeds (FU-717 — both were 404 because the deploy deleted
       `dora_api/features/data/`).
 
+## Stock item detail: level-picker width (2026-08-23)
+Couldn't be walked live — the SPA is behind a sign-in and the agent may not
+authenticate. vue-tsc + eslint green.
+
+- [ ] **Level row (mobile width especially):** the picker spans the full row like
+      the Name/Location fields, level name left, caret right, "Updated …" caption
+      underneath — not a narrow button sharing a row with the timestamp.
+
 ## Stock item detail feedback batch (2026-08-21)
 Everything here is a desktop / running-app observation — the agent's pane can't
 mount `#/stock/<id>` at all, and the peek is desktop-only (`$q.screen` reads 0
@@ -119,7 +127,9 @@ in the pane), so none of it could be walked live.
       not keep the first item's answer. Same for the QR dialog's image.
 - [ ] **Buy verdict card:** one surface (no inner box), tinted by verdict, dollar
       sign on the left in all four states, "No strong buy signal" when unsure, and
-      the action as an icon-only button *after* the chevron. Compare side-by-side
+      the action as an icon-only button *before* the chevron (swapped 2026-08-23 —
+      the chevron is now the last control in the row, in the same spot whether or
+      not the verdict carries an action). Compare side-by-side
       with "Dora thinks" above it — they should read as the same component family.
       Check a `wait` verdict too: the wait-hint block should show as a left-edge
       rule, not a nested tinted box.
@@ -334,27 +344,39 @@ agent pane can't provide — it doesn't composite, so click coordinates are dege
       saved version.
 - [ ] Clear the recipe name and hit Save → refused with a reason, nothing lost.
 
-**Ingredients:**
-- [ ] In the row editor (opened by tapping an ingredient's **name**), Cancel really cancels
-      — no dirty pill afterwards.
-- [ ] In that editor, type a name that doesn't exist → **Create "…" in my pantry** and
-      **Use "…" as free text** both offered; both work, and free text shows a **Free text**
-      chip on the row.
+**Ingredients** (2026-08-23 rework — one pencil, no Organise disclosure):
+- [ ] In the row editor (opened by tapping **anywhere on the row**, edit mode on), Cancel
+      really cancels — no dirty pill afterwards.
+- [ ] In that editor, type a name that doesn't exist → **Use "…"** is offered, then one
+      question: add to pantry, or keep as free text. Both branches work; free text shows a
+      **Free text** chip on the row. *(This is the one path the build session could not
+      drive — the pane wouldn't render option menus. FU-732.)*
+- [ ] Unit is a **dropdown** (same list as substitute ratios), and still accepts a typed
+      word like "pinch". The optional switch reads the same in both positions.
 - [ ] **Add ingredient** opens the editor straight away on the new row; a row left without
-      an item shows a **Needs an item** chip and Save says so (it no longer blocks silently).
-- [ ] Tap the **quantity** → qty + unit inline, as before.
+      an item shows a **Needs an item** chip and Save says so.
 - [ ] A missing ingredient with recorded substitutes shows a chip: **"Use <name>"** when you
       have one, **"N substitutes"** when you don't. Open it — in-stock ones first, ratio and
       note shown, out-of-stock ones offer add-to-list, and the footer says swapping happens
       in cook mode.
 - [ ] **Right now** cell adds "N has/have a substitute you already have" when that's true.
 
-**Sections & order** (under **Organise ingredients**):
-- [ ] Add a section → it appears in the ingredient list immediately, with "Nothing in this
-      section yet". (It used to be invisible until something was in it — which was nothing.)
-- [ ] Put an ingredient in it via the row editor; reorder sections with ↑/↓; delete a
-      section and its ingredients fall back to the main list.
+**Sections & order** (edit mode, in the ingredients list itself):
+- [ ] Add a section → it appears immediately with "Nothing in this section yet", its own
+      **Add to …** button, and a rename field.
+- [ ] Move an ingredient into it with **↓** (including when the section is still empty), and
+      back out with **↑**; reorder sections with their own ↑/↓; delete a section and its
+      ingredients fall back to the main list.
 - [ ] Reorder ingredients with ↑/↓ and Save — the order sticks after a reload.
+- [ ] Out of edit mode the rows carry nothing but the shopping-list button on a missing one.
+
+**Edit modes & photo** (2026-08-23 — the pencils; structurally verified, never seen):
+- [ ] Header pencil → fields; every field in a row is the **same width**; a dropdown opens
+      on **one** click. Pencil again (**Done**) saves and returns to reading.
+- [ ] With no photo, clicking the tile opens the file picker straight away. With one,
+      it offers **Change photo** / **Remove photo** and no preview. A photo you set shows in
+      the header after a reload.
+- [ ] Nothing about the photo remains at the bottom of the page.
 
 **The rest:**
 - [ ] All three step modes still render; only structured highlights the ingredients a step uses.

@@ -18,6 +18,151 @@ next.
 
 ---
 
+## 2026-08-23 (later 2) — **Stock detail: three feedback items (tooltip wording, verdict control order, level-picker width)**
+**Status:** code-complete, static checks green. **Browser pass owed** — the SPA
+sits behind a sign-in and this agent may not authenticate, so the running-app
+observation went to `DORA_VERIFY.md`.
+
+**Trigger:** owner feedback on `StockItemDetailPage.vue` — three items.
+
+**What changed:**
+1. **Opened-row tooltip wording.** "Flags this packet as opened" → "this item".
+   "Packet" is wrong for anything loose, bottled or by weight. Only the Opened
+   tooltip was touched — the Barcodes-tab help text still says "packet" and is
+   correct there (a barcode genuinely is printed on packaging).
+2. **Buy-verdict card: chevron and action swapped.** The chevron used to live
+   *inside* the summary/disclosure button, so it rendered before the one-tap
+   action button — meaning its x-position depended on whether the verdict had an
+   action at all (`one_tap_action.kind === 'none'` drops the button). Moving
+   between items therefore shuffled the caret sideways. The caret is now its own
+   control, last in the header row, always in the same place. It's a real
+   `<button>` (not a bare icon) so it stays keyboard-reachable, carries
+   `aria-expanded` + a "Show/Hide details" label, and gets a 44px tap target per
+   D-004. The summary line still toggles the same disclosure.
+3. **Level picker made full-width.** It was an intrinsically-sized
+   `q-btn-dropdown` sharing a flex row with the "Updated …" timestamp, so it was
+   narrower than every other editor in the fact list and its width changed with
+   the level name. Now `width: 100%` (matching the existing
+   `.dora-inline-edit :deep(.q-field)` rule), timestamp dropped underneath as a
+   caption. The label slot is wrapped in a `flex: 1 1 auto` span because q-btn
+   centres its content — without it a full-width trigger would float the level
+   name in the middle with the caret beside it, instead of value-left /
+   caret-right like a q-field.
+
+**Files touched:** `web_app/src/pages/StockItemDetailPage.vue`,
+`web_app/src/components/stock/BuyVerdictCard.vue`, `CHANGELOG.md`,
+`DORA_VERIFY.md`, this file.
+
+**Verification:**
+- `npx vue-tsc --noEmit` — clean (exit 0).
+- `npx eslint` on both changed files — clean.
+- *Not* driven in the browser. Ports 5170/5174 were held by another session's
+  dev server; a browser tab did reach `http://localhost:5174`, but it lands on
+  the sign-in wall and the agent is not permitted to enter credentials. Three
+  verify lines are in `DORA_VERIFY.md` (one new section + the stale
+  "action *after* the chevron" line under the 2026-08-21 batch corrected to
+  "*before*").
+
+**Standards close-gate (R-rules / D-rules):** no new violations. Change 2 keeps
+D-004 (44px target) and the "icon-only controls are still named" D-rule via
+`aria-label` on the new caret button. Change 3 uses existing tokens only, no raw
+colour. No new domain logic crossed the client/server line (R-003). **ADR
+evaluation:** nothing recurring enough to promote to a new `R-0NN`.
+
+**Next up:** owner walks the three `DORA_VERIFY.md` lines.
+
+**Open questions for user:** none.
+
+---
+
+## 2026-08-23 (later) — **Recipe view feedback batch (17 items): two block edit modes, the ingredients rework, three real bugs**
+**Status:** all 17 items shipped, green, structurally verified in the running
+app. **No screenshots** — the preview pane never painted this session (FU-733).
+
+**Trigger:** owner feedback dump on `RecipeDetailNext.vue` — photo controls,
+dropdown ergonomics, ingredient editing, and "the organise ingredients dropdown
+is super weird and I hate it".
+
+**Three real bugs, each with a precise cause.**
+1. **The masthead photo never rendered.** The page passed `:width="0" :height="0"`
+   to `ImageEditTile` intending the CSS class to size it — but the component
+   writes those into an *inline* style, which beats the stylesheet. The tile was
+   literally 0×0, which is why setting a photo left the header blank "even on
+   page refresh". `ImageEditTile` gained a `fill` prop (size from the caller's
+   CSS, no inline pair); the tile now measures 220×220 and the image paints.
+2. **Free-text ingredients were unreachable.** `QSelect.getAllOptions()` returns
+   the `no-option` slot **instead of** the whole option list —
+   `before-options`/`after-options` included. The free-text and create actions
+   lived only in `after-options`, so they vanished the moment the filter matched
+   nothing, i.e. every time a genuinely new ingredient was typed. Both slots now
+   offer it. Worth remembering: this is a Quasar contract, not a layout bug.
+3. **`text-wrap: balance` + content sizing wrapped the title.** The `h1` sat in a
+   flex row without `flex: 1`, so it was sized to its own text and broke early
+   with half the row empty.
+
+**The two pencils (R-055 / ADR-051).** Every masthead value was a `q-popup-edit`:
+two clicks to open a dropdown, and each control sized to its own longest option
+(the owner's "empty difficulty shows up as a very narrow box"). The owner offered
+hover-reveal or a pencil; hover is dead on touch and doesn't fix the sizing, so
+**block-level toggles**: the masthead flips identity + facts to one
+`auto-fit minmax(160px, 1fr)` grid (measured live: 3 × 323px, then 5 × 189px —
+all equal), and the ingredients section flips to an edit face. Leaving either
+mode commits, so the pencil wears **Done**; a failed save keeps the block open;
+`onSave` closes both, whichever door opened them. The method's prose editing is
+deliberately untouched — a popup over the paragraph you're reading is the right
+shape. This partially restores D-015's retired clause at *block* granularity.
+
+**The ingredients rework.** "Organise ingredients" is deleted whole; its jobs moved
+into the list. Edit mode gives every row always-visible **↑ / ↓ / delete** (no
+hover, no floating plate — on a phone there is no hover), whole-row tap-to-edit,
+per-section **Add to …**, **Add section** with an info chip, and in-place section
+rename/reorder/remove. The ↑/↓ do double duty: within a section they splice the
+array; **across a boundary they only re-point `section_client_id`**, because the
+row is already adjacent to that section in the array, so it lands at the near
+edge without touching order. First cut stepped *over* an empty section — verified
+live, then fixed by making an empty group a stop in its own right (`row: null`),
+because a section you just created is exactly the one you want to move into.
+
+**Also:** unit is now the shared canonical dropdown (new `useUnitOptions`,
+extracted from `SubstituteMetadataDialog`, which now consumes it — R-001/R-003)
+with `new-value-mode` so "pinch" still works; the optional toggle stopped
+changing its own label; the "Right now" cell's add-to-list is a real button on the
+cell's right edge; the bottom "Recipe photo" disclosure is gone and the tile owns
+the whole flow (no photo → picker immediately; photo → Change/Remove, no preview).
+
+**A test that was written and thrown away.** A spec pinning the `no-option` slot
+contract mounts fine but can never assert: Quasar's option menu needs
+`requestAnimationFrame`, which vitest's jsdom doesn't drive, so the menu is never
+in the DOM. Deleted rather than left as a mount-only test pretending to cover the
+bug; logged as FU-732 with the browser check.
+
+**Verification.** `vue-tsc` clean, eslint clean, **494 vitest** (unchanged).
+Driven live at 1280 and 375: photo tile 220×220 with the image painting and the
+aria-label flipping to "Change the recipe photo"; click with no photo → file
+picker, 0 dialogs; with a photo → a dialog containing exactly two buttons and no
+`<img>`; header pencil → equal-width fields → Serves 9 → Done → "Saved" and back
+to reading; ingredients edit mode → 3 always-on buttons per row at opacity 1 with
+transparent backgrounds; add section → move a row in and back out; whole-row tap →
+row editor with the unit dropdown and the static Optional label; missing-row
+"Add to a list" 16px off the cell's right edge; no horizontal overflow at 375px.
+
+**Close-gate — standards.** R-001 (`useUnitOptions` extracted rather than copied;
+`ImageEditTile` extended, not forked), R-002 (tokens only; `--semantic-negative`
+for the delete ink), R-003 (unit vocabulary has one home), R-006 (the row editor
+still patches a copy), D-016 (focus-visible on the newly-clickable row), D-019
+(fields never disabled while saving — only the pencil takes the spinner).
+**New: R-055 + ADR-051.** FU-691 (this stylesheet is off-token) is untouched and
+still open — new CSS follows the file's existing `var(--space-*, fallback)` style
+rather than making it worse.
+
+**Next up:** FU-688's swap pass is now *less* blocked — this batch is the owner
+refining the masthead, which is the shape the FU asked about, so "masthead vs
+shared `PageToolbar`" looks answered in favour of the masthead. Worth confirming
+with the owner before deleting `RecipeDetailPage.vue` (2,727 lines) and both hatch
+buttons.
+
+---
+
 ## 2026-08-23 — **Shopping-list redesign: run face + receipt face (FU-727), and the amend/observation loop closed (FU-726)**
 **Status:** both remaining faces built, green, and driven live. FU-727 and FU-726
 resolved. Real-device walk owed (FU-729).

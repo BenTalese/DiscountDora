@@ -27,12 +27,6 @@
                     class="dora-buy-verdict-card__icon"
                 />
                 <span class="dora-buy-verdict-card__headline">{{ headline }}</span>
-                <q-space />
-                <q-icon
-                    :name="expanded ? ICONS.collapse : ICONS.expand"
-                    size="18px"
-                    class="dora-text-muted"
-                />
             </button>
             <!-- Icon-only, and outside the disclosure button so a tap on the
                  action can't toggle the card. The name survives as the tooltip
@@ -47,6 +41,24 @@
             >
                 <q-tooltip>{{ actionLabel }}</q-tooltip>
             </BaseButton>
+            <!-- Feedback 2026-08-23: the caret used to live inside the summary
+                 button, which put it LEFT of the action — so it sat in a
+                 different place depending on whether the verdict had a one-tap
+                 action. It's now the last control in the row, always the same
+                 spot; it toggles the same disclosure the summary line does. -->
+            <button
+                type="button"
+                class="dora-buy-verdict-card__caret"
+                :aria-expanded="expanded"
+                :aria-label="expanded ? 'Hide details' : 'Show details'"
+                @click="expanded = !expanded"
+            >
+                <q-icon
+                    :name="expanded ? ICONS.collapse : ICONS.expand"
+                    size="18px"
+                    class="dora-text-muted"
+                />
+            </button>
         </div>
 
         <div v-if="expanded" class="dora-buy-verdict-card__body">
@@ -251,10 +263,25 @@
         text-align: left;
         cursor: pointer;
     }
-    .dora-buy-verdict-card__summary:focus-visible {
+    .dora-buy-verdict-card__summary:focus-visible,
+    .dora-buy-verdict-card__caret:focus-visible {
         outline: 2px solid var(--focus-ring);
         outline-offset: 2px;
         border-radius: 4px;
+    }
+    /* 44px tap target (D-004) for a control that's only an 18px glyph. */
+    .dora-buy-verdict-card__caret {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 auto;
+        min-width: 44px;
+        min-height: 44px;
+        padding: 0;
+        border: none;
+        background: none;
+        color: inherit;
+        cursor: pointer;
     }
     .dora-buy-verdict-card__icon {
         flex-shrink: 0;

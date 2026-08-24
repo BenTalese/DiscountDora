@@ -162,7 +162,14 @@
                                 <q-item>
                                     <q-item-section class="dora-text-secondary text-weight-bold" style="max-width:160px">Level</q-item-section>
                                     <q-item-section>
-                                        <div class="row items-center q-gutter-sm">
+                                        <!-- Feedback 2026-08-23: the picker used to be
+                                             an intrinsically-sized button sharing its
+                                             row with the timestamp, so it was narrower
+                                             than every other editor in the list (and
+                                             cramped on mobile). It now fills the row
+                                             like the q-fields do, and the timestamp
+                                             drops underneath as a caption. -->
+                                        <div class="column">
                                             <!-- Round 9: render the level
                                                  colour as a coloured swatch
                                                  INSIDE the button (matching
@@ -184,11 +191,13 @@
                                                 class="dora-level-picker"
                                             >
                                                 <template #label>
-                                                    <StockLevelDot
-                                                        :sequence="detailLevelSequence"
-                                                        dot-class="q-mr-sm"
-                                                    />
-                                                    {{ detail.stock_level_name ?? '—' }}
+                                                    <span class="dora-level-picker__label">
+                                                        <StockLevelDot
+                                                            :sequence="detailLevelSequence"
+                                                            dot-class="q-mr-sm"
+                                                        />
+                                                        {{ detail.stock_level_name ?? '—' }}
+                                                    </span>
                                                 </template>
                                                 <q-list dense>
                                                     <q-item
@@ -205,8 +214,7 @@
                                                     </q-item>
                                                 </q-list>
                                             </BaseDropdown>
-                                            <q-space />
-                                            <span class="dora-text-secondary text-caption">
+                                            <span class="dora-text-secondary text-caption q-mt-xs">
                                                 Updated {{ relativeTime(detail.stock_level_last_updated) }}
                                             </span>
                                         </div>
@@ -561,7 +569,7 @@
                                             </span>
                                             <q-icon :name="ICONS.info_outline" size="16px" class="dora-text-secondary">
                                                 <q-tooltip max-width="320px">
-                                                    Flags this packet as
+                                                    Flags this item as
                                                     opened. Set a shorter
                                                     expiry above if it's
                                                     perishable.
@@ -2689,6 +2697,23 @@
         border: 1px solid color-mix(in srgb, var(--text-primary) 22%, transparent);
         border-radius: 4px;
         transition: border-color 0.2s ease;
+        /* Matches `.dora-inline-edit :deep(.q-field)` above so the picker is
+           the same width as every other editor in the fact list. */
+        width: 100%;
+    }
+    /* q-btn centres its content; with a full-width trigger that would float
+       the level name in the middle and park the caret next to it. The label
+       takes the slack instead, so the text sits left (like a q-field's value)
+       and the caret pins to the right edge. */
+    .dora-level-picker :deep(.q-btn__content) {
+        flex-wrap: nowrap;
+    }
+    .dora-level-picker__label {
+        display: flex;
+        align-items: center;
+        flex: 1 1 auto;
+        min-width: 0;
+        text-align: left;
     }
     .dora-level-picker:hover,
     .dora-level-picker:focus-within {

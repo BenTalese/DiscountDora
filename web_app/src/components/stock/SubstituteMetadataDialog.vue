@@ -119,7 +119,7 @@
      * with the metadata bundle when the user confirms.
      */
     import { computed, ref, watch } from 'vue';
-    import { UNIT_TABLE } from 'src/generated/units_table';
+    import { useUnitOptions } from 'src/composables/useUnitOptions';
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
     import { ICONS } from 'src/style/icons';
@@ -187,37 +187,9 @@
 
     // ── Unit picker ────────────────────────────────────────────────────
     // UNIT_TABLE keys include every alias ("ml", "millilitre", "millilitres").
-    // De-duplicate by canonical form so the dropdown isn't 200 lines of
-    // synonyms; let the typed search find them via `use-input`.
-    const allUnitOptions = computed(() => {
-        const seen = new Set<string>();
-        const out: Array<{ label: string; value: string }> = [];
-        for (const def of Object.values(UNIT_TABLE)) {
-            if (seen.has(def.canonical)) continue;
-            seen.add(def.canonical);
-            out.push({ label: def.canonical, value: def.canonical });
-        }
-        out.sort((a, b) => a.label.localeCompare(b.label));
-        return out;
-    });
-    const unitOptions = ref([...allUnitOptions.value]);
-    function onUnitFilter(query: string, update: (cb: () => void) => void): void {
-        update(() => {
-            const q = query.trim().toLowerCase();
-            if (!q) {
-                unitOptions.value = [...allUnitOptions.value];
-                return;
-            }
-            // Match against every alias so typing "tablespoons" finds tbsp.
-            const matches = new Set<string>();
-            for (const [alias, def] of Object.entries(UNIT_TABLE)) {
-                if (alias.toLowerCase().includes(q) || def.canonical.toLowerCase().includes(q)) {
-                    matches.add(def.canonical);
-                }
-            }
-            unitOptions.value = allUnitOptions.value.filter((o) => matches.has(o.value));
-        });
-    }
+    // De-duplicated by canonical form, searchable by alias — shared with the
+    // recipe ingredient editor (R-001).
+    const { unitOptions, onUnitFilter } = useUnitOptions();
 
     // ── Validation ─────────────────────────────────────────────────────
     const notesError = computed<string | null>(() =>

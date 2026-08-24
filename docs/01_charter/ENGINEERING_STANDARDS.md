@@ -1966,6 +1966,33 @@ exceptions, which still must be commented) · **Source** (where it was establish
 - **Established by:** the shopping-list three-face redesign (plan / run / receipt),
   2026-08-23. See ADR-050.
 
+### R-055 — The edit affordance belongs to a block, not to every field
+- **Rule:** when a region of a page holds several editable values (a masthead's
+  identity + facts, a list of ingredients), give the **region** one explicit
+  read↔edit switch. Do not hang a summon-a-field affordance
+  (`q-popup-edit`/click-to-reveal) on each value. The rule is about *editing*
+  chrome specifically; a single value that is genuinely the only editable thing
+  in its region may still edit in place.
+- **Why:** a summoned field costs two interactions before the control does its
+  job — the first click builds the input, the second opens it — which is
+  measurable on every dropdown and unavoidable on touch, where there is no hover
+  to preview the target. It also sizes each control to its own content, so an
+  empty field renders as a sliver and a full one as a slab, and neighbouring
+  values never line up. A block that flips whole keeps one grid across both
+  states: the controls are the same width as each other in edit, and the values
+  sit where the inputs were.
+- **What still holds:** the read face must read as a *document*, not a wall of
+  inputs (that is what the block switch buys), and the commit stays explicit
+  (D-019 — inline editing is fine, silent autosave is not). Prose is the
+  carve-out: an editor over the paragraph you are reading is the right shape,
+  and the recipe method keeps it.
+- **Violation signal:** two or more `q-popup-edit`s in one section; a select that
+  needs a click to appear before it can be clicked to open; a row of values whose
+  widths change as their content does.
+- **Established by:** the recipe-page feedback batch, 2026-08-23. See ADR-051,
+  and D-015 in the design guide (whose retired clause this partially restores,
+  at block rather than page granularity).
+
 ## ADR process (evaluate every task)
 
 At the end of each work unit, ask: **did this task make or rely on a decision that
@@ -3405,6 +3432,37 @@ one-off, or purely product/UX decisions (those go to the Charter check + worklog
   design (right for navigation, wrong for the run face's per-tick reconcile of
   server-owned totals).
 - **Promotes rule:** R-054.
+
+### ADR-051 — Block-level edit toggles on the recipe page, not per-field popups
+- **Date / task:** 2026-08-23 (recipe-view feedback batch)
+- **Status:** accepted
+- **Context:** `RecipeDetailNext.vue` shipped with every masthead value behind a
+  `q-popup-edit`, and the owner reported the consequence directly: "you need to
+  click once for the input to show, then again to get the options to show", plus
+  inputs that "take the width of their option text", so an empty Difficulty was a
+  narrow box. The same page put the list's *shape* (sections, order) in an
+  "Organise ingredients" disclosure at the bottom, separated from the list it
+  reorganised. Two candidate fixes were on the table — reveal the inputs on hover,
+  or a pencil that flips the block — and hover fails outright on touch and still
+  leaves the control sized to its content.
+- **Decision:** two block-level pencils. The masthead flips identity + facts to a
+  fixed `auto-fit minmax(160px, 1fr)` grid of real inputs and back; the
+  ingredients section flips to an edit face carrying ↑/↓ (which also move a row
+  *between* sections, including into an empty one), delete, per-section and
+  global add, section rename/reorder/remove, and whole-row tap-to-edit. Leaving
+  either mode commits, so the pencil reads as Done; a failed save keeps the block
+  open. The read face keeps exactly one affordance — the shopping-list button on
+  a missing ingredient. The "Organise ingredients" disclosure and the bottom
+  "Recipe photo" disclosure are both deleted; their jobs moved to the thing they
+  were about.
+- **Consequences:** D-015's retired "read-view + explicit edit mode" clause comes
+  back at *block* granularity — the page as a whole still reads as a document,
+  which is what the retirement was protecting. The method's inline prose editing
+  is deliberately untouched. Because leaving a mode saves, the Save button and
+  the pencils are now three doors to one commit, and all three close both blocks.
+  Any future detail page that grows a second `q-popup-edit` in one region should
+  reach for this shape instead — that is R-055.
+- **Promotes rule:** R-055.
 
 ## Known fixes / things to try
 

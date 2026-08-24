@@ -61,7 +61,7 @@ needs an owner call on scope and timing.
 | Stocktake Mode | ✅ | Three-phase runner (Review Dora's confident set → Walk → Sweep what dropped out), queue ordered least-certain-first, install-wide on/off switch. Verify owed; FU-700 (switch not gated on dashboard/help copy) open | [PROPOSAL](docs/04_proposals/PROPOSAL_STOCKTAKE_MODE.md) |
 | Stock-item detail | ➗ | 2026-08-21 batch: 10 of 12 items shipped (buy-verdict card unified with "Dora thinks", clickable expiry, Barcodes own tab, peek-panel verdict follows the item, named 404 errors). Two left as install-state findings — FU-648 (QR dialog, never reproduced, now instrumented) and FU-710 (barcode register 404). Phone-verify owed | `DORA_VERIFY` → Stock-item detail |
 | Cookbook | ➗ | Chunks 1–10 plus three feedback batches. Batch 3 (2026-08-20) re-ordered the filter row to reported use, added `Serves ≥`, removed `Missing ≤`, ran a one-glyph-one-meaning icon pass, and deleted meal-slot names from the Category vocabulary (migration `c8b3e5f0a712`). Desktop branch + Quasar dropdowns unverified (agent pane pins `$q.screen` to `xs`). Open: FU-691 (off-token stylesheet), FU-692 (`ICONS.restaurant` overloaded), FU-693 (row names off D-003) | [PROPOSAL](docs/04_proposals/PROPOSAL_COOKBOOK.md) |
-| Recipe page | 🟡 | The redesign (`RecipeDetailNext.vue`) **won the owner comparison** and its gaps are closed — substitutes back as a per-row in-stock chip, `time_of_day` back, per-ingredient optional/notes, sections usable via a real row editor, and the debounced autosave replaced by explicit Save + dirty indicator + route guard (ADR-045/R-049, three silent-data-loss paths dissolved). **Blocked on one owner call (FU-688)**: masthead vs shared `PageToolbar`, which gates the one-way swap pass (delete the 2,727-line old page) | [PROPOSAL](docs/04_proposals/PROPOSAL_COOKBOOK.md) |
+| Recipe page | 🟡 | The redesign (`RecipeDetailNext.vue`) **won the owner comparison**, its gaps are closed (substitutes chip, `time_of_day`, per-ingredient optional/notes, explicit Save + route guard — ADR-045/R-049), and the **2026-08-23 feedback batch (17 items)** reworked how it edits: two **block-level pencils** replacing every per-field popup (R-055/ADR-051), the "Organise ingredients" disclosure deleted into an ingredients edit mode whose ↑/↓ also move rows between sections, a shared unit dropdown, and three real bugs fixed — the masthead photo rendering at 0×0, free text unreachable when the pantry matched nothing, the title wrapping early. **Blocked on one owner call (FU-688)**: masthead vs shared `PageToolbar` — which this batch effectively answers in the masthead's favour — gating the swap pass (delete the 2,727-line old page) | [PROPOSAL](docs/04_proposals/PROPOSAL_COOKBOOK.md) |
 | Products-as-overlay | ➗ | Phases 0–E code-complete; Phase-F tail is FU-214 browser-verify + L197 hard-delete decision + L205/206 bulk-select | [RUNBOOK](docs/04_proposals/PRODUCTS_OVERLAY_RUNBOOK.md) |
 | Prices surface | 🔴 | Investigation done and it confirms the owner's own diagnosis: all price *reading* capability (compare 5, ranges, alerts) sits on the product axis at `/price-history`, which has **no nav entry**, while the everyday user's own data gets a single-item modal with no range and no compare. Placement settled (price lens on Stock overview + trend section in Reports; alerts advanced-only); the keep/cut call itself is **FU-703** and gates FU-708 | [ASSESSMENT](docs/05_investigations/PRICES_SURFACE_UX_ASSESSMENT.md) |
 | ⭐ Zero-Input Pantry (P8-07) | 🟡 | Built end-to-end and extended (FU-653) to recipes, shopping lists and the meal planner, each behind its own off-by-default opt-in, purely additive. Server verified live; **all three client renders and the original P8-07 walk unseen** | [PROPOSAL](docs/04_proposals/PROPOSAL_ZERO_INPUT_PANTRY.md) + [INFERENCE_SURFACES](docs/04_proposals/PROPOSAL_INFERENCE_SURFACES.md) |
@@ -104,13 +104,15 @@ first.
    FU-708**. FU-704/705/706/707 (mobile form, chart touch, observation edit,
    signal tone) are independent and can start whenever.
 3. **🔴 Say the word on the recipe masthead (FU-688).** You picked the redesigned
-   page and its feature gaps are closed. One question remains: the new page
-   hand-rolls its masthead and action row while every other detail page uses the
-   shared `PageToolbar`. You said you'd assess it yourself. The **swap pass waits
-   on that answer**, because it's a one-way door — route re-point, delete
-   `RecipeDetailPage.vue` (2,727 lines), both hatch buttons, the duplicate form
-   model. Then walk `DORA_VERIFY.md` → "⚠️ Recipe page (new layout)": the
-   save/discard/guard round-trips and the substitutes chip need real pointer input.
+   page, its feature gaps are closed, and the 2026-08-23 feedback batch has now
+   *reworked* that masthead to your notes — which reads as an answer in the
+   masthead's favour, but it's still your call against the shared `PageToolbar`
+   every other detail page uses. The **swap pass waits on it**, because it's a
+   one-way door — route re-point, delete `RecipeDetailPage.vue` (2,727 lines),
+   both hatch buttons, the duplicate form model. Then walk `DORA_VERIFY.md` →
+   "⚠️ Recipe page (new layout)": the two new edit pencils, the ingredients edit
+   mode and the free-text ingredient flow all need real pointer input (the
+   preview pane wouldn't paint for the build session — FU-733).
 4. **Walk the 2026-08-22 stock-overview batch — the bulk-bar network check is the
    one that matters.** Six new bulk endpoints replaced per-item request loops on
    log-waste (and Undo), add-to-list, add-to-chosen-list, mark-restocked,

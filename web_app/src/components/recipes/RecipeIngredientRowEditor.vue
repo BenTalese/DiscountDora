@@ -32,32 +32,34 @@
                     :error-message="anchorError ?? undefined"
                     @filter="onItemFilter"
                 >
+                    <!-- Quasar renders `no-option` *instead of* the whole option
+                         list — `before-options` and `after-options` included
+                         (QSelect `getAllOptions`). Typing a brand-new ingredient
+                         matches nothing, which is precisely when the free-text
+                         action is needed, so it has to be offered from both
+                         slots or it is unreachable exactly when it matters. -->
                     <template #no-option>
-                        <q-item>
+                        <q-item v-if="typed.trim().length > 0" clickable :disable="creating" @click="onUseTyped">
+                            <q-item-section avatar>
+                                <q-icon :name="ICONS.add" color="primary" />
+                            </q-item-section>
+                            <q-item-section class="text-primary">
+                                Use "{{ typed.trim() }}"
+                            </q-item-section>
+                        </q-item>
+                        <q-item v-else>
                             <q-item-section class="dora-text-muted">
                                 Type to search your pantry.
                             </q-item-section>
                         </q-item>
                     </template>
-                    <template v-if="typed.length > 0" #after-options>
-                        <q-item clickable :disable="creating" @click="onCreateItem">
+                    <template v-if="typed.trim().length > 0" #after-options>
+                        <q-item clickable :disable="creating" @click="onUseTyped">
                             <q-item-section avatar>
                                 <q-icon :name="ICONS.add" color="primary" />
                             </q-item-section>
                             <q-item-section class="text-primary">
-                                Create "{{ typed }}" in my pantry
-                            </q-item-section>
-                        </q-item>
-                        <!-- FU-506 — free text keeps the ingredient readable
-                             without pretending it's tracked. Cookability stays
-                             unknown while any required row is unlinked, and the
-                             row can be linked later from this same picker. -->
-                        <q-item clickable @click="onUseFreeText">
-                            <q-item-section avatar>
-                                <q-icon :name="ICONS.edit" color="secondary" />
-                            </q-item-section>
-                            <q-item-section class="dora-text-secondary">
-                                Use "{{ typed }}" as free text — not tracked in stock
+                                Use "{{ typed.trim() }}"
                             </q-item-section>
                         </q-item>
                     </template>
@@ -91,15 +93,24 @@
                     style="max-width: 120px"
                     hide-bottom-space
                 />
-                <q-input
+                <!-- The same canonical vocabulary the substitute-ratio and
+                     price widgets use, rather than this page's own free-text
+                     box (R-001). `new-value-mode` keeps a recipe's own words —
+                     "pinch", "handful" — which the unit table doesn't carry. -->
+                <BaseSelect
                     v-model="draft.unit"
-                    dense
-                    outlined
-                    clearable
                     label="Unit"
-                    placeholder="g, ml, tbsp…"
-                    style="max-width: 140px"
-                    hide-bottom-space
+                    class="col"
+                    style="max-width: 160px"
+                    :options="unitOptions"
+                    use-input
+                    fill-input
+                    hide-selected
+                    clearable
+                    new-value-mode="add-unique"
+                    input-debounce="0"
+                    hint="Or type your own"
+                    @filter="onUnitFilter"
                 />
             </div>
 
@@ -119,10 +130,9 @@
             />
 
             <!-- ── Qualifiers ──────────────────────────────────────────── -->
-            <q-toggle
-                v-model="draft.is_optional"
-                :label="draft.is_optional ? 'Optional — skip it and still cook' : 'Required'"
-            />
+            <!-- One label, both states: a toggle whose text changes with it
+                 makes you read the sentence to work out which way it's set. -->
+            <q-toggle v-model="draft.is_optional" label="Optional — skip it and still cook" />
 
             <q-input
                 v-model="draft.notes"
@@ -172,6 +182,7 @@
     import BaseSelect from 'src/components/BaseSelect.vue';
     import { ICONS } from 'src/style/icons';
     import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';
+    import { useUnitOptions } from 'src/composables/useUnitOptions';
     import { useStockItemStore } from 'src/stores/stockItemStore';
     import { useStockLevelStore } from 'src/stores/stockLevelStore';
     import type {
@@ -205,6 +216,7 @@
     const draft = ref<IngredientPatch | null>(null);
     const typed = ref('');
     const creating = ref(false);
+    const { unitOptions, onUnitFilter } = useUnitOptions();
 
     // Re-seed the draft whenever the dialog opens on a row, so a second visit
     // never shows the previous row's values for a frame.
@@ -255,16 +267,33 @@
         update(() => { typed.value = value; });
     }
 
-    function onUseFreeText() {
+    /** Typed something the pantry doesn't have. One action, then one question:
+     *  should this be a tracked pantry item, or just words in the list? Asking
+     *  is what makes the free-text path discoverable — the old two-option menu
+     *  put the choice in a dropdown the user had to read to know it existed
+     *  (and, worse, never rendered when nothing matched). Persistent, because
+     *  a dismissed dialog would leave the typed text nowhere. */
+    function onUseTyped() {
         const text = typed.value.trim();
         if (!text || !draft.value) return;
-        draft.value.stock_item_id = null;
-        draft.value.raw_text = text;
-        typed.value = '';
+        $q.dialog({
+            title: `Add "${text}" to your pantry?`,
+            message: 'Tracked items let Dora tell you whether you have this and put it on a shopping list. '
+                + 'Free text just reads as part of the recipe.',
+            persistent: true,
+            ok: { label: 'Add to pantry', color: 'primary', noCaps: true },
+            cancel: { label: 'Keep as free text', flat: true, noCaps: true },
+        })
+            .onOk(() => { void createItem(text); })
+            .onCancel(() => {
+                if (!draft.value) return;
+                draft.value.stock_item_id = null;
+                draft.value.raw_text = text;
+                typed.value = '';
+            });
     }
 
-    async function onCreateItem() {
-        const name = typed.value.trim();
+    async function createItem(name: string) {
         if (!name || !draft.value) return;
         // Default to the most-stocked level: putting an item straight into a
         // recipe implies you have it, and the alternative is a row that reads

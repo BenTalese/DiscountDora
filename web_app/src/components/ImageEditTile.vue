@@ -16,13 +16,13 @@
     <div
         class="image-edit-tile"
         :class="`image-edit-tile--${shape}`"
-        :style="{ width: `${width}px`, height: `${height}px` }"
+        :style="fill ? undefined : { width: `${width}px`, height: `${height}px` }"
         role="button"
         tabindex="0"
         :aria-label="label"
-        @click="triggerPick"
-        @keydown.enter.prevent="triggerPick"
-        @keydown.space.prevent="triggerPick"
+        @click="onActivate"
+        @keydown.enter.prevent="onActivate"
+        @keydown.space.prevent="onActivate"
     >
         <slot />
         <div class="image-edit-tile__overlay">
@@ -55,6 +55,15 @@
             /** Caller's own save round-trip — shows the spinner and blocks re-picks. */
             busy?: boolean;
             accept?: string;
+            /** Size from the caller's own CSS instead of the `width`/`height`
+             *  pixel pair — for a tile that has to be responsive (a recipe
+             *  masthead photo is `100%` wide and square). */
+            fill?: boolean;
+            /** Don't open the picker on activation; emit `activate` and let the
+             *  caller decide (e.g. offer Change / Remove first when a picture
+             *  already exists). The caller opens it via the exposed
+             *  `openPicker()`. */
+            manual?: boolean;
         }>(),
         {
             shape: 'circle',
@@ -62,6 +71,8 @@
             height: 96,
             busy: false,
             accept: 'image/*',
+            fill: false,
+            manual: false,
         },
     );
 
@@ -69,6 +80,8 @@
         (e: 'pick', image: ProcessedImage): void;
         /** Message is safe to show the user verbatim. */
         (e: 'error', message: string): void;
+        /** `manual` tiles only — the tile was clicked or keyboard-activated. */
+        (e: 'activate'): void;
     }>();
 
     const fileInput = ref<HTMLInputElement | null>(null);
@@ -84,6 +97,17 @@
         if (props.busy || processing.value) return;
         fileInput.value?.click();
     }
+
+    function onActivate() {
+        if (props.busy || processing.value) return;
+        if (props.manual) {
+            emit('activate');
+            return;
+        }
+        triggerPick();
+    }
+
+    defineExpose({ openPicker: triggerPick });
 
     async function onFileChange(ev: Event) {
         const input = ev.target as HTMLInputElement;

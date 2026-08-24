@@ -73,8 +73,8 @@
                 v-model.number="packCount"
                 dense outlined type="number"
                 class="col"
-                label="Pack count"
-                :rules="[(v) => v == null || v > 0 || 'Must be > 0']"
+                label="Pack count (optional)"
+                :rules="[(v) => isBlank(v) || v > 0 || 'Must be > 0']"
                 hide-bottom-space
             >
                 <q-tooltip>
@@ -188,6 +188,20 @@
     // A pack count of 1 (or empty) is a single pack — same thing the collapsed
     // disclosure used to mean before the field went always-visible.
     const isMultipack = computed(() => packCount.value != null && packCount.value > 1);
+
+    // 2026-08-24 feedback: "pack count must be optional". It always was for the
+    // server, but `v-model.number` hands back the empty *string* — not null —
+    // once a typed value is cleared, so the `> 0` rule failed and the field
+    // showed a validation error until you retyped a number. Normalising the
+    // blank back to null is what makes clearing it mean "single pack" again;
+    // `isBlank` keeps the rule itself honest for the tick before the watcher
+    // runs.
+    function isBlank(v: unknown): boolean {
+        return v == null || v === '';
+    }
+    watch(packCount, (v) => {
+        if (isBlank(v)) packCount.value = null;
+    });
 
     // flat list grouped by dimension. The canonical strings come from
     // the generated table (single source of truth — chunk 1 / R-003), so

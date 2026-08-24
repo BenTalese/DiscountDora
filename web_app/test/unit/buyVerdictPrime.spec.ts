@@ -40,6 +40,7 @@ function verdictFor(name: string): BuyVerdict {
     return {
         verdict: 'buy',
         confidence: 'high',
+        strength: 3,
         reasons: [{ axis: 'need', signal: 'out_of_stock', label: name }],
         one_tap_action: { kind: 'add_to_list', label: 'Add to primary list' },
         data_used: {

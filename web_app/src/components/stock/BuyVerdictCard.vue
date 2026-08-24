@@ -62,8 +62,12 @@
         </div>
 
         <div v-if="expanded" class="dora-buy-verdict-card__body">
+        <!-- Named "data confidence" since 2026-08-24: with strength carrying
+             "how much you should care", this number is only ever about the
+             evidence, and a bare "high confidence" under "No strong buy
+             signal" read as a contradiction. -->
         <div class="text-caption dora-text-muted">
-            {{ verdict.confidence }} confidence
+            Data confidence: {{ verdict.confidence }}
         </div>
 
         <!-- time-boxed hint on `wait` verdicts. Server only sends
@@ -165,9 +169,22 @@
         () => ACTION_ICONS[props.verdict?.one_tap_action.kind ?? 'none'],
     );
 
+    // Feedback 2026-08-24: "Worth buying now" fired for any item you'd marked
+    // low, essential or not, so it filtered out as noise. A buy now grades off
+    // the server's `strength` (essential x band, modulated by price + waste) —
+    // same axis `stock_attention` ranks shortages on, so the two can't
+    // contradict each other about the same item.
+    const BUY_HEADLINE_BY_STRENGTH: Record<number, string> = {
+        3: 'Worth buying now',
+        2: 'Probably worth buying',
+        1: 'Might be worth buying',
+    };
     const headline = computed(() => {
         if (!props.verdict) return '';
-        if (props.verdict.verdict === 'buy') return 'Worth buying now';
+        if (props.verdict.verdict === 'buy') {
+            return BUY_HEADLINE_BY_STRENGTH[props.verdict.strength]
+                ?? 'Might be worth buying';
+        }
         if (props.verdict.verdict === 'wait') return 'Might be worth waiting';
         if (props.verdict.verdict === 'skip') return 'Probably skip';
         return 'No strong buy signal';

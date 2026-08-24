@@ -556,6 +556,19 @@ Resolved entries carry one extra line, and live in `DORA_FOLLOWUPS_RESOLVED.md`:
   on Stock overview** + a **trend section in Reports**; no new top-level nav
   entry), and alerts (**advanced-only, hide cleanly** — they need an inbound feed,
   so no stock-item watchlist). Those three are recorded as D2/D3/D4 in the memo.
+- **Owner idea added 2026-08-24 — a "Shopping" tab on the stock item.** Rename
+  the stock-item detail page's **Lists** tab to **Shopping**, and gather the
+  money surfaces into it: the buy-verdict collapsible card (today on Overview),
+  usual store, preferred buys, the price widget and the purchase-history log.
+  Owner is "not 100% on this idea" and asked for it to be weighed here rather
+  than built, because it is a **fourth candidate placement** for the everyday
+  price job alongside the memo's D3 (price lens on Stock overview + trend
+  section in Reports). Note the two aren't exclusive — D3 answers *"which of my
+  items got more expensive?"* across the pantry, this answers *"what do I know
+  about buying **this** one?"* on a single item, and it would give the buy
+  verdict a home next to the price history it reasons from. Weigh it when this
+  fork is decided; it changes nothing about the keep/cut call on `/price-history`
+  itself.
 - **Why deferred:** owner's call; it decides whether FU-704…708 are polish on a
   surviving page or throwaway work on one that gets retired.
 - **Recommended resolution:** now-ish, before any of FU-704…708 — it sets their scope.

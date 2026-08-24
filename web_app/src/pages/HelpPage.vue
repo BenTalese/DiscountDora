@@ -319,6 +319,30 @@
                         'When scanning is switched on (Settings → Admin → System), the Stock page grows a Scan button: point it at a product barcode to jump straight to the matching stock item, or at one of Dora\'s own printed QR labels. It is navigation only — scanning never looks up live prices. One thing to know if you use Dora on your phone: web browsers only allow camera access over a secure connection, so if you reach your instance at a plain http:// address the camera cannot open, and the scanner will tell you so and offer you a box to type the barcode into instead. Two ways round it — use the Dashy Dora Android app, which scans against any instance, or serve Dora over HTTPS. QR label printing and typing a barcode by hand work either way.',
                     path: '/stock',
                 },
+                // 2026-08-24 feedback: these three carry prose that used to sit
+                // permanently on the stock-item detail page — a paragraph above
+                // the barcode list, a paragraph inside the substitute-note
+                // dialog, and the QR tooltip. Explanation you read once doesn't
+                // earn permanent space on the surface; the (?) beside each
+                // heading deep-links here via `?q=<title>`.
+                {
+                    title: 'Barcodes',
+                    summary:
+                        "A barcode on a stock item is the product's real EAN-13 or UPC-A — the 13 or 12 digits printed underneath the barcode on the packet. Type it into the Scanning tab, or hit Scan on the Stock page and point the camera at the packet. Scanning a registered code then opens that item. Dora never looks the number up online, so any code you can read off a packet works, and one code belongs to one item. Codes listed as \"(from product: …)\" came along with a linked Product rather than being registered here, so they're removed from the Product, not from the stock item.",
+                    path: '/stock',
+                },
+                {
+                    title: 'QR label',
+                    summary:
+                        "Dora's own printable label for a stock item, shown in the Scanning tab. Scanning it opens that item's page — handy on a decanted jar or a tub with no packaging left. It is not the product's real EAN/UPC barcode: those identify a Product and are managed further down the same tab. Print a single label from the tab, or a whole batch under Settings → Kitchen setup → QR labels.",
+                    path: '/stock',
+                },
+                {
+                    title: 'Substitutes',
+                    summary:
+                        "List the items that can stand in for one another, on a stock item's Substitutes tab. Notes you add show on the substitute list and in cook mode when swapping, so \"1:1 in soups, but don't use in baking\" reaches you at the moment you'd get it wrong. Add a ratio when the swap isn't 1:1 — cook mode displays it so you don't have to do the maths in your head. A swap made in cook mode is temporary and applies to that session only; it never rewrites the recipe.",
+                    path: '/stock',
+                },
                 {
                     title: 'Link a product to a stock item',
                     summary:

@@ -48,7 +48,12 @@ export interface BuyVerdictWaitHint {
 
 export interface BuyVerdict {
     verdict: 'buy' | 'wait' | 'skip' | 'unsure';
+    /** How good the evidence is — NOT how much you should care. */
     confidence: 'high' | 'medium' | 'low';
+    /** How much you should care, 0-3. Graded from the item's Essential flag
+     *  against its stock band, then modulated by price and waste. Drives the
+     *  card's headline wording. */
+    strength: number;
     reasons: BuyVerdictReason[];
     one_tap_action: BuyVerdictAction;
     data_used: BuyVerdictDataUsed;

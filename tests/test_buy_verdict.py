@@ -132,10 +132,59 @@ def test__low_stock_plus_above_usual__is_wait():
     assert verdict.one_tap_action.kind == "skip"
 
 
-def test__low_stock_plus_usual_price__is_buy_medium():
+def test__non_essential_low_plus_usual_price__is_the_weakest_buy():
+    """The 2026-08-24 owner call. Marking a *non-essential* item low used to
+    produce "Worth buying now", which said the opposite of `stock_attention`'s
+    rule that a non-essential shortage isn't even worth a notification. It's
+    still a buy — you are low — but it's the bottom of the scale, and the
+    confidence stays high because the history behind it is rich."""
     verdict = compose_verdict(_rich_history_inputs(stock_level_band="low"))
     assert verdict.verdict == "buy"
-    assert verdict.confidence == "medium"
+    assert verdict.strength == 1
+    assert verdict.confidence == "high"
+
+
+def test__essential_low__outranks_the_same_item_unflagged():
+    """The flag is the whole point of the grading: same history, same band,
+    one step further up the scale because you said you always want it."""
+    normal = compose_verdict(_rich_history_inputs(stock_level_band="low"))
+    essential = compose_verdict(
+        _rich_history_inputs(stock_level_band="low", is_essential=True)
+    )
+    assert normal.strength == 1
+    assert essential.strength == 2
+    assert essential.verdict == normal.verdict == "buy"
+
+
+def test__essential_out_of_stock__is_the_top_of_the_scale():
+    verdict = compose_verdict(
+        _rich_history_inputs(stock_level_band="out", is_essential=True)
+    )
+    assert verdict.verdict == "buy"
+    assert verdict.strength == 3
+
+
+def test__essential_flag__does_not_lift_a_stocked_item():
+    """Essential grades a *shortage*. An essential you have plenty of is no
+    more worth buying than any other stocked item."""
+    stocked = compose_verdict(_rich_history_inputs(is_essential=True))
+    assert stocked.strength == 0
+
+
+def test__strength_and_confidence_are_independent():
+    """The two dials answer different questions, which is why they were split:
+    a strong need on thin evidence has to be sayable."""
+    verdict = compose_verdict(_AxisInputs(
+        price_samples=[(3.80, _dt(6))],        # 1 sample → thin price axis
+        unique_purchase_dates=[_today() - timedelta(days=6)],
+        waste_events_12mo=0,
+        purchases_12mo=1,
+        stock_level_band="out",
+        is_essential=True,
+        today=_today(),
+    ))
+    assert verdict.strength == 3               # you're out of an essential
+    assert verdict.confidence == "medium"      # off one price sample
 
 
 # ── Stocked branches (waste + price interplay) ───────────────────
@@ -176,7 +225,7 @@ def test__stocked_plus_waste_and_on_open_list__action_is_remove():
     assert verdict.one_tap_action.kind == "remove_from_list"
 
 
-def test__stocked_plus_cheapest__is_buy_medium():
+def test__stocked_plus_cheapest__is_the_weakest_buy():
     inputs = _rich_history_inputs(
         stock_level_band="stocked",
         price_samples=[
@@ -189,7 +238,9 @@ def test__stocked_plus_cheapest__is_buy_medium():
     )
     verdict = compose_verdict(inputs)
     assert verdict.verdict == "buy"
-    assert verdict.confidence == "medium"
+    # Nothing but the price is arguing for it — a "might", not a "now".
+    assert verdict.strength == 1
+    assert verdict.confidence == "high"
 
 
 def test__stocked_plus_above_usual__is_wait():
@@ -206,10 +257,14 @@ def test__stocked_plus_above_usual__is_wait():
     assert verdict.verdict == "wait"
 
 
-def test__stocked_plus_usual_price__is_unsure_low():
+def test__stocked_plus_usual_price__is_unsure():
+    """No axis is arguing either way. `confidence` stays high — the evidence
+    is rich, it just doesn't point anywhere; that separation is the point of
+    splitting strength out of confidence."""
     verdict = compose_verdict(_rich_history_inputs(stock_level_band="stocked"))
     assert verdict.verdict == "unsure"
-    assert verdict.confidence == "low"
+    assert verdict.strength == 0
+    assert verdict.confidence == "high"
     assert verdict.one_tap_action.kind == "none"
 
 
@@ -244,8 +299,8 @@ def test__all_axes_thin__collapses_to_single_not_enough_history():
 
 
 def test__thin_price_only__drops_confidence_a_step_but_keeps_verdict():
-    """Low-stock with thin price data: verdict stays `buy` (need trumps),
-    but confidence steps down from medium to low."""
+    """Low-stock with thin price data: verdict stays `buy` (need still argues
+    for it), and the one thin axis costs a step of confidence."""
     inputs = _AxisInputs(
         price_samples=[(3.80, _dt(6))],        # 1 sample → thin
         unique_purchase_dates=[_today() - timedelta(days=6)],
@@ -257,7 +312,7 @@ def test__thin_price_only__drops_confidence_a_step_but_keeps_verdict():
     )
     verdict = compose_verdict(inputs)
     assert verdict.verdict == "buy"
-    assert verdict.confidence == "low"     # stepped down from medium
+    assert verdict.confidence == "medium"   # one thin axis, stepped from high
 
 
 def test__waste_thin_but_no_events__signals_no_waste_history_not_thin():
@@ -281,11 +336,13 @@ def test__waste_thin_but_no_events__signals_no_waste_history_not_thin():
         today=_today(),
     )
     verdict = compose_verdict(inputs)
-    # Stocked + usual price + no-waste-history → unsure/low
-    # (no positive reason for a buy either). But not the 3-axis
-    # collapse; there are still price + need reasons.
+    # Stocked + usual price + no-waste-history → unsure (no positive reason
+    # for a buy either). But not the 3-axis collapse; there are still price +
+    # need reasons, and neither of those axes is thin — so confidence, which
+    # only measures the evidence, stays high.
     assert verdict.verdict == "unsure"
-    assert verdict.confidence == "low"
+    assert verdict.strength == 0
+    assert verdict.confidence == "high"
 
 
 # ── Data-used transparency ────────────────────────────────────────────
@@ -435,10 +492,11 @@ def test__wait_hint__not_wait__is_none():
 
 # ── FU-450 — fake-markdown demotion ───────────────────────────────────
 
-def test__fake_markdown__demotes_price_driven_buy_to_wait():
-    """Low stock + cheapest_3mo normally → buy/high. A fake markdown on a
-    linked product demotes it to `wait` and surfaces the honesty reason —
-    Dora won't celebrate an inflated 'special'."""
+def test__fake_markdown__costs_the_price_axis_its_strength():
+    """Low stock + cheapest_3mo is normally strength 2. A fake markdown on a
+    linked product takes the point back and surfaces the honesty reason — Dora
+    won't celebrate an inflated 'special'. It doesn't argue you out of the
+    shortage itself, so the verdict stays `buy`, one rung lower."""
     inputs = _rich_history_inputs(
         stock_level_band="low",
         fake_markdown=True,
@@ -451,7 +509,13 @@ def test__fake_markdown__demotes_price_driven_buy_to_wait():
         ],
     )
     verdict = compose_verdict(inputs)
-    assert verdict.verdict == "wait"
+    assert verdict.verdict == "buy"
+    assert verdict.strength == 1
+    honest = compose_verdict(_rich_history_inputs(
+        stock_level_band="low",
+        price_samples=inputs.price_samples,
+    ))
+    assert honest.strength == 2
     assert any(r.signal == "fake_markdown" for r in verdict.reasons)
 
 

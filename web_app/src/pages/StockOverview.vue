@@ -412,6 +412,7 @@
                     <BaseButton
                         variant="ghost"
                         dense
+                        :icon="ICONS.drive_file_move"
                         label="Move location"
                         :disable="bulkSelection.size === 0"
                         @click="openMoveDialog"
@@ -419,6 +420,7 @@
                     <BaseButton
                         variant="ghost"
                         dense
+                        :icon="ICONS.replay"
                         label="Restock"
                         :loading="bulkBusy"
                         :disable="bulkSelection.size === 0"

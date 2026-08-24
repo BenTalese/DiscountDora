@@ -28,6 +28,93 @@ next.
 
 ---
 
+## 2026-08-24 (later 2) — **Stock overview + stock-item detail: the 2026-08-24 owner batch**
+**Status:** all mechanical items shipped; backend **1954 passed** / 1 skipped /
+1 xfailed, frontend **494 vitest**, `vue-tsc` + eslint clean. **Nothing walked in
+a browser** — the only seeded launch configs run `DORA_ALLOW_DESTRUCTIVE=true`
+and reseed the owner's DB, so the session didn't start one. Verify block added to
+`DORA_VERIFY.md` ("Stock: the 2026-08-24 feedback batch").
+
+**Trigger:** owner feedback pasted at session start — 2 items on Stock overview,
+10 on stock-item detail, two of them questions rather than instructions.
+
+**The one that mattered — the buy verdict was contradicting `stock_attention`.**
+The owner's complaint ("I mark an item as low and suddenly that alone means it's
+worthwhile buying? A regular nonessential item?") turned out to be a genuine
+two-rules-for-one-idea defect, the same shape as the B4 the attention module was
+written to kill: `stock_attention.py`'s docstring says in as many words that *"a
+non-essential item that is low or out does not need attention"*, while
+`get_buy_verdict.py` never read `is_essential` at all and answered `buy/high` for
+the same item. Not-worth-a-notification and worth-buying-now, simultaneously.
+
+The fix took the owner's own suggestion (a scale) and anchored it to the axis
+that module already ranks on:
+- **`strength` (0-3) replaces the if-ladder.** Base is `is_essential` x band —
+  essential+out 3, essential+low and normal+out 2, normal+low 1, stocked 0 —
+  then `cheapest_3mo` +1, `above_usual` -1, `wastes_often` -2,
+  `wastes_sometimes` -1, fake markdown -1, clamped. Direction falls out of it:
+  any strength left is a `buy`; at zero the axis that took it there picks
+  `skip` / `wait` / `unsure`.
+- **`confidence` was doing two jobs and now does one.** It used to encode
+  *strength* (a low-stock item was "buy/medium" purely because low is weaker
+  than out) as well as evidence quality, so a well-evidenced weak call and a
+  guessed strong one both read "medium", and *"very likely worth buying, but
+  I've only seen two shops"* was unsayable. It's evidence only now — one step
+  down per thin axis, one more for a soft inference — and the card labels it
+  **"Data confidence"**, since a bare "high confidence" under "No strong buy
+  signal" read as a contradiction.
+- The card's headline grades off `strength`; three of the six test failures were
+  exactly this split (confidence going `medium`/`low` → `high` on rich history)
+  and were updated deliberately, not patched.
+- **`prominent` was drafted and then cut.** It was going to gate the stock row's
+  cart-button ring at strength >= 2 — but that ring was deleted in **D-10
+  (2026-08-19)**; the verdict only renders on the detail card and shopping-list
+  lines now. Shipping a field with no reader is speculative, so it went.
+
+**The rest, briefly.** Pack count: it *was* optional server-side, but
+`v-model.number` returns `''` on clear, which failed the `> 0` rule — normalised
+back to `null` + labelled "(optional)". Bulk bar: `Move location` and `Restock`
+took `ICONS.drive_file_move` and `ICONS.replay`, both already meaning exactly
+that elsewhere (the assistant's move-item action; Restock radar) rather than new
+glyphs. Header: `no-wrap` + `min-width: 0` on the name. Chevrons: not a centring
+bug — `PantryBeliefCard`'s was an 18px glyph flush to the padding while
+`BuyVerdictCard`'s is centred in a 44px tap target, ~13px apart; the belief card
+took the same header/caret structure, which is what "same card layouts" asked
+for anyway. Barcodes tab → **Scanning**, QR moved out of the header modal into
+the tab (fetched lazily on tab open, not page load), header button deleted, and
+the `direct` caption dropped per the owner's follow-up — only `(from product: …)`
+survives.
+
+**New shared component: `HelpHint.vue`.** The (?) beside a heading. It rides the
+Help page's **existing `?q=` deep-link** rather than introducing an anchor
+registry, so a guide's title is the only thing to keep in sync. Three guides
+added (Barcodes / QR label / Substitutes) carrying the prose deleted from the
+barcode panel and the substitute dialog.
+
+**Two owner decisions taken this session** (asked, not assumed): the strength
+model as specced; and the *"rename Lists → Shopping and gather the money
+surfaces into it"* idea recorded under **FU-703** rather than built — it's a
+fourth candidate placement for the everyday price job and belongs in that fork.
+
+**Standards close-gate.** No unexplained violations. R-003: the strength grading
+and its thresholds are server-side, the client reads a number and picks a
+headline; `is_essential` is read from the same entity flag `stock_attention` uses
+rather than re-derived. R-035/D-004: the new belief-card caret is a 44px target
+like the one it was aligned to. `_need_strength` had to move below `_AxisInputs`
+— the annotation is evaluated at def time, so the tunables block would have
+NameError'd on import. **ADR evaluation:** no new rule. The "one graded scale,
+server-owned, shared with whatever else ranks the same fact" idea is a *second*
+instance of R-003 rather than a new rule; if a third surface grades shortages it
+is worth promoting then.
+
+**Next up:** owner walks the verify block. FU-717's deploy fix still gates the
+Scanning tab actually working on this install (FU-648 / FU-710 — same
+`features/data` module).
+
+**Open questions for user:** none.
+
+---
+
 ## 2026-08-24 (later) — **Merging two parallel recipe-page rebuilds, then re-applying what the merge dropped**
 **Status:** merged and ported; `vue-tsc` + eslint clean, 494 vitest, 1950 pytest,
 PWA build succeeded. **Browser pass owed** — the SPA is behind a sign-in the

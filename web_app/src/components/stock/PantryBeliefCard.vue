@@ -14,21 +14,36 @@
         the same pill the row shows, and opens to the full reasoning.
     -->
     <div v-if="belief" :class="['belief-card', `is-${tone}`]">
-        <button
-            type="button"
-            class="belief-card__summary"
-            :aria-expanded="expanded"
-            @click="expanded = !expanded"
-        >
-            <q-icon :name="ICONS.inferred_hunch" size="18px" class="belief-card__icon" />
-            <span class="belief-card__headline">{{ headline }}</span>
-            <q-space />
-            <q-icon
-                :name="expanded ? ICONS.collapse : ICONS.expand"
-                size="18px"
-                class="dora-text-muted"
-            />
-        </button>
+        <!-- Feedback 2026-08-24: this card's chevron didn't line up in a column
+             with the buy-verdict card's directly below it. Both were centred in
+             their own row; the difference was structural — this one was an 18px
+             glyph flush to the card's padding, that one is centred inside a
+             44px tap target. Same header shape now (summary button + a separate
+             caret button), so the two chevrons share an x. -->
+        <div class="belief-card__header">
+            <button
+                type="button"
+                class="belief-card__summary"
+                :aria-expanded="expanded"
+                @click="expanded = !expanded"
+            >
+                <q-icon :name="ICONS.inferred_hunch" size="18px" class="belief-card__icon" />
+                <span class="belief-card__headline">{{ headline }}</span>
+            </button>
+            <button
+                type="button"
+                class="belief-card__caret"
+                :aria-expanded="expanded"
+                :aria-label="expanded ? 'Hide details' : 'Show details'"
+                @click="expanded = !expanded"
+            >
+                <q-icon
+                    :name="expanded ? ICONS.collapse : ICONS.expand"
+                    size="18px"
+                    class="dora-text-muted"
+                />
+            </button>
+        </div>
 
         <div v-if="expanded" class="belief-card__body">
             <div>{{ belief.reason }}</div>
@@ -91,11 +106,17 @@
         background: var(--semantic-warning-soft);
         border-color: var(--semantic-warning);
     }
+    .belief-card__header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
     .belief-card__summary {
         display: flex;
         align-items: center;
         gap: 6px;
-        width: 100%;
+        flex: 1 1 auto;
+        min-width: 0;
         min-height: 44px;
         padding: 0;
         border: none;
@@ -105,7 +126,22 @@
         text-align: left;
         cursor: pointer;
     }
-    .belief-card__summary:focus-visible {
+    /* 44px tap target (D-004) for a control that's only an 18px glyph. */
+    .belief-card__caret {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 auto;
+        min-width: 44px;
+        min-height: 44px;
+        padding: 0;
+        border: none;
+        background: none;
+        color: inherit;
+        cursor: pointer;
+    }
+    .belief-card__summary:focus-visible,
+    .belief-card__caret:focus-visible {
         outline: 2px solid var(--focus-ring);
         outline-offset: 2px;
         border-radius: 4px;

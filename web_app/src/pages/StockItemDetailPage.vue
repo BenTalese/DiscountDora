@@ -8,35 +8,30 @@
              Mark-open / Set-expiry / Add-to-list trio is gone because all
              three actions live inline on the page already. Show QR stays
              since it's not reachable elsewhere. -->
-        <div class="row items-center q-mb-md q-gutter-sm stock-detail__header">
+        <div class="row items-center no-wrap q-mb-md q-gutter-sm stock-detail__header">
             <BaseButton v-if="!embedded" variant="icon" :icon="ICONS.arrow_back" @click="goBack" />
             <BaseButton v-else variant="icon" :icon="ICONS.close" @click="emit('close')">
                 <q-tooltip>Close panel</q-tooltip>
             </BaseButton>
-            <div class="text-h5 q-mr-sm" style="min-width: 160px">
+            <!-- 2026-08-24 feedback: a long name used to wrap, which pushed the
+                 buttons to a third line and left the back arrow alone on the
+                 first. The row no longer wraps at all — the name takes the
+                 slack and truncates, the controls keep their intrinsic width,
+                 and the full name is still readable on the overview card
+                 below. `min-width: 0` is what lets a flex child shrink far
+                 enough to ellipsis. -->
+            <div class="text-h5 q-mr-sm stock-detail__name">
                 <AppSkeleton v-if="loading && !detail" type="line" width="180px" height="1.6rem" />
                 <template v-else>{{ detail?.name || 'Stock item' }}</template>
             </div>
-            <q-space />
-            <!-- Feedback 2026-08-16: on a phone the labelled QR + Delete
-                 buttons wrapped the header onto a second line. Below `sm`
-                 both drop to icon-only so they sit on the item-name line;
-                 the label survives as the tooltip, so nothing is lost. -->
-            <BaseButton
-                v-if="detail && scanningEnabled"
-                variant="secondary"
-                icon="qr_code_2"
-                :label="compactHeader ? undefined : 'Show QR'"
-                @click="openQrDialog"
-            >
-                <q-tooltip max-width="280px">
-                    Show QR — Dora's own label for this item, a scannable
-                    code that opens this page. It's *not* the product's real
-                    EAN/UPC barcode (barcodes register a Product, and any
-                    linkage to this stock item is managed on this page).
-                    Print a batch under Settings → Kitchen setup → QR labels.
-                </q-tooltip>
-            </BaseButton>
+            <!-- Feedback 2026-08-16: on a phone the labelled Delete button
+                 wrapped the header onto a second line. Below `sm` it drops to
+                 icon-only so it sits on the item-name line; the label survives
+                 as the tooltip, so nothing is lost.
+                 Feedback 2026-08-24: the "Show QR" button that used to sit here
+                 is gone — the code itself now renders in the Scanning tab
+                 rather than behind a modal, so a header button for it was a
+                 second route to something already on the page. -->
             <BaseButton
                 v-if="detail"
                 variant="danger-ghost"
@@ -65,41 +60,6 @@
         </div>
 
         <div v-else-if="detail" key="sid-content">
-            <!-- ── QR dialog ────────────────────────────────────────── -->
-            <BaseDialog v-model="showQrOpen" :title="detail.name" closable card-style="min-width: 280px; max-width: 400px">
-                    <q-card-section class="text-center">
-                        <AppSkeleton
-                            v-if="qrLoading"
-                            type="rect"
-                            width="256px"
-                            height="256px"
-                        />
-                        <img
-                            v-else-if="qrSrc"
-                            :src="qrSrc"
-                            alt="QR code"
-                            style="width: 256px; height: 256px; max-width: 100%;"
-                        />
-                        <!-- The error sits BELOW the image rather than in place
-                             of it: "Print one" can fail (blocked pop-up) after
-                             the code itself loaded fine, and swapping the
-                             loaded QR out for that message would read as the
-                             code having broken too. -->
-                        <div v-if="qrError" class="text-negative text-caption q-mt-sm">
-                            {{ qrError }}
-                        </div>
-                    </q-card-section>
-                    <template #actions>
-                        <BaseButton variant="ghost" label="Close" v-close-popup />
-                        <BaseButton
-                            variant="primary"
-                            :icon="ICONS.print"
-                            label="Print one"
-                            @click="openSingleQrSheet"
-                        />
-                    </template>
-            </BaseDialog>
-
             <!-- Feedback 2026-06-18: replaced q-tabs with DoraTabs so the
                  active-tab underline uses the same sliding accent indicator
                  as the main menu (shrunk to tab-row scale). The per-tab
@@ -1011,6 +971,7 @@
                 <q-tab-panel name="substitutes">
                     <div class="row items-center q-mb-sm">
                         <div class="text-subtitle1">Substitutes</div>
+                        <HelpHint topic="Substitutes" />
                         <q-space />
                         <BaseButton variant="primary" dense :icon="ICONS.add" label="Add substitute" @click="openSubstitutePicker" />
                     </div>
@@ -1093,22 +1054,68 @@
 
                 </q-tab-panel>
 
-                <!-- ── Barcodes ─────────────────────────────────────────
-                     Feedback 2026-08-21: this used to live at the bottom of
-                     the Substitutes tab, where nobody would look for it and
-                     nothing explained what to type. It's its own tab now, and
-                     it says where the number comes from.
+                <!-- ── Scanning ─────────────────────────────────────────
+                     Feedback 2026-08-21: barcodes used to live at the bottom of
+                     the Substitutes tab, where nobody would look for them.
+                     Feedback 2026-08-24: the tab is now "Scanning" and owns
+                     both halves of the scanning story — Dora's own QR label for
+                     this item (previously a header button opening a modal) on
+                     top, the product's real barcodes underneath. The explainer
+                     prose both halves used to carry now lives in Help; the (?)
+                     next to each heading goes there.
                      Still gated on the install-wide scanning flag (R-029:
                      when off, the surface stays hidden — scanning isn't an
                      active capability on this install). The tab itself is
                      hidden by the same flag, so this panel only renders when
-                     scanning is on. Shows direct registrations + via-Product
-                     derivations; Add/Remove available for direct rows only
-                     (via-Product live on the Product). -->
-                <q-tab-panel name="barcodes" class="q-pa-md">
+                     scanning is on. Barcodes show direct registrations +
+                     via-Product derivations; Add/Remove available for direct
+                     rows only (via-Product live on the Product). -->
+                <q-tab-panel name="scanning" class="q-pa-md">
+                    <!-- Dora's own QR label. Fetched through the authenticated
+                         http client (see useQrLabels) the first time this tab
+                         is opened, not on page load — most visits never come
+                         here. -->
+                    <div class="q-mb-lg">
+                        <div class="row items-center q-mb-sm">
+                            <div class="text-subtitle1">QR label</div>
+                            <HelpHint topic="QR label" />
+                            <q-space />
+                            <BaseButton
+                                variant="secondary"
+                                dense
+                                :icon="ICONS.print"
+                                label="Print"
+                                @click="openSingleQrSheet"
+                            />
+                        </div>
+                        <div class="row items-start">
+                            <AppSkeleton
+                                v-if="qrLoading"
+                                type="rect"
+                                width="256px"
+                                height="256px"
+                            />
+                            <img
+                                v-else-if="qrSrc"
+                                :src="qrSrc"
+                                alt="QR code"
+                                style="width: 256px; height: 256px; max-width: 100%;"
+                            />
+                        </div>
+                        <!-- The error sits BELOW the image rather than in place
+                             of it: Print can fail (blocked pop-up) after the
+                             code itself loaded fine, and swapping the loaded QR
+                             out for that message would read as the code having
+                             broken too. -->
+                        <div v-if="qrError" class="text-negative text-caption q-mt-sm">
+                            {{ qrError }}
+                        </div>
+                    </div>
+
                     <div>
                         <div class="row items-center q-mb-sm">
                             <div class="text-subtitle1">Barcodes</div>
+                            <HelpHint topic="Barcodes" />
                             <q-space />
                             <BaseButton
                                 variant="primary"
@@ -1117,22 +1124,6 @@
                                 label="Add barcode"
                                 @click="onAddBarcodeClick"
                             />
-                        </div>
-                        <!-- The "what do I even type here?" answer, on the
-                             surface rather than in a tooltip: the number is
-                             printed under the barcode on the packet, and Dora
-                             never looks it up anywhere — it's a shortcut key
-                             for opening this item. -->
-                        <div class="dora-text-secondary text-caption q-mb-md">
-                            A barcode here is the product's real
-                            <strong>EAN-13</strong> or <strong>UPC-A</strong> —
-                            the 13 or 12 digits printed underneath the barcode
-                            on the packet. Type it in, or hit
-                            <strong>Scan</strong> on the Stock page and point
-                            the camera at the packet. Scanning a registered code
-                            then opens this item. Dora never looks the number up
-                            online, so any code you can read off a packet works,
-                            and one code belongs to one item.
                         </div>
                         <div
                             v-if="detail.barcodes.length === 0"
@@ -1149,19 +1140,19 @@
                                     <q-item-label class="dora-text-monospace">
                                         {{ bc.barcode }}
                                     </q-item-label>
+                                    <!-- Feedback 2026-08-24: the `direct` rows
+                                         used to be captioned "direct", which is
+                                         what most people see and says nothing
+                                         on its own. Only the exception is
+                                         annotated now — a code that came along
+                                         with a linked Product, and so isn't
+                                         removable here. -->
                                     <q-item-label
                                         v-if="bc.source === 'via_product'"
                                         caption
                                         class="dora-text-muted"
                                     >
-                                        via product · {{ bc.product_name ?? '—' }}
-                                    </q-item-label>
-                                    <q-item-label
-                                        v-else
-                                        caption
-                                        class="dora-text-muted"
-                                    >
-                                        direct
+                                        (from product: {{ bc.product_name ?? '—' }})
                                     </q-item-label>
                                 </q-item-section>
                                 <q-item-section side>
@@ -1367,6 +1358,7 @@
     import BaseDialog from 'src/components/BaseDialog.vue';
     import BaseDropdown from 'src/components/BaseDropdown.vue';
     import BuyVerdictCard from 'src/components/stock/BuyVerdictCard.vue';
+    import HelpHint from 'src/components/help/HelpHint.vue';
     import StockLevelDot from 'src/components/stock/StockLevelDot.vue';
     import PantryBeliefCard from 'src/components/stock/PantryBeliefCard.vue';
     import { usePantryBeliefs } from 'src/composables/usePantryBeliefs';
@@ -1507,23 +1499,25 @@
     // The full per-100g table is behind a disclosure so it can't bury the
     // sections under it (feedback 2026-08-16).
     const nutritionExpanded = ref(false);
-    const showQrOpen = ref(false);
     // The QR PNG and the print sheet are fetched through the authenticated
     // http client and handed to the browser as blobs (see useQrLabels). The
     // previous `<img :src="apiUrl">` / `window.open(apiUrl)` pair relied on
     // the browser volunteering the session cookie on an unauthenticated
-    // request, which is why the dialog rendered empty and "Print one" died.
+    // request, which is why the code rendered empty and "Print one" died.
     const qrSrc = ref<string | null>(null);
     const qrLoading = ref(false);
     const qrError = ref<string | null>(null);
 
-    async function openQrDialog() {
-        showQrOpen.value = true;
-        if (qrSrc.value) return;
+    // Feedback 2026-08-24: the code renders inside the Scanning tab rather than
+    // behind a header button + modal, so the fetch is keyed to that tab opening.
+    // Still lazy — most visits to this page never open Scanning, and this is a
+    // network round-trip per item.
+    async function ensureQrLoadedAsync() {
+        if (qrSrc.value || qrLoading.value) return;
         qrLoading.value = true;
         qrError.value = null;
         try {
-            // size 512 looks crisp on retina; the dialog box clamps to 256.
+            // size 512 looks crisp on retina; the box clamps to 256.
             qrSrc.value = await fetchQrImageUrlAsync(stockItemId.value, 512);
         } catch (error) {
             // The reason, not just the fact. This used to be a bare sentence
@@ -1536,9 +1530,9 @@
         }
     }
 
-    // "Print one" opens a tab, so it must stay synchronous into
+    // "Print" opens a tab, so it must stay synchronous into
     // `openQrSheetAsync` — see the pop-up note there. Failures used to be
-    // dropped on the floor by a bare `void`; they now land in the dialog's own
+    // dropped on the floor by a bare `void`; they now land in the tab's own
     // error slot, next to the button that caused them.
     async function openSingleQrSheet() {
         qrError.value = null;
@@ -1562,14 +1556,18 @@
         },
         { immediate: true },
     );
-    // Same guard for the Barcodes tab, which is gated on the scanning flag.
+    // Same guard for the Scanning tab, which is gated on the scanning flag.
     watch(
         [scanningEnabled, tab],
         ([enabled, current]) => {
-            if (!enabled && current === 'barcodes') tab.value = 'overview';
+            if (!enabled && current === 'scanning') tab.value = 'overview';
         },
         { immediate: true },
     );
+    // Opening Scanning is what fetches the QR label — see `ensureQrLoadedAsync`.
+    watch(tab, (current) => {
+        if (current === 'scanning') void ensureQrLoadedAsync();
+    }, { immediate: true });
 
     // Full-path location options (e.g. "Pantry › Middle shelf › Left side"),
     // built once from the location tree so the picker reads like the other
@@ -2299,8 +2297,11 @@
         // Feedback 2026-08-21: barcodes were buried at the bottom of the
         // Substitutes tab. Own tab, same install-wide gate as the rest of the
         // scanning surface.
+        // Feedback 2026-08-24: renamed "Scanning" — it now holds this item's QR
+        // label as well as its barcodes, so a barcode count in the label would
+        // be counting half of what's in there.
         if (scanningEnabled.value) {
-            out.push({ name: 'barcodes', label: `Barcodes (${d?.barcodes.length ?? 0})`, icon: ICONS.barcode });
+            out.push({ name: 'scanning', label: 'Scanning', icon: ICONS.barcode });
         }
         out.push({ name: 'lists', label: `Lists (${onLists.value.length})`, icon: ICONS.shopping_cart });
         out.push({ name: 'history', label: 'History', icon: ICONS.history });
@@ -2599,10 +2600,12 @@
     }
 
     watch(stockItemId, () => {
-        // The peek panel swaps ids in place — drop the cached QR so the
-        // dialog can't show the previous item's label.
+        // The peek panel swaps ids in place — drop the cached QR so the tab
+        // can't show the previous item's label, and re-fetch if it's the tab
+        // we're currently looking at.
         qrSrc.value = null;
         qrError.value = null;
+        if (tab.value === 'scanning') void ensureQrLoadedAsync();
         if (stockItemId.value) void loadDetail();
     });
 
@@ -2665,6 +2668,20 @@
 <style scoped>
     .strike {
         text-decoration: line-through;
+    }
+
+    /* Header row: name takes the slack and ellipsises, controls keep their
+       intrinsic width. `min-width: 0` overrides the flex default that stops a
+       child shrinking below its content. */
+    .stock-detail__name {
+        flex: 1 1 auto;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .stock-detail__header > :not(.stock-detail__name) {
+        flex: 0 0 auto;
     }
     /* C-1b.3 — emphasise the cheapest linked product per §2.4 (style, not a
        separate "Add cheapest" button). Subtle outline + tinted background

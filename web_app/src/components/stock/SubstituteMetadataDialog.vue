@@ -6,12 +6,10 @@
         card-style="min-width: 360px; max-width: 520px"
     >
         <q-card-section>
-            <div class="text-caption dora-text-muted q-mb-sm">
-                Notes show on the substitute list and in cook mode when swapping.
-                Add a ratio when the swap isn't 1:1 — cook mode will display it
-                so you don't have to do the maths in your head.
-            </div>
-
+            <!-- Feedback 2026-08-24: the paragraph explaining where notes and
+                 ratios surface moved to Help → Guides ("Substitutes"), reachable
+                 from the (?) beside the Substitutes heading. It was permanent
+                 chrome on a dialog you open to type one line. -->
             <q-input
                 v-model="notesDraft"
                 type="textarea"

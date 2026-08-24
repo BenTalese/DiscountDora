@@ -2,13 +2,25 @@
 
     GET /api/stock-items/<id>/buy-verdict
 
-Returns a per-item verdict {buy / wait / skip / unsure} plus confidence,
-per-axis reasons, a one-tap action, and the data the composer reasoned
-from. See `docs/04_proposals/PROPOSAL_BUY_VERDICT_ORACLE.md` for the
+Returns a per-item verdict {buy / wait / skip / unsure} plus a strength, a
+confidence, per-axis reasons, a one-tap action, and the data the composer
+reasoned from. See `docs/04_proposals/PROPOSAL_BUY_VERDICT_ORACLE.md` for the
 full charter alignment + composition rules.
 
 Design points that keep this honest:
 
+* **Strength and confidence are different questions** (owner call
+  2026-08-24). `strength` (0-3) is how much you should care; `confidence`
+  is how good the evidence is. They used to be one dial, so "very likely
+  worth buying, but I've only seen two shops" was unsayable and a
+  well-evidenced weak call read the same as a guessed strong one.
+* **Essential grades the need axis.** `strength` starts from
+  `is_essential` x band — 3 for an essential you're out of, 1 for a
+  non-essential you marked low — because `stock_attention.py` already
+  ranks shortages on exactly that axis. Without it, the same item was
+  "not worth a notification" there and "Worth buying now" here.
+  The card's headline grades off it, so a non-essential you marked low
+  reads "Might be worth buying" rather than "Worth buying now".
 * **Personal data only.** Price samples come from completed shopping-
   list lines via the existing `line_paid_unit_price` ladder (R-003
   chokepoint). Cadence is derived inline. Waste rate reads
@@ -101,6 +113,23 @@ _WASTES_SOMETIMES_RATE = 0.10
 _HISTORY_WINDOW_DAYS = 365
 _PRICE_RECENT_WINDOW_DAYS = 90   # "cheapest in 3 months" window
 
+# ── Strength (owner call 2026-08-24) ──────────────────────────────────
+# The need axis grades rather than switches. Before this, marking any item low
+# produced "Worth buying now" — which contradicted `stock_attention.py`, whose
+# whole point is that *"a non-essential item that is low or out does not need
+# attention"*. The same item was therefore not worth a notification and worth
+# buying now at the same time: the two-rules-for-one-idea defect (B4) that
+# module was written to end. Grading on the same `is_essential` x band axis it
+# already ranks on is what makes the two agree.
+_MAX_STRENGTH = 3
+
+# Keyed by the need axis's own signal, not its band, so there is nothing to
+# translate between here and `_need_axis`. `thin_data` is absent and scores 0.
+_STRENGTH_BY_NEED_SIGNAL = {"out_of_stock": 2, "low_stock": 1, "stocked": 0}
+_PRICE_STRENGTH_MODIFIER = {"cheapest_3mo": 1, "above_usual": -1}
+_WASTE_STRENGTH_MODIFIER = {"wastes_often": -2, "wastes_sometimes": -1}
+
+
 # cycle detection for the `wait` verdict's time-boxed hint.
 # Reuses `_CHEAP_BAND_FRACTION` to define a "low" (same threshold P8-05
 # uses for `cheapest_3mo`), so there is one definition of "low" the whole
@@ -159,6 +188,11 @@ class WaitHintDto:
 class BuyVerdictDto:
     verdict: str                # "buy" | "wait" | "skip" | "unsure"
     confidence: str             # "high" | "medium" | "low"
+    # How much you should care, 0-3 — see `_need_strength` and the module
+    # docstring's strength table. Orthogonal to `confidence`, which is how good
+    # the evidence is: "very likely worth buying, but I've only seen two shops"
+    # needs both numbers to be sayable.
+    strength: int
     reasons: list[VerdictReasonDto]
     one_tap_action: OneTapActionDto
     data_used: VerdictDataUsedDto
@@ -181,6 +215,10 @@ class _AxisInputs:
     waste_events_12mo: int = 0
     purchases_12mo: int = 0     # size of unique_purchase_dates
     stock_level_band: str = "unknown"        # "out" | "low" | "stocked" | "unknown"
+    # The item's own Essential flag. The need axis grades on it — see
+    # `_need_strength`; this is the same fact `stock_attention.is_essential_low`
+    # reasons from, so the two surfaces agree about which shortages matter.
+    is_essential: bool = False
     is_on_open_list: bool = False            # drives one_tap_action for "skip"
     today: date = field(default_factory=date.today)
     # Household zone (R-021 / FU-525) — the zone `today` is expressed in, and the
@@ -446,6 +484,22 @@ def _wait_hint(inputs: _AxisInputs) -> Optional[WaitHintDto]:
 # ── The composer itself ────────────────────────────────────────────────
 
 
+def _need_strength(inputs: _AxisInputs, need_signal: str) -> int:
+    """Base strength from the need axis:
+
+                    out   low   stocked
+        essential    3     2      0
+        normal       2     1      0
+
+    Essential only lifts an actual shortage — an essential you already have
+    plenty of is no more worth buying than any other stocked item.
+    """
+    base = _STRENGTH_BY_NEED_SIGNAL.get(need_signal, 0)
+    if base > 0 and inputs.is_essential:
+        base += 1
+    return base
+
+
 def compose_verdict(inputs: _AxisInputs) -> BuyVerdictDto:
     price_reason, price_signal = _price_axis(inputs)
     need_reason,  need_signal  = _need_axis(inputs)
@@ -458,40 +512,13 @@ def compose_verdict(inputs: _AxisInputs) -> BuyVerdictDto:
 
     thin = [s for s in (price_signal, need_signal, waste_signal) if s == "thin_data"]
 
-    # Charter §2.3 rule set.
-    verdict = "unsure"
-    confidence = "medium"
-
-    if need_signal == "out_of_stock":
-        verdict, confidence = "buy", "high"
-    elif need_signal == "low_stock":
-        if price_signal == "cheapest_3mo":
-            verdict, confidence = "buy", "high"
-        elif price_signal == "above_usual":
-            verdict, confidence = "wait", "medium"
-        else:
-            verdict, confidence = "buy", "medium"
-    elif need_signal == "stocked":
-        if waste_signal == "wastes_often":
-            verdict, confidence = "skip", "high"
-        elif price_signal == "cheapest_3mo":
-            verdict, confidence = "buy", "medium"
-        elif price_signal == "above_usual":
-            verdict, confidence = "wait", "medium"
-        else:
-            verdict, confidence = "unsure", "low"
-    else:
-        # need is thin_data → everything hinges on price alone, which is
-        # not enough for a strong call.
-        verdict, confidence = "unsure", "low"
-
-    # Any thin axis drops confidence one step. Three thin axes are
-    # collapsed to a single explicit "not enough history" reason so the
-    # user sees one honest message rather than a wall of blanks.
+    # Three thin axes collapse to a single explicit "not enough history"
+    # reason so the user sees one honest message rather than a wall of blanks.
     if len(thin) == 3:
         return BuyVerdictDto(
             verdict="unsure",
             confidence="low",
+            strength=0,
             reasons=[VerdictReasonDto(
                 axis="need",
                 signal="thin_data",
@@ -501,7 +528,36 @@ def compose_verdict(inputs: _AxisInputs) -> BuyVerdictDto:
             one_tap_action=OneTapActionDto(kind="none", label=""),
             data_used=_data_used_dto(inputs),
         )
-    if thin:
+
+    # Strength — how much you should care. Need sets the base, price and waste
+    # modulate it; see the module docstring's table.
+    strength = _need_strength(inputs, need_signal)
+    strength += _PRICE_STRENGTH_MODIFIER.get(price_signal, 0)
+    strength += _WASTE_STRENGTH_MODIFIER.get(waste_signal, 0)
+    if inputs.fake_markdown:
+        strength -= 1
+    strength = max(0, min(_MAX_STRENGTH, strength))
+
+    # Direction. Anything with strength left is a buy; at zero, the axis that
+    # pushed it there decides how to say so. A fake markdown reads as `wait`
+    # for the same reason `above_usual` does — there is a real price reason to
+    # hold off, and a genuine special may well follow this one.
+    if strength > 0:
+        verdict = "buy"
+    elif waste_signal == "wastes_often":
+        verdict = "skip"
+    elif price_signal == "above_usual" or inputs.fake_markdown:
+        verdict = "wait"
+    else:
+        verdict = "unsure"
+
+    # Confidence answers a different question: how good is the evidence? It
+    # used to double as the strength dial (a `low`-stock item was "buy/medium"
+    # purely because low is weaker than out), which is why a well-evidenced
+    # weak call and a guessed strong one both read "medium". Each thin axis
+    # costs a step; nothing else does.
+    confidence = "high"
+    for _ in thin:
         confidence = _step_down(confidence)
 
     # D-11 — a need band Dora *inferred*, against what the user last
@@ -513,12 +569,12 @@ def compose_verdict(inputs: _AxisInputs) -> BuyVerdictDto:
         confidence = _step_down(confidence)
 
     # FU-450 — an inflated markdown on a linked product is an honesty
-    # signal, not a need signal. It demotes a *price-driven* `buy` to
-    # `wait` (don't celebrate a fake special) but never overrides a genuine
-    # `out_of_stock` need — you're out, you need it regardless of whether
-    # this particular "special" is real. Either way the reason surfaces so
-    # the card is honest (Charter P8). Skipped on the thin-data early return
-    # above — no verdict there to demote.
+    # signal, not a need signal. It costs a point of strength above (don't
+    # celebrate a fake special) but can't overturn a genuine shortage — you're
+    # out, you need it regardless of whether this particular "special" is real,
+    # and an essential you're out of still lands at 2. Either way the reason
+    # surfaces so the card is honest (Charter P8). Skipped on the thin-data
+    # early return above — no verdict there to demote.
     if inputs.fake_markdown:
         reasons.insert(0, VerdictReasonDto(
             axis="price",
@@ -526,8 +582,6 @@ def compose_verdict(inputs: _AxisInputs) -> BuyVerdictDto:
             label="Markdown looks inflated",
             detail="You've paid less than this \"special\" recently.",
         ))
-        if verdict == "buy" and need_signal != "out_of_stock":
-            verdict, confidence = "wait", "medium"
 
     one_tap = _pick_action(verdict, inputs)
     # attach the time-boxed hint only when the verdict actually
@@ -537,6 +591,7 @@ def compose_verdict(inputs: _AxisInputs) -> BuyVerdictDto:
     return BuyVerdictDto(
         verdict=verdict,
         confidence=confidence,
+        strength=strength,
         reasons=reasons,
         one_tap_action=one_tap,
         data_used=_data_used_dto(inputs),
@@ -692,6 +747,7 @@ def gather_verdict_inputs_for_items(
             waste_events_12mo=waste_in_window_by_item.get(item.id, 0),
             purchases_12mo=len(unique_dates),
             stock_level_band=_stock_level_band(levels_by_item.get(item.id)),
+            is_essential=item.is_essential,
             is_on_open_list=any(
                 line.shopping_list_id in open_list_ids for line in item_lines
             ),

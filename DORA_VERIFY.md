@@ -22,6 +22,29 @@ top-to-bottom.
 
 ---
 
+## Stock: the 2026-08-24 feedback batch
+Suites green, nothing walked — the verify configs reseed the DB, so the build
+session didn't run one.
+- [ ] Log a price: type a pack count, clear it, confirm no validation error and
+      **Log** still submits.
+- [ ] Bulk-select on Stock overview: **Move location** and **Restock** now carry
+      icons like their neighbours.
+- [ ] Stock item detail, phone width, item with a very long name: name stays on
+      the top line, truncates with "…", Delete stays inline, back arrow not orphaned.
+- [ ] Same page: the "Dora thinks" chevron and the buy-verdict chevron line up in
+      one vertical column.
+- [ ] **Scanning** tab (needs scanning on): QR renders inline on open with
+      **Print** beside it, no "Show QR" button left in the header, barcodes list
+      underneath. **On this install expect a 404** until FU-717's deploy fix lands
+      (FU-648 / FU-710, same module).
+- [ ] Barcode rows: a code you typed has no caption; one from a linked product
+      reads "(from product: …)".
+- [ ] The (?) beside **Substitutes**, **QR label** and **Barcodes** lands on
+      Help → Guides filtered to that guide.
+- [ ] Buy verdict wording: a **non-essential** item marked low reads "Might be
+      worth buying"; flag it Essential and it becomes "Probably worth buying";
+      an essential that's **out** reads "Worth buying now".
+
 ## Recipe page: the 2026-08-24 feedback batch
 The session that built it drove the page live at the agent pane's (mobile-shaped)
 viewport and confirmed: no Fraunces anywhere (everything renders in Nunito), the facts

@@ -15,6 +15,43 @@ semver — major bumps signal schema or breaking-config changes.
 - **Nutrition now carries vitamins and minerals (2026-08-17).** Answering "what else can be pulled?": a linked food's **Details** table gained an optional **"Vitamins & minerals"** block, collapsed until you open it, with **potassium, calcium, iron, magnesium, zinc, vitamins A, C, D, E and B12, folate, cholesterol, trans fat and the mono/polyunsaturated fats** — fifteen more nutrients, all of which USDA and Open Food Facts already carry. As before, **only what the source actually stated appears**: a nutrient it didn't state has no row, and if a food knows none of them the whole block is absent rather than empty. **Existing foods show nothing here until you re-run the import** under Settings → Admin → Nutrition — the values were never downloaded, so there's nothing to backfill from.
 
 ### Changed
+- **"Should I buy this?" now tells you how much it means it (2026-08-24).**
+  Marking anything low — a jar of capers as readily as the flour you always keep
+  in — produced the same flat **"Worth buying now"**, so the answer was easy to
+  stop reading. It now grades, using the **Essential** flag you already set:
+  an essential you're **out** of reads *"Worth buying now"*, an essential merely
+  low (or a normal item you're out of) reads *"Probably worth buying"*, and a
+  normal item you marked low reads *"Might be worth buying"*. A good price nudges
+  an item up a rung, an above-usual price or a habit of throwing this one away
+  nudges it down — so a non-essential you're out of, that's dear today and
+  usually goes off, comes out as *"Probably skip"*, where it used to say
+  *"Worth buying now"*. This also settles a straight contradiction: Dora's
+  attention rules hold that a non-essential shortage isn't worth an alert, while
+  the buy verdict was calling the same item urgent. The **confidence** line is
+  now labelled *"Data confidence"*, because that's all it ever meant — how much
+  history is behind the call, not how strongly she feels about it.
+- **A stock item's Barcodes tab is now Scanning, and holds the QR code
+  (2026-08-24).** The item's QR label used to be a **Show QR** button in the page
+  header that opened a modal — a second place to look for something that belongs
+  with the rest of the scanning story. The tab now opens on the code itself with
+  **Print** beside it, and the barcodes list sits underneath. Barcode rows you
+  registered yourself no longer carry a **"direct"** caption that said nothing;
+  only a code inherited from a linked product is annotated, as
+  *"(from product: …)"*.
+- **Less explaining on the page, more in the guides (2026-08-24).** The paragraph
+  above the barcode list and the one inside the substitute-note dialog were
+  permanent furniture in aid of something you read once. Both moved to
+  **Help → Guides** — as **Barcodes**, **QR label** and **Substitutes** — and each
+  heading grew a **(?)** that opens the matching guide.
+- **Long stock-item names behave on a phone (2026-08-24).** A long name wrapped,
+  which pushed the buttons down to a third line and left the back arrow sitting
+  alone at the top. The name now stays on the top line and truncates; the
+  controls stay next to it.
+- **Pack count really is optional when logging a price (2026-08-24).** Typing a
+  pack count and then clearing it left the field complaining, so it read as
+  required. Clearing it means what it always meant: one pack.
+- **Move location and Restock have icons (2026-08-24).** The two odd ones out in
+  the bulk-select bar on the Stock page.
 - **The recipe page: editing is by block now, and the photo lives on the photo
   (2026-08-24).** Two earlier passes over this page were built at the same time
   on two different machines; merging them kept the newer page and restored the

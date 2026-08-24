@@ -1,8 +1,8 @@
 <template>
     <div class="recipe-steps-editor">
         <div v-if="steps.length === 0" class="recipe-steps-editor__empty dora-text-muted q-mb-sm">
-            No structured steps yet. Add one to highlight ingredients/tools per step
-            and unlock per-step cook mode, or stick to the freeform Advanced fallback below.
+            No steps yet. Add one to link ingredients and tools to it and to
+            get per-step cook mode — or switch the step style to free text.
         </div>
 
         <draggable-step-row
@@ -17,6 +17,7 @@
             @update="onRowUpdate"
             @add-sub="onAddSubStep(row.client_id)"
             @remove="onRemove(row.client_id)"
+            @move="(delta) => onMove(row, delta)"
         />
 
         <BaseButton
@@ -135,6 +136,29 @@
             section_client_id: null,
         };
         emit('update:steps', [...props.steps, next]);
+    }
+
+    /** Reorder among siblings. Same effect as a drag, reachable with a thumb
+     *  or the keyboard — and the only reorder path on a phone, where the
+     *  drag handle is hidden (owner feedback 2026-08-24). */
+    function onMove(row: StepRowView, delta: -1 | 1) {
+        const siblings = props.steps
+            .filter((s) => s.parent_client_id === row.parent_client_id)
+            .sort((a, b) => a.sequence - b.sequence);
+        const ids = siblings.map((s) => s.client_id);
+        const from = ids.indexOf(row.client_id);
+        const to = from + delta;
+        if (from < 0 || to < 0 || to >= ids.length) return;
+        ids.splice(from, 1);
+        ids.splice(to, 0, row.client_id);
+        const newSeqById = new Map<string, number>(ids.map((id, i) => [id, i]));
+        emit(
+            'update:steps',
+            repackSequences(props.steps.map((s) =>
+                newSeqById.has(s.client_id)
+                    ? { ...s, sequence: newSeqById.get(s.client_id)! }
+                    : s)),
+        );
     }
 
     function onRemove(clientId: string) {

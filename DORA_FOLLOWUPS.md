@@ -55,6 +55,57 @@ Resolved entries carry one extra line, and live in `DORA_FOLLOWUPS_RESOLVED.md`:
 
 # Open
 
+## [OPEN] FU-732 — Sub-cent unit prices still read "$0.00 / g" everywhere except the recipe cost modal
+- **Raised:** 2026-08-24 (recipe-view feedback batch).
+- **Type:** finding.
+- **What:** `formatMoney` formats to the currency's minor unit, so a price of
+  $0.003/g renders as **$0.00 / g** — a real price that reads as free. The new
+  recipe cost modal fixes it locally (`unitPriceLabel` in
+  `RecipeCostDialog.vue` re-quotes g→kg and ml→L when the figure is under 5c),
+  but that is one call site's patch, not a shared rule. Anywhere else that
+  prints a per-unit price off a fine-grained unit has the same bug — the
+  shopping-list line price rows and the stock-item price surfaces are the
+  likely ones; not surveyed.
+- **Why deferred:** the reported surface was the recipe page, and the fix that
+  belongs in `useMoney` (a `formatUnitPrice(amount, unit)` that owns the
+  rescale, R-003) is a cross-surface change with its own verify.
+- **Recommended resolution:** when money formatting is next touched — promote
+  `unitPriceLabel` into `useMoney` and point every per-unit price at it.
+
+## [OPEN] FU-731 — `q-popup-edit` on a phone: the keyboard-over-the-field problem is only fixed for free-text instructions
+- **Raised:** 2026-08-24 (recipe-view feedback batch).
+- **Type:** finding.
+- **What:** the owner reported that editing free-text instructions on a phone
+  opened the keyboard over the input with nothing to scroll. That path now goes
+  through a maximised dialog (`RecipeMethodEditorDialog`) and is fixed. The
+  same `q-popup-edit` pattern still drives the recipe **title**, the eyebrow
+  selects, the six **facts**, a structured **step's text** and an ingredient's
+  **quantity** — and there is nothing about the reported failure that is
+  specific to the instructions field. It may simply not bite on the short ones
+  (a popup anchored to a short field near the top of the page has room), which
+  is exactly what the owner described.
+- **Why deferred:** it needs a real device to know which of them actually
+  misbehave; converting all of them to dialogs unprompted would undo the
+  inline-editing feel the page was built around.
+- **Recommended resolution:** when the phone walk in `DORA_VERIFY.md` (recipe
+  section, 2026-08-24) runs — fix only the ones that reproduce.
+
+## [OPEN] FU-730 — `Recipe.updated_at` is stamped by the PATCH handler only
+- **Raised:** 2026-08-24 (recipe-view feedback batch).
+- **Type:** finding.
+- **What:** the new edit stamp is written in `update_recipe.handle`. Deliberate
+  — cooking, favouriting and meal-pool adjustments change what *happened* to a
+  recipe, not what it is, and the version panel would be useless if "last
+  updated" moved every time you cooked. But two writers do change the recipe's
+  content and don't stamp it: the **URL/text importer**
+  (`import_recipe_from_content.py`) when it writes into an existing recipe, and
+  any future bulk/vocabulary migration that rewrites recipe rows in place.
+- **Why deferred:** the importer's overwrite path isn't reachable from the
+  recipe page (FU-689 closed won't-do), so nothing user-visible is wrong today.
+- **Recommended resolution:** opportunistic — whenever a second recipe write
+  path is added, stamp it there too (or lift the stamp into the repository's
+  save path for `Recipe`).
+
 ## [OPEN] FU-729 — Run/receipt faces have never been walked on a real phone
 - **Raised:** 2026-08-23 (FU-727 build)
 - **Type:** follow-up.

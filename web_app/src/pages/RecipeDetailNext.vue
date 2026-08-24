@@ -292,19 +292,39 @@
                     <!-- "You're missing two things, but you have a substitute
                          for one" is a different answer to "you're missing two
                          things", so it belongs in the cell that answers it. -->
-                    <span v-if="coverableCount > 0" class="rn__cellsub">
+                    <span v-if="coverableCount > 0" class="rn__cellswap">
+                        <q-icon :name="ICONS.swap_horiz" size="14px" />
                         {{ coverableCount === 1
                             ? '1 has a substitute you already have'
                             : `${coverableCount} have substitutes you already have` }}
                     </span>
-                    <button
-                        v-if="missingIngredients.length > 0"
-                        type="button"
-                        class="rn__link"
-                        @click="onAddMissingToList"
-                    >
-                        Add {{ missingIngredients.length === 1 ? 'it' : 'them' }} to a list →
-                    </button>
+                    <!-- Owner feedback 2026-08-24 — the add-to-list action
+                         said nothing about what was already on a list, so it
+                         offered to add things the user had added ten minutes
+                         earlier. It now counts only what's actually left, and
+                         when nothing is left it stops being an action. -->
+                    <template v-if="missingIngredients.length > 0">
+                        <button
+                            v-if="missingNotOnListCount > 0"
+                            type="button"
+                            class="rn__link"
+                            @click="onAddMissingToList"
+                        >
+                            Add {{ missingNotOnListCount === missingIngredients.length
+                                ? (missingNotOnListCount === 1 ? 'it' : 'them')
+                                : missingNotOnListCount }} to a list →
+                        </button>
+                        <span v-else class="rn__cellsub">
+                            <q-icon :name="ICONS.check" size="14px" />
+                            Already on a shopping list
+                        </span>
+                        <span
+                            v-if="missingOnListCount > 0 && missingNotOnListCount > 0"
+                            class="rn__cellsub"
+                        >
+                            {{ missingOnListCount }} already on a list
+                        </span>
+                    </template>
                     <span v-else class="rn__cellsub">{{ cookableCaption }}</span>
                 </div>
 
@@ -319,9 +339,21 @@
                     <span class="rn__cellv">
                         {{ recipe.estimated_cost !== null ? formatMoney(recipe.estimated_cost) : 'Not enough price info' }}
                     </span>
-                    <button type="button" class="rn__link" @click="openDetail('cost')">
-                        {{ recipe.estimated_cost_priced_count }} of {{ recipe.estimated_cost_total_count }} priced · breakdown →
-                    </button>
+                    <span class="rn__cellsub">
+                        {{ recipe.estimated_cost_priced_count }} of
+                        {{ recipe.estimated_cost_total_count }} priced
+                    </span>
+                    <!-- Feedback 2026-08-24 — the breakdown was a section on
+                         the page reached by a text link; it's a question with
+                         an answer, so it's a button and a modal. -->
+                    <BaseButton
+                        variant="subtle"
+                        dense
+                        class="rn__cellbtn"
+                        :icon="ICONS.receipt_long"
+                        label="Details"
+                        @click="costDialogOpen = true"
+                    />
                 </div>
 
                 <div class="rn__cell">
@@ -355,11 +387,91 @@
                         </div>
 
                         <div class="rn__pane">
-                            <template v-for="group in ingredientGroups" :key="group.key">
-                                <div v-if="group.name" class="rn__ingsec">{{ group.name }}</div>
+                            <!-- Owner feedback 2026-08-24 — a section used to be a
+                                 bare underlined caption above its rows, which read
+                                 as another free-text ingredient, and its controls
+                                 lived in an "Organise ingredients" disclosure at the
+                                 very bottom of the page. A section is a container, so
+                                 it looks like one: a card holding its own name, its
+                                 own rows and its own add button. The disclosure is
+                                 gone with it. -->
+                            <div
+                                v-for="group in ingredientGroups"
+                                :key="group.key"
+                                class="rn__group"
+                                :class="{ 'rn__group--card': group.sectionId !== null }"
+                            >
+                                <div v-if="group.sectionId !== null" class="rn__grouphead">
+                                    <InlineEditTarget
+                                        class="rn__groupname rn__edit"
+                                        :label="`Rename the ${group.name} section`"
+                                    >
+                                        {{ group.name }}
+                                        <q-popup-edit
+                                            :model-value="sectionNameOf(group.sectionId)"
+                                            v-slot="scope"
+                                            auto-save
+                                            @save="(v) => renameSection(String(group.sectionId), String(v ?? ''))"
+                                        >
+                                            <q-input
+                                                v-model="scope.value"
+                                                dense
+                                                autofocus
+                                                label="Section name"
+                                                placeholder="For the sauce"
+                                                @keyup.enter="scope.set"
+                                            />
+                                        </q-popup-edit>
+                                    </InlineEditTarget>
+                                    <span class="rn__groupcount">{{ group.rows.length }}</span>
+                                    <BaseButton
+                                        variant="icon"
+                                        dense
+                                        :icon="ICONS.more_vert"
+                                        :aria-label="`Section options for ${group.name}`"
+                                    >
+                                        <q-menu auto-close>
+                                            <q-list dense style="min-width: 190px">
+                                                <q-item
+                                                    clickable
+                                                    :disable="sectionIndexOf(group.sectionId) === 0"
+                                                    @click="moveSection(String(group.sectionId), -1)"
+                                                >
+                                                    <q-item-section avatar>
+                                                        <q-icon :name="ICONS.arrow_upward" />
+                                                    </q-item-section>
+                                                    <q-item-section>Move section up</q-item-section>
+                                                </q-item>
+                                                <q-item
+                                                    clickable
+                                                    :disable="sectionIndexOf(group.sectionId) === form.sections.length - 1"
+                                                    @click="moveSection(String(group.sectionId), 1)"
+                                                >
+                                                    <q-item-section avatar>
+                                                        <q-icon :name="ICONS.arrow_downward" />
+                                                    </q-item-section>
+                                                    <q-item-section>Move section down</q-item-section>
+                                                </q-item>
+                                                <q-separator />
+                                                <q-item clickable @click="removeSection(String(group.sectionId))">
+                                                    <q-item-section avatar>
+                                                        <q-icon :name="ICONS.delete" color="negative" />
+                                                    </q-item-section>
+                                                    <q-item-section>
+                                                        Remove section
+                                                        <q-item-label caption>
+                                                            Its ingredients move to the main list
+                                                        </q-item-label>
+                                                    </q-item-section>
+                                                </q-item>
+                                            </q-list>
+                                        </q-menu>
+                                    </BaseButton>
+                                </div>
+
                                 <ul class="rn__ing">
                                     <li
-                                        v-for="row in group.rows"
+                                        v-for="(row, rowIndex) in group.rows"
                                         :key="row.client_id"
                                         :class="{ 'rn__ing--lit': litIngredients.has(String(row.client_id)) }"
                                     >
@@ -417,14 +529,21 @@
                                                     can't tell whether you have it.
                                                 </q-tooltip>
                                             </q-chip>
+                                            <!-- "Missing" and "missing, but you have
+                                                 something you could use instead" are
+                                                 different answers to tonight's
+                                                 question, so the chip says which one
+                                                 this is (feedback 2026-08-24). The
+                                                 swap list itself stays one tap away in
+                                                 the substitutes chip beside it. -->
                                             <q-chip
                                                 v-else-if="isMissingItem(row.stock_item_id)"
                                                 dense square size="sm"
-                                                color="negative"
-                                                text-color="white"
+                                                :color="hasSwapInStock(row) ? 'warning' : 'negative'"
+                                                :text-color="hasSwapInStock(row) ? 'dark' : 'white'"
                                                 class="rn__chip"
                                             >
-                                                Missing
+                                                {{ hasSwapInStock(row) ? 'Missing — swap in stock' : 'Missing' }}
                                             </q-chip>
                                             <q-chip
                                                 v-if="expiringChipFor(row.stock_item_id)"
@@ -443,8 +562,25 @@
                                             />
                                             <span v-if="row.notes" class="rn__ingnote">{{ row.notes }}</span>
                                         </span>
-                                        <!-- Per-row quick action, revealed on hover/focus. -->
+                                        <!-- Per-row actions. Reordering lives here now
+                                             that the organise disclosure is gone; on a
+                                             phone the cluster is permanently visible,
+                                             because hover isn't a gesture a thumb has. -->
                                         <span class="rn__ingact">
+                                            <BaseButton
+                                                variant="icon" dense
+                                                :icon="ICONS.arrow_upward"
+                                                :disable="rowIndex === 0"
+                                                :aria-label="`Move ${ingredientLabel(row)} up`"
+                                                @click="moveIngredientWithin(group.rows, rowIndex, -1)"
+                                            />
+                                            <BaseButton
+                                                variant="icon" dense
+                                                :icon="ICONS.arrow_downward"
+                                                :disable="rowIndex === group.rows.length - 1"
+                                                :aria-label="`Move ${ingredientLabel(row)} down`"
+                                                @click="moveIngredientWithin(group.rows, rowIndex, 1)"
+                                            />
                                             <AddToListButton
                                                 v-if="row.stock_item_id && isMissingItem(row.stock_item_id)"
                                                 :stock-item-id="row.stock_item_id"
@@ -459,27 +595,33 @@
                                         </span>
                                     </li>
                                 </ul>
-                                <!-- A section you just created has nothing in it
-                                     yet, and saying so is what makes it obvious
-                                     where the ingredients go. -->
-                                <p v-if="group.rows.length === 0" class="rn__ingsecempty">
-                                    Nothing in this section yet — open an ingredient
-                                    and set its section.
-                                </p>
-                            </template>
 
-                            <p v-if="form.ingredients.length === 0" class="rn__empty">
-                                No ingredients yet.
-                            </p>
+                                <p v-if="group.rows.length === 0" class="rn__ingsecempty">
+                                    Nothing in this section yet.
+                                </p>
+
+                                <BaseButton
+                                    variant="subtle"
+                                    class="rn__add"
+                                    :icon="ICONS.add"
+                                    :label="group.sectionId === null ? 'Add ingredient' : `Add to ${group.name}`"
+                                    @click="addIngredient(group.sectionId)"
+                                />
+                            </div>
                         </div>
 
                         <BaseButton
-                            variant="subtle"
-                            class="rn__add"
+                            variant="ghost"
+                            class="rn__addsec"
                             :icon="ICONS.add"
-                            label="Add ingredient"
-                            @click="addIngredient"
-                        />
+                            label="Add section"
+                            @click="addSection"
+                        >
+                            <q-tooltip>
+                                Sections group the list under headings — "For the
+                                sauce", "To serve".
+                            </q-tooltip>
+                        </BaseButton>
                     </section>
                 </div>
 
@@ -487,17 +629,40 @@
                     <div class="rn__sechead">
                         <h2 class="rn__sectitle" id="rnMet">Method</h2>
                         <span class="rn__seccount">{{ methodCountLabel }}</span>
+                    </div>
+
+                    <!-- Owner feedback 2026-08-24 — the three-way control now
+                         says what it switches ("Step style") and names the
+                         styles in full, and the editor is one pencil shared by
+                         all three rather than a per-style disclosure whose
+                         label changed under you. One edit button, whatever the
+                         style, because it is always the same intent: change
+                         the method. -->
+                    <div class="rn__stylebar">
+                        <span class="rn__stylek">Step style</span>
                         <BaseSegmented
                             v-model="form.steps_mode"
                             dense
+                            unelevated
                             class="rn__modes"
                             :options="[
-                                { label: 'Steps', value: 'structured' },
-                                { label: 'Text', value: 'freeform' },
-                                { label: 'Photos', value: 'image' },
+                                { label: 'Structured', value: 'structured' },
+                                { label: 'Free text', value: 'freeform' },
+                                { label: 'Image', value: 'image' },
                             ]"
                             @update:model-value="markDirty"
                         />
+                        <BaseButton
+                            variant="secondary"
+                            dense
+                            class="rn__styleedit"
+                            :icon="ICONS.edit"
+                            :label="compact ? undefined : 'Edit'"
+                            :aria-label="methodEditLabel"
+                            @click="methodEditorOpen = true"
+                        >
+                            <q-tooltip>{{ methodEditLabel }}</q-tooltip>
+                        </BaseButton>
                     </div>
 
                     <div class="rn__pane">
@@ -532,38 +697,48 @@
                                     </InlineEditTarget>
                                     <span v-if="step.hint" class="rn__hint">{{ step.hint }}</span>
                                     <span v-if="usesLabel(step)" class="rn__uses">Uses {{ usesLabel(step) }}</span>
+                                    <!-- Sub-steps read as the same kind of
+                                         thing as a step, one level in: same
+                                         numbered bullet, toned down and
+                                         indented rather than a plain bulleted
+                                         list in a different visual language
+                                         (feedback 2026-08-24). -->
                                     <ol v-if="subStepsOf(step).length > 0" class="rn__substeps">
-                                        <li v-for="sub in subStepsOf(step)" :key="sub.client_id">{{ sub.text }}</li>
+                                        <li v-for="sub in subStepsOf(step)" :key="sub.client_id">
+                                            <p>{{ sub.text || 'Empty sub-step' }}</p>
+                                            <span v-if="sub.hint" class="rn__hint">{{ sub.hint }}</span>
+                                        </li>
                                     </ol>
                                 </li>
                             </ol>
-                            <p v-else class="rn__empty">No steps yet — add them in the step editor below.</p>
+                            <p v-else class="rn__empty">No steps yet — tap Edit to add them.</p>
                         </template>
 
-                        <!-- Freeform — one editable block of text. -->
+                        <!-- Free text — one block, edited in the shared method
+                             editor. It used to edit through an inline popup,
+                             which on a phone opened the keyboard *over* the
+                             field with nothing to scroll (feedback
+                             2026-08-24); the dialog puts the field above the
+                             keyboard and scrolls itself. -->
                         <template v-else-if="form.steps_mode === 'freeform'">
-                            <InlineEditTarget
+                            <button
                                 v-if="freeformLines.length > 0"
-                                tag="div"
-                                class="rn__free rn__edit"
-                                label="Edit the instructions"
+                                type="button"
+                                class="rn__free rn__edit rn__freebtn"
+                                aria-label="Edit the instructions"
+                                @click="methodEditorOpen = true"
                             >
                                 <p v-for="(line, i) in freeformLines" :key="`f-${i}`">{{ line }}</p>
-                                <q-popup-edit v-model="form.instructions" v-slot="scope" auto-save @save="markDirty">
-                                    <q-input v-model="scope.value" type="textarea" autogrow dense autofocus label="Instructions" style="min-width: 320px" />
-                                </q-popup-edit>
-                            </InlineEditTarget>
-                            <InlineEditTarget
+                            </button>
+                            <button
                                 v-else
-                                tag="p"
-                                class="rn__empty rn__edit"
-                                label="Add instructions"
+                                type="button"
+                                class="rn__empty rn__edit rn__freebtn"
+                                aria-label="Add instructions"
+                                @click="methodEditorOpen = true"
                             >
-                                No instructions yet.
-                                <q-popup-edit v-model="form.instructions" v-slot="scope" auto-save @save="markDirty">
-                                    <q-input v-model="scope.value" type="textarea" autogrow dense autofocus label="Instructions" style="min-width: 320px" />
-                                </q-popup-edit>
-                            </InlineEditTarget>
+                                No instructions yet — tap to write them.
+                            </button>
                         </template>
 
                         <!-- Photo steps. -->
@@ -573,40 +748,28 @@
                                 :recipe-id="recipe.recipe_id"
                                 :images="recipe.step_images ?? []"
                             />
-                            <p v-else class="rn__empty">No step photos yet — add them below.</p>
+                            <p v-else class="rn__empty">No step photos yet — tap Edit to add them.</p>
                         </template>
                     </div>
-
-                    <!-- Structural editing (reorder, sub-steps, per-step
-                         ingredients, photo management) lives behind one
-                         disclosure. Inline editing covers the text; this
-                         covers the shape. -->
-                    <q-expansion-item
-                        v-if="form.steps_mode !== 'freeform'"
-                        dense-toggle
-                        class="rn__editor"
-                        :label="form.steps_mode === 'structured' ? 'Reorder steps, link ingredients & tools' : 'Add or reorder step photos'"
-                    >
-                        <RecipeStepsEditor
-                            v-if="form.steps_mode === 'structured'"
-                            :steps="form.steps"
-                            :ingredient-options="ingredientOptions"
-                            :tool-options="toolOptions"
-                            :section-options="sectionOptions"
-                            @update:steps="onStepsChanged"
-                        />
-                        <RecipeStepImagesEditor
-                            v-else
-                            :model-value="form.step_images"
-                            @update:model-value="onStepImagesChanged"
-                        />
-                    </q-expansion-item>
                 </section>
             </div>
 
-            <!-- ═══ Details — everything administrative ═════════════════ -->
+            <!-- ═══ Details — everything administrative ═════════════════
+                 Owner feedback 2026-08-24 — dietary tags, tools, the source
+                 URL and the notes were four separate disclosures for four
+                 fields nobody opens twice. They are one "Additional details"
+                 chunk now. What stayed separate genuinely answers its own
+                 question: nutrition, the photo, and the version history. The
+                 cost breakdown left this list entirely — it is a modal on the
+                 status strip — and so did "Organise ingredients", which the
+                 ingredient section cards absorbed. -->
             <div class="rn__details">
-                <q-expansion-item v-model="detailOpen.tags" dense-toggle label="Tags & tools" :caption="tagsCaption">
+                <q-expansion-item
+                    v-model="detailOpen.extra"
+                    dense-toggle
+                    label="Additional details"
+                    :caption="extraCaption"
+                >
                     <div class="rn__disc">
                         <BaseSelect
                             v-model="form.dietary_tag_ids"
@@ -621,145 +784,9 @@
                             label="Tools"
                             :options="toolSelectOptions"
                             emit-value map-options multiple use-chips clearable
+                            class="q-mb-sm"
                             @update:model-value="markDirty"
                         />
-                    </div>
-                </q-expansion-item>
-
-                <!-- ── Organise ─────────────────────────────────────────
-                     The shape of the list, in the same place the method keeps
-                     the shape of its steps. Deliberately not drag-and-drop:
-                     the old page's handles doubled as drag-into-a-section, on
-                     the surface most likely to be used one-handed at a bench.
-                     ↑/↓ are keyboard-operable for free and can't fire by
-                     accident while scrolling. -->
-                <q-expansion-item
-                    v-model="detailOpen.sections"
-                    dense-toggle
-                    label="Organise ingredients"
-                    :caption="organiseCaption"
-                >
-                    <div class="rn__disc">
-                        <p class="rn__hintblock">
-                            Sections group the list under headings — "For the sauce",
-                            "To serve". A recipe with no sections shows one flat list.
-                        </p>
-
-                        <div v-for="(sec, i) in orderedSections" :key="sec.client_id" class="rn__secrow">
-                            <q-input
-                                v-model="sec.name"
-                                dense outlined
-                                class="col"
-                                placeholder="For the sauce"
-                                label="Section name"
-                                @update:model-value="markDirty"
-                            />
-                            <BaseButton
-                                variant="icon"
-                                :icon="ICONS.arrow_upward"
-                                :disable="i === 0"
-                                :aria-label="`Move section ${sec.name || i + 1} up`"
-                                @click="moveSection(sec.client_id, -1)"
-                            />
-                            <BaseButton
-                                variant="icon"
-                                :icon="ICONS.arrow_downward"
-                                :disable="i === orderedSections.length - 1"
-                                :aria-label="`Move section ${sec.name || i + 1} down`"
-                                @click="moveSection(sec.client_id, 1)"
-                            />
-                            <BaseButton
-                                variant="danger-icon"
-                                :icon="ICONS.delete"
-                                :aria-label="`Remove section ${sec.name || i + 1}`"
-                                @click="removeSection(sec.client_id)"
-                            />
-                        </div>
-                        <BaseButton
-                            variant="subtle"
-                            :icon="ICONS.add"
-                            label="Add section"
-                            @click="addSection"
-                        />
-
-                        <template v-if="form.ingredients.length > 1">
-                            <div class="rn__discsub">Order</div>
-                            <ol class="rn__order">
-                                <li v-for="(entry, i) in orderedIngredients" :key="entry.row.client_id">
-                                    <span class="rn__ordername">
-                                        {{ ingredientLabel(entry.row) }}
-                                        <span v-if="entry.section" class="rn__ordersec">{{ entry.section }}</span>
-                                    </span>
-                                    <BaseButton
-                                        variant="icon"
-                                        :icon="ICONS.arrow_upward"
-                                        :disable="i === 0"
-                                        :aria-label="`Move ${ingredientLabel(entry.row)} up`"
-                                        @click="moveIngredient(String(entry.row.client_id), -1)"
-                                    />
-                                    <BaseButton
-                                        variant="icon"
-                                        :icon="ICONS.arrow_downward"
-                                        :disable="i === orderedIngredients.length - 1"
-                                        :aria-label="`Move ${ingredientLabel(entry.row)} down`"
-                                        @click="moveIngredient(String(entry.row.client_id), 1)"
-                                    />
-                                </li>
-                            </ol>
-                            <p class="rn__hintblock">
-                                Which section an ingredient belongs to is set on the
-                                ingredient itself — tap its name in the list above.
-                            </p>
-                        </template>
-                    </div>
-                </q-expansion-item>
-
-                <q-expansion-item
-                    v-if="moneyEnabled && showCostCell"
-                    v-model="detailOpen.cost"
-                    dense-toggle
-                    label="Cost breakdown"
-                    :caption="costCaption"
-                >
-                    <div class="rn__disc">
-                        <q-markup-table flat dense class="rn__costtable">
-                            <tbody>
-                                <tr v-for="(line, i) in recipe.estimated_cost_lines" :key="`c-${i}`">
-                                    <td>
-                                        {{ line.name }}
-                                        <span v-if="formatQuantity(line.quantity, line.unit)" class="dora-text-muted">
-                                            · {{ formatQuantity(line.quantity, line.unit) }}
-                                        </span>
-                                    </td>
-                                    <td class="text-right">
-                                        <template v-if="line.line_cost !== null">
-                                            {{ formatMoney(line.line_cost) }}
-                                            <div class="text-caption dora-text-muted">
-                                                {{ formatMoney(line.unit_price) }} / {{ line.priced_unit }}
-                                            </div>
-                                        </template>
-                                        <span v-else class="text-caption dora-text-muted">{{ costLineReason(line) }}</span>
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </q-markup-table>
-                    </div>
-                </q-expansion-item>
-
-                <q-expansion-item
-                    v-if="isComplex && recipe.nutrition"
-                    v-model="detailOpen.nutrition"
-                    dense-toggle
-                    label="Nutrition"
-                    :caption="nutritionCaption"
-                >
-                    <div class="rn__disc">
-                        <RecipeNutritionCard :nutrition="recipe.nutrition" />
-                    </div>
-                </q-expansion-item>
-
-                <q-expansion-item v-model="detailOpen.notes" dense-toggle label="Source & notes" :caption="notesCaption">
-                    <div class="rn__disc">
                         <q-input
                             v-model="form.source"
                             dense outlined clearable
@@ -773,6 +800,18 @@
                             label="Notes"
                             @update:model-value="markDirty"
                         />
+                    </div>
+                </q-expansion-item>
+
+                <q-expansion-item
+                    v-if="isComplex && recipe.nutrition"
+                    v-model="detailOpen.nutrition"
+                    dense-toggle
+                    label="Nutrition"
+                    :caption="nutritionCaption"
+                >
+                    <div class="rn__disc">
+                        <RecipeNutritionCard :nutrition="recipe.nutrition" />
                     </div>
                 </q-expansion-item>
 
@@ -794,29 +833,71 @@
                     </div>
                 </q-expansion-item>
 
+                <!-- Version information. Was "Other versions", captioned "N
+                     siblings" — a word from the data model, not the kitchen.
+                     It now answers the two questions actually asked of a
+                     recipe's history: when did this one come about, and what
+                     other versions of it exist (feedback 2026-08-24). It
+                     renders even for a singleton, because created/updated are
+                     facts about every recipe. -->
                 <q-expansion-item
-                    v-if="versionSiblings.length > 0"
                     v-model="detailOpen.versions"
                     dense-toggle
-                    label="Other versions"
-                    :caption="`${versionSiblings.length} sibling${versionSiblings.length === 1 ? '' : 's'}`"
+                    label="Version information"
+                    :caption="versionsCaption"
                 >
                     <div class="rn__disc">
-                        <q-list dense separator>
-                            <q-item
-                                v-for="sib in versionSiblings"
-                                :key="sib.recipe_id"
-                                clickable
-                                @click="goToSibling(sib.recipe_id)"
-                            >
-                                <q-item-section>
-                                    <q-item-label>{{ sib.name }}</q-item-label>
-                                    <q-item-label caption>
-                                        {{ sib.last_made_on ? `Last cooked ${formatDate(sib.last_made_on)}` : 'Never cooked' }}
-                                    </q-item-label>
-                                </q-item-section>
-                            </q-item>
-                        </q-list>
+                        <div class="rn__vfacts">
+                            <div class="rn__vfact">
+                                <span class="rn__cellk">Created</span>
+                                <span>{{ recipe.created_at ? formatDate(recipe.created_at) : 'Unknown' }}</span>
+                            </div>
+                            <div class="rn__vfact">
+                                <span class="rn__cellk">Last updated</span>
+                                <span>
+                                    {{ recipe.updated_at
+                                        ? formatDate(recipe.updated_at)
+                                        : 'Not edited since it was added' }}
+                                </span>
+                            </div>
+                        </div>
+
+                        <template v-if="versionSiblings.length > 0">
+                            <div class="rn__discsub">Versions of this recipe</div>
+                            <q-list dense separator>
+                                <q-item class="rn__vthis">
+                                    <q-item-section>
+                                        <q-item-label>{{ recipe.name }}</q-item-label>
+                                        <q-item-label caption>
+                                            {{ recipe.created_at ? `Created ${formatDate(recipe.created_at)}` : 'Created — unknown' }}
+                                        </q-item-label>
+                                    </q-item-section>
+                                    <q-item-section side>
+                                        <q-badge outline color="primary" label="You're here" />
+                                    </q-item-section>
+                                </q-item>
+                                <q-item
+                                    v-for="sib in versionSiblings"
+                                    :key="sib.recipe_id"
+                                    clickable
+                                    @click="goToSibling(sib.recipe_id)"
+                                >
+                                    <q-item-section>
+                                        <q-item-label>{{ sib.name }}</q-item-label>
+                                        <q-item-label caption>
+                                            {{ sib.created_at ? `Created ${formatDate(sib.created_at)}` : 'Created — unknown' }}
+                                        </q-item-label>
+                                    </q-item-section>
+                                    <q-item-section side>
+                                        <q-icon :name="ICONS.chevron_right" />
+                                    </q-item-section>
+                                </q-item>
+                            </q-list>
+                        </template>
+                        <p v-else class="rn__hintblock rn__vnone">
+                            This is the only version. "New version" makes a copy you
+                            can change without losing this one.
+                        </p>
                     </div>
                 </q-expansion-item>
 
@@ -870,8 +951,33 @@
             :recipe="recipe"
             :dirty="dirty"
             :saving="saveState === 'saving'"
+            :substitutable="substitutableNames"
             @start="goToCookMode"
             @save-and-start="onSaveAndCook"
+        />
+
+        <RecipeMethodEditorDialog
+            v-model="methodEditorOpen"
+            :mode="form.steps_mode"
+            :steps="form.steps"
+            :instructions="form.instructions"
+            :step-images="form.step_images"
+            :ingredient-options="ingredientOptions"
+            :tool-options="toolOptions"
+            :section-options="sectionOptions"
+            @update:steps="onStepsChanged"
+            @update:instructions="onInstructionsChanged"
+            @update:step-images="onStepImagesChanged"
+        />
+
+        <RecipeCostDialog
+            v-if="recipe"
+            v-model="costDialogOpen"
+            :lines="recipe.estimated_cost_lines ?? []"
+            :total="recipe.estimated_cost"
+            :priced-count="recipe.estimated_cost_priced_count"
+            :total-count="recipe.estimated_cost_total_count"
+            :servings="form.servings"
         />
 
         <RecipeIngredientRowEditor
@@ -955,9 +1061,9 @@
     import ImageUploadField from 'src/components/ImageUploadField.vue';
     import MealStepper from 'src/components/recipes/MealStepper.vue';
     import RecipeNutritionCard from 'src/components/recipes/RecipeNutritionCard.vue';
-    import RecipeStepImagesEditor from 'src/components/recipes/RecipeStepImagesEditor.vue';
     import RecipeStepImagesViewer from 'src/components/recipes/RecipeStepImagesViewer.vue';
-    import RecipeStepsEditor from 'src/components/recipes/RecipeStepsEditor.vue';
+    import RecipeCostDialog from 'src/components/recipes/RecipeCostDialog.vue';
+    import RecipeMethodEditorDialog from 'src/components/recipes/RecipeMethodEditorDialog.vue';
     import CookModeGuardDialog from 'src/components/recipes/CookModeGuardDialog.vue';
     import RecipeIngredientPickerDialog from 'src/components/recipes/RecipeIngredientPickerDialog.vue';
     import RecipeIngredientRowEditor from 'src/components/recipes/RecipeIngredientRowEditor.vue';
@@ -993,8 +1099,9 @@
     import { useMealSlotStore } from 'src/stores/mealSlotStore';
     import { useStockLevelStore } from 'src/stores/stockLevelStore';
     import { useShoppingListStore } from 'src/stores/shoppingListStore';
+    import { cartStateFor, type Membership } from 'src/models/shoppingList';
     import StockItemApiService from 'src/services/api/stockItemApiService';
-    import type { Recipe, RecipeCostLine } from 'src/models/recipe';
+    import type { Recipe } from 'src/models/recipe';
     import type { SubstituteOption } from 'src/components/recipes/recipeSubstituteTypes';
     import type { EditableStep } from 'src/components/recipes/recipeStepEditorTypes';
     import type { EditableStepImage } from 'src/components/recipes/recipeStepImageEditorTypes';
@@ -1019,6 +1126,13 @@
     const { recipeCollections } = storeToRefs(recipeStore);
     const { cuisines, categories, dietaryTags, tools } = storeToRefs(recipeVocabStore);
     const { mealSlotNames } = storeToRefs(mealSlotStore);
+    // Shopping-list membership, read from the same place every cart button
+    // reads it (R-003) so the page and the buttons can't disagree about
+    // whether something is already on a list.
+    const { membership: listMembership } = storeToRefs(shoppingListStore);
+    const membership = computed<Membership | null>(
+        () => (listMembership.value as Membership | null) ?? null,
+    );
 
     const { moneyEnabled } = useMoneyEnabled();
     const { nutritionEnabled, isComplex } = useNutritionMode();
@@ -1042,9 +1156,10 @@
     const stepImagesDirty = ref(false);
     const imageVersion = ref(0);
     const litStep = ref<string | null>(null);
+    const costDialogOpen = ref(false);
+    const methodEditorOpen = ref(false);
     const detailOpen = reactive({
-        tags: false, sections: false, cost: false,
-        nutrition: false, notes: false, kcal: false, versions: false, photo: false,
+        extra: false, nutrition: false, kcal: false, versions: false, photo: false,
     });
 
     // ── Save ────────────────────────────────────────────────────────────
@@ -1227,19 +1342,48 @@
      *  shipped doing) made a brand-new section invisible the moment it was
      *  created, so there was no visible place to move anything into and the
      *  feature read as broken. An empty section shows its own hint instead. */
-    const ingredientGroups = computed(() => {
+    type IngredientGroup = {
+        key: string;
+        /** Null for the unsectioned rows — the group that renders bare. */
+        sectionId: string | null;
+        name: string;
+        rows: IngredientForm[];
+    };
+
+    const ingredientGroups = computed<IngredientGroup[]>(() => {
         const flat = form.ingredients.filter((i) => !i.section_client_id);
-        const groups: { key: string; name: string; rows: IngredientForm[] }[] = [];
-        if (flat.length > 0) groups.push({ key: 'main', name: '', rows: flat });
+        const groups: IngredientGroup[] = [];
+        // The main group always renders, even empty: it owns the "Add
+        // ingredient" button, and a recipe whose every row sits in a section
+        // would otherwise have no way back to an unsectioned one.
+        groups.push({ key: 'main', sectionId: null, name: '', rows: flat });
         for (const sec of [...form.sections].sort((a, b) => a.sequence - b.sequence)) {
             groups.push({
                 key: sec.client_id,
+                sectionId: sec.client_id,
                 name: sec.name || 'Untitled section',
                 rows: form.ingredients.filter((i) => i.section_client_id === sec.client_id),
             });
         }
         return groups;
     });
+
+    function sectionNameOf(clientId: string | null): string {
+        if (!clientId) return '';
+        return form.sections.find((sec) => sec.client_id === clientId)?.name ?? '';
+    }
+    function sectionIndexOf(clientId: string | null): number {
+        if (!clientId) return -1;
+        return [...form.sections]
+            .sort((a, b) => a.sequence - b.sequence)
+            .findIndex((sec) => sec.client_id === clientId);
+    }
+    function renameSection(clientId: string, name: string) {
+        const sec = form.sections.find((x) => x.client_id === clientId);
+        if (!sec) return;
+        sec.name = name;
+        markDirty();
+    }
 
     // ── Substitutes ─────────────────────────────────────────────────────
     // Fetched per missing ingredient, because "what could I use instead" is
@@ -1279,11 +1423,37 @@
     }
 
     /** Missing rows that a substitute you already have would cover. This is
-     *  the fact that changes tonight's answer, so the status strip says it. */
-    const coverableCount = computed(() =>
+     *  the fact that changes tonight's answer, so the status strip says it —
+     *  and, since 2026-08-24, so do the ingredient row and the cook-mode
+     *  guard, which is the last place it can still change the decision. */
+    const coverableIngredients = computed(() =>
         missingIngredients.value.filter(
             (i) => (substitutesFor.value.get(i.stock_item_id) ?? []).some((e) => e.inStock),
+        ));
+    const coverableCount = computed(() => coverableIngredients.value.length);
+    const substitutableNames = computed(() =>
+        coverableIngredients.value.map(
+            (i) => stockItems.value.find((s) => s.stock_item_id === i.stock_item_id)?.name
+                ?? i.stock_item_name,
+        ));
+
+    /** True when this row is missing but something in the pantry could stand
+     *  in for it. Drives the row chip's wording. */
+    function hasSwapInStock(row: IngredientForm): boolean {
+        if (!row.stock_item_id || !isMissingItem(row.stock_item_id)) return false;
+        return (substitutesFor.value.get(row.stock_item_id) ?? []).some((e) => e.inStock);
+    }
+
+    // ── What's already on a shopping list ───────────────────────────────
+    // Server-owned membership, not a client guess: the same map the cart
+    // buttons read. Missing rows split into "still to buy" and "already
+    // handled" so the status strip stops offering to add both.
+    const missingOnListCount = computed(() =>
+        missingIngredients.value.filter(
+            (i) => cartStateFor(i.stock_item_id, membership.value) !== 'none',
         ).length);
+    const missingNotOnListCount = computed(
+        () => missingIngredients.value.length - missingOnListCount.value);
 
     function isMissingItem(stockItemId: string | null | undefined): boolean {
         if (!stockItemId) return false;
@@ -1346,15 +1516,6 @@
         return r.estimated_cost !== null
             || (r.estimated_cost_lines ?? []).some((l) => l.reason !== 'no_link');
     });
-    function costLineReason(line: RecipeCostLine): string {
-        switch (line.reason) {
-            case 'no_link': return 'Not linked to a stock item';
-            case 'no_price': return 'No price recorded yet';
-            case 'unit_mismatch':
-                return line.priced_unit ? `Priced per ${line.priced_unit} — can't convert` : "Units don't match";
-            default: return '';
-        }
-    }
 
     const versionSiblings = computed(() => recipe.value?.version_siblings ?? []);
 
@@ -1403,8 +1564,22 @@
     const sectionOptions = computed(() =>
         form.sections.map((s) => ({ value: s.client_id, label: s.name || 'Untitled section' })));
 
+    /** One pencil, three styles — so the label has to say which one it will
+     *  open (owner feedback 2026-08-24). */
+    const methodEditLabel = computed(() => {
+        switch (form.steps_mode) {
+            case 'structured': return 'Edit steps';
+            case 'image': return 'Edit step photos';
+            default: return 'Edit instructions';
+        }
+    });
+
     function onStepsChanged(steps: EditableStep[]) {
         form.steps = steps;
+        markDirty();
+    }
+    function onInstructionsChanged(text: string) {
+        form.instructions = text;
         markDirty();
     }
     function onStepImagesChanged(images: EditableStepImage[]) {
@@ -1414,44 +1589,34 @@
     }
 
     // ── Captions for the collapsed Details rows ─────────────────────────
-    const tagsCaption = computed(() => {
+    /** Tags, tools, source and notes now share one row, so its caption has to
+     *  say which of the four are set without listing everything. */
+    const extraCaption = computed(() => {
+        const bits: string[] = [];
         const names = [
             ...form.dietary_tag_ids.map((id) => dietaryTags.value.find((t) => t.dietary_tag_id === id)?.name),
             ...form.tool_ids.map((id) => tools.value.find((t) => t.tool_id === id)?.name),
         ].filter(Boolean);
-        return names.length > 0 ? names.join(' · ') : 'None';
+        if (names.length > 0) bits.push(names.join(' · '));
+        if (form.source) bits.push('Has a source');
+        if (form.notes) bits.push('Has notes');
+        return bits.length > 0 ? bits.join(' · ') : 'Tags, tools, source, notes';
     });
-    const orderedSections = computed(() =>
-        [...form.sections].sort((a, b) => a.sequence - b.sequence));
-
-    const organiseCaption = computed(() => {
-        if (form.sections.length === 0) return 'One flat list';
-        return orderedSections.value.map((s) => s.name || 'Untitled').join(' · ');
-    });
-    const costCaption = computed(() => {
-        const r = recipe.value;
-        if (!r) return '';
-        const total = r.estimated_cost !== null ? formatMoney(r.estimated_cost) : 'No estimate';
-        return `${total} · ${r.estimated_cost_priced_count} of ${r.estimated_cost_total_count} priced`;
+    const versionsCaption = computed(() => {
+        const n = versionSiblings.value.length;
+        if (n === 0) return 'Only version';
+        return `${n + 1} versions`;
     });
     const nutritionCaption = computed(() => {
         const n = recipe.value?.nutrition;
         if (!n) return '';
         return n.kcal ? `${Math.round(n.kcal)} kcal per serving` : 'Per serving';
     });
-    const notesCaption = computed(() => {
-        const bits: string[] = [];
-        if (form.source) bits.push('Has a source');
-        bits.push(form.notes ? 'Has notes' : 'No notes');
-        return bits.join(' · ');
-    });
-
-    function openDetail(which: 'cost') {
-        detailOpen[which] = true;
-    }
 
     // ── Ingredient + section mutations ──────────────────────────────────
-    function addIngredient() {
+    /** `sectionId` is the card the button lives in, so a row lands where it
+     *  was asked for rather than in the flat list every time. */
+    function addIngredient(sectionId: string | null = null) {
         form.ingredients.push({
             client_id: newClientId(),
             stock_item_id: null,
@@ -1459,7 +1624,7 @@
             quantity: null,
             unit: null,
             notes: null,
-            section_client_id: null,
+            section_client_id: sectionId,
             is_optional: false,
         } as IngredientForm);
         markDirty();
@@ -1482,13 +1647,22 @@
     }
 
     /** Ingredient order is array order — there is no `sequence` on the wire,
-     *  and arrays are sent with replace semantics — so a move is a splice. */
-    function moveIngredient(clientId: string, delta: -1 | 1) {
-        const from = form.ingredients.findIndex((i) => i.client_id === clientId);
-        const to = from + delta;
-        if (from < 0 || to < 0 || to >= form.ingredients.length) return;
-        const [row] = form.ingredients.splice(from, 1);
-        if (row) form.ingredients.splice(to, 0, row);
+     *  and arrays are sent with replace semantics — so a move is a splice.
+     *
+     *  Moves are *within a section card*: the visible neighbours are the
+     *  section's rows, not the whole recipe's, so swapping array positions
+     *  with the row directly above/below in that group is what makes ↑ and ↓
+     *  mean what they look like they mean. Changing which section a row is in
+     *  is a different act, done in the row editor. */
+    function moveIngredientWithin(rows: IngredientForm[], index: number, delta: -1 | 1) {
+        const target = rows[index + delta];
+        const source = rows[index];
+        if (!target || !source) return;
+        const from = form.ingredients.findIndex((i) => i.client_id === source.client_id);
+        const to = form.ingredients.findIndex((i) => i.client_id === target.client_id);
+        if (from < 0 || to < 0) return;
+        const [moved] = form.ingredients.splice(from, 1);
+        if (moved) form.ingredients.splice(to, 0, moved);
         markDirty();
     }
 
@@ -1552,12 +1726,6 @@
         ordered.forEach((s, i) => { s.sequence = i; });
         markDirty();
     }
-
-    /** The flat, ordered ingredient list the organise disclosure walks —
-     *  reading order, so ↑/↓ mean what they look like they mean. */
-    const orderedIngredients = computed(() =>
-        ingredientGroups.value.flatMap((g) =>
-            g.rows.map((row) => ({ row, section: g.name }))));
 
     // ── Photo ───────────────────────────────────────────────────────────
     function onPickPhoto(image: { dataUrl: string }) {
@@ -1767,13 +1935,12 @@
 </script>
 
 <style scoped lang="scss">
-    /* Fraunces is the DISPLAY face only — recipe title + section labels.
-       Body text deliberately inherits the user's chosen font (Settings →
-       Appearance, themeService FONT_FAMILY_CSS): overriding that here would
-       silently ignore their preference on this one page. */
-    .rn {
-        --rn-display: 'Fraunces Variable', 'Fraunces', Georgia, serif;
-    }
+    /* No display face. The page shipped with Fraunces on the title and the
+       section labels; the owner's verdict 2026-08-24 was that it "just
+       doesn't feel like the same app" — which is the right call, because a
+       page-specific typeface is a second brand nobody asked for. Everything
+       here inherits the user's chosen font (Settings → Appearance,
+       themeService FONT_FAMILY_CSS), like every other page. */
 
     /* ── Masthead ─────────────────────────────────────────────────────── */
     .rn__masthead {
@@ -1805,7 +1972,6 @@
     .rn__identity { min-width: 0; }
     .rn__backrow { display: flex; align-items: center; gap: var(--space-2, 8px); }
     .rn__title {
-        font-family: var(--rn-display);
         font-size: 2rem;
         font-weight: 600;
         line-height: 1.15;
@@ -1845,7 +2011,7 @@
         gap: var(--space-2, 8px) var(--space-6, 24px);
         margin-top: var(--space-4, 16px);
     }
-    .rn__fact { display: flex; flex-direction: column; gap: 2px; min-width: 60px; }
+    .rn__fact { display: flex; flex-direction: column; gap: 2px; min-width: 60px; flex: 0 0 auto; }
     .rn__factk {
         font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.07em;
         text-transform: uppercase; color: var(--text-muted);
@@ -1904,6 +2070,15 @@
     }
     .rn__link:hover { text-decoration: underline; }
     .rn__link:focus-visible { outline: 2px solid var(--brand-primary); outline-offset: 2px; }
+    .rn__cellbtn { align-self: flex-start; margin-top: var(--space-1, 4px); }
+    /* The swap line is good news on a cell that is otherwise bad news, so it
+       carries the positive ink rather than the muted grey the other sub-lines
+       use (D-013 — colour means something here). */
+    .rn__cellswap {
+        display: flex; align-items: center; gap: var(--space-1, 4px);
+        font-size: 0.8125rem;
+        color: var(--semantic-positive);
+    }
 
     /* ── Body ─────────────────────────────────────────────────────────── */
     .rn__body {
@@ -1928,7 +2103,6 @@
         border-bottom: 1px solid var(--border-default);
     }
     .rn__sectitle {
-        font-family: var(--rn-display);
         font-size: 0.9375rem; font-weight: 700;
         letter-spacing: 0.08em; text-transform: uppercase;
         color: var(--text-secondary);
@@ -1938,28 +2112,56 @@
         font-size: 0.8125rem; color: var(--text-muted);
         font-variant-numeric: tabular-nums; margin-left: auto;
     }
-    .rn__modes { margin-left: var(--space-2, 8px); }
-
-    .rn__ingsec {
-        font-family: var(--rn-display);
-        font-size: 0.75rem; font-weight: 700; letter-spacing: 0.08em;
-        text-transform: uppercase; color: var(--brand-primary);
+    .rn__modes { min-width: 0; }
+    /* The style switch is a labelled control on its own line rather than a
+       nameless three-way crammed into the section heading. */
+    .rn__stylebar {
         display: flex; align-items: center; gap: var(--space-2, 8px);
-        padding: var(--space-3, 12px) var(--space-2, 8px) var(--space-1, 4px);
+        flex-wrap: wrap;
+        margin-bottom: var(--space-3, 12px);
     }
-    .rn__ingsec::after {
-        content: ''; flex: 1; height: 1px; background: var(--border-default);
+    .rn__stylek {
+        font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.07em;
+        text-transform: uppercase; color: var(--text-muted);
     }
+    .rn__styleedit { margin-left: auto; }
+
+    /* A section is a container, so it is drawn as one (owner feedback
+       2026-08-24). The unsectioned group deliberately gets no card: a box
+       around "the rest of the ingredients" is a box around nothing. */
+    .rn__group { margin-bottom: var(--space-3, 12px); }
+    .rn__group--card {
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-lg, 10px);
+        background: var(--surface-component);
+        padding: var(--space-2, 8px);
+    }
+    .rn__grouphead {
+        display: flex; align-items: center; gap: var(--space-2, 8px);
+        padding: var(--space-1, 4px) var(--space-1, 4px) var(--space-2, 8px);
+        border-bottom: 1px solid var(--divider);
+        margin-bottom: var(--space-1, 4px);
+    }
+    .rn__groupname {
+        font-size: 0.8125rem; font-weight: 700; letter-spacing: 0.06em;
+        text-transform: uppercase; color: var(--brand-primary);
+        min-width: 0;
+    }
+    .rn__groupcount {
+        margin-left: auto;
+        font-size: 0.8125rem; color: var(--text-muted);
+        font-variant-numeric: tabular-nums;
+    }
+    .rn__addsec { margin-top: var(--space-2, 8px); }
     .rn__ing { list-style: none; margin: 0; padding: 0; }
     .rn__ing li {
         display: grid;
-        grid-template-columns: auto 1fr;
+        grid-template-columns: auto 1fr auto;
         gap: var(--space-3, 12px);
         align-items: baseline;
         padding: var(--space-2, 8px);
         border-bottom: 1px solid var(--divider);
         border-radius: var(--radius-sm, 4px);
-        position: relative;
     }
     .rn__ing li:hover { background: var(--overlay-hover); }
     .rn__ing--lit {
@@ -1975,12 +2177,9 @@
     .rn__chip { margin-left: var(--space-1, 4px); }
     .rn__chip--unlinked { background: var(--surface-sunken); color: var(--text-muted); }
     .rn__ingact {
-        position: absolute; right: var(--space-1, 4px); top: 50%;
-        transform: translateY(-50%);
         display: flex; align-items: center; gap: var(--space-1, 4px);
         opacity: 0;
         transition: opacity 120ms ease;
-        background: var(--surface-component);
         border-radius: var(--radius-sm, 4px);
     }
     .rn__ing li:hover .rn__ingact,
@@ -2017,15 +2216,53 @@
     .rn__steps p { margin: 0; max-width: 62ch; line-height: 1.6; }
     .rn__hint { display: block; font-size: 0.8125rem; color: var(--text-muted); margin-top: var(--space-1, 4px); }
     .rn__uses { display: block; font-size: 0.75rem; color: var(--text-muted); margin-top: var(--space-2, 8px); }
-    .rn__substeps { margin: var(--space-2, 8px) 0 0; padding-left: var(--space-5, 20px); color: var(--text-secondary); }
+    /* Sub-steps: the step treatment one level in — same numbered bullet, a
+       size down, toned and indented behind a rule (feedback 2026-08-24). */
+    .rn__substeps {
+        list-style: none; counter-reset: rnsub;
+        margin: var(--space-3, 12px) 0 0;
+        padding: 0 0 0 var(--space-4, 16px);
+        border-left: 2px solid var(--border-default);
+        display: flex; flex-direction: column; gap: var(--space-2, 8px);
+        color: var(--text-secondary);
+    }
+    .rn__substeps > li {
+        counter-increment: rnsub;
+        display: grid; grid-template-columns: 24px 1fr;
+        gap: var(--space-3, 12px);
+        align-items: start;
+    }
+    .rn__substeps > li::before {
+        content: counter(rnsub);
+        display: flex; align-items: center; justify-content: center;
+        width: 24px; height: 24px; border-radius: 50%;
+        background: var(--surface-sunken);
+        color: var(--text-muted);
+        font-size: 0.75rem; font-weight: 700; font-variant-numeric: tabular-nums;
+    }
+    .rn__substeps p { margin: 0; max-width: 62ch; line-height: 1.55; font-size: 0.9375rem; }
     .rn__free p { margin: 0 0 var(--space-3, 12px); max-width: 62ch; line-height: 1.6; }
+    /* The free-text block is a real <button> (it opens the method editor), so
+       it has to be talked back out of looking like one — same trick as the
+       ingredient name. */
+    .rn__freebtn {
+        appearance: none; background: none; border: 0;
+        font: inherit; color: inherit; text-align: left;
+        display: block; width: 100%; padding: var(--space-1, 4px);
+    }
     .rn__empty { color: var(--text-muted); font-size: 0.875rem; }
     .rn__hintblock { color: var(--text-muted); font-size: 0.8125rem; margin: 0 0 var(--space-3, 12px); }
     .rn__editor { margin-top: var(--space-4, 16px); border-top: 1px solid var(--divider); }
 
     .rn__details { margin-top: var(--space-8, 32px); border-top: 1px solid var(--divider); }
     .rn__disc { padding: var(--space-3, 12px) var(--space-2, 8px) var(--space-4, 16px); }
-    .rn__costtable td { vertical-align: top; }
+    .rn__vfacts {
+        display: flex; flex-wrap: wrap; gap: var(--space-2, 8px) var(--space-6, 24px);
+        margin-bottom: var(--space-3, 12px);
+    }
+    .rn__vfact { display: flex; flex-direction: column; gap: 2px; }
+    .rn__vthis { background: var(--surface-sunken); }
+    .rn__vnone { margin-bottom: 0; }
     .rn__flip { margin-top: var(--space-6, 24px); display: flex; justify-content: center; }
 
     .rn__savebar {
@@ -2118,6 +2355,18 @@
         /* A phone scrolls the page, not two nested panes. */
         .rn__pane { max-height: none; overflow: visible; }
         .rn__title { font-size: 1.5rem; }
+        /* One line that scrolls, rather than three rows of facts pushing the
+           method off the first screen (owner feedback 2026-08-24; D-011 —
+           wide content scrolls inside its own container, never the page). */
+        .rn__facts {
+            flex-wrap: nowrap;
+            overflow-x: auto;
+            scrollbar-width: none;
+        }
+        .rn__facts::-webkit-scrollbar { display: none; }
+        /* Hover isn't a gesture a thumb has, so the row cluster is always
+           there on a phone. */
+        .rn__ingact { opacity: 1; }
         /* Actions scroll sideways rather than stacking three deep (D-011:
            wide content scrolls inside its own container, never the page). */
         .rn__actions {

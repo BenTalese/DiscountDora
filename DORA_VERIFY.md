@@ -22,6 +22,44 @@ top-to-bottom.
 
 ---
 
+## Recipe page: the 2026-08-24 feedback batch
+The session that built it drove the page live at the agent pane's (mobile-shaped)
+viewport and confirmed: no Fraunces anywhere (everything renders in Nunito), the facts
+line is `nowrap` + `overflow-x: auto`, the **Details** button opens the cost modal with
+the right totals / coverage bar / ranked lines / grouped unpriced reasons and "$30.00 per
+kg" instead of "$0.00 per g", the **Step style** control reads Structured · Free text ·
+Image with one shared **Edit** pencil, the method editor opens maximised with the text
+pre-filled and round-trips an edit, structured steps render as cards with the
+up/down/sub-step/hint/remove row and **no drag grip** at phone width, sub-steps indent
+with their own numbered bullet in both editor and read view, a new section renders as a
+card with its own name / count / **Add to <section>** / ⋮ menu, **Right now** reads
+"Add 1 to a list → · 1 already on a list" and flips to "Already on a shopping list" when
+nothing is left, the missing chip reads **"Missing — swap in stock"**, the picker arrives
+with an on-list row unticked and badged **"On This week"**, and **Version information**
+shows created + last-updated and both versions with their created dates (last-updated
+filled in the moment a Save landed).
+
+What that pass could **not** cover — the pane never composites and reports a 0px
+viewport, so every `$q.screen` branch renders in its mobile form:
+- [ ] **Desktop width:** the drag grip on a structured step is visible again above 768px
+      and still reorders by dragging; the method editor opens as a normal dialog, not
+      full-screen; the cost modal isn't cramped; the action row and the two-column
+      ingredients/method body still read well.
+- [ ] **On a real phone:** tap **Edit** on a free-text recipe with one short line — the
+      keyboard opens *below* the field and the field stays visible. (This is the reported
+      bug; the fix is the full-screen editor.)
+- [ ] **On a real phone:** the facts line (Serves · Prep · Cook · Total · Difficulty ·
+      When) scrolls sideways as one line and doesn't drag the page with it.
+- [ ] The ingredient row's ↑/↓ + cart + delete cluster is reachable with a thumb (it's
+      permanently visible below 768px) and doesn't crowd long ingredient names.
+- [ ] **Additional details** — tags, tools, source URL and notes all still save from the
+      merged panel, and its caption reflects what's set.
+- [ ] The other two inline `q-popup-edit`s on a phone — a structured **step's text** and
+      an ingredient's **quantity** — don't have the keyboard-over-the-field problem the
+      free-text block had. If they do, they want the same treatment.
+- [ ] A recipe with **no** version siblings shows Version information with created,
+      last-updated and the "only version" line (verified with siblings; not without).
+
 ## Shopping list — run face and receipt face (2026-08-23) — origin FU-729
 Agent drove both faces in a 430×900 browser with money on and confirmed: run-face
 sections with per-section `0/1` progress, whole-row tick, the Undo toast, a
@@ -347,14 +385,11 @@ agent pane can't provide — it doesn't composite, so click coordinates are dege
       have one, **"N substitutes"** when you don't. Open it — in-stock ones first, ratio and
       note shown, out-of-stock ones offer add-to-list, and the footer says swapping happens
       in cook mode.
-- [ ] **Right now** cell adds "N has/have a substitute you already have" when that's true.
-
-**Sections & order** (under **Organise ingredients**):
-- [ ] Add a section → it appears in the ingredient list immediately, with "Nothing in this
-      section yet". (It used to be invisible until something was in it — which was nothing.)
-- [ ] Put an ingredient in it via the row editor; reorder sections with ↑/↓; delete a
-      section and its ingredients fall back to the main list.
-- [ ] Reorder ingredients with ↑/↓ and Save — the order sticks after a reload.
+**Sections & order** (rebuilt 2026-08-24 — sections are cards in the ingredient
+list; the "Organise ingredients" panel is gone):
+- [ ] Put an ingredient in a section via the row editor; move a section up/down from its
+      **⋮** menu; delete a section and its ingredients fall back to the main list.
+- [ ] Reorder ingredients with the row's ↑/↓ and Save — the order sticks after a reload.
 
 **The rest:**
 - [ ] All three step modes still render; only structured highlights the ingredients a step uses.

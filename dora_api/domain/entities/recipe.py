@@ -72,6 +72,12 @@ class Recipe(BaseEntity):
     # cookbook "Recently added" sort axis. Stamped by the create handlers
     # at write time.
     created_at: datetime
+    # Recipe-view feedback 2026-08-24 — when the recipe was last *edited*
+    # (a PATCH through update_recipe). Distinct from `last_made_on` (when it
+    # was cooked) and `created_at` (when it was added). NULL on a recipe that
+    # has never been edited since it was created; the version-information
+    # panel reads it alongside `created_at`.
+    updated_at: datetime | None = None
     # RD-29 — free-text personal notes about the recipe ("I halve the
     # chilli", "kids' favourite"). Distinct from `instructions` (the method):
     # this is the cook's own commentary, surfaced in cook mode under the
@@ -100,6 +106,7 @@ class Recipe(BaseEntity):
         KCAL = "kcal"
         STEPS_MODE = "steps_mode"
         CREATED_AT = "created_at"
+        UPDATED_AT = "updated_at"
         NOTES = "notes"
 
 

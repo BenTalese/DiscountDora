@@ -56,6 +56,12 @@
                         <q-item-section>
                             <q-item-label>{{ row.stock_item_name }}</q-item-label>
                         </q-item-section>
+                        <q-item-section v-if="row.onList" side>
+                            <q-chip dense square size="sm" class="ingredient-picker__onlist">
+                                <q-icon :name="ICONS.shopping_cart" size="14px" class="q-mr-xs" />
+                                {{ row.onListName ? `On ${row.onListName}` : 'On a list' }}
+                            </q-chip>
+                        </q-item-section>
                     </q-item>
                 </template>
 
@@ -91,6 +97,12 @@
                         <q-item-section>
                             <q-item-label>{{ row.stock_item_name }}</q-item-label>
                         </q-item-section>
+                        <q-item-section v-if="row.onList" side>
+                            <q-chip dense square size="sm" class="ingredient-picker__onlist">
+                                <q-icon :name="ICONS.shopping_cart" size="14px" class="q-mr-xs" />
+                                {{ row.onListName ? `On ${row.onListName}` : 'On a list' }}
+                            </q-chip>
+                        </q-item-section>
                     </q-item>
                 </template>
 
@@ -119,12 +131,14 @@
 
 <script lang="ts" setup>
     import BaseButton from 'src/components/BaseButton.vue';
+    import { ICONS } from 'src/style/icons';
     import StockLevelDot from 'src/components/stock/StockLevelDot.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
     import type { Recipe } from 'src/models/recipe';
     import type { StockItem } from 'src/models/stockItem';
     import { useStockItemStore } from 'src/stores/stockItemStore';
     import { useShoppingListStore } from 'src/stores/shoppingListStore';
+    import { cartStateFor, type Membership } from 'src/models/shoppingList';
     import { storeToRefs } from 'pinia';
     import { computed, ref, watch } from 'vue';
 
@@ -153,6 +167,10 @@
     const stockItemStore = useStockItemStore();
     const { stockItems } = storeToRefs(stockItemStore);
     const shoppingListStore = useShoppingListStore();
+    const { membership: storeMembership } = storeToRefs(shoppingListStore);
+    const membership = computed<Membership | null>(
+        () => (storeMembership.value as Membership | null) ?? null,
+    );
 
     const listOptions = computed(() =>
         shoppingListStore.summaries
@@ -178,7 +196,25 @@
          *  over a word we'd invent here, so the picker says the same thing the
          *  stock pages do. */
         levelLabel: string;
+        /** Owner feedback 2026-08-24 — already sitting on an unticked list.
+         *  The picker used to tick these anyway, so "add all missing" quietly
+         *  proposed adding things the user had already added. Read from the
+         *  same membership the cart buttons read (R-003), so the two can't
+         *  disagree. */
+        onList: boolean;
+        /** Which list it's on, when we can name exactly one. */
+        onListName: string | null;
     };
+
+    /** The single unticked list an item is on, by name — null when it's on
+     *  none or on several (the chip then just says "On a list"). */
+    function listNameFor(stockItemId: string): string | null {
+        const m = membership.value;
+        const entry = m?.items.find((i) => i.stock_item_id === stockItemId);
+        if (!entry || entry.unticked_list_ids.length !== 1) return null;
+        const id = entry.unticked_list_ids[0];
+        return shoppingListStore.summaries.find((s) => s.shopping_list_id === id)?.name ?? null;
+    }
 
     const rows = computed<Row[]>(() => {
         if (!props.recipe) return [];
@@ -204,6 +240,8 @@
                 levelSequence: si?.stock_level_sequence ?? null,
                 levelLabel: si?.stock_level_name
                     ?? (ing.is_missing ? 'Out of stock or untracked' : 'In stock'),
+                onList: cartStateFor(ing.stock_item_id, membership.value) !== 'none',
+                onListName: listNameFor(ing.stock_item_id),
             });
         }
         return Array.from(byId.values()).sort((a, b) => {
@@ -224,6 +262,13 @@
         const initial = props.initialCheckedIds;
         const initialSet = initial ? new Set(initial) : null;
         for (const row of rows.value) {
+            // Owner feedback 2026-08-24 — never *propose* adding something
+            // that's already on a list. The checkbox stays live, so the user
+            // can still choose to add a second line; we just don't ask for it.
+            if (row.onList) {
+                next[row.stock_item_id] = false;
+                continue;
+            }
             if (initialSet) {
                 next[row.stock_item_id] = initialSet.has(row.stock_item_id);
                 continue;
@@ -263,16 +308,17 @@
 
     function selectAll() {
         // §1.9 — "all" still excludes optional rows by default; users
-        // opt in to optional rows individually via their checkbox.
+        // opt in to optional rows individually via their checkbox. Rows
+        // already on a list are excluded for the same reason.
         const next: Record<string, boolean> = {};
-        for (const row of rows.value) next[row.stock_item_id] = !row.is_optional;
+        for (const row of rows.value) next[row.stock_item_id] = !row.is_optional && !row.onList;
         selected.value = next;
     }
 
     function selectMissing() {
         const next: Record<string, boolean> = {};
         for (const row of rows.value) {
-            if (row.is_optional) {
+            if (row.is_optional || row.onList) {
                 next[row.stock_item_id] = false;
                 continue;
             }
@@ -303,5 +349,11 @@
     .ingredient-picker__dot {
         min-width: 0;
         padding-right: 8px;
+    }
+    /* Says "already handled", so it must not compete with the name it
+       qualifies (D-013 — a state chip, not an alert). */
+    .ingredient-picker__onlist {
+        background: var(--surface-sunken);
+        color: var(--text-muted);
     }
 </style>

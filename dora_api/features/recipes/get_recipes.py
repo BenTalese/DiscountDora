@@ -140,11 +140,16 @@ class RecipeVersionSiblingDto:
     """C-4 Chunk 8 — a light view of a sibling version. The detail endpoint
     embeds an array of these so the UI can render a "Versions" card
     without a second round-trip; the fields are the minimum needed for the
-    card row (name + last-made + meals-on-hand)."""
+    card row (name + last-made + meals-on-hand).
+
+    Recipe-view feedback 2026-08-24 — `created_at` joined it: the version
+    panel prints when each version was made, which is the only fact that
+    distinguishes two versions of the same recipe at a glance."""
     recipe_id: UUID
     name: str
     last_made_on: date | None
     available_meals: int
+    created_at: datetime | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -306,6 +311,9 @@ class RecipeDto:
     # RD-29 — free-text personal notes about the recipe (cook's own
     # commentary). Surfaced in cook mode under the steps; NULL when unset.
     notes: str | None = None
+    # when the recipe was last edited. NULL until its first PATCH; the
+    # recipe page's version panel prints it beside `created_at`.
+    updated_at: datetime | None = None
     # IMPL_PLAN_RECIPE_IMPORTER §Chunk 4 — count of REQUIRED ingredients
     # whose ``stock_item_id`` is null. Drives the recipe-detail
     # "N ingredients need linking" prompt and the shopping-list
@@ -437,6 +445,7 @@ class RecipeDto:
             version_group_id = recipe.version_group_id,
             kcal = recipe.kcal,
             created_at = recipe.created_at,
+            updated_at = recipe.updated_at,
             ingredients = _IngDtos,
             missing_count = _Missing,
             cookable = _Cookable,
@@ -1349,11 +1358,15 @@ class GetRecipesHandler:
                     name=sib.name,
                     last_made_on=sib.last_made_on,
                     available_meals=sib.available_meals or 0,
+                    created_at=sib.created_at,
                 )
                 for sib in siblings
                 if sib.id != recipe_id
             ]
-            sibling_dtos.sort(key=lambda s: s.name.lower())
+            # Oldest first. The panel reads as a history now that every row
+            # carries its created date, and name order said nothing about
+            # which version came from which.
+            sibling_dtos.sort(key=lambda s: (s.created_at is None, s.created_at, s.name.lower()))
         step_image_rows = get_step_image_metadata_for_recipe(entity.id)
         step_image_dtos = [
             RecipeStepImageDto(

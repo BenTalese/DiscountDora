@@ -1,5 +1,6 @@
 import logging
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import List
 from uuid import UUID
 
@@ -417,6 +418,12 @@ class UpdateRecipeHandler:
                 replace_step_images_for_recipe(recipe_id, _ImageWrites)
             except ValueError as exc:
                 return UpdateRecipeResponse(invalid_step_message=str(exc))
+
+        # Recipe-view feedback 2026-08-24 — the edit stamp the version panel
+        # reads. Stamped on every PATCH that reaches here (i.e. one that
+        # passed validation), not on cook / favourite / meal-pool writes:
+        # those change what happened to the recipe, not what it *is*.
+        _Recipe.updated_at = datetime.now(UTC)
 
         self.repository.save_changes()
         return UpdateRecipeResponse()

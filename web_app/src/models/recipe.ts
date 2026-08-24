@@ -98,6 +98,10 @@ export type Recipe = {
      *  cookbook "Recently added" sort axis. Always present on rows from
      *  the API (backfilled by migration f9d3a7c2b5e8 for legacy rows). */
     created_at: string;
+    /** Recipe-view feedback 2026-08-24 — when the recipe was last edited
+     *  (any successful PATCH). Null until its first edit. The version panel
+     *  prints it beside `created_at`; nothing else reads it. */
+    updated_at: string | null;
     prep_time_minutes: number | null;
     recipe_collection_id: string | null;
     /** Resolved server-side (same shape as `cuisine_name`) so the card /
@@ -274,6 +278,9 @@ export type RecipeVersionSibling = {
     name: string;
     last_made_on: string | null;
     available_meals: number;
+    /** When that version was created — the one fact that tells two versions
+     *  of the same recipe apart at a glance. Null only on legacy rows. */
+    created_at: string | null;
 };
 
 /** Why an ingredient contributed nothing to the estimate. Mirrors the

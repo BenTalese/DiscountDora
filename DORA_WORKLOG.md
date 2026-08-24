@@ -18,6 +18,122 @@ next.
 
 ---
 
+## 2026-08-24 — **Recipe page: the second feedback batch (15 items), built and driven live**
+**Status:** all 15 items shipped, both suites green, and — unusually for this
+page — **verified in a running browser**. Real-device + desktop-width walk owed
+(`DORA_VERIFY.md`, new recipe section).
+
+**Trigger:** owner feedback pasted at session start, on `RecipeDetailNext.vue`
+(the page that won FU-688).
+
+**What shipped — backend.** Two facts the version panel needed and the API
+didn't have:
+- **`Recipe.updated_at`** — nullable `DateTime(timezone=True)`, migration
+  `b3f7c1d9a2e6` (head was `a7d4e91c3f28`). **No backfill on purpose**: we have
+  no record of when legacy rows were last edited, and inventing one would have
+  the panel print a lie. Stamped in `update_recipe.handle` just before
+  `save_changes()` — every successful PATCH, and nothing else (cook / favourite
+  / meal-pool change what *happened* to a recipe, not what it is). The other
+  writers that don't stamp are logged as **FU-730**.
+- **`RecipeVersionSiblingDto.created_at`**, and the sibling list now sorts
+  **oldest-first** instead of by name — with a date on every row it reads as a
+  history, and name order said nothing about which version came from which.
+
+Two e2e patch-semantics tests asserted "an empty PATCH changes nothing", which
+is no longer true by design; they now pop `updated_at` and assert it moved.
+DTO snapshot refreshed (`DORA_UPDATE_DTO_SNAPSHOTS=1`).
+
+**What shipped — frontend.** Two new components and a rebuild of a third:
+- **`RecipeCostDialog.vue`** — the cost breakdown as a modal. Total, **cost per
+  serving** (display math off server-owned figures, R-003 type C), a coverage
+  bar for "priced 3 of 5", the priced lines **ranked dearest-first** with a
+  share bar each, and the unpriced ones **grouped by reason** rather than
+  repeating "—" down a column.
+- **`RecipeMethodEditorDialog.vue`** — one pencil for all three step styles,
+  maximised below `sm`. This is the fix for *two* reported problems: the
+  per-style disclosure whose label changed under you, and free-text editing on
+  a phone opening the keyboard over the field.
+- **`RecipeStepRow.vue`** rebuilt: header (label · section · grip) → step text →
+  hint → ingredients/tools → an actions row (**up · down · sub-step · hint ·
+  remove**). The grip is `display:none` below 768px, so ↑/↓ are the phone's
+  reorder path; `RecipeStepsEditor` grew the `onMove` sibling swap to serve
+  them. Sub-steps are the same card, indented, sunken, with a brand-soft left
+  rule — and the *read* view's sub-steps got the same treatment (numbered
+  bullet, one size down, behind a rule) instead of a plain `<ol>`.
+
+On the page itself: Fraunces deleted (see the new D-rule); the facts line goes
+`nowrap` + `overflow-x:auto` on a phone; ingredient **sections are cards** with
+their own name, count, ⋮ menu and **"Add to <section>"** button, which let the
+whole **"Organise ingredients"** disclosure go (ingredient ↑/↓ moved onto the
+rows, permanently visible below 768px because hover isn't a thumb gesture);
+tags/tools/source/notes merged into one **Additional details**; **Version
+information** replaced "Other versions" and renders even for a singleton.
+
+**Shopping-list state, in three places.** `cartStateFor` + the store's
+membership map (the same source the cart buttons read) now feed: the **Right
+now** cell, which counts only what's *left* ("Add 1 to a list → · 1 already on
+a list") and stops being a button when everything's handled; the **picker**,
+where an on-list row arrives **unticked** and badged with its list name — that
+was the actual ask, "the modal should account for that when initially selecting
+ingredients"; and `selectAll` / `selectMissing`, which skip on-list rows too.
+
+**Substitutes, surfaced three ways** (the answer to "is it hidden or missed?" —
+it was there, as a chip, and invisible): the missing chip on a row now reads
+**"Missing — swap in stock"** when a stand-in is in the pantry, the Right-now
+cell carries a positive-ink swap line, and **`CookModeGuardDialog`** takes a
+`substitutable` prop and names them on the last screen before you cook.
+
+**Verified live** (and this page *does* mount in the agent pane now — the
+2026-08-19 memory that `#/cookbook/<id>` won't mount is stale; it came up first
+try after a form login). Confirmed by DOM/computed-style probe: Nunito
+everywhere; facts `nowrap`/`auto`; the cost modal reading `$1.89 · $0.95 per
+serving · Priced 3 of 5` with share bars `100/83/27%` and **"$30.00 / kg"**
+where it used to say "$0.00 / g"; the method editor opening maximised with the
+text pre-filled and an edit round-tripping into the read view; step cards with
+the five-button row, grip `display:none`, sub-step indent 20px; a new section
+card with "Nothing in this section yet" and a correctly-disabled "Move section
+up"; **Right now** flipping between "Already on a shopping list" and "Add 1 to
+a list → · 1 already on a list" after toggling one item off its list; the
+picker showing `Parmesan Cheese | On This week` unticked beside a ticked
+`Sourdough Bread`; and Version information reading "2 versions" with
+last-updated filling in the moment a Save landed.
+
+Note for whoever drives next: the seeded install ships **`money_enabled:
+false`**, so the cost cell is correctly absent until you flip it
+(`PATCH /api/app-settings {money_enabled:true}` with `X-CSRF-Token` from the
+`dora_csrf` cookie — the key is `money_enabled`, not `money`) **and hard-reload**,
+because `useFeatureFlags` probes `/api/health` once per session. Flipped back to
+false afterwards. Dev-seed side effects left behind: a "Tomato Pasta (v2)" row,
+a section on "Tomato Pasta", and one Cheesy Garlic Bread ingredient taken off
+its list.
+
+**Close-gate — standards.** Checked against R-001 (three components rather than
+more branches in a 2,100-line page), R-002/D-017 (tokens only), R-003 (no
+domain rule client-side: membership, cookability, cost and the expiry verdict
+all still come off the server; per-serving cost and the ×1000 unit rescale are
+display math), R-006 (the row editor still hands back a patch), R-010 (no new
+vocabulary), D-011 (the facts line and the dialog bodies scroll inside
+themselves), D-013 (the swap line is positive ink because it *means* something;
+the on-list chip is muted because it doesn't), D-016 (the phone's always-visible
+row cluster). **New: D-022** — *one typeface family per install; no
+page-specific display face* — written from this batch's first item, with the
+`@fontsource-variable/fraunces` dependency, its `boot/fonts.ts` import and the
+`--rn-display` custom property all deleted so the shortcut can't be retaken.
+No new R-rule/ADR: nothing here constrains architecture beyond what R-001/R-003
+already say.
+
+**Verification:** `vue-tsc` clean, eslint clean, **494 vitest**, **1950 pytest**
+(1 skipped, 1 xfailed — both pre-existing), `quasar build` clean.
+
+**Left open:** FU-730 (other recipe writers don't stamp `updated_at`), FU-731
+(the remaining `q-popup-edit`s may have the same phone-keyboard problem — fix
+only what reproduces on a real device), FU-732 (sub-cent unit prices still read
+"$0.00 / g" outside this modal; the real home is a `formatUnitPrice` in
+`useMoney`). FU-688 (delete the old page) is untouched and now further behind —
+`RecipeDetailPage.vue` has none of this.
+
+---
+
 ## 2026-08-23 — **Shopping-list redesign: run face + receipt face (FU-727), and the amend/observation loop closed (FU-726)**
 **Status:** both remaining faces built, green, and driven live. FU-727 and FU-726
 resolved. Real-device walk owed (FU-729).

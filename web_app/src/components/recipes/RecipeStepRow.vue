@@ -1,35 +1,38 @@
 <template>
-    <!-- drag-and-drop reorder via `useDragDropList`.
-         The parent editor owns the drag state + sibling-pair predicate
-         and passes per-row bindings down through `dragBindings`. The
-         row spreads `rowProps` on its outer wrapper (drop target) and
-         `handleProps` on the handle icon (the only draggable element),
-         so textareas/selects below stay normally clickable. -->
+    <!--
+        One step (or sub-step) in the structured editor.
+
+        Rebuilt 2026-08-24 from owner feedback ("the structured step editor is
+        horrible"). The order is now the order you think in — what the step
+        *says*, then what it uses, then what you can do to it:
+
+          header   label · section picker · drag handle (pointer devices only)
+          text     the step itself
+          hint     only once you've asked for one
+          uses     ingredients + tools
+          actions  up · down · sub-step · hint · remove
+
+        The drag handle is hidden below the tablet breakpoint: a grip you
+        can't usefully drag with a thumb is noise, and ↑/↓ do the same job
+        with no aiming. Sub-steps keep the same card, indented and toned, so
+        the two levels read as the same kind of thing at different depths
+        rather than as two different components.
+    -->
     <div
-        class="recipe-step-row q-mb-sm"
+        class="rstep"
         :class="{
-            'recipe-step-row--sub': row.depth === 1,
+            'rstep--sub': row.depth === 1,
             ...dragBindings.rowClass,
         }"
         v-bind="dragBindings.rowProps"
     >
-        <div class="recipe-step-row__header row items-center q-gutter-xs no-wrap">
-            <div
-                class="dora-dnd-handle dora-text-muted"
-                aria-label="Drag to reorder"
-                v-bind="dragBindings.handleProps"
-            >
-                <q-icon :name="ICONS.drag_indicator" />
-                <q-tooltip>Drag to reorder among siblings</q-tooltip>
-            </div>
-            <div class="recipe-step-row__label dora-text-muted">
-                {{ row.depth === 0 ? `Step ${row.sibling_index + 1}` : `↳ Sub-step ${row.sibling_index + 1}` }}
-            </div>
+        <div class="rstep__head">
+            <span class="rstep__label">
+                {{ row.depth === 0 ? `Step ${row.sibling_index + 1}` : `Sub-step ${row.sibling_index + 1}` }}
+            </span>
             <q-space />
-            <!-- section picker, only when the recipe has named
-                 sections and only at depth 0 (sub-steps inherit visually
-                 from their parent). Mirrors the ingredient row picker on
-                 RecipeDetailPage. -->
+            <!-- Section picker, only when the recipe has named sections and
+                 only at depth 0 (sub-steps inherit their parent's). -->
             <q-select
                 v-if="row.depth === 0 && (sectionOptions?.length ?? 0) > 1"
                 v-model="sectionModel"
@@ -41,21 +44,16 @@
                 dense
                 outlined
                 label="Section"
-                class="recipe-step-row__section-select"
+                class="rstep__section"
             />
-            <BaseButton
-                v-if="canAddSubStep"
-                variant="icon"
-                :icon="ICONS.subdirectory_arrow_right"
-                aria-label="Add sub-step"
-                @click="$emit('add-sub')"
-            />
-            <BaseButton
-                variant="icon"
-                :icon="ICONS.close"
-                aria-label="Remove step"
-                @click="$emit('remove')"
-            />
+            <div
+                class="dora-dnd-handle dora-text-muted rstep__grip"
+                aria-label="Drag to reorder"
+                v-bind="dragBindings.handleProps"
+            >
+                <q-icon :name="ICONS.drag_indicator" />
+                <q-tooltip>Drag to reorder among siblings</q-tooltip>
+            </div>
         </div>
 
         <q-input
@@ -65,38 +63,19 @@
             autogrow
             outlined
             dense
-            class="q-mt-xs"
         />
 
-        <div class="row q-gutter-sm q-mt-xs items-center">
-            <BaseButton
-                v-if="!showHint"
-                variant="ghost"
-                :icon="ICONS.lightbulb"
-                label="Add hint"
-                @click="onAddHint"
-            />
-            <q-input
-                v-else
-                v-model="hintModel"
-                label="Hint (optional)"
-                dense
-                outlined
-                class="col"
-                :debounce="100"
-            >
-                <template #append>
-                    <BaseButton
-                        variant="icon"
-                        :icon="ICONS.close"
-                        aria-label="Remove hint"
-                        @click="onClearHint"
-                    />
-                </template>
-            </q-input>
-        </div>
+        <q-input
+            v-if="showHint"
+            v-model="hintModel"
+            label="Hint (optional)"
+            dense
+            outlined
+            class="rstep__hint"
+            :debounce="100"
+        />
 
-        <div class="row q-gutter-sm q-mt-xs">
+        <div class="rstep__uses">
             <q-select
                 v-model="ingredientsModel"
                 :options="ingredientOptions"
@@ -127,6 +106,53 @@
                 label="Tools"
                 class="col"
             />
+        </div>
+
+        <div class="rstep__actions">
+            <BaseButton
+                variant="icon"
+                :icon="ICONS.arrow_upward"
+                :disable="row.sibling_index === 0"
+                :aria-label="`Move ${stepName} up`"
+                @click="$emit('move', -1)"
+            >
+                <q-tooltip>Move up</q-tooltip>
+            </BaseButton>
+            <BaseButton
+                variant="icon"
+                :icon="ICONS.arrow_downward"
+                :disable="row.sibling_index === row.sibling_total - 1"
+                :aria-label="`Move ${stepName} down`"
+                @click="$emit('move', 1)"
+            >
+                <q-tooltip>Move down</q-tooltip>
+            </BaseButton>
+            <BaseButton
+                v-if="canAddSubStep"
+                variant="icon"
+                :icon="ICONS.subdirectory_arrow_right"
+                :aria-label="`Add a sub-step under ${stepName}`"
+                @click="$emit('add-sub')"
+            >
+                <q-tooltip>Add sub-step</q-tooltip>
+            </BaseButton>
+            <BaseButton
+                variant="icon"
+                :icon="ICONS.lightbulb"
+                :aria-label="showHint ? `Remove the hint on ${stepName}` : `Add a hint to ${stepName}`"
+                @click="onToggleHint"
+            >
+                <q-tooltip>{{ showHint ? 'Remove hint' : 'Add hint' }}</q-tooltip>
+            </BaseButton>
+            <q-space />
+            <BaseButton
+                variant="danger-icon"
+                :icon="ICONS.delete"
+                :aria-label="`Remove ${stepName}`"
+                @click="$emit('remove')"
+            >
+                <q-tooltip>Remove</q-tooltip>
+            </BaseButton>
         </div>
     </div>
 </template>
@@ -161,7 +187,13 @@
         (e: 'update', updated: EditableStep): void;
         (e: 'add-sub'): void;
         (e: 'remove'): void;
+        /** Reorder among siblings — the keyboard/thumb equivalent of the
+         *  drag handle, and the only reorder affordance on a phone. */
+        (e: 'move', delta: -1 | 1): void;
     }>();
+
+    const stepName = computed(() =>
+        (props.row.depth === 0 ? 'step ' : 'sub-step ') + (props.row.sibling_index + 1));
 
     function patch(partial: Partial<EditableStep>) {
         const { depth, sibling_index, sibling_total, ...base } = props.row;
@@ -175,13 +207,14 @@
     });
 
     const showHint = ref<boolean>(props.row.hint !== null && props.row.hint !== '');
-    function onAddHint() {
+    function onToggleHint() {
+        if (showHint.value) {
+            showHint.value = false;
+            patch({ hint: null });
+            return;
+        }
         showHint.value = true;
         if (props.row.hint === null) patch({ hint: '' });
-    }
-    function onClearHint() {
-        showHint.value = false;
-        patch({ hint: null });
     }
     const hintModel = computed<string>({
         get: () => props.row.hint ?? '',
@@ -208,31 +241,60 @@
 </script>
 
 <style scoped lang="scss">
-    .recipe-step-row {
-        border: 1px solid var(--border-subtle);
-        border-radius: var(--radius-md);
-        padding: 8px 12px;
-        background: var(--surface-card);
+    .rstep {
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-md, 6px);
+        padding: var(--space-3, 12px);
+        margin-bottom: var(--space-3, 12px);
+        background: var(--surface-component);
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-2, 8px);
         transition:
             box-shadow var(--motion-normal, 200ms) ease,
             opacity var(--motion-normal, 200ms) ease,
             background-color var(--motion-normal, 200ms) ease;
     }
-    .recipe-step-row--sub {
-        margin-left: 24px;
+    /* Same card, one level in: the left rule and the sunken ground are the
+       only difference, so depth reads without a second visual language. */
+    .rstep--sub {
+        margin-left: var(--space-5, 20px);
         background: var(--surface-sunken);
+        border-left: 3px solid var(--brand-primary-soft);
     }
-    .recipe-step-row__label {
-        font-weight: 500;
-        font-size: 0.85em;
+
+    .rstep__head {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2, 8px);
     }
-    /* FU-094 / R-022 — drag affordances live in src/css/dnd.scss
-       (.dora-dnd-row / .dora-dnd-handle). The composable applies the
-       classes via `rowClass`; the template uses .dora-dnd-handle on
-       the handle wrapper. No per-component DnD CSS needed. */
-    /* FU-117 — keep the section picker compact in the header row so it
-       doesn't crowd the move/sub-step/remove buttons. */
-    .recipe-step-row__section-select {
-        max-width: 160px;
+    .rstep__label {
+        font-weight: 700;
+        font-size: 0.75rem;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--text-muted);
+    }
+    .rstep__section { max-width: 160px; }
+
+    .rstep__uses {
+        display: flex;
+        gap: var(--space-2, 8px);
+        flex-wrap: wrap;
+    }
+    .rstep__uses > * { flex: 1 1 200px; min-width: 0; }
+
+    .rstep__actions {
+        display: flex;
+        align-items: center;
+        gap: var(--space-1, 4px);
+        padding-top: var(--space-1, 4px);
+        border-top: 1px solid var(--divider);
+    }
+
+    /* A grip you can't drag with a thumb is noise — ↑/↓ are the phone's
+       reorder affordance (owner feedback 2026-08-24). */
+    @media (max-width: 767px) {
+        .rstep__grip { display: none; }
     }
 </style>

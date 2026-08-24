@@ -10,6 +10,39 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-738 — `RecipeDetailNext.vue` violates R-055: the masthead is still ~9 per-field `q-popup-edit`s
+- **Raised:** 2026-08-24 (two-machine merge of the 08-23 and 08-24 recipe batches)
+- **Type:** finding (engineering-standards violation, cited at close-gate)
+- **Rule:** R-055 / ADR-051 — the edit affordance belongs to a block, not to
+  every field.
+- **Where:** `web_app/src/pages/RecipeDetailNext.vue` — 25 `q-popup-edit`s in
+  total, ~9 of them in the masthead identity + facts region; several carry
+  `auto-save`, which also cuts against R-055's explicit-commit clause (D-019).
+- **How it got here.** Two agents rebuilt this page at the same time on two
+  machines against two different feedback batches. The 08-23 batch replaced the
+  masthead popups with block-level read↔edit toggles and promoted the pattern to
+  R-055; the 08-24 batch rebuilt the same page for a different list and left the
+  popups alone. The merge kept the 08-24 page — it was browser-verified and
+  carried the cost modal, method editor, `Recipe.updated_at` and the
+  shopping-list awareness — so the rule landed without its implementation.
+- **Why it still matters.** The complaint R-055 answers is the owner's and is
+  unaddressed on the shipped page: two interactions before a dropdown opens, and
+  each control sized to its own content ("empty difficulty shows up as a very
+  narrow box"). The 2026-08-24 feedback never mentioned editing chrome, so it
+  did not supersede this — it simply covered other ground.
+- **Recommended resolution point:** later — reapply block-level toggles on top of
+  the merged page, ideally folded into the FU-688 swap pass so the page is opened
+  once. The 08-23 implementation is recoverable from tag `backup/pre-merge-local`
+  (`web_app/src/pages/RecipeDetailNext.vue`) as a reference, not a revert.
+- **Resolved:** 2026-08-24 — block edit mode re-applied on top of the merged
+  page in the same session that raised this. The masthead is one pencil over a
+  read face plus a `minmax(160px, 1fr)` field grid; the ingredient row's
+  quantity popup (which also carried a free-text unit) was dropped so the whole
+  row opens the row editor. `q-popup-edit` count 25 → 2, and both survivors are
+  R-055's stated carve-outs (a section's name; the step text as prose).
+  `vue-tsc` + eslint clean, 494 vitest, PWA build succeeded. Browser pass owed
+  in `DORA_VERIFY.md` — the SPA is behind a sign-in the agent may not use.
+
 ## [RESOLVED] FU-727 — Shopping-list redesign: run face and receipt face still to build
 - **Raised:** 2026-08-23 (shopping-list redesign, plan face landed)
 - **Type:** deferred job.

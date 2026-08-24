@@ -28,56 +28,74 @@ next.
 
 ---
 
-## 2026-08-24 (later) — **Merging two parallel recipe-page rebuilds**
-**Status:** merged, all suites green. No new product behaviour — this unit only
-reconciles two branches.
+## 2026-08-24 (later) — **Merging two parallel recipe-page rebuilds, then re-applying what the merge dropped**
+**Status:** merged and ported; `vue-tsc` + eslint clean, 494 vitest, 1950 pytest,
+PWA build succeeded. **Browser pass owed** — the SPA is behind a sign-in the
+agent may not use (`DORA_VERIFY.md`, recipe sections).
 
 **Trigger:** owner worked the code with a second agent on another machine before
 pushing this device's changes. Local had 13 modified files + 1 new file
-uncommitted; origin had one unpushed-to-here commit (`168a519e`, 26 files). Both
-sessions had rebuilt `RecipeDetailNext.vue` against *different* feedback batches.
+uncommitted; origin had `168a519e` (26 files). Both sessions had rebuilt
+`RecipeDetailNext.vue`, against two different feedback lists.
 
-**The contested file.** Both batches independently deleted the "Organise
-ingredients" disclosure, moved ingredient ↑/↓ onto the rows, and reworked
-sections — two implementations of overlapping intent, 12 conflict blocks. The
-**08-24 version was taken whole**: it was driven in a real browser, and it alone
-carries the cost modal, the method editor, `Recipe.updated_at` + its migration,
-and the shopping-list awareness. The 08-23 page was dropped (recoverable at tag
-`backup/pre-merge-local`).
+**Part 1 — the merge.** Twelve conflict blocks in that one file, plus five
+append-collisions in the ledgers. The **08-24 page was taken whole**: browser-
+verified, and the only side carrying the cost modal, method editor,
+`Recipe.updated_at` + migration, and shopping-list awareness. The 08-23 page was
+dropped (tag `backup/pre-merge-local`). Its shared-component work merged without
+conflict and was kept: `ImageEditTile`'s `fill`/`manual` props, `useUnitOptions`,
+`RecipeIngredientRowEditor` (prop-compatible with the 08-24 page — checked), and
+the stock-detail batch.
 
-**What was salvaged from the 08-23 side.** Its shared-component work merged
-without conflict and is strictly additive: `ImageEditTile`'s `fill` prop, the
-shared unit dropdown (`useUnitOptions`), the rebuilt `RecipeIngredientRowEditor`
-(prop-compatible with the 08-24 page — checked, not assumed), and the stock-detail
-batch (`BuyVerdictCard`, `SubstituteMetadataDialog`, `StockItemDetailPage`).
+**Part 2 — what the merge silently regressed.** The owner then produced the
+*first* feedback list, the one the 08-23 batch had been built from. Checking the
+merged page against it found **seven items the 08-24 page never addressed** and
+the 08-23 page had: the bottom photo disclosure still present, the photo modal
+still showing a preview, the empty state opening that modal instead of the file
+picker, the masthead still per-field popups, the title still wrapping early, and
+the Right-now action still a text link. (`q-popup-edit` had gone 27 → 25 across
+the whole 08-24 batch — the editing chrome was essentially untouched.) All were
+re-applied on top of the merged page rather than by reverting to the 08-23 one.
 
-**One real bug carried across.** The 08-24 page still passed `:width="0"
-:height="0"` to `ImageEditTile` — the exact 0×0 masthead-photo bug the 08-23
-session had diagnosed and fixed. Re-applied as `fill` on the merged page;
-`.rn__photo` is already `width:100%; aspect-ratio:1/1`, which is what the prop
-was built for.
+**What the port deliberately did *not* copy.** The 08-23 page's Fraunces
+`font-family` on `.rn__title` (D-022 killed it) and its **ingredients** pencil —
+the 08-24 section cards already answer that part of the list, and the owner had
+marked the ingredients pencil "not sure". Instead the *row* became the target:
+tapping anywhere on it opens the one editor, which also removed the quantity
+popup's free-text unit that had been re-breaking the canonical-unit item.
 
-**Standards close-gate.** The merge leaves one **R-055 violation**: the shipped
-page keeps ~9 masthead `q-popup-edit`s (25 total, some `auto-save`), while
-R-055/ADR-051 — promoted from the 08-23 batch — say the edit affordance belongs
-to a block. The rule is **not retired**: the two-click / sliver-sizing complaint
-behind it is the owner's and stays unfixed, and the 08-24 feedback never touched
-editing chrome, so it did not supersede it. Logged as **FU-738**, and R-055 gained
-a "reference implementation superseded" note so the rule doesn't read as
-describing code that exists. **ADR evaluation:** no new rule — but see the open
-question below.
+**R-055 came out satisfied, not violated.** The merge had briefly left the rule
+describing code that no longer existed (logged as FU-738 at that point). After
+the port the page is **25 → 2** `q-popup-edit`s, and both survivors are the
+rule's own carve-outs: a section's name (the only editable thing in its region)
+and a step's text (prose). FU-738 moved to `DORA_FOLLOWUPS_RESOLVED.md` in the
+same session; R-055's "Established by" gained a note describing where its
+reference implementation actually lives now.
 
-**Verification:** `vue-tsc` clean · eslint clean on all changed frontend files ·
-**494 vitest** passed (unchanged) · **1950 pytest** passed, 1 skipped, 1 xfailed
-(the known SQLite-batch downgrade limitation).
+**Ledger hygiene.** Both machines had allocated **FU-730/731/732**; the 08-24
+ids were already pushed, so the 08-23 ids were renumbered 730→734, 731→735,
+732→736, 733→737, with references chased through `DORA_VERIFY.md` and this file
+(reconciliation note at the top, matching the 2026-07-18 precedent). FU-731 was
+narrowed to the two surviving popups; FU-735's title corrected (it contradicted
+its own body). Two contradictory "Sections & order" verify blocks — an artifact
+of resolving the ledger conflict by keeping both sides — were reconciled down to
+the one that describes the shipped design. Pre-existing duplicate **FU-640**
+predates both sessions and was left alone.
 
-**Next up:** owner reviews the merge, then pushes. FU-688 (masthead vs
-`PageToolbar`) still gates the swap pass.
+**Standards close-gate.** No unexplained violations. R-055 is now met by the page
+that defines it. Dead code from the port removed rather than left (`.rn__ingbtn`,
+the unused `ImageUploadField` import, `detailOpen.photo`); the single-use
+`leaveEditMode(Ref)` helper was inlined rather than kept generic for one caller.
+**ADR evaluation:** no new rule — but see the open question.
 
-**Open questions for user:** worth a rule about *coordinating* parallel work on
-one surface? This merge cost a full page rebuild and produced an FU-collision plus
-an orphaned rule. Not promoted to an `R-0NN` unilaterally — it's a process
-convention, not a code one.
+**Next up:** owner reviews, walks the verify items, then pushes. FU-688 (masthead
+vs `PageToolbar`) still gates the swap pass.
+
+**Open questions for user:** (1) worth a convention for coordinating parallel
+work on one surface? This cost a page rebuild, an FU-id collision and a briefly
+orphaned rule. Not promoted to an `R-0NN` unilaterally — it's process, not code.
+(2) The 08-23 page is still reachable at `backup/pre-merge-local` if any of its
+ingredients-edit-mode behaviour is wanted after all.
 
 ---
 

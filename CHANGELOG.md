@@ -15,6 +15,36 @@ semver — major bumps signal schema or breaking-config changes.
 - **Nutrition now carries vitamins and minerals (2026-08-17).** Answering "what else can be pulled?": a linked food's **Details** table gained an optional **"Vitamins & minerals"** block, collapsed until you open it, with **potassium, calcium, iron, magnesium, zinc, vitamins A, C, D, E and B12, folate, cholesterol, trans fat and the mono/polyunsaturated fats** — fifteen more nutrients, all of which USDA and Open Food Facts already carry. As before, **only what the source actually stated appears**: a nutrient it didn't state has no row, and if a food knows none of them the whole block is absent rather than empty. **Existing foods show nothing here until you re-run the import** under Settings → Admin → Nutrition — the values were never downloaded, so there's nothing to backfill from.
 
 ### Changed
+- **The recipe page: editing is by block now, and the photo lives on the photo
+  (2026-08-24).** Two earlier passes over this page were built at the same time
+  on two different machines; merging them kept the newer page and restored the
+  parts of the older one it had missed:
+  - **One pencil for the recipe details, instead of a popup on every field.**
+    The name, collection, cuisine, category, serves, prep, cook, difficulty and
+    when used to each summon their own little editor — two clicks before a
+    dropdown would open, and each control only as wide as its own longest
+    option, so an empty **Difficulty** was a sliver. The block now flips as a
+    whole: read face, pencil, one grid of equally-sized fields, and the pencil
+    wears **Done** while you're in it. Leaving commits; a failed save keeps the
+    block open so the error has something to point at.
+  - **An ingredient row opens one editor.** The quantity and the name used to be
+    two separate targets on the same row, and the quantity's editor offered a
+    free-text unit even though the row editor already had the proper dropdown.
+    Tapping anywhere on the row now opens the one editor that covers quantity,
+    unit, name, section, note and the optional flag.
+  - **Every photo control is on the photo.** The second, fuller uploader in a
+    disclosure at the very bottom of the page is gone. With no photo, tapping
+    the tile opens the file picker immediately; with one, it offers **Change
+    photo** / **Remove photo** and nothing else — the modal no longer shows you
+    a picture you just tapped on.
+  - **The recipe photo shows up again.** A photo you set stayed blank in the
+    header, even after a refresh, because the tile was being sized to 0×0.
+  - **The title stops wrapping early** on a wide screen with half the row empty
+    beside it.
+  - **"Add to a list" is a button on the right of the "Right now" card**, where
+    the card's other actions are, rather than a text link under the copy. It
+    still counts only what isn't already on a list, and disappears when
+    everything missing has been handled.
 - **The recipe page, second pass (2026-08-24).** Fifteen pieces of feedback on
   the redesigned recipe page, most of them about it behaving like its own little
   app rather than part of Dora:

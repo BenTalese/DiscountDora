@@ -32,9 +32,10 @@ Image with one shared **Edit** pencil, the method editor opens maximised with th
 pre-filled and round-trips an edit, structured steps render as cards with the
 up/down/sub-step/hint/remove row and **no drag grip** at phone width, sub-steps indent
 with their own numbered bullet in both editor and read view, a new section renders as a
-card with its own name / count / **Add to <section>** / ⋮ menu, **Right now** reads
-"Add 1 to a list → · 1 already on a list" and flips to "Already on a shopping list" when
-nothing is left, the missing chip reads **"Missing — swap in stock"**, the picker arrives
+card with its own name / count / **Add to <section>** / ⋮ menu, **Right now** counted only
+what was left and flipped to "Already on a shopping list" when nothing was (that cell's
+action became a **button on the card's right** in the 08-24 merge — the counting is
+unchanged, the link isn't), the missing chip reads **"Missing — swap in stock"**, the picker arrives
 with an on-list row unticked and badged **"On This week"**, and **Version information**
 shows created + last-updated and both versions with their created dates (last-updated
 filled in the moment a Save landed).
@@ -54,9 +55,10 @@ viewport, so every `$q.screen` branch renders in its mobile form:
       permanently visible below 768px) and doesn't crowd long ingredient names.
 - [ ] **Additional details** — tags, tools, source URL and notes all still save from the
       merged panel, and its caption reflects what's set.
-- [ ] The other two inline `q-popup-edit`s on a phone — a structured **step's text** and
-      an ingredient's **quantity** — don't have the keyboard-over-the-field problem the
-      free-text block had. If they do, they want the same treatment.
+- [ ] The two remaining inline `q-popup-edit`s on a phone — a structured **step's text**
+      and a **section's name** — don't have the keyboard-over-the-field problem the
+      free-text block had. If they do, they want the same treatment. (The ingredient
+      **quantity** popup was removed in the 08-24 merge; the row opens its editor now.)
 - [ ] A recipe with **no** version siblings shows Version information with created,
       last-updated and the "only version" line (verified with siblings; not without).
 
@@ -382,8 +384,8 @@ agent pane can't provide — it doesn't composite, so click coordinates are dege
       saved version.
 - [ ] Clear the recipe name and hit Save → refused with a reason, nothing lost.
 
-**Ingredients** (2026-08-23 rework — one pencil, no Organise disclosure):
-- [ ] In the row editor (opened by tapping **anywhere on the row**, edit mode on), Cancel
+**Ingredients** (no Organise disclosure; the row is the edit target):
+- [ ] In the row editor (opened by tapping **anywhere on the row**), Cancel
       really cancels — no dirty pill afterwards.
 - [ ] In that editor, type a name that doesn't exist → **Use "…"** is offered, then one
       question: add to pantry, or keep as free text. Both branches work; free text shows a
@@ -404,22 +406,19 @@ list; the "Organise ingredients" panel is gone):
 - [ ] Reorder ingredients with the row's ↑/↓ and Save — the order sticks after a reload.
 - [ ] **Right now** cell adds "N has/have a substitute you already have" when that's true.
 
-**Sections & order** (edit mode, in the ingredients list itself):
-- [ ] Add a section → it appears immediately with "Nothing in this section yet", its own
-      **Add to …** button, and a rename field.
-- [ ] Move an ingredient into it with **↓** (including when the section is still empty), and
-      back out with **↑**; reorder sections with their own ↑/↓; delete a section and its
-      ingredients fall back to the main list.
-- [ ] Reorder ingredients with ↑/↓ and Save — the order sticks after a reload.
-- [ ] Out of edit mode the rows carry nothing but the shopping-list button on a missing one.
-
-**Edit modes & photo** (2026-08-23 — the pencils; structurally verified, never seen):
+**Masthead editing & photo** (2026-08-24 merge — never seen in a browser):
 - [ ] Header pencil → fields; every field in a row is the **same width**; a dropdown opens
       on **one** click. Pencil again (**Done**) saves and returns to reading.
+- [ ] Nothing in the masthead edits by tapping the value itself any more — the pencil is
+      the only way in, and **Total** / **Per serving** have no field (they're derived).
+- [ ] Tapping an ingredient row anywhere — quantity included — opens the one row editor.
 - [ ] With no photo, clicking the tile opens the file picker straight away. With one,
       it offers **Change photo** / **Remove photo** and no preview. A photo you set shows in
       the header after a reload.
 - [ ] Nothing about the photo remains at the bottom of the page.
+- [ ] Desktop width: a short title doesn't wrap with empty space beside it.
+- [ ] **Right now**: "Add …to a list" is a button on the card's **right**, and it's absent
+      once everything missing is already on a list.
 
 **The rest:**
 - [ ] All three step modes still render; only structured highlights the ingredients a step uses.

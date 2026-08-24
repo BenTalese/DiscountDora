@@ -55,31 +55,6 @@ Resolved entries carry one extra line, and live in `DORA_FOLLOWUPS_RESOLVED.md`:
 
 # Open
 
-## [OPEN] FU-738 — `RecipeDetailNext.vue` violates R-055: the masthead is still ~9 per-field `q-popup-edit`s
-- **Raised:** 2026-08-24 (two-machine merge of the 08-23 and 08-24 recipe batches)
-- **Type:** finding (engineering-standards violation, cited at close-gate)
-- **Rule:** R-055 / ADR-051 — the edit affordance belongs to a block, not to
-  every field.
-- **Where:** `web_app/src/pages/RecipeDetailNext.vue` — 25 `q-popup-edit`s in
-  total, ~9 of them in the masthead identity + facts region; several carry
-  `auto-save`, which also cuts against R-055's explicit-commit clause (D-019).
-- **How it got here.** Two agents rebuilt this page at the same time on two
-  machines against two different feedback batches. The 08-23 batch replaced the
-  masthead popups with block-level read↔edit toggles and promoted the pattern to
-  R-055; the 08-24 batch rebuilt the same page for a different list and left the
-  popups alone. The merge kept the 08-24 page — it was browser-verified and
-  carried the cost modal, method editor, `Recipe.updated_at` and the
-  shopping-list awareness — so the rule landed without its implementation.
-- **Why it still matters.** The complaint R-055 answers is the owner's and is
-  unaddressed on the shipped page: two interactions before a dropdown opens, and
-  each control sized to its own content ("empty difficulty shows up as a very
-  narrow box"). The 2026-08-24 feedback never mentioned editing chrome, so it
-  did not supersede this — it simply covered other ground.
-- **Recommended resolution point:** later — reapply block-level toggles on top of
-  the merged page, ideally folded into the FU-688 swap pass so the page is opened
-  once. The 08-23 implementation is recoverable from tag `backup/pre-merge-local`
-  (`web_app/src/pages/RecipeDetailNext.vue`) as a reference, not a revert.
-
 ## [OPEN] FU-737 — The preview pane could not paint this session; screenshots and Quasar popups were unverifiable
 - **Raised:** 2026-08-23 (recipe-view feedback batch)
 - **Type:** finding.
@@ -114,7 +89,7 @@ Resolved entries carry one extra line, and live in `DORA_FOLLOWUPS_RESOLVED.md`:
   third time, promote it to a "known fixes" entry in `ENGINEERING_STANDARDS.md`
   rather than a test.
 
-## [OPEN] FU-735 — `time_of_day` and `kcal` are not in the masthead edit grid
+## [OPEN] FU-735 — per-serving `kcal` is a masthead fact but isn't in the masthead edit grid
 - **Raised:** 2026-08-23 (recipe-view feedback batch)
 - **Type:** leftover.
 - **What:** the masthead's edit face carries name, collection, cuisine, category,
@@ -166,12 +141,16 @@ Resolved entries carry one extra line, and live in `DORA_FOLLOWUPS_RESOLVED.md`:
 - **What:** the owner reported that editing free-text instructions on a phone
   opened the keyboard over the input with nothing to scroll. That path now goes
   through a maximised dialog (`RecipeMethodEditorDialog`) and is fixed. The
-  same `q-popup-edit` pattern still drives the recipe **title**, the eyebrow
+  same `q-popup-edit` pattern used to drive the recipe **title**, the eyebrow
   selects, the six **facts**, a structured **step's text** and an ingredient's
   **quantity** — and there is nothing about the reported failure that is
   specific to the instructions field. It may simply not bite on the short ones
   (a popup anchored to a short field near the top of the page has room), which
   is exactly what the owner described.
+- **Narrowed by the 2026-08-24 merge (R-055 port).** The masthead popups and the
+  ingredient-quantity popup are gone — the masthead flips as a block and the row
+  opens its own editor. **Two** popups remain on this page: a structured step's
+  text and a section's name. This FU now covers only those two.
 - **Why deferred:** it needs a real device to know which of them actually
   misbehave; converting all of them to dialogs unprompted would undo the
   inline-editing feel the page was built around.

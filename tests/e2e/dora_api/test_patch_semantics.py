@@ -413,7 +413,12 @@ def test__patch_recipe__notes_only__leaves_every_other_field_unchanged(api):
 
     after = _recipe(recipe_id)
     assert after["notes"] == "cook's note"
+    # `updated_at` is the edit stamp (2026-08-24); every successful PATCH
+    # moves it by design, so it is compared separately rather than pinned
+    # as "unchanged".
+    assert after["updated_at"] is not None
     before.pop("notes"), after.pop("notes")
+    before.pop("updated_at"), after.pop("updated_at")
     assert after == before
 
 
@@ -423,7 +428,11 @@ def test__patch_recipe__empty_body__succeeds_and_changes_nothing(api):
 
     resp = requests.patch(f"{BASE}/recipes/{recipe_id}", json={})
     assert resp.status_code == 204, resp.text
-    assert _recipe(recipe_id) == before
+    after = _recipe(recipe_id)
+    # An empty PATCH still counts as an edit attempt and stamps
+    # `updated_at`; nothing else may move.
+    before.pop("updated_at"), after.pop("updated_at")
+    assert after == before
 
 
 def test__patch_recipe__null_servings__clears_servings(api):

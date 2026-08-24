@@ -1992,6 +1992,15 @@ exceptions, which still must be commented) · **Source** (where it was establish
 - **Established by:** the recipe-page feedback batch, 2026-08-23. See ADR-051,
   and D-015 in the design guide (whose retired clause this partially restores,
   at block rather than page granularity).
+- **Reference implementation superseded (2026-08-24 merge).** The 2026-08-23
+  block-pencil build of `RecipeDetailNext.vue` was written on one machine while a
+  second agent rebuilt the same page against a different feedback batch; the
+  merge kept the latter (browser-verified, and the only one carrying the cost
+  modal, method editor and shopping-list awareness). The rule stands — the
+  two-click/sliver-sizing complaint that produced it is the owner's and is *still
+  unfixed*, since the 2026-08-24 feedback never touched editing chrome — but the
+  page currently violates it (~9 `q-popup-edit`s in the masthead, some
+  `auto-save`). Tracked as FU-738; the rule is not retired, just unimplemented.
 
 ## ADR process (evaluate every task)
 

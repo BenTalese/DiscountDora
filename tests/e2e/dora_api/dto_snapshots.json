@@ -288,6 +288,7 @@
       "tool_ids",
       "unallocated_meals",
       "unlinked_ingredient_count",
+      "updated_at",
       "version_group_id",
       "version_siblings"
     ]

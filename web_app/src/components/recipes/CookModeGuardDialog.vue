@@ -19,6 +19,18 @@
             <ul class="q-mt-sm q-mb-none dora-text-secondary">
                 <li v-for="reason in reasons" :key="reason">{{ reasonText(reason) }}</li>
             </ul>
+            <!-- Owner feedback 2026-08-24 — "missing" and "missing, but you
+                 have something you could use instead" are different answers,
+                 and this dialog is the last place the second one can change
+                 the decision. Names, not a count: which ingredient it is, is
+                 the whole point. -->
+            <div v-if="substitutableNames.length > 0" class="cmg__subs">
+                <q-icon :name="ICONS.swap_horiz" size="16px" />
+                <span>
+                    You have a substitute in stock for
+                    {{ substitutableNames.join(', ') }} — swap it during cooking.
+                </span>
+            </div>
         </q-card-section>
         <template #actions>
             <BaseButton variant="ghost" label="Cancel" @click="open = false" />
@@ -51,6 +63,7 @@
     import { computed } from 'vue';
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
+    import { ICONS } from 'src/style/icons';
     import type { Recipe } from 'src/models/recipe';
     import {
         cookGuardReasons,
@@ -68,8 +81,12 @@
             /** Spins the "Save & start" button while the caller's save is in
              *  flight. */
             saving?: boolean;
+            /** Names of missing ingredients the cook already has a substitute
+             *  for. Supplied by the recipe page, which is the only surface
+             *  that loads substitutes; everywhere else leaves it empty. */
+            substitutable?: string[];
         }>(),
-        { dirty: false, saving: false },
+        { dirty: false, saving: false, substitutable: () => [] },
     );
 
     const emit = defineEmits<{
@@ -87,6 +104,7 @@
     });
 
     const reasons = computed(() => cookGuardReasons(props.recipe, props.dirty));
+    const substitutableNames = computed(() => props.substitutable ?? []);
 
     const missingCount = computed(() =>
         props.recipe ? missingStockItemIds(props.recipe).length : 0,
@@ -108,3 +126,17 @@
         }
     }
 </script>
+
+<style scoped lang="scss">
+    .cmg__subs {
+        display: flex;
+        align-items: flex-start;
+        gap: var(--space-2, 8px);
+        margin-top: var(--space-3, 12px);
+        padding: var(--space-2, 8px) var(--space-3, 12px);
+        border-radius: var(--radius-md, 6px);
+        background: var(--semantic-positive-soft);
+        color: var(--text-primary);
+        font-size: 0.875rem;
+    }
+</style>

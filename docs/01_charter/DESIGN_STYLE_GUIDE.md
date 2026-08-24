@@ -613,6 +613,26 @@ Quasar's raw defaults (casing, sizing, shadows) unstyled.
   a group heading that isn't a link; a group with more than ~8 destinations
   (that's the split signal, not a nesting signal).
 
+### D-022 — One typeface family per install: no page-specific display face
+- **Rule:** every surface renders in the **user's chosen font** (Settings →
+  Appearance → `themeService FONT_FAMILY_CSS`). A page may not introduce a
+  typeface of its own — not for a title, not for a section label, not "just as
+  a display face". Hierarchy is made with the **size / weight / letter-spacing
+  / colour scales already in Part A**, which is what those scales are for. The
+  font picker's list is the complete set of faces the app may render, and a
+  face that isn't offered there must not be loaded at all.
+- **Why:** the redesigned recipe page shipped with Fraunces on its title,
+  section labels and ingredient-section captions, reasoned as "display face
+  only, body still inherits the preference". The owner's verdict on seeing it
+  in use (2026-08-24) was that the page *"just doesn't feel like it's the same
+  app"* — which is the accurate read: a face nobody else uses reads as a second
+  brand, and it silently overrides a preference the user set precisely because
+  they wanted the app to look one way. It also costs a font download for one
+  route.
+- **Violation signal:** a `font-family` declaration anywhere outside
+  `themeService` / the font-picker vocabulary; a `--*-display` custom property;
+  a `@fontsource*` import for a face the picker doesn't offer.
+
 ---
 
 ## Exemplars (the bar — protect these)

@@ -15,6 +15,55 @@ semver — major bumps signal schema or breaking-config changes.
 - **Nutrition now carries vitamins and minerals (2026-08-17).** Answering "what else can be pulled?": a linked food's **Details** table gained an optional **"Vitamins & minerals"** block, collapsed until you open it, with **potassium, calcium, iron, magnesium, zinc, vitamins A, C, D, E and B12, folate, cholesterol, trans fat and the mono/polyunsaturated fats** — fifteen more nutrients, all of which USDA and Open Food Facts already carry. As before, **only what the source actually stated appears**: a nutrient it didn't state has no row, and if a food knows none of them the whole block is absent rather than empty. **Existing foods show nothing here until you re-run the import** under Settings → Admin → Nutrition — the values were never downloaded, so there's nothing to backfill from.
 
 ### Changed
+- **The recipe page, second pass (2026-08-24).** Fifteen pieces of feedback on
+  the redesigned recipe page, most of them about it behaving like its own little
+  app rather than part of Dora:
+  - **The special recipe typeface is gone.** Titles and section labels were set
+    in a display serif nothing else in the app uses; they now render in the font
+    you picked in Settings → Appearance, like every other page.
+  - **Cost has a Details button and a proper modal.** The breakdown used to be a
+    section of the page holding a plain table. It's now a modal that answers the
+    question you actually asked: the total and the **cost per serving**, a bar
+    showing how much of the recipe we could price at all, the ingredients
+    **ranked dearest-first** with a share bar each, and the ones we couldn't
+    price grouped by *why*. Fine prices read as "$3.00 / kg" rather than
+    rounding to "$0.00 / g".
+  - **"Add missing to a list" knows what's already on a list.** It counts only
+    what's actually left ("Add 1 to a list"), says how many are already handled,
+    and when everything is on a list it stops being a button and says so. The
+    picker that opens agrees: anything already on a list arrives **unticked**
+    and badged with the list it's on.
+  - **Substitutes are visible where the decision is made.** A missing ingredient
+    you have a stand-in for now reads **"Missing — swap in stock"** on its own
+    row, the "Right now" card says how many are covered, and the **Start cook
+    mode** confirmation names them, so the last screen before you cook tells you
+    the recipe is more possible than the missing count suggests.
+  - **One pencil edits the method, whatever style it's in.** "Steps / Text /
+    Photos" is now a labelled **Step style: Structured · Free text · Image**
+    control with a single **Edit** button beside it, replacing a disclosure whose
+    name changed under you. On a phone the editor opens full-screen — which is
+    the fix for editing free-text instructions there, where the keyboard used to
+    cover the field with nothing to scroll.
+  - **The structured step editor was rebuilt.** Each step is a clear card that
+    reads top to bottom — the step, then what it uses, then a row of actions
+    (**up, down, sub-step, hint, remove**). Drag grips are hidden on phones,
+    where the arrows do the job. Sub-steps look like steps, one level in, both
+    while editing and while reading.
+  - **Ingredient sections are cards.** A section used to be a caption that
+    looked like another free-text ingredient, managed from a disclosure at the
+    bottom of the page. It's now a card with its own name (tap to rename), its
+    own **"Add to <section>"** button, and rename / move / remove in one menu.
+    The separate "Organise ingredients" panel is gone; reordering lives on the
+    rows themselves.
+  - **The facts line stays on one line.** Serves / prep / cook / total /
+    difficulty / when now scrolls sideways on a phone instead of stacking three
+    rows deep.
+  - **"Other versions" became "Version information",** and answers what you'd
+    ask of it: when this recipe was **created**, when it was **last updated**,
+    and every version of it with the date each was made — including a singleton,
+    which used to show nothing at all.
+  - **Tags, tools, source URL and notes** are one **"Additional details"** chunk
+    rather than four separate rows.
 - **Three small fixes on a stock item's page (2026-08-23).** The **buy-verdict
   card's chevron and its one-tap button have swapped places** — the chevron is now
   the last thing in the row, so it sits in the same spot whether or not that

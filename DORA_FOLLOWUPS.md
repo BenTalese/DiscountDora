@@ -55,7 +55,32 @@ Resolved entries carry one extra line, and live in `DORA_FOLLOWUPS_RESOLVED.md`:
 
 # Open
 
-## [OPEN] FU-733 — The preview pane could not paint this session; screenshots and Quasar popups were unverifiable
+## [OPEN] FU-738 — `RecipeDetailNext.vue` violates R-055: the masthead is still ~9 per-field `q-popup-edit`s
+- **Raised:** 2026-08-24 (two-machine merge of the 08-23 and 08-24 recipe batches)
+- **Type:** finding (engineering-standards violation, cited at close-gate)
+- **Rule:** R-055 / ADR-051 — the edit affordance belongs to a block, not to
+  every field.
+- **Where:** `web_app/src/pages/RecipeDetailNext.vue` — 25 `q-popup-edit`s in
+  total, ~9 of them in the masthead identity + facts region; several carry
+  `auto-save`, which also cuts against R-055's explicit-commit clause (D-019).
+- **How it got here.** Two agents rebuilt this page at the same time on two
+  machines against two different feedback batches. The 08-23 batch replaced the
+  masthead popups with block-level read↔edit toggles and promoted the pattern to
+  R-055; the 08-24 batch rebuilt the same page for a different list and left the
+  popups alone. The merge kept the 08-24 page — it was browser-verified and
+  carried the cost modal, method editor, `Recipe.updated_at` and the
+  shopping-list awareness — so the rule landed without its implementation.
+- **Why it still matters.** The complaint R-055 answers is the owner's and is
+  unaddressed on the shipped page: two interactions before a dropdown opens, and
+  each control sized to its own content ("empty difficulty shows up as a very
+  narrow box"). The 2026-08-24 feedback never mentioned editing chrome, so it
+  did not supersede this — it simply covered other ground.
+- **Recommended resolution point:** later — reapply block-level toggles on top of
+  the merged page, ideally folded into the FU-688 swap pass so the page is opened
+  once. The 08-23 implementation is recoverable from tag `backup/pre-merge-local`
+  (`web_app/src/pages/RecipeDetailNext.vue`) as a reference, not a revert.
+
+## [OPEN] FU-737 — The preview pane could not paint this session; screenshots and Quasar popups were unverifiable
 - **Raised:** 2026-08-23 (recipe-view feedback batch)
 - **Type:** finding.
 - **What:** every `computer{action:"screenshot"}` timed out and
@@ -71,7 +96,7 @@ Resolved entries carry one extra line, and live in `DORA_FOLLOWUPS_RESOLVED.md`:
 - **Recommended resolution:** opportunistic — if it recurs, try a fresh preview
   server rather than a fresh tab, and fall back to the real-Chrome surface.
 
-## [OPEN] FU-732 — Ingredient free-text flow has no automated cover; the Quasar slot trap that caused it is unguarded
+## [OPEN] FU-736 — Ingredient free-text flow has no automated cover; the Quasar slot trap that caused it is unguarded
 - **Raised:** 2026-08-23 (recipe-view feedback batch)
 - **Type:** finding.
 - **What:** the "Add ingredient doesn't allow free text" defect had a precise
@@ -89,7 +114,7 @@ Resolved entries carry one extra line, and live in `DORA_FOLLOWUPS_RESOLVED.md`:
   third time, promote it to a "known fixes" entry in `ENGINEERING_STANDARDS.md`
   rather than a test.
 
-## [OPEN] FU-731 — `time_of_day` and `kcal` are not in the masthead edit grid
+## [OPEN] FU-735 — `time_of_day` and `kcal` are not in the masthead edit grid
 - **Raised:** 2026-08-23 (recipe-view feedback batch)
 - **Type:** leftover.
 - **What:** the masthead's edit face carries name, collection, cuisine, category,
@@ -103,7 +128,7 @@ Resolved entries carry one extra line, and live in `DORA_FOLLOWUPS_RESOLVED.md`:
 - **Recommended resolution:** opportunistic — next time the recipe masthead or
   the nutrition mode split is touched.
 
-## [OPEN] FU-730 — Recipe-page masthead selects have no accessible name
+## [OPEN] FU-734 — Recipe-page masthead selects have no accessible name
 - **Raised:** 2026-08-23 (recipe-view feedback batch)
 - **Type:** finding.
 - **What:** in the masthead's edit face the five `BaseSelect`s (collection,
@@ -118,6 +143,56 @@ Resolved entries carry one extra line, and live in `DORA_FOLLOWUPS_RESOLVED.md`:
 - **Recommended resolution:** now-ish, as its own small unit — it is a
   one-component fix with a broad win, and A6/axe coverage would catch it.
 
+## [OPEN] FU-732 — Sub-cent unit prices still read "$0.00 / g" everywhere except the recipe cost modal
+- **Raised:** 2026-08-24 (recipe-view feedback batch).
+- **Type:** finding.
+- **What:** `formatMoney` formats to the currency's minor unit, so a price of
+  $0.003/g renders as **$0.00 / g** — a real price that reads as free. The new
+  recipe cost modal fixes it locally (`unitPriceLabel` in
+  `RecipeCostDialog.vue` re-quotes g→kg and ml→L when the figure is under 5c),
+  but that is one call site's patch, not a shared rule. Anywhere else that
+  prints a per-unit price off a fine-grained unit has the same bug — the
+  shopping-list line price rows and the stock-item price surfaces are the
+  likely ones; not surveyed.
+- **Why deferred:** the reported surface was the recipe page, and the fix that
+  belongs in `useMoney` (a `formatUnitPrice(amount, unit)` that owns the
+  rescale, R-003) is a cross-surface change with its own verify.
+- **Recommended resolution:** when money formatting is next touched — promote
+  `unitPriceLabel` into `useMoney` and point every per-unit price at it.
+
+## [OPEN] FU-731 — `q-popup-edit` on a phone: the keyboard-over-the-field problem is only fixed for free-text instructions
+- **Raised:** 2026-08-24 (recipe-view feedback batch).
+- **Type:** finding.
+- **What:** the owner reported that editing free-text instructions on a phone
+  opened the keyboard over the input with nothing to scroll. That path now goes
+  through a maximised dialog (`RecipeMethodEditorDialog`) and is fixed. The
+  same `q-popup-edit` pattern still drives the recipe **title**, the eyebrow
+  selects, the six **facts**, a structured **step's text** and an ingredient's
+  **quantity** — and there is nothing about the reported failure that is
+  specific to the instructions field. It may simply not bite on the short ones
+  (a popup anchored to a short field near the top of the page has room), which
+  is exactly what the owner described.
+- **Why deferred:** it needs a real device to know which of them actually
+  misbehave; converting all of them to dialogs unprompted would undo the
+  inline-editing feel the page was built around.
+- **Recommended resolution:** when the phone walk in `DORA_VERIFY.md` (recipe
+  section, 2026-08-24) runs — fix only the ones that reproduce.
+
+## [OPEN] FU-730 — `Recipe.updated_at` is stamped by the PATCH handler only
+- **Raised:** 2026-08-24 (recipe-view feedback batch).
+- **Type:** finding.
+- **What:** the new edit stamp is written in `update_recipe.handle`. Deliberate
+  — cooking, favouriting and meal-pool adjustments change what *happened* to a
+  recipe, not what it is, and the version panel would be useless if "last
+  updated" moved every time you cooked. But two writers do change the recipe's
+  content and don't stamp it: the **URL/text importer**
+  (`import_recipe_from_content.py`) when it writes into an existing recipe, and
+  any future bulk/vocabulary migration that rewrites recipe rows in place.
+- **Why deferred:** the importer's overwrite path isn't reachable from the
+  recipe page (FU-689 closed won't-do), so nothing user-visible is wrong today.
+- **Recommended resolution:** opportunistic — whenever a second recipe write
+  path is added, stamp it there too (or lift the stamp into the repository's
+  save path for `Recipe`).
 ## [OPEN] FU-729 — Run/receipt faces have never been walked on a real phone
 - **Raised:** 2026-08-23 (FU-727 build)
 - **Type:** follow-up.

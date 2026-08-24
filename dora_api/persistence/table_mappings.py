@@ -837,6 +837,10 @@ def configure_mappings(db: SQLAlchemy):
         # write time; historical rows were backfilled from last_made_on
         # (else now()) by migration f9d3a7c2b5e8.
         Column("created_at", DateTime(timezone=True), nullable=False),
+        # when the recipe was last edited (PATCH /recipes/<id>). NULL until the
+        # first edit; the recipe page's version-information panel prints it
+        # next to created_at.
+        Column("updated_at", DateTime(timezone=True), nullable=True),
         # RD-29 — free-text personal notes (the cook's own commentary, shown
         # in cook mode under the steps). Distinct from `instructions`.
         Column("notes", Text, nullable=True),

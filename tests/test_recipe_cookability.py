@@ -73,6 +73,9 @@ def _recipe(*ingredient_args):
         # RecipeDto.from_entity so the stub mirrors the real entity.
         steps_mode="freeform",
         created_at=datetime.now(timezone.utc),
+        # Recipe-view feedback 2026-08-24 — the edit stamp. None = never
+        # edited since it was added, which is what a fresh stub is.
+        updated_at=None,
         ingredients=list(ingredient_args),
     )
 

@@ -3,8 +3,8 @@
 Per DEC-2 the version model is *flat*: recipes sharing a
 `version_group_id` are equal peers (no current pointer, no snapshot vs
 current distinction). New-version copies the source recipe (ingredients,
-tools, steps, vocabulary, image, source URL) into a fresh row with the
-same group id — and if the source had no group id yet, allocates one and
+sections, tools, steps, step images, vocabulary, image, source URL) into a
+fresh row with the same group id — and if the source had no group id yet, allocates one and
 back-fills the source so the two recipes form the group.
 
 The handler returns the new recipe id; the SPA routes into its detail
@@ -25,6 +25,9 @@ from dora_api.domain.entities.recipe import Recipe
 from dora_api.domain.entities.recipe_ingredient import RecipeIngredient
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.types import EMPTY_UUID
+from dora_api.features.recipes.recipe_section_access import (
+    SectionWrite, get_sections_for_recipe, replace_sections_for_recipe,
+)
 from dora_api.features.recipes.recipe_step_access import (
     StepWrite, get_steps_for_recipe, replace_steps_for_recipe,
 )
@@ -167,6 +170,37 @@ class NewRecipeVersionHandler:
         # empirically unreachable, but the shape stays uniform.
         self.repository.flush()
 
+        # Sections — the recipe's named ingredient/step groups ("For the
+        # sauce"). Cloned before the ingredient back-fill and the step writes
+        # below, because both carry a `section_id` FK into this table and the
+        # rows have to exist first. Until 2026-08-26 they were not copied at
+        # all, so a sectioned recipe came out of new-version flattened into
+        # the implicit main group — every card gone, on a page that renders
+        # sections as cards.
+        source_sections = get_sections_for_recipe(source_id)
+        old_to_new_section: dict[UUID, UUID] = {}
+        if source_sections:
+            # The source section's own id doubles as the client_id, so the
+            # helper's client→real map *is* the old→new map.
+            old_to_new_section = {
+                UUID(str(client_id)): real
+                for client_id, real in replace_sections_for_recipe(
+                    new_recipe.id,
+                    [
+                        SectionWrite(
+                            client_id=row["id"],
+                            sequence=row["sequence"],
+                            name=row["name"],
+                        )
+                        for row in source_sections
+                    ],
+                ).items()
+            }
+            for original, copy in zip(source.ingredients or [], cloned_ingredients):
+                if original.section_id is None:
+                    continue
+                copy.section_id = old_to_new_section.get(original.section_id)
+
         # Tags + tools — separate access helpers; safe to call after flush.
         tag_ids = get_tag_ids_for_recipe(source_id)
         if tag_ids:
@@ -201,6 +235,10 @@ class NewRecipeVersionHandler:
                         if oid in old_to_new_ing
                     ],
                     tool_ids=list(row["tool_ids"]),
+                    section_id=(
+                        old_to_new_section.get(row["section_id"])
+                        if row["section_id"] is not None else None
+                    ),
                 ))
             replace_steps_for_recipe(new_recipe.id, step_writes)
 

@@ -1,8 +1,10 @@
 <template>
     <!-- IMPL_PLAN_RECIPE_IMPORTER §Chunk 5 — shared "Import a recipe" dialog.
          Replaces the pre-Chunk-5 URL-fetching flow with a paste textarea.
-         Used by RecipesOverview (creates a new recipe from the import) and
-         RecipeDetailPage (overwrites the current form's fields). The dialog
+         Used by RecipesOverview (creates a new recipe from the import). It
+         had a second caller — the old recipe detail page, which overwrote the
+         current form's fields — until that page was deleted on 2026-08-26;
+         the redesign deliberately doesn't carry Import (FU-689). The dialog
          owns the paste input, the source-URL input, the loading state, the
          error display, and the `importFromContentAsync` call. It emits
          `@imported(dto)` on success and lets the caller decide what to do
@@ -84,13 +86,12 @@
     /**
      * IMPL_PLAN_RECIPE_IMPORTER §Chunk 5 — the dialog focuses purely on
      * the import mechanism (paste content → API call → structured
-     * result). What to *do* with the result lives at the call site,
-     * because the two callers diverge meaningfully:
-     *
-     *   - RecipesOverview wires the imported DTO to `createAsync` and
-     *     navigates to the new recipe.
-     *   - RecipeDetailPage prompts for confirm-overwrite and then
-     *     patches the local form fields.
+     * result). What to *do* with the result lives at the call site:
+     * RecipesOverview wires the imported DTO to `createAsync` and navigates
+     * to the new recipe. The split existed because a second caller
+     * (import-over-an-existing-recipe) diverged meaningfully; that caller is
+     * gone, but the seam is worth keeping — it is what makes the dialog
+     * reusable by the next surface that wants a paste-import.
      *
      * The dialog returns the raw `ImportedRecipe` (which carries
      * `is_degraded`) and the caller decides on the toast. The dialog
@@ -106,10 +107,11 @@
     const props = withDefaults(
         defineProps<{
             modelValue: boolean;
-            /** Optional extra sentence appended to the caption.
-             *  RecipeDetailPage adds "Your existing recipe will be
-             *  overwritten with the imported fields." here; the overview
-             *  surface leaves it null. */
+            /** Optional extra sentence appended to the caption — for a caller
+             *  whose import has a consequence worth warning about (the old
+             *  import-over-a-recipe flow said "Your existing recipe will be
+             *  overwritten with the imported fields."). The overview surface,
+             *  the only caller today, leaves it null. */
             degradedHint?: string | null;
             /** IMPL_PLAN_RECIPE_IMPORTER §Chunk 6 — content pre-fill for
              *  the PWA share-target landing. When the OS Share sheet

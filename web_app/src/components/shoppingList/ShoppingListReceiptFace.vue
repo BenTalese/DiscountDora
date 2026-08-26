@@ -144,7 +144,7 @@
              the numbers are the same aggregate, only the trip has happened. -->
         <StoreSpendCard
             class="q-mt-sm"
-            title="Where you spent it"
+            tense="receipt"
             :buckets="detail.totals.by_store"
             :collapsible="$q.screen.lt.md"
         />

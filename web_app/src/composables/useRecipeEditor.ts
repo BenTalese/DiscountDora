@@ -1,7 +1,7 @@
 // The recipe edit model — form shape, hydrate-from-server, and
-// build-the-PATCH — extracted from `RecipeDetailPage.vue` on 2026-08-20 so the
-// redesigned page (`RecipeDetailNext.vue`) renders a *different page* over the
-// *same* rules rather than a second copy of them (R-001 / R-003).
+// build-the-PATCH — extracted on 2026-08-20 from the recipe page the redesign
+// replaced, so the redesigned page renders a *different page* over the *same*
+// rules rather than a second copy of them (R-001 / R-003).
 //
 // Everything here was lifted verbatim from that page; the comments explaining
 // each rule came with it, because the rules are the valuable part:
@@ -15,11 +15,9 @@
 //     user is *in* structured mode, and `step_images[]` only when they were
 //     touched, so flipping modes never destroys the other mode's content.
 //
-// ⚠️ `RecipeDetailPage.vue` still carries its own inline copy. That is
-// deliberate and temporary: it is the comparison baseline for the redesign and
-// one of the two pages is going to be deleted (FU-688). Collapsing the old
-// page onto this composable is wasted work if it's the one that goes — but if
-// it survives, that collapse is the first thing to do.
+// The duplicate inline copy this file used to warn about went with the old
+// page on 2026-08-26 (FU-688). `RecipeDetailPage.vue` is now the only consumer,
+// and this is the only copy of these rules.
 
 import { reactive } from 'vue';
 import { recipeStepImageUrl } from 'src/services/api/recipeApiService';

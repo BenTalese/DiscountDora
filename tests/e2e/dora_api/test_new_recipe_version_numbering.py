@@ -150,6 +150,48 @@ def test__new_version__carries_unlinked_and_optional_ingredients(api):
     assert flour["is_optional"] is False
 
 
+def test__new_version__carries_sections_and_their_ingredient_links(api):
+    """Owner feedback 2026-08-26 — "new version doesn't copy all fields
+    properly". Sections were the field: they were never cloned, so a
+    sectioned recipe came back with every group flattened into the implicit
+    main list. Pins both halves — the section rows themselves, and the
+    ingredient `section_id` that points at them (a copied section nobody's
+    ingredients belong to is the same bug wearing a hat)."""
+    token = uuid4().hex[:8]
+    source = requests.post(RECIPES, json={
+        "name": f"Version Sections {token}",
+        "sections": [
+            {"client_id": "s1", "sequence": 0, "name": f"For the sauce {token}"},
+            {"client_id": "s2", "sequence": 1, "name": f"To serve {token}"},
+        ],
+        "ingredients": [
+            {"raw_text": f"tomatoes {token}", "section_client_id": "s1"},
+            {"raw_text": f"basil {token}", "section_client_id": "s2"},
+            {"raw_text": f"salt {token}"},
+        ],
+    }).json()
+
+    # Detail endpoint, not `_by_id`: the list endpoint carries only
+    # `section_count`, the hydrated `sections[]` is detail-only.
+    copy = requests.get(f"{RECIPES}/{_new_version(source['recipe_id'])}").json()
+    original = requests.get(f"{RECIPES}/{source['recipe_id']}").json()
+
+    # Sections cloned, in order, with fresh ids of their own.
+    assert [s["name"] for s in copy["sections"]] == [
+        f"For the sauce {token}", f"To serve {token}",
+    ]
+    copy_section_ids = {s["section_id"] for s in copy["sections"]}
+    assert copy_section_ids.isdisjoint({s["section_id"] for s in original["sections"]})
+
+    # Each ingredient landed back in its own group — and the unsectioned one
+    # stayed unsectioned.
+    by_name = {i["raw_text"]: i for i in copy["ingredients"]}
+    section_by_id = {s["section_id"]: s["name"] for s in copy["sections"]}
+    assert section_by_id[by_name[f"tomatoes {token}"]["section_id"]] == f"For the sauce {token}"
+    assert section_by_id[by_name[f"basil {token}"]["section_id"]] == f"To serve {token}"
+    assert by_name[f"salt {token}"]["section_id"] is None
+
+
 def test__new_version__editing_the_copy_leaves_the_source_untouched(api):
     base_name = f"Version Indep {uuid4().hex[:8]}"
     source = requests.post(RECIPES, json={

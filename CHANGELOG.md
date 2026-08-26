@@ -14,7 +14,96 @@ semver — major bumps signal schema or breaking-config changes.
 
 - **Nutrition now carries vitamins and minerals (2026-08-17).** Answering "what else can be pulled?": a linked food's **Details** table gained an optional **"Vitamins & minerals"** block, collapsed until you open it, with **potassium, calcium, iron, magnesium, zinc, vitamins A, C, D, E and B12, folate, cholesterol, trans fat and the mono/polyunsaturated fats** — fifteen more nutrients, all of which USDA and Open Food Facts already carry. As before, **only what the source actually stated appears**: a nutrient it didn't state has no row, and if a food knows none of them the whole block is absent rather than empty. **Existing foods show nothing here until you re-run the import** under Settings → Admin → Nutrition — the values were never downloaded, so there's nothing to backfill from.
 
+### Fixed
+- **A new version of a recipe kept its sections (2026-08-26).** *"New version
+  doesn't copy all fields properly"* — the missing field was your ingredient
+  **sections**. "For the sauce", "To serve" and everything in them were dropped
+  on the way across, so a carefully grouped recipe came out as one flat list and
+  you had to rebuild the groups by hand. The copy now carries the sections, in
+  order, with each ingredient and step back in the group it came from.
+- **Changing a recipe photo closes the photo box (2026-08-26).** Tapping the
+  photo → **Change photo** → picking a file left the little Change/Remove box
+  sitting there afterwards, so you had to close it yourself even though you'd
+  already done the thing. It closes on its own now.
+
 ### Changed
+- **The recipe page's header reads with icons (2026-08-26).** Collection,
+  cuisine, category, serves, prep, cook, total, difficulty and when-you'd-eat-it
+  each carry the same little glyph the cookbook's own filters use, so the same
+  thing looks the same in both places — and the icons stay on the fields when you
+  switch the header into edit mode, instead of the block changing character
+  halfway through.
+- **The ingredient Unit box is a plain list again (2026-08-26).** It offered
+  "Or type your own", which invited you to invent a unit Dora then couldn't do
+  anything with. It's now a fixed list — and a list of the units an ingredient is
+  actually measured in, so `kJ` and `cm` no longer turn up in it. The informal
+  ones it was there for (pinch, dash, pack, dozen) were already on the list.
+- **There's one recipe page again (2026-08-26).** The redesigned page had been
+  running side by side with the old one so the two could be compared, each with a
+  button across to the other. The redesign won: it's now what you get at every
+  recipe, and the old page and both hop-across buttons are gone.
+- **Your stores are drawn in their own colours now (2026-08-26).** The shopping
+  list's *"Where you'll spend it"* card coloured each store from a generic chart
+  palette picked by whichever store you were spending most at — so Woolworths
+  could come out red and Coles green, and both changed colour as the totals
+  moved. Dora now reads the **majority colour out of the logo you uploaded** for
+  that store and uses that: Woolworths green, Coles red, Aldi blue, whatever your
+  local is. It happens once, when you upload the logo, and **logos you've already
+  uploaded are done automatically** the first time you start this version. A store
+  with no logo — or a black-and-white one — keeps the same stable colour it always
+  had, worked out from its name, so every store has *a* colour and none of them
+  moves around.
+- **The shopping list page got the same treatment the stock list did
+  (2026-08-26).** The two are the app's two list screens and they'd drifted
+  apart, so this closes the gap:
+  - The **"Shopping lists" heading is gone** — it sat directly above the list's
+    actual name and told you nothing.
+  - The **"More" menu is gone.** Every action is on the toolbar, which now
+    **scrolls sideways** rather than hiding things, and **drops to icons on a
+    phone** (hold one to see its name) so it stops eating a quarter of the screen.
+  - **New list** is now the first, green button instead of a faint link at the top
+    of a panel that doesn't exist on a phone — it was genuinely easy to miss.
+  - **Manage templates** came out of the bottom of that panel and is now a
+    **Templates** button on the toolbar.
+  - **Quick add** is now just **Add item**.
+  - **Bulk select** is the same button, name, icon and bar as the stock list's,
+    down to *Select visible* / *Deselect all*. **Long-press any item** to start
+    selecting; **unticking the last one** drops you back out.
+  - **Refresh deals** only appears if you're using products — with no product data
+    it could only ever report "nothing changed".
+  - **Clear all items** and **Delete list** moved to the bottom of the list, past
+    everything they'd destroy, instead of sitting a tap away from *Add item*.
+- **Move what you didn't buy, at the moment you'd think of it (2026-08-26).**
+  "Move unticked to another list" used to be a line in a menu you'd have to know
+  to open, and the finish dialog just noted in grey that unticked items would
+  "stay on the list" — by which point the list was archived and they were
+  stranded. Finishing a shop with anything unticked now **asks**: leave them,
+  move them to another list, or move them to a new one (named after the shop
+  they're left over from). Nothing is duplicated — anything already on the
+  target list is skipped. Selecting items and choosing **Move to list…** in the
+  bulk bar does the same thing for a set you pick yourself.
+- **The shopping list is usable on a phone again (2026-08-26).** Each row was
+  laying out eight controls side by side, which squeezed the item's *name* — the
+  only part you actually read — into about 60px and wrapped it over four lines
+  while the buttons jammed into each other. On a narrow screen the name now gets
+  the full width with the swap and remove buttons beside it, and the reorder
+  arrows, quantity and price sit on one strip underneath. Nothing was hidden or
+  moved into a menu. Separately, the list panel on the right could push the whole
+  page sideways by about 100px on a desktop — a long list name no longer does
+  that.
+- **Smaller, quieter list heading (2026-08-26).** The list's name was rendered
+  larger than the title on every other page; it now matches. The status badge
+  stopped shouting **DONE** in letter-spaced capitals — it's a normal-case pill,
+  and the three states finally read as a sequence (a grey draft, a blue shop in
+  progress, a green finished one) rather than a finished shop being the drabbest
+  of the three. Created and completed dates each got their own icon instead of
+  being run together after a middot.
+- **"Where you'll spend it" says something sensible with money turned off
+  (2026-08-26).** With money surfaces off the card kept its spend wording while
+  showing nothing but item counts. It now reads **"Where you'll shop"** (or
+  "Where you shopped" on a finished list), sizes its bar by how many items each
+  store is carrying, and drops the "12 items unpriced, not counted" footnote that
+  described a total you can't see.
 - **"Should I buy this?" now tells you how much it means it (2026-08-24).**
   Marking anything low — a jar of capers as readily as the flour you always keep
   in — produced the same flat **"Worth buying now"**, so the answer was easy to

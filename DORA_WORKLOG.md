@@ -28,6 +28,240 @@ next.
 
 ---
 
+## 2026-08-26 (later) — **Recipe view: the 2026-08-26 owner feedback batch (5 items), and the FU-688 swap**
+**Status:** all 5 items shipped and **driven live** against an isolated instance.
+Backend **1964 passed** / 1 skipped / 1 xfailed, frontend **497 vitest** (3 new),
+`vue-tsc` + `npm run lint` clean.
+
+**The one with a real bug behind it — "new version doesn't copy all fields
+properly".** The missing field was **sections**. `new_recipe_version.py` cloned
+scalars, ingredients, tags, tools, steps and step images, but never touched
+`RecipeSection` — so a sectioned recipe came out of new-version with every group
+flattened into the implicit main list, on a page that renders sections as cards.
+The clone now runs `replace_sections_for_recipe` between the recipe flush and the
+step writes (it has to sit there: both `RecipeIngredient.section_id` and
+`RecipeStep.section_id` are FKs into a table whose rows don't exist until the new
+recipe does), and the source section's own id doubles as the helper's
+`client_id`, so the returned client→real map *is* the old→new map — no second
+bookkeeping dict. Pinned by
+`test__new_version__carries_sections_and_their_ingredient_links`, which asserts
+both halves: the section rows, **and** the ingredient `section_id` pointing at
+them (a cloned section nobody's ingredients belong to is the same bug wearing a
+hat). Confirmed red before the fix, green after, and then driven end-to-end in
+the browser — a two-section recipe versioned through the UI button renders both
+cards with the right ingredient in each and the unsectioned one in the main list.
+Three fields *are* deliberately not copied (`is_favourite`, `last_made_on`,
+`available_meals`); that's defensible and commented, but the toast never says so,
+which is [[FU-741]].
+
+**The photo modal that wouldn't go away — a bubbling synthetic click.** Reported
+as *"picking a new photo doesn't close the modal"*. `onChangePhoto` sets
+`photoDialogOpen = false` and then calls `openPicker()`, which calls `.click()`
+on the tile's hidden `<input type=file>` — and **that synthetic click bubbles**,
+up to the tile's own `@click`, which on a `manual` tile re-emits `activate`,
+which sets `photoDialogOpen = true` again. The dialog was closing and instantly
+reopening. One `@click.stop` on the input in `ImageEditTile.vue` (shared, so
+every `manual` consumer gets it). Proven live in both directions: a bubbled click
+from the file input leaves the dialog closed, the same bubbled click from an
+*unstopped* tile child (the `<img>`) opens it. The native-picker round-trip
+itself can't be agent-driven and is in `DORA_VERIFY`.
+
+**Header icons — take them from the cookbook, not invent them.** The owner's read
+was right: collection, cuisine, category, serves, difficulty, when and kcal all
+already have a glyph on the cookbook's filter row (`collection`, `public`,
+`category`, `people`, `difficulty`, `schedule`, `local_fire_department`), and the
+masthead was the one place naming them in bare words. Those seven are reused
+verbatim. Prep and cook had no existing glyph and **couldn't share one**: `timer`
+already means *total* time on `RecipeRow`, so two new `ICONS` entries separate
+them by activity rather than by clock — `prepTime: mdi-knife` (before the heat),
+`cookTime: mdi-pot-steam-outline` (on it). Every icon appears in **both** modes —
+read view and the edit-mode field's `prepend` — which is what the owner asked
+for and what stops the block changing character mid-edit. The `·` separators went
+with them: a leading glyph already marks where one fact stops, and dot-plus-icon
+reads as punctuation noise. Verified live in both modes (all 8 edit fields carry
+their prepend, all 3 eyebrow + 6 fact glyphs render read-side).
+
+**Unit: closed list, and the right list.** `new-value-mode="add-unique"` and the
+"Or type your own" hint are gone. The non-obvious half: closing an open
+vocabulary means auditing what the closed one contains, and `UNIT_TABLE` spans
+**six dimensions** — so the picker was quietly offering `kJ`, `kcal`, `cm` and
+`ft` as ingredient units, harmless while free text existed and actively wrong
+once it's the only choice. `useUnitOptions` gained an optional `dimensions`
+filter (the composable already documented callers narrowing it — the price
+widget does) and the editor passes `['volume','mass','count']` as a literal
+rather than borrowing the table's `PRICE_DIMENSIONS`: same three today, but that
+constant means "what a price observation may be expressed in" and shouldn't drift
+by proxy. Nothing was lost — `pinch`, `dash`, `smidgen`, `stick`, `pack`, `dozen`
+are all canonical units already. Pinned by a new
+`test/unit/useUnitOptions.spec.ts` (3 tests): a **generated** table feeding a
+now-closed list is exactly the stable, low-churn contract the verify stance says
+to automate — a regeneration that adds an energy unit would otherwise land it in
+the ingredient dropdown silently.
+
+**FU-688 closed — the swap, in one pass.** *"Can obliterate the old version of the
+page out of existence now."* That also answers the reserved masthead-vs-shared-
+`PageToolbar` question, and answers it twice: the same batch asked for the
+masthead's header block to be **enriched**. So `/cookbook/:id` points at the
+redesign, `RecipeDetailNext.vue` was `git mv`'d into `RecipeDetailPage.vue` over
+the deleted 2,727-line original, the `/cookbook/:id/new` route and both hatch
+buttons are gone (`.rn__flip` with them), `goToSibling` / `onNewVersion` push
+`/cookbook/<id>`, and the duplicate inline form model died with the old page —
+`useRecipeEditor`'s ⚠️ header note, which said collapsing it was "the first job
+once the old page goes", is rewritten rather than left to rot. Two files that
+*described* the old page were repointed rather than left half-true:
+`RecipeImportDialog.vue` (it lost a caller — its "two callers diverge" comment
+now says why the seam is still worth keeping) and
+`UnlinkedIngredientsSettings.vue` (its `wellStocked` pointer now names
+`RecipeIngredientRowEditor.vue`, where that flow actually lives). Ledger
+housekeeping fell out of it: [[FU-712]]'s blocker ("when one of the two files is
+deleted") has now cleared, and [[FU-692]]'s recipe-tools crossover **resolved
+itself** — it lived in the deleted page's chip row.
+
+**Deliberately NOT done.** [[FU-691]] (the page's off-token D-017 stylesheet
+sweep) was offered to the owner as the tied tidy step and **deferred by his
+call** — the merged page still has no browser walk behind it, and a
+whole-stylesheet rewrite in the same diff as a masthead change and a 2,727-line
+deletion makes any spacing regression unattributable. Its recommended resolution
+point is re-pointed to "after the verify walk, standalone". This session's new
+CSS again matches the file's existing convention rather than leaving two.
+
+**Verification setup.** Same shape as the earlier shopping-list unit and worth
+reusing: the owner's backend stayed untouched on :5170 throughout (confirmed up
+at the end); a throwaway instance ran on **:5171** with a SQLite DB in the
+scratchpad (`DORA_API_PORT` + `DORA_DB_URL`), SPA on **:5174** (the only dev port
+in the CORS allowlist) pointed at it via
+`localStorage['dora.backendBaseUrl']`. Both scratch servers were stopped and the
+5171 process killed **by PID** — a `pkill -f dora_api.startup` would have taken
+the owner's :5170 with it, and was correctly refused. **[[FU-737]] reproduced
+exactly:** every `computer{action:"screenshot"}` timed out and no Quasar popup
+(`q-menu`) ever rendered, which is why the unit dropdown's *contents* went to a
+vitest spec and its *popup* went to `DORA_VERIFY`. Everything else was asserted
+against live DOM after real `computer` clicks.
+
+**Standards close-gate.** No unexplained violations. R-001: the `.stop` fix and
+the dimension filter both landed in the shared component/composable, not at the
+call site — one consumer today, but both are the kind of thing the second
+consumer inherits silently. R-003: sections are cloned server-side in the same
+unit of work as the rest of the copy; the client was not asked to re-post them.
+D-005: the masthead glyphs are the cookbook's existing set, and the two new ones
+are new *meanings*, not new pictures for meanings that already had one. D-017:
+knowingly deferred, see above. **ADR evaluation — no new rule.** The bubbling-
+`.click()` footgun is real and worth remembering, but it has bitten once and the
+comment in `ImageEditTile.vue` carries the reasoning at the site that owns it; a
+rule promoted off one occurrence is how the standards doc gets noisy. Same for
+"narrow a vocabulary when you close it" — one occurrence, recorded in the
+composable's docstring. Revisit either if a second instance shows up.
+
+**Next up:** the recipe page's `DORA_VERIFY` walk is now the whole tail — the
+2026-08-20 parity pass, the 08-24 batch, and the new 08-26 section — and
+[[FU-691]] queues directly behind it.
+
+---
+
+## 2026-08-26 — **Shopping lists: the 2026-08-26 owner feedback batch (16 items)**
+**Status:** all 16 items shipped and **driven live at 375px and 1280px** against
+an isolated instance. Backend **1963 passed** / 1 skipped / 1 xfailed, frontend
+**494 vitest**, `vue-tsc` + eslint clean.
+
+**Verification setup worth reusing.** The owner's own backend has been running on
+:5170 since 2026-08-23 against their real DB, so nothing here touched it: a second
+instance ran on **:5171 with a throwaway SQLite DB** (`DORA_API_PORT` +
+`DORA_DB_PATH`), and the SPA ran on **:5174** — which is the only dev port in the
+CORS allowlist, so that's not arbitrary. Logged in with the project's own seeded
+e2e fixture (`dora`/`dora`, the one `web_app/e2e/auth.setup.ts` uses) via a
+throwaway Playwright driver rather than hand-driving a login form. Scratch files
+were deleted; the temporary launch config was removed.
+
+**The one with real design in it — store colours.** *"Possible to derive this from
+the logo uploaded? Woolworths is majority green, Coles is majority red."* Yes, and
+it belongs server-side: a new `Store.brand_colour` (migration `c9f2a7d4e1b8`,
+backfills existing logos) is derived **once at upload** by
+`features/stores/_logo_colour.py`. The naive version doesn't work — a retail logo
+is ~90% white canvas, so the modal colour of every logo on earth is white. The
+extractor throws away transparent and **unsaturated** pixels (that's the white,
+the black and every grey between), quantises what's left to 32-step buckets, takes
+the mode, then averages that bucket's real pixels rather than returning the
+bucket centre. Verified live: green/red/navy logos came back `#168b3b` / `#e01a20`
+/ `#012d72`, and a greyscale logo correctly returns None. 9 unit tests
+(`tests/test_store_logo_colour.py`) — a stable pure function whose output is
+*persisted*, so a regression wouldn't surface until someone re-uploaded.
+
+The old `segmentColour` was `var(--chart-${index % 5 + 1})` — **indexed by
+position in the spend-sorted list**, so a store changed colour when the totals
+moved. The palette + FNV-1a hash also lived only in `StoreLogo.vue`, so a store
+was a mauve pill in Settings and a chart-3 bar on the list. Both now go through
+`src/style/storeSwatch.ts`: `brand_colour` first, deterministic hash second.
+
+**"Mobile view is god awful… overlapping… squished" — reproduced, and it wasn't
+overflow.** The page doesn't scroll sideways at all (measured 0px). The row was
+laying out **eight columns** at 375px, so the *name* got ~60px and wrapped over
+four lines while the controls collided. Fixed by letting the row wrap: line 1 is
+tick · name · swap+delete, line 2 is reorder · quantity · price. Row height
+201px → 130px. Two details were load-bearing: the name needs `flex: 1 1 0` (with
+`auto` its intrinsic width plus the tick exceeded the row and it wrapped to a
+line of its own), and putting the two row actions **up on the name line** is what
+stops a third line — measured, 76+249+76 doesn't fit in 325.
+
+**A real pre-existing bug found while verifying.** At 1280px the whole page had
+**105px of horizontal scroll**: `q-virtual-scroll` sizes itself from its widest
+row, so the lists rail's scroller measured 421px inside its own 300px rail.
+`min-width: 0` alone didn't fix it (it computed to 0 and the box stayed 421) —
+the width had to be pinned to 100% so `overflow: auto` had something to clip
+against. Same family as FU-578 #40.
+
+**Consistency items, briefly.** `PageToolbar` and its "Shopping lists" title are
+gone (the title sat directly above the list's real name); the **More menu is
+gone** and every action rides a `.sld-toolbar__actions` scroll band copied rule-
+for-rule from `.stock-toolbar__actions`, icon-only under `compactToolbar`
+(`$q.screen.lt.sm`). `.dora-subbar` moved out of `StockOverview.vue` into a
+shared `src/css/subbar.scss` — copying 15 lines into the second page would have
+guaranteed the drift the owner was complaining about. Bulk select is now the same
+button, name, icon and bar, plus `v-touch-hold:600` on a line to enter and
+"unticking the last one exits". `text-h4` → `text-h5`; the uppercase
+letter-spaced badge became a B2 status pill on tokens (it was also 13.6px, under
+D-003's floor) and the three states now read neutral → info → positive, so a
+*finished* shop is no longer the drabbest of the three.
+
+**Two owner decisions taken before building** (asked, not assumed): the four
+open questions in the batch were put to the owner, who chose server-side colour
+derivation, "Add item", Clear-all-at-the-bottom, and — going further than the
+option offered — that the **finish dialog itself** should ask about unticked
+items. That last one is the better idea: `MoveUntickedHandler` became
+`MoveLinesHandler(source, target, line_ids|None)` behind two routes, the More-menu
+entry died, and finishing early now offers leave / move-to-existing /
+move-to-new. Driven live: 12 unticked items, finished, list went `done` with 0
+lines and *"Leftovers from Big weekly shop"* appeared as a draft with all 12.
+
+**Deliberately NOT built.** A bulk "Remove" in the selection bar: there is no
+remove-these-line-ids endpoint and looping N deletes is the exact per-item request
+loop **FU-713/714** exist to stamp out. Noted in place; the footer's "Clear all
+items" covers the whole-list case.
+
+**Standards close-gate.** No unexplained violations. R-003: `brand_colour` is
+derived server-side once and read as a value, never recomputed per render; the
+colour rides the detail handler's existing store query rather than a second one.
+R-001/R-022: two extractions rather than two copies (`subbar.scss`,
+`storeSwatch.ts`). R-002: the status pill is tokens in the stylesheet, not Quasar
+colour names threaded through the template; the hash palette keeps its existing
+"deterministic hash swatches" carve-out, now stated once. FU-713/714 honoured —
+bulk move is one request. D-001: store colours are identity, never state, and
+always beside the store's name. D-003: pill lifted to `--font-size-sm`; the meta
+row is timestamps, the sanctioned use of `--text-muted`. **ADR evaluation:** no
+new rule. "Derive a display fact from user-uploaded media at write time" is a
+second instance of R-003, not a new one; worth promoting if a third surface does
+it.
+
+**Next up:** owner walks `DORA_VERIFY.md` → "Shopping list: the 2026-08-26
+feedback batch". The unverified surface is the **run and receipt faces** — this
+session drove the plan face hard and only passed through the other two.
+
+**Open questions for user:** one judgement call, logged as FU-738 — with the
+toolbar full, the lifecycle CTA ("Start shopping") is the button that runs off
+the right edge at 1280px. That is the scroll band behaving exactly as asked, but
+it's the most important button on the page.
+
+---
+
 ## 2026-08-24 (later 2) — **Stock overview + stock-item detail: the 2026-08-24 owner batch**
 **Status:** all mechanical items shipped; backend **1954 passed** / 1 skipped /
 1 xfailed, frontend **494 vitest**, `vue-tsc` + eslint clean. **Nothing walked in

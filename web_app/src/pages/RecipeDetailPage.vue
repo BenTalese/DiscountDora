@@ -1,1286 +1,982 @@
 <template>
-    <q-page padding>
-        <!-- Loading shell -->
-        <FadeTransition mode="out-in">
-        <div v-if="loading && !recipe" key="rd-loading">
-            <!-- Skeleton mirrors the header + the two-column editor layout. -->
-            <div class="row items-center q-mb-md q-gutter-sm">
-                <AppSkeleton type="circle" width="36px" height="36px" />
-                <AppSkeleton type="line" width="240px" height="1.6rem" />
-                <q-space />
-                <AppSkeleton type="rect" width="110px" height="36px" />
-            </div>
-            <div class="row q-col-gutter-lg">
-                <div class="col-12 col-md-8">
-                    <AppSkeleton type="rect" width="100%" height="200px" class="q-mb-md" />
-                    <AppSkeleton type="rect" width="100%" height="260px" />
-                </div>
-                <div class="col-12 col-md-4">
-                    <AppSkeleton type="rect" width="100%" height="120px" class="q-mb-md" />
-                    <AppSkeleton type="rect" width="100%" height="180px" />
+    <q-page padding class="rn">
+        <!-- Loading shell. Mirrors the real layout (D-007) rather than
+             announcing itself in words. -->
+        <div v-if="loading && !recipe">
+            <div class="rn__masthead">
+                <AppSkeleton type="rect" width="100%" height="200px" />
+                <div>
+                    <AppSkeleton type="line" width="60%" height="2rem" class="q-mb-sm" />
+                    <AppSkeleton type="line" width="40%" height="1rem" />
                 </div>
             </div>
+            <AppSkeleton type="rect" width="100%" height="64px" class="q-mt-md" />
+            <AppSkeleton type="rect" width="100%" height="320px" class="q-mt-md" />
         </div>
 
-        <q-banner v-else-if="loadError" key="rd-error" class="dora-bg-negative-soft text-negative" dense rounded>
+        <q-banner v-else-if="loadError" class="dora-bg-negative-soft text-negative" dense rounded>
             {{ loadError }}
         </q-banner>
 
-        <div v-else-if="recipe" key="rd-content">
-            <!-- ── Header ──────────────────────────────────────────────
-                 Feedback 2026-08-19: one toolbar, not three rows. The
-                 breadcrumb is gone (the back arrow already says where you
-                 came from), the name sits inline beside that arrow (matching
-                 the stock-item detail header), and every action lives in the
-                 shared `PageToolbar` actions slot — including the three that
-                 used to hide behind an ellipsis menu, because an extra click
-                 to reach Delete / New version / Favourite is pure cost.
-                 Phones drop the labels to icons on the same `lt.sm` gate the
-                 cookbook and stock overview use; the label survives as the
-                 tooltip. -->
-            <PageToolbar :title="form.name || 'Untitled recipe'" back-to="/cookbook">
-                <template #actions>
-                    <BaseButton
-                        variant="primary"
-                        :icon="ICONS.restaurant_menu"
-                        :label="compactToolbar ? undefined : 'Cook mode'"
-                        aria-label="Cook mode"
-                        @click="onStartCookMode"
-                    >
-                        <q-tooltip v-if="compactToolbar">Cook mode</q-tooltip>
-                    </BaseButton>
-                    <BaseButton
-                        v-if="!editing"
-                        variant="secondary"
-                        :icon="ICONS.edit"
-                        :label="compactToolbar ? undefined : 'Edit'"
-                        aria-label="Edit"
-                        @click="editing = true"
-                    >
-                        <q-tooltip v-if="compactToolbar">Edit</q-tooltip>
-                    </BaseButton>
-                    <BaseButton
-                        v-if="editing"
-                        variant="secondary"
-                        :icon="ICONS.save"
-                        :label="compactToolbar ? undefined : 'Save'"
-                        aria-label="Save"
-                        :disable="!isDirty"
-                        :loading="saving"
-                        @click="onSave"
-                    >
-                        <q-tooltip v-if="compactToolbar">Save</q-tooltip>
-                    </BaseButton>
-                    <BaseButton
-                        v-if="editing"
-                        variant="ghost"
-                        :icon="ICONS.check"
-                        :label="compactToolbar ? undefined : 'Done'"
-                        aria-label="Done"
-                        @click="editing = false"
-                    >
-                        <q-tooltip v-if="compactToolbar">Done</q-tooltip>
-                    </BaseButton>
-                    <!-- Feedback 2026-08-19: import is a toolbar button here
-                         too, the way it is on the cookbook overview — it was
-                         a row buried in a sidebar card. -->
-                    <BaseButton
-                        variant="ghost"
-                        :icon="ICONS.content_paste"
-                        :label="compactToolbar ? undefined : 'Import'"
-                        aria-label="Import a recipe"
-                        @click="onImportFromUrl"
-                    >
-                        <q-tooltip>
-                            {{ compactToolbar ? 'Import a recipe — ' : '' }}paste a
-                            recipe over this one
-                        </q-tooltip>
-                    </BaseButton>
-                    <BaseButton
-                        variant="ghost"
-                        :icon="recipe.is_favourite ? 'favorite' : 'favorite_border'"
-                        :label="compactToolbar ? undefined : (recipe.is_favourite ? 'Favourited' : 'Favourite')"
-                        :aria-label="recipe.is_favourite ? 'Remove from favourites' : 'Add to favourites'"
-                        :class="{ 'text-negative': recipe.is_favourite }"
-                        @click="onToggleFavourite"
-                    >
-                        <q-tooltip v-if="compactToolbar">
-                            {{ recipe.is_favourite ? 'Favourited' : 'Favourite' }}
-                        </q-tooltip>
-                    </BaseButton>
-                    <!-- copies the recipe into a sibling version (same
-                         `version_group_id`) and routes into it. -->
-                    <BaseButton
-                        variant="ghost"
-                        :icon="ICONS.content_copy"
-                        :label="compactToolbar ? undefined : 'New version'"
-                        aria-label="New version"
-                        :loading="newVersionLoading"
-                        @click="onNewVersion"
-                    >
-                        <q-tooltip v-if="compactToolbar">New version</q-tooltip>
-                    </BaseButton>
-                    <BaseButton
-                        variant="ghost"
-                        :icon="ICONS.print"
-                        :label="compactToolbar ? undefined : 'Print'"
-                        aria-label="Print"
-                        @click="onPrint"
-                    >
-                        <q-tooltip v-if="compactToolbar">Print</q-tooltip>
-                    </BaseButton>
-                    <BaseButton
-                        variant="danger-ghost"
-                        :icon="ICONS.delete"
-                        :label="compactToolbar ? undefined : 'Delete'"
-                        aria-label="Delete recipe"
-                        @click="onDelete"
-                    >
-                        <q-tooltip v-if="compactToolbar">Delete recipe</q-tooltip>
-                    </BaseButton>
-                    <!-- Temporary hatch to the redesigned page so the two can
-                         be compared on the same recipe. One of them gets
-                         deleted — see FU-688. -->
-                    <BaseButton
-                        variant="subtle"
-                        :icon="ICONS.auto_awesome"
-                        :label="compactToolbar ? undefined : 'New layout'"
-                        aria-label="Try the new layout"
-                        :to="`/cookbook/${recipeId}/new`"
-                    >
-                        <q-tooltip>Try the new layout for this recipe</q-tooltip>
-                    </BaseButton>
-                </template>
-            </PageToolbar>
+        <template v-else-if="recipe">
+            <!-- ═══ Masthead — photo, identity, facts ═══════════════════
+                 One unit replacing the old page's breadcrumb row, heading row,
+                 toolbar row, hero image and 11-field meta card. -->
+            <div class="rn__masthead">
+                <!-- Every photo control lives on the photo itself. The page used
+                     to carry a second, fuller uploader in a disclosure at the
+                     very bottom — the last place you look for the picture at the
+                     top. With no photo the tile opens the file picker on the
+                     first tap; with one it offers Change / Remove first, which
+                     is what `manual` is for. -->
+                <ImageEditTile
+                    ref="photoTile"
+                    class="rn__photo"
+                    :class="{ 'rn__photo--empty': !photoUrl }"
+                    :label="hasPhoto ? 'Change the recipe photo' : 'Add a recipe photo'"
+                    shape="rounded"
+                    fill
+                    :manual="hasPhoto"
+                    @activate="photoDialogOpen = true"
+                    @pick="onPickPhoto"
+                >
+                    <img v-if="photoUrl" :src="photoUrl" alt="" class="rn__photoimg" />
+                    <div v-else class="rn__photoplaceholder">
+                        <q-icon :name="ICONS.photo_camera" size="28px" />
+                        <span>{{ hasPhoto ? 'Photo hidden' : 'Add a photo' }}</span>
+                    </div>
+                </ImageEditTile>
 
-            <!-- L289 — the name is its own clearly-editable field (matching
-                 the stock-item screen), not a heading masquerading as one. -->
-            <q-input
-                v-if="editing"
-                v-model="form.name"
-                outlined
-                dense
-                label="Recipe name"
-                class="q-mb-md recipe-name-input"
-                :error="!!nameError"
-                :error-message="nameError ?? undefined"
-                @update:model-value="onNameInput"
-            />
-
-            <div class="row q-col-gutter-lg">
-                <!-- â”€â”€ Main editor column â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
-                <div class="col-12 col-md-8">
-                    <!-- ── DR-11 (D-015) read view ─────────────────────────
-                         Default reading surface. Renders the same `form` model
-                         the editor writes, so it can't drift; the Edit toggle
-                         swaps to the cards below. "Available meals" (a status +
-                         stepper action) stays visible in both modes. -->
-                    <div v-if="!editing" class="recipe-read">
-                        <q-img
-                            v-if="imagePreviewUrl"
-                            :src="imagePreviewUrl"
-                            :ratio="16 / 9"
-                            class="recipe-read__hero q-mb-md"
+                <div class="rn__identity">
+                    <div class="rn__backrow">
+                        <BaseButton
+                            variant="icon"
+                            class="dora-text-secondary"
+                            :icon="ICONS.arrow_back"
+                            to="/cookbook"
+                            aria-label="Back to cookbook"
                         />
-                        <div class="row items-center q-gutter-sm q-mb-md">
-                            <q-chip v-if="readCuisine" dense square :icon="ICONS.restaurant_menu">{{ readCuisine }}</q-chip>
-                            <q-chip v-if="readCategory" dense square>{{ readCategory }}</q-chip>
-                            <q-chip v-if="form.time_of_day" dense square :icon="ICONS.schedule">{{ form.time_of_day }}</q-chip>
-                            <q-chip v-if="form.difficulty" dense square :icon="ICONS.trending_up">{{ form.difficulty }}</q-chip>
-                            <q-chip v-if="form.servings" dense square :icon="ICONS.restaurant">
-                                {{ form.servings }} {{ form.servings === 1 ? 'serving' : 'servings' }}
-                            </q-chip>
-                            <q-chip v-if="readTimeLabel" dense square :icon="ICONS.timer">{{ readTimeLabel }}</q-chip>
-                            <q-chip v-if="isSimple && form.kcal" dense square :icon="ICONS.monitor_heart">{{ form.kcal }} kcal</q-chip>
-                            <!-- FU-635 — in complex mode the headline number
-                                 is the rollup, not the typed field. -->
-                            <q-chip
-                                v-else-if="isComplex && recipe?.nutrition?.kcal"
+                        <h1 v-if="!headerEditing" class="rn__title">{{ form.name || 'Untitled recipe' }}</h1>
+                        <h1 v-else class="rn__title rn__title--edit">
+                            <q-input
+                                v-model="form.name"
                                 dense
-                                square
-                                :icon="ICONS.monitor_heart"
-                            >
-                                {{ Math.round(recipe.nutrition.kcal) }} kcal
-                            </q-chip>
-                        </div>
-                        <div v-if="readTags.length > 0 || readTools.length > 0" class="q-mb-md">
-                            <q-chip v-for="t in readTags" :key="`tag-${t}`" dense outline size="sm">{{ t }}</q-chip>
-                            <q-chip v-for="t in readTools" :key="`tool-${t}`" dense outline size="sm" :icon="ICONS.restaurant">{{ t }}</q-chip>
-                        </div>
-
-                        <q-card flat bordered class="q-mb-md">
-                            <q-card-section>
-                                <div class="text-subtitle1 q-mb-sm">Ingredients</div>
-                                <div v-if="form.ingredients.length === 0" class="dora-text-muted text-caption">
-                                    No ingredients listed.
-                                </div>
-                                <template v-for="(grp, gi) in readIngredientGroups" :key="`ig-${gi}`">
-                                    <div v-if="grp.name" class="text-caption text-weight-medium dora-text-secondary q-mt-sm">
-                                        {{ grp.name }}
-                                    </div>
-                                    <ul class="recipe-read__ings">
-                                        <li
-                                            v-for="(ing, ii) in grp.rows"
-                                            :key="`ig-${gi}-${ii}`"
-                                            :class="{ 'recipe-read__ing--optional': ing.is_optional }"
-                                        >
-                                            <span v-if="ing.quantity" class="text-weight-medium">
-                                                {{ ing.quantity }}{{ ing.unit ? ' ' + ing.unit : '' }}
-                                            </span>
-                                            {{ ingredientDisplayName(ing) }}
-                                            <span v-if="ing.notes" class="dora-text-muted">— {{ ing.notes }}</span>
-                                            <span v-if="ing.is_optional" class="dora-text-muted text-caption q-ml-xs">(optional)</span>
-                                            <q-chip
-                                                v-if="ing.stock_item_id && isMissingItem(ing.stock_item_id)"
-                                                dense
-                                                square
-                                                size="sm"
-                                                color="negative"
-                                                text-color="white"
-                                                class="q-ml-xs"
-                                            >
-                                                Missing
-                                            </q-chip>
-                                            <!-- Feedback 2026-08-17 — which ingredient
-                                                 is the expiring one. Sits beside Missing
-                                                 rather than replacing it: an item can be
-                                                 in stock and about to go off, which is
-                                                 exactly the case worth cooking. -->
-                                            <!-- D-002: `dark` ink, not white. Measured against
-                                                 every theme's semantic tokens, white on the
-                                                 amber chip lands at 1.7–3.0:1 (the floor is
-                                                 4.5); `dark` clears it at 5.5–9.5. The Missing
-                                                 chip above still uses white — that's the
-                                                 app-wide sweep in FU-671, not a difference
-                                                 that means anything. -->
-                                            <q-chip
-                                                v-if="ing.expiringChip"
-                                                dense
-                                                square
-                                                size="sm"
-                                                :color="ing.expiringChip.colour"
-                                                text-color="dark"
-                                                :icon="ing.expiringChip.icon"
-                                                class="q-ml-xs"
-                                            >
-                                                {{ ing.expiringChip.label }}
-                                                <q-tooltip>{{ ing.expiringChip.tooltip }}</q-tooltip>
-                                            </q-chip>
-                                        </li>
-                                    </ul>
-                                </template>
-                            </q-card-section>
-                        </q-card>
-
-                        <q-card flat bordered class="q-mb-md">
-                            <q-card-section>
-                                <div class="text-subtitle1 q-mb-sm">Instructions</div>
-                                <ol
-                                    v-if="form.steps_mode === 'structured' && readSteps.length > 0"
-                                    class="recipe-read__steps"
-                                >
-                                    <li v-for="s in readSteps" :key="s.client_id">
-                                        {{ s.text }}
-                                        <div v-if="s.hint" class="text-caption dora-text-muted">{{ s.hint }}</div>
-                                    </li>
-                                </ol>
-                                <ol
-                                    v-else-if="readFreeformLines.length > 0"
-                                    class="recipe-read__steps"
-                                >
-                                    <li v-for="(line, li) in readFreeformLines" :key="`step-${li}`">{{ line }}</li>
-                                </ol>
-                                <div
-                                    v-else-if="form.steps_mode === 'image' && form.step_images.length > 0"
-                                    class="column q-gutter-sm"
-                                >
-                                    <img
-                                        v-for="img in form.step_images"
-                                        :key="img.client_id"
-                                        :src="img.preview_url"
-                                        alt="Recipe step"
-                                        class="recipe-read__stepimg"
-                                    />
-                                </div>
-                                <div v-else class="dora-text-muted text-caption">No instructions yet.</div>
-                            </q-card-section>
-                        </q-card>
-
-                        <q-card v-if="form.source" flat bordered class="q-mb-md">
-                            <q-card-section class="row items-center q-gutter-sm no-wrap">
-                                <q-icon :name="ICONS.link" class="dora-text-muted" />
-                                <a
-                                    v-if="form.source.startsWith('http')"
-                                    :href="form.source"
-                                    target="_blank"
-                                    rel="noopener"
-                                    class="text-primary ellipsis"
-                                >{{ form.source }}</a>
-                                <span v-else class="ellipsis">{{ form.source }}</span>
-                            </q-card-section>
-                        </q-card>
-
-                        <q-card v-if="form.notes" flat bordered class="q-mb-md">
-                            <q-card-section>
-                                <div class="text-caption dora-text-muted q-mb-xs">Notes</div>
-                                <div class="recipe-read__notes">{{ form.notes }}</div>
-                            </q-card-section>
-                        </q-card>
+                                outlined
+                                autofocus
+                                maxlength="255"
+                                aria-label="Recipe name"
+                                @update:model-value="markDirty"
+                            />
+                        </h1>
+                        <BaseButton
+                            class="rn__pencil"
+                            :variant="headerEditing ? 'secondary' : 'icon'"
+                            :icon="headerEditing ? ICONS.check : ICONS.edit"
+                            :label="headerEditing ? 'Done' : undefined"
+                            :aria-label="headerEditing ? 'Finish editing the recipe details' : 'Edit the recipe details'"
+                            :aria-pressed="headerEditing"
+                            :loading="headerEditing && saveState === 'saving'"
+                            @click="onToggleHeaderEdit"
+                        >
+                            <q-tooltip v-if="!headerEditing">Edit the recipe details</q-tooltip>
+                        </BaseButton>
                     </div>
 
-                    <!-- recipe image (FU-039). -->
-                    <q-card v-if="editing" flat bordered class="q-mb-md">
-                        <q-card-section>
-                            <ImageUploadField
-                                :preview-url="imagePreviewUrl"
-                                :can-clear="hasRemovableImage"
-                                :name="form.name"
-                                alt="Recipe image"
-                                @pick="onPickImage"
-                                @clear="onClearImage"
-                            />
-                        </q-card-section>
-                    </q-card>
+                    <!-- Read: a sentence. Edit: three fields on the same grid
+                         the facts use, so the block keeps its shape across the
+                         flip instead of every control resizing to its own
+                         longest option (R-055 / ADR-051). -->
+                    <!-- Owner feedback 2026-08-26 — every axis in this block
+                         already has a glyph on the cookbook page's filter row,
+                         and the header was the one place naming them in bare
+                         words. Same icon, same meaning, both modes (D-005). The
+                         "·" separators went with them: a leading glyph already
+                         marks where one fact stops and the next starts, and
+                         dot-plus-icon reads as punctuation noise. -->
+                    <div v-if="!headerEditing" class="rn__eyebrow">
+                        <span class="rn__brow">
+                            <q-icon :name="ICONS.collection" size="15px" />
+                            {{ collectionName || 'No collection' }}
+                        </span>
+                        <span class="rn__brow">
+                            <q-icon :name="ICONS.public" size="15px" />
+                            {{ cuisineName || 'Any cuisine' }}
+                        </span>
+                        <span class="rn__brow">
+                            <q-icon :name="ICONS.category" size="15px" />
+                            {{ categoryName || 'No category' }}
+                        </span>
+                    </div>
+                    <div v-else class="rn__fields">
+                        <BaseSelect
+                            v-model="form.recipe_collection_id"
+                            label="Collection"
+                            :options="collectionOptions"
+                            emit-value map-options clearable
+                            @update:model-value="markDirty"
+                        >
+                            <template #prepend><q-icon :name="ICONS.collection" size="18px" /></template>
+                        </BaseSelect>
+                        <BaseSelect
+                            v-model="form.cuisine_id"
+                            label="Cuisine"
+                            :options="cuisineOptions"
+                            emit-value map-options clearable
+                            @update:model-value="markDirty"
+                        >
+                            <template #prepend><q-icon :name="ICONS.public" size="18px" /></template>
+                        </BaseSelect>
+                        <BaseSelect
+                            v-model="form.category_id"
+                            label="Category"
+                            :options="categoryOptions"
+                            emit-value map-options clearable
+                            @update:model-value="markDirty"
+                        >
+                            <template #prepend><q-icon :name="ICONS.category" size="18px" /></template>
+                        </BaseSelect>
+                    </div>
 
-                    <q-card v-if="editing" flat bordered class="q-mb-md">
-                        <q-card-section>
-                            <div class="row q-col-gutter-sm">
-                                <q-select
-                                    v-model="form.cuisine_id"
-                                    outlined
-                                    dense
-                                    label="Cuisine"
-                                    :options="cuisineOptions"
-                                    emit-value
-                                    map-options
-                                    clearable
-                                    class="col-12 col-sm-6"
-                                    @update:model-value="markDirty"
-                                />
-                                <q-select
-                                    v-model="form.category_id"
-                                    outlined
-                                    dense
-                                    label="Category"
-                                    :options="categoryOptions"
-                                    emit-value
-                                    map-options
-                                    clearable
-                                    class="col-12 col-sm-6"
-                                    @update:model-value="markDirty"
-                                />
-                                <q-select
-                                    v-model="form.time_of_day"
-                                    outlined
-                                    dense
-                                    label="Time of day"
-                                    :options="timeOfDayOptions"
-                                    clearable
-                                    class="col-6 col-sm-3"
-                                    @update:model-value="markDirty"
-                                />
-                                <q-select
-                                    v-model="form.difficulty"
-                                    outlined
-                                    dense
-                                    label="Difficulty"
-                                    :options="difficultyOptions"
-                                    clearable
-                                    class="col-6 col-sm-3"
-                                    @update:model-value="markDirty"
-                                />
-                                <q-input
-                                    v-model.number="form.servings"
-                                    outlined
-                                    dense
-                                    type="number"
-                                    label="Servings"
-                                    min="1"
-                                    class="col-6 col-sm-2"
-                                    @update:model-value="markDirty"
-                                />
-                                <q-input
-                                    v-model.number="form.prep_time_minutes"
-                                    outlined
-                                    dense
-                                    type="number"
-                                    label="Prep (min)"
-                                    min="0"
-                                    class="col-6 col-sm-2"
-                                    @update:model-value="markDirty"
-                                />
-                                <q-input
-                                    v-model.number="form.cook_time_minutes"
-                                    outlined
-                                    dense
-                                    type="number"
-                                    label="Cook (min)"
-                                    min="0"
-                                    class="col-6 col-sm-2"
-                                    @update:model-value="markDirty"
-                                />
-                                <!-- simple nutrition (kcal). Hidden when
-                                     nutrition is `off`, and when it's
-                                     `complex` — there the figure is rolled up
-                                     from the ingredients' linked foods, and a
-                                     typed number beside it would be a second
-                                     answer nobody could reconcile (R-029). -->
-                                <q-input
-                                    v-if="isSimple"
-                                    v-model.number="form.kcal"
-                                    outlined
-                                    dense
-                                    type="number"
-                                    label="kcal per serving"
-                                    min="0"
-                                    class="col-6 col-sm-2"
-                                    @update:model-value="markDirty"
-                                />
-                                <q-select
-                                    v-model="form.recipe_collection_id"
-                                    outlined
-                                    dense
-                                    label="Collection"
-                                    :options="collectionOptions"
-                                    emit-value
-                                    map-options
-                                    clearable
-                                    class="col-12 col-sm-6"
-                                    @update:model-value="markDirty"
-                                />
-                                <!-- L264 â€” dietary tags editable on the detail
-                                     page (the primary edit surface), not only
-                                     the add modal. -->
-                                <q-select
-                                    v-model="form.dietary_tag_ids"
-                                    outlined
-                                    dense
-                                    label="Dietary tags"
-                                    :options="dietaryTagOptions"
-                                    emit-value
-                                    map-options
-                                    multiple
-                                    use-chips
-                                    clearable
-                                    class="col-12 col-sm-6"
-                                    @update:model-value="markDirty"
-                                />
-                                <!-- L310 — tools required (configurable). -->
-                                <q-select
-                                    v-model="form.tool_ids"
-                                    outlined
-                                    dense
-                                    label="Tools"
-                                    :options="toolOptions"
-                                    emit-value
-                                    map-options
-                                    multiple
-                                    use-chips
-                                    clearable
-                                    class="col-12 col-sm-6"
-                                    @update:model-value="markDirty"
-                                />
-                            </div>
-                        </q-card-section>
-                    </q-card>
+                    <div v-if="!headerEditing" class="rn__facts">
+                        <div class="rn__fact">
+                            <span class="rn__factk"><q-icon :name="ICONS.people" size="14px" />Serves</span>
+                            <span class="rn__factv">{{ form.servings ?? '—' }}</span>
+                        </div>
+                        <div class="rn__fact">
+                            <span class="rn__factk"><q-icon :name="ICONS.prepTime" size="14px" />Prep</span>
+                            <span class="rn__factv">{{ form.prep_time_minutes ? form.prep_time_minutes + ' min' : '—' }}</span>
+                        </div>
+                        <div class="rn__fact">
+                            <span class="rn__factk"><q-icon :name="ICONS.cookTime" size="14px" />Cook</span>
+                            <span class="rn__factv">{{ form.cook_time_minutes ? form.cook_time_minutes + ' min' : '—' }}</span>
+                        </div>
+                        <div v-if="totalMinutes !== null" class="rn__fact">
+                            <span class="rn__factk"><q-icon :name="ICONS.timer" size="14px" />Total</span>
+                            <span class="rn__factv">{{ totalMinutes }} min</span>
+                        </div>
+                        <div class="rn__fact">
+                            <span class="rn__factk"><q-icon :name="ICONS.difficulty" size="14px" />Difficulty</span>
+                            <span class="rn__factv">{{ form.difficulty || '—' }}</span>
+                        </div>
+                        <div class="rn__fact">
+                            <span class="rn__factk"><q-icon :name="ICONS.schedule" size="14px" />When</span>
+                            <span class="rn__factv">{{ form.time_of_day || '—' }}</span>
+                        </div>
+                        <div v-if="headlineKcal !== null" class="rn__fact">
+                            <span class="rn__factk">
+                                <q-icon :name="ICONS.local_fire_department" size="14px" />Per serving
+                            </span>
+                            <span class="rn__factv">{{ headlineKcal }} kcal</span>
+                        </div>
+                    </div>
+                    <!-- Total and Per serving are derived, so they have no field
+                         here — there is nothing to type into them. -->
+                    <div v-else class="rn__fields">
+                        <q-input
+                            v-model.number="form.servings"
+                            dense outlined type="number" min="1" label="Serves"
+                            @update:model-value="markDirty"
+                        >
+                            <template #prepend><q-icon :name="ICONS.people" size="18px" /></template>
+                        </q-input>
+                        <q-input
+                            v-model.number="form.prep_time_minutes"
+                            dense outlined type="number" min="0" label="Prep (min)"
+                            @update:model-value="markDirty"
+                        >
+                            <template #prepend><q-icon :name="ICONS.prepTime" size="18px" /></template>
+                        </q-input>
+                        <q-input
+                            v-model.number="form.cook_time_minutes"
+                            dense outlined type="number" min="0" label="Cook (min)"
+                            @update:model-value="markDirty"
+                        >
+                            <template #prepend><q-icon :name="ICONS.cookTime" size="18px" /></template>
+                        </q-input>
+                        <BaseSelect
+                            v-model="form.difficulty"
+                            label="Difficulty"
+                            :options="DIFFICULTY_OPTIONS"
+                            clearable
+                            @update:model-value="markDirty"
+                        >
+                            <template #prepend><q-icon :name="ICONS.difficulty" size="18px" /></template>
+                        </BaseSelect>
+                        <BaseSelect
+                            v-model="form.time_of_day"
+                            label="When"
+                            :options="timeOfDayOptions"
+                            clearable
+                            @update:model-value="markDirty"
+                        >
+                            <template #prepend><q-icon :name="ICONS.schedule" size="18px" /></template>
+                        </BaseSelect>
+                    </div>
+                </div>
+            </div>
 
-                    <!-- â”€â”€ Meals on hand â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
-                    <q-card v-if="recipe && batchEnabled" flat bordered class="q-mb-md">
-                        <q-card-section class="row items-center q-gutter-md no-wrap">
-                            <div>
-                                <div class="text-subtitle1">Available meals</div>
-                                <div class="text-caption dora-text-muted">
-                                    <!-- DR-11 (FU-578 #11): "cooked" implied a cook event
-                                         and clashed with "Last cooked: Never" — the pool is
-                                         raisable via the stepper without ever cooking. "on
-                                         hand" matches the card title + the tooltip's "in
-                                         your pool" wording, so the two widgets agree. -->
-                                    {{ recipe.unallocated_meals }} unallocated
-                                    of {{ recipe.available_meals }} on hand
-                                    <q-icon :name="ICONS.help_outline" size="14px" class="q-ml-xs">
-                                        <q-tooltip>
-                                            Portions of this recipe already in your
-                                            pool but not yet earmarked for any
-                                            meal-plan slot. Cook mode adds to the
-                                            pool; planning a meal subtracts from it.
-                                        </q-tooltip>
-                                    </q-icon>
-                                </div>
-                            </div>
-                            <q-space />
-                            <MealStepper
-                                :available="recipe.available_meals"
-                                :busy="adjusting"
-                                @adjust="onAdjustMeals"
-                            />
-                        </q-card-section>
-                    </q-card>
+            <!-- ═══ Actions — their own full-width row ═══════════════════
+                 Save and Discard only exist while there is something to save,
+                 so a recipe being *read* still leads with Cook mode. While
+                 they're present Save is the primary and Cook mode steps back —
+                 two primaries in one row is no primary at all. -->
+            <div class="rn__actions">
+                <BaseButton
+                    v-if="dirty"
+                    variant="primary"
+                    :icon="ICONS.save"
+                    label="Save"
+                    aria-label="Save changes"
+                    :loading="saveState === 'saving'"
+                    :disable="!canSave"
+                    @click="onSave"
+                />
+                <BaseButton
+                    v-if="dirty"
+                    variant="ghost"
+                    :icon="ICONS.undo"
+                    :label="compact ? undefined : 'Discard'"
+                    aria-label="Discard changes"
+                    :disable="saveState === 'saving'"
+                    @click="onDiscard"
+                >
+                    <q-tooltip v-if="compact">Discard changes</q-tooltip>
+                </BaseButton>
+                <BaseButton
+                    :variant="dirty ? 'secondary' : 'primary'"
+                    :icon="ICONS.restaurant_menu"
+                    :label="compact ? undefined : 'Cook mode'"
+                    aria-label="Cook mode"
+                    @click="onStartCookMode"
+                >
+                    <q-tooltip v-if="compact">Cook mode</q-tooltip>
+                </BaseButton>
+                <BaseButton
+                    variant="ghost"
+                    :icon="recipe.is_favourite ? 'favorite' : 'favorite_border'"
+                    :label="compact ? undefined : (recipe.is_favourite ? 'Favourited' : 'Favourite')"
+                    :class="{ 'text-negative': recipe.is_favourite }"
+                    :aria-label="recipe.is_favourite ? 'Remove from favourites' : 'Add to favourites'"
+                    @click="onToggleFavourite"
+                >
+                    <q-tooltip v-if="compact">{{ recipe.is_favourite ? 'Favourited' : 'Favourite' }}</q-tooltip>
+                </BaseButton>
+                <BaseButton
+                    variant="ghost"
+                    :icon="ICONS.content_copy"
+                    :label="compact ? undefined : 'New version'"
+                    aria-label="New version"
+                    :loading="newVersionLoading"
+                    @click="onNewVersion"
+                >
+                    <q-tooltip v-if="compact">New version</q-tooltip>
+                </BaseButton>
+                <BaseButton
+                    variant="ghost"
+                    :icon="ICONS.print"
+                    :label="compact ? undefined : 'Print'"
+                    aria-label="Print"
+                    @click="onPrint"
+                >
+                    <q-tooltip v-if="compact">Print</q-tooltip>
+                </BaseButton>
+                <BaseButton
+                    variant="danger-ghost"
+                    class="rn__delete"
+                    :icon="ICONS.delete"
+                    :label="compact ? undefined : 'Delete'"
+                    aria-label="Delete recipe"
+                    @click="onDelete"
+                >
+                    <q-tooltip v-if="compact">Delete recipe</q-tooltip>
+                </BaseButton>
+            </div>
 
-                    <!-- ── Sections (C-4 Chunk 10) ─────────────────────
-                         Optional named groups. Empty = flat recipe (existing
-                         behaviour). Rows are assigned to a section via the
-                         per-ingredient picker below. Renaming/reordering is
-                         in-place; deleting a section unsections its rows. -->
-                    <q-card v-if="editing" flat bordered class="q-mb-md">
-                        <q-card-section class="row items-center q-pb-sm">
-                            <div class="text-subtitle1">
-                                Sections
-                                <span class="text-caption dora-text-muted q-ml-sm">
-                                    {{ form.sections.length }}
-                                </span>
-                            </div>
-                            <q-space />
-                            <BaseButton
-                                variant="ghost"
-                                dense
-                                :icon="ICONS.add"
-                                label="Add section"
-                                @click="addSection"
-                            />
-                        </q-card-section>
-                        <q-separator v-if="form.sections.length > 0" />
-                        <q-list v-if="form.sections.length > 0" separator>
-                            <q-item v-for="(sec, sIdx) in form.sections" :key="sec.client_id">
-                                <q-item-section>
-                                    <q-input
-                                        v-model="sec.name"
-                                        dense
-                                        outlined
-                                        label="Section name"
-                                        placeholder="e.g. Sauce"
-                                        @update:model-value="markDirty"
-                                    />
-                                </q-item-section>
-                                <q-item-section side>
-                                    <div class="row q-gutter-xs">
-                                        <BaseButton
-                                            variant="icon"
-                                            icon="arrow_upward"
-                                            :disable="sIdx === 0"
-                                            @click="moveSection(sIdx, -1)"
-                                        />
-                                        <BaseButton
-                                            variant="icon"
-                                            icon="arrow_downward"
-                                            :disable="sIdx === form.sections.length - 1"
-                                            @click="moveSection(sIdx, 1)"
-                                        />
-                                        <BaseButton
-                                            variant="danger-icon"
-                                            :icon="ICONS.delete"
-                                            @click="removeSection(sIdx)"
-                                        />
-                                    </div>
-                                </q-item-section>
-                            </q-item>
-                        </q-list>
-                        <q-card-section v-else class="dora-text-muted text-caption">
-                            No sections. Add one if your recipe has named parts
-                            (e.g. "Sauce", "Filling"); ingredients without a
-                            section render as one flat list.
-                        </q-card-section>
-                    </q-card>
-
-                    <!-- â”€â”€ Ingredients â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
-                    <q-card v-if="editing" flat bordered class="q-mb-md">
-                        <q-card-section class="row items-center q-pb-sm">
-                            <div class="text-subtitle1">
-                                Ingredients
-                                <span class="text-caption dora-text-muted q-ml-sm">
-                                    {{ form.ingredients.length }}
-                                </span>
-                            </div>
-                            <q-space />
-                            <BaseButton
-                                variant="ghost"
-                                dense
-                                :icon="ICONS.add"
-                                label="Add ingredient"
-                                @click="addIngredient"
-                            />
-                        </q-card-section>
-                        <q-separator />
-                        <q-list separator>
-                            <q-item
-                                v-for="(ing, idx) in form.ingredients"
-                                :key="ing.client_id ?? idx"
-                                class="ingredient-row"
-                                :class="{
-                                    'ingredient-row--missing': ing.stock_item_id && isMissingItem(ing.stock_item_id),
-                                    ...ingredientDnd.bind(ing).rowClass,
-                                }"
-                                v-bind="ingredientDnd.bind(ing).rowProps"
-                            >
-                                <!-- drag handle via
-                                     `useDragDropList`. Only this icon is
-                                     draggable; the row body keeps default
-                                     cursor so the selects/inputs stay
-                                     normally interactive. Dropping onto
-                                     another row both reorders AND copies
-                                     the target's section_client_id, so
-                                     cross-section reassignment is a
-                                     single gesture. -->
-                                <q-item-section side style="min-width: 28px; padding-right: 4px">
-                                    <div
-                                        class="dora-dnd-handle dora-text-muted"
-                                        aria-label="Drag to reorder or move section"
-                                        v-bind="ingredientDnd.bind(ing).handleProps"
-                                    >
-                                        <q-icon :name="ICONS.drag_indicator" />
-                                        <q-tooltip>Drag to reorder; drop onto a row in another section to move it there</q-tooltip>
-                                    </div>
-                                </q-item-section>
-                                <q-item-section style="min-width: 240px">
-                                    <!-- Stock-item autocomplete with inline create. The
-                                         picker shows existing tracked items, and offers
-                                         "Create '<typed>'" or "Use as free-text" (FU-506)
-                                         when there's no exact match. -->
-                                    <q-select
-                                        v-model="ing.stock_item_id"
-                                        dense
-                                        outlined
-                                        use-input
-                                        input-debounce="150"
-                                        :options="rowOptionsFor(ing)"
-                                        option-value="value"
-                                        option-label="label"
-                                        emit-value
-                                        map-options
-                                        :label="ing.raw_text && !ing.stock_item_id ? 'Free-text ingredient' : 'Stock item'"
-                                        @filter="onIngredientFilter"
-                                        @update:model-value="onIngredientChosen($event, idx)"
-                                    >
-                                        <template #no-option>
-                                            <q-item>
-                                                <q-item-section class="dora-text-muted">
-                                                    Type to search â€” or press
-                                                    <em>Create new</em>.
-                                                </q-item-section>
-                                            </q-item>
-                                        </template>
-                                        <template
-                                            v-if="ingredientFilter.trim().length > 0"
-                                            #after-options
-                                        >
-                                            <q-item
-                                                clickable
-                                                @click="createInlineStockItem(idx, ingredientFilter)"
-                                            >
-                                                <q-item-section avatar>
-                                                    <q-icon :name="ICONS.add" color="primary" />
-                                                </q-item-section>
-                                                <q-item-section class="text-primary">
-                                                    Create "{{ ingredientFilter }}"
-                                                </q-item-section>
-                                            </q-item>
-                                            <!-- FU-506 — free-text ingredient path.
-                                                 Saves the typed text as raw_text with
-                                                 no linked pantry item. Cookability
-                                                 stays "unknown" while any required
-                                                 ingredient is unlinked; user can link
-                                                 later from the same picker. -->
-                                            <q-item
-                                                clickable
-                                                @click="useAsRawText(idx, ingredientFilter)"
-                                            >
-                                                <q-item-section avatar>
-                                                    <q-icon :name="ICONS.edit" color="secondary" />
-                                                </q-item-section>
-                                                <q-item-section class="dora-text-secondary">
-                                                    Use "{{ ingredientFilter }}" as free text (no pantry link)
-                                                </q-item-section>
-                                            </q-item>
-                                        </template>
-                                    </q-select>
-                                    <!-- FU-506 — surface the free-text label so an
-                                         unlinked row isn't just a blank picker. -->
-                                    <div
-                                        v-if="ing.raw_text && !ing.stock_item_id"
-                                        class="text-caption dora-text-muted q-mt-xs ellipsis"
-                                    >
-                                        "{{ ing.raw_text }}"
-                                    </div>
-                                </q-item-section>
-
-                                <!-- L292 — one status chip per row. "Missing"
-                                     wins (it's the actionable state) and the
-                                     row itself is tinted; otherwise show the
-                                     stock-level chip. -->
-                                <q-item-section side top style="min-width: 130px">
-                                    <div v-if="ing.stock_item_id" class="column items-end">
-                                        <q-chip
-                                            v-if="isMissingItem(ing.stock_item_id)"
-                                            dense
-                                            color="negative"
-                                            text-color="white"
-                                            :icon="ICONS.report"
-                                        >
-                                            Missing
-                                        </q-chip>
-                                        <q-chip
-                                            v-else
-                                            dense
-                                            :color="levelColourFor(ing.stock_item_id) ?? undefined"
-                                            :text-color="levelColourFor(ing.stock_item_id) ? 'white' : undefined"
-                                            :class="levelColourFor(ing.stock_item_id) ? undefined : 'dora-bg-sunken dora-text-secondary'"
-                                        >
-                                            {{ levelNameFor(ing.stock_item_id) ?? 'Untracked' }}
-                                        </q-chip>
-                                    </div>
-                                </q-item-section>
-
-                                <q-item-section style="max-width: 90px">
-                                    <q-input
-                                        v-model.number="ing.quantity"
-                                        dense
-                                        outlined
-                                        type="number"
-                                        label="Qty"
-                                        @update:model-value="markDirty"
-                                    />
-                                </q-item-section>
-                                <q-item-section style="max-width: 90px">
-                                    <q-input
-                                        v-model="ing.unit"
-                                        dense
-                                        outlined
-                                        label="Unit"
-                                        @update:model-value="markDirty"
-                                    />
-                                </q-item-section>
-                                <q-item-section style="max-width: 200px">
-                                    <q-input
-                                        v-model="ing.notes"
-                                        dense
-                                        outlined
-                                        label="Notes"
-                                        @update:model-value="markDirty"
-                                    />
-                                </q-item-section>
-
-                                <!-- section picker, only when
-                                     the recipe has named sections. -->
-                                <q-item-section
-                                    v-if="form.sections.length > 0"
-                                    style="max-width: 160px"
-                                >
-                                    <q-select
-                                        v-model="ing.section_client_id"
-                                        :options="sectionOptions"
-                                        option-value="value"
-                                        option-label="label"
-                                        emit-value
-                                        map-options
-                                        dense
-                                        outlined
-                                        label="Section"
-                                        @update:model-value="markDirty"
-                                    />
-                                </q-item-section>
-
-                                <!-- Cookbook revision §1.9 — optional flag.
-                                     Excluded from cookability + missing
-                                     count + shopping-list picker defaults. -->
-                                <q-item-section side style="max-width: 110px">
-                                    <q-checkbox
-                                        v-model="ing.is_optional"
-                                        dense
-                                        label="Optional"
-                                        @update:model-value="markDirty"
-                                    >
-                                        <q-tooltip>
-                                            Optional ingredients don't affect whether the recipe is cookable.
-                                        </q-tooltip>
-                                    </q-checkbox>
-                                </q-item-section>
-
-                                <q-item-section side top>
-                                    <div class="row q-gutter-xs items-center">
-                                        <!-- unified AddToListButton.
-                                             State-aware + toggle behaviour;
-                                             replaces the row's hand-rolled
-                                             "add to primary" path. -->
-                                        <AddToListButton
-                                            v-if="ing.stock_item_id"
-                                            variant="row"
-                                            :stock-item-id="ing.stock_item_id"
-                                        />
-                                        <BaseButton
-                                            variant="danger-icon"
-                                            :icon="ICONS.delete"
-                                            @click="removeIngredient(idx)"
-                                        />
-                                    </div>
-                                </q-item-section>
-                            </q-item>
-                            <q-item v-if="form.ingredients.length === 0">
-                                <q-item-section class="dora-text-muted text-center">
-                                    No ingredients yet. Add one or
-                                    <a
-                                        href="#"
-                                        class="text-primary"
-                                        @click.prevent="onImportFromUrl"
-                                    >
-                                        paste a recipe
-                                    </a>.
-                                </q-item-section>
-                            </q-item>
-                        </q-list>
-                    </q-card>
-
-                    <!-- ── Instructions ─ Structured steps + freeform fallback ─ -->
-                    <q-card v-if="editing" flat bordered class="q-mb-md">
-                        <q-card-section>
-                            <div class="row items-center q-mb-sm">
-                                <div class="text-subtitle1">Instructions</div>
-                                <q-space />
-                                <BaseSegmented
-                                    v-model="form.steps_mode"
-                                    :options="[
-                                        { label: 'Structured', value: 'structured' },
-                                        { label: 'Freeform', value: 'freeform' },
-                                        { label: 'Image', value: 'image' },
-                                    ]"
-                                    flat
-                                    dense
-                                    spread
-                                    @update:model-value="markDirty"
-                                />
-                            </div>
-
-                            <RecipeStepsEditor
-                                v-if="form.steps_mode === 'structured'"
-                                :steps="form.steps"
-                                :ingredient-options="stepIngredientOptions"
-                                :tool-options="stepToolOptions"
-                                :section-options="sectionOptions"
-                                @update:steps="onStepsChange"
-                            />
-
-                            <q-input
-                                v-else-if="form.steps_mode === 'freeform'"
-                                v-model="form.instructions"
-                                outlined
-                                type="textarea"
-                                autogrow
-                                placeholder="One step per line. Cook mode will split on newlines."
-                                hint="Paste the recipe text or type freeform — Ctrl+V works."
-                                @update:model-value="markDirty"
-                            />
-
-                            <!-- PROPOSAL_RECIPE_IMAGE_STEPS — image-mode
-                                 editor. Multi-file picker + drag-reorder;
-                                 the centralised processImageFile resizes
-                                 client-side before save. -->
-                            <RecipeStepImagesEditor
-                                v-else
-                                :model-value="form.step_images"
-                                @update:model-value="onStepImagesChange"
-                            />
-
-                            <q-expansion-item
-                                v-if="form.steps_mode === 'structured'"
-                                label="Advanced — keep a freeform instructions blob too"
-                                :icon="ICONS.notes"
-                                class="q-mt-md"
-                                dense
-                            >
-                                <q-input
-                                    v-model="form.instructions"
-                                    outlined
-                                    type="textarea"
-                                    autogrow
-                                    placeholder="Optional plain-text instructions (kept as a fallback for cook mode if no structured steps exist)."
-                                    @update:model-value="markDirty"
-                                />
-                            </q-expansion-item>
-                        </q-card-section>
-                    </q-card>
-
-                    <!-- ── C-4 Chunk 7 — Source URL (optional) ────────────── -->
-                    <q-card v-if="editing" flat bordered class="q-mb-md">
-                        <q-card-section>
-                            <q-input
-                                v-model="form.source"
-                                outlined
-                                dense
-                                label="Source URL (optional)"
-                                placeholder="https://example.com/recipes/lasagne"
-                                :icon="ICONS.link"
-                                @update:model-value="markDirty"
-                            >
-                                <template #append>
-                                    <BaseButton
-                                        v-if="form.source && form.source.startsWith('http')"
-                                        variant="ghost"
-                                        :icon="ICONS.open_in_new"
-                                        label="Open"
-                                        :href="form.source"
-                                        target="_blank"
-                                    />
-                                </template>
-                            </q-input>
-                        </q-card-section>
-                    </q-card>
-
-                    <!-- ── RD-29 — Personal notes (optional) ──────────────── -->
-                    <q-card v-if="editing" flat bordered class="q-mb-md">
-                        <q-card-section>
-                            <q-input
-                                v-model="form.notes"
-                                outlined
-                                dense
-                                autogrow
-                                type="textarea"
-                                label="Personal notes (optional)"
-                                placeholder="Your own notes — tweaks you make, who liked it, what to serve it with. Shown in cook mode under the steps."
-                                @update:model-value="markDirty"
-                            />
-                        </q-card-section>
-                    </q-card>
-
-                    <!-- freeform Nutrition field deliberately
-                         no longer rendered/edited. The simple-mode kcal
-                         input lives next to servings/prep/cook above. The
-                         freeform column survives in the form/DTO for
-                         backwards compatibility until we're sure no user
-                         has typed something irreplaceable in there
-                         (see FU-115). -->
+            <!-- ═══ Status strip — replaces seven sidebar cards ══════════
+                 Severity lives in a 3px edge stripe rather than a washed cell
+                 (D-013): it stays legible on both grounds and doesn't shout.
+                 Cells that have nothing to say don't render. -->
+            <div class="rn__status">
+                <div
+                    class="rn__cell rn__cell--split"
+                    :class="missingIngredients.length > 0 ? 'rn__cell--bad' : (cookableNow ? 'rn__cell--ok' : '')"
+                >
+                    <div class="rn__cellbody">
+                        <span class="rn__cellk">Right now</span>
+                        <span class="rn__cellv">{{ cookableHeadline }}</span>
+                        <!-- "You're missing two things, but you have a substitute
+                             for one" is a different answer to "you're missing two
+                             things", so it belongs in the cell that answers it. -->
+                        <span v-if="coverableCount > 0" class="rn__cellswap">
+                            <q-icon :name="ICONS.swap_horiz" size="14px" />
+                            {{ coverableCount === 1
+                                ? '1 has a substitute you already have'
+                                : `${coverableCount} have substitutes you already have` }}
+                        </span>
+                        <!-- Owner feedback 2026-08-24 — the action said nothing
+                             about what was already on a list, so it offered to
+                             add things the user had added ten minutes earlier.
+                             The copy now counts only what's actually left; the
+                             action itself is the cell's button, on the right. -->
+                        <template v-if="missingIngredients.length > 0">
+                            <span v-if="missingNotOnListCount === 0" class="rn__cellsub">
+                                <q-icon :name="ICONS.check" size="14px" />
+                                Already on a shopping list
+                            </span>
+                            <span v-else-if="missingOnListCount > 0" class="rn__cellsub">
+                                {{ missingOnListCount }} already on a list
+                            </span>
+                        </template>
+                        <span v-else class="rn__cellsub">{{ cookableCaption }}</span>
+                    </div>
+                    <!-- The cell's action, at the cell's edge — a real button on
+                         the right rather than a text link buried under the copy
+                         it belongs to. It disappears (rather than going inert)
+                         once everything missing is already on a list. -->
+                    <BaseButton
+                        v-if="missingIngredients.length > 0 && missingNotOnListCount > 0"
+                        variant="secondary"
+                        :icon="ICONS.add_shopping_cart"
+                        :label="compact ? undefined : addMissingLabel"
+                        :aria-label="`${addMissingLabel} — the ingredients you're missing`"
+                        @click="onAddMissingToList"
+                    >
+                        <q-tooltip v-if="compact">{{ addMissingLabel }}</q-tooltip>
+                    </BaseButton>
                 </div>
 
-                <!-- â”€â”€ Sidebar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
-                <div class="col-12 col-md-4">
-                    <!-- L290 — theme-aware: soft tinted surfaces with
-                         on-surface text instead of a hard bright green that
-                         was unreadable in dark mode. -->
-                    <q-card
-                        flat
-                        bordered
-                        class="q-mb-md"
-                        :class="cookableCardClass"
-                    >
-                        <q-card-section>
-                            <div class="row items-center q-gutter-sm">
-                                <q-icon :name="cookableIcon" size="28px" />
-                                <div>
-                                    <div class="text-subtitle1">
-                                        {{ cookableHeadline }}
-                                    </div>
-                                    <div class="text-caption dora-text-secondary">
-                                        {{ cookableCaption }}
-                                    </div>
-                                </div>
-                            </div>
-                        </q-card-section>
-                        <q-tooltip v-if="cookableNow === null">
-                            Link ingredients to check cookability — this
-                            is a stock-item feature.
-                        </q-tooltip>
-                    </q-card>
+                <div v-if="atRiskCount > 0" class="rn__cell rn__cell--warn">
+                    <span class="rn__cellk">Worth cooking</span>
+                    <span class="rn__cellv">{{ atRiskHeadline }}</span>
+                    <span class="rn__cellsub">Uses it up</span>
+                </div>
 
-                    <!-- FU-653 — Dora's belief about this recipe, as a remark
-                         *under* the verdict card rather than inside it: the
-                         card states what your recorded levels say, and this
-                         says what she suspects. Deliberately separate so the
-                         two can't be mistaken for one answer. Rendered only
-                         when the user opted the recipes surface in (the server
-                         sends nothing otherwise). -->
-                    <q-card
-                        v-if="recipe?.inference_hint"
-                        flat
-                        bordered
-                        class="q-mb-md recipe-inference"
-                        :class="recipe.inference_hint === 'at_risk'
-                            ? 'recipe-inference--risk' : 'recipe-inference--good'"
-                    >
-                        <q-card-section class="row items-start no-wrap q-gutter-sm">
-                            <q-icon :name="ICONS.inferred_hunch" size="22px" />
-                            <div>
-                                <div class="text-subtitle2">
-                                    {{ recipe.inference_hint === 'at_risk'
-                                        ? 'Dora thinks you may be short'
-                                        : 'Dora thinks you may be able to cook this' }}
-                                </div>
-                                <div class="text-caption dora-text-secondary">
-                                    {{ inferenceCaption }}
-                                </div>
-                            </div>
-                        </q-card-section>
-                    </q-card>
-
-                    <!-- read-only "last cooked". The cook + log-cook
-                         actions in the top toolbar update this value;
-                         displaying it here closes the loop ("when did I make
-                         this last?") without needing a separate journal view. -->
-                    <q-card flat bordered class="q-mb-md" v-if="recipe">
-                        <q-card-section class="row items-center q-gutter-sm">
-                            <q-icon :name="ICONS.history" size="22px" class="dora-text-muted" />
-                            <div>
-                                <div class="text-caption dora-text-muted">Last cooked</div>
-                                <div class="text-body2">
-                                    {{ recipe.last_made_on ? formatLastMade(recipe.last_made_on) : 'Never' }}
-                                </div>
-                            </div>
-                        </q-card-section>
-                    </q-card>
-
-                    <!-- cost estimate. Server-derived from linked product
-                         offers and price observations; rendered only when the
-                         C-cross money opt-in is on.
-
-                         Feedback 2026-08-19: collapsed it shows what it always
-                         showed; expanded it shows the working — per ingredient,
-                         the quantity, the unit price it was matched against,
-                         and the line total, or why that ingredient couldn't be
-                         priced. Costing has enough "why is that number what it
-                         is?" in it (unit reconciliation, offers vs what you
-                         actually paid) that hiding the arithmetic makes the
-                         estimate untrustworthy. It also renders now when the
-                         estimate is *null* but ingredients are linked — the
-                         old card vanished silently, which reads as a bug. -->
-                    <q-card
-                        v-if="moneyEnabled && recipe && showCostCard"
-                        flat
-                        bordered
-                        class="q-mb-md"
-                    >
-                        <q-expansion-item dense-toggle expand-separator>
-                            <template #header>
-                                <q-item-section avatar class="recipe-cost__avatar">
-                                    <q-icon :name="ICONS.payments" size="22px" class="dora-text-muted" />
-                                </q-item-section>
-                                <q-item-section>
-                                    <div class="text-caption dora-text-muted">Estimated cost</div>
-                                    <div class="text-body2">
-                                        <strong v-if="recipe.estimated_cost !== null">
-                                            {{ formatMoney(recipe.estimated_cost) }}
-                                        </strong>
-                                        <strong v-else class="dora-text-muted">Not enough price info</strong>
-                                        <span class="text-caption dora-text-muted q-ml-xs">
-                                            ({{ recipe.estimated_cost_priced_count }} /
-                                            {{ recipe.estimated_cost_total_count }}
-                                            ingredients priced)
-                                        </span>
-                                    </div>
-                                </q-item-section>
-                            </template>
-
-                            <q-card-section class="q-pt-none">
-                                <div class="text-caption dora-text-muted q-mb-sm">
-                                    Each ingredient is priced from its cheapest linked
-                                    product offer, or from what you last paid for it.
-                                    An ingredient measured in units the price can't be
-                                    converted into is left out rather than guessed at.
-                                </div>
-                                <q-markup-table flat dense class="recipe-cost__table">
-                                    <tbody>
-                                        <tr
-                                            v-for="(line, li) in recipe.estimated_cost_lines"
-                                            :key="`cost-${li}`"
-                                        >
-                                            <td>
-                                                {{ line.name }}
-                                                <span v-if="costLineQuantity(line)" class="dora-text-muted">
-                                                    · {{ costLineQuantity(line) }}
-                                                </span>
-                                            </td>
-                                            <td class="text-right">
-                                                <template v-if="line.line_cost !== null">
-                                                    {{ formatMoney(line.line_cost) }}
-                                                    <div class="text-caption dora-text-muted">
-                                                        {{ formatMoney(line.unit_price) }} / {{ line.priced_unit }}
-                                                    </div>
-                                                </template>
-                                                <span v-else class="text-caption dora-text-muted">
-                                                    {{ costLineReason(line) }}
-                                                </span>
-                                            </td>
-                                        </tr>
-                                    </tbody>
-                                </q-markup-table>
-                            </q-card-section>
-                        </q-expansion-item>
-                    </q-card>
-
-                    <!-- FU-635 — complex mode replaces the typed number with
-                         the rollup over the ingredients' linked foods. Two
-                         nutrition cards would be two answers to one question,
-                         so this and the kcal card below are alternatives. -->
-                    <RecipeNutritionCard
-                        v-if="isComplex && recipe && recipe.nutrition"
-                        :nutrition="recipe.nutrition"
+                <div v-if="moneyEnabled && showCostCell" class="rn__cell">
+                    <span class="rn__cellk">Estimated cost</span>
+                    <span class="rn__cellv">
+                        {{ recipe.estimated_cost !== null ? formatMoney(recipe.estimated_cost) : 'Not enough price info' }}
+                    </span>
+                    <span class="rn__cellsub">
+                        {{ recipe.estimated_cost_priced_count }} of
+                        {{ recipe.estimated_cost_total_count }} priced
+                    </span>
+                    <!-- Feedback 2026-08-24 — the breakdown was a section on
+                         the page reached by a text link; it's a question with
+                         an answer, so it's a button and a modal. -->
+                    <BaseButton
+                        variant="subtle"
+                        dense
+                        class="rn__cellbtn"
+                        :icon="ICONS.receipt_long"
+                        label="Details"
+                        @click="costDialogOpen = true"
                     />
+                </div>
 
-                    <!-- kcal card. Read-only echo of the
-                         editor field; renders only when nutrition is in
-                         simple mode AND the recipe has a value. -->
-                    <q-card
-                        v-if="!isComplex && nutritionEnabled && recipe && recipe.kcal !== null && recipe.kcal !== undefined"
-                        flat
-                        bordered
-                        class="q-mb-md"
-                    >
-                        <q-card-section class="row items-center q-gutter-sm">
-                            <q-icon :name="ICONS.monitor_heart" size="22px" class="dora-text-muted" />
-                            <div>
-                                <div class="text-caption dora-text-muted">
-                                    Nutrition (per serving)
-                                </div>
-                                <div class="text-body2">
-                                    <strong>{{ recipe.kcal }}</strong>
-                                    <span class="dora-text-muted q-ml-xs">kcal</span>
-                                </div>
-                            </div>
-                        </q-card-section>
-                    </q-card>
+                <div class="rn__cell">
+                    <span class="rn__cellk">Last cooked</span>
+                    <span class="rn__cellv">
+                        {{ recipe.last_made_on ? formatDate(recipe.last_made_on) : 'Never' }}
+                    </span>
+                    <!-- The meal pool merged in here rather than owning a card
+                         of its own. Batch-cooking households only. -->
+                    <span v-if="batchEnabled" class="rn__pool">
+                        <MealStepper
+                            :available="recipe.available_meals"
+                            :busy="adjusting"
+                            size="sm"
+                            @adjust="onAdjustMeals"
+                        />
+                        <span class="rn__cellsub">
+                            {{ recipe.unallocated_meals }} free of {{ recipe.available_meals }}
+                        </span>
+                    </span>
+                </div>
+            </div>
 
-                    <q-card flat bordered class="q-mb-md">
-                        <q-list separator>
-                            <q-item
-                                clickable
-                                :disable="missingIngredients.length === 0"
-                                @click="onAddMissingToList"
+            <!-- ═══ Body — ingredients rail + method ════════════════════ -->
+            <div class="rn__body">
+                <div class="rn__rail">
+                    <section aria-labelledby="rnIng">
+                        <div class="rn__sechead">
+                            <h2 class="rn__sectitle" id="rnIng">Ingredients</h2>
+                            <span class="rn__seccount">{{ form.ingredients.length }}</span>
+                        </div>
+
+                        <div class="rn__pane">
+                            <!-- Owner feedback 2026-08-24 — a section used to be a
+                                 bare underlined caption above its rows, which read
+                                 as another free-text ingredient, and its controls
+                                 lived in an "Organise ingredients" disclosure at the
+                                 very bottom of the page. A section is a container, so
+                                 it looks like one: a card holding its own name, its
+                                 own rows and its own add button. The disclosure is
+                                 gone with it. -->
+                            <div
+                                v-for="group in ingredientGroups"
+                                :key="group.key"
+                                class="rn__group"
+                                :class="{ 'rn__group--card': group.sectionId !== null }"
                             >
-                                <q-item-section avatar>
-                                    <q-icon :name="ICONS.add_shopping_cart" color="primary" />
-                                </q-item-section>
-                                <q-item-section>
-                                    <q-item-label>
-                                        Add all missing to a shopping list
-                                    </q-item-label>
-                                    <q-item-label caption>
-                                        {{ missingIngredients.length === 0
-                                            ? 'Nothing missing.'
-                                            : `${missingIngredients.length} item${missingIngredients.length === 1 ? '' : 's'} to add.`
-                                        }}
-                                    </q-item-label>
-                                </q-item-section>
-                            </q-item>
-                            <q-item
-                                clickable
-                                :disable="missingIngredients.length === 0"
-                                @click="onFindSubstitutes"
-                            >
-                                <q-item-section avatar>
-                                    <q-icon :name="ICONS.swap_horiz" color="primary" />
-                                </q-item-section>
-                                <q-item-section>
-                                    <q-item-label>
-                                        Find substitutes for missing
-                                    </q-item-label>
-                                    <q-item-label caption>
-                                        Shows substitutes recorded on each item's detail page.
-                                    </q-item-label>
-                                </q-item-section>
-                            </q-item>
-                        </q-list>
-                    </q-card>
+                                <div v-if="group.sectionId !== null" class="rn__grouphead">
+                                    <InlineEditTarget
+                                        class="rn__groupname rn__edit"
+                                        :label="`Rename the ${group.name} section`"
+                                    >
+                                        {{ group.name }}
+                                        <q-popup-edit
+                                            :model-value="sectionNameOf(group.sectionId)"
+                                            v-slot="scope"
+                                            auto-save
+                                            @save="(v) => renameSection(String(group.sectionId), String(v ?? ''))"
+                                        >
+                                            <q-input
+                                                v-model="scope.value"
+                                                dense
+                                                autofocus
+                                                label="Section name"
+                                                placeholder="For the sauce"
+                                                @keyup.enter="scope.set"
+                                            />
+                                        </q-popup-edit>
+                                    </InlineEditTarget>
+                                    <span class="rn__groupcount">{{ group.rows.length }}</span>
+                                    <BaseButton
+                                        variant="icon"
+                                        dense
+                                        :icon="ICONS.more_vert"
+                                        :aria-label="`Section options for ${group.name}`"
+                                    >
+                                        <q-menu auto-close>
+                                            <q-list dense style="min-width: 190px">
+                                                <q-item
+                                                    clickable
+                                                    :disable="sectionIndexOf(group.sectionId) === 0"
+                                                    @click="moveSection(String(group.sectionId), -1)"
+                                                >
+                                                    <q-item-section avatar>
+                                                        <q-icon :name="ICONS.arrow_upward" />
+                                                    </q-item-section>
+                                                    <q-item-section>Move section up</q-item-section>
+                                                </q-item>
+                                                <q-item
+                                                    clickable
+                                                    :disable="sectionIndexOf(group.sectionId) === form.sections.length - 1"
+                                                    @click="moveSection(String(group.sectionId), 1)"
+                                                >
+                                                    <q-item-section avatar>
+                                                        <q-icon :name="ICONS.arrow_downward" />
+                                                    </q-item-section>
+                                                    <q-item-section>Move section down</q-item-section>
+                                                </q-item>
+                                                <q-separator />
+                                                <q-item clickable @click="removeSection(String(group.sectionId))">
+                                                    <q-item-section avatar>
+                                                        <q-icon :name="ICONS.delete" color="negative" />
+                                                    </q-item-section>
+                                                    <q-item-section>
+                                                        Remove section
+                                                        <q-item-label caption>
+                                                            Its ingredients move to the main list
+                                                        </q-item-label>
+                                                    </q-item-section>
+                                                </q-item>
+                                            </q-list>
+                                        </q-menu>
+                                    </BaseButton>
+                                </div>
 
-                    <!-- Feedback 2026-08-19: the "Paste a recipe…" row that
-                         lived here is now the toolbar's Import button, so
-                         importing looks the same on this page as it does on
-                         the cookbook overview. -->
-
-                    <!-- Versions card. Only renders when this
-                         recipe has siblings sharing its version_group_id.
-                         A lone group-id (singleton that's never been
-                         versioned) hides the card. -->
-                    <q-card v-if="versionSiblings.length > 0" flat bordered class="q-mb-md">
-                        <q-card-section>
-                            <div class="row items-center q-gutter-xs q-mb-xs">
-                                <q-icon :name="ICONS.content_copy" size="18px" class="dora-text-muted" />
-                                <div class="text-subtitle1">Other versions</div>
-                            </div>
-                            <div class="text-caption dora-text-muted q-mb-sm">
-                                Equal peers — pick any when scheduling a meal.
-                            </div>
-                            <q-list dense separator>
-                                <q-item
-                                    v-for="sibling in versionSiblings"
-                                    :key="sibling.recipe_id"
-                                    clickable
-                                    @click="onJumpToSibling(sibling.recipe_id)"
-                                >
-                                    <q-item-section>
-                                        <q-item-label>{{ sibling.name }}</q-item-label>
-                                        <q-item-label caption class="dora-text-muted">
-                                            <span v-if="sibling.last_made_on">
-                                                Last made {{ formatLastMade(sibling.last_made_on) }}
+                                <ul class="rn__ing">
+                                    <li
+                                        v-for="(row, rowIndex) in group.rows"
+                                        :key="row.client_id"
+                                        class="rn__ing--target"
+                                        :class="{ 'rn__ing--lit': litIngredients.has(String(row.client_id)) }"
+                                        role="button"
+                                        tabindex="0"
+                                        :aria-label="`Edit ${ingredientLabel(row)}`"
+                                        @click="openRowEditor(String(row.client_id))"
+                                        @keydown.enter.prevent="openRowEditor(String(row.client_id))"
+                                        @keydown.space.prevent="openRowEditor(String(row.client_id))"
+                                    >
+                                        <!-- Quantity, unit, name, section, note and
+                                             the optional flag are one thing to a
+                                             cook, so the whole row opens one editor
+                                             rather than the quantity and the name
+                                             each owning their own target. The
+                                             quantity popup also carried a free-text
+                                             unit, which the row editor's canonical
+                                             dropdown had already replaced. -->
+                                        <span class="rn__qty">
+                                            {{ formatQuantity(row.quantity, row.unit) || '—' }}
+                                        </span>
+                                        <span class="rn__ingname">
+                                            <span class="rn__ingtext">{{ ingredientLabel(row) }}</span>
+                                            <q-chip v-if="row.is_optional" dense square size="sm" class="rn__chip">Optional</q-chip>
+                                            <!-- A row with neither an item nor text is
+                                                 the one thing that can refuse the save,
+                                                 so it says so on the row instead of only
+                                                 in the save message. -->
+                                            <q-chip
+                                                v-if="isHalfBuilt(row)"
+                                                dense square size="sm"
+                                                color="warning"
+                                                text-color="dark"
+                                                class="rn__chip"
+                                                clickable
+                                                @click="openRowEditor(String(row.client_id))"
+                                            >
+                                                Needs an item
+                                            </q-chip>
+                                            <q-chip
+                                                v-else-if="!row.stock_item_id"
+                                                dense square size="sm"
+                                                class="rn__chip rn__chip--unlinked"
+                                            >
+                                                Free text
+                                                <q-tooltip>
+                                                    Not linked to a pantry item, so Dora
+                                                    can't tell whether you have it.
+                                                </q-tooltip>
+                                            </q-chip>
+                                            <!-- "Missing" and "missing, but you have
+                                                 something you could use instead" are
+                                                 different answers to tonight's
+                                                 question, so the chip says which one
+                                                 this is (feedback 2026-08-24). The
+                                                 swap list itself stays one tap away in
+                                                 the substitutes chip beside it. -->
+                                            <q-chip
+                                                v-else-if="isMissingItem(row.stock_item_id)"
+                                                dense square size="sm"
+                                                :color="hasSwapInStock(row) ? 'warning' : 'negative'"
+                                                :text-color="hasSwapInStock(row) ? 'dark' : 'white'"
+                                                class="rn__chip"
+                                            >
+                                                {{ hasSwapInStock(row) ? 'Missing — swap in stock' : 'Missing' }}
+                                            </q-chip>
+                                            <q-chip
+                                                v-if="expiringChipFor(row.stock_item_id)"
+                                                dense square size="sm"
+                                                :color="expiringChipFor(row.stock_item_id)!.colour"
+                                                text-color="dark"
+                                                :icon="expiringChipFor(row.stock_item_id)!.icon"
+                                                class="rn__chip"
+                                            >
+                                                {{ expiringChipFor(row.stock_item_id)!.label }}
+                                                <q-tooltip>{{ expiringChipFor(row.stock_item_id)!.tooltip }}</q-tooltip>
+                                            </q-chip>
+                                            <span @click.stop>
+                                                <RecipeIngredientSubstitutes
+                                                    :entries="substitutesForRow(row)"
+                                                    :ingredient-name="ingredientLabel(row)"
+                                                />
                                             </span>
-                                            <span v-else>Never made</span>
-                                            · {{ sibling.available_meals }} on hand
+                                            <span v-if="row.notes" class="rn__ingnote">{{ row.notes }}</span>
+                                        </span>
+                                        <!-- Per-row actions. Reordering lives here now
+                                             that the organise disclosure is gone; on a
+                                             phone the cluster is permanently visible,
+                                             because hover isn't a gesture a thumb has. -->
+                                        <span class="rn__ingact" @click.stop>
+                                            <BaseButton
+                                                variant="icon" dense
+                                                :icon="ICONS.arrow_upward"
+                                                :disable="rowIndex === 0"
+                                                :aria-label="`Move ${ingredientLabel(row)} up`"
+                                                @click="moveIngredientWithin(group.rows, rowIndex, -1)"
+                                            />
+                                            <BaseButton
+                                                variant="icon" dense
+                                                :icon="ICONS.arrow_downward"
+                                                :disable="rowIndex === group.rows.length - 1"
+                                                :aria-label="`Move ${ingredientLabel(row)} down`"
+                                                @click="moveIngredientWithin(group.rows, rowIndex, 1)"
+                                            />
+                                            <AddToListButton
+                                                v-if="row.stock_item_id && isMissingItem(row.stock_item_id)"
+                                                :stock-item-id="row.stock_item_id"
+                                                variant="row"
+                                            />
+                                            <BaseButton
+                                                variant="danger-icon" dense
+                                                :icon="ICONS.delete"
+                                                :aria-label="`Remove ${ingredientLabel(row)}`"
+                                                @click="removeIngredient(String(row.client_id))"
+                                            />
+                                        </span>
+                                    </li>
+                                </ul>
+
+                                <p v-if="group.rows.length === 0" class="rn__ingsecempty">
+                                    Nothing in this section yet.
+                                </p>
+
+                                <BaseButton
+                                    variant="subtle"
+                                    class="rn__add"
+                                    :icon="ICONS.add"
+                                    :label="group.sectionId === null ? 'Add ingredient' : `Add to ${group.name}`"
+                                    @click="addIngredient(group.sectionId)"
+                                />
+                            </div>
+                        </div>
+
+                        <BaseButton
+                            variant="ghost"
+                            class="rn__addsec"
+                            :icon="ICONS.add"
+                            label="Add section"
+                            @click="addSection"
+                        >
+                            <q-tooltip>
+                                Sections group the list under headings — "For the
+                                sauce", "To serve".
+                            </q-tooltip>
+                        </BaseButton>
+                    </section>
+                </div>
+
+                <section aria-labelledby="rnMet">
+                    <div class="rn__sechead">
+                        <h2 class="rn__sectitle" id="rnMet">Method</h2>
+                        <span class="rn__seccount">{{ methodCountLabel }}</span>
+                    </div>
+
+                    <!-- Owner feedback 2026-08-24 — the three-way control now
+                         says what it switches ("Step style") and names the
+                         styles in full, and the editor is one pencil shared by
+                         all three rather than a per-style disclosure whose
+                         label changed under you. One edit button, whatever the
+                         style, because it is always the same intent: change
+                         the method. -->
+                    <div class="rn__stylebar">
+                        <span class="rn__stylek">Step style</span>
+                        <BaseSegmented
+                            v-model="form.steps_mode"
+                            dense
+                            unelevated
+                            class="rn__modes"
+                            :options="[
+                                { label: 'Structured', value: 'structured' },
+                                { label: 'Free text', value: 'freeform' },
+                                { label: 'Image', value: 'image' },
+                            ]"
+                            @update:model-value="markDirty"
+                        />
+                        <BaseButton
+                            variant="secondary"
+                            dense
+                            class="rn__styleedit"
+                            :icon="ICONS.edit"
+                            :label="compact ? undefined : 'Edit'"
+                            :aria-label="methodEditLabel"
+                            @click="methodEditorOpen = true"
+                        >
+                            <q-tooltip>{{ methodEditLabel }}</q-tooltip>
+                        </BaseButton>
+                    </div>
+
+                    <div class="rn__pane">
+                        <!-- Structured — the only mode that can tie a step to
+                             its ingredients, because it's the only one that
+                             stores the link. -->
+                        <template v-if="form.steps_mode === 'structured'">
+                            <ol v-if="topLevelSteps.length > 0" class="rn__steps">
+                                <!-- The `li` was focusable purely to drive the
+                                     ingredient highlight, which put two tab
+                                     stops on every step and named neither. The
+                                     edit target is the stop now, and focus/
+                                     hover on it lights the same rail rows. -->
+                                <li
+                                    v-for="step in topLevelSteps"
+                                    :key="step.client_id"
+                                    :class="{ 'rn__step--lit': litStep === step.client_id }"
+                                    @mouseenter="litStep = step.client_id"
+                                    @mouseleave="litStep = null"
+                                >
+                                    <InlineEditTarget
+                                        tag="p"
+                                        class="rn__edit"
+                                        :label="`Edit step ${step.sequence + 1}`"
+                                        @focusin="litStep = step.client_id"
+                                        @focusout="litStep = null"
+                                    >
+                                        {{ step.text || 'Empty step' }}
+                                        <q-popup-edit v-model="step.text" v-slot="scope" auto-save @save="markDirty">
+                                            <q-input v-model="scope.value" type="textarea" autogrow dense autofocus label="Step" />
+                                        </q-popup-edit>
+                                    </InlineEditTarget>
+                                    <span v-if="step.hint" class="rn__hint">{{ step.hint }}</span>
+                                    <span v-if="usesLabel(step)" class="rn__uses">Uses {{ usesLabel(step) }}</span>
+                                    <!-- Sub-steps read as the same kind of
+                                         thing as a step, one level in: same
+                                         numbered bullet, toned down and
+                                         indented rather than a plain bulleted
+                                         list in a different visual language
+                                         (feedback 2026-08-24). -->
+                                    <ol v-if="subStepsOf(step).length > 0" class="rn__substeps">
+                                        <li v-for="sub in subStepsOf(step)" :key="sub.client_id">
+                                            <p>{{ sub.text || 'Empty sub-step' }}</p>
+                                            <span v-if="sub.hint" class="rn__hint">{{ sub.hint }}</span>
+                                        </li>
+                                    </ol>
+                                </li>
+                            </ol>
+                            <p v-else class="rn__empty">No steps yet — tap Edit to add them.</p>
+                        </template>
+
+                        <!-- Free text — one block, edited in the shared method
+                             editor. It used to edit through an inline popup,
+                             which on a phone opened the keyboard *over* the
+                             field with nothing to scroll (feedback
+                             2026-08-24); the dialog puts the field above the
+                             keyboard and scrolls itself. -->
+                        <template v-else-if="form.steps_mode === 'freeform'">
+                            <button
+                                v-if="freeformLines.length > 0"
+                                type="button"
+                                class="rn__free rn__edit rn__freebtn"
+                                aria-label="Edit the instructions"
+                                @click="methodEditorOpen = true"
+                            >
+                                <p v-for="(line, i) in freeformLines" :key="`f-${i}`">{{ line }}</p>
+                            </button>
+                            <button
+                                v-else
+                                type="button"
+                                class="rn__empty rn__edit rn__freebtn"
+                                aria-label="Add instructions"
+                                @click="methodEditorOpen = true"
+                            >
+                                No instructions yet — tap to write them.
+                            </button>
+                        </template>
+
+                        <!-- Photo steps. -->
+                        <template v-else>
+                            <RecipeStepImagesViewer
+                                v-if="(recipe.step_images ?? []).length > 0"
+                                :recipe-id="recipe.recipe_id"
+                                :images="recipe.step_images ?? []"
+                            />
+                            <p v-else class="rn__empty">No step photos yet — tap Edit to add them.</p>
+                        </template>
+                    </div>
+                </section>
+            </div>
+
+            <!-- ═══ Details — everything administrative ═════════════════
+                 Owner feedback 2026-08-24 — dietary tags, tools, the source
+                 URL and the notes were four separate disclosures for four
+                 fields nobody opens twice. They are one "Additional details"
+                 chunk now. What stayed separate genuinely answers its own
+                 question: nutrition, the photo, and the version history. The
+                 cost breakdown left this list entirely — it is a modal on the
+                 status strip — and so did "Organise ingredients", which the
+                 ingredient section cards absorbed. -->
+            <div class="rn__details">
+                <q-expansion-item
+                    v-model="detailOpen.extra"
+                    dense-toggle
+                    label="Additional details"
+                    :caption="extraCaption"
+                >
+                    <div class="rn__disc">
+                        <BaseSelect
+                            v-model="form.dietary_tag_ids"
+                            label="Dietary tags"
+                            :options="dietaryTagOptions"
+                            emit-value map-options multiple use-chips clearable
+                            class="q-mb-sm"
+                            @update:model-value="markDirty"
+                        />
+                        <BaseSelect
+                            v-model="form.tool_ids"
+                            label="Tools"
+                            :options="toolSelectOptions"
+                            emit-value map-options multiple use-chips clearable
+                            class="q-mb-sm"
+                            @update:model-value="markDirty"
+                        />
+                        <q-input
+                            v-model="form.source"
+                            dense outlined clearable
+                            class="q-mb-sm"
+                            label="Source URL"
+                            @update:model-value="markDirty"
+                        />
+                        <q-input
+                            v-model="form.notes"
+                            dense outlined type="textarea" autogrow
+                            label="Notes"
+                            @update:model-value="markDirty"
+                        />
+                    </div>
+                </q-expansion-item>
+
+                <q-expansion-item
+                    v-if="isComplex && recipe.nutrition"
+                    v-model="detailOpen.nutrition"
+                    dense-toggle
+                    label="Nutrition"
+                    :caption="nutritionCaption"
+                >
+                    <div class="rn__disc">
+                        <RecipeNutritionCard :nutrition="recipe.nutrition" />
+                    </div>
+                </q-expansion-item>
+
+                <q-expansion-item
+                    v-if="!isComplex && nutritionEnabled"
+                    v-model="detailOpen.kcal"
+                    dense-toggle
+                    label="Calories"
+                    :caption="form.kcal ? `${form.kcal} kcal per serving` : 'Not set'"
+                >
+                    <div class="rn__disc">
+                        <q-input
+                            v-model.number="form.kcal"
+                            dense outlined type="number" min="0"
+                            label="kcal per serving"
+                            style="max-width: 220px"
+                            @update:model-value="markDirty"
+                        />
+                    </div>
+                </q-expansion-item>
+
+                <!-- Version information. Was "Other versions", captioned "N
+                     siblings" — a word from the data model, not the kitchen.
+                     It now answers the two questions actually asked of a
+                     recipe's history: when did this one come about, and what
+                     other versions of it exist (feedback 2026-08-24). It
+                     renders even for a singleton, because created/updated are
+                     facts about every recipe. -->
+                <q-expansion-item
+                    v-model="detailOpen.versions"
+                    dense-toggle
+                    label="Version information"
+                    :caption="versionsCaption"
+                >
+                    <div class="rn__disc">
+                        <div class="rn__vfacts">
+                            <div class="rn__vfact">
+                                <span class="rn__cellk">Created</span>
+                                <span>{{ recipe.created_at ? formatDate(recipe.created_at) : 'Unknown' }}</span>
+                            </div>
+                            <div class="rn__vfact">
+                                <span class="rn__cellk">Last updated</span>
+                                <span>
+                                    {{ recipe.updated_at
+                                        ? formatDate(recipe.updated_at)
+                                        : 'Not edited since it was added' }}
+                                </span>
+                            </div>
+                        </div>
+
+                        <template v-if="versionSiblings.length > 0">
+                            <div class="rn__discsub">Versions of this recipe</div>
+                            <q-list dense separator>
+                                <q-item class="rn__vthis">
+                                    <q-item-section>
+                                        <q-item-label>{{ recipe.name }}</q-item-label>
+                                        <q-item-label caption>
+                                            {{ recipe.created_at ? `Created ${formatDate(recipe.created_at)}` : 'Created — unknown' }}
                                         </q-item-label>
                                     </q-item-section>
                                     <q-item-section side>
-                                        <q-icon :name="ICONS.east" />
+                                        <q-badge outline color="primary" label="You're here" />
+                                    </q-item-section>
+                                </q-item>
+                                <q-item
+                                    v-for="sib in versionSiblings"
+                                    :key="sib.recipe_id"
+                                    clickable
+                                    @click="goToSibling(sib.recipe_id)"
+                                >
+                                    <q-item-section>
+                                        <q-item-label>{{ sib.name }}</q-item-label>
+                                        <q-item-label caption>
+                                            {{ sib.created_at ? `Created ${formatDate(sib.created_at)}` : 'Created — unknown' }}
+                                        </q-item-label>
+                                    </q-item-section>
+                                    <q-item-section side>
+                                        <q-icon :name="ICONS.chevron_right" />
                                     </q-item-section>
                                 </q-item>
                             </q-list>
-                        </q-card-section>
-                    </q-card>
-                </div>
+                        </template>
+                        <p v-else class="rn__hintblock rn__vnone">
+                            This is the only version. "New version" makes a copy you
+                            can change without losing this one.
+                        </p>
+                    </div>
+                </q-expansion-item>
+
             </div>
+        </template>
+
+        <!-- Two different jobs, deliberately not merged. The dirty pill is a
+             standing statement of fact ("there is unsaved work here") and has
+             to survive until it stops being true; the bar below is a transient
+             outcome. One element doing both is how the old autosave indicator
+             ended up being the only feedback channel for either. -->
+        <div v-if="dirty && saveState !== 'saving'" class="rn__dirty" role="status">
+            <q-icon :name="ICONS.edit" size="14px" />
+            <span>Unsaved changes</span>
         </div>
-        </FadeTransition>
 
-        <!-- â”€â”€ Substitutes dialog â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
-        <BaseDialog v-model="substitutesOpen" title="Substitutes for missing ingredients" closable card-style="min-width: 460px; max-width: 640px">
-                <q-card-section>
-                    <div class="text-caption dora-text-muted">
-                        These are recorded on each item's detail page. To cook
-                        with one, start cook mode and tap the swap icon on the
-                        ingredient â€” it applies to that cook only and never
-                        changes the saved recipe.
-                    </div>
-                </q-card-section>
-                <q-separator />
-                <q-card-section
-                    v-if="loadingSubstitutes"
-                    class="text-center q-py-xl"
-                >
-                    <AppSpinner />
-                </q-card-section>
-                <q-card-section v-else class="q-pt-sm">
-                    <div
-                        v-for="entry in substituteOptions"
-                        :key="entry.stockItemId"
-                        class="q-mb-md"
-                    >
-                        <div class="text-subtitle2">
-                            <q-icon :name="ICONS.report" color="negative" size="16px" />
-                            {{ entry.name }}
-                        </div>
-                        <div v-if="entry.substitutes.length === 0" class="text-caption dora-text-muted">
-                            No substitutes recorded â€” set some on the stock item's detail page.
-                        </div>
-                        <div v-else class="row q-gutter-xs q-mt-xs">
-                            <q-chip
-                                v-for="sub in entry.substitutes"
-                                :key="sub.stock_item_id"
-                                color="primary"
-                                text-color="white"
-                            >
-                                {{ sub.name }}
-                            </q-chip>
-                        </div>
-                    </div>
-                </q-card-section>
-                <template #actions>
-                    <BaseButton variant="ghost" label="Close" v-close-popup />
-                </template>
-        </BaseDialog>
+        <div v-if="saveState !== 'idle'" class="rn__savebar" :class="`rn__savebar--${saveState}`" role="status">
+            <q-spinner v-if="saveState === 'saving'" size="16px" />
+            <q-icon v-else-if="saveState === 'saved'" :name="ICONS.check" />
+            <q-icon v-else :name="ICONS.error" />
+            <span>{{ saveMessage }}</span>
+        </div>
 
-        <!-- â”€â”€ Import-from-URL dialog â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
-        <!-- shared dialog. The detail surface adds the
-             "overwrite" caption sentence via :degraded-hint and handles
-             the confirm-then-patch flow on `@imported`. -->
-        <RecipeImportDialog
-            v-model="importOpen"
-            degraded-hint="Your existing recipe will be overwritten with the imported fields."
-            @imported="onRecipeImported"
+        <!-- With an explicit save there is a real answer to "you have unsaved
+             changes, cook anyway?", so the guard is wired to it instead of the
+             hardcoded `false` the autosave version had to pass. -->
+        <CookModeGuardDialog
+            v-model="cookGuardOpen"
+            :recipe="recipe"
+            :dirty="dirty"
+            :saving="saveState === 'saving'"
+            :substitutable="substitutableNames"
+            @start="goToCookMode"
+            @save-and-start="onSaveAndCook"
         />
 
-        <!-- ── Per-ingredient picker (Chunk B §1.4) ──────────────── -->
+        <RecipeMethodEditorDialog
+            v-model="methodEditorOpen"
+            :mode="form.steps_mode"
+            :steps="form.steps"
+            :instructions="form.instructions"
+            :step-images="form.step_images"
+            :ingredient-options="ingredientOptions"
+            :tool-options="toolOptions"
+            :section-options="sectionOptions"
+            @update:steps="onStepsChanged"
+            @update:instructions="onInstructionsChanged"
+            @update:step-images="onStepImagesChanged"
+        />
+
+        <RecipeCostDialog
+            v-if="recipe"
+            v-model="costDialogOpen"
+            :lines="recipe.estimated_cost_lines ?? []"
+            :total="recipe.estimated_cost"
+            :priced-count="recipe.estimated_cost_priced_count"
+            :total-count="recipe.estimated_cost_total_count"
+            :servings="form.servings"
+        />
+
+        <RecipeIngredientRowEditor
+            v-model="rowEditorOpen"
+            :row="rowEditorRow"
+            :sections="form.sections"
+            @save="onRowEditorSave"
+        />
+
         <RecipeIngredientPickerDialog
             ref="pickerRef"
             v-model="pickerOpen"
@@ -1289,1056 +985,910 @@
             @confirm="onPickerConfirm"
         />
 
-        <!-- Cook-mode guard (L297/L299/L309). Extracted 2026-08-19 to
-             `CookModeGuardDialog` so the cookbook shows the same confirm this
-             page does — the rule used to live only here. -->
-        <CookModeGuardDialog
-            v-model="cookGuardOpen"
-            :recipe="recipe"
-            :dirty="isDirty"
-            :saving="saving"
-            @start="goToCookMode"
-            @save-and-start="onGuardSaveAndCook"
-        />
+        <!-- No preview here: you opened this by tapping the photo, so you have
+             just looked at it. Two buttons, nothing else. -->
+        <BaseDialog v-model="photoDialogOpen" title="Recipe photo" closable card-style="min-width: 300px">
+            <q-card-section class="rn__photoacts">
+                <BaseButton
+                    variant="primary"
+                    :icon="ICONS.photo_camera"
+                    label="Change photo"
+                    @click="onChangePhoto"
+                />
+                <BaseButton
+                    variant="danger-ghost"
+                    :icon="ICONS.delete"
+                    label="Remove photo"
+                    @click="onRemovePhoto"
+                />
+            </q-card-section>
+        </BaseDialog>
     </q-page>
 </template>
 
 <script lang="ts" setup>
-    import { ICONS } from 'src/style/icons';
-    import { formatDate as formatLocaleDate } from 'src/composables/useDateFormat';
+    /**
+     * The recipe page — the 2026-08-20 redesign, and since 2026-08-26 the only
+     * one.
+     *
+     * It ran in parallel with the original at `/cookbook/:id/new` while the two
+     * were compared on the same recipe. The owner picked this one (FU-688) and
+     * the original — 2,727 lines, its own duplicate form model, both hatch
+     * buttons and the `/new` route — was deleted with the swap. It kept the
+     * bespoke masthead over the shared `PageToolbar` every other detail page
+     * uses; that was the one piece explicitly reserved, and the same feedback
+     * batch asked for the masthead to be *enriched*, so it stays. Import is
+     * deliberately absent (FU-689 closed won't-do — importing over an existing
+     * recipe was never wanted here).
+     *
+     * Three things made it different from the page it replaced:
+     *
+     * 1. **No modes, but an explicit save.** The read/edit toggle is gone —
+     *    values render as text and edit in place via `q-popup-edit`. What is
+     *    *not* gone is the commit: edits mark the form dirty and a Save button
+     *    appears. The first cut autosaved on a 500ms debounce and the owner
+     *    reversed it; see the save block below for the three ways that failed.
+     *    D-015's "read-view + explicit edit mode for detail pages" clause was
+     *    retired when this page won the comparison (FU-688) — it had been
+     *    written against the old page's form-as-detail, which no longer
+     *    exists, and it was the only clause of that rule about detail pages.
+     *    Inline editing keeps the page reading as a recipe, which is what the
+     *    clause was actually protecting.
+     * 2. **Structural edits stay behind a disclosure.** Reordering steps,
+     *    linking ingredients to steps, managing photos — the things that need a
+     *    real editor — live in one expansion under the method, not inline.
+     * 3. **No business logic of its own.** The form model, hydrate and PATCH
+     *    build all come from `useRecipeEditor` (R-003); everything else reads
+     *    server-derived values off the loaded recipe exactly as the old page
+     *    does.
+     *
+     * All three step modes are supported. Only `structured` can highlight the
+     * ingredients a step uses, because it's the only mode that stores the link.
+     */
+    import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
+    import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
+    import { useQuasar } from 'quasar';
+    import { storeToRefs } from 'pinia';
+
     import AppSkeleton from 'src/components/AppSkeleton.vue';
-    import AppSpinner from 'src/components/AppSpinner.vue';
-    import AddToListButton from 'src/components/AddToListButton.vue';
-    import RecipeIngredientPickerDialog from 'src/components/recipes/RecipeIngredientPickerDialog.vue';
-    import CookModeGuardDialog from 'src/components/recipes/CookModeGuardDialog.vue';
-    import { needsCookGuard } from 'src/helpers/cookModeGuard';
-    import RecipeNutritionCard from 'src/components/recipes/RecipeNutritionCard.vue';
     import BaseButton from 'src/components/BaseButton.vue';
-    import PageToolbar from 'src/components/PageToolbar.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
     import BaseSegmented from 'src/components/BaseSegmented.vue';
+    import BaseSelect from 'src/components/BaseSelect.vue';
+    import InlineEditTarget from 'src/components/InlineEditTarget.vue';
+    import ImageEditTile from 'src/components/ImageEditTile.vue';
     import MealStepper from 'src/components/recipes/MealStepper.vue';
-    import ImageUploadField from 'src/components/ImageUploadField.vue';
-    import RecipeStepsEditor from 'src/components/recipes/RecipeStepsEditor.vue';
-    import RecipeStepImagesEditor from 'src/components/recipes/RecipeStepImagesEditor.vue';
-    import type { EditableStepImage } from 'src/components/recipes/recipeStepImageEditorTypes';
-    import type {
-        EditableStep as EditableRecipeStep,
-        IngredientOption,
-        ToolOption,
-    } from 'src/components/recipes/recipeStepEditorTypes';
-    import FadeTransition from 'src/components/transitions/FadeTransition.vue';
-    import { storeToRefs } from 'pinia';
-    import { useQuasar } from 'quasar';
-    import { useRecipeExport } from 'src/composables/useRecipeExport';
-    import { formatMoney } from 'src/composables/useMoney';
+    import RecipeNutritionCard from 'src/components/recipes/RecipeNutritionCard.vue';
+    import RecipeStepImagesViewer from 'src/components/recipes/RecipeStepImagesViewer.vue';
+    import RecipeCostDialog from 'src/components/recipes/RecipeCostDialog.vue';
+    import RecipeMethodEditorDialog from 'src/components/recipes/RecipeMethodEditorDialog.vue';
+    import CookModeGuardDialog from 'src/components/recipes/CookModeGuardDialog.vue';
+    import RecipeIngredientPickerDialog from 'src/components/recipes/RecipeIngredientPickerDialog.vue';
+    import RecipeIngredientRowEditor from 'src/components/recipes/RecipeIngredientRowEditor.vue';
+    import RecipeIngredientSubstitutes from 'src/components/recipes/RecipeIngredientSubstitutes.vue';
+    import AddToListButton from 'src/components/AddToListButton.vue';
+
+    import { ICONS } from 'src/style/icons';
     import { formatQuantity } from 'src/helpers/formatQuantity';
-    import { useShoppingListActions } from 'src/composables/useShoppingListActions';
-    import { colourForSequence } from 'src/helpers/stockLevelLogic';
-    import type { Recipe, RecipeCostLine, RecipeStepsMode } from 'src/models/recipe';
-    import type { Substitute } from 'src/models/stockItemDetail';
-    import RecipeApiService, { recipeImageUrl, recipeStepImageUrl, type ImportedRecipe } from 'src/services/api/recipeApiService';
-    import RecipeImportDialog from 'src/components/recipes/RecipeImportDialog.vue';
-    import { useImagePrefs } from 'src/composables/useImagePrefs';
-    import { useDragDropList } from 'src/composables/useDragDropList';
-    import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
+    import { formatDate } from 'src/composables/useDateFormat';
+    import { formatMoney } from 'src/composables/useMoney';
+    import { needsCookGuard } from 'src/helpers/cookModeGuard';
+    import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';
     import { useBatchEnabled } from 'src/composables/useBatchEnabled';
+    import { useImagePrefs } from 'src/composables/useImagePrefs';
+    import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
     import { useNutritionMode } from 'src/composables/useNutritionMode';
-    import { useUnsavedChangesGuard } from 'src/composables/useUnsavedChangesGuard';
-    import type {
-        CreateRecipeIngredientCommand,
-        RecipeStepCommand,
-        UpdateRecipeCommand,
-    } from 'src/services/api/recipeApiService';
-    import StockItemApiService from 'src/services/api/stockItemApiService';
-    import { useMealSlotStore } from 'src/stores/mealSlotStore';
+    import { useRecipeExport } from 'src/composables/useRecipeExport';
+    import { DEFAULT_MEAL_SLOTS, DIFFICULTY_VALUES } from 'src/helpers/recipeVocabulary';
+    import { useShoppingListActions } from 'src/composables/useShoppingListActions';
+    import {
+        buildUpdateCommand,
+        hydrateRecipeForm,
+        newClientId,
+        useRecipeForm,
+        type IngredientForm,
+        type IngredientPatch,
+    } from 'src/composables/useRecipeEditor';
+
+    import RecipeApiService, { recipeImageUrl } from 'src/services/api/recipeApiService';
     import { useRecipeStore } from 'src/stores/recipeStore';
     import { useRecipeVocabStore } from 'src/stores/recipeVocabStore';
-    import { useShoppingListStore } from 'src/stores/shoppingListStore';
     import { useStockItemStore } from 'src/stores/stockItemStore';
+    import { useMealSlotStore } from 'src/stores/mealSlotStore';
     import { useStockLevelStore } from 'src/stores/stockLevelStore';
-    import {
-        DEFAULT_MEAL_SLOTS,
-        DIFFICULTY_VALUES,
-    } from 'src/helpers/recipeVocabulary';
-    import { computed, onMounted, reactive, ref, watch } from 'vue';
+    import { useShoppingListStore } from 'src/stores/shoppingListStore';
+    import { cartStateFor, type Membership } from 'src/models/shoppingList';
+    import StockItemApiService from 'src/services/api/stockItemApiService';
+    import type { Recipe } from 'src/models/recipe';
+    import type { SubstituteOption } from 'src/components/recipes/recipeSubstituteTypes';
+    import type { EditableStep } from 'src/components/recipes/recipeStepEditorTypes';
+    import type { EditableStepImage } from 'src/components/recipes/recipeStepImageEditorTypes';
 
-    const difficultyOptions = [...DIFFICULTY_VALUES];
-    import { useRoute, useRouter } from 'vue-router';
-    import { describeApiError, toastCaption } from 'src/services/errorHandling/apiErrorHandler';
+    // Domain vocabulary, not a page constant: the same three values rank
+    // recipes in the cookbook's sort. R-003 — one home, four readers.
+    const DIFFICULTY_OPTIONS = [...DIFFICULTY_VALUES];
 
+    const $q = useQuasar();
     const route = useRoute();
     const router = useRouter();
-    const $q = useQuasar();
 
     const recipeStore = useRecipeStore();
     const stockItemStore = useStockItemStore();
-    const stockLevelStore = useStockLevelStore();
-    const shoppingListStore = useShoppingListStore();
     const recipeVocabStore = useRecipeVocabStore();
+    const shoppingListStore = useShoppingListStore();
     const mealSlotStore = useMealSlotStore();
+    const stockLevelStore = useStockLevelStore();
     const recipeApi = new RecipeApiService();
-    // C-cross Chunk 5 — recipe-image render gate (covers the saved-
-    // preview branch only; pick/clear is always live).
-    const { showRecipeImages } = useImagePrefs();
-    // money + nutrition gates for the new estimate/kcal
-    // surfaces. Both render-only; consumers fall back to no-render when
-    // either flag is off.
-    const { moneyEnabled } = useMoneyEnabled();
-    const { nutritionEnabled, isSimple, isComplex } = useNutritionMode();
-    // Feedback 2026-08-19: the meal pool is a batch-cooking concept. With
-    // cook-style "fresh" there is no pool to show, so the card doesn't
-    // render — same gate the cookbook already applies to "Meals prepared".
-    const { batchEnabled } = useBatchEnabled();
-    // Phones drop every toolbar label down to its icon — same gate and the
-    // same name as the cookbook overview and stock overview toolbars.
-    const compactToolbar = computed(() => $q.screen.lt.sm);
     const stockItemApi = new StockItemApiService();
-    const { addItems } = useShoppingListActions();
-
-    const { recipeCollections } = storeToRefs(recipeStore);
     const { stockItems } = storeToRefs(stockItemStore);
-    const { stockLevels } = storeToRefs(stockLevelStore);
+    const { recipeCollections } = storeToRefs(recipeStore);
     const { cuisines, categories, dietaryTags, tools } = storeToRefs(recipeVocabStore);
     const { mealSlotNames } = storeToRefs(mealSlotStore);
-
-    // `time_of_day` reads the household meal-slot vocabulary; falls
-    // back to the seed constant only before the store's first load.
-    const timeOfDayOptions = computed(() =>
-        mealSlotNames.value.length > 0 ? mealSlotNames.value : [...DEFAULT_MEAL_SLOTS],
+    // Shopping-list membership, read from the same place every cart button
+    // reads it (R-003) so the page and the buttons can't disagree about
+    // whether something is already on a list.
+    const { membership: listMembership } = storeToRefs(shoppingListStore);
+    const membership = computed<Membership | null>(
+        () => (listMembership.value as Membership | null) ?? null,
     );
 
-    const recipeId = computed(() => String(route.params.id ?? ''));
-    const recipe = ref<Recipe | null>(null);
-
+    const { moneyEnabled } = useMoneyEnabled();
+    const { nutritionEnabled, isComplex } = useNutritionMode();
+    const { batchEnabled } = useBatchEnabled();
+    const { showRecipeImages } = useImagePrefs();
+    const { addItems } = useShoppingListActions();
     const recipeExport = useRecipeExport();
-    function onPrint() {
-        if (!recipeId.value) return;
-        recipeExport.openPrintView(recipeId.value);
-    }
+
+    const compact = computed(() => $q.screen.lt.sm);
+    const recipeId = computed(() => String(route.params.id ?? ''));
+
+    const recipe = ref<Recipe | null>(null);
+    const form = useRecipeForm();
     const loading = ref(false);
     const loadError = ref<string | null>(null);
-    const saving = ref(false);
-    const isDirty = ref(false);
-    const nameError = ref<string | null>(null);
+    const adjusting = ref(false);
+    const newVersionLoading = ref(false);
     const cookGuardOpen = ref(false);
-    // Image edit state: imageDirty marks a pick/clear; imageVersion busts the
-    // <img> cache after a save so the new image shows.
+    const photoDialogOpen = ref(false);
     const imageDirty = ref(false);
-    const imageVersion = ref(0);
-    // R-020 — deferred-save surface, must wire the unsaved-changes guard.
-    // Dirty iff any field edit OR an image pick/clear is pending save.
-    useUnsavedChangesGuard(computed(() => isDirty.value || imageDirty.value));
-
-    function onNameInput() {
-        nameError.value = null;
-        markDirty();
-    }
-
-    // â”€â”€ Form state (mirrors the editable recipe shape) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    type IngredientForm = CreateRecipeIngredientCommand;
-
-    type RecipeForm = {
-        name: string;
-        category_id: string | null;
-        cook_time_minutes: number | null;
-        cuisine_id: string | null;
-        difficulty: string | null;
-        instructions: string | null;
-        // RD-29 — free-text personal notes about the recipe.
-        notes: string | null;
-        prep_time_minutes: number | null;
-        recipe_collection_id: string | null;
-        servings: number | null;
-        // origin URL.
-        source: string | null;
-        time_of_day: string | null;
-        ingredients: IngredientForm[];
-        dietary_tag_ids: string[];
-        tool_ids: string[];
-        // null = no change (existing image, shown via the endpoint). A data URL
-        // sets a new image; explicit null + imageDirty clears it.
-        image: string | null;
-        // structured steps editor state.
-        steps: EditableRecipeStep[];
-        // Editor mode toggle. PROPOSAL_RECIPE_IMAGE_STEPS extended this to
-        // a tri-state — `structured` sends `steps[]`, `freeform` sends an
-        // empty `steps[]` so the server clears structure, `image` sends
-        // `step_images[]`. Mode switching is non-destructive: switching
-        // away from a mode does NOT clear its payload on save (the user
-        // can flip back without re-entry).
-        steps_mode: RecipeStepsMode;
-        // PROPOSAL_RECIPE_IMAGE_STEPS — image-mode editor state. Each row
-        // carries its data URL (sent on save) + a preview URL (the same
-        // data URL for freshly-uploaded rows, or the bytes-endpoint URL
-        // for rows hydrated from the server). The dirty flag flips when
-        // the user reorders / adds / removes, so we only POST step_images
-        // when there's been a change.
-        step_images: EditableStepImage[];
-        // simple nutrition kcal. Editor input renders only
-        // when nutrition is enabled; the form field exists regardless.
-        kcal: number | null;
-        // named sections. Empty list = flat recipe.
-        // Hydrated from `recipe.sections`; the existing section_id is
-        // reused as client_id so unchanged sections round-trip and
-        // ingredient `section_client_id` references stay valid.
-        sections: SectionForm[];
-    };
-
-    type SectionForm = {
-        client_id: string;
-        sequence: number;
-        name: string;
-    };
-
-    function newClientId(): string {
-        if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-            return crypto.randomUUID();
-        }
-        return `c${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
-    }
-
-    /** `q-input v-model.number` leaves an empty field as `''` (not null) and
-     *  a non-numeric clear as `NaN`. The server expects `int | None`, so we
-     *  coerce to a real integer or `null` here at the wire boundary. */
-    function toIntOrNull(value: unknown): number | null {
-        if (value === null || value === undefined || value === '') return null;
-        const n = typeof value === 'number' ? value : Number(value);
-        if (!Number.isFinite(n)) return null;
-        return Math.trunc(n);
-    }
-
-    const emptyForm = (): RecipeForm => ({
-        name: '',
-        category_id: null,
-        cook_time_minutes: null,
-        cuisine_id: null,
-        difficulty: null,
-        instructions: null,
-        notes: null,
-        prep_time_minutes: null,
-        recipe_collection_id: null,
-        servings: null,
-        source: null,
-        time_of_day: null,
-        ingredients: [],
-        dietary_tag_ids: [],
-        tool_ids: [],
-        image: null,
-        steps: [],
-        steps_mode: 'structured',
-        step_images: [],
-        kcal: null,
-        sections: [],
-    });
-
-    const form = reactive<RecipeForm>(emptyForm());
-
-    function hydrateForm(source: Recipe) {
-        // Use the existing recipe_ingredient_id as the client_id so already-
-        // saved steps that reference real ingredient UUIDs round-trip cleanly:
-        // unchanged ingredients keep their ids; the server resolves either
-        // form (a fresh client_id from the editor or an existing UUID) on save.
-        const ingredients = source.ingredients.map((i) => ({
-            stock_item_id: i.stock_item_id,
-            // Carry the free-text label through load so an unlinked ingredient
-            // (imported or hand-entered) still shows what it was — without this
-            // the row renders as a blank "Stock item" picker with no name.
-            raw_text: i.raw_text,
-            quantity: i.quantity,
-            unit: i.unit,
-            notes: i.notes,
-            client_id: i.recipe_ingredient_id,
-            // re-use the existing section UUID as client_id
-            // (see hydrate below) so round-tripping keeps the reference.
-            section_client_id: i.section_id,
-            // Cookbook revision §1.9 — optional flag round-trip.
-            is_optional: i.is_optional ?? false,
-        }));
-        const sections: SectionForm[] = (source.sections ?? []).map((s) => ({
-            client_id: s.section_id,
-            sequence: s.sequence,
-            name: s.name,
-        }));
-        const steps: EditableRecipeStep[] = (source.steps ?? []).map((s) => ({
-            client_id: s.step_id,
-            parent_client_id: s.parent_step_id,
-            sequence: s.sequence,
-            text: s.text,
-            hint: s.hint,
-            ingredient_client_ids: [...s.ingredient_ids],
-            tool_ids: [...s.tool_ids],
-            // round-trip the section grouping so editing
-            // existing recipes preserves the importer's HowToSection
-            // assignments (and any subsequent picks).
-            section_client_id: s.section_id,
-        }));
-        Object.assign(form, {
-            name: source.name,
-            category_id: source.category_id,
-            cook_time_minutes: source.cook_time_minutes,
-            cuisine_id: source.cuisine_id,
-            difficulty: source.difficulty,
-            instructions: source.instructions,
-            notes: source.notes,
-            prep_time_minutes: source.prep_time_minutes,
-            recipe_collection_id: source.recipe_collection_id,
-            servings: source.servings,
-            source: source.source,
-            time_of_day: source.time_of_day,
-            ingredients,
-            dietary_tag_ids: [...(source.dietary_tag_ids ?? [])],
-            tool_ids: [...(source.tool_ids ?? [])],
-            image: null,
-            steps,
-            // PROPOSAL_RECIPE_IMAGE_STEPS — trust the server's declared
-            // steps_mode rather than re-deriving from has_structured_steps;
-            // backfill falls through to the old "structured if rows exist,
-            // else freeform" guess for resilience.
-            steps_mode: source.steps_mode
-                ?? (source.has_structured_steps ? 'structured' : 'freeform'),
-            step_images: (source.step_images ?? []).map(img => ({
-                client_id: img.image_id,
-                existing_image_id: img.image_id,
-                preview_url: recipeStepImageUrl(source.recipe_id, img.image_id),
-                data_url: '',
-            })),
-            kcal: source.kcal,
-            sections,
-        });
-        imageDirty.value = false;
-        stepImagesDirty.value = false;
-        isDirty.value = false;
-    }
-
-    function markDirty() {
-        isDirty.value = true;
-    }
-
-    function onStepsChange(next: EditableRecipeStep[]) {
-        form.steps = next;
-        markDirty();
-    }
-
-    // PROPOSAL_RECIPE_IMAGE_STEPS — tracks whether the step_images set has
-    // been touched in this edit session. The save flow only POSTs
-    // step_images when this is true so a mode flip alone (without an
-    // upload/remove/reorder) leaves the rows in place.
     const stepImagesDirty = ref(false);
+    const imageVersion = ref(0);
+    const litStep = ref<string | null>(null);
+    const costDialogOpen = ref(false);
+    const methodEditorOpen = ref(false);
+    const detailOpen = reactive({
+        extra: false, nutrition: false, kcal: false, versions: false,
+    });
 
-    function onStepImagesChange(next: EditableStepImage[]) {
-        form.step_images = next;
-        stepImagesDirty.value = true;
-        markDirty();
-    }
-
-    // Ingredient + tool option lists fed to RecipeStepsEditor. Ingredient
-    // options use the form's per-row client_id as the value so a step can
-    // reference an ingredient before the server has assigned it a real id.
-    const stepIngredientOptions = computed<IngredientOption[]>(() =>
-        form.ingredients
-            .map((i, idx) => {
-                const stockItem = stockItems.value.find((s) => s.stock_item_id === i.stock_item_id);
-                return {
-                    value: i.client_id ?? String(idx),
-                    label: stockItem?.name ?? '(unknown ingredient)',
-                };
-            }),
-    );
-    const stepToolOptions = computed<ToolOption[]>(() =>
-        tools.value.map((t) => ({ value: t.tool_id, label: t.name })),
-    );
-
-    // â”€â”€ Stock-level helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    function levelNameFor(stockItemId: string): string | null {
-        const item = stockItems.value.find((s) => s.stock_item_id === stockItemId);
-        if (!item) return null;
-        const level = stockLevels.value.find((l) => l.stock_level_id === item.stock_level_id);
-        return level?.name ?? null;
-    }
-    function levelColourFor(stockItemId: string): string | null {
-        // sequence-keyed (R-003). The item's own
-        // `stock_level_sequence` is populated by the server; fall back to a
-        // store lookup if absent (older cached items).
-        const item = stockItems.value.find((s) => s.stock_item_id === stockItemId);
-        if (!item) return null;
-        const seq = item.stock_level_sequence
-            ?? stockLevels.value.find((l) => l.stock_level_id === item.stock_level_id)?.sequence;
-        return typeof seq === 'number' ? colourForSequence(seq) : null;
-    }
-    // Per-ingredient "missing" badge in the live editor. Reads the stock item's
-    // server-derived `is_out_of_stock` boolean (Â§3.1) rather than matching a
-    // level name; untracked / unknown items count as missing.
-    function isMissingItem(stockItemId: string): boolean {
-        if (!stockItemId) return true;
-        const item = stockItems.value.find((s) => s.stock_item_id === stockItemId);
-        return !item || Boolean(item.is_out_of_stock);
-    }
-    // Feedback 2026-08-17 — filtering the cookbook to "uses expiring
-    // ingredients" told you a recipe qualified but not which ingredient made
-    // it qualify, so opening a result left you comparing the list against the
-    // pantry by hand. These read the server's per-ingredient verdict off the
-    // loaded recipe (never the stock store, and never recomputed from the
-    // date) so the chips and that filter share one horizon by construction.
+    // ── Save ────────────────────────────────────────────────────────────
+    // Inline editing, explicit commit. The page shipped with a 500ms debounced
+    // autosave behind every popup-edit, which had three failure modes the
+    // owner reversed it over: (1) each save ended in `loadRecipe()`, which
+    // re-hydrates `form` — so a save firing while a second popup was open
+    // rebound that popup to an orphaned row object and dropped the edit;
+    // (2) a fresh, not-yet-linked ingredient row failed the anchor check, so
+    // every *unrelated* save was refused until it was filled or deleted, with
+    // no button to retry from; (3) navigating inside the debounce window sent
+    // the PATCH into a torn-down component, so a failure had nowhere to show.
+    // An explicit Save fixes all three by construction: nothing re-hydrates
+    // mid-edit, validation is reported when the user asks to commit, and the
+    // dirty flag is what the route guard reads.
     //
-    // Keyed by stock item rather than by row: the read view renders the edit
-    // form's ingredients, which carry no `recipe_ingredient_id`. Two rows
-    // pointing at the same pantry item both chip, which is correct anyway.
-    const expiringItems = computed(() => {
-        const map = new Map<string, { expired: boolean; date: string | null }>();
-        for (const ing of recipe.value?.ingredients ?? []) {
-            if (!ing.stock_item_id || !ing.is_expiring) continue;
-            map.set(ing.stock_item_id, {
-                expired: ing.is_expired,
-                date: ing.expiry_date,
-            });
-        }
-        return map;
-    });
-    /** Chip copy + tone for an at-risk ingredient, or null for the rest.
-     *  D-001 escalation: amber for "use it soon", red once it's gone off. */
-    function expiringChipFor(stockItemId: string | null | undefined) {
-        if (!stockItemId) return null;
-        const hit = expiringItems.value.get(stockItemId);
-        if (!hit) return null;
-        // D-006 — the date reads through the household formatter, never a
-        // raw ISO echo.
-        const when = hit.date ? formatLocaleDate(hit.date) : null;
-        return hit.expired
-            ? {
-                label: 'Expired',
-                colour: 'negative',
-                icon: ICONS.error,
-                tooltip: when ? `Expired ${when}` : 'Past its expiry date',
-            }
-            : {
-                label: 'Use soon',
-                colour: 'warning',
-                icon: ICONS.event_busy,
-                tooltip: when ? `Expires ${when}` : 'Expiring soon',
-            };
-    }
-    // Cookability is server-owned (Â§3.2): the loaded recipe carries `cookable`
-    // and each ingredient carries `is_missing`. We read those off the saved
-    // recipe rather than recomputing from stock data â€” the summary reflects the
-    // persisted recipe and refreshes after each save (`loadRecipe`).
-    // IMPL_PLAN_RECIPE_IMPORTER §Chunk 4 — unlinked ingredients
-    // (stock_item_id === null) can't be "missing" in the stock-status
-    // sense; they're filtered here so the downstream "add missing to
-    // list" and "find substitutes" flows never see a null id. The
-    // "N ingredients need linking" prompt is shown separately when
-    // unlinked_ingredient_count > 0.
-    const missingIngredients = computed(() => {
-        const r = recipe.value;
-        if (!r) return [];
-        return r.ingredients
-            .filter((i): i is typeof i & { stock_item_id: string; stock_item_name: string } =>
-                i.is_missing && i.stock_item_id !== null,
-            )
-            // Dedupe — an ingredient on multiple rows is still one shopping line.
-            .filter((i, idx, arr) => arr.findIndex((x) => x.stock_item_id === i.stock_item_id) === idx);
-    });
+    // D-019 is why the *fields* are never disabled while saving — only the
+    // Save button is, which is that rule's stated carve-out.
+    type SaveState = 'idle' | 'saving' | 'saved' | 'error';
+    const saveState = ref<SaveState>('idle');
+    const saveMessage = ref('');
+    const dirty = ref(false);
+    let idleTimer: ReturnType<typeof setTimeout> | null = null;
 
-    const trackedCount = computed(
-        () => new Set((recipe.value?.ingredients ?? []).map((i) => i.stock_item_id).filter(Boolean)).size,
-    );
-    const inStockCount = computed(
-        () =>
-            new Set(
-                (recipe.value?.ingredients ?? [])
-                    .filter((i) => !i.is_missing)
-                    .map((i) => i.stock_item_id)
-                    .filter(Boolean),
-            ).size,
-    );
-    // IMPL_PLAN_RECIPE_IMPORTER §Chunk 4 — cookableNow is now tri-state.
-    // ``null`` fires when the recipe has any unlinked required ingredient.
-    // The card renders dimmed with a tooltip; the "Cook mode" guard
-    // downstream (line ~1791) treats null as "not cookable" for the
-    // "confirm before starting" prompt, but the *label* on the guard's
-    // prompt is different — see cookableHeadline / cookableCaption below.
-    const cookableNow = computed<boolean | null>(
-        () => recipe.value?.cookable ?? false,
-    );
-    const unlinkedCount = computed(
-        () => recipe.value?.unlinked_ingredient_count ?? 0,
-    );
-    const cookableCardClass = computed(() => {
-        if (cookableNow.value === null) return 'dora-bg-sunken dora-text-muted';
-        return cookableNow.value
-            ? 'dora-bg-positive-soft text-positive'
-            : 'dora-bg-warning-soft text-warning';
-    });
-    const cookableIcon = computed(() => {
-        if (cookableNow.value === null) return ICONS.help_outline;
-        return cookableNow.value ? ICONS.check_circle : ICONS.shopping_cart;
-    });
-    const cookableHeadline = computed(() => {
-        if (cookableNow.value === null) {
-            return `${unlinkedCount.value} ingredient${unlinkedCount.value === 1 ? '' : 's'} to link`;
-        }
-        if (cookableNow.value) return 'Cookable now';
-        return `Missing ${missingIngredients.value.length} ingredient${missingIngredients.value.length === 1 ? '' : 's'}`;
-    });
-    const cookableCaption = computed(() => {
-        if (cookableNow.value === null) {
-            return 'Cookability check needs every ingredient linked to a stock item.';
-        }
-        return `${inStockCount.value} of ${trackedCount.value} in stock`;
-    });
+    // ── Masthead edit mode (R-055 / ADR-051) ────────────────────────────
+    // One pencil for the whole block, replacing the per-field `q-popup-edit`s
+    // that used to sit on the name, collection, cuisine, category and every
+    // fact. Those cost two clicks on every dropdown (one to summon the field,
+    // one to open it) and sized each control to its own longest option, so an
+    // empty Difficulty was a sliver. A block that flips whole keeps one grid
+    // across both states, and a select is a select.
+    //
+    // The other two editable regions don't need a switch: an ingredient row
+    // opens its editor on a tap of the row, and the method is prose, where an
+    // editor over the paragraph you're reading is the right shape — R-055's
+    // stated carve-out, served by `RecipeMethodEditorDialog`.
+    const headerEditing = ref(false);
 
-    // FU-653 — the belief remark's copy. Names the items and says plainly that
-    // nothing above it has changed, so the two cards can't be read as one
-    // contradictory verdict.
-    const inferenceCaption = computed(() => {
-        const names = (recipe.value?.inference_stock_item_names ?? []).join(', ');
-        return recipe.value?.inference_hint === 'at_risk'
-            ? `From your shopping and cooking rhythm, she suspects ${names} has run out since you last recorded it. Cookability above still follows what you recorded.`
-            : `You've got ${names} recorded as missing, but her reading of your rhythm says otherwise. Record a level to settle it.`;
-    });
-
-    // â”€â”€ Picker (autocomplete + inline create) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    const ingredientFilter = ref('');
-
-    function onIngredientFilter(value: string, update: (cb: () => void) => void) {
-        update(() => {
-            ingredientFilter.value = value;
-        });
-    }
-
-    function rowOptionsFor(_ing: IngredientForm) {
-        // Show all stock items, filtered by the active typed text.
-        const q = ingredientFilter.value.trim().toLowerCase();
-        return stockItems.value
-            .filter((s) => !q || s.name.toLowerCase().includes(q))
-            .slice(0, 60)
-            .map((s) => ({ label: s.name, value: s.stock_item_id }));
-    }
-
-    function onIngredientChosen(_value: unknown, _idx: number) {
-        markDirty();
-    }
-
-    async function createInlineStockItem(idx: number, rawName: string) {
-        const name = rawName.trim();
-        if (!name) return;
-        // Default the new item to the most-stocked level so it doesn't
-        // immediately count as "missing" â€” the user hasn't told us otherwise
-        // and slotting it straight into a recipe implies they have it.
-        const wellStocked = stockLevels.value[0];
-        if (!wellStocked) {
-            $q.notify({
-                type: 'negative',
-                position: 'bottom-right',
-                message: 'No stock levels configured â€” cannot create stock item.',
-            });
+    /** Leaving edit mode commits, because the pencil reads as "done" — see the
+     *  Done label it wears while open. A failed save keeps the block open so
+     *  the error has something to point at. */
+    async function onToggleHeaderEdit() {
+        if (!headerEditing.value) {
+            headerEditing.value = true;
             return;
         }
+        if (dirty.value) {
+            await onSave();
+            if (saveState.value === 'error') return;
+        }
+        headerEditing.value = false;
+    }
+
+    /** Every edit path lands here. It records that there is something to
+     *  save; it never saves. */
+    function markDirty() {
+        dirty.value = true;
+        // A previous failure is no longer describing the current form.
+        if (saveState.value === 'error') saveState.value = 'idle';
+    }
+
+    /** Mirrors the server's `recipe_ingredient_anchor` CHECK and the name
+     *  requirement, as human sentences. Empty = safe to send. */
+    const saveBlockers = computed(() => {
+        const out: string[] = [];
+        if (!form.name.trim()) out.push('the recipe needs a name');
+        const halfBuilt = form.ingredients.filter((i) => !i.stock_item_id && !i.raw_text).length;
+        if (halfBuilt > 0) {
+            out.push(halfBuilt === 1
+                ? '1 ingredient has no item or text yet'
+                : `${halfBuilt} ingredients have no item or text yet`);
+        }
+        return out;
+    });
+
+    /** True for a row that would block the save — used to point at the row
+     *  rather than only naming a count in the message. */
+    function isHalfBuilt(row: IngredientForm): boolean {
+        return !row.stock_item_id && !row.raw_text;
+    }
+
+    const canSave = computed(() => dirty.value && saveState.value !== 'saving');
+
+    async function onSave() {
+        const src = recipe.value;
+        if (!src || saveState.value === 'saving') return;
+        if (saveBlockers.value.length > 0) {
+            saveState.value = 'error';
+            saveMessage.value = `Not saved — ${saveBlockers.value.join(', and ')}.`;
+            return;
+        }
+        saveState.value = 'saving';
+        saveMessage.value = 'Saving…';
         try {
-            await stockItemStore.createStockItemAsync({
-                name,
-                stock_level_id: wellStocked.stock_level_id,
-                stock_location_id: null,
+            const command = buildUpdateCommand(form, src, {
+                image: imageDirty.value,
+                stepImages: stepImagesDirty.value,
             });
-            // Refresh-and-locate: createStockItemAsync pushes onto the store,
-            // so the new id is there waiting for us.
-            const created = stockItems.value.find((s) => s.name === name);
-            if (created) {
-                form.ingredients[idx]!.stock_item_id = created.stock_item_id;
-                markDirty();
-                // copy shifted from "Created stock item" (internal
-                // jargon) to a user-facing "Added to your pantry" so the user
-                // isn't surprised by a new tracked item on the next Stock
-                // overview visit. The inline-create path persists the item
-                // regardless of whether the recipe save goes through.
-                $q.notify({
-                    type: 'positive',
-                    position: 'bottom-right',
-                    message: `Added "${name}" to your pantry.`,
-                });
-            }
+            const didImageChange = imageDirty.value;
+            await recipeStore.updateRecipeAsync(command);
+            // Safe to re-hydrate here in a way autosave never was: the user
+            // asked to commit, so nothing is mid-edit. This is what picks up
+            // the server-derived values the page reads (cost, cookability,
+            // per-ingredient expiry) rather than recomputing them.
+            await loadRecipe();
+            if (didImageChange) imageVersion.value++;
+            dirty.value = false;
+            // A save is the end of an edit: the masthead goes back to reading,
+            // whichever button asked for it (the Save button in the action row
+            // or the pencil).
+            headerEditing.value = false;
+            saveState.value = 'saved';
+            saveMessage.value = 'Saved';
+            if (idleTimer) clearTimeout(idleTimer);
+            idleTimer = setTimeout(() => { saveState.value = 'idle'; }, 1600);
         } catch (err) {
-            $q.notify({
-                type: 'negative',
-                position: 'bottom-right',
-                message: 'Could not create stock item.',
-                caption: toastCaption(err),
-            });
+            saveState.value = 'error';
+            saveMessage.value = `Couldn't save. ${toastCaption(err)}`;
         }
     }
 
-    function addIngredient() {
-        form.ingredients.push({
-            stock_item_id: '',
-            raw_text: null,
-            quantity: null,
-            unit: null,
-            notes: null,
-            // every ingredient row needs a stable client_id so
-            // a step can highlight it before the server assigns a real UUID.
-            client_id: newClientId(),
-            section_client_id: null,
-            // Cookbook revision §1.9 — new rows default to required.
-            is_optional: false,
+    /** Discard: re-hydrate from the last loaded recipe. No refetch — the point
+     *  is to undo local edits, and `recipe.value` is what they departed from. */
+    function onDiscard() {
+        const src = recipe.value;
+        if (!src) return;
+        $q.dialog({
+            title: 'Discard changes',
+            message: 'Throw away every change you’ve made since the last save?',
+            cancel: true,
+            ok: { label: 'Discard', color: 'negative' },
+        }).onOk(() => {
+            hydrateRecipeForm(form, src);
+            imageDirty.value = false;
+            stepImagesDirty.value = false;
+            dirty.value = false;
+            headerEditing.value = false;
+            saveState.value = 'idle';
         });
-        markDirty();
     }
 
-    // FU-506 — save the typed text as an unlinked ingredient. Server
-    // accepts `stock_item_id=null` when `raw_text` is set (the
-    // recipe_ingredient_anchor CHECK constraint). The user can link
-    // it later from the same picker.
-    function useAsRawText(idx: number, rawText: string) {
-        const text = rawText.trim();
-        if (!text) return;
-        const row = form.ingredients[idx];
-        if (!row) return;
-        row.stock_item_id = null;
-        row.raw_text = text;
-        ingredientFilter.value = '';
-        markDirty();
-    }
-
-    // section helpers.
-    function addSection() {
-        form.sections.push({
-            client_id: newClientId(),
-            sequence: form.sections.length,
-            name: '',
-        });
-        markDirty();
-    }
-    function removeSection(idx: number) {
-        const removed = form.sections[idx];
-        if (!removed) return;
-        form.sections.splice(idx, 1);
-        // Resequence so server-side sort stays tight.
-        form.sections.forEach((s, i) => { s.sequence = i; });
-        // Detach any ingredients that pointed at it.
-        for (const ing of form.ingredients) {
-            if (ing.section_client_id === removed.client_id) {
-                ing.section_client_id = null;
-            }
-        }
-        // detach any top-level steps that pointed at it too.
-        for (const step of form.steps) {
-            if (step.section_client_id === removed.client_id) {
-                step.section_client_id = null;
-            }
-        }
-        markDirty();
-    }
-    function moveSection(idx: number, delta: -1 | 1) {
-        const target = idx + delta;
-        if (target < 0 || target >= form.sections.length) return;
-        const a = form.sections[idx];
-        const b = form.sections[target];
-        if (!a || !b) return;
-        form.sections[idx] = b;
-        form.sections[target] = a;
-        form.sections.forEach((s, i) => { s.sequence = i; });
-        markDirty();
-    }
-    const sectionOptions = computed(() => [
-        { value: null, label: '(Main)' },
-        ...form.sections.map((s) => ({
-            value: s.client_id,
-            label: s.name.trim() || '(Unnamed section)',
-        })),
-    ]);
-    // ── FU-118 / R-022 — ingredient DnD reorder + cross-section move ───
-    // `useDragDropList` owns the drag state machine + the dragover/leave/
-    // drop wiring. We supply the per-drop effect: re-insert source at the
-    // target's original slot AND copy the target's `section_client_id` to
-    // source, so reorder-within-section and move-between-sections are one
-    // gesture. Empty sections still need the per-row Section picker (you
-    // can't drop onto something that doesn't exist).
-    //
-    // FU-161 partner-bug — both indices are captured BEFORE the splice so
-    // the "insert at target's original slot" semantic matches shopping-list
-    // and recipe-step DnD. The previous pattern computed `toIdx` AFTER
-    // removing the source, which shifted the target's index down by one
-    // whenever the user dragged downwards — the drop landed one row above
-    // where the user let go. Same shape as feedback L414 on shopping
-    // lists; the fix is the same too.
-    const ingredientDnd = useDragDropList<IngredientForm>({
-        mime: 'application/x-dora-recipe-ingredient',
-        getId: (ing) => ing.client_id ?? null,
-        onDrop: ({ item: source }, { item: target }) => {
-            const fromIdx = form.ingredients.indexOf(source);
-            const toIdx = form.ingredients.indexOf(target);
-            if (fromIdx < 0 || toIdx < 0) return;
-            // `section_client_id` is optional on the command type but always
-            // present in form rows (null = unsectioned). Normalise so the
-            // assignment stays well-typed under exactOptionalPropertyTypes.
-            source.section_client_id = target.section_client_id ?? null;
-            form.ingredients.splice(fromIdx, 1);
-            form.ingredients.splice(toIdx, 0, source);
-            markDirty();
-        },
-    });
-
-    function removeIngredient(idx: number) {
-        const removed = form.ingredients[idx];
-        form.ingredients.splice(idx, 1);
-        // Drop any step references to the removed ingredient so the request
-        // stays consistent (the server would silently drop them too, but
-        // keeping the editor honest avoids "ghost" highlights on re-edit).
-        if (removed?.client_id) {
-            const stale = removed.client_id;
-            form.steps = form.steps.map((s) => ({
-                ...s,
-                ingredient_client_ids: s.ingredient_client_ids.filter((c) => c !== stale),
-            }));
-        }
-        markDirty();
-    }
-
-    // â”€â”€ Collection + vocabulary options â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    const collectionOptions = computed(() =>
-        recipeCollections.value.map((c) => ({
-            label: c.name,
-            value: c.recipe_collection_id,
-        })),
-    );
-    const cuisineOptions = computed(() =>
-        cuisines.value.map((c) => ({ label: c.name, value: c.cuisine_id })),
-    );
-    const categoryOptions = computed(() =>
-        categories.value.map((c) => ({ label: c.name, value: c.category_id })),
-    );
-    // Dietary tag options, grouping-prefixed so a flat multiselect still reads
-    // as clustered ("Allergen-free: Gluten-free").
-    const dietaryTagOptions = computed(() =>
-        dietaryTags.value.map((t) => ({ label: `${t.category}: ${t.name}`, value: t.dietary_tag_id })),
-    );
-    const toolOptions = computed(() =>
-        tools.value.map((t) => ({ label: t.name, value: t.tool_id })),
-    );
-
-    // ── DR-11 (D-015): read view state + display derivations ──────────────
-    // The page defaults to a READ view; an explicit Edit toggle reveals the
-    // form (a detail page is never an always-editable form — the cook-mode
-    // surface already proved a reading view is the right shape). These
-    // derivations map the same `form` model + option lists + stock helpers the
-    // editor uses, so read and edit can't drift.
-    const editing = ref(false);
-
-    function labelOf(
-        opts: ReadonlyArray<{ value: string | null; label: string }>,
-        id: string | null | undefined,
-    ): string | null {
-        if (!id) return null;
-        return opts.find((o) => o.value === id)?.label ?? null;
-    }
-    const readCuisine = computed(() => labelOf(cuisineOptions.value, form.cuisine_id));
-    const readCategory = computed(() => labelOf(categoryOptions.value, form.category_id));
-    const readTags = computed(() =>
-        form.dietary_tag_ids
-            .map((id) => labelOf(dietaryTagOptions.value, id))
-            .filter((x): x is string => !!x),
-    );
-    const readTools = computed(() =>
-        form.tool_ids
-            .map((id) => labelOf(toolOptions.value, id))
-            .filter((x): x is string => !!x),
-    );
-    const readTimeLabel = computed(() => {
-        const parts: string[] = [];
-        if (form.prep_time_minutes) parts.push(`${form.prep_time_minutes} min prep`);
-        if (form.cook_time_minutes) parts.push(`${form.cook_time_minutes} min cook`);
-        return parts.join(' · ');
-    });
-    function ingredientDisplayName(ing: typeof form.ingredients[number]): string {
-        if (ing.stock_item_id) {
-            return stockItems.value.find((s) => s.stock_item_id === ing.stock_item_id)?.name
-                ?? '(unknown ingredient)';
-        }
-        return (ing.raw_text ?? '').trim() || '(ingredient)';
-    }
-    // Ingredients grouped by named section (section order), unsectioned last.
-    //
-    // The rows are a *read model*, not the edit form's rows: each carries the
-    // at-risk chip already resolved, so the template renders one property
-    // instead of calling a lookup four times per ingredient. Everything the
-    // read view derives per-row belongs here for the same reason.
-    type ReadIngredientRow = typeof form.ingredients[number] & {
-        expiringChip: ReturnType<typeof expiringChipFor>;
-    };
-    const readIngredientGroups = computed(() => {
-        const toRow = (i: typeof form.ingredients[number]): ReadIngredientRow =>
-            ({ ...i, expiringChip: expiringChipFor(i.stock_item_id) });
-        const sections = [...form.sections].sort((a, b) => a.sequence - b.sequence);
-        const groups: Array<{ name: string | null; rows: ReadIngredientRow[] }> = [];
-        for (const sec of sections) {
-            const rows = form.ingredients
-                .filter((i) => i.section_client_id === sec.client_id)
-                .map(toRow);
-            if (rows.length > 0) groups.push({ name: sec.name || 'Section', rows });
-        }
-        const known = new Set(sections.map((s) => s.client_id));
-        const loose = form.ingredients
-            .filter((i) => !i.section_client_id || !known.has(i.section_client_id))
-            .map(toRow);
-        if (loose.length > 0) groups.push({ name: null, rows: loose });
-        return groups;
-    });
-    // Structured steps for the read list: top-level (no parent), by sequence.
-    const readSteps = computed(() =>
-        [...form.steps]
-            .filter((s) => !s.parent_client_id)
-            .sort((a, b) => a.sequence - b.sequence),
-    );
-    // Freeform instructions → non-empty lines for an ordered read list.
-    const readFreeformLines = computed(() =>
-        (form.instructions ?? '')
-            .split('\n')
-            .map((l) => l.trim())
-            .filter((l) => l.length > 0),
-    );
-
-    // What the image field shows: a freshly-picked data URL while
-    // editing, otherwise the saved image via the endpoint (cache-busted),
-    // else nothing.
-    // C-cross Chunk 5 — `showRecipeImages` gates the saved-preview
-    // branch only. A freshly-picked image still renders so the user can
-    // see what they're about to save; the editor itself (pick/clear)
-    // stays fully usable regardless.
-    const imagePreviewUrl = computed(() => {
-        if (imageDirty.value) return form.image;
-        if (showRecipeImages.value && recipe.value?.has_image) {
-            return recipeImageUrl(recipe.value.recipe_id, imageVersion.value);
-        }
-        return null;
-    });
-    // Feedback 2026-08-19: "no way to remove/clear image of a recipe". The
-    // claim above was only half true — ImageUploadField derives Remove from
-    // its `previewUrl` when `canClear` isn't passed, and that URL is gated on
-    // `showRecipeImages`. With photos turned off the recipe still HAD an
-    // image and there was no way to delete it. Whether an image exists is a
-    // fact about the recipe; whether it's displayed is a viewing preference.
-    // They're separate questions, so Remove now reads the fact.
-    // ── Cost card (feedback 2026-08-19) ────────────────────────────────
-    // Show the card whenever the recipe has something the estimator could
-    // have priced — i.e. at least one ingredient linked to a stock item.
-    // Without that, "no estimate" isn't information, it's an empty card.
-    const showCostCard = computed(
-        () => recipe.value !== null
-            && (recipe.value.estimated_cost !== null
-                || recipe.value.estimated_cost_lines.some((l) => l.reason !== 'no_link')),
-    );
-    function costLineQuantity(line: RecipeCostLine): string {
-        return formatQuantity(line.quantity, line.unit);
-    }
-    // Server ships the reason code; the sentence lives here (R-003 — one
-    // owner per fact, and copy is the client's fact).
-    function costLineReason(line: RecipeCostLine): string {
-        switch (line.reason) {
-            case 'no_link':
-                return 'Not linked to a stock item';
-            case 'no_price':
-                return 'No price recorded yet';
-            case 'unit_mismatch':
-                return line.priced_unit
-                    ? `Priced per ${line.priced_unit} — can't convert`
-                    : "Units don't match";
-            default:
-                return '';
-        }
-    }
-
-    const hasRemovableImage = computed(() =>
-        imageDirty.value ? !!form.image : !!recipe.value?.has_image,
-    );
-    function onPickImage(dataUrl: string) {
-        form.image = dataUrl;
-        imageDirty.value = true;
-        markDirty();
-    }
-    function onClearImage() {
-        form.image = null;
-        imageDirty.value = true;
-        markDirty();
-    }
-
-    // â”€â”€ Save / load â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     async function loadRecipe() {
         loading.value = true;
         loadError.value = null;
         try {
             const fresh = await recipeApi.getAsync(recipeId.value);
             recipe.value = fresh;
-            hydrateForm(fresh);
+            hydrateRecipeForm(form, fresh);
+            imageDirty.value = false;
+            stepImagesDirty.value = false;
         } catch (err) {
-            loadError.value = `Could not load recipe: ${describeApiError(err)}`;
+            loadError.value = toastCaption(err) || "Couldn't load this recipe.";
         } finally {
             loading.value = false;
         }
+        // After the form is hydrated, so `missingIngredients` is current.
+        // Deliberately not awaited by callers: the page is fully usable while
+        // the chips fill in.
+        void loadSubstitutes();
     }
 
-    async function onSave() {
-        if (!recipe.value) return;
+    // ── Derived display ─────────────────────────────────────────────────
+    const collectionName = computed(
+        () => recipeCollections.value.find((c) => c.recipe_collection_id === form.recipe_collection_id)?.name ?? '',
+    );
+    const cuisineName = computed(() => cuisines.value.find((c) => c.cuisine_id === form.cuisine_id)?.name ?? '');
+    const categoryName = computed(() => categories.value.find((c) => c.category_id === form.category_id)?.name ?? '');
 
-        // L289 — never silently drop a half-filled ingredient row. Block the
-        // save and point the user at it.
-        if (form.ingredients.some((i) => !i.stock_item_id)) {
-            $q.notify({
-                type: 'warning',
-                position: 'bottom-right',
-                message: 'Every ingredient needs a stock item.',
-                caption: 'Pick an item for each row, or remove the empty one.',
-            });
-            return;
-        }
-        if (!form.name.trim()) {
-            nameError.value = 'Give the recipe a name.';
-            return;
-        }
+    const collectionOptions = computed(() =>
+        recipeCollections.value.map((c) => ({ label: c.name, value: c.recipe_collection_id })));
+    const cuisineOptions = computed(() => cuisines.value.map((c) => ({ label: c.name, value: c.cuisine_id })));
+    const categoryOptions = computed(() => categories.value.map((c) => ({ label: c.name, value: c.category_id })));
+    const dietaryTagOptions = computed(() => dietaryTags.value.map((t) => ({ label: t.name, value: t.dietary_tag_id })));
+    const toolSelectOptions = computed(() => tools.value.map((t) => ({ label: t.name, value: t.tool_id })));
 
-        saving.value = true;
-        try {
-            const src = recipe.value;
-            // L286 — true PATCH semantics: only send scalar fields that
-            // actually changed, so re-saving an unchanged name can't trip the
-            // name-uniqueness check. Arrays are always sent (replace semantics).
-            // sections always go with the ingredient
-            // replace so a renamed section keeps its rows. Empty array =
-            // clear all sections; rows fall back to the implicit main
-            // group via ON DELETE SET NULL on the server.
-            const command: UpdateRecipeCommand = {
-                recipe_id: src.recipe_id,
-                ingredients: form.ingredients,
-                dietary_tag_ids: form.dietary_tag_ids,
-                tool_ids: form.tool_ids,
-                sections: form.sections.map((s, i) => ({
-                    client_id: s.client_id,
-                    sequence: i,
-                    name: (s.name || '').trim() || 'Untitled section',
-                })),
-            };
-            // Only touch the image when the user actually changed it.
-            const didImageChange = imageDirty.value;
-            if (didImageChange) command.image = form.image;
-            if (form.name !== src.name) command.name = form.name;
-            if (form.category_id !== src.category_id) command.category_id = form.category_id;
-            if (form.cuisine_id !== src.cuisine_id) command.cuisine_id = form.cuisine_id;
-            if (form.cook_time_minutes !== src.cook_time_minutes) command.cook_time_minutes = toIntOrNull(form.cook_time_minutes);
-            if (form.difficulty !== src.difficulty) command.difficulty = form.difficulty;
-            if (form.instructions !== src.instructions) command.instructions = form.instructions;
-            if (form.notes !== src.notes) command.notes = form.notes;
-            // always send `steps` so the server knows whether
-            // this save replaces the structured set or clears it (freeform
-            // mode sends []). Map the editor's EditableStep shape into the
-            // wire RecipeStepCommand.
-            // PROPOSAL_RECIPE_IMAGE_STEPS — only replace the structured
-            // step set when the user is *in* structured mode. Image / free
-            // form mode leaves existing structured rows untouched (mode
-            // switch is non-destructive — switching back finds them
-            // intact).
-            if (form.steps_mode === 'structured') {
-                const stepsToSend: RecipeStepCommand[] = form.steps.map((s) => ({
-                    client_id: s.client_id,
-                    parent_client_id: s.parent_client_id,
-                    sequence: s.sequence,
-                    text: s.text,
-                    hint: s.hint,
-                    ingredient_client_ids: [...s.ingredient_client_ids],
-                    tool_ids: [...s.tool_ids],
-                    // round-trip the section grouping. Sub-steps
-                    // stay null (the editor doesn't expose a picker on
-                    // depth-1 rows); server flattens by parent.
-                    section_client_id: s.parent_client_id === null
-                        ? s.section_client_id
-                        : null,
-                }));
-                command.steps = stepsToSend;
-            }
-            // PROPOSAL_RECIPE_IMAGE_STEPS — flip steps_mode if it changed,
-            // and replace step_images only when the user touched them in
-            // this edit session. A bare mode flip preserves existing rows.
-            if (form.steps_mode !== src.steps_mode) {
-                command.steps_mode = form.steps_mode;
-            }
-            if (stepImagesDirty.value) {
-                command.step_images = form.step_images.map(img =>
-                    img.data_url || '',
-                ).filter(s => s.startsWith('data:image/'));
-            }
-            if (form.prep_time_minutes !== src.prep_time_minutes) command.prep_time_minutes = toIntOrNull(form.prep_time_minutes);
-            if (form.recipe_collection_id !== src.recipe_collection_id) command.recipe_collection_id = form.recipe_collection_id;
-            if (form.servings !== src.servings) command.servings = toIntOrNull(form.servings);
-            if (form.source !== src.source) command.source = form.source;
-            if (form.time_of_day !== src.time_of_day) command.time_of_day = form.time_of_day;
-            if (form.kcal !== src.kcal) command.kcal = toIntOrNull(form.kcal);
-            await recipeStore.updateRecipeAsync(command);
-            await loadRecipe();
-            // Bust the <img> cache so a changed/cleared image shows immediately.
-            if (didImageChange) imageVersion.value++;
-            $q.notify({
-                type: 'positive',
-                position: 'bottom-right',
-                message: 'Recipe saved.',
-            });
-        } catch (err) {
-            $q.notify({
-                type: 'negative',
-                position: 'bottom-right',
-                message: 'Could not save recipe.',
-                caption: toastCaption(err),
-            });
-        } finally {
-            saving.value = false;
+    // `time_of_day` reads the household's own meal-slot names; the seed
+    // constant is only the pre-first-load fallback.
+    const timeOfDayOptions = computed(() =>
+        (mealSlotNames.value.length > 0 ? mealSlotNames.value : [...DEFAULT_MEAL_SLOTS]));
+
+    const totalMinutes = computed(() => {
+        const p = form.prep_time_minutes ?? 0;
+        const c = form.cook_time_minutes ?? 0;
+        return p + c > 0 ? p + c : null;
+    });
+    const headlineKcal = computed(() => {
+        if (isComplex.value && recipe.value?.nutrition?.kcal) return Math.round(recipe.value.nutrition.kcal);
+        return form.kcal ?? null;
+    });
+
+    const photoUrl = computed(() => {
+        if (imageDirty.value) return form.image;
+        if (showRecipeImages.value && recipe.value?.has_image) {
+            return recipeImageUrl(recipe.value.recipe_id, imageVersion.value);
         }
+        return null;
+    });
+    // Whether a photo *exists* — independent of whether photos are displayed,
+    // which is a viewing preference (the bug fixed on the old page 2026-08-19).
+    const hasPhoto = computed(() => (imageDirty.value ? !!form.image : !!recipe.value?.has_image));
+
+    function ingredientLabel(row: IngredientForm): string {
+        if (row.stock_item_id) {
+            return stockItems.value.find((s) => s.stock_item_id === row.stock_item_id)?.name
+                ?? row.raw_text ?? 'Unknown item';
+        }
+        return row.raw_text || 'Unnamed ingredient';
     }
 
-    // â”€â”€ Sidebar actions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    /** Ingredients bucketed by section, in section order, with the unsectioned
+     *  rows first under no heading — matching how the list reads on paper.
+     *
+     *  Sections with no rows are rendered too. Skipping them (which this page
+     *  shipped doing) made a brand-new section invisible the moment it was
+     *  created, so there was no visible place to move anything into and the
+     *  feature read as broken. An empty section shows its own hint instead. */
+    type IngredientGroup = {
+        key: string;
+        /** Null for the unsectioned rows — the group that renders bare. */
+        sectionId: string | null;
+        name: string;
+        rows: IngredientForm[];
+    };
+
+    const ingredientGroups = computed<IngredientGroup[]>(() => {
+        const flat = form.ingredients.filter((i) => !i.section_client_id);
+        const groups: IngredientGroup[] = [];
+        // The main group always renders, even empty: it owns the "Add
+        // ingredient" button, and a recipe whose every row sits in a section
+        // would otherwise have no way back to an unsectioned one.
+        groups.push({ key: 'main', sectionId: null, name: '', rows: flat });
+        for (const sec of [...form.sections].sort((a, b) => a.sequence - b.sequence)) {
+            groups.push({
+                key: sec.client_id,
+                sectionId: sec.client_id,
+                name: sec.name || 'Untitled section',
+                rows: form.ingredients.filter((i) => i.section_client_id === sec.client_id),
+            });
+        }
+        return groups;
+    });
+
+    function sectionNameOf(clientId: string | null): string {
+        if (!clientId) return '';
+        return form.sections.find((sec) => sec.client_id === clientId)?.name ?? '';
+    }
+    function sectionIndexOf(clientId: string | null): number {
+        if (!clientId) return -1;
+        return [...form.sections]
+            .sort((a, b) => a.sequence - b.sequence)
+            .findIndex((sec) => sec.client_id === clientId);
+    }
+    function renameSection(clientId: string, name: string) {
+        const sec = form.sections.find((x) => x.client_id === clientId);
+        if (!sec) return;
+        sec.name = name;
+        markDirty();
+    }
+
+    // ── Substitutes ─────────────────────────────────────────────────────
+    // Fetched per missing ingredient, because "what could I use instead" is
+    // only a question when something is actually absent. N is the number of
+    // missing rows — small, and the fan-out is the same shape the old page
+    // used for its bulk dialog.
+    const substitutesFor = ref(new Map<string, SubstituteOption[]>());
+
+    async function loadSubstitutes() {
+        const targets = missingIngredients.value.map((i) => i.stock_item_id);
+        if (targets.length === 0) {
+            substitutesFor.value = new Map();
+            return;
+        }
+        const next = new Map<string, SubstituteOption[]>();
+        const results = await Promise.allSettled(
+            targets.map((id) => stockItemApi.getDetailAsync(id)),
+        );
+        results.forEach((res, i) => {
+            const id = targets[i]!;
+            // A single failed lookup shouldn't cost the others their chip, and
+            // it isn't worth a toast: substitutes are an enhancement to a row
+            // that already reads "Missing" correctly without them.
+            if (res.status !== 'fulfilled') return;
+            const entries = (res.value.substitutes ?? []).map((sub) => ({
+                sub,
+                inStock: !isMissingItem(sub.stock_item_id),
+            }));
+            if (entries.length > 0) next.set(id, entries);
+        });
+        substitutesFor.value = next;
+    }
+
+    function substitutesForRow(row: IngredientForm): SubstituteOption[] {
+        if (!row.stock_item_id) return [];
+        return substitutesFor.value.get(row.stock_item_id) ?? [];
+    }
+
+    /** Missing rows that a substitute you already have would cover. This is
+     *  the fact that changes tonight's answer, so the status strip says it —
+     *  and, since 2026-08-24, so do the ingredient row and the cook-mode
+     *  guard, which is the last place it can still change the decision. */
+    const coverableIngredients = computed(() =>
+        missingIngredients.value.filter(
+            (i) => (substitutesFor.value.get(i.stock_item_id) ?? []).some((e) => e.inStock),
+        ));
+    const coverableCount = computed(() => coverableIngredients.value.length);
+    const substitutableNames = computed(() =>
+        coverableIngredients.value.map(
+            (i) => stockItems.value.find((s) => s.stock_item_id === i.stock_item_id)?.name
+                ?? i.stock_item_name,
+        ));
+
+    /** True when this row is missing but something in the pantry could stand
+     *  in for it. Drives the row chip's wording. */
+    function hasSwapInStock(row: IngredientForm): boolean {
+        if (!row.stock_item_id || !isMissingItem(row.stock_item_id)) return false;
+        return (substitutesFor.value.get(row.stock_item_id) ?? []).some((e) => e.inStock);
+    }
+
+    // ── What's already on a shopping list ───────────────────────────────
+    // Server-owned membership, not a client guess: the same map the cart
+    // buttons read. Missing rows split into "still to buy" and "already
+    // handled" so the status strip stops offering to add both.
+    const missingOnListCount = computed(() =>
+        missingIngredients.value.filter(
+            (i) => cartStateFor(i.stock_item_id, membership.value) !== 'none',
+        ).length);
+    const missingNotOnListCount = computed(
+        () => missingIngredients.value.length - missingOnListCount.value);
+
+    // Names the button by what it will actually do. When some of the missing
+    // rows are already handled the count has to be explicit ("Add 2 to a list"),
+    // because "add them" would otherwise read as all of them.
+    const addMissingLabel = computed(() => {
+        const left = missingNotOnListCount.value;
+        if (left === missingIngredients.value.length) {
+            return left === 1 ? 'Add it to a list' : 'Add them to a list';
+        }
+        return `Add ${left} to a list`;
+    });
+
+    function isMissingItem(stockItemId: string | null | undefined): boolean {
+        if (!stockItemId) return false;
+        const item = stockItems.value.find((s) => s.stock_item_id === stockItemId);
+        return !item || Boolean(item.is_out_of_stock);
+    }
+
+    // Server's per-ingredient expiry verdict, read off the loaded recipe so the
+    // chips and the cookbook's expiring filter share one horizon (as the old
+    // page does). Keyed by stock item, not row.
+    const expiringItems = computed(() => {
+        const map = new Map<string, { expired: boolean; date: string | null }>();
+        for (const ing of recipe.value?.ingredients ?? []) {
+            if (!ing.stock_item_id || !ing.is_expiring) continue;
+            map.set(ing.stock_item_id, { expired: ing.is_expired, date: ing.expiry_date });
+        }
+        return map;
+    });
+    function expiringChipFor(stockItemId: string | null | undefined) {
+        if (!stockItemId) return null;
+        const hit = expiringItems.value.get(stockItemId);
+        if (!hit) return null;
+        const when = hit.date ? formatDate(hit.date) : null;
+        return hit.expired
+            ? { label: 'Expired', colour: 'negative', icon: ICONS.error, tooltip: when ? `Expired ${when}` : 'Past its expiry date' }
+            : { label: 'Use soon', colour: 'warning', icon: ICONS.event_busy, tooltip: when ? `Expires ${when}` : 'Expiring soon' };
+    }
+    const atRiskCount = computed(() => expiringItems.value.size);
+    const atRiskHeadline = computed(() => {
+        const names = [...expiringItems.value.keys()]
+            .map((id) => stockItems.value.find((s) => s.stock_item_id === id)?.name)
+            .filter(Boolean);
+        if (names.length === 1) return `${names[0]} needs using`;
+        return `${atRiskCount.value} ingredients need using`;
+    });
+
+    const missingIngredients = computed(() => {
+        const r = recipe.value;
+        if (!r) return [];
+        return r.ingredients
+            .filter((i): i is typeof i & { stock_item_id: string; stock_item_name: string } =>
+                i.is_missing && i.stock_item_id !== null)
+            .filter((i, idx, arr) => arr.findIndex((x) => x.stock_item_id === i.stock_item_id) === idx);
+    });
+    const cookableNow = computed<boolean | null>(() => recipe.value?.cookable ?? false);
+    const unlinkedCount = computed(() => recipe.value?.unlinked_ingredient_count ?? 0);
+    const cookableHeadline = computed(() => {
+        if (unlinkedCount.value > 0 && missingIngredients.value.length === 0) {
+            return `${unlinkedCount.value} ingredient${unlinkedCount.value === 1 ? '' : 's'} to link`;
+        }
+        if (missingIngredients.value.length === 0) return 'Everything in stock';
+        return `${missingIngredients.value.length} ingredient${missingIngredients.value.length === 1 ? '' : 's'} missing`;
+    });
+    const cookableCaption = computed(() =>
+        cookableNow.value === null ? 'Link them to know for sure' : 'You can cook this now');
+
+    const showCostCell = computed(() => {
+        const r = recipe.value;
+        if (!r) return false;
+        return r.estimated_cost !== null
+            || (r.estimated_cost_lines ?? []).some((l) => l.reason !== 'no_link');
+    });
+
+    const versionSiblings = computed(() => recipe.value?.version_siblings ?? []);
+
+    // ── Method ──────────────────────────────────────────────────────────
+    const topLevelSteps = computed(() =>
+        [...form.steps].filter((s) => !s.parent_client_id).sort((a, b) => a.sequence - b.sequence));
+    function subStepsOf(step: EditableStep) {
+        return form.steps
+            .filter((s) => s.parent_client_id === step.client_id)
+            .sort((a, b) => a.sequence - b.sequence);
+    }
+    const freeformLines = computed(() =>
+        (form.instructions ?? '').split('\n').map((l) => l.trim()).filter((l) => l.length > 0));
+    const methodCountLabel = computed(() => {
+        if (form.steps_mode === 'structured') {
+            const n = topLevelSteps.value.length;
+            return `${n} step${n === 1 ? '' : 's'}`;
+        }
+        if (form.steps_mode === 'image') {
+            const n = (recipe.value?.step_images ?? []).length;
+            return `${n} photo${n === 1 ? '' : 's'}`;
+        }
+        return `${freeformLines.value.length} line${freeformLines.value.length === 1 ? '' : 's'}`;
+    });
+    /** Ingredient names a structured step declares — the only mode that has
+     *  the link, which is why the highlight is structured-only. */
+    function usesLabel(step: EditableStep): string {
+        const names = step.ingredient_client_ids
+            .map((id) => form.ingredients.find((i) => i.client_id === id))
+            .filter((i): i is IngredientForm => !!i)
+            .map((i) => ingredientLabel(i));
+        return names.join(', ');
+    }
+    const litIngredients = computed(() => {
+        const ids = new Set<string>();
+        if (!litStep.value) return ids;
+        const step = form.steps.find((s) => s.client_id === litStep.value);
+        for (const id of step?.ingredient_client_ids ?? []) ids.add(id);
+        return ids;
+    });
+
+    // The steps editor's option shape is {value,label} for all three lists.
+    const ingredientOptions = computed(() =>
+        form.ingredients.map((i) => ({ value: String(i.client_id), label: ingredientLabel(i) })));
+    const toolOptions = computed(() => tools.value.map((t) => ({ value: t.tool_id, label: t.name })));
+    const sectionOptions = computed(() =>
+        form.sections.map((s) => ({ value: s.client_id, label: s.name || 'Untitled section' })));
+
+    /** One pencil, three styles — so the label has to say which one it will
+     *  open (owner feedback 2026-08-24). */
+    const methodEditLabel = computed(() => {
+        switch (form.steps_mode) {
+            case 'structured': return 'Edit steps';
+            case 'image': return 'Edit step photos';
+            default: return 'Edit instructions';
+        }
+    });
+
+    function onStepsChanged(steps: EditableStep[]) {
+        form.steps = steps;
+        markDirty();
+    }
+    function onInstructionsChanged(text: string) {
+        form.instructions = text;
+        markDirty();
+    }
+    function onStepImagesChanged(images: EditableStepImage[]) {
+        form.step_images = images;
+        stepImagesDirty.value = true;
+        markDirty();
+    }
+
+    // ── Captions for the collapsed Details rows ─────────────────────────
+    /** Tags, tools, source and notes now share one row, so its caption has to
+     *  say which of the four are set without listing everything. */
+    const extraCaption = computed(() => {
+        const bits: string[] = [];
+        const names = [
+            ...form.dietary_tag_ids.map((id) => dietaryTags.value.find((t) => t.dietary_tag_id === id)?.name),
+            ...form.tool_ids.map((id) => tools.value.find((t) => t.tool_id === id)?.name),
+        ].filter(Boolean);
+        if (names.length > 0) bits.push(names.join(' · '));
+        if (form.source) bits.push('Has a source');
+        if (form.notes) bits.push('Has notes');
+        return bits.length > 0 ? bits.join(' · ') : 'Tags, tools, source, notes';
+    });
+    const versionsCaption = computed(() => {
+        const n = versionSiblings.value.length;
+        if (n === 0) return 'Only version';
+        return `${n + 1} versions`;
+    });
+    const nutritionCaption = computed(() => {
+        const n = recipe.value?.nutrition;
+        if (!n) return '';
+        return n.kcal ? `${Math.round(n.kcal)} kcal per serving` : 'Per serving';
+    });
+
+    // ── Ingredient + section mutations ──────────────────────────────────
+    /** `sectionId` is the card the button lives in, so a row lands where it
+     *  was asked for rather than in the flat list every time. */
+    function addIngredient(sectionId: string | null = null) {
+        form.ingredients.push({
+            client_id: newClientId(),
+            stock_item_id: null,
+            raw_text: null,
+            quantity: null,
+            unit: null,
+            notes: null,
+            section_client_id: sectionId,
+            is_optional: false,
+        } as IngredientForm);
+        markDirty();
+        // A fresh row has no anchor yet, so open the editor on it straight
+        // away rather than leaving a blank line the user has to discover is
+        // clickable — and which would block the save if they didn't.
+        const added = form.ingredients[form.ingredients.length - 1];
+        if (added?.client_id) openRowEditor(String(added.client_id));
+    }
+    function removeIngredient(clientId: string) {
+        const idx = form.ingredients.findIndex((i) => i.client_id === clientId);
+        if (idx < 0) return;
+        form.ingredients.splice(idx, 1);
+        // A step that pointed at this row would otherwise keep a dangling
+        // reference, which survives the PATCH as a step that "uses" nothing.
+        for (const step of form.steps) {
+            step.ingredient_client_ids = step.ingredient_client_ids.filter((id) => id !== clientId);
+        }
+        markDirty();
+    }
+
+    /** Ingredient order is array order — there is no `sequence` on the wire,
+     *  and arrays are sent with replace semantics — so a move is a splice.
+     *
+     *  Moves are *within a section card*: the visible neighbours are the
+     *  section's rows, not the whole recipe's, so swapping array positions
+     *  with the row directly above/below in that group is what makes ↑ and ↓
+     *  mean what they look like they mean. Changing which section a row is in
+     *  is a different act, done in the row editor. */
+    function moveIngredientWithin(rows: IngredientForm[], index: number, delta: -1 | 1) {
+        const target = rows[index + delta];
+        const source = rows[index];
+        if (!target || !source) return;
+        const from = form.ingredients.findIndex((i) => i.client_id === source.client_id);
+        const to = form.ingredients.findIndex((i) => i.client_id === target.client_id);
+        if (from < 0 || to < 0) return;
+        const [moved] = form.ingredients.splice(from, 1);
+        if (moved) form.ingredients.splice(to, 0, moved);
+        markDirty();
+    }
+
+    // ── The row editor ──────────────────────────────────────────────────
+    const rowEditorOpen = ref(false);
+    const rowEditorFor = ref<string | null>(null);
+    const rowEditorRow = computed(
+        () => form.ingredients.find((i) => i.client_id === rowEditorFor.value) ?? null);
+
+    function openRowEditor(clientId: string) {
+        rowEditorFor.value = clientId;
+        rowEditorOpen.value = true;
+    }
+
+    /** The editor hands back a whole patch rather than mutating the row, so
+     *  Cancel is a real cancel (R-006 safe mutations). */
+    function onRowEditorSave(patch: IngredientPatch) {
+        const row = form.ingredients.find((i) => i.client_id === rowEditorFor.value);
+        if (!row) return;
+        Object.assign(row, patch);
+        markDirty();
+    }
+
+    // ── Sections ────────────────────────────────────────────────────────
+    /** `sequence` is what the server sorts on, so it is kept dense and
+     *  0-based after every structural change rather than left with gaps. */
+    function resequenceSections() {
+        [...form.sections]
+            .sort((a, b) => a.sequence - b.sequence)
+            .forEach((sec, i) => { sec.sequence = i; });
+    }
+    function addSection() {
+        form.sections.push({ client_id: newClientId(), sequence: form.sections.length, name: '' });
+        resequenceSections();
+        markDirty();
+    }
+    function removeSection(clientId: string) {
+        const idx = form.sections.findIndex((s) => s.client_id === clientId);
+        if (idx < 0) return;
+        form.sections.splice(idx, 1);
+        // Rows in a deleted section fall back to the flat list, mirroring the
+        // server's ON DELETE SET NULL.
+        for (const ing of form.ingredients) {
+            if (ing.section_client_id === clientId) ing.section_client_id = null;
+        }
+        // Steps carry a section reference too (C-4 Chunk 10), and a stale one
+        // would point at a section the PATCH no longer contains.
+        for (const step of form.steps) {
+            if (step.section_client_id === clientId) step.section_client_id = null;
+        }
+        resequenceSections();
+        markDirty();
+    }
+    function moveSection(clientId: string, delta: -1 | 1) {
+        const ordered = [...form.sections].sort((a, b) => a.sequence - b.sequence);
+        const from = ordered.findIndex((s) => s.client_id === clientId);
+        const to = from + delta;
+        if (from < 0 || to < 0 || to >= ordered.length) return;
+        const [sec] = ordered.splice(from, 1);
+        if (sec) ordered.splice(to, 0, sec);
+        ordered.forEach((s, i) => { s.sequence = i; });
+        markDirty();
+    }
+
+    // ── Photo ───────────────────────────────────────────────────────────
+    // Every photo control lives on the photo itself, so the tile is the only
+    // uploader on the page; the dialog just picks which of the two things you
+    // meant when a photo already exists.
+    const photoTile = ref<InstanceType<typeof ImageEditTile> | null>(null);
+
+    function onPickPhoto(image: { dataUrl: string }) {
+        form.image = image.dataUrl;
+        imageDirty.value = true;
+        markDirty();
+    }
+    function onChangePhoto() {
+        photoDialogOpen.value = false;
+        photoTile.value?.openPicker();
+    }
+    function onRemovePhoto() {
+        photoDialogOpen.value = false;
+        form.image = null;
+        imageDirty.value = true;
+        markDirty();
+    }
+
+    // ── Actions ─────────────────────────────────────────────────────────
     async function onToggleFavourite() {
         if (!recipe.value) return;
         try {
             await recipeStore.toggleFavouriteAsync(recipe.value);
             await loadRecipe();
         } catch (err) {
-            $q.notify({
-                type: 'negative',
-                position: 'bottom-right',
-                message: 'Could not toggle favourite.',
-                caption: toastCaption(err),
-            });
+            $q.notify({ type: 'negative', position: 'bottom-right', message: "Couldn't update favourite.", caption: toastCaption(err) });
         }
     }
 
-    // L297/L299/L309 — guard cook-mode entry. A confirm is shown when there
-    // are unsaved edits OR the recipe isn't cookable now. The guard uses a
-    // real dialog with an explicit Cancel; clicking outside / Esc just closes
-    // it (never navigates). Clean entry (saved + cookable) goes straight in.
-    function goToCookMode() {
-        cookGuardOpen.value = false;
-        void router.push(`/cookbook/${recipeId.value}/cook`);
-    }
     function onStartCookMode() {
         if (!recipe.value) return;
-        // Shared predicate (R-003) — the cookbook asks the same question.
-        if (needsCookGuard(recipe.value, isDirty.value)) {
+        // `dirty` is a real guard reason now — the shared helper has always
+        // taken it, and the autosave page had nothing truthful to pass.
+        if (needsCookGuard(recipe.value, dirty.value)) {
             cookGuardOpen.value = true;
             return;
         }
         goToCookMode();
     }
-    async function onGuardSaveAndCook() {
+    function goToCookMode() {
+        void router.push(`/cookbook/${recipeId.value}/cook`);
+    }
+    /** The guard's "save and start" branch. Cook mode reads the *server's*
+     *  recipe, so starting without committing would cook the old version. */
+    async function onSaveAndCook() {
         await onSave();
-        // Don't proceed if the save surfaced a validation error (still dirty
-        // or a name error means it didn't persist) — L297 "block when the
-        // most recent save errored".
-        if (!isDirty.value && !nameError.value) goToCookMode();
+        if (saveState.value === 'error') return;
+        goToCookMode();
     }
 
-    // `onAddRowToList` retired; the per-row
-    // AddToListButton owns the click now.
+    function onPrint() {
+        if (!recipeId.value) return;
+        recipeExport.openPrintView(recipeId.value);
+    }
 
-    // Add-all-missing → opens the shared per-ingredient picker (Chunk B §1.4)
-    // pre-selected to the currently missing items.
-    const pickerRef = ref<{ setBusy: (v: boolean) => void } | null>(null);
+    async function onNewVersion() {
+        if (!recipe.value) return;
+        newVersionLoading.value = true;
+        try {
+            const created = await recipeApi.createNewVersionAsync(recipe.value.recipe_id);
+            // CreatedResponse carries either `recipe_id` (created() body) or
+            // `id` (Location-style). Cover both, as the old page does.
+            const newId = (created as Record<string, unknown>).recipe_id as string | undefined
+                ?? created.id;
+            await recipeStore.getRecipesAsync();
+            $q.notify({
+                type: 'positive',
+                position: 'bottom-right',
+                message: 'New version created.',
+                caption: 'Both versions are equal peers — pick either when scheduling.',
+            });
+            if (newId) void router.push(`/cookbook/${newId}`);
+        } catch (err) {
+            $q.notify({ type: 'negative', position: 'bottom-right', message: "Couldn't create a new version.", caption: toastCaption(err) });
+        } finally {
+            newVersionLoading.value = false;
+        }
+    }
+
+    function onDelete() {
+        if (!recipe.value) return;
+        $q.dialog({
+            title: 'Delete recipe',
+            message: `Delete "${recipe.value.name}"? This can't be undone.`,
+            cancel: true,
+            ok: { label: 'Delete', color: 'negative' },
+        }).onOk(() => { void doDelete(); });
+    }
+    async function doDelete() {
+        if (!recipe.value) return;
+        try {
+            await recipeStore.deleteRecipeAsync(recipe.value.recipe_id);
+            await router.push('/cookbook');
+        } catch (err) {
+            $q.notify({ type: 'negative', position: 'bottom-right', message: "Couldn't delete.", caption: toastCaption(err) });
+        }
+    }
+
+    async function onAdjustMeals(delta: number) {
+        if (!recipe.value) return;
+        adjusting.value = true;
+        try {
+            await recipeStore.adjustMealsAsync(recipe.value.recipe_id, delta);
+            await loadRecipe();
+        } catch (err) {
+            $q.notify({ type: 'negative', position: 'bottom-right', message: 'Could not update meals.', caption: toastCaption(err) });
+        } finally {
+            adjusting.value = false;
+        }
+    }
+
+    // Reuses the shared picker (and its list-target step) rather than a
+    // second, thinner add path — same flow the old page runs (R-001).
     const pickerOpen = ref(false);
+    const pickerRef = ref<InstanceType<typeof RecipeIngredientPickerDialog> | null>(null);
     const pickerInitialCheckedIds = ref<string[] | undefined>(undefined);
 
     function onAddMissingToList() {
@@ -2371,357 +1921,537 @@
         }
     }
 
-    // â”€â”€ Substitutes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    const substitutesOpen = ref(false);
-    const loadingSubstitutes = ref(false);
-    const substituteOptions = ref<
-        { stockItemId: string; name: string; substitutes: Substitute[] }[]
-    >([]);
-
-    async function onFindSubstitutes() {
-        if (missingIngredients.value.length === 0) return;
-        substitutesOpen.value = true;
-        loadingSubstitutes.value = true;
-        try {
-            // Fan-out: one detail fetch per missing item. N is small and this
-            // is interactive, so the parallelism is fine.
-            const results = await Promise.all(
-                missingIngredients.value.map(async (ing) => {
-                    const detail = await stockItemApi.getDetailAsync(ing.stock_item_id);
-                    const ingName =
-                        recipe.value?.ingredients.find(
-                            (i) => i.stock_item_id === ing.stock_item_id,
-                        )?.stock_item_name ?? detail.name;
-                    return {
-                        stockItemId: ing.stock_item_id,
-                        name: ingName,
-                        substitutes: detail.substitutes ?? [],
-                    };
-                }),
-            );
-            substituteOptions.value = results;
-        } catch (err) {
-            $q.notify({
-                type: 'negative',
-                position: 'bottom-right',
-                message: 'Could not load substitutes.',
-                caption: toastCaption(err),
-            });
-            substitutesOpen.value = false;
-        } finally {
-            loadingSubstitutes.value = false;
-        }
+    function goToSibling(id: string) {
+        void router.push(`/cookbook/${id}`);
     }
 
-    // ── Import a recipe (paste) ─────────────────────────────────────────
-    // IMPL_PLAN_RECIPE_IMPORTER §Chunk 5 — the dialog (RecipeImportDialog)
-    // now owns a paste textarea + optional source URL, and calls
-    // `importFromContentAsync`. This page opens it via v-model and
-    // handles the result: confirm-overwrite → patch form fields →
-    // close + toast.
-    const importOpen = ref(false);
-
-    function onImportFromUrl() {
-        importOpen.value = true;
-    }
-
-    async function onRecipeImported(imported: ImportedRecipe) {
-        // Confirm overwrite — the imported result might wipe out careful
-        // local edits if we just clobber the form.
-        const proceed = await new Promise<boolean>((resolve) => {
-            $q.dialog({
-                title: `Import "${imported.name}"?`,
-                message:
-                    `Found ${imported.ingredients.length} ingredient${
-                        imported.ingredients.length === 1 ? '' : 's'
-                    }. ${
-                        imported.ingredients.filter((i) => i.stock_item_id).length
-                    } matched existing stock items.${
-                        isDirty.value
-                            ? ' Your unsaved edits to this recipe will be discarded.'
-                            : ''
-                    }`,
-                ok: { label: 'Replace fields', color: 'primary', noCaps: true },
-                cancel: { noCaps: true },
-            })
-                .onOk(() => resolve(true))
-                .onCancel(() => resolve(false))
-                .onDismiss(() => resolve(false));
-        });
-        if (!proceed) {
-            // User backed out — close the import dialog so we don't leave
-            // a stale URL on screen.
-            importOpen.value = false;
-            return;
-        }
-
-        form.name = imported.name;
-        // Importer resolves scraped names to vocab ids when it can; null
-        // id (no match) leaves the select empty for the user to pick.
-        form.cuisine_id = imported.cuisine_id;
-        form.category_id = imported.category_id;
-        form.difficulty = imported.difficulty;
-        form.servings = imported.servings;
-        form.prep_time_minutes = imported.prep_time_minutes;
-        form.cook_time_minutes = imported.cook_time_minutes;
-        // `source` is its own field now; stop appending
-        // "Source: <url>" to the instructions blob.
-        form.instructions = imported.instructions || null;
-        form.source = imported.source_url || null;
-        // IMPL_PLAN_RECIPE_IMPORTER §Chunk 4/5 — every ingredient rides
-        // through save now. Linked rows send stock_item_id; unlinked
-        // rows send raw_text and stock_item_id: null. The user resolves
-        // unlinked rows later via the recipe editor's picker OR the
-        // bulk-linker page (Chunk 6). Pre-Chunk-4 this branch coerced
-        // stock_item_id to '' which no longer parses server-side.
-        form.ingredients = imported.ingredients.map((i) => ({
-            stock_item_id: i.stock_item_id,
-            raw_text: i.raw_text,
-            quantity: i.quantity,
-            unit: i.unit,
-            notes: i.notes,
-            client_id: newClientId(),
-            // Cookbook revision §1.9 — importer v1 makes no attempt to
-            // detect optional from the source text (parsing "or to
-            // taste" / parens is brittle). User toggles per-row after
-            // import.
-            is_optional: false,
-        }));
-        // Importer never lands a recipe in image mode — image steps
-        // are hand-entered only. Pre-flip back if the user was just
-        // experimenting before kicking off an import.
-        form.steps_mode = 'freeform';
-        // adopt parsed structured steps when the source
-        // shipped HowToStep / HowToSection. Empty list ⇒ source only had a
-        // string, freeform mode stays active.
-        if (imported.steps && imported.steps.length > 0) {
-            form.steps = imported.steps.map((s) => ({
-                client_id: s.client_id,
-                parent_client_id: s.parent_client_id,
-                sequence: s.sequence,
-                text: s.text,
-                hint: s.hint,
-                ingredient_client_ids: [],
-                tool_ids: [],
-                section_client_id: null,
-            }));
-            form.steps_mode = 'structured';
-        } else {
-            form.steps = [];
-            form.steps_mode = 'freeform';
-        }
-        markDirty();
-        importOpen.value = false;
-        // IMPL_PLAN_RECIPE_IMPORTER §Chunk 5 — distinct toast when the
-        // parser fell back to its lowest-shape output (typically < 3
-        // ingredients found). The user knows to clean up rather than
-        // assume the structured fields are accurate.
-        if (imported.is_degraded) {
-            $q.notify({
-                type: 'warning',
-                position: 'bottom-right',
-                timeout: 6000,
-                message: 'Couldn’t auto-structure that paste',
-                caption:
-                    'Pulled the text into Instructions and saved the URL. ' +
-                    'Review and edit to clean it up.',
-            });
-        } else {
-            const unlinkedCount = imported.ingredients.filter((i) => !i.stock_item_id).length;
-            $q.notify({
-                type: 'positive',
-                position: 'bottom-right',
-                message:
-                    `Imported "${imported.name}".` +
-                    (unlinkedCount === 0
-                        ? ''
-                        : ` ${unlinkedCount} ingredient${unlinkedCount === 1 ? '' : 's'} unlinked — link later from the recipe.`),
-            });
-        }
-    }
-
-    // ── Meals-on-hand controls ─────────────────────────────────────────
-    // Feedback 2026-08-19: "Mark cooked" and "Log cook…" are gone. Cooking
-    // is an *implicit* fact — nobody navigates to a recipe to remember to
-    // record that they made it — so the only writer of `last_made_on` and
-    // the pool bump is now finishing a cook session. The stepper below stays
-    // as the direct way to correct the pool count.
-    const adjusting = ref(false);
-
-    async function onAdjustMeals(delta: number) {
-        if (!recipe.value) return;
-        adjusting.value = true;
-        try {
-            await recipeStore.adjustMealsAsync(recipe.value.recipe_id, delta);
-            await loadRecipe();
-        } catch (err) {
-            $q.notify({
-                type: 'negative',
-                position: 'bottom-right',
-                message: 'Could not update meals.',
-                caption: toastCaption(err),
-            });
-        } finally {
-            adjusting.value = false;
-        }
-    }
-
-    // ── C-4 Chunk 8 — versions ──────────────────────────────────────────
-    const versionSiblings = computed(() => recipe.value?.version_siblings ?? []);
-    const newVersionLoading = ref(false);
-
-    async function onNewVersion() {
-        if (!recipe.value) return;
-        newVersionLoading.value = true;
-        try {
-            const created = await recipeApi.createNewVersionAsync(recipe.value.recipe_id);
-            // CreatedResponse carries either `recipe_id` (created() body) or
-            // `id` (Location-style). Cover both.
-            const newId =
-                (created as Record<string, unknown>).recipe_id as string | undefined
-                ?? created.id;
-            await recipeStore.getRecipesAsync();
-            $q.notify({
-                type: 'positive',
-                position: 'bottom-right',
-                message: 'New version created.',
-                caption: 'Both versions are equal peers — pick either when scheduling.',
-            });
-            if (newId) void router.push(`/cookbook/${newId}`);
-        } catch (err) {
-            $q.notify({
-                type: 'negative',
-                position: 'bottom-right',
-                message: 'Could not create version.',
-                caption: toastCaption(err),
-            });
-        } finally {
-            newVersionLoading.value = false;
-        }
-    }
-
-    function onJumpToSibling(recipeId: string) {
-        void router.push(`/cookbook/${recipeId}`);
-    }
-
-    function formatLastMade(isoDate: string): string {
-        try {
-            const d = new Date(isoDate);
-            if (Number.isNaN(d.getTime())) return 'recently';
-            return formatLocaleDate(d, { day: 'numeric', month: 'short', year: 'numeric' });
-        } catch {
-            return 'recently';
-        }
-    }
-
-    async function onDelete() {
-        if (!recipe.value) return;
-        const ok = await new Promise<boolean>((resolve) => {
-            $q.dialog({
-                title: 'Delete recipe',
-                message: `Delete "${recipe.value!.name}"? This cannot be undone.`,
-                ok: { label: 'Delete', color: 'negative', noCaps: true },
-                cancel: { noCaps: true },
-            })
-                .onOk(() => resolve(true))
-                .onCancel(() => resolve(false))
-                .onDismiss(() => resolve(false));
-        });
-        if (!ok) return;
-        try {
-            await recipeStore.deleteRecipeAsync(recipe.value.recipe_id);
-            // The recipe is gone — drop dirty flags so the unsaved-changes
-            // guard (FU-156) doesn't prompt about edits to a now-deleted row.
-            isDirty.value = false;
-            imageDirty.value = false;
-            void router.push('/cookbook');
-        } catch (err) {
-            $q.notify({
-                type: 'negative',
-                position: 'bottom-right',
-                message: 'Could not delete.',
-                caption: toastCaption(err),
-            });
-        }
-    }
-
-    // `onBack` was retired 2026-08-19 — PageToolbar's `back-to` is a plain
-    // router link to /cookbook, which is all this did. The unsaved-changes
-    // prompt is owned by `useUnsavedChangesGuard` (FU-156) and fires on the
-    // resulting router-leave whatever triggered it, so nothing is lost.
-
-    // â”€â”€ Mount â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Mount / unmount / leaving ───────────────────────────────────────
     onMounted(async () => {
         await Promise.all([
             recipeStore.ensureCollectionsLoadedAsync(),
             stockItemStore.ensureLoadedAsync(),
             stockLevelStore.ensureLoadedAsync(),
-            shoppingListStore.ensureLoadedAsync(),
             recipeVocabStore.ensureLoadedAsync(),
+            shoppingListStore.ensureLoadedAsync(),
             mealSlotStore.ensureLoadedAsync(),
         ]);
         await loadRecipe();
+        window.addEventListener('beforeunload', onBeforeUnload);
     });
 
-    // Re-load when navigating between recipes without unmount.
+    onBeforeUnmount(() => {
+        // The page shipped with neither of these. The autosave timer it had
+        // outlived the component, so a PATCH could land with nothing mounted
+        // to report its failure to.
+        if (idleTimer) clearTimeout(idleTimer);
+        window.removeEventListener('beforeunload', onBeforeUnload);
+    });
+
+    /** Tab close / reload. The browser shows its own generic prompt; the
+     *  string is ignored by every current engine but `preventDefault` is what
+     *  actually arms it. */
+    function onBeforeUnload(e: BeforeUnloadEvent) {
+        if (!dirty.value) return;
+        e.preventDefault();
+        e.returnValue = '';
+    }
+
+    // In-app navigation — the Back arrow, a sibling version, cook mode.
+    onBeforeRouteLeave((_to, _from, next) => {
+        if (!dirty.value) {
+            next();
+            return;
+        }
+        $q.dialog({
+            title: 'Unsaved changes',
+            message: 'You have changes that haven’t been saved yet.',
+            cancel: { label: 'Stay', flat: true, noCaps: true },
+            ok: { label: 'Leave without saving', color: 'negative', noCaps: true },
+        })
+            .onOk(() => { next(); })
+            .onCancel(() => { next(false); });
+    });
+
+    // Switching recipes in place (a sibling version) is a fresh load; the
+    // guard above has already dealt with any unsaved work.
     watch(recipeId, () => {
-        if (recipeId.value) void loadRecipe();
+        dirty.value = false;
+        headerEditing.value = false;
+        saveState.value = 'idle';
+        void loadRecipe();
     });
 </script>
 
-<style scoped>
-    /* FU-653 — the belief remark. A tinted edge only: it sits under the
-       cookability verdict and must read as a note about it, not a second
-       verdict competing with it. */
-    .recipe-inference--risk {
-        border-color: color-mix(in srgb, var(--semantic-warning) 55%, transparent);
+<style scoped lang="scss">
+    /* No display face. The page shipped with Fraunces on the title and the
+       section labels; the owner's verdict 2026-08-24 was that it "just
+       doesn't feel like the same app" — which is the right call, because a
+       page-specific typeface is a second brand nobody asked for. Everything
+       here inherits the user's chosen font (Settings → Appearance,
+       themeService FONT_FAMILY_CSS), like every other page. */
+
+    /* ── Masthead ─────────────────────────────────────────────────────── */
+    .rn__masthead {
+        display: grid;
+        grid-template-columns: 220px 1fr;
+        gap: var(--space-5, 20px);
+        align-items: start;
     }
-    .recipe-inference--good {
-        border-color: color-mix(in srgb, var(--semantic-positive) 55%, transparent);
+    .rn__photo {
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        border-radius: var(--radius-lg, 10px);
+        overflow: hidden;
+        border: 1px solid var(--border-default);
     }
-    .recipe-name-input :deep(input) {
-        font-size: 1.15rem;
+    .rn__photoimg { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .rn__photoplaceholder {
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: var(--space-2, 8px);
+        width: 100%; height: 100%;
+        color: var(--text-muted);
+        font-size: 0.875rem;
+    }
+    .rn__photoacts { display: flex; flex-direction: column; gap: var(--space-2, 8px); }
+    /* The empty state is the tile itself now, not a separate <button>, so this
+       only has to tint the well — `.rn__photoplaceholder` centres the content. */
+    .rn__photo--empty { background: var(--surface-sunken); }
+    .rn__photo--empty:hover { border-color: var(--brand-primary); }
+
+    .rn__identity { min-width: 0; }
+    .rn__pencil { flex: none; }
+
+    /* One grid for both halves of the edit face, so a select is as wide as
+       the cell it sits in rather than as wide as its longest option. */
+    .rn__fields {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+        gap: var(--space-3, 12px);
+        margin-top: var(--space-3, 12px);
+    }
+    .rn__backrow { display: flex; align-items: center; gap: var(--space-2, 8px); }
+    .rn__title {
+        font-size: 2rem;
         font-weight: 600;
-    }
-    .ingredient-row {
-        align-items: flex-start;
-    }
-    /* L292 — tint the whole row when its ingredient is missing, instead of
-       stacking a second chip. */
-    .ingredient-row--missing {
-        background: color-mix(in srgb, var(--q-negative) 9%, transparent);
-    }
-    /* FU-118 / R-022 — drag affordances live in src/css/dnd.scss
-       (.dora-dnd-row / .dora-dnd-handle); the composable applies the
-       classes via `rowClass`, the template uses .dora-dnd-handle on
-       the handle wrapper. */
-    /* ── DR-11 (D-015) read view ──────────────────────────────────────── */
-    .recipe-read__hero {
-        border-radius: var(--radius-lg, 12px);
-        max-height: 320px;
-    }
-    .recipe-read__ings {
+        line-height: 1.15;
+        letter-spacing: -0.01em;
         margin: 0;
-        padding-left: var(--space-5, 20px);
-        line-height: 1.6;
+        /* The h1 sits in a flex row; without `flex: 1` it is sized to its own
+           text and wraps with half the row still empty. `text-wrap: balance`
+           made that worse by splitting evenly across the lines it chose, so it
+           goes too — the title should fill the row and only wrap when it must. */
+        flex: 1;
+        min-width: 0;
     }
-    .recipe-read__ing--optional {
+    /* In edit mode the h1 is a wrapper around an input, so it drops the
+       display sizing it uses when it is actually a heading. */
+    .rn__title--edit { font-size: 1rem; font-weight: 400; }
+    .rn__eyebrow {
+        display: flex; flex-wrap: wrap; align-items: center;
+        /* Wider than the old dot-separated gap — the glyphs are doing the
+           separating now, so the space between facts has to read as bigger
+           than the space inside one. */
+        gap: var(--space-2, 8px) var(--space-4, 16px);
+        margin-top: var(--space-2, 8px);
+        color: var(--text-secondary);
+        font-size: 0.875rem;
+    }
+    .rn__brow { display: inline-flex; align-items: center; gap: var(--space-1, 4px); }
+
+    /* The inline-edit affordance: reads as text, reveals on hover/focus. */
+    .rn__edit {
+        border-radius: var(--radius-sm, 4px);
+        cursor: pointer;
+        padding: 0 3px;
+        margin: 0 -3px;
+        box-shadow: inset 0 -1px 0 0 transparent;
+        transition: background 100ms ease, box-shadow 100ms ease;
+    }
+    .rn__edit:hover {
+        background: var(--overlay-hover);
+        box-shadow: inset 0 -1px 0 0 var(--border-strong);
+    }
+    .rn__edit:focus-visible {
+        outline: 2px solid var(--brand-primary);
+        outline-offset: 1px;
+    }
+
+    .rn__facts {
+        display: flex; flex-wrap: wrap;
+        gap: var(--space-2, 8px) var(--space-6, 24px);
+        margin-top: var(--space-4, 16px);
+    }
+    .rn__fact { display: flex; flex-direction: column; gap: 2px; min-width: 60px; flex: 0 0 auto; }
+    .rn__factk {
+        display: inline-flex; align-items: center; gap: var(--space-1, 4px);
+        font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.07em;
+        text-transform: uppercase; color: var(--text-muted);
+    }
+    /* The letter-spacing above is set for capitals; on the glyph it just
+       pushes it off its word. */
+    .rn__factk .q-icon { letter-spacing: normal; }
+    .rn__factv { font-size: 1rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+    /* ── Actions ──────────────────────────────────────────────────────── */
+    .rn__actions {
+        display: flex; align-items: center; gap: var(--space-2, 8px);
+        margin-top: var(--space-5, 20px);
+        padding-top: var(--space-4, 16px);
+        border-top: 1px solid var(--divider);
+        flex-wrap: wrap;
+    }
+    .rn__delete { margin-left: auto; }
+
+    /* ── Status strip ─────────────────────────────────────────────────── */
+    .rn__status {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1px;
+        margin-top: var(--space-5, 20px);
+        background: var(--border-default);
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-lg, 10px);
+        overflow: hidden;
+    }
+    .rn__cell {
+        background: var(--surface-component);
+        padding: var(--space-3, 12px) var(--space-4, 16px);
+        display: flex; flex-direction: column; gap: 2px;
+        position: relative;
+    }
+    /* A cell that carries an action: copy on the left, the action on the
+       right edge where it can be reached without reading past it. */
+    .rn__cell--split {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--space-3, 12px);
+    }
+    .rn__cellbody { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+    /* Severity as an edge stripe rather than a washed cell: it survives both
+       themes and doesn't drown the text it's qualifying (D-002/D-013). */
+    .rn__cell--bad::before,
+    .rn__cell--warn::before,
+    .rn__cell--ok::before {
+        content: '';
+        position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+    }
+    .rn__cell--bad::before { background: var(--semantic-negative); }
+    .rn__cell--warn::before { background: var(--semantic-warning); }
+    .rn__cell--ok::before { background: var(--semantic-positive); }
+    .rn__cellk {
+        font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.07em;
+        text-transform: uppercase; color: var(--text-muted);
+    }
+    .rn__cellv { font-weight: 600; }
+    .rn__cellsub { font-size: 0.8125rem; color: var(--text-muted); }
+    .rn__pool { display: flex; align-items: center; gap: var(--space-2, 8px); flex-wrap: wrap; }
+    .rn__link {
+        background: none; border: 0; padding: 0;
+        font: inherit; font-size: 0.8125rem; font-weight: 600;
+        color: var(--brand-primary); cursor: pointer; text-align: left;
+    }
+    .rn__link:hover { text-decoration: underline; }
+    .rn__link:focus-visible { outline: 2px solid var(--brand-primary); outline-offset: 2px; }
+    .rn__cellbtn { align-self: flex-start; margin-top: var(--space-1, 4px); }
+    /* The swap line is good news on a cell that is otherwise bad news, so it
+       carries the positive ink rather than the muted grey the other sub-lines
+       use (D-013 — colour means something here). */
+    .rn__cellswap {
+        display: flex; align-items: center; gap: var(--space-1, 4px);
+        font-size: 0.8125rem;
+        color: var(--semantic-positive);
+    }
+
+    /* ── Body ─────────────────────────────────────────────────────────── */
+    .rn__body {
+        display: grid;
+        grid-template-columns: minmax(280px, 34%) 1fr;
+        gap: var(--space-8, 32px);
+        margin-top: var(--space-6, 24px);
+        align-items: start;
+    }
+    /* The rail follows the method down a long recipe, and each pane scrolls
+       inside itself rather than the page (owner ask). */
+    .rn__rail { position: sticky; top: var(--space-4, 16px); }
+    .rn__pane {
+        max-height: calc(100vh - 220px);
+        overflow-y: auto;
+        overscroll-behavior: contain;
+    }
+    .rn__sechead {
+        display: flex; align-items: center; gap: var(--space-3, 12px);
+        padding-bottom: var(--space-2, 8px);
+        margin-bottom: var(--space-3, 12px);
+        border-bottom: 1px solid var(--border-default);
+    }
+    .rn__sectitle {
+        font-size: 0.9375rem; font-weight: 700;
+        letter-spacing: 0.08em; text-transform: uppercase;
+        color: var(--text-secondary);
+        margin: 0;
+    }
+    .rn__seccount {
+        font-size: 0.8125rem; color: var(--text-muted);
+        font-variant-numeric: tabular-nums; margin-left: auto;
+    }
+    .rn__modes { min-width: 0; }
+    /* The style switch is a labelled control on its own line rather than a
+       nameless three-way crammed into the section heading. */
+    .rn__stylebar {
+        display: flex; align-items: center; gap: var(--space-2, 8px);
+        flex-wrap: wrap;
+        margin-bottom: var(--space-3, 12px);
+    }
+    .rn__stylek {
+        font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.07em;
+        text-transform: uppercase; color: var(--text-muted);
+    }
+    .rn__styleedit { margin-left: auto; }
+
+    /* A section is a container, so it is drawn as one (owner feedback
+       2026-08-24). The unsectioned group deliberately gets no card: a box
+       around "the rest of the ingredients" is a box around nothing. */
+    .rn__group { margin-bottom: var(--space-3, 12px); }
+    .rn__group--card {
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-lg, 10px);
+        background: var(--surface-component);
+        padding: var(--space-2, 8px);
+    }
+    .rn__grouphead {
+        display: flex; align-items: center; gap: var(--space-2, 8px);
+        padding: var(--space-1, 4px) var(--space-1, 4px) var(--space-2, 8px);
+        border-bottom: 1px solid var(--divider);
+        margin-bottom: var(--space-1, 4px);
+    }
+    .rn__groupname {
+        font-size: 0.8125rem; font-weight: 700; letter-spacing: 0.06em;
+        text-transform: uppercase; color: var(--brand-primary);
+        min-width: 0;
+    }
+    .rn__groupcount {
+        margin-left: auto;
+        font-size: 0.8125rem; color: var(--text-muted);
+        font-variant-numeric: tabular-nums;
+    }
+    .rn__addsec { margin-top: var(--space-2, 8px); }
+    .rn__ing { list-style: none; margin: 0; padding: 0; }
+    .rn__ing li {
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        gap: var(--space-3, 12px);
+        align-items: baseline;
+        padding: var(--space-2, 8px);
+        border-bottom: 1px solid var(--divider);
+        border-radius: var(--radius-sm, 4px);
+    }
+    .rn__ing li:hover { background: var(--overlay-hover); }
+    /* The whole row is the edit target, so it carries the affordance — the
+       quantity and the name are plain text inside it. */
+    .rn__ing--target { cursor: pointer; }
+    .rn__ing--target:focus-visible {
+        outline: 2px solid var(--brand-primary);
+        outline-offset: -2px;
+    }
+    .rn__ing--lit {
+        background: var(--brand-primary-soft) !important;
+        box-shadow: inset 3px 0 0 0 var(--brand-primary);
+    }
+    .rn__qty {
+        font-variant-numeric: tabular-nums; font-weight: 700;
+        white-space: nowrap; min-width: 58px;
+    }
+    .rn__ingname { min-width: 0; }
+    .rn__ingnote { display: block; font-size: 0.8125rem; color: var(--text-muted); }
+    .rn__chip { margin-left: var(--space-1, 4px); }
+    .rn__chip--unlinked { background: var(--surface-sunken); color: var(--text-muted); }
+    .rn__ingact {
+        display: flex; align-items: center; gap: var(--space-1, 4px);
+        opacity: 0;
+        transition: opacity 120ms ease;
+        border-radius: var(--radius-sm, 4px);
+    }
+    .rn__ing li:hover .rn__ingact,
+    .rn__ing li:focus-within .rn__ingact { opacity: 1; }
+    .rn__add { margin-top: var(--space-3, 12px); width: 100%; }
+
+    /* Method — the v1 treatment the owner preferred: roomy rows, a filled
+       brand-soft numeral, generous measure. */
+    .rn__steps {
+        list-style: none; counter-reset: rnstep;
+        margin: 0; padding: 0;
+        display: flex; flex-direction: column; gap: var(--space-4, 16px);
+    }
+    .rn__steps > li {
+        counter-increment: rnstep;
+        display: grid; grid-template-columns: 34px 1fr;
+        gap: var(--space-4, 16px);
+        align-items: start;
+        padding: var(--space-2, 8px);
+        border-radius: var(--radius-md, 6px);
+    }
+    .rn__steps > li::before {
+        content: counter(rnstep);
+        display: flex; align-items: center; justify-content: center;
+        width: 34px; height: 34px; border-radius: 50%;
+        background: var(--brand-primary-soft);
+        color: var(--brand-primary);
+        font-weight: 700; font-variant-numeric: tabular-nums;
+    }
+    .rn__steps > li.rn__step--lit { background: var(--overlay-hover); }
+    .rn__steps > li.rn__step--lit::before {
+        background: var(--brand-primary); color: var(--text-on-primary);
+    }
+    .rn__steps p { margin: 0; max-width: 62ch; line-height: 1.6; }
+    .rn__hint { display: block; font-size: 0.8125rem; color: var(--text-muted); margin-top: var(--space-1, 4px); }
+    .rn__uses { display: block; font-size: 0.75rem; color: var(--text-muted); margin-top: var(--space-2, 8px); }
+    /* Sub-steps: the step treatment one level in — same numbered bullet, a
+       size down, toned and indented behind a rule (feedback 2026-08-24). */
+    .rn__substeps {
+        list-style: none; counter-reset: rnsub;
+        margin: var(--space-3, 12px) 0 0;
+        padding: 0 0 0 var(--space-4, 16px);
+        border-left: 2px solid var(--border-default);
+        display: flex; flex-direction: column; gap: var(--space-2, 8px);
         color: var(--text-secondary);
     }
-    .recipe-read__steps {
-        margin: 0;
-        padding-left: var(--space-5, 20px);
-        line-height: 1.6;
+    .rn__substeps > li {
+        counter-increment: rnsub;
+        display: grid; grid-template-columns: 24px 1fr;
+        gap: var(--space-3, 12px);
+        align-items: start;
     }
-    .recipe-read__steps li {
+    .rn__substeps > li::before {
+        content: counter(rnsub);
+        display: flex; align-items: center; justify-content: center;
+        width: 24px; height: 24px; border-radius: 50%;
+        background: var(--surface-sunken);
+        color: var(--text-muted);
+        font-size: 0.75rem; font-weight: 700; font-variant-numeric: tabular-nums;
+    }
+    .rn__substeps p { margin: 0; max-width: 62ch; line-height: 1.55; font-size: 0.9375rem; }
+    .rn__free p { margin: 0 0 var(--space-3, 12px); max-width: 62ch; line-height: 1.6; }
+    /* The free-text block is a real <button> (it opens the method editor), so
+       it has to be talked back out of looking like one — same trick as the
+       ingredient name. */
+    .rn__freebtn {
+        appearance: none; background: none; border: 0;
+        font: inherit; color: inherit; text-align: left;
+        display: block; width: 100%; padding: var(--space-1, 4px);
+    }
+    .rn__empty { color: var(--text-muted); font-size: 0.875rem; }
+    .rn__hintblock { color: var(--text-muted); font-size: 0.8125rem; margin: 0 0 var(--space-3, 12px); }
+    .rn__editor { margin-top: var(--space-4, 16px); border-top: 1px solid var(--divider); }
+
+    .rn__details { margin-top: var(--space-8, 32px); border-top: 1px solid var(--divider); }
+    .rn__disc { padding: var(--space-3, 12px) var(--space-2, 8px) var(--space-4, 16px); }
+    .rn__vfacts {
+        display: flex; flex-wrap: wrap; gap: var(--space-2, 8px) var(--space-6, 24px);
+        margin-bottom: var(--space-3, 12px);
+    }
+    .rn__vfact { display: flex; flex-direction: column; gap: 2px; }
+    .rn__vthis { background: var(--surface-sunken); }
+    .rn__vnone { margin-bottom: 0; }
+    .rn__savebar {
+        position: fixed; bottom: var(--space-5, 20px); left: 50%;
+        transform: translateX(-50%); z-index: 6000;
+        display: flex; align-items: center; gap: var(--space-2, 8px);
+        padding: var(--space-2, 8px) var(--space-4, 16px);
+        border-radius: var(--radius-pill, 999px);
+        background: var(--surface-elevated);
+        border: 1px solid var(--border-default);
+        box-shadow: 0 2px 10px var(--overlay-dim);
+        font-size: 0.875rem;
+        color: var(--text-secondary);
+    }
+    .rn__savebar--error { border-color: var(--semantic-negative); color: var(--semantic-negative); }
+
+    /* The standing "there is unsaved work" statement. Sits above the transient
+       savebar's slot so the two never occupy the same space. */
+    .rn__dirty {
+        position: fixed; bottom: var(--space-5, 20px); left: 50%;
+        transform: translateX(-50%); z-index: 6000;
+        display: flex; align-items: center; gap: var(--space-2, 8px);
+        padding: var(--space-2, 8px) var(--space-4, 16px);
+        border-radius: var(--radius-pill, 999px);
+        background: var(--surface-elevated);
+        border: 1px solid var(--semantic-warning);
+        box-shadow: 0 2px 10px var(--overlay-dim);
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: var(--text-secondary);
+    }
+
+
+    .rn__ingsecempty {
+        color: var(--text-muted);
+        font-size: 0.8125rem;
+        margin: 0;
+        padding: var(--space-2, 8px);
+    }
+
+    .rn__secrow {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2, 8px);
         margin-bottom: var(--space-2, 8px);
     }
-    .recipe-read__stepimg {
-        max-width: 100%;
-        border-radius: var(--radius-md, 8px);
+
+    .rn__discsub {
+        font-size: 0.75rem; font-weight: 700; letter-spacing: 0.06em;
+        text-transform: uppercase; color: var(--text-muted);
+        margin: var(--space-5, 20px) 0 var(--space-2, 8px);
     }
-    .recipe-read__notes {
-        white-space: pre-wrap;
-        line-height: 1.5;
+
+    .rn__order {
+        list-style: none;
+        margin: 0 0 var(--space-3, 12px);
+        padding: 0;
+    }
+    .rn__order li {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2, 8px);
+        padding: var(--space-1, 4px) 0;
+        border-bottom: 1px solid var(--divider);
+    }
+    .rn__ordername { flex: 1; min-width: 0; }
+    .rn__ordersec {
+        margin-left: var(--space-2, 8px);
+        font-size: 0.75rem;
+        color: var(--text-muted);
+    }
+
+    /* ── Phone ────────────────────────────────────────────────────────── */
+    @media (max-width: 1023px) {
+        .rn__masthead { grid-template-columns: 1fr; }
+        .rn__photo { aspect-ratio: 16 / 9; }
+        .rn__body { grid-template-columns: 1fr; gap: var(--space-6, 24px); }
+        .rn__rail { position: static; }
+        /* A phone scrolls the page, not two nested panes. */
+        .rn__pane { max-height: none; overflow: visible; }
+        .rn__title { font-size: 1.5rem; }
+        /* One line that scrolls, rather than three rows of facts pushing the
+           method off the first screen (owner feedback 2026-08-24; D-011 —
+           wide content scrolls inside its own container, never the page). */
+        .rn__facts {
+            flex-wrap: nowrap;
+            overflow-x: auto;
+            scrollbar-width: none;
+        }
+        .rn__facts::-webkit-scrollbar { display: none; }
+        /* Hover isn't a gesture a thumb has, so the row cluster is always
+           there on a phone. */
+        .rn__ingact { opacity: 1; }
+        /* Actions scroll sideways rather than stacking three deep (D-011:
+           wide content scrolls inside its own container, never the page). */
+        .rn__actions {
+            flex-wrap: nowrap;
+            overflow-x: auto;
+            scrollbar-width: none;
+        }
+        .rn__actions::-webkit-scrollbar { display: none; }
+        .rn__delete { margin-left: 0; }
     }
 </style>

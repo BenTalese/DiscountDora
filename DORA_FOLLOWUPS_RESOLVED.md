@@ -10,6 +10,55 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-688 — the redesigned recipe page won; the old page, the duplicate form model and both hatch buttons still have to go
+- **Raised:** 2026-08-20 (audit of the un-logged recipe-view redesign).
+- **Type:** deferred job.
+- **What:** **Decided 2026-08-20 — `RecipeDetailNext.vue` is the page that
+  survives**, conditional on feature parity, which the same-day gap-closing pass
+  delivered (substitutes, time-of-day, per-ingredient optional/notes/free-text,
+  section assignment + ordering, explicit save; Import deliberately dropped, see
+  FU-689). The *decision* is closed. What is still open is the mechanical
+  swap, which the owner has not yet greenlit because he wants to live with the
+  new layout first — in particular the bespoke masthead, which is the one piece
+  he has explicitly reserved judgement on:
+  - Point `/cookbook/:id` at the new page and delete `RecipeDetailPage.vue`
+    (2,727 lines) and the `/cookbook/:id/new` route.
+  - Delete **both hatch buttons** ("New layout" / "Back to the old layout") —
+    they are user-visible and only exist for the comparison.
+  - Delete the old page's **duplicate inline form model**, now that
+    `useRecipeEditor` is the only copy that matters. The composable's header
+    comment says this is the first job once the old page goes — do it in the
+    same pass or the note goes stale.
+  - Re-point `goToSibling` / `onNewVersion`, which currently keep the user on
+    `/new` so a comparison session isn't kicked out.
+  - **Decide the masthead vs. shared `PageToolbar` question.** The new page
+    hand-rolls its back-arrow row and action row; every other detail page uses
+    `PageToolbar`, and the 2026-08-19 batch deliberately moved the *old* recipe
+    page onto it. Owner is assessing; if `PageToolbar` wins, the masthead's
+    identity block stays and only the controls move.
+- **Why deferred:** the owner wants time on the new layout before the old one is
+  destroyed — a one-way door while the masthead is still under review.
+- **Recommended resolution:** **when the owner confirms the masthead**, and in
+  one pass — a half-done swap leaves two live pages and a stale comment.
+- **State note:** resolved 2026-08-26 in one pass. The owner greenlit it —
+  *"can obliterate the old version of the page out of existence now (happy enough
+  with the direction of the new page)"* — in the same feedback batch that asked
+  for the masthead's header block to be **enriched** with the cookbook's icons,
+  which settles the reserved masthead-vs-`PageToolbar` question in the masthead's
+  favour. Everything on the list went together: `/cookbook/:id` now resolves to
+  the redesigned page (`RecipeDetailNext.vue` renamed to `RecipeDetailPage.vue`
+  in its place), the old 2,727-line page and the `/cookbook/:id/new` route are
+  deleted, the "Back to the old layout" hatch is gone (its `.rn__flip` style with
+  it), `goToSibling` and `onNewVersion` push `/cookbook/<id>`, and the duplicate
+  inline form model died with the old page — `useRecipeEditor`'s ⚠️ header note
+  is rewritten to say so. Stale cross-references in `RecipeImportDialog.vue`
+  (which lost a caller) and `UnlinkedIngredientsSettings.vue` were repointed.
+  Verified live at `/cookbook/:id`: the redesigned page renders, and **New
+  version** lands on `/cookbook/<new id>` rather than `/new`. [[FU-691]]'s
+  stylesheet sweep was deliberately **not** folded in — owner's call, deferred
+  until the merged page has had a browser walk.
+
+
 ## [RESOLVED] FU-738 — `RecipeDetailNext.vue` violates R-055: the masthead is still ~9 per-field `q-popup-edit`s
 - **Raised:** 2026-08-24 (two-machine merge of the 08-23 and 08-24 recipe batches)
 - **Type:** finding (engineering-standards violation, cited at close-gate)

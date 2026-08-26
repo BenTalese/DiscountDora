@@ -86,6 +86,9 @@ def configure_mappings(db: SQLAlchemy):
         Column("id", UUIDType, primary_key=True),
         Column("name", String(255), nullable=False),
         Column("image", LargeBinary, nullable=True),
+        # Derived from `image` at write time (see features/stores/_logo_colour.py),
+        # never entered by hand. `#rrggbb`, so 7 chars.
+        Column("brand_colour", String(7), nullable=True),
     )
 
     app_setting_table = Table(

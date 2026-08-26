@@ -149,6 +149,10 @@ export type StoreSpend = {
     line_count: number;
     priced_line_count: number;
     subtotal: number;
+    /** The store's own `#rrggbb`, derived from its uploaded logo. Null when
+     *  it has no logo (or a greyscale one) — the card falls back to the
+     *  deterministic hash swatch so a bucket always has a colour. */
+    brand_colour: string | null;
 };
 
 /** Server-owned list-level money/count aggregates (state-ownership Type B).

@@ -38,6 +38,7 @@ from dora_api.domain.entities.shopping_list import ShoppingListLine
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.entities.store import Store
 from dora_api.features.routers import STORE_ROUTER
+from dora_api.features.stores._logo_colour import dominant_colour
 from dora_api.infrastructure.api_response import (bad_request,
                                                   business_rule_violation,
                                                   created, no_content,
@@ -61,6 +62,10 @@ class StoreDto:
     # bytes never travel in list/detail JSON. SPA fetches via
     # `GET /stores/<id>/image`.
     has_image: bool
+    # The logo's majority colour, derived once at upload (`_logo_colour.py`).
+    # NULL when there's no logo or it has no usable hue — the SPA falls back
+    # to its deterministic hash swatch there.
+    brand_colour: str | None
 
     @classmethod
     def from_entity(cls, store: Store) -> 'StoreDto':
@@ -70,6 +75,7 @@ class StoreDto:
             store_id = store.id,
             name = store.name,
             has_image = False,
+            brand_colour = store.brand_colour,
         )
 
 
@@ -144,9 +150,11 @@ class CreateStoreHandler:
         normalised = req.name.strip().lower()
         if any(s.name.strip().lower() == normalised for s in existing):
             return CreateStoreResponse(duplicate=True)
+        image = req.image.encode("utf-8") if req.image else None
         store = Store(
             name=req.name.strip(),
-            image=req.image.encode("utf-8") if req.image else None,
+            image=image,
+            brand_colour=dominant_colour(image),
         )
         self.repository.add(store)
         self.repository.save_changes()
@@ -210,10 +218,17 @@ class UpdateStoreHandler:
                 if str(s.id) != str(store_id) and s.name.strip().lower() == normalised:
                     return UpdateStoreResponse(duplicate=True)
             store.name = target
+        # The colour is derived from the image, so it moves with it — clearing
+        # the logo clears the colour, replacing the logo re-derives it. Leaving
+        # a stale colour behind would paint the store's buckets in the colours
+        # of a logo it no longer has.
         if req.clear_image:
             store.image = None
+            store.brand_colour = None
         elif "image" in set_fields and req.image is not None:
-            store.image = req.image.encode("utf-8")
+            image = req.image.encode("utf-8")
+            store.image = image
+            store.brand_colour = dominant_colour(image)
         self.repository.save_changes()
         return UpdateStoreResponse()
 

@@ -55,6 +55,99 @@ Resolved entries carry one extra line, and live in `DORA_FOLLOWUPS_RESOLVED.md`:
 
 # Open
 
+## [OPEN] FU-743 — `web_app/test/` is outside the lint script, and already has an error in it
+- **Raised:** 2026-08-26 (recipe-view feedback batch)
+- **Type:** finding.
+- **What:** `npm run lint` globs `./src*/**/*` only, so nothing has ever linted
+  `web_app/test/`. Running eslint over it by hand turns up one real error —
+  `test/unit/useBuyVerdict.spec.ts:34` uses an `import()` type annotation, which
+  `@typescript-eslint/consistent-type-imports` forbids. Pre-existing; found while
+  checking this batch's own files.
+- **Why deferred:** widening the lint glob is a repo-wide config change that may
+  surface more than one error, and this batch's files lint clean on their own.
+- **Recommended resolution:** opportunistic — one line in `package.json` plus
+  whatever the widened run reports.
+
+## [OPEN] FU-742 — The recipe facts strip got longer when it gained icons
+- **Raised:** 2026-08-26 (recipe-view feedback batch)
+- **Type:** finding.
+- **What:** every fact in the masthead (Serves · Prep · Cook · Total · Difficulty
+  · When) now carries a glyph, which adds ~18px each. Measured live at 375px: the
+  strip has 72px of overflow inside its own `overflow-x: auto` container. The page
+  itself doesn't scroll sideways (0px) and the sideways strip is the design, so
+  nothing is broken — but before the icons it very likely fitted, and the last
+  fact now needs a swipe.
+- **Why deferred:** the owner asked for the icons explicitly, and hiding the
+  labels on narrow screens to buy the space back would trade a swipe for an
+  unlabelled glyph. Wants an eye on it before anything changes.
+- **Recommended resolution:** with the `DORA_VERIFY` phone walk of the 2026-08-26
+  batch — if it reads badly, the levers are dropping `Total` (it's derived from
+  the two beside it) or shrinking the icon.
+
+## [OPEN] FU-741 — `is_favourite` on a new recipe version resets deliberately; nothing says so in the UI
+- **Raised:** 2026-08-26 (recipe-view feedback batch)
+- **Type:** finding.
+- **What:** while auditing "new version doesn't copy all fields properly" (the
+  real cause was sections — fixed), three fields were confirmed to be *deliberately*
+  not copied: `is_favourite` (reset to false), `last_made_on` (null) and
+  `available_meals` (0). Each is defensible — they're facts about a recipe's history
+  in the household, not about the recipe — and each is commented in
+  `new_recipe_version.py`. But the toast only says "Both versions are equal peers",
+  so a user who favourited the original and then makes a v2 sees it silently
+  un-favourited and may well read that as the same copy bug.
+- **Why deferred:** it's a copy/UX question, not a defect, and the batch's ask was
+  the actual missing data.
+- **Recommended resolution:** opportunistic — either say it in the toast caption or
+  decide `is_favourite` should in fact carry (the other two clearly shouldn't).
+
+## [OPEN] FU-740 — No bulk "Remove" on the shopping list: there is no remove-by-line-ids endpoint
+- **Raised:** 2026-08-26 (shopping-list feedback batch)
+- **Type:** leftover.
+- **What:** the rebuilt bulk bar carries Tick / Untick / Move to list…, but no
+  Remove. Stock overview's equivalent has destructive actions, so its absence is
+  noticeable once you're selecting things. The blocker is that
+  `shoppingListApiService` has `bulk-add` and `bulk-remove-by-stock-item` but no
+  "remove these line ids", and looping N `deleteLineAsync` calls is precisely the
+  per-item request loop [[FU-713]]/[[FU-714]] exist to eliminate.
+- **Why deferred:** the feedback batch didn't ask for it, and adding an endpoint
+  plus a UI affordance unprompted is scope growth. A comment in
+  `ShoppingListDetail.vue`'s bulk bar records the reasoning in place.
+- **Recommended resolution:** opportunistic — next time `bulk_operations.py` is
+  touched. `BulkRemoveByLineIdsHandler` is a near-copy of the existing
+  by-stock-item one.
+
+## [OPEN] FU-739 — Run and receipt faces weren't re-driven after the 2026-08-26 toolbar rebuild
+- **Raised:** 2026-08-26 (shopping-list feedback batch)
+- **Type:** follow-up.
+- **What:** the session drove the **plan face** hard at 375px and 1280px (row
+  relayout, bulk bar, store card, finish dialog, live move-to-new-list) and only
+  passed through the run and receipt faces in transit. Both share the rebuilt
+  toolbar — the run face gains "Switch list" where the rail would be, the receipt
+  face gains Amend and Put away — and both were only seen as a side effect of
+  starting/finishing a shop, not walked.
+- **Why it matters:** the run face is the one surface designed for a thumb in a
+  supermarket, and its sticky footer plus the new destructive footer now both sit
+  at the bottom of the page. Nothing observed suggested they collide, but that
+  combination was never looked at deliberately.
+- **Recommended resolution:** now-ish — folds into [[FU-729]]'s real-device walk,
+  which is already owed for exactly these two faces.
+
+## [OPEN] FU-738 — The lifecycle CTA is the button that scrolls off the shopping-list toolbar
+- **Raised:** 2026-08-26 (shopping-list feedback batch)
+- **Type:** finding (needs an owner call).
+- **What:** the rebuilt toolbar is a sideways-scrolling band, as asked ("horizontal
+  scrollable toolbar, no overflow menu"). With the full set on — New list · Add
+  item · Bulk select · Templates · Refresh deals · Export · Start shopping — it
+  needs ~1000px, and at 1280px the lists rail leaves the main column ~948px. So
+  the band scrolls, and the button clipped at the right edge is **the lifecycle
+  CTA**, the most important one on the page.
+- **Why deferred:** it is the requested behaviour working correctly, not a bug,
+  and every fix is a design trade: pin the CTA outside the scroller, put it first,
+  or let the band wrap on desktop and scroll only on phones. That's an owner call,
+  not an implementation detail.
+- **Recommended resolution:** now-ish — one decision, then a few lines. Worth
+  pairing with the `DORA_VERIFY` walk, since it's most obvious at desktop widths.
+
 ## [OPEN] FU-737 — The preview pane could not paint this session; screenshots and Quasar popups were unverifiable
 - **Raised:** 2026-08-23 (recipe-view feedback batch)
 - **Type:** finding.
@@ -472,15 +565,15 @@ Resolved entries carry one extra line, and live in `DORA_FOLLOWUPS_RESOLVED.md`:
 - **Raised:** 2026-08-22 (expiry-menu work)
 - **Type:** leftover.
 - **What:** `expiryIndicatorFor` was echoing the raw ISO date into its tooltip
-  (a D-006 violation) and now routes through `formatDate`. `RecipeDetailPage.vue:1712`
-  and `RecipeDetailNext.vue:1311` build the *same* two phrases ("Expired {when}" /
-  "Expires {when}") by hand rather than calling the helper — three copies of one
-  sentence, which is how the ISO leak survived in the first place.
-- **Why deferred:** out of scope; those pages are mid-redesign (the Next variant
-  won the comparison) and folding them in now would collide.
-- **Recommended resolution:** opportunistic — when the recipe-page redesign
-  lands and one of the two files is deleted, point the survivor at
-  `expiryIndicatorFor`.
+  (a D-006 violation) and now routes through `formatDate`. The recipe page builds
+  the *same* two phrases ("Expired {when}" / "Expires {when}") by hand rather than
+  calling the helper — which is how the ISO leak survived in the first place.
+- **Why deferred:** out of scope; the page was mid-redesign with two live copies
+  and folding them in would have collided.
+- **Recommended resolution:** **now-ish — the blocker cleared.** [[FU-688]]
+  resolved 2026-08-26 and there is only one recipe page again
+  (`web_app/src/pages/RecipeDetailPage.vue`, formerly `RecipeDetailNext.vue`).
+  Point the survivor at `expiryIndicatorFor` — search it for "Expires ".
 
 ## [OPEN] FU-711 — "open / in-use" wording is now split across surfaces
 - **Raised:** 2026-08-21 (stock-item detail feedback batch)
@@ -834,23 +927,22 @@ Resolved entries carry one extra line, and live in `DORA_FOLLOWUPS_RESOLVED.md`:
   in scope: `ICONS.restaurant` (fork-and-knife) currently stands for *a meal*
   (meal-plan chips/cards, the `no_planned_meals` alert, the dashboard,
   `UpcomingTimeline`, onboarding, Help), *the admin Cooking settings page*,
-  *the About page*, and — the actual crossover — **recipe tools** in
-  `RecipeDetailPage.vue:208`, where the cookbook's own Tools filter uses
-  `ICONS.blender`. Servings was a fifth meaning until this session moved it to
-  `ICONS.people`.
+  *the About page*. Servings was a fifth meaning until this session moved it to
+  `ICONS.people`. **The recipe-tools crossover resolved itself** on 2026-08-26:
+  it lived in the old recipe page's chip row, which [[FU-688]] deleted; the
+  surviving page doesn't glyph its Tools panel at all.
 - **Why deferred:** it spans meal plans, dashboard, alerts, settings, help and
   onboarding — six surfaces the owner hasn't reviewed — and the fix is a
   glossary decision ("what is the one thing fork-and-knife means?") before it's
   an edit. Doing it as a side effect of a cookbook fix is how you get a diff
-  nobody can review. `RecipeDetailPage.vue` is also slated for deletion by
-  [[FU-688]], so its tools crossover may resolve itself.
+  nobody can review.
 - **Fix shape:** pin `restaurant` = "a meal / an occasion of eating" (its
   dominant use), then repoint the outliers: tools → `blender`, the admin
   Cooking page and About row → something that isn't a plate.
 - **Recommended resolution:** opportunistic, or as part of the next icon/design
   pass — worth doing before the icon set gets a sixth meaning.
 
-## [OPEN] FU-691 — `RecipeDetailNext.vue`'s stylesheet is off-token throughout (D-017)
+## [OPEN] FU-691 — the recipe page's stylesheet is off-token throughout (D-017)
 - **Raised:** 2026-08-20 (recipe-view parity pass).
 - **Type:** finding.
 - **What:** the page's ~350-line `<style scoped>` block predates any D-017 check
@@ -864,41 +956,17 @@ Resolved entries carry one extra line, and live in `DORA_FOLLOWUPS_RESOLVED.md`:
   conventions in one stylesheet — flagged here instead, per the explain-or-flag
   rule, because a half-converted stylesheet is worse than either end state.
 - **Why deferred:** it is a mechanical sweep of one file with no behaviour
-  change, and it should happen *after* the old page is deleted and the masthead
-  question is settled (FU-688) — converting CSS that may be restructured is
-  wasted work.
-- **Recommended resolution:** **with FU-688's swap pass**, as the tidy step.
+  change. Its original blocker — the old page and the masthead question — cleared
+  on 2026-08-26 when [[FU-688]] resolved, and the file is now
+  `web_app/src/pages/RecipeDetailPage.vue`. The owner was offered it as part of
+  that swap and **chose to defer**: the merged page still has no browser walk
+  behind it, so a whole-stylesheet rewrite would tangle any spacing regression up
+  with the swap and the icon work in one diff. The 2026-08-26 batch's new CSS
+  (`.rn__brow`, the `.rn__factk` icon rules) again matches the file's existing
+  style rather than leaving two conventions in one stylesheet.
+- **Recommended resolution:** **after the `DORA_VERIFY` walk of the merged recipe
+  page**, as a standalone tidy with nothing else in the diff.
 
-## [OPEN] FU-688 — the redesigned recipe page won; the old page, the duplicate form model and both hatch buttons still have to go
-- **Raised:** 2026-08-20 (audit of the un-logged recipe-view redesign).
-- **Type:** deferred job.
-- **What:** **Decided 2026-08-20 — `RecipeDetailNext.vue` is the page that
-  survives**, conditional on feature parity, which the same-day gap-closing pass
-  delivered (substitutes, time-of-day, per-ingredient optional/notes/free-text,
-  section assignment + ordering, explicit save; Import deliberately dropped, see
-  FU-689). The *decision* is closed. What is still open is the mechanical
-  swap, which the owner has not yet greenlit because he wants to live with the
-  new layout first — in particular the bespoke masthead, which is the one piece
-  he has explicitly reserved judgement on:
-  - Point `/cookbook/:id` at the new page and delete `RecipeDetailPage.vue`
-    (2,727 lines) and the `/cookbook/:id/new` route.
-  - Delete **both hatch buttons** ("New layout" / "Back to the old layout") —
-    they are user-visible and only exist for the comparison.
-  - Delete the old page's **duplicate inline form model**, now that
-    `useRecipeEditor` is the only copy that matters. The composable's header
-    comment says this is the first job once the old page goes — do it in the
-    same pass or the note goes stale.
-  - Re-point `goToSibling` / `onNewVersion`, which currently keep the user on
-    `/new` so a comparison session isn't kicked out.
-  - **Decide the masthead vs. shared `PageToolbar` question.** The new page
-    hand-rolls its back-arrow row and action row; every other detail page uses
-    `PageToolbar`, and the 2026-08-19 batch deliberately moved the *old* recipe
-    page onto it. Owner is assessing; if `PageToolbar` wins, the masthead's
-    identity block stays and only the controls move.
-- **Why deferred:** the owner wants time on the new layout before the old one is
-  destroyed — a one-way door while the masthead is still under review.
-- **Recommended resolution:** **when the owner confirms the masthead**, and in
-  one pass — a half-done swap leaves two live pages and a stale comment.
 ## [OPEN] FU-686 — `PantryBeliefChip.vue` is orphaned and still described everywhere as the live row form
 - **Raised:** 2026-08-20 (stock-signal consolidation, Chunk 4).
 - **Type:** finding.

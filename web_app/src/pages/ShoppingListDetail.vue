@@ -5,149 +5,151 @@
              (effective date ascending — past at top, future at bottom). -->
         <div class="row no-wrap q-col-gutter-md">
             <div class="col" style="min-width: 0">
-                <!-- Toolbar (UX-v2 §8): page-consistent header with the
-                     working actions VISIBLE, not behind an ellipsis. Only
-                     rare/destructive actions live in "More". -->
-                <PageToolbar title="Shopping lists">
-                    <template #actions>
+                <!-- Toolbar. 2026-08-26 feedback rebuilt this to the Stock
+                     overview shape, because "consistency is important" and
+                     these two pages are the app's two list surfaces:
+
+                     - **No page title.** "Shopping lists" was a heading that
+                       told you nothing you couldn't see from the nav, sitting
+                       directly above the list's *actual* name.
+                     - **No "More" ellipsis.** Every action is on the band; the
+                       band scrolls sideways rather than wrapping or hiding
+                       behind a menu (same rule as `.stock-toolbar__actions`
+                       and `FilterRow`). The one surviving menu is Export, and
+                       that groups variants of a single action rather than
+                       acting as a catch-all.
+                     - **Labels drop on phones**, tooltips carry the name
+                       (`compactToolbar`), so the row doesn't eat the viewport.
+                     - **New list is primary and first**, because it was
+                       previously a ghost link at the top of a rail that
+                       doesn't exist on a phone — people missed it entirely.
+                     - **Templates is here**, not buried at the bottom of the
+                       rail behind an ellipsised "Manage templates…" link.
+
+                     Destructive actions (Clear all items, Delete list)
+                     deliberately did NOT come with them — they live in a
+                     footer under the list, past everything they'd destroy. -->
+                <div class="row items-center q-gutter-sm sld-toolbar">
+                    <div class="row items-center no-wrap sld-toolbar__actions">
                         <BaseButton
-                            variant="ghost"
+                            variant="primary"
                             :icon="ICONS.add"
-                            label="Quick add"
+                            :label="compactToolbar ? undefined : 'New list'"
+                            aria-label="New list"
+                            @click="newListOpen = true"
+                        >
+                            <q-tooltip>Start a new shopping list</q-tooltip>
+                        </BaseButton>
+                        <BaseButton
+                            variant="secondary"
+                            :icon="ICONS.add_shopping_cart"
+                            :label="compactToolbar ? undefined : 'Add item'"
+                            aria-label="Add item"
                             :disable="!detail || detail.status === 'done'"
                             @click="onOpenQuickAdd"
                         >
                             <q-tooltip>Search every stock item and drop it onto this list</q-tooltip>
                         </BaseButton>
-                        <!-- The grouping segmented control, Refresh deals and
-                             Select all left the toolbar: it was 930px wide and
-                             never wrapped (clipping at "Store" on a phone and
-                             wrapping the page title at 1280px). Ordering is a
-                             *view* preference and now sits on the list header
-                             where the sections are; the other two are rare and
-                             live in More. Only Quick add, More and the one
-                             lifecycle CTA stay inline. -->
+                        <!-- Same control, same name, same icon as Stock
+                             overview's — including the Cancel flip, so the
+                             muscle memory transfers. Long-pressing a line
+                             enters it too (see `onLineLongPress`). -->
                         <BaseButton
-                            v-if="planFace && detail && detail.lines.length > 0"
-                            variant="ghost"
+                            v-if="planFace && detail && detail.lines.length > 0 && !bulkMode"
+                            variant="secondary"
                             :icon="ICONS.checklist"
-                            :label="bulkMode ? 'Done selecting' : 'Select'"
-                            class="gt-xs"
-                            @click="bulkMode ? exitBulkMode() : enterBulkMode()"
+                            :label="compactToolbar ? undefined : 'Bulk select'"
+                            aria-label="Bulk select"
+                            @click="enterBulkMode"
                         >
-                            <q-tooltip>Tick or untick a bunch at once</q-tooltip>
+                            <q-tooltip>Tick, move or remove a bunch at once</q-tooltip>
                         </BaseButton>
-                        <BaseDropdown
-                            flat
-                            dense
-                            :disable="!detail"
-                            label="More"
-                            :icon="ICONS.more_horiz"
+                        <BaseButton
+                            v-else-if="planFace && detail && detail.lines.length > 0"
+                            variant="secondary"
+                            :icon="ICONS.close"
+                            :label="compactToolbar ? undefined : 'Cancel'"
+                            aria-label="Cancel bulk select"
+                            @click="exitBulkMode"
                         >
-                            <q-list dense style="min-width: 230px">
-                                <!-- The run face hides the lists rail, so this
-                                     is the only way to another list mid-shop.
-                                     It appears exactly when the rail is gone,
-                                     rather than duplicating it. -->
-                                <q-item
-                                    v-if="runFace"
-                                    clickable
-                                    v-close-popup
-                                    @click="switchListOpen = true"
-                                >
-                                    <q-item-section avatar><q-icon :name="ICONS.list_alt" /></q-item-section>
-                                    <q-item-section>Switch list</q-item-section>
-                                </q-item>
-                                <q-item
-                                    clickable
-                                    v-close-popup
-                                    :disable="!detail || detail.lines.length === 0"
-                                    @click="onRefreshDeals"
-                                >
-                                    <q-item-section avatar><q-icon :name="ICONS.refresh" /></q-item-section>
-                                    <q-item-section>
-                                        <q-item-label>Refresh deals</q-item-label>
-                                        <q-item-label caption>Re-check linked product offers</q-item-label>
-                                    </q-item-section>
-                                </q-item>
-                                <q-item
-                                    v-if="planFace && detail && detail.lines.length > 0"
-                                    clickable
-                                    v-close-popup
-                                    class="lt-sm"
-                                    @click="bulkMode ? exitBulkMode() : enterBulkMode()"
-                                >
-                                    <q-item-section avatar><q-icon :name="ICONS.checklist" /></q-item-section>
-                                    <q-item-section>{{ bulkMode ? 'Done selecting' : 'Select several' }}</q-item-section>
-                                </q-item>
-                                <q-separator />
-                                <q-item
-                                    clickable
-                                    v-close-popup
-                                    :disable="!detail || detail.lines.length === 0"
-                                    @click="onSaveAsTemplate"
-                                >
-                                    <q-item-section avatar><q-icon :name="ICONS.bookmark_add" /></q-item-section>
-                                    <q-item-section>
-                                        <q-item-label>Save as template</q-item-label>
-                                        <q-item-label caption>Reusable snapshot of these items</q-item-label>
-                                    </q-item-section>
-                                </q-item>
-                                <q-item
-                                    clickable
-                                    v-close-popup
-                                    :disable="!detail || detail.lines.length === 0"
-                                    @click="onPrint"
-                                >
-                                    <q-item-section avatar><q-icon :name="ICONS.print" /></q-item-section>
-                                    <q-item-section>
-                                        <q-item-label>Print / Save as PDF</q-item-label>
-                                        <q-item-label caption>Opens a printable view</q-item-label>
-                                    </q-item-section>
-                                </q-item>
-                                <q-item
-                                    clickable
-                                    v-close-popup
-                                    :disable="untickedCount === 0 || otherActiveLists.length === 0"
-                                    @click="onMoveUnticked"
-                                >
-                                    <q-item-section avatar><q-icon :name="ICONS.drive_file_move" /></q-item-section>
-                                    <q-item-section>
-                                        <q-item-label>Move unticked to another list</q-item-label>
-                                        <q-item-label caption>
-                                            {{
-                                                otherActiveLists.length === 0
-                                                    ? 'No other active lists'
-                                                    : `${untickedCount} unticked item${untickedCount === 1 ? '' : 's'} can move`
-                                            }}
-                                        </q-item-label>
-                                    </q-item-section>
-                                </q-item>
-                                <q-item clickable v-close-popup @click="copyAll">
-                                    <q-item-section avatar><q-icon :name="ICONS.content_copy" /></q-item-section>
-                                    <q-item-section>Copy to new list</q-item-section>
-                                </q-item>
-                                <q-separator />
-                                <q-item
-                                    clickable
-                                    v-close-popup
-                                    :disable="!detail || detail.lines.length === 0"
-                                    @click="onClearAll"
-                                >
-                                    <q-item-section avatar><q-icon :name="ICONS.playlist_remove" color="negative" /></q-item-section>
-                                    <q-item-section class="text-negative">Clear all items</q-item-section>
-                                </q-item>
-                                <q-item
-                                    clickable
-                                    v-close-popup
-                                    :disable="!currentSummary"
-                                    @click="onDeleteCurrentList"
-                                >
-                                    <q-item-section avatar><q-icon :name="ICONS.delete" color="negative" /></q-item-section>
-                                    <q-item-section class="text-negative">Delete list</q-item-section>
-                                </q-item>
-                            </q-list>
-                        </BaseDropdown>
+                            <q-tooltip>Cancel bulk select</q-tooltip>
+                        </BaseButton>
+                        <!-- The run face hides the lists rail, so this is the
+                             only way to another list mid-shop. It appears
+                             exactly when the rail is gone. -->
+                        <BaseButton
+                            v-if="runFace"
+                            variant="secondary"
+                            :icon="ICONS.list_alt"
+                            :label="compactToolbar ? undefined : 'Switch list'"
+                            aria-label="Switch list"
+                            @click="switchListOpen = true"
+                        >
+                            <q-tooltip>Jump to another list</q-tooltip>
+                        </BaseButton>
+                        <BaseButton
+                            variant="secondary"
+                            :icon="ICONS.bookmarks"
+                            :label="compactToolbar ? undefined : 'Templates'"
+                            aria-label="Manage templates"
+                            to="/shopping-lists/templates"
+                        >
+                            <q-tooltip>Reusable lists you can start a shop from</q-tooltip>
+                        </BaseButton>
+                        <!-- Products-gated (2026-08-26 feedback). Offers only
+                             exist on the product axis, so on an install with
+                             no product data this button re-checks nothing and
+                             reports "0 lines checked" — a control whose only
+                             possible outcome is a no-op. -->
+                        <BaseButton
+                            v-if="productsEnabled"
+                            variant="secondary"
+                            :icon="ICONS.refresh"
+                            :label="compactToolbar ? undefined : 'Refresh deals'"
+                            aria-label="Refresh deals"
+                            :disable="!detail || detail.lines.length === 0"
+                            @click="onRefreshDeals"
+                        >
+                            <q-tooltip>Re-check linked product offers</q-tooltip>
+                        </BaseButton>
+                        <BaseButton
+                            variant="secondary"
+                            :icon="ICONS.export_data"
+                            :label="compactToolbar ? undefined : 'Export'"
+                            aria-label="Export"
+                            :disable="!detail"
+                        >
+                            <q-menu auto-close>
+                                <q-list dense style="min-width: 230px">
+                                    <q-item
+                                        clickable
+                                        :disable="!detail || detail.lines.length === 0"
+                                        @click="onPrint"
+                                    >
+                                        <q-item-section avatar><q-icon :name="ICONS.print" /></q-item-section>
+                                        <q-item-section>
+                                            <q-item-label>Print / Save as PDF</q-item-label>
+                                            <q-item-label caption>Opens a printable view</q-item-label>
+                                        </q-item-section>
+                                    </q-item>
+                                    <q-item
+                                        clickable
+                                        :disable="!detail || detail.lines.length === 0"
+                                        @click="onSaveAsTemplate"
+                                    >
+                                        <q-item-section avatar><q-icon :name="ICONS.bookmark_add" /></q-item-section>
+                                        <q-item-section>
+                                            <q-item-label>Save as template</q-item-label>
+                                            <q-item-label caption>Reusable snapshot of these items</q-item-label>
+                                        </q-item-section>
+                                    </q-item>
+                                    <q-item clickable @click="copyAll">
+                                        <q-item-section avatar><q-icon :name="ICONS.content_copy" /></q-item-section>
+                                        <q-item-section>Copy to new list</q-item-section>
+                                    </q-item>
+                                </q-list>
+                            </q-menu>
+                        </BaseButton>
                         <!-- One primary action per lifecycle phase (UX-v2:
                              no Pause, no separate shop page — Start flips
                              the page itself into shopping state). -->
@@ -155,7 +157,8 @@
                             v-if="detail && detail.status === 'draft'"
                             variant="primary"
                             :icon="ICONS.shopping_cart"
-                            label="Start shopping"
+                            :label="compactToolbar ? undefined : 'Start shopping'"
+                            aria-label="Start shopping"
                             :disable="detail.lines.length === 0"
                             :loading="togglingProgress"
                             @click="onStartShopping"
@@ -166,15 +169,16 @@
                             v-else-if="detail && detail.status === 'shopping'"
                             variant="positive"
                             :icon="ICONS.check"
-                            label="Finish & restock"
+                            :label="compactToolbar ? undefined : 'Finish & restock'"
+                            aria-label="Finish and restock"
                             :loading="finishing"
                             @click="openFinishReview"
                         >
                             <q-tooltip>
                                 Marks this shop as done: every ticked item moves
                                 back to Stocked in your pantry, and the list is
-                                archived. Untick anything you didn't actually buy
-                                first.
+                                archived. Anything you didn't buy can move to
+                                another list on the way out.
                             </q-tooltip>
                         </BaseButton>
                         <!-- A finished list is a record, so correcting it is an
@@ -186,7 +190,8 @@
                             v-if="receiptFace"
                             :variant="amending ? 'secondary' : 'ghost'"
                             :icon="ICONS.edit"
-                            :label="amending ? 'Done amending' : 'Amend'"
+                            :label="compactToolbar ? undefined : (amending ? 'Done amending' : 'Amend')"
+                            :aria-label="amending ? 'Done amending' : 'Amend'"
                             @click="amending = !amending"
                         >
                             <q-tooltip>
@@ -198,7 +203,8 @@
                             v-if="detail && detail.status === 'done'"
                             variant="primary"
                             :icon="ICONS.inventory_2"
-                            label="Put away"
+                            :label="compactToolbar ? undefined : 'Put away'"
+                            aria-label="Put away"
                             @click="putAwayOpen = true"
                         >
                             <q-tooltip>
@@ -206,19 +212,15 @@
                                 so you don't forget a corner. Doesn't save.
                             </q-tooltip>
                         </BaseButton>
-                        <BaseButton
-                            v-if="detail && detail.status === 'done'"
-                            variant="ghost"
-                            :icon="ICONS.content_copy"
-                            label="Copy to new list"
-                            @click="copyAll"
-                        />
-                    </template>
-                </PageToolbar>
+                    </div>
+                </div>
 
                 <!-- Mobile list switcher (UX-v2 §3.2): same date-ordered
                      continuum as the desktop rail, as a dropdown at the top
-                     of the page. -->
+                     of the page. It is now *only* a switcher — "New list" and
+                     "Manage templates…" were bookended around this menu, which
+                     is how both ended up hidden on the surface where they
+                     matter most; both are toolbar buttons now. -->
                 <BaseDropdown
                     v-if="!runFace"
                     class="lt-md full-width q-mb-md"
@@ -227,11 +229,6 @@
                     :label="detail?.display_name ?? 'Pick a list'"
                 >
                     <q-list dense>
-                        <q-item clickable v-close-popup @click="newListOpen = true">
-                            <q-item-section avatar><q-icon :name="ICONS.add" color="primary" /></q-item-section>
-                            <q-item-section class="text-primary text-weight-medium">New list</q-item-section>
-                        </q-item>
-                        <q-separator />
                         <q-virtual-scroll
                             :items="railEntries"
                             :virtual-scroll-item-size="60"
@@ -249,11 +246,6 @@
                                 />
                             </template>
                         </q-virtual-scroll>
-                        <q-separator />
-                        <q-item clickable v-close-popup to="/shopping-lists/templates">
-                            <q-item-section avatar><q-icon :name="ICONS.bookmarks" /></q-item-section>
-                            <q-item-section>Manage templates…</q-item-section>
-                        </q-item>
                     </q-list>
                 </BaseDropdown>
 
@@ -284,23 +276,38 @@
                 </div>
 
                 <div v-else-if="detail" key="sld-content">
-                    <!-- Top info area (UX-v2 §4): big name + heading-scale
-                         status badge, readable meta row, a real shop-day
-                         button, and the resurrected completion doughnut with
-                         the server-owned money totals beside it. -->
+                    <!-- Top info area (UX-v2 §4): the list's name, its
+                         lifecycle status, and when it happened.
+
+                         2026-08-26 feedback, three items:
+                         - The name was `text-h4` — visibly larger than every
+                           other detail page's title. It is `text-h5` now, the
+                           same size `PageToolbar` and the stock-item detail
+                           page use for the thing you're looking at.
+                         - The status badge was uppercase + letter-spaced at
+                           13.6px, which shouted "DONE" and sat under D-003's
+                           14px floor for a chip carrying a value. It is a
+                           normal-case B2 status pill now, and the three
+                           statuses finally read as a progression (neutral
+                           draft → info while shopping → positive once done)
+                           rather than the old primary/positive/grey set that
+                           made a *finished* shop the drabbest of the three.
+                         - The dates were a bare grey run-on. They're a proper
+                           meta row now: one icon-led item each, so "created"
+                           and "completed" are distinguishable at a glance
+                           instead of being separated by a middot. -->
                     <div class="row items-start q-col-gutter-md q-mb-md">
                         <div class="col" style="min-width: 0">
                             <div class="row items-center q-gutter-x-sm no-wrap">
                                 <template v-if="!editingName">
-                                    <span class="text-h4 sld-title ellipsis">{{ detail.display_name }}</span>
-                                    <q-badge
-                                        :class="['sld-status-badge', { 'dora-bg-sunken dora-text-secondary': !statusBadgeColour }]"
-                                        :color="statusBadgeColour ?? undefined"
-                                        :label="statusBadgeLabel"
-                                    />
+                                    <span class="text-h5 sld-title ellipsis">{{ detail.display_name }}</span>
+                                    <span class="sld-status-pill" :class="`sld-status-pill--${detail.status}`">
+                                        {{ statusBadgeLabel }}
+                                    </span>
                                     <BaseButton
                                         variant="icon"
                                         :icon="ICONS.edit"
+                                        aria-label="Rename list"
                                         @click="startNameEdit"
                                     >
                                         <q-tooltip>Rename — leave blank to label by date</q-tooltip>
@@ -321,10 +328,17 @@
                                     @keydown.esc.prevent="cancelName"
                                 />
                             </div>
-                            <div class="text-caption dora-text-muted q-mt-xs">
-                                Created {{ formatDate(detail.created_at) }}
-                                <span v-if="detail.status === 'done' && detail.completed_at">
-                                    · Completed {{ formatDate(detail.completed_at) }}
+                            <div class="row items-center q-gutter-x-md sld-meta q-mt-xs">
+                                <span class="row items-center no-wrap">
+                                    <q-icon :name="ICONS.event" size="14px" class="q-mr-xs" />
+                                    Created {{ formatDate(detail.created_at) }}
+                                </span>
+                                <span
+                                    v-if="detail.status === 'done' && detail.completed_at"
+                                    class="row items-center no-wrap"
+                                >
+                                    <q-icon :name="ICONS.event_available" size="14px" class="q-mr-xs" />
+                                    Completed {{ formatDate(detail.completed_at) }}
                                 </span>
                             </div>
                         </div>
@@ -355,39 +369,85 @@
                         />
                     </div>
 
-                    <!-- Bulk-select action bar — only while selecting. The
-                         entry point is the toolbar "Select" button. -->
-                    <q-banner
-                        v-if="planFace && bulkMode"
-                        class="q-mb-sm bulk-bar bulk-bar-active"
-                        dense
-                        rounded
-                    >
-                        <template #avatar>
-                            <q-icon :name="ICONS.checklist" />
-                        </template>
-                        {{ bulkSelection.size }} selected
-                        <template #action>
-                            <BaseButton variant="ghost" label="Select all" @click="selectAllLines" />
-                            <BaseButton
-                                variant="ghost"
-                                :icon="ICONS.check_box"
-                                label="Tick selected"
-                                :disable="bulkSelection.size === 0"
-                                :loading="bulkBusy"
-                                @click="onBulkTick(true)"
-                            />
-                            <BaseButton
-                                variant="ghost"
-                                :icon="ICONS.check_box_outline_blank"
-                                label="Untick"
-                                :disable="bulkSelection.size === 0"
-                                :loading="bulkBusy"
-                                @click="onBulkTick(false)"
-                            />
-                            <BaseButton variant="ghost" label="Done" @click="exitBulkMode" />
-                        </template>
-                    </q-banner>
+                    <!-- Bulk-select action bar. 2026-08-26 feedback: *"bulk
+                         select button and behaviour should match the stock
+                         overview. Consistency is important. Even down to the
+                         name of the button."* — so this is Stock overview's
+                         bar, not a lookalike: the same `dora-subbar` sunken
+                         well, the same slide transition, the same leading
+                         "N selected", the same Select-visible / Deselect-all
+                         pair, and the same dense ghost action buttons. The
+                         page's own actions differ (this is a list of lines,
+                         not of stock items), the chrome does not.
+
+                         "Done" is gone from the bar: exiting is the toolbar's
+                         Cancel, exactly as on Stock overview, so there aren't
+                         two differently-named ways out. -->
+                    <div v-if="planFace" class="bulk-bar q-py-xs">
+                    <q-slide-transition>
+                        <div v-if="bulkMode" class="dora-subbar">
+                            <div class="dora-subbar__inner">
+                                <div class="row items-center q-gutter-sm">
+                                    <q-icon :name="ICONS.checklist" />
+                                    <span class="text-weight-medium">{{ bulkSelection.size }} selected</span>
+                                    <q-space />
+                                    <BaseButton variant="ghost" dense label="Select visible" @click="selectAllLines" />
+                                    <BaseButton
+                                        variant="ghost"
+                                        dense
+                                        label="Deselect all"
+                                        :disable="bulkSelection.size === 0"
+                                        @click="deselectAllLines"
+                                    />
+                                    <BaseButton
+                                        variant="ghost"
+                                        dense
+                                        :icon="ICONS.check_box"
+                                        label="Tick"
+                                        :disable="bulkSelection.size === 0"
+                                        :loading="bulkBusy"
+                                        @click="onBulkTick(true)"
+                                    />
+                                    <BaseButton
+                                        variant="ghost"
+                                        dense
+                                        :icon="ICONS.check_box_outline_blank"
+                                        label="Untick"
+                                        :disable="bulkSelection.size === 0"
+                                        :loading="bulkBusy"
+                                        @click="onBulkTick(false)"
+                                    />
+                                    <!-- Replaces More → "Move unticked to
+                                         another list". Same idea, but you pick
+                                         what moves instead of the app assuming
+                                         "everything unticked", and it borrows
+                                         the glyph Stock overview's bulk "Move
+                                         location" already uses for exactly
+                                         this shape of action. -->
+                                    <BaseButton
+                                        variant="ghost"
+                                        dense
+                                        :icon="ICONS.drive_file_move"
+                                        label="Move to list…"
+                                        :loading="bulkBusy"
+                                        :disable="bulkSelection.size === 0 || otherActiveLists.length === 0"
+                                        @click="onBulkMoveToList"
+                                    >
+                                        <q-tooltip v-if="otherActiveLists.length === 0">
+                                            No other active list to move them to
+                                        </q-tooltip>
+                                    </BaseButton>
+                                    <!-- No bulk "Remove" here on purpose: there
+                                         is no remove-these-line-ids endpoint,
+                                         and looping N deletes is the exact
+                                         per-item request loop FU-713/714 exist
+                                         to stamp out. Clearing the list whole
+                                         is the footer button below. -->
+                                </div>
+                            </div>
+                        </div>
+                    </q-slide-transition>
+                    </div>
 
                     <!-- Budget-aware trim banner (money-gated + budget-set).
                          Fires when the projected active-list total exceeds the
@@ -608,6 +668,7 @@
                                 <q-item
                                     v-for="line in section.lines"
                                     :key="line.line_id"
+                                    class="shopping-line"
                                     :class="{
                                         'shopping-line-ticked': line.is_ticked,
                                         'shopping-line-focused': focusedLineId === line.line_id,
@@ -619,6 +680,7 @@
                                         ...lineDnd.bind(line).handleProps,
                                         ...lineDnd.bind(line).rowProps,
                                     }"
+                                    v-touch-hold:600="() => onLineLongPress(line.line_id)"
                                 >
                                     <!-- Decorative grip — whole-row mode, the
                                          row itself is the draggable element;
@@ -635,7 +697,7 @@
                                         v-if="canReorder"
                                         side
                                         top
-                                        class="dora-dnd-handle"
+                                        class="dora-dnd-handle shopping-line__reorder"
                                     >
                                         <div class="column items-center">
                                             <BaseButton
@@ -667,7 +729,7 @@
                                             </BaseButton>
                                         </div>
                                     </q-item-section>
-                                    <q-item-section v-if="bulkMode" side top>
+                                    <q-item-section v-if="bulkMode" side top class="shopping-line__bulk">
                                         <q-checkbox
                                             :model-value="bulkSelection.has(line.line_id)"
                                             @update:model-value="toggleBulkLine(line.line_id)"
@@ -694,7 +756,7 @@
                                         <!-- UX-v2 §6: plain name-link + level
                                              dot — StockItemChip is retired. -->
                                         <div
-                                            class="row items-center q-gutter-x-sm no-wrap"
+                                            class="row items-center q-gutter-x-sm no-wrap shopping-line__name-row"
                                             :class="{
                                                 'shopping-line-ticked-content': line.is_ticked,
                                             }"
@@ -874,7 +936,15 @@
                                         </div>
                                     </q-item-section>
 
-                                    <q-item-section side style="min-width: 150px">
+                                    <!-- Forces the controls onto their own line
+                                         on a phone (see `.shopping-line`
+                                         below). A zero-height flex break is
+                                         the least invasive way to do it: the
+                                         row keeps one DOM shape at every
+                                         width, and `order` decides what lands
+                                         above and below it. -->
+                                    <div class="shopping-line__break lt-sm" />
+                                    <q-item-section side class="shopping-line__qty">
                                         <div class="row items-center q-gutter-xs no-wrap">
                                             <BaseButton
                                                 variant="icon"
@@ -1031,8 +1101,8 @@
                                     <!-- S12: direct row actions, no kebab.
                                          "Move to another list" was axed
                                          (§12 Q2) — remove + re-add covers it. -->
-                                    <q-item-section side>
-                                        <div class="column items-center q-gutter-xs">
+                                    <q-item-section side class="shopping-line__actions">
+                                        <div class="column items-center q-gutter-xs shopping-line__action-stack">
                                             <BaseButton
                                                 variant="icon"
                                                 size="sm"
@@ -1196,6 +1266,40 @@
                             class="sld-receipt-zoom"
                         />
                     </BaseDialog>
+
+                    <!-- Destructive footer. 2026-08-26 feedback moved "Clear
+                         all items" out of the More menu; it landed here
+                         rather than on the toolbar deliberately, and "Delete
+                         list" came with it for the same reason: you reach
+                         both only by scrolling past everything they'd
+                         destroy, and neither sits in the thumb path next to
+                         "Add item". Both still confirm.
+
+                         Delete list also lives on each list's own ⋮ menu in
+                         the rail / switcher — this is the one for the list
+                         you're currently looking at. -->
+                    <div class="sld-danger-footer row items-center q-gutter-sm q-mt-lg q-pt-md">
+                        <BaseButton
+                            variant="ghost"
+                            :icon="ICONS.playlist_remove"
+                            label="Clear all items"
+                            class="text-negative"
+                            :disable="detail.lines.length === 0"
+                            @click="onClearAll"
+                        >
+                            <q-tooltip>Remove every line. The list itself stays.</q-tooltip>
+                        </BaseButton>
+                        <BaseButton
+                            variant="ghost"
+                            :icon="ICONS.delete"
+                            label="Delete list"
+                            class="text-negative"
+                            :disable="!currentSummary"
+                            @click="onDeleteCurrentList"
+                        >
+                            <q-tooltip>Delete this list and everything on it.</q-tooltip>
+                        </BaseButton>
+                    </div>
 
                     <!-- Mid-shop sticky footer (M10–M12): live progress +
                          remaining spend + the finish CTA, always in reach. -->
@@ -1430,7 +1534,27 @@
         <!-- UX-v2 M12 — restock review. One-click "Restock & finish" with
              every ticked item listed and individually adjustable (default
              Stocked). Replaces the old text-only confirm dialog. -->
-        <BaseDialog v-model="finishReviewOpen" title="Finish & restock" closable card-style="min-width: 320px; max-width: 480px">
+        <!-- Finish & restock. 2026-08-26 feedback: the dialog *"asks if you
+             want to move unticked/unpurchased items to another list for
+             later, UI changes based on whether all items are ticked or not"*.
+
+             So it has two shapes. Clean finish: a confirmation of what's
+             about to be restocked. Finishing early: the same, plus the
+             leftovers promoted from a passive grey footnote ("copy or move
+             them later if they're still wanted" — which nobody ever did,
+             because the list was archived by then and the items were
+             stranded) into an actual decision made at the only moment the
+             user is thinking about it.
+
+             This is where the old More → "Move unticked to another list"
+             went. Same server call, offered at the right time instead of
+             hidden in a menu you'd have to think to open. -->
+        <BaseDialog
+            v-model="finishReviewOpen"
+            :title="untickedCount > 0 ? 'Finish early & restock' : 'Finish & restock'"
+            closable
+            card-style="min-width: 320px; max-width: 480px"
+        >
             <q-card-section>
                 <div class="text-body2 dora-text-muted">
                     {{
@@ -1440,7 +1564,7 @@
                     }}
                 </div>
             </q-card-section>
-            <q-card-section v-if="finishEntries.length > 0" class="q-pt-none scroll" style="max-height: 50vh">
+            <q-card-section v-if="finishEntries.length > 0" class="q-pt-none scroll" style="max-height: 34vh">
                 <q-list separator dense>
                     <q-item v-for="entry in finishEntries" :key="entry.line_id">
                         <q-item-section>
@@ -1454,19 +1578,52 @@
                     </q-item>
                 </q-list>
             </q-card-section>
+
             <q-card-section v-if="untickedCount > 0" class="q-pt-none">
-                <div class="text-caption dora-text-muted">
-                    {{ untickedCount }} unticked item{{ untickedCount === 1 ? '' : 's' }}
-                    stay{{ untickedCount === 1 ? 's' : '' }} on the list — copy or move
-                    them later if they're still wanted.
+                <q-banner class="dora-bg-warning-soft q-mb-sm" dense rounded>
+                    <template #avatar>
+                        <q-icon :name="ICONS.warning" color="warning" />
+                    </template>
+                    <span class="text-body2">
+                        <strong>
+                            {{ untickedCount }} item{{ untickedCount === 1 ? '' : 's' }}
+                        </strong>
+                        {{ untickedCount === 1 ? "isn't" : "aren't" }} ticked.
+                        What should happen to
+                        {{ untickedCount === 1 ? 'it' : 'them' }}?
+                    </span>
+                </q-banner>
+                <q-option-group
+                    v-model="leftoverAction"
+                    :options="leftoverOptions"
+                    color="primary"
+                    dense
+                />
+                <!-- Only rendered for the "move to an existing list" branch,
+                     and that branch only exists when there is somewhere to
+                     move to. -->
+                <BaseSelect
+                    v-if="leftoverAction === 'move-existing'"
+                    v-model="leftoverTargetListId"
+                    class="q-mt-sm"
+                    label="Move to"
+                    :options="otherActiveListOptions"
+                    emit-value
+                    map-options
+                />
+                <div class="text-caption dora-text-muted q-mt-sm">
+                    Anything already on the target list is skipped — you won't
+                    get duplicates.
                 </div>
             </q-card-section>
+
             <template #actions>
                 <BaseButton variant="ghost" label="Cancel" v-close-popup />
                 <BaseButton
                     variant="positive"
                     :icon="ICONS.check"
-                    label="Restock & finish"
+                    :label="finishCtaLabel"
+                    :disable="finishBlocked"
                     :loading="finishing"
                     @click="confirmFinish"
                 />
@@ -1481,6 +1638,7 @@
     import AppSkeleton from 'src/components/AppSkeleton.vue';
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseDropdown from 'src/components/BaseDropdown.vue';
+    import BaseSelect from 'src/components/BaseSelect.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
     import TripCard from 'src/components/shoppingList/TripCard.vue';
     import StoreSpendCard from 'src/components/shoppingList/StoreSpendCard.vue';
@@ -1493,7 +1651,6 @@
     import FadeTransition from 'src/components/transitions/FadeTransition.vue';
     import NewListDialog from 'src/components/dialogs/NewListDialog.vue';
     import PutAwayDialog from 'src/components/dialogs/PutAwayDialog.vue';
-    import PageToolbar from 'src/components/PageToolbar.vue';
     import ShoppingListRailItem from 'src/components/shoppingList/ShoppingListRailItem.vue';
     import BuyVerdictBadgeInline from 'src/components/stock/BuyVerdictBadgeInline.vue';
     import BuyVerdictApiService from 'src/services/api/buyVerdictApiService';
@@ -1503,6 +1660,7 @@
     import { useBuyVerdictEnabled } from 'src/composables/useBuyVerdictEnabled';
     import { useBuyVerdictActions } from 'src/composables/useBuyVerdictActions';
     import { useQuasar, type QVirtualScroll } from 'quasar';
+    import { useFeatureFlags } from 'src/composables/useFeatureFlags';
     import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
     import { useMoney, formatMoney } from 'src/composables/useMoney';
     const { currencySymbol } = useMoney();
@@ -1550,6 +1708,14 @@
     const stockLevelStore = useStockLevelStore();
     const productStore = useProductStore();
     const { moneyEnabled } = useMoneyEnabled();
+    // Gates "Refresh deals" (2026-08-26 feedback) — offers live on the
+    // product axis, so with no product data that button's only possible
+    // outcome is "0 lines checked, nothing changed".
+    const { products: productsEnabled } = useFeatureFlags();
+    // Phones drop every toolbar label and ride the icon alone, tooltip
+    // carrying the name — same breakpoint and same reason as Stock overview's
+    // `compactToolbar` (the row was eating a quarter of the screen).
+    const compactToolbar = computed(() => $q.screen.lt.sm);
     // Per-user display opt-out (D-12). Gates the bulk verdict prefetch below;
     // `BuyVerdictBadgeInline` checks it again for the render.
     const { buyVerdictEnabled } = useBuyVerdictEnabled();
@@ -1653,8 +1819,57 @@
     };
     const finishEntries = ref<FinishEntry[]>([]);
 
+    /** What to do with lines that were never ticked, decided in the finish
+     *  dialog rather than left to be discovered on an archived list later. */
+    type LeftoverAction = 'leave' | 'move-existing' | 'move-new';
+    const leftoverAction = ref<LeftoverAction>('leave');
+    const leftoverTargetListId = ref<string | null>(null);
+
+    const otherActiveListOptions = computed(() =>
+        otherActiveLists.value.map((s) => ({
+            label: s.display_name,
+            value: s.shopping_list_id,
+        }))
+    );
+
+    const leftoverOptions = computed(() => {
+        const options = [
+            {
+                label: 'Leave them on this list',
+                value: 'leave',
+            },
+        ];
+        // Only offered when there is somewhere to move to. An empty radio
+        // that opens an empty select is worse than not offering the choice.
+        if (otherActiveLists.value.length > 0) {
+            options.push({ label: 'Move them to another list', value: 'move-existing' });
+        }
+        options.push({ label: 'Move them to a new list', value: 'move-new' });
+        return options;
+    });
+
+    /** Guards the one state the dialog can be in where "finish" is
+     *  ambiguous: move-to-an-existing-list picked, no list chosen yet. */
+    const finishBlocked = computed(() =>
+        untickedCount.value > 0
+            && leftoverAction.value === 'move-existing'
+            && !leftoverTargetListId.value
+    );
+
+    const finishCtaLabel = computed(() => {
+        if (untickedCount.value === 0) return 'Restock & finish';
+        return leftoverAction.value === 'leave'
+            ? 'Restock & finish'
+            : 'Move & finish';
+    });
+
     function openFinishReview() {
         if (!detail.value) return;
+        // Reset the leftover decision each time the dialog opens — it is a
+        // choice about *this* finish, not a remembered preference.
+        leftoverAction.value = 'leave';
+        leftoverTargetListId.value =
+            otherActiveLists.value[0]?.shopping_list_id ?? null;
         const seen = new Set<string>();
         finishEntries.value = detail.value.lines
             .filter((l) => l.is_ticked)
@@ -1674,11 +1889,47 @@
         finishReviewOpen.value = true;
     }
 
+    /** Moves the unticked lines off this list per the dialog's choice, before
+     *  the finish archives it. Returns how many actually moved.
+     *
+     *  Order matters: the move has to happen *first*. `finishAsync` archives
+     *  the list, and the server refuses to move lines onto (or, once done,
+     *  meaningfully off) an archived list. */
+    async function moveLeftoversBeforeFinish(): Promise<number> {
+        if (untickedCount.value === 0 || leftoverAction.value === 'leave') return 0;
+
+        let targetId = leftoverTargetListId.value;
+        if (leftoverAction.value === 'move-new') {
+            // Two calls rather than one, and deliberately not a per-item
+            // loop: create the list, then move the whole leftover set into
+            // it in a single request.
+            const created = await api.createAsync({
+                name: `Leftovers from ${detail.value?.display_name ?? 'last shop'}`,
+            });
+            targetId = created.shopping_list_id;
+        }
+        if (!targetId) return 0;
+
+        const result = await api.moveUntickedToAsync(listId.value, targetId);
+        return result.moved_count;
+    }
+
     async function confirmFinish() {
+        if (finishBlocked.value) return;
         finishing.value = true;
         try {
+            const movedCount = await moveLeftoversBeforeFinish();
             const result = await api.finishAsync(listId.value);
             finishReviewOpen.value = false;
+            if (movedCount > 0) {
+                $q.notify({
+                    type: 'positive',
+                    position: 'bottom-right',
+                    message: `${movedCount} unticked item${
+                        movedCount === 1 ? '' : 's'
+                    } moved for later.`,
+                });
+            }
             await Promise.all([
                 refreshAll(),
                 stockItemStore.getStockItemsAsync(),
@@ -1716,17 +1967,37 @@
         bulkSelection.value = new Set();
     }
     function toggleBulkLine(lineId: string) {
-        if (bulkSelection.value.has(lineId)) {
+        const wasSelected = bulkSelection.value.has(lineId);
+        if (wasSelected) {
             bulkSelection.value.delete(lineId);
         } else {
             bulkSelection.value.add(lineId);
         }
         // Force reactivity — Set mutation isn't shallow-tracked.
         bulkSelection.value = new Set(bulkSelection.value);
+        // *"Long press for bulk action selection and deselect all to cancel"*
+        // — unticking the last selected line is the way back out, the mirror
+        // of the long-press that got you in. Guarded on `wasSelected` so
+        // entering from the toolbar (which starts at zero selected) doesn't
+        // immediately close the bar again.
+        if (wasSelected && bulkSelection.value.size === 0) {
+            bulkMode.value = false;
+        }
     }
     function selectAllLines() {
         const ids = (detail.value?.lines ?? []).map((l) => l.line_id);
         bulkSelection.value = new Set(ids);
+    }
+    function deselectAllLines() {
+        bulkSelection.value = new Set();
+    }
+    /** Long-press a line to start selecting, with that line already ticked —
+     *  the mobile entry point, same as Stock overview's `onRowLongPress`. On
+     *  desktop the toolbar button is the way in and this never fires. */
+    function onLineLongPress(lineId: string) {
+        if (!planFace.value) return;
+        if (!bulkMode.value) bulkMode.value = true;
+        if (!bulkSelection.value.has(lineId)) toggleBulkLine(lineId);
     }
     async function onBulkTick(isTicked: boolean) {
         if (bulkSelection.value.size === 0) return;
@@ -2087,18 +2358,11 @@
                 return 'Draft';
         }
     });
-    // R-002: "done" routes through the neutral chip class (template
-    // binding below), not a `grey-N` literal.
-    const statusBadgeColour = computed<string | null>(() => {
-        switch (detail.value?.status) {
-            case 'shopping':
-                return 'positive';
-            case 'done':
-                return null;
-            default:
-                return 'primary';
-        }
-    });
+    // The pill's colour now comes from a `sld-status-pill--{status}` class
+    // keyed off the status itself (R-002: tokens in the stylesheet, no
+    // Quasar colour names threaded through the template). That also killed
+    // the old "which of these is the neutral one?" question — see the
+    // status-pill block in <style>.
 
     function isChosen(line: ShoppingListLine, productId: string): boolean {
         const chosen = chosenOfferFor(line);
@@ -3195,16 +3459,22 @@
         }
     }
 
-    async function onMoveUnticked() {
-        if (untickedCount.value === 0 || otherActiveLists.value.length === 0) return;
-        // Use Quasar's built-in `options` dialog (radio-style) rather than
-        // building a custom picker — the user just needs to pick a target.
-        const targetId = await new Promise<string | null>((resolve) => {
+    // ── Moving items to another list ──────────────────────────────────
+    // Two entry points, one flow (2026-08-26 feedback). The standalone
+    // "Move unticked to another list" hidden in the More menu is gone: you
+    // now either select exactly what you want moved (bulk bar → "Move to
+    // list…") or you're told about the leftovers on the way out of the shop
+    // (the finish dialog). Both land here.
+
+    /** Quasar's built-in radio `options` dialog rather than a hand-rolled
+     *  picker — the user is choosing one of a short list of names. Resolves
+     *  null on cancel/dismiss. */
+    async function pickTargetList(title: string, message: string): Promise<string | null> {
+        if (otherActiveLists.value.length === 0) return null;
+        return await new Promise<string | null>((resolve) => {
             $q.dialog({
-                title: 'Move unticked items to…',
-                message: `${untickedCount.value} unticked item${
-                    untickedCount.value === 1 ? '' : 's'
-                } will move. Duplicates already on the target list are skipped.`,
+                title,
+                message,
                 options: {
                     type: 'radio',
                     model: '',
@@ -3220,9 +3490,14 @@
                 .onCancel(() => resolve(null))
                 .onDismiss(() => resolve(null));
         });
-        if (!targetId) return;
+    }
+
+    /** Shared result handling so the two callers report a move identically. */
+    async function reportMove(
+        move: () => Promise<{ moved_count: number; skipped_duplicates: number }>,
+    ): Promise<boolean> {
         try {
-            const result = await api.moveUntickedToAsync(listId.value, targetId);
+            const result = await move();
             await refreshAll();
             $q.notify({
                 type: 'positive',
@@ -3235,6 +3510,7 @@
                         ? ` ${result.skipped_duplicates} skipped (already on target).`
                         : ''),
             });
+            return true;
         } catch (err) {
             $q.notify({
                 type: 'negative',
@@ -3242,6 +3518,30 @@
                 message: 'Could not move items.',
                 caption: toastCaption(err),
             });
+            return false;
+        }
+    }
+
+    async function onBulkMoveToList() {
+        const count = bulkSelection.value.size;
+        if (count === 0 || otherActiveLists.value.length === 0) return;
+        const targetId = await pickTargetList(
+            'Move selected items to…',
+            `${count} item${count === 1 ? '' : 's'} will move. Duplicates ` +
+            'already on the target list are skipped.',
+        );
+        if (!targetId) return;
+        const ids = [...bulkSelection.value];
+        bulkBusy.value = true;
+        try {
+            // One request for the whole selection, not one per line
+            // (FU-713/714's shape).
+            const moved = await reportMove(
+                () => api.moveLinesToAsync(listId.value, targetId, ids),
+            );
+            if (moved) exitBulkMode();
+        } finally {
+            bulkBusy.value = false;
         }
     }
 
@@ -3355,11 +3655,65 @@
     .sld-name-input {
         min-width: 260px;
     }
-    .sld-status-badge {
-        font-size: 0.85rem;
-        letter-spacing: 0.06em;
-        text-transform: uppercase;
-        padding: 4px 12px;
+    /* Toolbar action band. Same rule (and same reasoning) as
+       `.stock-toolbar__actions` on Stock overview: one no-wrap row that
+       scrolls sideways, the controls running off the edge being the
+       affordance. `gap` rather than `q-gutter-sm` because the gutter's
+       negative margins fight `overflow-x`; children can't shrink past their
+       own width or the row would squash the labels instead of scrolling. */
+    .sld-toolbar {
+        margin-bottom: var(--space-4);
+    }
+    .sld-toolbar__actions {
+        gap: var(--space-2);
+        overflow-x: auto;
+        overflow-y: hidden;
+        min-width: 0;
+        flex: 1 1 auto;
+        padding-bottom: 2px;
+        scrollbar-width: none;
+    }
+    .sld-toolbar__actions::-webkit-scrollbar {
+        display: none;
+    }
+    .sld-toolbar__actions > * {
+        flex: 0 0 auto;
+    }
+    /* B2 status pill: pill radius, space-1/space-2 padding, --font-size-sm
+       (D-003's floor for a chip that carries a value — the old badge was
+       13.6px uppercase). Soft background + full-strength semantic ink, never
+       the soft token on both (the D-002 badge failure). */
+    .sld-status-pill {
+        flex: none;
+        border-radius: var(--radius-pill);
+        padding: var(--space-1) var(--space-2);
+        font-size: calc(var(--font-size-sm) * 1rem);
+        font-weight: 500;
+        line-height: 1.2;
+        white-space: nowrap;
+    }
+    /* A draft hasn't happened yet — neutral, and quiet enough not to compete
+       with the "Start shopping" button sitting beside it. */
+    .sld-status-pill--draft {
+        background: var(--surface-sunken);
+        color: var(--text-secondary);
+    }
+    /* Mid-shop is a state you're in, not an achievement. */
+    .sld-status-pill--shopping {
+        background: var(--semantic-info-soft);
+        color: var(--semantic-info);
+    }
+    /* Finishing the shop is the success in this lifecycle, so this is the one
+       that earns the positive token. */
+    .sld-status-pill--done {
+        background: var(--semantic-positive-soft);
+        color: var(--semantic-positive);
+    }
+    /* Timestamps, so `--text-muted` is the sanctioned use and the 12px
+       caption floor is the right size (D-003). */
+    .sld-meta {
+        font-size: calc(var(--font-size-xs) * 1rem);
+        color: var(--text-muted);
     }
     .sld-group-toggle {
         border: 1px solid var(--surface-component);
@@ -3367,13 +3721,37 @@
     }
     .sld-rail {
         width: 300px;
+        min-width: 0;
         position: sticky;
         top: 60px;
         height: calc(100vh - 110px);
     }
+    /* `min-width: 0` is what makes the 300px above actually hold. A flex item
+       defaults to `min-width: auto`, so this scroller was refusing to shrink
+       below the intrinsic width of its widest row — a rail entry is a
+       `row no-wrap` of name + "next up" badge + date caption + ⋮ — and at
+       1280px it measured 421px inside its 300px parent, pushing ~105px of
+       horizontal scroll onto the whole page (the FU-578 #40 family). The row
+       already carries `.ellipsis` on the name, so it truncates correctly once
+       it is allowed to. */
     .sld-rail-scroll {
         min-height: 0;
+        min-width: 0;
+        /* Pinned to the rail's own 300px. `min-width: 0` alone wasn't enough:
+           `q-virtual-scroll` sizes itself from its widest row, so the scroller
+           measured 421px inside a 300px rail and pushed ~105px of horizontal
+           scroll onto the entire page at 1280px (the FU-578 #40 family). With
+           the width pinned, `overflow: auto` finally has something to clip
+           against, and the row's own `.ellipsis` truncates the name. */
+        width: 100%;
+        max-width: 100%;
         overflow: auto;
+    }
+    /* Separated from the list by a rule rather than a card — these are exits,
+       not content, and a bordered box would give them more presence than two
+       destructive actions should have. */
+    .sld-danger-footer {
+        border-top: 1px solid var(--divider);
     }
     .sld-shop-footer {
         position: sticky;
@@ -3419,6 +3797,108 @@
     .sld-price-btn {
         min-width: 96px;
     }
+    /* ── The line row on a phone (2026-08-26 feedback) ────────────────
+       *"Mobile view is god awful with majority of UI elements overlapping
+       each other by a lot and whole thing is just squished."* Reproduced at
+       375px and it is not an overflow bug — the page doesn't scroll
+       sideways at all. It's that the row was laying out **eight** columns
+       side by side (reorder, tick, name, buy verdict, quantity stepper,
+       price button, swap, delete), so the item's *name* — the only thing on
+       the row you actually read — was compressed to about 60px and wrapped
+       over four lines while the controls jammed into each other.
+
+       The fix is to stop pretending a phone has desktop width: the name
+       gets the full row, and every control drops to a second line under it
+       as one strip. Nothing is hidden and nothing moves into a menu — the
+       row just admits it needs two lines. Desktop is untouched. */
+    @media (max-width: 599px) {
+        .shopping-line {
+            flex-wrap: wrap;
+        }
+        /* Line 1: tick · name · swap+delete. Line 2: reorder · quantity ·
+           price. Measured at 375px, that is exactly what fits — putting the
+           two row actions up on the name line is what stops a third line
+           appearing, and they belong to "this item" more than to "how many
+           and how much" anyway.
+
+           `flex: 1 1 0` (basis zero, not auto) on the name is load-bearing:
+           with `auto` the name's intrinsic width plus the tick exceeded the
+           row and the name wrapped onto a line of its own. */
+        .shopping-line > .q-item__section--side:not(.shopping-line__reorder):not(.shopping-line__qty):not(.shopping-line__actions) {
+            order: 0;
+        }
+        .shopping-line > .q-item__section--main {
+            order: 1;
+            min-width: 0;
+            flex: 1 1 0;
+        }
+        .shopping-line__actions { order: 2; }
+        /* The break sits between the two groups; everything ordered after it
+           lands on the second line. */
+        .shopping-line__break {
+            order: 3;
+            flex: 1 0 100%;
+            height: 0;
+        }
+        .shopping-line__reorder { order: 4; }
+        .shopping-line__qty     { order: 5; }
+        /* On the second line the sections are peers in one strip, so their
+           desktop sizing (a 150px floor on the quantity block, `top`
+           alignment, per-section padding) has to go. */
+        .shopping-line > .q-item__section--side.shopping-line__reorder,
+        .shopping-line > .q-item__section--side.shopping-line__qty {
+            min-width: 0;
+            padding-left: 0;
+            padding-top: var(--space-2);
+            align-items: center;
+        }
+        .shopping-line > .q-item__section--side.shopping-line__actions {
+            min-width: 0;
+            align-items: center;
+        }
+        /* The quantity section stacks its stepper, the price button and the
+           price-provenance caption vertically — three rows deep, which is
+           what made the phone strip fall onto three lines of its own. Side
+           by side they fit in one. */
+        .shopping-line__qty {
+            flex: 1 1 auto;
+            flex-direction: row;
+            align-items: center;
+            gap: var(--space-2);
+            flex-wrap: wrap;
+        }
+        .shopping-line__qty > * {
+            margin: 0;
+        }
+        /* The provenance caption ("last paid at Coles") is the least urgent
+           thing on the row and the first to cost a line — it stays available
+           inside the price editor, which is where you'd act on it. */
+        .shopping-line__qty > .text-caption {
+            display: none;
+        }
+        /* Reorder and row actions stack vertically on desktop, where they sit
+           in their own narrow columns. In the phone strip they're side by
+           side like everything else. */
+        .shopping-line__reorder .column,
+        .shopping-line__action-stack {
+            flex-direction: row;
+            align-items: center;
+        }
+        /* The name and the buy-verdict badge share a `no-wrap` row, which on a
+           phone meant the badge kept its ~70px and the *name* wrapped to
+           three lines inside the ~100px left over. Letting the row wrap puts
+           the badge underneath and gives the name the full width — it is the
+           thing being read, so it gets the space. */
+        .shopping-line__name-row {
+            flex-wrap: wrap;
+        }
+        /* Drag-to-reorder is a pointer gesture; the arrows are the thumb path
+           (and the keyboard one). Dropping the decorative grip here buys back
+           the width without removing a way to reorder. */
+        .shopping-line__reorder .q-icon {
+            display: none;
+        }
+    }
     .shopping-line-name {
         font-weight: 500;
         text-decoration: none;
@@ -3437,11 +3917,15 @@
        (.dora-dnd-row / --dragging / --drop-over). The decorative
        handle icon-section is non-interactive (whole-row mode), so
        the grab/grabbing cursors aren't needed here. */
+    /* The bar itself is `.dora-subbar` from the shared `src/css/subbar.scss`
+       now (2026-08-26); this wrapper only exists to give
+       `q-slide-transition` a stable 4px buffer to measure against, exactly as
+       on Stock overview. The old `.bulk-bar-active` primary-soft tint went
+       with the old banner — a whole-width brand wash for "you are selecting
+       things" was louder than the state warranted, and it was the one visible
+       difference between the two pages' bars. */
     .bulk-bar {
-        background: var(--overlay-hover);
-    }
-    .bulk-bar-active {
-        background: var(--brand-primary-soft);
+        min-height: 0;
     }
     .shopping-line-ticked-content {
         opacity: 0.6;

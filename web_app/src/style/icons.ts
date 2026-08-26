@@ -286,6 +286,12 @@ export const ICONS = {
     // `meal` is the recipe/dish itself and `chef_hat` is the act of cooking,
     // so neither carries the "already done, waiting for you" sense.
     mealsPrepared: 'mdi-fridge',
+    // 2026-08-26 — the recipe masthead's two half-times. `timer` already means
+    // *total* time on the cookbook row, so prep and cook can't borrow it and
+    // can't share one glyph either; they separate by the activity rather than
+    // by the clock. Board-and-knife = before the heat, pot = on it.
+    prepTime: 'mdi-knife',
+    cookTime: 'mdi-pot-steam-outline',
     // Filter/sort axis glyphs — see the cookbook filter row, where every
     // control carries one so the strip scans as a set (D-005).
     sort: 'mdi-sort',

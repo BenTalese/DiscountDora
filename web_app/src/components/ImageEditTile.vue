@@ -29,11 +29,18 @@
             <q-icon :name="ICONS.edit" :size="overlayIconSize" />
         </div>
         <q-inner-loading :showing="busy" />
+        <!-- `@click.stop` is load-bearing, not defensive. `openPicker()` calls
+             `.click()` on this input, and that synthetic click *bubbles* — up
+             to the tile's own `@click`, which on a `manual` tile re-emits
+             `activate`. So the recipe page's "Change photo" button closed its
+             dialog and the bubbled click immediately reopened it: the owner's
+             "modal stays open and you have to close it intentionally". -->
         <input
             ref="fileInput"
             type="file"
             :accept="accept"
             class="image-edit-tile__input"
+            @click.stop
             @change="onFileChange"
         />
     </div>

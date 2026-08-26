@@ -95,8 +95,11 @@
                 />
                 <!-- The same canonical vocabulary the substitute-ratio and
                      price widgets use, rather than this page's own free-text
-                     box (R-001). `new-value-mode` keeps a recipe's own words —
-                     "pinch", "handful" — which the unit table doesn't carry. -->
+                     box (R-001). Closed list, no `new-value-mode`: the owner's
+                     2026-08-26 call, and the table already carries the words
+                     the free-text escape existed for ("pinch", "dash",
+                     "stick"). `use-input` stays — it's the typeahead over ~22
+                     options and their aliases, not an escape hatch. -->
                 <BaseSelect
                     v-model="draft.unit"
                     label="Unit"
@@ -107,9 +110,7 @@
                     fill-input
                     hide-selected
                     clearable
-                    new-value-mode="add-unique"
                     input-debounce="0"
-                    hint="Or type your own"
                     @filter="onUnitFilter"
                 />
             </div>
@@ -216,7 +217,12 @@
     const draft = ref<IngredientPatch | null>(null);
     const typed = ref('');
     const creating = ref(false);
-    const { unitOptions, onUnitFilter } = useUnitOptions();
+    // An ingredient is measured by volume, mass or count — never in kJ or cm,
+    // which the unfiltered table also carries. Spelled out rather than reusing
+    // the table's `PRICE_DIMENSIONS`: same three today, but that constant means
+    // "what a price observation may be expressed in" and shouldn't drift by
+    // proxy.
+    const { unitOptions, onUnitFilter } = useUnitOptions(['volume', 'mass', 'count']);
 
     // Re-seed the draft whenever the dialog opens on a row, so a second visit
     // never shows the previous row's values for a frame.

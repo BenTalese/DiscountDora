@@ -31,6 +31,7 @@ def test__get_stores__GettingStore__GetsAllExpectedAttributes(api):
         'store_id',
         'name',
         'has_image',
+        'brand_colour',
     }
 
 

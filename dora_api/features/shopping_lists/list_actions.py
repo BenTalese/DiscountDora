@@ -11,6 +11,11 @@ Endpoints:
       The source list keeps its ticked lines. Duplicates on the target
       list are skipped (the per-list "unique stock item" invariant).
 
+  POST /api/shopping-lists/<id>/lines/move-to/<target_id>
+      Same move, but over an explicit set of `line_ids` — the bulk-select
+      bar's "Move to list" action. One request for the whole selection,
+      not one per line (the FU-713/714 shape).
+
   POST /api/shopping-lists/<id>/refresh-deals
       Re-runs the cheapest-offer auto-pick for every line on the list,
       clearing any stale `selected_product_id` if a cheaper option now
@@ -27,21 +32,25 @@ from dataclasses import dataclass
 from typing import List
 from uuid import UUID
 
+from pydantic import BaseModel, ConfigDict, Field
+
 from dora_api.domain.entities.shopping_list import (ShoppingList,
                                                     ShoppingListLine)
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.features.routers import SHOPPING_LIST_ROUTER
 from dora_api.infrastructure.api_response import (business_rule_violation, ok,
                                                   no_content, not_found)
+from dora_api.infrastructure.decorators import has_request_body
+from dora_api.infrastructure.utils import get_request_body
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 from dora_api.infrastructure.ports import Repository
 
 
-# ───── Move unticked → existing list ──────────────────────────────────────
+# ───── Move lines → existing list ─────────────────────────────────────────
 
 @dataclass(slots=True)
-class MoveUntickedResponse:
+class MoveLinesResponse:
     source_not_found: bool = False
     target_not_found: bool = False
     same_list: bool = False
@@ -50,26 +59,54 @@ class MoveUntickedResponse:
     skipped_duplicates: int = 0
 
 
-class MoveUntickedHandler:
+class MoveLinesHandler:
+    """Moves lines from one list onto another.
+
+    Two callers, one body of rules: "move everything unticked" (the finish
+    flow's offer to carry the leftovers forward) and "move exactly these"
+    (the bulk-select bar). Both need the same duplicate skipping, the same
+    archived-target guard and the same sequence appending, so `line_ids` is
+    a filter on one handler rather than a second near-copy of it — the
+    duplicate-skipping rule is the kind that drifts when it lives twice.
+    """
     def __init__(self, repository: Repository) -> None:
         self.repository = repository
 
-    def handle(self, source_id: UUID, target_id: UUID) -> MoveUntickedResponse:
+    def handle(
+        self,
+        source_id: UUID,
+        target_id: UUID,
+        line_ids: List[UUID] | None = None,
+    ) -> MoveLinesResponse:
+        """`line_ids=None` means "every unticked line on the source list";
+        an explicit list moves exactly those, ticked or not."""
         if source_id == target_id:
-            return MoveUntickedResponse(same_list=True)
+            return MoveLinesResponse(same_list=True)
 
         source = self.repository.get(ShoppingList).by_id(source_id)
         if source is None:
-            return MoveUntickedResponse(source_not_found=True)
+            return MoveLinesResponse(source_not_found=True)
         target = self.repository.get(ShoppingList).by_id(target_id)
         if target is None:
-            return MoveUntickedResponse(target_not_found=True)
+            return MoveLinesResponse(target_not_found=True)
         if target.is_done:
-            return MoveUntickedResponse(target_archived=True)
+            return MoveLinesResponse(target_archived=True)
 
-        unticked: List[ShoppingListLine] = self.repository.get(ShoppingListLine).all(
-            EntityField(ShoppingListLine, "shopping_list_id").eq(source_id)
-            & EntityField(ShoppingListLine, ShoppingListLine.Fields.IS_TICKED).eq(False)
+        source_filter = EntityField(
+            ShoppingListLine, "shopping_list_id"
+        ).eq(source_id)
+        if line_ids is None:
+            source_filter = source_filter & EntityField(
+                ShoppingListLine, ShoppingListLine.Fields.IS_TICKED
+            ).eq(False)
+        else:
+            # Scoped to the source list on purpose: an id from another list
+            # must not be movable by passing it here.
+            source_filter = source_filter & EntityField(
+                ShoppingListLine, "id"
+            ).in_(list(line_ids))
+        movable: List[ShoppingListLine] = self.repository.get(ShoppingListLine).all(
+            source_filter
         )
         target_lines: List[ShoppingListLine] = self.repository.get(ShoppingListLine).all(
             EntityField(ShoppingListLine, "shopping_list_id").eq(target_id)
@@ -79,7 +116,7 @@ class MoveUntickedHandler:
 
         moved = 0
         skipped = 0
-        for line in unticked:
+        for line in movable:
             if line.stock_item_id in target_item_ids:
                 # Don't merge quantities here — that's a separate UX
                 # decision; the unique-per-line invariant wins for now.
@@ -93,7 +130,7 @@ class MoveUntickedHandler:
             moved += 1
 
         self.repository.save_changes()
-        return MoveUntickedResponse(moved_count=moved, skipped_duplicates=skipped)
+        return MoveLinesResponse(moved_count=moved, skipped_duplicates=skipped)
 
 
 @SHOPPING_LIST_ROUTER.route(
@@ -101,17 +138,10 @@ class MoveUntickedHandler:
 )
 def move_unticked_to(source_id: UUID, target_id: UUID):
     _Logger = logging.getLogger(__name__)
-    _Response = MoveUntickedHandler(SqlAlchemyRepository()).handle(source_id, target_id)
-    if _Response.source_not_found:
-        return not_found("ShoppingList (source)", source_id)
-    if _Response.target_not_found:
-        return not_found("ShoppingList (target)", target_id)
-    if _Response.same_list:
-        return business_rule_violation("Source and target lists are the same.")
-    if _Response.target_archived:
-        return business_rule_violation(
-            "Cannot move items to an archived list. Unarchive it first."
-        )
+    _Response = MoveLinesHandler(SqlAlchemyRepository()).handle(source_id, target_id)
+    _Error = _move_error_response(_Response, source_id, target_id)
+    if _Error is not None:
+        return _Error
     _Logger.info(
         f"Moved {_Response.moved_count} unticked line(s) from {source_id} -> {target_id} "
         f"({_Response.skipped_duplicates} duplicates skipped)"
@@ -120,6 +150,51 @@ def move_unticked_to(source_id: UUID, target_id: UUID):
         "moved_count": _Response.moved_count,
         "skipped_duplicates": _Response.skipped_duplicates,
     })
+
+
+class MoveLinesRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    line_ids: List[UUID] = Field(min_length=1)
+
+
+@SHOPPING_LIST_ROUTER.route(
+    "/<uuid:source_id>/lines/move-to/<uuid:target_id>", methods=["POST"]
+)
+@has_request_body(MoveLinesRequest)
+def move_lines_to(source_id: UUID, target_id: UUID):
+    _Logger = logging.getLogger(__name__)
+    _Request: MoveLinesRequest = get_request_body()
+    _Response = MoveLinesHandler(SqlAlchemyRepository()).handle(
+        source_id, target_id, _Request.line_ids
+    )
+    _Error = _move_error_response(_Response, source_id, target_id)
+    if _Error is not None:
+        return _Error
+    _Logger.info(
+        f"Moved {_Response.moved_count} selected line(s) from {source_id} -> {target_id} "
+        f"({_Response.skipped_duplicates} duplicates skipped)"
+    )
+    return ok({
+        "moved_count": _Response.moved_count,
+        "skipped_duplicates": _Response.skipped_duplicates,
+    })
+
+
+def _move_error_response(
+    response: MoveLinesResponse, source_id: UUID, target_id: UUID
+):
+    """None when the move succeeded; otherwise the error to return."""
+    if response.source_not_found:
+        return not_found("ShoppingList (source)", source_id)
+    if response.target_not_found:
+        return not_found("ShoppingList (target)", target_id)
+    if response.same_list:
+        return business_rule_violation("Source and target lists are the same.")
+    if response.target_archived:
+        return business_rule_violation(
+            "Cannot move items to an archived list. Unarchive it first."
+        )
+    return None
 
 
 # ───── Refresh deals ──────────────────────────────────────────────────────

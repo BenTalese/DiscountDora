@@ -1,0 +1,33 @@
+/* The shared "sub-bar": the sunken well that slides open under a page's
+ * toolbar to hold bulk-select actions.
+ *
+ * Extracted from `StockOverview.vue` (2026-08-26) when the shopping list was
+ * asked to match it — *"bulk select button and behaviour should match the
+ * stock overview. Consistency is important."* Copying the ~15 lines into the
+ * second page would have guaranteed the two drift apart again, which is the
+ * defect being fixed, so it lives once, next to `dnd.scss`, on the same
+ * shared-affordance precedent (R-022 / ADR-018).
+ *
+ * Usage — the outer `q-py-xs` wrapper matters:
+ *
+ *     <div class="bulk-bar q-py-xs">
+ *       <q-slide-transition>
+ *         <div v-if="bulkMode" class="dora-subbar">
+ *           <div class="dora-subbar__inner"> …actions… </div>
+ *         </div>
+ *       </q-slide-transition>
+ *     </div>
+ *
+ * `q-slide-transition` quirks worth keeping: chrome lives on the outer host so
+ * the radius is right from frame one, and there is deliberately no real border
+ * (it would render as a 2px sliver at height 0).
+ */
+
+.dora-subbar {
+    background: var(--surface-sunken);
+    border-radius: 6px;
+}
+
+.dora-subbar__inner {
+    padding: 12px 16px;
+}

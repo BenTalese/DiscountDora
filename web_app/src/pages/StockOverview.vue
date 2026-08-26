@@ -1661,17 +1661,11 @@
 </script>
 
 <style scoped>
-    /* FU-012: bulk-select banner pairs with the FilterBar panel — both
-       use the sunken-well treatment now. FilterBar owns its own styling
-       (in the component); this matches it so the two sub-bars still
-       read as siblings. `q-slide-transition` quirks: keep chrome on the
-       outer host (radius from frame one) and avoid a real border (would
-       render a 2px sliver at height 0) — neither matters with the new
-       borderless sunken treatment, but the pattern is worth remembering. */
-    .dora-subbar {
-        background: var(--surface-sunken);
-        border-radius: 6px;
-    }
+    /* FU-012: bulk-select banner pairs with the FilterBar panel — both use
+       the sunken-well treatment. `.dora-subbar` / `.dora-subbar__inner`
+       moved to the shared `src/css/subbar.scss` (2026-08-26) when the
+       shopping list adopted the same bar; the rationale and the
+       q-slide-transition quirks live there now. */
 
     /* ── Toolbar (2026-08-15 feedback) ────────────────────────────────
        Desktop: one row, actions left, filter-toggle + search right.
@@ -1719,9 +1713,6 @@
        which is how the two rows drifted to different control heights; the
        shared component is also where the 44px touch height (B3/D-004) is
        now stated once. */
-    .dora-subbar__inner {
-        padding: 12px 16px;
-    }
     /* ── App-shell layout (2026-08-04) ────────────────────────────────
        The page is a fixed-height flex column: chrome (toolbar, filters,
        bulk bar) and the counts footer keep their natural height, the

@@ -146,6 +146,11 @@ class StoreSpendDto:
     line_count: int
     priced_line_count: int
     subtotal: float
+    # The store's own brand colour, derived from its uploaded logo
+    # (`features/stores/_logo_colour.py`). None when the store has no logo,
+    # or the logo has no usable hue — the SPA falls back to its deterministic
+    # hash swatch there, so a bucket always has *a* colour.
+    brand_colour: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -217,6 +222,7 @@ def compute_list_totals(
     lines: List['ShoppingListLineDto'],
     *,
     spent_only: bool = False,
+    brand_colour_by_store: dict[UUID, str | None] | None = None,
 ) -> ShoppingListTotalsDto:
     """Aggregate the per-line price/savings into list-level totals. Single source
     for the dashboard's primary-list stats (it reads these instead of summing).
@@ -266,6 +272,7 @@ def compute_list_totals(
         if line.estimated_unit_price is not None:
             _Bucket[2] += 1
             _Bucket[3] += price
+    _Colours = brand_colour_by_store or {}
     _ByStore = [
         StoreSpendDto(
             store_id = sid,
@@ -273,6 +280,7 @@ def compute_list_totals(
             line_count = b[1],
             priced_line_count = b[2],
             subtotal = b[3],
+            brand_colour = _Colours.get(sid) if sid else None,
         )
         for sid, b in _Buckets.items()
     ]
@@ -430,6 +438,10 @@ class GetShoppingListDetailHandler:
         # ("I buy this here"), and the stores of prior actual purchases.
         # One lookup covers all three so neither ladder round-trips per line.
         _StoreNameLookup: dict[UUID, str] = {}
+        # Same lookup, second column: the store card paints its buckets in
+        # each store's own brand colour (2026-08-26 feedback), so the colour
+        # rides along with the name rather than costing a second query.
+        _StoreColourLookup: dict[UUID, str | None] = {}
         _WantedStoreIds: set[UUID] = {
             l.purchased_store_id for l in _Lines if l.purchased_store_id
         }
@@ -486,12 +498,11 @@ class GetShoppingListDetailHandler:
             p[2] for p in _PriorPurchaseByItem.values() if p[2]
         }
         if _WantedStoreIds:
-            _StoreNameLookup = {
-                s.id: s.name
-                for s in self.repository.get(Store).all(
-                    EntityField(Store, "id").in_(list(_WantedStoreIds))
-                )
-            }
+            _Stores = self.repository.get(Store).all(
+                EntityField(Store, "id").in_(list(_WantedStoreIds))
+            )
+            _StoreNameLookup = {s.id: s.name for s in _Stores}
+            _StoreColourLookup = {s.id: s.brand_colour for s in _Stores}
 
         def _breadcrumb_for(item: StockItem | None) -> List[str]:
             if item is None or item.stock_location is None:
@@ -675,7 +686,9 @@ class GetShoppingListDetailHandler:
             # A finished list's money is a record of what was spent, not a
             # projection of what might be (see `spent_only`).
             totals = compute_list_totals(
-                _LineDtos, spent_only = _List.status == SHOPPING_LIST_STATUS_DONE,
+                _LineDtos,
+                spent_only = _List.status == SHOPPING_LIST_STATUS_DONE,
+                brand_colour_by_store = _StoreColourLookup,
             ),
             lines = _LineDtos,
             attachments = _Attachments,

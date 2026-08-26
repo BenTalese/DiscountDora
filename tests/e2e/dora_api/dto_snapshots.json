@@ -384,6 +384,7 @@
       "total"
     ],
     "item_keys": [
+      "brand_colour",
       "has_image",
       "name",
       "store_id"

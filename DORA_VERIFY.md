@@ -45,6 +45,27 @@ session didn't run one.
       worth buying"; flag it Essential and it becomes "Probably worth buying";
       an essential that's **out** reads "Worth buying now".
 
+## Recipe page: the 2026-08-26 feedback batch
+Driven live against a throwaway backend and confirmed: `/cookbook/:id` renders the
+redesigned page (old page deleted), **New version** lands on `/cookbook/<new id>`
+with the sections cloned into their cards, every header axis carries the
+cookbook's own glyph in both read and edit mode, the Unit field's "Or type your
+own" hint is gone, and a click on the photo tile's hidden file input no longer
+bubbles back up to reopen the photo dialog. Left for you:
+- [ ] **The photo round-trip end to end:** tap the photo → **Change photo** →
+      pick a file → the dialog is gone *and* the new photo is on the tile. (The
+      propagation half was proven; the native file picker can't be driven by an
+      agent.)
+- [ ] The Unit dropdown opens and offers only ingredient units — `g`, `ml`,
+      `cup`, `pinch`, `pack` — with **no** `kJ` / `cm` / `ft`, and typing a word
+      it doesn't know now adds nothing. (Quasar popups don't render in the agent
+      pane — FU-737.)
+- [ ] **On a phone:** the facts strip (now icon + label per fact) still scrolls
+      sideways as one line without dragging the page. It measured 72px of
+      in-container overflow at 375px — designed behaviour, but the icons made it
+      longer, so confirm the last fact is still reachable.
+- [ ] Both eyebrow and facts icons read correctly in a dark theme.
+
 ## Recipe page: the 2026-08-24 feedback batch
 The session that built it drove the page live at the agent pane's (mobile-shaped)
 viewport and confirmed: no Fraunces anywhere (everything renders in Nunito), the facts
@@ -84,6 +105,21 @@ viewport, so every `$q.screen` branch renders in its mobile form:
       **quantity** popup was removed in the 08-24 merge; the row opens its editor now.)
 - [ ] A recipe with **no** version siblings shows Version information with created,
       last-updated and the "only version" line (verified with siblings; not without).
+
+## Shopping list — the 2026-08-26 feedback batch
+Plan face was driven live at 375px and 1280px (rows, bulk bar, store card, finish
+dialog, a real move-to-new-list). Left for you:
+- [ ] On a real phone: long-press an item enters bulk select with it ticked, and
+      unticking the last one drops back out. Touch-hold only — desktop mouse won't.
+- [ ] Upload a logo for a store you use, then check its colour on "Where you'll
+      spend it". A greyscale logo should keep the old name-derived colour.
+- [ ] Turn money off: the card reads "Where you'll shop" and its bar sizes by
+      item count.
+- [ ] Run and receipt faces on the rebuilt toolbar — FU-739. Watch the bottom of
+      the run face: the sticky shop footer and the new Clear-all/Delete footer
+      are both down there.
+- [ ] Desktop: the toolbar scrolls sideways and "Start shopping" is the button
+      that runs off the edge — decide if that's acceptable (FU-738).
 
 ## Shopping list — run face and receipt face (2026-08-23) — origin FU-729
 Agent drove both faces in a 430×900 browser with money on and confirmed: run-face
@@ -384,8 +420,10 @@ The whole runner changed shape. Note the Review phase **won't appear** until Dor
 - [ ] Order is stable — leave and re-enter the runner on unchanged data, same sequence.
 
 ## ⚠️ Recipe page (new layout): the parity pass (2026-08-20) — origin FU-688
-The layout decision is made — the new page wins. This is now about whether the
-gap-closing pass actually works. Open any recipe, tap **New layout**.
+The layout decision is made — the new page wins, and since 2026-08-26 it is the
+only one (`/cookbook/:id` goes straight to it; the old page and both hatch
+buttons are deleted). This is now about whether the gap-closing pass actually
+works. Open any recipe.
 
 _Confirmed live by the session that built it (2026-08-20): the page renders (FU-681 was
 stale), **When** shows and holds `Dinner`, **Organise ingredients** is present, all 15

@@ -1,6 +1,6 @@
 ﻿# Dashy Dora — Project State
 
-**Last reviewed: 2026-08-24.** Milestone-progress front door — phase board,
+**Last reviewed: 2026-08-26.** Milestone-progress front door — phase board,
 workstreams, and what needs your attention. This is *not* a changelog;
 shipped-work history lives in `CHANGELOG.md` + `DORA_WORKLOG.md`.
 
@@ -27,11 +27,12 @@ browser-verify and the meal-reconcile Chunk 6 tail left, and **Phase 3
 a real-device walk. The work has been a sustained **owner-feedback polish
 stream** across stock overview, stock-item detail, cookbook and the recipe page:
 the stock-signal consolidation is code-complete across all six chunks, the
-redesigned recipe page won its comparison and its feature gaps are closed, and
-the 2026-08-22 batch put the stock row's expiry menu, uncertainty ring and **six
-new bulk endpoints** in (one request per bulk action instead of N). Both suites
-are green as of 2026-08-24 — backend **1950 passed** / 1 skipped / 1 xfailed,
-frontend **494 vitest passed**, `vue-tsc` clean. The dominant debt is no longer
+**redesigned recipe page won its comparison and the old one was deleted on
+2026-08-26** (FU-688 — one page again, masthead confirmed), and the 2026-08-22
+batch put the stock row's expiry menu, uncertainty ring and **six new bulk
+endpoints** in (one request per bulk action instead of N). Both suites are green
+as of 2026-08-26 — backend **1964 passed** / 1 skipped / 1 xfailed, frontend
+**497 vitest passed**, `vue-tsc` + lint clean. The dominant debt is no longer
 building: it is that **a large, stacked body of shipped UI has never been seen
 in a browser** — stock overview, stocktake, recipe, cookbook, inference
 surfaces, offline sync and the whole champion sequence all sit in
@@ -56,13 +57,13 @@ needs an owner call on scope and timing.
 
 | Workstream | Status | Where it's at | Governing doc |
 |---|---|---|---|
-| **Shopping lists (three-face redesign)** | ➗ | **All three faces built.** *Plan*: trip card + "Where you'll spend it" store card, four ordering modes with Unsorted fallback and auto-disable, thumb-friendly reorder arrows, slimmed toolbar. *Run* (2026-08-23): whole-row tap target, undo toast on tick, cleared sections collapsing to "all N picked", bottom-sheet price capture, rail moved to More, every curation affordance stripped. *Receipt* (2026-08-23): read-only itemised receipt + past-tense store split + "Didn't buy" tail, corrections behind an announced **Amend** that also rewrites the harvested price observation (FU-726 closed). Underneath it all, price comes from **what you last paid**, resolved server-side with its provenance (R-053/ADR-049), so totals work with no product data; offers are a separate *"Online offer:"* chip feeding no total. Promoted to **R-054/ADR-050**. Only a real-device walk is owed (FU-729) | worklog 2026-08-23 + `DORA_VERIFY` → Shopping list |
+| **Shopping lists (three-face redesign)** | ➗ | **All three faces built.** *Plan*: trip card + "Where you'll spend it" store card, four ordering modes with Unsorted fallback and auto-disable, thumb-friendly reorder arrows, slimmed toolbar. *Run* (2026-08-23): whole-row tap target, undo toast on tick, cleared sections collapsing to "all N picked", bottom-sheet price capture, rail moved to More, every curation affordance stripped. *Receipt* (2026-08-23): read-only itemised receipt + past-tense store split + "Didn't buy" tail, corrections behind an announced **Amend** that also rewrites the harvested price observation (FU-726 closed). Underneath it all, price comes from **what you last paid**, resolved server-side with its provenance (R-053/ADR-049), so totals work with no product data; offers are a separate *"Online offer:"* chip feeding no total. Promoted to **R-054/ADR-050**. **2026-08-26 owner batch (16 items) landed on top**, and unlike most of this backlog it was **driven live** at 375px and 1280px against an isolated instance: the page was rebuilt to the Stock-overview shape (no page title, no More menu, sideways-scrolling icon-only toolbar, New list promoted to primary, Templates surfaced, bulk select identical down to the button name, long-press to enter), store colours are now **derived from the uploaded logo server-side** (`Store.brand_colour`, migration `c9f2a7d4e1b8`, R-003), the phone row was relayed out (eight columns → two lines; 201px → 130px), and "move unticked" moved out of a hidden menu into the finish dialog itself. A pre-existing **105px page-wide horizontal scroll** from the lists rail was found and fixed while verifying. Owed: run/receipt faces on the new toolbar (FU-739), the real-device walk (FU-729), and one owner call (FU-738) | worklog 2026-08-26 + `DORA_VERIFY` → Shopping list |
 | Stock Overview | ➗ | Signal consolidation **code-complete, all six chunks**; the row went 9 visual channels → 4, attention is one server-owned rule (`stock_attention.py`) read by outline/count/chip/bell, and the list opens on what needs you. Three owner feedback batches since (2026-08-20/21/22): filter-panel auto-open, urgency-ordered Needs-attention sort, "Needs check" chip retired to Stocktake, and 2026-08-22's expiry-menu date header, uncertainty ring moved off the box edge, and **six bulk endpoints** replacing per-item request loops. **None of it walked in a browser** | [IMPL_PLAN](docs/04_proposals/IMPL_PLAN_STOCK_SIGNAL_CONSOLIDATION.md) + `PROPOSAL_STOCK_OVERVIEW` |
 | Stocktake Mode | ✅ | Three-phase runner (Review Dora's confident set → Walk → Sweep what dropped out), queue ordered least-certain-first, install-wide on/off switch. Verify owed; FU-700 (switch not gated on dashboard/help copy) open | [PROPOSAL](docs/04_proposals/PROPOSAL_STOCKTAKE_MODE.md) |
 | Stock-item detail | ➗ | 2026-08-21 batch: 10 of 12 items shipped. **2026-08-24 batch on top of it**: the Barcodes tab became **Scanning** and absorbed the QR label (header button + modal deleted), the meaningless `direct` caption went, a new shared `HelpHint` (?) moved the barcode + substitute explainer prose into Help → Guides, the header stopped wrapping long names, and the "Dora thinks" chevron was re-structured to column-align with the buy verdict's. FU-648 (QR dialog) and FU-710 (barcode register 404) both wait on FU-717's deploy fix — and both now sit on the *Scanning* tab's critical path. Phone-verify owed | `DORA_VERIFY` → Stock: the 2026-08-24 feedback batch |
 | Buy verdict oracle (P8-05/06) | ➗ | **Regraded 2026-08-24 (owner call).** A `strength` scale (0-3) from `is_essential` x stock band, modulated by price + waste, replaced the if-ladder that answered "Worth buying now" for *any* item marked low — which contradicted `stock_attention.py`'s own rule that a non-essential shortage isn't alert-worthy. `confidence` was split out and now means evidence quality only ("Data confidence" in the UI). Composer still pure; 35 unit tests green. Wording-verify owed | `get_buy_verdict.py` · [PROPOSAL](docs/04_proposals/PROPOSAL_BUY_VERDICT_ORACLE.md) |
 | Cookbook | ➗ | Chunks 1–10 plus three feedback batches. Batch 3 (2026-08-20) re-ordered the filter row to reported use, added `Serves ≥`, removed `Missing ≤`, ran a one-glyph-one-meaning icon pass, and deleted meal-slot names from the Category vocabulary (migration `c8b3e5f0a712`). Desktop branch + Quasar dropdowns unverified (agent pane pins `$q.screen` to `xs`). Open: FU-691 (off-token stylesheet), FU-692 (`ICONS.restaurant` overloaded), FU-693 (row names off D-003) | [PROPOSAL](docs/04_proposals/PROPOSAL_COOKBOOK.md) |
-| Recipe page | 🟡 | The redesign (`RecipeDetailNext.vue`) **won the owner comparison**, its gaps are closed (explicit Save + dirty indicator + route guard, ADR-045/R-049). **Two feedback batches were built concurrently on two machines and merged 2026-08-24.** The shipped page is the **08-24 batch (15 items, driven live)** — Fraunces deleted (new **D-022**), cost breakdown promoted to a modal, ingredient sections rebuilt as cards ("Organise ingredients" gone), one shared pencil for all three step styles with a full-screen phone editor, structured step editor rebuilt, shopping-list membership surfaced in the Right-now cell *and* the picker, and "Other versions" replaced by **Version information** on a new `Recipe.updated_at` (migration `b3f7c1d9a2e6`) — with the **08-23 batch re-applied on top of it**: block-level masthead editing (**R-055/ADR-051**, `q-popup-edit` 25 → 2, both survivors being the rule's own carve-outs), whole-row ingredient editing, the photo flow collapsed onto the photo itself, the 0×0 masthead-photo fix, the shared unit dropdown (`useUnitOptions`) and the title-wrap fix. **Browser pass owed** on the merged result (`DORA_VERIFY.md`). **Blocked on one owner call (FU-688)**: masthead vs shared `PageToolbar`, which gates the one-way swap pass (delete the 2,727-line old page — now two feedback batches behind) | [PROPOSAL](docs/04_proposals/PROPOSAL_COOKBOOK.md) |
+| Recipe page | ➗ | **The comparison is over and the old page is gone (2026-08-26).** The owner greenlit the swap — *"can obliterate the old version of the page out of existence now"* — which also settled the reserved masthead-vs-`PageToolbar` question in the masthead's favour, since the same batch asked for the masthead to be *enriched*. **FU-688 closed in one pass:** `/cookbook/:id` points at the redesign (renamed into `RecipeDetailPage.vue` over the deleted 2,727-line original), the `/new` route and both hatch buttons deleted, the duplicate form model gone, `useRecipeEditor` the only copy. The rest of that 5-item batch shipped with it and was **driven live**: new-version was **losing ingredient sections entirely** (never cloned — a sectioned recipe came out flat; now cloned with both the ingredient and step FKs remapped, pinned by a test confirmed red first), the photo dialog reopened itself because `openPicker()`'s synthetic `.click()` **bubbled back to the tile** (one `@click.stop` in the shared `ImageEditTile`), the masthead's axes took the cookbook's own glyphs in **both** read and edit mode (two new `ICONS` for prep/cook — they couldn't share `timer`, which already means *total*), and the ingredient Unit picker became a closed list **narrowed to volume/mass/count**, the generated table having quietly offered `kJ` and `cm` as ingredient units. Owed: the browser walk (three stacked `DORA_VERIFY` sections) with FU-691 queued behind it. *Earlier history:* the redesign **won the owner comparison**, its gaps are closed (explicit Save + dirty indicator + route guard, ADR-045/R-049). **Two feedback batches were built concurrently on two machines and merged 2026-08-24.** The shipped page is the **08-24 batch (15 items, driven live)** — Fraunces deleted (new **D-022**), cost breakdown promoted to a modal, ingredient sections rebuilt as cards ("Organise ingredients" gone), one shared pencil for all three step styles with a full-screen phone editor, structured step editor rebuilt, shopping-list membership surfaced in the Right-now cell *and* the picker, and "Other versions" replaced by **Version information** on a new `Recipe.updated_at` (migration `b3f7c1d9a2e6`) — with the **08-23 batch re-applied on top of it**: block-level masthead editing (**R-055/ADR-051**, `q-popup-edit` 25 → 2, both survivors being the rule's own carve-outs), whole-row ingredient editing, the photo flow collapsed onto the photo itself, the 0×0 masthead-photo fix, the shared unit dropdown (`useUnitOptions`) and the title-wrap fix. | [PROPOSAL](docs/04_proposals/PROPOSAL_COOKBOOK.md) |
 | Products-as-overlay | ➗ | Phases 0–E code-complete; Phase-F tail is FU-214 browser-verify + L197 hard-delete decision + L205/206 bulk-select | [RUNBOOK](docs/04_proposals/PRODUCTS_OVERLAY_RUNBOOK.md) |
 | Prices surface | 🔴 | Investigation done and it confirms the owner's own diagnosis: all price *reading* capability (compare 5, ranges, alerts) sits on the product axis at `/price-history`, which has **no nav entry**, while the everyday user's own data gets a single-item modal with no range and no compare. Placement settled (price lens on Stock overview + trend section in Reports; alerts advanced-only); the keep/cut call itself is **FU-703** and gates FU-708. A fourth candidate placement was added 2026-08-24 (owner): a **Shopping tab on the stock item** gathering buy verdict + usual store + preferred buys + price widget + purchase history — recorded under FU-703 to be weighed, not built | [ASSESSMENT](docs/05_investigations/PRICES_SURFACE_UX_ASSESSMENT.md) |
 | ⭐ Zero-Input Pantry (P8-07) | 🟡 | Built end-to-end and extended (FU-653) to recipes, shopping lists and the meal planner, each behind its own off-by-default opt-in, purely additive. Server verified live; **all three client renders and the original P8-07 walk unseen** | [PROPOSAL](docs/04_proposals/PROPOSAL_ZERO_INPUT_PANTRY.md) + [INFERENCE_SURFACES](docs/04_proposals/PROPOSAL_INFERENCE_SURFACES.md) |
@@ -83,18 +84,27 @@ needs an owner call on scope and timing.
 
 ## ⚠️ Needs your attention now
 
-**Total open backlog is 102 items in `DORA_FOLLOWUPS.md`** (counted 2026-08-23).
+**Total open backlog is 117 items in `DORA_FOLLOWUPS.md`** (counted 2026-08-26).
 These are the ones wanting a decision or a running-app check, most important
 first.
 
-1. **🟡 One character in `deploy-dora.sh` (FU-717, cause found).** The deploy
+1. **🔴 One shopping-list toolbar call (FU-738).** The rebuilt toolbar scrolls
+   sideways exactly as you asked, and with every action on it the button that runs
+   off the right edge at 1280px is **"Start shopping"** — the lifecycle CTA. Pin it
+   outside the scroller, move it first, or let the band wrap on desktop and scroll
+   only on phones. One decision, then a few lines. The rest of that batch shipped
+   verified: it was driven live at 375px and 1280px, so the walk owed
+   (`DORA_VERIFY` → "the 2026-08-26 feedback batch") is short — long-press on a real
+   phone, a store logo's derived colour, and the run/receipt faces on the new
+   toolbar (FU-739).
+2. **🟡 One character in `deploy-dora.sh` (FU-717, cause found).** The deploy
    rsyncs with `--exclude='data'`, which matches the **basename at any depth** —
    so it deleted `dora_api/features/data/` (15 files) off the server every
    deploy, and all of `/api/data/*` 404'd. Change it to `--exclude='/data'` and
    redeploy. The script also holds your SSH password in plaintext at mode 0664;
    worth a key + rotation. Follow-ups: **FU-720** (nothing verifies the deployed
    route map — the app booted clean while serving 404s) and **FU-719**.
-2. **🔴 Decide the fate of the product price axis (FU-703).** You named the cause
+3. **🔴 Decide the fate of the product price axis (FU-703).** You named the cause
    yourself: products got demoted to a push-your-own-data niche while the stock
    item was upgraded to carry everyday price functionality, and the half-built
    surface got torn the other way. The investigation confirms it — all the price
@@ -104,17 +114,20 @@ first.
    no new nav slot; alerts advanced-only). The keep/cut call is yours and **gates
    FU-708**. FU-704/705/706/707 (mobile form, chart touch, observation edit,
    signal tone) are independent and can start whenever.
-3. **🔴 Say the word on the recipe masthead (FU-688).** You picked the redesigned
-   page, its feature gaps are closed, and the 2026-08-23 feedback batch has now
-   *reworked* that masthead to your notes — which reads as an answer in the
-   masthead's favour, but it's still your call against the shared `PageToolbar`
-   every other detail page uses. The **swap pass waits on it**, because it's a
-   one-way door — route re-point, delete `RecipeDetailPage.vue` (2,727 lines),
-   both hatch buttons, the duplicate form model. Then walk `DORA_VERIFY.md` →
-   "⚠️ Recipe page (new layout)": the two new edit pencils, the ingredients edit
-   mode and the free-text ingredient flow all need real pointer input (the
-   preview pane wouldn't paint for the build session — FU-733).
-4. **Walk the 2026-08-22 stock-overview batch — the bulk-bar network check is the
+4. **Walk the recipe page — the swap is done and it's now three stacked batches
+   deep with no browser pass.** FU-688 closed 2026-08-26: you said obliterate the
+   old page, so `/cookbook/:id` is the redesign, the original 2,727 lines and both
+   hatch buttons are gone, and your ask to *enrich* the masthead settled the
+   `PageToolbar` question in its favour. The 08-26 items themselves were driven
+   live (sections now survive **New version** — they were being dropped entirely;
+   the photo dialog no longer reopens itself; the header carries the cookbook's
+   glyphs in both modes; Unit is a closed, correctly-narrowed list). What's owed is
+   everything *underneath* that: `DORA_VERIFY.md` → the 2026-08-20 parity pass, the
+   08-24 batch, and the new 08-26 section. Two things there genuinely can't be
+   agent-driven — the **native file picker** on Change photo, and any **Quasar
+   dropdown**, which never renders in the agent pane (FU-737). FU-691's stylesheet
+   sweep is deliberately queued behind this walk, your call.
+5. **Walk the 2026-08-22 stock-overview batch — the bulk-bar network check is the
    one that matters.** Six new bulk endpoints replaced per-item request loops on
    log-waste (and Undo), add-to-list, add-to-chosen-list, mark-restocked,
    remove-from-list and move. Open devtools Network: **if any bulk action still
@@ -124,7 +137,7 @@ first.
    was seen in a browser — port 5170 was held by another session's pre-change
    backend. `DORA_VERIFY.md` → "Stock overview: expiry menu, uncertainty ring,
    bulk endpoints (2026-08-22)".
-5. **Walk the whole stock + stocktake surface — it's all built and none of it has
+6. **Walk the whole stock + stocktake surface — it's all built and none of it has
    been seen (FU-683).** Six chunks, nothing waiting on you, Chunks 3–6 never run
    in front of a human. The row went from nine visual channels to four; the
    highlighting and the "Needs attention" count are finally the same rule; nothing
@@ -134,7 +147,7 @@ first.
    effect of tier deriving from severity — a one-line reversal), and the Review
    phase **legitimately won't appear** until Dora has ~3 logged purchases for
    something.
-6. **Confirm the "Needs attention" chip in a browser after a bulk action
+7. **Confirm the "Needs attention" chip in a browser after a bulk action
    (FU-715).** You reported it broken, then said it seemed fine — logged rather
    than dropped. The static read found the chip now does a bare
    `needs_attention === true` with no client fallback, so it matches nothing if
@@ -142,46 +155,46 @@ first.
    intermittent: optimistic/offline-queued mutations don't recompute attention
    until a refetch, and the rule honours mutes but not snooze/dismiss, so **the
    chip and the bell disagree on a real install**.
-7. **🔴 Two install-state bugs that only reproduce on your box.** FU-710 — the
+8. **🔴 Two install-state bugs that only reproduce on your box.** FU-710 — the
    barcode register POSTs 404 on your install (same module as the QR 404, so
    likely one cause). FU-648 — the QR dialog failure has never reproduced in three
    attempts, but the error now names status + ref, so the next report closes it.
    Both need a phone or a non-localhost host.
-8. **🔴 Pick a lever for `--text-on-primary` (FU-674).** Three themes (pesto 3.88,
+9. **🔴 Pick a lever for `--text-on-primary` (FU-674).** Three themes (pesto 3.88,
    blueberry 4.21, midnight 2.86) fail D-002's 4.5:1 floor **app-wide**. Either
    darken those themes' ink (changes every primary button in three themes) or
    darken their `--brand-primary` (changes the brand colour). One decision, then
    mechanical.
-9. **🔴 Dark themes never paint their authored page colour (FU-709).** Every dark
+10. **🔴 Dark themes never paint their authored page colour (FU-709).** Every dark
    theme declares a `--surface-page` that nothing renders. A colour decision, not
    a bug fix.
-10. **🔴 Small decisions that clear the stock row (FU-685, FU-686).** The row's
+11. **🔴 Small decisions that clear the stock row (FU-685, FU-686).** The row's
    expiry button still colours off a hardcoded 7 days while its outline reads your
    configured window — a 14-day setting can outline a row whose expiry pill is
    still green (~5 lines either way once you pick). And `PantryBeliefChip.vue` is
    orphaned while three comments still call it the live row form.
-11. **Walk the new inference surfaces (FU-653).** Recipes / shopping lists / meal
+12. **Walk the new inference surfaces (FU-653).** Recipes / shopping lists / meal
     planner, each toggled separately, all off by default. Server side verified;
     the three client renders have never been seen, and the seed carries two
     "Belief demo:" recipes that make it a 30-second check.
-12. **Round-trip the offline sync in a browser.** It queued changes and lost every
+13. **Round-trip the offline sync in a browser.** It queued changes and lost every
     one of them while reporting success. Fixed and Vitest-pinned, but the failure
     mode is exactly what a mocked transport can't reproduce — go offline, change
     something, come back, **and reload to confirm the server kept it**.
-13. **Walk the nutrition surfaces against a real USDA import.** Auto-suggest was
+14. **Walk the nutrition surfaces against a real USDA import.** Auto-suggest was
     agent-verified on a 20-food scratch catalogue; what's unknown is **match
     quality on your own pantry at ~7,800 rows** and whether the matching page
     loads at that size. That walk is what should decide **FU-643** (the missing
     AU/US synonym layer). The recipe nutrition card hasn't been seen with real
     data either.
-14. **Products-overlay Phase-F verify + hard-delete call (FU-214).** Product
+15. **Products-overlay Phase-F verify + hard-delete call (FU-214).** Product
     surfaces need a running-app walk with real data; L197 hard-delete is undecided
     and L205/206 bulk-select is unbuilt — the runbook's Phase-F blocker.
-15. **⭐ Verify the champion sequence (P8-07/08/09/10).** Four surfaces stacked and
+16. **⭐ Verify the champion sequence (P8-07/08/09/10).** Four surfaces stacked and
     untested — Zero-Input Pantry, Kitchen health, Memory reports, plus the native
     Android APK build + device walk. Pairs naturally with FU-389 (mobile/PWA field
     test) and the queued Settings-rework verify sections.
-16. **Phase-4 release readiness needs your steer on scope and timing.** FU-406
+17. **Phase-4 release readiness needs your steer on scope and timing.** FU-406
     (README/showcase + GitHub Releases process), FU-608 (make the repo public,
     stand up Sponsors / BMC / PayPal, then one placeholder-swap pass), FU-557
     (support channel — a one-line config change lights up Help / error-report /

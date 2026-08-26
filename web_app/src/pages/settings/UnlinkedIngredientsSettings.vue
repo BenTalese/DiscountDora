@@ -238,9 +238,8 @@
         // Default the new item to the most-stocked level so it doesn't
         // immediately count as "missing" — the user hasn't told us
         // otherwise, and pulling it out of an imported recipe implies
-        // they do have some of it. Mirrors RecipeDetailPage's "create
-        // new inline" flow (search this file: `wellStocked` in
-        // RecipeDetailPage.vue).
+        // they do have some of it. Mirrors the recipe page's "create new
+        // inline" flow (`wellStocked` in RecipeIngredientRowEditor.vue).
         const wellStocked = stockLevels.value[0];
         if (!wellStocked) {
             $q.notify({

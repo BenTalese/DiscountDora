@@ -46,6 +46,9 @@ export default defineConfig((ctx): any => {
             // drop-target ring, handle grip). Loaded after colours so
             // it can reference `--brand-primary` / `--surface-sunken`.
             'dnd.scss',
+            // 2026-08-26 — the bulk-select sub-bar, shared by Stock overview
+            // and the shopping list so the two can't drift apart again.
+            'subbar.scss',
         ],
 
         // https://github.com/quasarframework/quasar/tree/dev/extras

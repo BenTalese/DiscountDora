@@ -25,17 +25,20 @@
 
         <template v-else>
             <q-card-section class="q-pt-sm q-pb-xs">
-                <!-- Proportional bar. Segments are spend share, so an
-                     unpriced-only bucket contributes nothing and the bar
-                     honestly reflects money rather than item counts. -->
-                <div v-if="pricedTotal > 0" class="sl-store-bar" role="presentation">
+                <!-- Proportional bar. With money on, segments are spend
+                     share, so an unpriced-only bucket contributes nothing
+                     and the bar honestly reflects money rather than item
+                     counts. With money off there is no spend to share out,
+                     so it falls back to how many items each store is
+                     carrying — the same question, minus the dollars. -->
+                <div v-if="barTotal > 0" class="sl-store-bar" role="presentation">
                     <div
-                        v-for="(b, i) in buckets"
+                        v-for="b in buckets"
                         :key="b.store_id ?? '__none__'"
                         class="sl-store-bar__seg"
                         :style="{
-                            width: `${(b.subtotal / pricedTotal) * 100}%`,
-                            background: segmentColour(i, b),
+                            width: `${(barValue(b) / barTotal) * 100}%`,
+                            background: segmentColour(b),
                         }"
                     />
                 </div>
@@ -44,7 +47,7 @@
             <q-card-section class="q-pt-xs">
                 <div class="row q-gutter-xs">
                     <q-chip
-                        v-for="(b, i) in buckets"
+                        v-for="b in buckets"
                         :key="b.store_id ?? '__none__'"
                         dense
                         square
@@ -54,7 +57,7 @@
                         <span
                             v-if="b.store_id !== null"
                             class="sl-store-dot"
-                            :style="{ background: segmentColour(i, b) }"
+                            :style="{ background: segmentColour(b) }"
                         />
                         <span class="text-weight-medium q-mr-xs">{{ b.store_name }}</span>
                         <span class="dora-text-muted">
@@ -95,22 +98,41 @@
     import BaseButton from 'src/components/BaseButton.vue';
     import { formatMoney } from 'src/composables/useMoney';
     import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
+    import { storeColour } from 'src/style/storeSwatch';
     import type { StoreSpend } from 'src/models/shoppingList';
 
     const props = withDefaults(defineProps<{
         buckets: StoreSpend[];
         /** Mobile passes true so the card starts as a one-line summary. */
         collapsible?: boolean;
-        /** Past tense on the receipt face; the plan-face default otherwise. */
-        title?: string;
-    }>(), { collapsible: false, title: "Where you'll spend it" });
+        /** Which face is asking. Past tense on the receipt. */
+        tense?: 'plan' | 'receipt';
+    }>(), { collapsible: false, tense: 'plan' });
 
     const { moneyEnabled } = useMoneyEnabled();
 
     const expanded = ref(!props.collapsible);
 
-    const pricedTotal = computed(() =>
-        props.buckets.reduce((sum, b) => sum + b.subtotal, 0)
+    /** 2026-08-26 feedback: *"'Where you spent it' is a bit odd when budgets
+     *  and money are off"* — and it was, because the card kept its money
+     *  wording while showing nothing but item counts. All four wordings live
+     *  here so the two callers can't drift: the face picks the tense, the
+     *  money flag picks the verb. */
+    const title = computed(() => {
+        if (props.tense === 'receipt') {
+            return moneyEnabled.value ? 'Where you spent it' : 'Where you shopped';
+        }
+        return moneyEnabled.value ? "Where you'll spend it" : "Where you'll shop";
+    });
+
+    /** What each segment's width is proportional to. Money when there is
+     *  money; item count otherwise. */
+    function barValue(bucket: StoreSpend): number {
+        return moneyEnabled.value ? bucket.subtotal : bucket.line_count;
+    }
+
+    const barTotal = computed(() =>
+        props.buckets.reduce((sum, b) => sum + barValue(b), 0)
     );
 
     const unpricedCount = computed(() =>
@@ -123,11 +145,16 @@
         return bucket.priced_line_count < bucket.line_count ? '~' : '';
     }
 
-    /** Categorical, not semantic — these are stores, not states, so they read
-     *  from the chart ramp rather than any success/warning token (D-001). */
-    function segmentColour(index: number, bucket: StoreSpend): string {
+    /** Identity, not state — a store's own colour, so Woolworths reads green
+     *  and Coles red (2026-08-26 feedback). It used to come from the chart
+     *  ramp indexed by *position in this list*, which meant a store changed
+     *  colour whenever the spend order changed. `storeColour` resolves the
+     *  logo-derived `brand_colour` first and falls back to the deterministic
+     *  name hash; D-001 is satisfied because the colour never encodes a state
+     *  and never travels without the store's name beside it. */
+    function segmentColour(bucket: StoreSpend): string {
         if (bucket.store_id === null) return 'var(--surface-sunken)';
-        return `var(--chart-${(index % 5) + 1})`;
+        return storeColour(bucket.store_name, bucket.brand_colour);
     }
 
     const summaryLine = computed(() => {
@@ -154,7 +181,10 @@
                 );
             }
         }
-        if (unpricedCount.value > 0) {
+        // Money-gated too: with money off nothing on this card is priced, so
+        // "12 items unpriced, not counted" would be describing a total the
+        // user can't see and never asked for.
+        if (moneyEnabled.value && unpricedCount.value > 0) {
             notes.push(
                 `${unpricedCount.value} item${unpricedCount.value === 1 ? '' : 's'} unpriced, not counted`
             );

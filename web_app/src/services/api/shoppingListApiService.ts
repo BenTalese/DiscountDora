@@ -339,6 +339,19 @@ export default class ShoppingListApiService {
             {},
         );
 
+    /** Bulk-select's "Move to list" — one request for the whole selection.
+     *  Same server rules as `moveUntickedToAsync` (duplicates on the target
+     *  are skipped, archived targets rejected), just over explicit ids. */
+    moveLinesToAsync = async (
+        sourceId: string,
+        targetId: string,
+        lineIds: string[],
+    ): Promise<MoveUntickedResult> =>
+        await this.httpClient.post<MoveUntickedResult, { line_ids: string[] }>(
+            `/shopping-lists/${sourceId}/lines/move-to/${targetId}`,
+            { line_ids: lineIds },
+        );
+
     refreshDealsAsync = async (id: string): Promise<RefreshDealsResult> =>
         await this.httpClient.post<RefreshDealsResult, Record<string, never>>(
             `/shopping-lists/${id}/refresh-deals`,

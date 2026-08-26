@@ -27,6 +27,7 @@
 
 <script lang="ts" setup>
     import { resolveBaseURL } from 'src/services/api/axiosHttpClient';
+    import { hashSwatch } from 'src/style/storeSwatch';
     import { computed } from 'vue';
 
     const props = withDefaults(
@@ -48,41 +49,17 @@
         { height: 32, width: 48, hasImage: false, storeId: null, previewSrc: null },
     );
 
-    /** Stable, deterministic colour from the store name. We pick from a
-     *  small palette of theme-compatible neutrals so the swatches don't
-     *  clash with the Pesto palette in either theme. */
-    const SWATCH_PALETTE = [
-        ['#ece1c9', '#2e2820'], // sand
-        ['#d8e3d0', '#1f2a1c'], // pesto-tint
-        ['#e6dbe6', '#2c1f2c'], // mauve
-        ['#dde6e9', '#1c2629'], // mist
-        ['#ecd9d0', '#3a1f17'], // terracotta
-        ['#dfe1e8', '#1d1f28'], // slate
-    ] as const;
-
-    function hashIndex(text: string): number {
-        // 32-bit FNV-1a over the lowercased name. Plenty for picking
-        // one of N palette entries with even-ish distribution.
-        let h = 0x811c9dc5;
-        const s = text.toLowerCase();
-        for (let i = 0; i < s.length; i++) {
-            h ^= s.charCodeAt(i);
-            h = Math.imul(h, 0x01000193);
-        }
-        return (h >>> 0) % SWATCH_PALETTE.length;
-    }
-
-    const swatch = computed(() => SWATCH_PALETTE[hashIndex(props.name || '?')]!);
+    // The palette + hash moved to `src/style/storeSwatch.ts` so the shopping
+    // list's store breakdown draws each store in the same colour this
+    // placeholder does (2026-08-26 feedback). R-002 carve-out and the
+    // reasoning for determinism live with it there.
+    const swatch = computed(() => hashSwatch(props.name));
 
     const placeholderStyle = computed(() => ({
         height: `${props.height}px`,
         minWidth: `${props.width}px`,
-        // R-002 carve-out: hash-swatch palette is a deterministic
-        // brand-stable fallback (per ENGINEERING_STANDARDS §R-002
-        // carve-outs — "deterministic hash swatches"). The two hex
-        // values come from a sealed 6-entry palette above.
-        background: swatch.value[0],
-        color: swatch.value[1],
+        background: swatch.value.background,
+        color: swatch.value.ink,
     }));
 
     const initial = computed(() => {

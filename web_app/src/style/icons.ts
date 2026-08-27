@@ -37,6 +37,16 @@ export const ICONS = {
     currency_usd: 'mdi-currency-usd',
     language: 'mdi-translate',
     record_voice_over: 'mdi-microphone-message',
+    // The listening toggle's two faces. Added 2026-08-27 because cook
+    // mode and Dora chat were passing the bare Material names 'mic' /
+    // 'mic_off' / 'mic_none' straight to `q-btn`. This app's icon set is
+    // MDI, so an unprefixed Material name isn't resolved as an icon at
+    // all — Quasar renders it as a ligature, which with no Material font
+    // loaded means the button literally read "mic_off" in text. Every
+    // icon goes through this map (R-034); these were the two that didn't.
+    mic: 'mdi-microphone',
+    mic_off: 'mdi-microphone-off',
+    mic_none: 'mdi-microphone-outline',
     auto_awesome: 'mdi-auto-fix',
     barcode: 'mdi-barcode',
     bolt: 'mdi-lightning-bolt',
@@ -132,6 +142,9 @@ export const ICONS = {
     unmute: 'mdi-bell-outline',
     star: 'mdi-star',
     star_outline: 'mdi-star-outline',
+    // Health Star Rating 2026-08-27 — the scheme is scored in half-star
+    // steps, so a half glyph is load-bearing, not decoration.
+    star_half: 'mdi-star-half-full',
     storage: 'mdi-database',
     swap_horiz: 'mdi-swap-horizontal',
     tune: 'mdi-tune',
@@ -167,6 +180,11 @@ export const ICONS = {
     event_repeat: 'mdi-calendar-refresh',
     event_available: 'mdi-calendar-check',
     event_note: 'mdi-calendar-edit',
+    // "No expiry set" — an *empty* calendar. Deliberately not a variant
+    // of `event_available` (mdi-calendar-check): the two states used to
+    // differ by colour alone, and a far-future expiry reads the same as no
+    // expiry at a glance (owner feedback 2026-08-27).
+    event_blank: 'mdi-calendar-blank-outline',
     inventory: 'mdi-package-variant',
     trending_down: 'mdi-trending-down',
     trending_up: 'mdi-trending-up',
@@ -209,6 +227,10 @@ export const ICONS = {
     icon: 'mdi-help-box-outline',
     image: 'mdi-image',
     image_not_supported: 'mdi-image-off',
+    // Recipe step photos 2026-08-27 — "open this at a size you can actually
+    // read". `visibility` already means "show/hide" across the app, so a
+    // second meaning needed its own glyph.
+    zoom_in: 'mdi-magnify-plus-outline',
     inbox: 'mdi-inbox',
     info_outline: 'mdi-information-outline',
     ios_share: 'mdi-export-variant',

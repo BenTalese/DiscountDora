@@ -606,6 +606,9 @@
     .dora-bubble-hint {
         background: var(--surface-component);
         color: var(--text-primary);
+        /* Thin outline so the bubble stays legible against busy page content
+           behind it — the shadow alone wasn't enough separation. */
+        border: 1px solid var(--border-strong);
         padding: 10px 14px;
         border-radius: 12px;
         max-width: 260px;
@@ -616,25 +619,23 @@
         gap: 8px;
         align-items: flex-start;
     }
-    .body--dark .dora-bubble-hint {
-        background: var(--q-component);
-        color: var(--q-text);
-    }
     .dora-bubble-hint-text {
         flex: 1;
     }
+    /* Rotated square rather than a border-triangle so the tail can carry the
+       same 1px outline as the bubble; its top half sits over the bubble body
+       and hides the bubble's own bottom border. */
     .dora-bubble-hint-arrow {
         position: absolute;
         right: 24px;
-        bottom: -8px;
-        width: 0;
-        height: 0;
-        border-left: 8px solid transparent;
-        border-right: 8px solid transparent;
-        border-top: 8px solid white;
-    }
-    .body--dark .dora-bubble-hint-arrow {
-        border-top-color: var(--q-component);
+        bottom: -7px;
+        width: 12px;
+        height: 12px;
+        background: var(--surface-component);
+        border-right: 1px solid var(--border-strong);
+        border-bottom: 1px solid var(--border-strong);
+        border-bottom-right-radius: 2px;
+        transform: rotate(45deg);
     }
     .dora-bubble-pop-enter-active,
     .dora-bubble-pop-leave-active {

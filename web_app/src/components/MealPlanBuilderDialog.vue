@@ -1,13 +1,28 @@
 <template>
+    <!-- Owner feedback 2026-08-27 — "the auto builder modal doesn't fit
+         properly on mobile". `min-width: 560px` won against `max-width: 95vw`
+         (a min-width is a floor, not a suggestion), so on a 375px phone the
+         card was ~185px wider than the viewport and the review step's controls
+         ran off the right edge. Same fix the ingredient picker already
+         carries: no floor, and a width that can't exceed the viewport. -->
     <BaseDialog
         :model-value="modelValue"
         title="Build my week"
         closable
-        card-style="min-width: 560px; max-width: 95vw"
+        card-style="min-width: 0; width: min(640px, 94vw)"
         @update:model-value="emit('update:modelValue', $event)"
     >
         <q-card-section class="q-pt-none">
-            <q-stepper v-model="step" flat animated>
+            <!-- `alternative-labels` puts the step name under its dot rather
+                 than beside it, which is what stops the three-step header
+                 clipping on a phone. -->
+            <q-stepper
+                v-model="step"
+                flat
+                animated
+                :alternative-labels="$q.screen.lt.sm"
+                class="builder-stepper"
+            >
                 <!-- ── Step 1 — Guide ─────────────────────────────────────── -->
                 <q-step :name="1" title="Guide" :icon="ICONS.auto_awesome" :done="step > 1">
                     <div class="text-caption dora-text-muted q-mb-md">
@@ -196,6 +211,18 @@
                             {{ needToBuyCount }} to buy ·
                             {{ Math.max(previewIngredients.length - needToBuyCount, 0) }} in stock
                         </div>
+                        <div v-if="previewUnlinked.length" class="builder-hint">
+                            <q-icon :name="ICONS.info" size="18px" class="builder-hint__icon" />
+                            <div>
+                                {{ previewUnlinked.length }}
+                                ingredient{{ previewUnlinked.length === 1 ? '' : 's' }}
+                                in these recipes
+                                {{ previewUnlinked.length === 1 ? "isn't" : "aren't" }}
+                                linked to your pantry, so
+                                {{ previewUnlinked.length === 1 ? 'it' : 'they' }}
+                                can't go on a shopping list.
+                            </div>
+                        </div>
                         <q-list dense separator class="builder-list">
                             <q-item v-for="ing in previewIngredients" :key="ing.stock_item_id">
                                 <q-item-section>
@@ -237,12 +264,14 @@
                     </div>
                     <div v-else class="column q-gutter-sm items-start">
                         <div class="text-subtitle2">All set — {{ proposed.length }} meal(s) planned.</div>
-                        <div class="row q-gutter-sm">
+                        <!-- Owner feedback 2026-08-27 — hands off to the same
+                             picker the planner and the recipe page use, rather
+                             than sweeping the week into a new list unseen. -->
+                        <div class="row q-gutter-sm builder-done-actions">
                             <BaseButton
-                                :icon="ICONS.shopping_cart"
-                                label="Generate shopping list"
-                                :loading="generatingList"
-                                @click="onGenerateList"
+                                :icon="ICONS.add_shopping_cart"
+                                label="Add to a shopping list"
+                                @click="onAddToList"
                             />
                             <BaseButton variant="secondary" :icon="ICONS.print" label="Print this week" @click="printWeek" />
                         </div>
@@ -292,7 +321,7 @@
         v-model="pickerOpen"
         :title="pickerMode === 'swap' ? 'Swap this meal' : 'Add a meal'"
         closable
-        card-style="min-width: 460px; max-width: 95vw"
+        card-style="min-width: 0; width: min(460px, 92vw)"
     >
         <q-card-section class="q-pt-none">
             <div class="builder-picker">
@@ -322,6 +351,7 @@
     import { useStockStatus } from 'src/composables/useStockStatus';
     import type {
         AutoBuildEmphasis, AutoBuildReason, MealPlanIngredient, ProposedEntry,
+        UnlinkedIngredient,
     } from 'src/models/mealPlan';
     import type { MealPlanEntryCommand } from 'src/services/api/mealPlanApiService';
     import type { Recipe } from 'src/models/recipe';
@@ -344,7 +374,9 @@
         /** Persists the (edited) proposal onto the focused week. */
         buildPlan: (entries: MealPlanEntryCommand[]) => Promise<void>;
         /** Generates the shopping list; scoped to `recipeIds` when given. */
-        generateList: (recipeIds?: string[]) => Promise<void>;
+        /** Opens the planner's shared add-to-list picker, seeded with the
+         *  saved week's aggregated demand. */
+        openAddToList: () => void;
         printWeek: () => void;
     }>();
     const emit = defineEmits<{ (e: 'update:modelValue', value: boolean): void }>();
@@ -360,9 +392,12 @@
     const proposed = ref<DraftEntry[]>([]);
     const generatingProposal = ref(false);
     const building = ref(false);
-    const generatingList = ref(false);
     const doneState = ref(false);
     const previewIngredients = ref<MealPlanIngredient[]>([]);
+    // FU-505 — ingredients with no linked pantry item can't become list
+    // lines. The aggregate reports them now (2026-08-27) so the review
+    // step can say so before you commit to the week.
+    const previewUnlinked = ref<UnlinkedIngredient[]>([]);
     const previewLoading = ref(false);
 
     // FU-611 — the ranker only ever picks *distinct* recipes, so a day×slot
@@ -504,13 +539,16 @@
     async function refreshPreview() {
         if (proposed.value.length === 0) {
             previewIngredients.value = [];
+            previewUnlinked.value = [];
             return;
         }
         previewLoading.value = true;
         try {
-            previewIngredients.value = await api.previewIngredientsAsync(
+            const payload = await api.previewIngredientsAsync(
                 proposed.value.map((e) => ({ recipe_id: e.recipe_id, servings: e.servings })),
             );
+            previewIngredients.value = payload.items;
+            previewUnlinked.value = payload.unlinked;
         } finally {
             previewLoading.value = false;
         }
@@ -571,6 +609,7 @@
     function startManual() {
         proposed.value = [];
         previewIngredients.value = [];
+        previewUnlinked.value = [];
         lastBuildRequested.value = 0;
         lastBuildPlaced.value = 0;
         step.value = 2;
@@ -684,19 +723,13 @@
         }
     }
 
-    async function onGenerateList() {
-        generatingList.value = true;
-        try {
-            // A single-day build → scope the list to exactly the meals just
-            // planned; a multi-day build wants the whole week's list.
-            const singleDay = new Set(proposed.value.map((e) => e.scheduled_for)).size === 1;
-            const ids = singleDay
-                ? [...new Set(proposed.value.map((e) => e.recipe_id))]
-                : undefined;
-            await props.generateList(ids);
-        } finally {
-            generatingList.value = false;
-        }
+    // Closes the builder first: the picker is the planner page's dialog, and
+    // stacking two modals on a phone leaves you tapping through layers to get
+    // back. The week is already saved by this point, so its aggregate is what
+    // the picker loads.
+    function onAddToList() {
+        emit('update:modelValue', false);
+        props.openAddToList();
     }
 
     // ── Reset on (re)open ────────────────────────────────────────────────────
@@ -705,6 +738,7 @@
         step.value = 1;
         proposed.value = [];
         previewIngredients.value = [];
+        previewUnlinked.value = [];
         lastBuildRequested.value = 0;
         lastBuildPlaced.value = 0;
         doneState.value = false;
@@ -722,6 +756,12 @@
 <style scoped>
     .builder-field {
         margin-bottom: 1rem;
+    }
+    /* Quasar's step padding is sized for a desktop stepper; on a phone it
+       costs 48px of an already-narrow content column. */
+    .builder-stepper :deep(.q-stepper__step-inner) {
+        padding-left: 12px;
+        padding-right: 12px;
     }
     .builder-field__label {
         font-size: calc(var(--font-size-sm) * 1rem);
@@ -823,5 +863,44 @@
     .builder-list {
         max-height: 40vh;
         overflow-y: auto;
+    }
+    /* Owner feedback 2026-08-27 — the controls cluster alone wants ~400px
+       (two 120–130px selects, a servings stepper and two icon buttons), so on
+       a phone it can only work stacked under the meal name. The selects go
+       full-width there; below them the servings stepper and the two actions
+       sit on one line with the actions pushed to the right edge, which is
+       where a thumb is. */
+    @media (max-width: 599px) {
+        .builder-row {
+            flex-direction: column;
+            align-items: stretch;
+            gap: 0.4rem;
+            padding: 0.6rem 0;
+        }
+        .builder-row__controls {
+            flex-wrap: wrap;
+            gap: 0.4rem;
+        }
+        .builder-day-select,
+        .builder-slot-select {
+            flex: 1 1 8rem;
+            min-width: 0;
+        }
+        .builder-servings {
+            margin-left: auto;
+        }
+        /* One scroll region, not three: nested max-heights inside a dialog
+           that is itself scrolling turns the review step into a set of tiny
+           windows on a phone. */
+        .builder-list,
+        .builder-picker {
+            max-height: none;
+        }
+        .builder-done-actions {
+            width: 100%;
+        }
+        .builder-done-actions > * {
+            flex: 1 1 100%;
+        }
     }
 </style>

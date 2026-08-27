@@ -114,6 +114,12 @@ export function useFeatureFlags() {
         // (a dataset is imported / a key is set / OFF is permitted). Derived
         // server-side from installed reality — see features/nutrition/sources.py.
         nutritionComplexUsable: computed(() => readFlag('nutrition_complex_usable')),
+        // Owner ask 2026-08-27 — the recipe Health Star Rating. Off
+        // everywhere by default: HSR is an Australian/NZ government scheme,
+        // and an install elsewhere shouldn't be shown a national rating as
+        // though it were universal. Settings → Region's "Match this device"
+        // is what offers it when it detects an AU/NZ locale.
+        healthStarRating: computed(() => readFlag('health_star_rating')),
         refresh,
     };
 }

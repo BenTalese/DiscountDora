@@ -59,6 +59,7 @@ def _get_or_create(repository: SqlAlchemyRepository) -> AppSetting:
     # opt in to AI mode individually on Settings → Assistant.
     setting = AppSetting(
         scanning_enabled=False,
+        health_star_rating_enabled=False,
         # PROPOSAL_STOCKTAKE_MODE §8 — fresh installs get Fortnightly +
         # Auto-on so the queue "just works" without a Settings visit.
         stocktake_default_cadence_band="fortnightly",

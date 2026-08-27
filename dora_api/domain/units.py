@@ -49,14 +49,103 @@ CANONICAL_PRICE_UNIT: dict[str, str] = {
 }
 
 
-SUPPORTED_PRICING_LOCALES: frozenset[str] = frozenset({"AU", "US"})
+# ── Measurement system ────────────────────────────────────────────────────
+#
+# The install-wide answer to "which units does this household actually use?".
+# Owner feedback 2026-08-27: *"Locale and region settings should also include
+# units config, which then determines what units appear throughout the app …
+# for universal ones, e.g. 'dash', always include those."*
+#
+# Three systems, and they are not three disjoint sets:
+#
+#   ``metric``    ml/L, g/kg, the 250 ml cup and 20 ml tablespoon (AU/NZ).
+#   ``us``        fl oz/qt/gal, oz/lb, the 240 ml US cup and 14.8 ml US tbsp.
+#   ``imperial``  the UK reality: metric core for weights and volumes (that is
+#                 how UK shelves and recipes are labelled) *plus* oz/lb, fl oz
+#                 and the 568 ml imperial pint.
+#
+# `UNIT_SYSTEMS` is keyed by **canonical** form, not by alias — one row per
+# real unit, ~35 rows instead of ~150. It is the only place the mapping lives
+# (R-003); `units_for_system()` is the only reader, and the SPA gets it via the
+# generated mirror rather than restating it.
+METRIC = "metric"
+IMPERIAL = "imperial"
+US_CUSTOMARY = "us"
+
+SUPPORTED_MEASUREMENT_SYSTEMS: frozenset[str] = frozenset({
+    METRIC, IMPERIAL, US_CUSTOMARY,
+})
+
+# Units that belong to no system because they belong to all of them: the
+# informal cooking amounts, the count units, and energy (a nutrition label is
+# not a measurement system). Always offered, whatever the install picks.
+UNIVERSAL_CANONICAL_UNITS: frozenset[str] = frozenset({
+    "smidgen", "pinch", "dash",
+    # 5 ml here, 4.93 ml in the US, 5.9 ml in the UK — nobody measures a
+    # teaspoon to 2%. One row, offered everywhere.
+    "tsp",
+    "ea", "pack", "dozen",
+    "kJ", "kcal", "J",
+})
+
+UNIT_SYSTEMS: dict[str, frozenset[str]] = {
+    # volume
+    "ml":       frozenset({METRIC, IMPERIAL}),
+    "L":        frozenset({METRIC, IMPERIAL}),
+    "tbsp":     frozenset({METRIC, IMPERIAL}),
+    "cup":      frozenset({METRIC, IMPERIAL}),
+    "US tbsp":  frozenset({US_CUSTOMARY}),
+    "US cup":   frozenset({US_CUSTOMARY}),
+    "fl oz":    frozenset({IMPERIAL, US_CUSTOMARY}),
+    "pt":       frozenset({IMPERIAL}),           # 568 ml — UK, not the US pint
+    "qt":       frozenset({US_CUSTOMARY}),
+    "gal":      frozenset({US_CUSTOMARY}),
+    # mass
+    "mg":       frozenset({METRIC, IMPERIAL}),
+    "g":        frozenset({METRIC, IMPERIAL}),
+    "kg":       frozenset({METRIC, IMPERIAL}),
+    "oz":       frozenset({IMPERIAL, US_CUSTOMARY}),
+    "lb":       frozenset({IMPERIAL, US_CUSTOMARY}),
+    "stick":    frozenset({US_CUSTOMARY}),       # butter, a US supermarket fact
+    # length — recipe metadata (tin sizes), not quantities
+    "mm":       frozenset({METRIC, IMPERIAL}),
+    "cm":       frozenset({METRIC, IMPERIAL}),
+    "m":        frozenset({METRIC, IMPERIAL}),
+    "in":       frozenset({IMPERIAL, US_CUSTOMARY}),
+    "ft":       frozenset({IMPERIAL, US_CUSTOMARY}),
+}
+
+
+def units_for_system(system: str) -> frozenset[str]:
+    """Canonical units offered by pickers under *system*.
+
+    Universal units are always included. An unrecognised system falls back to
+    metric rather than raising — a bad value in one setting must not empty
+    every unit dropdown in the app.
+    """
+    resolved = system if system in SUPPORTED_MEASUREMENT_SYSTEMS else METRIC
+    return frozenset(
+        UNIVERSAL_CANONICAL_UNITS
+        | {c for c, systems in UNIT_SYSTEMS.items() if resolved in systems}
+    )
+
+
+def pricing_convention_for(system: str) -> str:
+    """Which shelf-pricing convention *system* implies: ``"US"`` or ``"AU"``.
+
+    Only the US prices by the quart and the pound. The UK sells in metric by
+    law and displays ``/100g`` and ``/L`` exactly as Australia does, so
+    ``imperial`` maps to the AU convention — the imperial units it keeps are
+    for cooking, not for shelf labels.
+    """
+    return "US" if system == US_CUSTOMARY else "AU"
 
 
 def display_denominator_for(
     active_dim: str,
     latest_measure_in_canonical: float,
     *,
-    locale: str = "AU",
+    system: str = METRIC,
 ) -> tuple[str, float]:
     """The shelf display convention for a per-unit price.
 
@@ -73,16 +162,18 @@ def display_denominator_for(
     bottle; same for "$0.50 / fl oz" vs "$16.00 / qt"). Count stays "ea"
     (no fractional convention either way).
 
-    Locale is resolved server-side from ``AppSetting.unit_pricing_locale``
-    — single source so the chart axis, sidecar entries, widget headline,
-    and chart points all share one denominator. Compute math is locale-
-    independent; only the rendered denominator changes.
+    The system is resolved server-side from ``AppSetting.measurement_system``
+    — single source so the chart axis, sidecar entries, widget headline, and
+    chart points all share one denominator, and so the units a picker offers
+    and the denominator a price is quoted in can never disagree. (This used to
+    be its own ``unit_pricing_locale`` setting on an AU/US axis, which was a
+    second name for the same fact and was never exposed in the UI at all.)
+    Compute math is system-independent; only the rendered denominator changes.
     """
     if active_dim == COUNT:
         return ("ea", 1.0)
-    if locale == "US":
+    if pricing_convention_for(system) == "US":
         return _us_denominator(active_dim, latest_measure_in_canonical)
-    # AU is the default for any unrecognised locale string — safe fallback.
     return _au_denominator(active_dim, latest_measure_in_canonical)
 
 

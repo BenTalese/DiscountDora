@@ -1,7 +1,9 @@
 <template>
-    <!-- The chip is the whole affordance: its label already answers the
-         question the user actually has ("can I cook this anyway?"), so the
-         menu is for the detail, not the verdict. -->
+    <!-- The chip is deliberately just a count: it stays small on a wrapping
+         ingredient row, and it counts *every* recorded swap rather than only
+         the ones in stock — a swap you'd have to buy is still a swap the user
+         may want to know about (owner feedback 2026-08-27). Which of them you
+         actually have is what the menu is for. -->
     <button
         v-if="entries.length > 0"
         type="button"
@@ -18,23 +20,18 @@
             </div>
             <q-list dense separator class="rsub__list">
                 <q-item v-for="entry in ordered" :key="entry.sub.stock_item_id">
+                    <!-- Stock level reads as the same dot-left-of-the-name it
+                         does everywhere else in the app, rather than this
+                         surface's own badge wording (D-013 / owner feedback
+                         2026-08-27). Tooltip'd — a bare dot isn't decodable. -->
+                    <q-item-section side class="rsub__dot">
+                        <StockLevelDot :sequence="entry.levelSequence" size="12px">
+                            <q-tooltip>{{ entry.levelLabel }}</q-tooltip>
+                        </StockLevelDot>
+                    </q-item-section>
                     <q-item-section>
                         <q-item-label class="rsub__name">
                             {{ entry.sub.name }}
-                            <q-badge
-                                v-if="entry.inStock"
-                                class="rsub__badge"
-                                color="positive"
-                                text-color="dark"
-                                :label="entry.sub.stock_level_name || 'In stock'"
-                            />
-                            <q-badge
-                                v-else
-                                class="rsub__badge"
-                                color="grey-6"
-                                text-color="white"
-                                label="Also missing"
-                            />
                         </q-item-label>
                         <q-item-label v-if="formatSubstituteRatio(entry.sub)" caption>
                             {{ formatSubstituteRatio(entry.sub) }}
@@ -52,13 +49,6 @@
                     </q-item-section>
                 </q-item>
             </q-list>
-            <!-- The one thing a user reading this list will try to do next,
-                 and the one thing it must not silently do: swapping is a
-                 cook-session decision and never rewrites the recipe. -->
-            <div class="rsub__foot">
-                Swap during cooking — start cook mode and tap the swap icon on this
-                ingredient. Your saved recipe never changes.
-            </div>
         </q-menu>
     </button>
 </template>
@@ -71,9 +61,9 @@
      * listed substitute *names* per missing item and stopped there — leaving
      * the reader to check each one against their own pantry by hand. The whole
      * value of the feature is the one fact that dialog didn't show: whether the
-     * substitute is something you actually have. So the verdict is the chip
-     * label, and it sits on the row it's about rather than behind a page-level
-     * action.
+     * substitute is something you actually have. So the list carries a level
+     * dot per option, and it sits on the row it's about rather than behind a
+     * page-level action. The chip itself stays a bare count — see the template.
      *
      * Read-only by design. Substitutes are per-cook swaps (cook mode owns
      * them) and per-item facts (the stock-item detail page owns them); nothing
@@ -82,6 +72,7 @@
     import { computed } from 'vue';
 
     import AddToListButton from 'src/components/AddToListButton.vue';
+    import StockLevelDot from 'src/components/stock/StockLevelDot.vue';
     import { ICONS } from 'src/style/icons';
     import { formatSubstituteRatio } from 'src/helpers/substituteRatio';
     import type { SubstituteOption } from './recipeSubstituteTypes';
@@ -101,12 +92,13 @@
 
     const haveOne = computed(() => props.entries.some((e) => e.inStock));
 
+    /** Always the total number of recorded swaps — never a count filtered by
+     *  what's in stock, which used to read "0 swaps" on a row that had swaps
+     *  the user could buy. The tint still says whether one is available now;
+     *  the menu says which. */
     const chipLabel = computed(() => {
-        const have = props.entries.filter((e) => e.inStock);
-        if (have.length === 1) return `Use ${have[0]!.sub.name}`;
-        if (have.length > 1) return `${have.length} swaps in stock`;
         const n = props.entries.length;
-        return `${n} substitute${n === 1 ? '' : 's'}`;
+        return `${n} swap${n === 1 ? '' : 's'}`;
     });
 </script>
 
@@ -170,15 +162,8 @@
         flex-wrap: wrap;
     }
 
-    .rsub__badge {
-        font-size: var(--font-size-xs);
-    }
-
-    .rsub__foot {
-        padding: var(--space-3) var(--space-4);
-        border-top: 1px solid var(--divider);
-        max-width: 360px;
-        font-size: var(--font-size-xs);
-        color: var(--text-muted);
+    .rsub__dot {
+        padding-right: var(--space-2);
+        min-width: 0;
     }
 </style>

@@ -16,10 +16,14 @@ def test_preview_ingredients_returns_aggregated_list():
     })
     assert resp.status_code == 200, resp.text
     body = resp.json()
-    assert isinstance(body, list)
-    for ing in body:
+    assert isinstance(body, dict) and "items" in body and "unlinked" in body
+    for ing in body["items"]:
         assert "stock_item_id" in ing
         assert "used_in_recipe_ids" in ing
+        # Owner feedback 2026-08-27 — the shared add-to-list picker files
+        # optional ingredients into their own unticked section, so the
+        # aggregate has to say which items are optional.
+        assert "is_optional" in ing
 
 
 def _recipe_with_unlinked_ingredient() -> str | None:
@@ -32,11 +36,13 @@ def _recipe_with_unlinked_ingredient() -> str | None:
     )
 
 
-def test_preview_ingredients_with_unlinked_ingredient_does_not_500():
+def test_preview_ingredients_with_unlinked_ingredient_reports_it():
     """Regression: the aggregator read `.id` off a None stock item, so ONE
     unlinked row anywhere in the selection 500'd the endpoint (and the saved
-    plan's /ingredients with it). Unlinked rows are skipped — a shopping list
-    is a list of stock items, and an unlinked row isn't one yet."""
+    plan's /ingredients with it). Unlinked rows still can't become lines — a
+    shopping list is a list of stock items — but since 2026-08-27 they're
+    *named* in `unlinked` rather than dropped, which is how the picker-driven
+    add keeps FU-505's promise now that it no longer calls auto-generate."""
     recipe_id = _recipe_with_unlinked_ingredient()
     if recipe_id is None:
         import pytest
@@ -45,10 +51,13 @@ def test_preview_ingredients_with_unlinked_ingredient_does_not_500():
         "recipes": [{"recipe_id": recipe_id, "servings": 2}],
     })
     assert resp.status_code == 200, resp.text
-    assert isinstance(resp.json(), list)
+    body = resp.json()
+    assert len(body["unlinked"]) > 0
+    for u in body["unlinked"]:
+        assert u["recipe_name"] and u["ingredient_name"]
 
 
 def test_preview_empty_selection_is_empty():
     resp = requests.post(f"{MEAL_PLANS}/preview-ingredients", json={"recipes": []})
     assert resp.status_code == 200, resp.text
-    assert resp.json() == []
+    assert resp.json() == {"items": [], "unlinked": []}

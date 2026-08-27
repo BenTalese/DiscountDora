@@ -14,12 +14,21 @@
                  `stock_item_id` / `raw_text`, which is what `anchorError`
                  enforces before Done can commit. -->
             <div>
+                <!-- `hide-selected` + `fill-input` is the standard Quasar
+                     shape for a single-select typeahead, and its absence was
+                     the "apple apple" bug (owner, 2026-08-27): the selected
+                     label rendered *beside* the text still sitting in the
+                     input, so creating "apple" from typed text read back as
+                     the item twice. -->
                 <q-select
+                    ref="itemSelect"
                     v-model="draft.stock_item_id"
                     dense
                     outlined
                     clearable
                     use-input
+                    fill-input
+                    hide-selected
                     input-debounce="150"
                     autofocus
                     :options="itemOptions"
@@ -28,7 +37,7 @@
                     emit-value
                     map-options
                     :label="isFreeText ? 'Free-text ingredient' : 'Pantry item'"
-                    :error="!!anchorError"
+                    :error="showAnchorError && !!anchorError"
                     :error-message="anchorError ?? undefined"
                     @filter="onItemFilter"
                 >
@@ -39,7 +48,7 @@
                          action is needed, so it has to be offered from both
                          slots or it is unreachable exactly when it matters. -->
                     <template #no-option>
-                        <q-item v-if="typed.trim().length > 0" clickable :disable="creating" @click="onUseTyped">
+                        <q-item v-if="canUseTyped" clickable :disable="creating" @click="onUseTyped">
                             <q-item-section avatar>
                                 <q-icon :name="ICONS.add" color="primary" />
                             </q-item-section>
@@ -53,7 +62,7 @@
                             </q-item-section>
                         </q-item>
                     </template>
-                    <template v-if="typed.trim().length > 0" #after-options>
+                    <template v-if="canUseTyped" #after-options>
                         <q-item clickable :disable="creating" @click="onUseTyped">
                             <q-item-section avatar>
                                 <q-icon :name="ICONS.add" color="primary" />
@@ -149,11 +158,13 @@
         </q-card-section>
 
         <template #actions>
-            <BaseButton variant="ghost" label="Cancel" @click="open = false" />
+            <BaseButton variant="ghost" label="Cancel" @click="onCancel" />
+            <!-- Not disabled on `anchorError`: a disabled button with a red
+                 field beside it is the dialog telling you off for opening it.
+                 It asks when you actually try to commit instead. -->
             <BaseButton
                 variant="primary"
                 label="Done"
-                :disable="!!anchorError"
                 @click="onDone"
             />
         </template>
@@ -175,7 +186,7 @@
      * user backed out of.
      */
     import { computed, ref, watch } from 'vue';
-    import { useQuasar } from 'quasar';
+    import { QSelect, useQuasar } from 'quasar';
     import { storeToRefs } from 'pinia';
 
     import BaseButton from 'src/components/BaseButton.vue';
@@ -201,6 +212,11 @@
     const emit = defineEmits<{
         'update:modelValue': [value: boolean];
         save: [patch: IngredientPatch];
+        /** Backed out of a row that never got an anchor. The page drops it —
+         *  otherwise "add ingredient, change your mind" leaves a blank row
+         *  behind that then blocks the save (owner: adding an ingredient
+         *  "is not fluid enough", 2026-08-27). */
+        cancel: [];
     }>();
 
     const $q = useQuasar();
@@ -217,12 +233,25 @@
     const draft = ref<IngredientPatch | null>(null);
     const typed = ref('');
     const creating = ref(false);
+    const itemSelect = ref<QSelect | null>(null);
+    /** The anchor rule is real, but a *fresh* row hasn't broken it yet — it
+     *  simply hasn't been filled in. Showing the red the instant the dialog
+     *  opens is the dialog complaining about its own empty state, which is
+     *  what the owner flagged. It arms on the first attempt to commit. */
+    const showAnchorError = ref(false);
     // An ingredient is measured by volume, mass or count — never in kJ or cm,
     // which the unfiltered table also carries. Spelled out rather than reusing
     // the table's `PRICE_DIMENSIONS`: same three today, but that constant means
     // "what a price observation may be expressed in" and shouldn't drift by
     // proxy.
-    const { unitOptions, onUnitFilter } = useUnitOptions(['volume', 'mass', 'count']);
+    // The second argument keeps this row's saved unit offered even when the
+    // install's measurement system excludes it — an imported US recipe on a
+    // metric install must not have its `lb` silently dropped from its own
+    // dropdown.
+    const { unitOptions, onUnitFilter } = useUnitOptions(
+        ['volume', 'mass', 'count'],
+        () => draft.value?.unit,
+    );
 
     // Re-seed the draft whenever the dialog opens on a row, so a second visit
     // never shows the previous row's values for a frame.
@@ -231,6 +260,7 @@
         ([isOpen, row]) => {
             if (!isOpen || !row) return;
             typed.value = '';
+            showAnchorError.value = false;
             draft.value = {
                 stock_item_id: row.stock_item_id ?? null,
                 raw_text: row.raw_text ?? null,
@@ -260,10 +290,32 @@
 
     const itemOptions = computed(() => {
         const q = typed.value.trim().toLowerCase();
-        return stockItems.value
+        const matches = stockItems.value
             .filter((s) => !q || s.name.toLowerCase().includes(q))
             .slice(0, 60)
             .map((s) => ({ label: s.name, value: s.stock_item_id }));
+        // `map-options` can only render a label for an option it can see, and
+        // the list is capped at 60 — so a selection that filtered out (or a
+        // pantry item just created here) would display as a bare UUID. Pin it
+        // to the front rather than raising the cap.
+        const selected = draft.value?.stock_item_id;
+        if (selected && !matches.some((o) => o.value === selected)) {
+            const hit = stockItems.value.find((s) => s.stock_item_id === selected);
+            if (hit) matches.unshift({ label: hit.name, value: hit.stock_item_id });
+        }
+        return matches;
+    });
+
+    /** Offer "Use <text>" only when the text is something other than what is
+     *  already selected — with `fill-input` the box carries the selected
+     *  item's own name, and offering to re-create it reads as a bug. */
+    const canUseTyped = computed(() => {
+        const text = typed.value.trim();
+        if (text.length === 0) return false;
+        const selected = draft.value?.stock_item_id;
+        if (!selected) return true;
+        const name = stockItems.value.find((s) => s.stock_item_id === selected)?.name ?? '';
+        return name.trim().toLowerCase() !== text.toLowerCase();
     });
 
     const sectionOptions = computed(() =>
@@ -325,6 +377,13 @@
                 draft.value.stock_item_id = created.stock_item_id;
                 draft.value.raw_text = null;
                 typed.value = '';
+                showAnchorError.value = false;
+                // Creating the item *is* the choice — leaving the menu open on
+                // the list you just added to, waiting for a second, deliberate
+                // pick, was the other half of the owner's report. Fill the box
+                // with the new name and close it.
+                itemSelect.value?.updateInputValue(created.name, true);
+                itemSelect.value?.hidePopup();
                 // The item is persisted whether or not the recipe save goes
                 // through, so say so rather than letting it appear unannounced
                 // on the Stock overview.
@@ -346,9 +405,21 @@
         }
     }
 
+    /** Cancelling a row that still has no anchor removes it; cancelling an
+     *  edit of a real row just closes. */
+    function onCancel() {
+        const row = props.row;
+        open.value = false;
+        if (row && !row.stock_item_id && !(row.raw_text ?? '').trim()) emit('cancel');
+    }
+
     function onDone() {
         const d = draft.value;
-        if (!d || anchorError.value) return;
+        if (!d) return;
+        if (anchorError.value) {
+            showAnchorError.value = true;
+            return;
+        }
         const text = (d.raw_text ?? '').trim();
         emit('save', {
             ...d,

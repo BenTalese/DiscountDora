@@ -130,6 +130,7 @@
     import { useMoney, formatMoney } from 'src/composables/useMoney';
     import { ICONS } from 'src/style/icons';
     import { SUPPORTED_PRICE_UNITS } from 'src/generated/units_table';
+    import { useMeasurementSystem } from 'src/composables/useMeasurementSystem';
     import type { PriceEntryPrefill } from 'src/models/stockItemDetail';
     import type { Store } from 'src/models/store';
 
@@ -206,9 +207,17 @@
     // flat list grouped by dimension. The canonical strings come from
     // the generated table (single source of truth — chunk 1 / R-003), so
     // the picker never drifts from the server's accepted set.
+    // Narrowed to the install's measurement system (owner feedback
+    // 2026-08-27) — a metric household shouldn't be offered `lb` when logging
+    // a shelf price, and a US one shouldn't be offered `kg`. Count units are
+    // universal so `ea` / `dozen` / `pack` survive either way. The unit
+    // already on the row is kept offered so editing an existing observation
+    // can't silently re-unit it.
+    const { offeredUnits } = useMeasurementSystem();
     const unitOptions = computed(() => {
         const groups: Record<string, { canonical: string; label: string }[]> = {};
         for (const u of SUPPORTED_PRICE_UNITS) {
+            if (!offeredUnits.value.has(u.canonical) && unit.value !== u.canonical) continue;
             (groups[u.dimension] ??= []).push({ canonical: u.canonical, label: u.label });
         }
         const order: string[] = ['volume', 'mass', 'count'];

@@ -1983,15 +1983,34 @@ exceptions, which still must be commented) · **Source** (where it was establish
   sit where the inputs were.
 - **What still holds:** the read face must read as a *document*, not a wall of
   inputs (that is what the block switch buys), and the commit stays explicit
-  (D-019 — inline editing is fine, silent autosave is not). Prose is the
-  carve-out: an editor over the paragraph you are reading is the right shape,
-  and the recipe method keeps it.
+  (D-019 — inline editing is fine, silent autosave is not).
+- **The prose carve-out was retired 2026-08-27.** It read "an editor over the
+  paragraph you are reading is the right shape, and the recipe method keeps
+  it", and it was written when the method's editor was a `q-popup-edit`. What
+  actually shipped behind it was a *modal*, which is neither of the two shapes
+  this rule is about — and the owner rejected it on sight ("adopt the header
+  edit style, where it is read-only entirely until you press the edit button,
+  and then it swaps in-place"). The method is now a block switch like the rest
+  (`RecipeStructuredMethod.vue` renders both faces off one `editing` prop, so
+  the geometry cannot drift between them). The rule has no carve-outs.
+- **Corollary — one component, both faces.** When a region flips, the read face
+  and the edit face belong in the *same* component off an `editing` prop, not in
+  a viewer plus a separate editor. Two components drift: the numbering, the
+  indent and the spacing get maintained twice and the block visibly changes
+  character mid-edit, which is the thing the switch existed to prevent.
 - **Violation signal:** two or more `q-popup-edit`s in one section; a select that
   needs a click to appear before it can be clicked to open; a row of values whose
   widths change as their content does.
-- **Established by:** the recipe-page feedback batch, 2026-08-23. See ADR-051,
-  and D-015 in the design guide (whose retired clause this partially restores,
-  at block rather than page granularity).
+- **Established by:** the recipe-page feedback batch, 2026-08-23. See ADR-051
+  and ADR-052, and D-015 in the design guide (whose retired clause this
+  partially restores, at block rather than page granularity).
+- **⚠️ The ingredient half of ADR-051 was lost in the 2026-08-24 merge and
+  restored 2026-08-27.** The surviving page kept its editing chrome permanently
+  on — tap-a-row-to-edit, reorder arrows and a delete button on every row, in
+  read mode — and the owner reported it again from scratch three days later
+  ("I want the pencil edit style for ingredients, same as header and method").
+  Worth knowing when reading ADR-051: it describes a decision that was made,
+  then silently un-made by a merge that had no way to know it was choosing.
 - **Reference implementation, after the 2026-08-24 merge.** The 08-23 block-pencil
   build and a second agent's 08-24 rebuild of `RecipeDetailNext.vue` were written
   in parallel on two machines. The merge kept the 08-24 page (browser-verified,
@@ -2002,6 +2021,72 @@ exceptions, which still must be commented) · **Source** (where it was establish
   the name each owning a target. The page went from **25 `q-popup-edit`s to 2**,
   both of which are the rule's own carve-outs — a section's name (the only
   editable thing in its region) and the step text (prose).
+
+
+### R-056 — One regional convention, one setting, one axis
+- **Rule:** an install-wide *convention* — how money is written, which units are
+  measured in, which day counts as today — gets **one** setting on **one** axis,
+  published to every session on `/api/health`, with the vocabulary it implies
+  derived from it server-side. Do not add a second setting that answers a
+  narrower version of the same question, and do not restate the mapping from the
+  setting to its consequences on the client: the client filters a generated
+  mirror of the server's table, it does not carry its own copy of which unit
+  belongs to which system.
+- **Why:** two settings for one fact do not stay in agreement, and the failure is
+  silent in the worst direction — the user changes the one they can see and the
+  other keeps quietly deciding something. Dora had exactly this: an
+  `unit_pricing_locale` on an "AU"/"US" axis, which decided the denominator a
+  shelf price was quoted in, was never surfaced in the UI at all. The moment a
+  units picker arrived, "which units do we use?" and "which denominator do we
+  price in?" were plainly the same question, and keeping both would have let an
+  install offer grams in every dropdown while quoting `/lb` on the price beside
+  them.
+- **The axis has to be able to express the real cases.** "AU or US" could not
+  tell the UK apart from the US, because both use pounds and ounces and only one
+  prices by the quart. The replacement is metric / imperial / US customary, where
+  imperial is deliberately *metric plus* imperial — which is what a UK shelf
+  actually looks like. Choosing an axis that collapses two real answers into one
+  is the same defect as holding the fact twice, arriving earlier.
+- **Where it goes:** `/api/health`, not the admin `/app-settings` payload, when
+  every session needs it and only admins can read settings. Currency and locale
+  already worked this way; the measurement system joined them.
+- **Violation signal:** two settings whose values are in bijection; a client-side
+  `if (system === 'us')` that decides which units, colours, or formats to show;
+  a setting with no UI (that is usually the second copy, not the first).
+- **Established by:** the units-config feedback item, 2026-08-27. See ADR-053.
+
+
+### R-057 — Replacing a server-orchestrated action relocates its reporting; a guarantee is a migration item, not a casualty
+- **Rule:** when a one-shot server endpoint is replaced by a client-composed flow
+  over smaller endpoints, inventory what the old **response** told the user and
+  give every one of those facts a new home *in the same change*. If a fact can't
+  ride on any of the new calls, extend one of them to carry it. "The new flow
+  doesn't have anywhere to put that" is a reason to make somewhere, not a reason
+  to drop it.
+- **Why:** a guarantee that lives in a response body is invisible in a diff that
+  deletes the call. Nothing fails, no test goes red, and the loss surfaces months
+  later as a bug report about something the app used to say. Dora's meal-plan
+  "generate the week's list" endpoint returned `unlinked_skipped` — the recipe
+  ingredients that were never matched to a pantry item and therefore *silently
+  didn't make it onto your list* (FU-505, itself raised because they were being
+  dropped). Swapping that button for the shared picker would have deleted the
+  only place the app ever mentioned them.
+- **Apply:** the fix is usually a small server change, not client cleverness —
+  the old endpoint knew this because it had the domain in hand. Here the
+  ingredient aggregate became an envelope (`{items, unlinked}`) so the picker
+  could name what it couldn't take, which is strictly better than the dialog it
+  replaced: it says so *before* you commit rather than after.
+- **Also inventory:** provenance the server stamped (`added_via`), names it
+  generated (an auto-named list), and navigation the response implied. Each is
+  either reproduced, deliberately dropped **with the owner's agreement**, or
+  logged. Two of those three were reproduced here; the `added_via` chip was
+  dropped on an explicit owner call, which is the shape this rule expects — a
+  decision, not an oversight.
+- **Violation signal:** a diff that deletes an API call and adds UI, with no
+  change to the endpoints the new UI calls; a response field that becomes unused
+  in the same commit as a new flow.
+- **Established by:** the meal-plan add-to-list unification, 2026-08-27. See ADR-054.
+
 
 ## ADR process (evaluate every task)
 
@@ -3473,6 +3558,105 @@ one-off, or purely product/UX decisions (those go to the Charter check + worklog
   Any future detail page that grows a second `q-popup-edit` in one region should
   reach for this shape instead — that is R-055.
 - **Promotes rule:** R-055.
+
+### ADR-052 — A region that flips read↔edit renders both faces from one component
+- **Date / task:** 2026-08-27 (recipe-view feedback batch)
+- **Status:** accepted
+- **Context:** R-055 says a region gets one edit toggle; it says nothing about
+  how the two faces are built. The recipe method was built as two — a read view
+  inline on the page, and `RecipeStepsEditor` + `RecipeStepRow` inside
+  `RecipeMethodEditorDialog`. The result was three separate problems the owner
+  reported as four separate items: the numbered-bullet geometry existed twice
+  and had drifted (the read view's sub-step rule did not line up with its
+  parent's numeral, and could not be made to without editing two stylesheets);
+  the edit face was a *dialog*, which is neither of the shapes R-055 is about
+  and which he rejected outright ("adopt the header edit style… it swaps
+  in-place"); and the block visibly changed character mid-edit, which is the
+  exact failure the block switch was introduced to prevent.
+- **Decision:** the read face and the edit face belong in **one component,
+  selected by an `editing` prop**. `RecipeStructuredMethod.vue` renders the same
+  `<ol>`, the same bullets and the same indent in both modes, and swaps only what
+  sits in the content column — a paragraph, or a field. The geometry that both
+  depend on is declared once as CSS custom properties (`--rsm-num`, `--rsm-gap`)
+  because three things read it: the bullet, the content column, and the sub-step
+  rule that must run through the bullet's centre.
+- **Consequences:** `RecipeStepsEditor`, `RecipeStepRow` and
+  `RecipeMethodEditorDialog` were deleted (all three single-consumer). Controls
+  that do not fit the read face's width move to a per-item dialog rather than
+  forcing the shared layout wider — for the method that is
+  `RecipeStepLinksDialog` (a step's ingredients, tools and section), which was
+  also the fix for "serious lack of use of the horizontal space". The cost is a
+  component with two template branches, which is real; the alternative is two
+  components that agree only as long as someone remembers to change both, and
+  this one had already stopped agreeing.
+- **Not generalised to every pair of read/edit components.** This is about a
+  region whose two faces must share a *visual structure* a reader carries across
+  the flip. A form that replaces the page it edits has no such structure to
+  preserve.
+
+### ADR-053 — A regional convention is one setting on an axis wide enough to be true (promotes R-056)
+- **Context:** the owner asked for a units config in Region & locale: *"Locale
+  and region settings should also include units config, which then determines
+  what units appear throughout the app … for universal ones, e.g. 'dash', always
+  include those."* An `AppSetting.unit_pricing_locale` already existed on an
+  "AU"/"US" axis, deciding whether a per-unit price read `/100g` or `/lb`. It had
+  no UI anywhere and nothing but `your_prices.py` read it.
+- **Decision:** replace it rather than sit beside it.
+  `AppSetting.measurement_system` holds `metric` | `imperial` | `us`, drives both
+  the picker vocabulary and the price denominator, and rides `/api/health`
+  alongside currency and locale. The unit→system mapping lives once, keyed by
+  canonical form, in `dora_api/domain/units.py` (`UNIT_SYSTEMS` +
+  `UNIVERSAL_CANONICAL_UNITS` + `units_for_system`), and is emitted into
+  `web_app/src/generated/units_table.ts` by the existing dump script, so the SPA
+  filters a mirror rather than restating the table.
+- **Why three values, not two.** The old axis could not express the UK: it uses
+  pounds, ounces and the 568 ml pint in the kitchen while pricing in metric on
+  the shelf, so it is neither "AU" nor "US". `imperial` therefore resolves to the
+  *metric* pricing convention while offering imperial cooking units — the two
+  questions have different answers for one real country, which is precisely why
+  one setting can serve them both only if the axis is honest.
+- **Why universal units are a first-class concept.** `pinch`, `dash`, `smidgen`,
+  `tsp` and the count units belong to no system, and a filter that dropped them
+  would be obviously wrong in a way the owner pre-empted in the request. They are
+  a named set rather than an accident of the mapping.
+- **Consequence — an off-system unit already on a row survives.** `useUnitOptions`
+  takes an optional `includeValue` getter and keeps that one unit offered. An
+  imported US recipe on a metric install must not have its saved `lb` disappear
+  from its own dropdown; a closed list that silently drops a stored value is data
+  loss dressed as a filter.
+- **Migration:** `e4c7a2b9f1d3` maps `AU → metric`, `US → us`, and drops the old
+  column. The downgrade folds `imperial → AU`, which is lossy in the picker but
+  exact in the pricing behaviour — the honest direction to lose information in.
+- **Promotes rule:** R-056.
+
+
+### ADR-054 — A replaced endpoint's response is an inventory, not a casualty list (promotes R-057)
+- **Date / task:** 2026-08-27 (owner feedback: meal-plan add-to-list unification)
+- **Status:** accepted
+- **Context:** The owner asked for the meal planner's one-shot "Generate shopping
+  list for this week" to become the recipe page's reviewable "Add to list" flow.
+  The two buttons look interchangeable, but the old one was a single call to
+  `POST /shopping-lists/auto-generate`, whose response carried four things the
+  new client-composed flow had nowhere to put: the unlinked-ingredient report
+  (FU-505), the `auto_meal_plan` provenance stamped on each line, the generated
+  list name, and the navigation into the new list.
+- **Decision:** treat the old response as an inventory to be walked item by item
+  before the call is deleted. Unlinked ingredients moved **server-side** into the
+  ingredient aggregate as an envelope field, so the picker names them up front;
+  the list name became the picker's pre-filled "+ New list" value; the navigation
+  was kept for the create-new branch only. Provenance was the one deliberate
+  drop — put to the owner as a named cost and accepted, because preserving it
+  would have meant either a client asserting a server-owned fact or a new
+  endpoint shape for one chip.
+- **Consequences:** commits us to a small server change whenever a client-composed
+  flow replaces an orchestrated one — which is the right side to pay on, since the
+  endpoint had the domain in hand and the client doesn't. Rules out the quiet
+  version of this refactor, where a flow gets friendlier and loses a safety net in
+  the same commit. Does **not** require preserving everything: it requires each
+  item to be a decision with a name on it.
+- **Promotes rule:** R-057.
+
+---
 
 ## Known fixes / things to try
 

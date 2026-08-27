@@ -26,13 +26,24 @@ from dora_api.features.nutrition.recipe_rollup import (
 
 
 class _Food:
-    def __init__(self, name, kcal=100.0, protein=None, carbs=None, fat=None):
+    def __init__(self, name, kcal=100.0, protein=None, carbs=None, fat=None,
+                 saturated_fat=None, sugars=None, fibre=None, sodium=None,
+                 food_category=None):
         self.id = uuid4()
         self.name = name
         self.kcal_per_100g = kcal
         self.protein_g_per_100g = protein
         self.carbs_g_per_100g = carbs
         self.fat_g_per_100g = fat
+        # The Health Star Rating inputs (2026-08-27). Default None so every
+        # existing test still describes a food that knows only its energy.
+        self.saturated_fat_g_per_100g = saturated_fat
+        self.sugars_g_per_100g = sugars
+        self.fibre_g_per_100g = fibre
+        self.sodium_mg_per_100g = sodium
+        # USDA's food group, the fvnl test's only input. See
+        # `features/nutrition/food_categories.py`.
+        self.food_category = food_category
 
 
 class _Portion:
@@ -347,5 +358,178 @@ def test__effective_kcal__WholeRecipeBasis__RefusesToInventAPerServingFigure():
 
 def test__effective_kcal__NutritionOff__SaysNothingEvenWithDataAvailable():
     assert effective_kcal_per_serving("off", 420, _rollup()) == (None, False)
+
+#endregion
+
+
+#endregion
+
+#region health star rating (2026-08-27)
+# The rollup's job for HSR is *not* the scoring — that lives in
+# `domain/health_star_rating.py` and is pinned band-by-band in
+# `test_health_star_rating.py`. What's pinned here is the plumbing between the
+# two, which is where the mistakes would be: the per-100g basis (a different
+# basis from every other figure the rollup returns), the fvnl numerator, and
+# the mass-weighted coverage that stops a missing penalty nutrient passing for
+# a clean score.
+
+VEGETABLES = "Vegetables and Vegetable Products"
+FRUIT = "Fruits and Fruit Juices"
+DAIRY = "Dairy and Egg Products"
+
+
+def test__rating__is_scored_per_100g_of_the_dish_not_per_serving():
+    """The trap: every other figure the rollup returns is divided by servings.
+    HSR is not — it is per 100 g of food, so a recipe serving 1 and the same
+    recipe serving 8 must rate identically."""
+    food = _Food("Rice", kcal=130.0, food_category="Cereal Grains and Pasta")
+    one = _Recipe([_Ingredient(_StockItem("Rice", food), 500, "g")], servings=1)
+    eight = _Recipe([_Ingredient(_StockItem("Rice", food), 500, "g")], servings=8)
+
+    rated_one = rollup_recipe_nutrition(_repo_for(one, [food]), one)
+    rated_eight = rollup_recipe_nutrition(_repo_for(eight, [food]), eight)
+
+    assert rated_one.kcal != rated_eight.kcal          # per-serving figures differ
+    assert rated_one.rating.stars == rated_eight.rating.stars
+    assert rated_one.rating.score == rated_eight.rating.score
+
+
+def test__rating__energy_points_come_from_the_per_100g_density():
+    """400 kcal/100g is ~1674 kJ, one band below the >1675 edge — so the whole
+    chain (per-100g division, then the kcal-to-kJ conversion) has to be right
+    for this to land on 4 rather than 5 or 0."""
+    food = _Food("Rich thing", kcal=400.0)
+    recipe = _Recipe([_Ingredient(_StockItem("Rich thing", food), 250, "g")], servings=2)
+
+    result = rollup_recipe_nutrition(_repo_for(recipe, [food]), recipe)
+
+    assert result.total_grams == pytest.approx(250)
+    assert result.rating.energy_points == 4
+
+
+def test__fvnl_percent__is_the_mass_fraction_of_fvnl_category_foods():
+    carrot = _Food("Carrot", kcal=41.0, food_category=VEGETABLES)
+    butter = _Food("Butter", kcal=717.0, food_category="Fats and Oils")
+    recipe = _Recipe([
+        _Ingredient(_StockItem("Carrot", carrot), 300, "g"),
+        _Ingredient(_StockItem("Butter", butter), 100, "g"),
+    ], servings=2)
+
+    result = rollup_recipe_nutrition(_repo_for(recipe, [carrot, butter]), recipe)
+
+    assert result.total_grams == pytest.approx(400)
+    assert result.fvnl_percent == pytest.approx(75.0)
+    # 75% is the >75 band's floor, so it scores 3 — not 4. A mass fraction
+    # computed by ingredient *count* instead would have given 50% here.
+    assert result.rating.v_points == 3
+
+
+def test__fvnl_percent__counts_fruit_and_vegetables_alike():
+    apple = _Food("Apple", kcal=52.0, food_category=FRUIT)
+    carrot = _Food("Carrot", kcal=41.0, food_category=VEGETABLES)
+    recipe = _Recipe([
+        _Ingredient(_StockItem("Apple", apple), 100, "g"),
+        _Ingredient(_StockItem("Carrot", carrot), 100, "g"),
+    ], servings=1)
+
+    result = rollup_recipe_nutrition(_repo_for(recipe, [apple, carrot]), recipe)
+
+    assert result.fvnl_percent == pytest.approx(100.0)
+
+
+def test__fvnl_percent__an_unclassified_food_scores_nothing_rather_than_guessing():
+    """A food imported before the category column existed carries None. It has
+    to read as "not fvnl" — the conservative direction — not as an error and
+    not as a guess from its name."""
+    unknown = _Food("Mystery veg", kcal=40.0, food_category=None)
+    recipe = _Recipe([_Ingredient(_StockItem("Mystery veg", unknown), 200, "g")], servings=1)
+
+    result = rollup_recipe_nutrition(_repo_for(recipe, [unknown]), recipe)
+
+    assert result.fvnl_percent == pytest.approx(0.0)
+    assert result.rating.v_points == 0
+
+
+def test__fvnl_percent__is_none_when_nothing_could_be_weighed():
+    """Distinct from 0.0: "we weighed this dish and none of it was fvnl" is a
+    different statement from "we could not weigh this dish"."""
+    recipe = _Recipe([_Ingredient(None, None, None)], servings=1)
+
+    result = rollup_recipe_nutrition(_repo_for(recipe), recipe)
+
+    assert result.fvnl_percent is None
+    assert result.total_grams is None
+    assert result.rating is None
+
+
+def test__nutrient_coverage__is_weighted_by_mass_not_by_ingredient_count():
+    """200 g of an ingredient with no sugars figure distorts a per-100g total
+    far more than 20 g of one does, and HSR is entirely a per-100g question —
+    so coverage counts grams, not rows."""
+    known = _Food("Known", kcal=100.0, sugars=10.0, food_category=DAIRY)
+    unknown = _Food("Unknown", kcal=100.0, sugars=None, food_category=DAIRY)
+    recipe = _Recipe([
+        _Ingredient(_StockItem("Known", known), 100, "g"),
+        _Ingredient(_StockItem("Unknown", unknown), 300, "g"),
+    ], servings=1)
+
+    result = rollup_recipe_nutrition(_repo_for(recipe, [known, unknown]), recipe)
+
+    # By row count this would be 0.5; by mass it is 100/400.
+    assert result.nutrient_coverage["sugars_g"] == pytest.approx(0.25)
+    assert result.nutrient_coverage["kcal"] == pytest.approx(1.0)
+
+
+def test__missing_sugars__flatters_the_rating_which_is_why_coverage_is_reported():
+    """The measured USDA gap (sugars known for ~77% of SR Legacy foods) as a
+    rollup-level assertion. Both dishes are identical but for the sugar figure,
+    and the one we know less about rates better — so the rating can never be
+    rendered without its coverage beside it."""
+    sweet = _Food("Sweet", kcal=350.0, sugars=45.0)
+    silent = _Food("Sweet", kcal=350.0, sugars=None)
+    known = _Recipe([_Ingredient(_StockItem("Sweet", sweet), 200, "g")], servings=1)
+    unknown = _Recipe([_Ingredient(_StockItem("Sweet", silent), 200, "g")], servings=1)
+
+    rated_known = rollup_recipe_nutrition(_repo_for(known, [sweet]), known)
+    rated_unknown = rollup_recipe_nutrition(_repo_for(unknown, [silent]), unknown)
+
+    assert rated_unknown.rating.stars > rated_known.rating.stars
+    assert rated_known.nutrient_coverage["sugars_g"] == pytest.approx(1.0)
+    assert rated_unknown.nutrient_coverage["sugars_g"] == pytest.approx(0.0)
+
+
+def test__rating__the_new_nutrients_are_summed_per_serving_as_well():
+    """Saturated fat, sugars, fibre and sodium ride the same per-serving path
+    the macros do — the panel renders them, not just the rating."""
+    food = _Food(
+        "Thing", kcal=200.0, protein=10.0,
+        saturated_fat=4.0, sugars=6.0, fibre=3.0, sodium=400.0,
+    )
+    recipe = _Recipe([_Ingredient(_StockItem("Thing", food), 200, "g")], servings=2)
+
+    result = rollup_recipe_nutrition(_repo_for(recipe, [food]), recipe)
+
+    # 200 g of the food, halved across 2 servings, so 100 g worth per serving.
+    assert result.saturated_fat_g == pytest.approx(4.0)
+    assert result.sugars_g == pytest.approx(6.0)
+    assert result.fibre_g == pytest.approx(3.0)
+    assert result.sodium_mg == pytest.approx(400)
+
+
+def test__optional_ingredients__stay_out_of_the_rating_too():
+    """They sit outside both halves of the coverage ratio already; they must
+    also stay out of the fvnl fraction, or marking the garnish optional would
+    change the star rating."""
+    base = _Food("Base", kcal=300.0, food_category="Cereal Grains and Pasta")
+    herb = _Food("Parsley", kcal=36.0, food_category="Spices and Herbs")
+    recipe = _Recipe([
+        _Ingredient(_StockItem("Base", base), 100, "g"),
+        _Ingredient(_StockItem("Parsley", herb), 100, "g", is_optional=True),
+    ], servings=1)
+
+    result = rollup_recipe_nutrition(_repo_for(recipe, [base, herb]), recipe)
+
+    assert result.total_grams == pytest.approx(100)
+    assert result.fvnl_percent == pytest.approx(0.0)
 
 #endregion

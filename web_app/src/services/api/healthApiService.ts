@@ -35,6 +35,12 @@ export interface HealthInfo {
     locale_policy?: {
         currency: string;        // ISO 4217, e.g. 'AUD'
         locale: string;          // BCP-47, e.g. 'en-AU'
+        // which units every dropdown in the app offers:
+        // 'metric' | 'imperial' | 'us'. Rides with currency/locale because
+        // it is the same kind of fact — an install-wide regional convention
+        // every session needs on boot, not just admins. Optional in the type
+        // because older backends won't emit it; callers default to metric.
+        measurement_system?: string;
     };
     // FU-615 — install-wide household cooking config (moved off User).
     // Every client reads it here: cook mode seeds its serving scaler from

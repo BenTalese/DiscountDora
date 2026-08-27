@@ -64,6 +64,31 @@
                  and Dora's belief). Time + ingredient count moved under the
                  name — see above. -->
             <div class="row items-center no-wrap recipe-row__chips">
+                <!-- Health Star Rating (owner ask 2026-08-27). Stars rather
+                     than a number, and no chip around them: the row already
+                     carries two chips, and a third box would read as a third
+                     opinion when this is the one that's meant to be scannable
+                     while browsing. Survives `compact` — on a phone it is the
+                     most compressible way to say the most. -->
+                <span
+                    v-if="rating"
+                    class="recipe-row__hsr"
+                    :class="{ 'recipe-row__hsr--part': !ratingJudgeable }"
+                >
+                    <RecipeHealthStars
+                        :stars="rating.stars"
+                        size="sm"
+                        :show-value="false"
+                        :qualifier="ratingJudgeable ? 'estimated' : 'estimated from part of the recipe'"
+                    />
+                    <q-tooltip>
+                        Health Star Rating {{ rating.stars.toFixed(1) }} of 5{{
+                            ratingJudgeable
+                                ? ''
+                                : ' — worked out from only part of this recipe'
+                        }}
+                    </q-tooltip>
+                </span>
                 <q-chip
                     v-if="kcal.value !== null && !compact"
                     dense
@@ -144,6 +169,8 @@
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
     import ExpiringChip from 'src/components/recipes/ExpiringChip.vue';
+    import RecipeHealthStars from 'src/components/recipes/RecipeHealthStars.vue';
+    import { useHealthStarRating } from 'src/composables/useHealthStarRating';
     import { useQuasar } from 'quasar';
     import BaseButton from 'src/components/BaseButton.vue';
     import type { Recipe } from 'src/models/recipe';
@@ -177,6 +204,14 @@
         totalTime, ingredientCount, kcal, missingIds, cookable,
         cookButtonColor, cookButtonTooltip, addListTooltip, inferenceTooltip,
     } = useRecipeDisplay(() => props.recipe);
+
+    // The rating axis, if the install has it. `ratingOf` reads the server's
+    // answer off the list DTO — the rollup already runs for the whole page to
+    // feed the kcal chip, so the stars cost nothing extra (R-003).
+    const { ratingAvailable, ratingOf } = useHealthStarRating();
+    const rating = computed(() =>
+        (ratingAvailable.value ? ratingOf(props.recipe).rating : null));
+    const ratingJudgeable = computed(() => ratingOf(props.recipe).judgeable);
 
     function onAddToList() {
         if (cookable.value) emit('add-all-to-list', props.recipe.recipe_id);
@@ -238,6 +273,11 @@
     /* Second line under the name. Plain text + inline icons rather than
        chips: chip chrome at this size is heavier than the facts warrant, and
        the old chip version is what read as cluttered. */
+    /* A partial rating is drawn at reduced opacity rather than with a "(part)"
+       suffix like the kcal chip: there is no room for the word, and the stars
+       still have to read as stars. The tooltip carries the detail. */
+    .recipe-row__hsr { display: inline-flex; align-items: center; }
+    .recipe-row__hsr--part { opacity: 0.55; }
     .recipe-row__meta {
         gap: 10px;
         margin-top: 2px;

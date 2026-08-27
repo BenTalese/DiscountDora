@@ -336,6 +336,21 @@
             >
                 <template #prepend><q-icon :name="ICONS.local_fire_department" size="18px" /></template>
             </q-input>
+            <!-- Health Star Rating lower-bound filter (gated on the
+                 install switch + complex nutrition). A minimum rather than a
+                 maximum, unlike Kcal: nobody browses for the worst dinner. -->
+            <BaseSelect
+                v-if="ratingAvailable"
+                v-model="healthStarsMin"
+                class="filter-row__wide"
+                label="Health stars ≥"
+                :options="HEALTH_STAR_OPTIONS"
+                emit-value
+                map-options
+                clearable
+            >
+                <template #prepend><q-icon :name="ICONS.star" size="18px" /></template>
+            </BaseSelect>
             <q-input
                 v-if="batchEnabled"
                 v-model.number="mealCountMin"
@@ -477,11 +492,17 @@
             @start="startCookMode"
         />
 
-        <!-- ── Per-ingredient picker (Chunk B §1.4) ─────────────── -->
-        <RecipeIngredientPickerDialog
+        <!-- ── Per-ingredient picker (Chunk B §1.4) ─────────────────────
+             Owner feedback 2026-08-27 — the recipe-only picker was replaced by
+             the shared `AddToListDialog` that meal plans also render, so the
+             two surfaces run one flow (R-001). -->
+        <AddToListDialog
             ref="pickerRef"
             v-model="pickerOpen"
-            :recipe="pickerRecipe"
+            :title="pickerRecipe ? `Add ingredients from ${pickerRecipe.name}` : 'Add ingredients to a list'"
+            :rows="pickerRows"
+            :unlinked="pickerUnlinked"
+            :default-new-list-name="pickerRecipe ? `Shopping: ${pickerRecipe.name}` : 'Shopping list'"
             :initial-checked-ids="pickerInitialCheckedIds"
             @confirm="onPickerConfirm"
         />
@@ -504,7 +525,7 @@
     import RecipeCard from 'src/components/RecipeCard.vue';
     import RecipeRow from 'src/components/recipes/RecipeRow.vue';
     import RecipeEditDialog from 'components/RecipeEditDialog.vue';
-    import RecipeIngredientPickerDialog from 'src/components/recipes/RecipeIngredientPickerDialog.vue';
+    import AddToListDialog from 'src/components/shoppingList/AddToListDialog.vue';
     import CookModeGuardDialog from 'src/components/recipes/CookModeGuardDialog.vue';
     import FilterRow from 'src/components/filters/FilterRow.vue';
     import TriStateFilter from 'src/components/filters/TriStateFilter.vue';
@@ -520,6 +541,8 @@
     import { useListViewMode } from 'src/composables/useListViewMode';
     import { useShoppingListActions } from 'src/composables/useShoppingListActions';
     import type { Recipe, RecipeTagCatalogue } from 'src/models/recipe';
+    import type { AddToListConfirm } from 'src/components/shoppingList/addToListTypes';
+    import { rowsFromRecipe, unlinkedFromRecipe } from 'src/helpers/addToListRows';
     import RecipeApiService, { type ImportedRecipe } from 'src/services/api/recipeApiService';
     import RecipeImportDialog from 'src/components/recipes/RecipeImportDialog.vue';
     import { useMealSlotStore } from 'src/stores/mealSlotStore';
@@ -539,6 +562,7 @@
     import { useRoute, useRouter } from 'vue-router';
     import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';
     import { useNutritionMode } from 'src/composables/useNutritionMode';
+    import { useHealthStarRating } from 'src/composables/useHealthStarRating';
 
     const $q = useQuasar();
     const router = useRouter();
@@ -552,7 +576,7 @@
     const recipeVocabStore = useRecipeVocabStore();
     const mealSlotStore = useMealSlotStore();
     const recipeApi = new RecipeApiService();
-    const { addItems } = useShoppingListActions();
+    const { addStockItemsToList } = useShoppingListActions();
 
     const { recipes, recipeCollections } = storeToRefs(recipeStore);
     const { stockItems } = storeToRefs(stockItemStore);
@@ -580,6 +604,21 @@
         value: recipe.kcal_per_serving ?? null,
         judgeable: recipe.kcal_is_reliable === true,
     });
+    // Health Star Rating axis (owner ask 2026-08-27). Gated on the install
+    // switch *and* complex nutrition — see `useHealthStarRating`. The rating
+    // rides the rollup that already runs for the whole page, so having it on
+    // the list costs no extra query.
+    const { ratingAvailable, ratingOf } = useHealthStarRating();
+    const starsOf = (recipe: Recipe) => {
+        const { rating, judgeable } = ratingOf(recipe);
+        return { value: rating?.stars ?? null, judgeable };
+    };
+    // Half steps, matching the scheme. 0.5 is deliberately absent: a floor of
+    // "at least the worst possible rating" filters nothing.
+    const HEALTH_STAR_OPTIONS = [1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5].map((value) => ({
+        label: `${value.toFixed(1)} stars`,
+        value,
+    }));
     // Two conditional axes, each gated on the feature that gives it meaning:
     // Kcal on the nutrition opt-in, "Meals prepared" on batch cook-style.
     const SORT_OPTIONS = computed<SortAxisFor<SortKey>[]>(() => {
@@ -594,6 +633,12 @@
             options.push({
                 label: 'Kcal', value: 'kcal',
                 ascLabel: 'Lowest first', descLabel: 'Highest first', defaultDir: 'asc',
+            });
+        }
+        if (ratingAvailable.value) {
+            options.push({
+                label: 'Health stars', value: 'health_stars',
+                ascLabel: 'Lowest first', descLabel: 'Highest first', defaultDir: 'desc',
             });
         }
         return options;
@@ -628,6 +673,7 @@
         // "Kcal ≤" filter (only renders when nutrition opt-in
         // is on). Recipes with no kcal value pass through.
         kcalMax: ref<number | null>(null),
+        healthStarsMin: ref<number | null>(null),
         collectionFilter: ref<string | null>(null),
         // L235 — cuisine + category are distinct single-select id filters.
         cuisineFilter: ref<string | null>(null),
@@ -646,6 +692,7 @@
     const {
         searchText, favouritesOnly, cookableNowOnly, inStockOnly,
         plannedFilterState, expiringOnly, mealCountMin, servesMin, kcalMax,
+        healthStarsMin,
         collectionFilter, cuisineFilter, categoryFilter, timeOfDayFilter,
         difficultyFilter, ingredientsMax, usesStockItemIds, excludesStockItemIds,
     } = cookbookState;
@@ -664,6 +711,7 @@
         | 'meal_count'
         | 'total_time'
         | 'kcal'
+        | 'health_stars'
         | 'ingredient_count'
         | 'difficulty';
     type SortDir = 'asc' | 'desc';
@@ -929,6 +977,19 @@
                 const { value, judgeable } = kcalOf(r);
                 if (judgeable && value !== null && value > kcalMax.value) return false;
             }
+            // "Health stars ≥" filter. Same rule as Kcal, and for the same
+            // reason: a recipe we can't put a trustworthy rating on passes
+            // through rather than being hidden. Excluding a dinner on the
+            // strength of a 2-of-9 estimate is exactly the misleading move
+            // R-041 exists to stop.
+            if (
+                ratingAvailable.value
+                && healthStarsMin.value !== null
+                && Number.isFinite(healthStarsMin.value)
+            ) {
+                const { value, judgeable } = starsOf(r);
+                if (judgeable && value !== null && value < healthStarsMin.value) return false;
+            }
 
             // '__none__' is a real value meaning "uncategorised".
             if (collectionFilter.value !== null) {
@@ -1086,6 +1147,18 @@
                     if (av === bv) return a.name.localeCompare(b.name);
                     return (av - bv) * dirSign;
                 }
+                case 'health_stars': {
+                    // Thin estimates sink, as on the kcal axis — ranking a
+                    // half-known recipe above a fully-known one on nothing but
+                    // missing data is the same mistake in a different unit.
+                    const av = starsOf(a).judgeable ? starsOf(a).value : null;
+                    const bv = starsOf(b).judgeable ? starsOf(b).value : null;
+                    if (av === null && bv === null) return a.name.localeCompare(b.name);
+                    if (av === null) return 1;
+                    if (bv === null) return -1;
+                    if (av === bv) return a.name.localeCompare(b.name);
+                    return (av - bv) * dirSign;
+                }
                 case 'ingredient_count': {
                     // neither side is null (ingredients[] is
                     // always at least []), so no sentinel-sink handling.
@@ -1131,6 +1204,7 @@
             || (mealCountMin.value !== null && Number.isFinite(mealCountMin.value))
             || (servesMin.value !== null && Number.isFinite(servesMin.value))
             || (kcalMax.value !== null && Number.isFinite(kcalMax.value))
+            || (healthStarsMin.value !== null && Number.isFinite(healthStarsMin.value))
             || collectionFilter.value !== null
             || cuisineFilter.value !== null
             || categoryFilter.value !== null
@@ -1158,6 +1232,7 @@
         if (mealCountMin.value !== null && Number.isFinite(mealCountMin.value)) n++;
         if (servesMin.value !== null && Number.isFinite(servesMin.value)) n++;
         if (kcalMax.value !== null && Number.isFinite(kcalMax.value)) n++;
+        if (healthStarsMin.value !== null && Number.isFinite(healthStarsMin.value)) n++;
         if (collectionFilter.value !== null) n++;
         if (cuisineFilter.value !== null) n++;
         if (categoryFilter.value !== null) n++;
@@ -1257,6 +1332,7 @@
         mealCountMin.value = null;
         servesMin.value = null;
         kcalMax.value = null;
+        healthStarsMin.value = null;
         collectionFilter.value = null;
         cuisineFilter.value = null;
         categoryFilter.value = null;
@@ -1439,22 +1515,16 @@
     // initial check state (default = missing/low checked, sufficient/well
     // unchecked; `add-missing` passes the explicit subset as initial-checked
     // so the user lands on exactly what they need to buy).
-    const pickerRef = ref<{ setBusy: (v: boolean) => void } | null>(null);
+    const pickerRef = ref<{ setBusy: (v: boolean) => void; newListName: string } | null>(null);
     const pickerOpen = ref(false);
     const pickerRecipe = ref<Recipe | null>(null);
     const pickerInitialCheckedIds = ref<string[] | undefined>(undefined);
+    const pickerRows = computed(() => rowsFromRecipe(pickerRecipe.value));
+    const pickerUnlinked = computed(() => unlinkedFromRecipe(pickerRecipe.value));
 
-    function requireActiveList(): boolean {
-        const hasOne = shoppingListStore.summaries.some((s) => s.status !== 'done');
-        if (hasOne) return true;
-        $q.dialog({
-            title: 'No active shopping list',
-            message: 'Create one first to add ingredients to it.',
-            ok: { label: 'Open lists', noCaps: true, color: 'primary' },
-            cancel: { noCaps: true },
-        }).onOk(() => { void router.push('/shopping-lists'); });
-        return false;
-    }
+    // `requireActiveList` retired 2026-08-27 — the shared dialog offers
+    // "+ New list", so "you have no lists" is no longer a dead end that
+    // bounces you to another page mid-task.
 
     function onAddMissing(recipeId: string, stockItemIds: string[]) {
         const recipe = recipes.value.find((r) => r.recipe_id === recipeId);
@@ -1467,7 +1537,6 @@
             });
             return;
         }
-        if (!requireActiveList()) return;
         pickerRecipe.value = recipe;
         pickerInitialCheckedIds.value = stockItemIds;
         pickerOpen.value = true;
@@ -1484,18 +1553,18 @@
             });
             return;
         }
-        if (!requireActiveList()) return;
         pickerRecipe.value = recipe;
         pickerInitialCheckedIds.value = undefined;
         pickerOpen.value = true;
     }
 
-    async function onPickerConfirm(payload: { stockItemIds: string[]; targetListId: string }) {
+    async function onPickerConfirm(payload: AddToListConfirm) {
         pickerRef.value?.setBusy(true);
         try {
-            await addItems(
+            await addStockItemsToList(
                 payload.targetListId,
-                payload.stockItemIds.map((id) => ({ stock_item_id: id })),
+                payload.stockItemIds,
+                pickerRef.value?.newListName ?? 'Shopping list',
             );
             pickerOpen.value = false;
             pickerRecipe.value = null;

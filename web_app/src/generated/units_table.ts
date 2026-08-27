@@ -136,6 +136,40 @@ export const UNIT_TABLE: Readonly<Record<string, UnitDef>> = {
     "joules": { dimension: "energy", factor: 0.001, canonical: "J" },
 };
 
+export type MeasurementSystem = 'metric' | 'imperial' | 'us';
+
+export const MEASUREMENT_SYSTEMS: ReadonlyArray<MeasurementSystem> = ["metric", "imperial", "us"];
+
+/** Canonical units that belong to every system — the informal cooking
+ *  amounts, the count units, and energy. Always offered. */
+export const UNIVERSAL_CANONICAL_UNITS: ReadonlySet<string> = new Set(["J", "dash", "dozen", "ea", "kJ", "kcal", "pack", "pinch", "smidgen", "tsp"]);
+
+/** Canonical unit → the systems that offer it. Units absent from both
+ *  this map and `UNIVERSAL_CANONICAL_UNITS` are offered by no system. */
+export const UNIT_SYSTEMS: Readonly<Record<string, ReadonlyArray<MeasurementSystem>>> = {
+    "ml": ["imperial", "metric"],
+    "L": ["imperial", "metric"],
+    "tbsp": ["imperial", "metric"],
+    "cup": ["imperial", "metric"],
+    "US tbsp": ["us"],
+    "US cup": ["us"],
+    "fl oz": ["imperial", "us"],
+    "pt": ["imperial"],
+    "qt": ["us"],
+    "gal": ["us"],
+    "mg": ["imperial", "metric"],
+    "g": ["imperial", "metric"],
+    "kg": ["imperial", "metric"],
+    "oz": ["imperial", "us"],
+    "lb": ["imperial", "us"],
+    "stick": ["us"],
+    "mm": ["imperial", "metric"],
+    "cm": ["imperial", "metric"],
+    "m": ["imperial", "metric"],
+    "in": ["imperial", "us"],
+    "ft": ["imperial", "us"],
+};
+
 export const INGREDIENT_DENSITY_G_PER_ML: Readonly<Record<string, number>> = {
     "water": 1.0,
     "milk": 1.03,

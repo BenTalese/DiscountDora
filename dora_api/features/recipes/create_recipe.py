@@ -21,7 +21,9 @@ from dora_api.features.meal_slots.slot_validation import (
     get_valid_slot_names, invalid_slot_message)
 from dora_api.features.recipes.get_recipes import get_recipes
 from dora_api.features.recipes.recipe_tag_access import set_tag_ids_for_recipe
-from dora_api.features.recipes.recipe_tool_access import set_tool_ids_for_recipe
+from dora_api.features.recipes.recipe_tool_access import (
+    set_tool_ids_for_recipe, sync_recipe_tools_from_steps,
+)
 from dora_api.features.recipes.recipe_step_access import (
     StepWrite, replace_steps_for_recipe,
 )
@@ -379,6 +381,13 @@ class CreateRecipeHandler:
                 replace_steps_for_recipe(_NewRecipe.id, _StepWrites)
             except ValueError as exc:
                 return CreateRecipeResponse(invalid_step_message=str(exc))
+
+        # Recipe-view feedback 2026-08-27 — same derivation as the PATCH: a
+        # structured recipe's tools are the union of its steps'. Keeps an
+        # imported recipe's cookbook tool filter truthful without the importer
+        # having to send a second, redundant list.
+        if _NewRecipe.steps_mode == "structured":
+            sync_recipe_tools_from_steps(_NewRecipe.id)
 
         # PROPOSAL_RECIPE_IMAGE_STEPS — write step images last so the FK to
         # the just-created recipe is satisfied. The replace helper validates

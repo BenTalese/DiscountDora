@@ -109,6 +109,16 @@ class NutritionFood(BaseEntity):
     vitamin_e_mg_per_100g: float | None = None
     vitamin_b12_ug_per_100g: float | None = None
     folate_ug_per_100g: float | None = None
+    # USDA's own food-group description for this row (e.g. "Vegetables and
+    # Vegetable Products"), stored verbatim from the dataset's
+    # `food_category.csv`. NULL for OFF and live-API rows, which carry no
+    # equivalent.
+    #
+    # Isolated on purpose: nothing renders it, and its only consumer is the
+    # Health Star Rating's fvnl test (`features/nutrition/food_categories.py`).
+    # It is emphatically *not* `StockGroup` — see that module for why the
+    # user's pantry filing system must stay unrelated to this.
+    food_category: str | None = None
     imported_at: datetime | None = None
 
     class Fields(BaseEntity.Fields):
@@ -139,5 +149,6 @@ class NutritionFood(BaseEntity):
         VITAMIN_D_UG_PER_100G = "vitamin_d_ug_per_100g"
         VITAMIN_E_MG_PER_100G = "vitamin_e_mg_per_100g"
         VITAMIN_B12_UG_PER_100G = "vitamin_b12_ug_per_100g"
+        FOOD_CATEGORY = "food_category"
         FOLATE_UG_PER_100G = "folate_ug_per_100g"
         IMPORTED_AT = "imported_at"

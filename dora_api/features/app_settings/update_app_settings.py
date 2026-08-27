@@ -26,6 +26,7 @@ class UpdateAppSettingsRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     scanning_enabled: bool | None = None
+    health_star_rating_enabled: bool | None = None
     # `buy_verdict_enabled` left this request on 2026-08-19 (D-12) — it is a
     # per-user display preference now, patched via PATCH /auth/me. `extra=forbid`
     # means an old client still sending it here gets a 4xx rather than a silent
@@ -54,7 +55,7 @@ class UpdateAppSettingsRequest(BaseModel):
     # users — it ALWAYS opens via target="_blank" rel="noopener").
     product_search_url: str | None = Field(default=None, max_length=500)
     # AU vs US per-unit display locale.
-    unit_pricing_locale: str | None = Field(default=None, max_length=8)
+    measurement_system: str | None = Field(default=None, max_length=16)
     # install-wide currency (ISO 4217; 3 uppercase letters) and
     # display locale (BCP-47 tag; validated in the handler against Python's
     # Babel-style parse rather than a regex, since BCP-47 has more shapes
@@ -136,6 +137,9 @@ class UpdateAppSettingsHandler:
 
         if "scanning_enabled" in set_fields and request.scanning_enabled is not None:
             setting.scanning_enabled = request.scanning_enabled
+        if ("health_star_rating_enabled" in set_fields
+                and request.health_star_rating_enabled is not None):
+            setting.health_star_rating_enabled = request.health_star_rating_enabled
         # C-cross Chunk 1 — install feature flags. Partial-update semantics
         # like every other field above: only fields present in the body
         # change; the rest are left alone.
@@ -180,19 +184,19 @@ class UpdateAppSettingsHandler:
         if "expiring_soon_window_days" in set_fields and request.expiring_soon_window_days is not None:
             setting.expiring_soon_window_days = request.expiring_soon_window_days
 
-        # unit_pricing_locale. Validated against the
-        # supported set so a typo can't silently degrade display.
-        if "unit_pricing_locale" in set_fields and request.unit_pricing_locale is not None:
-            from dora_api.domain.units import SUPPORTED_PRICING_LOCALES
-            _Locale = request.unit_pricing_locale.strip().upper()
-            if _Locale not in SUPPORTED_PRICING_LOCALES:
+        # measurement_system. Validated against the supported set so a typo
+        # can't silently empty every unit dropdown in the app.
+        if "measurement_system" in set_fields and request.measurement_system is not None:
+            from dora_api.domain.units import SUPPORTED_MEASUREMENT_SYSTEMS
+            _System = request.measurement_system.strip().lower()
+            if _System not in SUPPORTED_MEASUREMENT_SYSTEMS:
                 return UpdateAppSettingsResponse(
                     invalid_reason=(
-                        f"'{_Locale}' is not a supported unit-pricing locale. "
-                        f"Supported: {sorted(SUPPORTED_PRICING_LOCALES)}."
+                        f"'{_System}' is not a supported measurement system. "
+                        f"Supported: {sorted(SUPPORTED_MEASUREMENT_SYSTEMS)}."
                     ),
                 )
-            setting.unit_pricing_locale = _Locale
+            setting.measurement_system = _System
 
         # currency + locale. Currency is ISO 4217 (3 uppercase
         # letters, no digits — the validator here mirrors the client's

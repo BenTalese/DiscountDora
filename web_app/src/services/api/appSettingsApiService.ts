@@ -28,6 +28,17 @@ export type AppSettings = {
     // (composables/useMoney.ts), which reads these values from /api/health.
     currency: string;
     locale: string;
+    /** Owner ask 2026-08-27 — which units every dropdown in the app offers:
+     *  'metric' | 'imperial' | 'us'. Also decides the shelf convention a
+     *  per-unit price is quoted in, replacing the old `unit_pricing_locale`
+     *  (which answered only the second question, on an axis that couldn't
+     *  tell the UK from the US). Read by every session via /api/health;
+     *  editable here by admins. */
+    measurement_system: 'metric' | 'imperial' | 'us';
+    /** Owner ask 2026-08-27 — the recipe Health Star Rating. Off everywhere
+     *  by default; HSR is an AU/NZ government scheme and an install elsewhere
+     *  shouldn't be shown a national rating as if it were universal. */
+    health_star_rating_enabled: boolean;
     // Alerts C-9.2 — household-wide alert thresholds (PROPOSAL_ALERTS §3.3).
     expiring_soon_window_days: number;
     // Phase D / FU-186 — admin-set URL the Product Search nav opens.

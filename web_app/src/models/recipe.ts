@@ -223,6 +223,39 @@ export type Recipe = {
     kcal_is_reliable: boolean;
 };
 
+/** The Health Star Rating for a recipe (owner ask 2026-08-27).
+ *
+ *  Server-owned, and deliberately more than a star count: every intermediate
+ *  the FSANZ method names travels with it so the panel can show its working.
+ *  Present only when the install has the rating switched on *and* is in
+ *  complex nutrition mode — read it, never re-derive it (R-003; the tables
+ *  live in `dora_api/domain/health_star_rating.py` and have no business being
+ *  transcribed a second time in TypeScript). */
+export type RecipeHealthStarRating = {
+    /** 0.5 to 5.0, in half-star steps. */
+    stars: number;
+    /** Baseline points minus every modifying point. Lower is better. */
+    score: number;
+    baseline_points: number;
+    energy_points: number;
+    saturated_fat_points: number;
+    total_sugars_points: number;
+    sodium_points: number;
+    v_points: number;
+    protein_points: number;
+    fibre_points: number;
+    /** False when the ≥13-baseline / <5-fvnl rule suppressed the protein
+     *  credit. Surfaced because a silently-zeroed protein score reads as a
+     *  bug unless the UI can say why. */
+    protein_counted: boolean;
+    /** % of the dish's counted weight that is fruit, vegetable, nut or
+     *  legume. Null when nothing could be weighed. */
+    fvnl_percent: number | null;
+    /** Raw summed ingredient weight in grams — the per-100g denominator, and
+     *  the reason the rating is labelled an estimate. */
+    total_grams: number | null;
+};
+
 /** FU-635 — the recipe rollup. Nutrient fields are null when no counted
  *  ingredient carried that nutrient; a 0 would claim the recipe has none.
  *  `counted_count` / `total_count` / `uncounted` always travel with the
@@ -246,6 +279,22 @@ export type RecipeNutrition = {
     /** Reason id → how many ingredients it accounts for. Only non-zero
      *  reasons are present. Copy for each id lives in the component. */
     uncounted: Partial<Record<RecipeNutritionGap, number>>;
+    /** The four nutrients the panel gained alongside the Health Star Rating
+     *  (2026-08-27). Same per-serving basis as the macros above. */
+    saturated_fat_g: number | null;
+    sugars_g: number | null;
+    fibre_g: number | null;
+    sodium_mg: number | null;
+    /** Per nutrient, the fraction (0..1) of the recipe's counted *weight*
+     *  whose food carried a figure — mass-weighted, because these feed a
+     *  per-100g calculation. Keyed by the rollup's own names ('kcal',
+     *  'sugars_g', …). It exists because the gap isn't symmetric: a missing
+     *  penalty nutrient makes a recipe rate *better*, so the panel must be
+     *  able to say which figures were thin. */
+    nutrient_coverage: Partial<Record<string, number>>;
+    /** Null when the install has the rating off, or nothing could be
+     *  weighed. */
+    health_star_rating: RecipeHealthStarRating | null;
 };
 
 /** FU-635 — closed set of reasons an ingredient contributed nothing (R-010).

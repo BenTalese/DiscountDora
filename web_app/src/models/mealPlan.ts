@@ -62,6 +62,26 @@ export type MealPlanIngredient = {
     total_quantity: number | null;
     unit: string | null;
     used_in_recipe_ids: string[];
+    /** Owner feedback 2026-08-27 — server-owned; true only when *every*
+     *  contributing ingredient row across the week was optional. Drives the
+     *  shared add-to-list picker's Optional section. */
+    is_optional: boolean;
+};
+
+/** An ingredient row with no linked stock item, so it can't become a
+ *  shopping-list line (FU-505). Reported so the picker can name what it
+ *  couldn't take rather than dropping it silently. */
+export type UnlinkedIngredient = {
+    recipe_name: string;
+    ingredient_name: string;
+};
+
+/** Envelope returned by both the saved-plan `/ingredients` endpoint and the
+ *  builder's `/preview-ingredients`. Was a bare array until 2026-08-27 —
+ *  `unlinked` has no per-item home. */
+export type MealPlanIngredients = {
+    items: MealPlanIngredient[];
+    unlinked: UnlinkedIngredient[];
 };
 
 export type Shortfall = {

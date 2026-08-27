@@ -143,7 +143,16 @@ def resolve_newly_swept(
     if last_session_at is None or not unengaged_items:
         return []
 
-    now_ = now or datetime.now(UTC)
+    # `last_session_at` comes off `User.stocktake_last_session_at`, which SQLite
+    # hands back naive — the same trap as FU-526. Every comparison below is
+    # against tz-aware values, so a bare `<=` raised TypeError and 500'd
+    # GET /api/stocktake/session for any user who had ever completed a run.
+    # It went unnoticed because nothing seeded a past session: the field was
+    # None on every dev and test user, and None short-circuits above. The
+    # 2026-08-27 Sweep fixture (which sets it) is what surfaced it.
+    last_session_ = _aware(last_session_at)
+    assert last_session_ is not None  # non-None checked above; narrows the type
+    now_ = _aware(now) or datetime.now(UTC)
     window = timedelta(days=engagement_window_days)
     latest = _latest_activity_by_item([item.id for item in unengaged_items])
 
@@ -153,7 +162,7 @@ def resolve_newly_swept(
         if last_activity is None:
             continue  # never tracked, not newly untracked
         dropped_out_at = last_activity + window
-        if dropped_out_at <= last_session_at or dropped_out_at > now_:
+        if dropped_out_at <= last_session_ or dropped_out_at > now_:
             continue
         swept.append(SweptItem(
             item=item,

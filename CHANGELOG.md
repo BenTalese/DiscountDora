@@ -6,6 +6,148 @@ semver — major bumps signal schema or breaking-config changes.
 ## [Unreleased]
 
 ### Added
+- **One add-to-list flow, shared by recipes and meal plans (2026-08-27).** The
+  meal planner's **Generate shopping list for this week** button is gone. In its
+  place is **Add to a list**, which opens the same picker the recipe page opens:
+  a checkbox per ingredient, a target-list dropdown at the top, Select all /
+  Select missing, and Cancel / Add. You see exactly what's about to go on the
+  list and can untick any of it before it does. The picker also gained a
+  **+ New list** option, so "I don't have a list yet" no longer bounces you to
+  another page mid-task — on the planner it pre-fills the old auto-generated
+  name (*Meals: week of 25 Aug*), and creating one there navigates you into it
+  the way the old button did. The **Build my week** wizard's final step hands off
+  to the same picker.
+- **The picker says how much, and what wants it (2026-08-27).** Every row now
+  carries the quantity the week (or recipe) needs — *needs 750g* — and, on a
+  meal plan, which meals pulled it in: *for Spaghetti Aglio e Olio, Tomato
+  Pasta*. Optional ingredients are recognised across a whole week now, filed
+  under their own **Optional** heading and never ticked for you; an ingredient
+  that's optional in one meal but required in another counts as required.
+  Ingredients that were never linked to a pantry item are named in the picker
+  itself rather than reported in a dialog after the fact.
+- **Units are now a setting (2026-08-27).** Settings → Region & locale has a
+  **Units** row: **Metric**, **Imperial (UK)**, or **US customary**. It decides
+  which units every quantity and price dropdown in the app offers — a metric
+  household is no longer offered quarts, and a US one is no longer offered the
+  20 ml Australian tablespoon. The informal cooking amounts (**pinch, dash,
+  smidgen, teaspoon**) and the count units (**ea, pack, dozen**) are offered
+  under every setting, because they don't belong to a system. Imperial is
+  deliberately *metric plus* imperial rather than instead of it — that's how UK
+  shelves and recipes are actually labelled. A row that already holds an
+  off-system unit keeps it in its own dropdown, so an imported US recipe never
+  has its `lb` quietly dropped. **Match this device** now sets this too, and the
+  preview at the top of the page shows the units you'll get alongside the money
+  and date samples.
+- **Stocktake has a real dataset (2026-08-27).** Every item in a stocktake run
+  used to say the same thing, because the only items in the rotation had no
+  purchase history behind them and Dora genuinely had nothing to go on. Both
+  seeds now put items with engineered histories into the rotation, so a run
+  shows what it's supposed to: a **Review** phase of things Dora is confident
+  about, a **Walk** ordered least-certain-first across high, medium and low
+  confidence, and a **Tidy-up** of something that has just fallen out of
+  rotation. The showcase dataset gets the same treatment.
+
+### Changed
+- **Stocktake's (?) opens Help, not a modal (2026-08-27).** The explainer —
+  the three phases, and what each of the five per-item options does — now lives
+  in **Help → Guides → Stocktake**, where it can be found by someone who isn't
+  mid-run. The runner's (?) deep-links straight to it. Guides can hold this kind
+  of long-form explanation now: an entry with a body opens in place rather than
+  navigating away, and the filter searches the body as well as the title, so
+  searching "push 3 days" finds the guide that explains it.
+- **"No expiry set" is an empty calendar (2026-08-27).** It shared its ticked
+  calendar with "expires, but not for a while" and differed only by colour, so a
+  far-future expiry and no expiry at all read the same at a glance.
+- **Cook mode follows the method you picked (2026-08-27).** It used to prefer
+  structured steps whenever a recipe had any, whatever the recipe's step style
+  said — so a recipe set to **Free text** with structured steps also saved would
+  cook from the structured ones. Switching step style stays non-destructive
+  (all three payloads coexist), which is exactly why "structured steps exist"
+  never meant "cook from them".
+- **Cook mode's header fits a phone (2026-08-27).** The recipe name stays on the
+  same line as the exit button and truncates instead of wrapping under it; the
+  headcount control drops to its own row on a narrow screen instead of crushing
+  the voice buttons. **Exit** is an icon, matching stocktake and stock item
+  details. **Sous Chef** and the **mic** show whether they're on by being filled
+  in, rather than by appending "on" to a label.
+- **Dora explains her own voice support (2026-08-27).** A browser can expose the
+  speech API and have no voices installed, in which case it accepts a request to
+  speak and then silently does nothing — the usual state on Firefox, which only
+  speaks through voices the operating system gives it. Dora now checks for actual
+  voices rather than for the API, always checks whether her own neural voice is
+  available, and **falls back to the neural voice** instead of going quiet.
+  Settings → Voice says which engine is live and why, and there's a new Help
+  guide answering "which browsers can Dora speak in?".
+
+### Fixed
+- **The meal planner's "to buy" count now moves when you shop-plan
+  (2026-08-27).** It counted everything the week needed that wasn't in the
+  pantry, so *3 to buy* stayed *3 to buy* after you'd put all three on a list.
+  The headline count is now what's still outstanding, with *N already on a list*
+  named beside it, and it settles to **all on a list** once nothing is left —
+  which is a different statement from *fully stocked*, and only one of them is
+  ever true. Applies to the mobile week card, its collapsed one-line summary,
+  and the desktop week-status strip and shopping card.
+- **Items already on a list start unticked everywhere (2026-08-27).** Already
+  true on the recipe page; now true on the meal planner too, and **Select all** /
+  **Select missing** skip them as well, so a bulk add can't quietly propose
+  something you've already added.
+- **The Build-my-week modal fits a phone (2026-08-27).** Its card carried a
+  560px *minimum* width, which beats any max-width, so on a 375px screen it was
+  ~185px wider than the viewport and the review step's day/slot pickers ran off
+  the right edge. The card now can't exceed the screen, the review rows stack
+  their controls under the meal name instead of alongside it, the three-step
+  header uses under-the-dot labels, and the nested scroll panes are collapsed
+  into the one the dialog already has.
+- **Cook mode's step photos load from the right place (2026-08-27).** The image
+  view built its own URL instead of using the app's, which resolved only when the
+  page and the API happened to share an origin. A photo that fails to load now
+  says so, instead of falling back to its alt text and reading like a step that
+  was only ever words.
+- **The mic button drew its own name (2026-08-27).** Cook mode and Dora chat
+  passed Material icon names to an app that uses MDI, so the button rendered the
+  literal text "mic_off" rather than a microphone.
+- **Stocktake no longer errors after your first completed run (2026-08-27).**
+  Working out which items had just fallen out of rotation compared a stored
+  timestamp against a live one without reconciling timezones, which failed on
+  SQLite installs for any user who had finished a run before. Nothing had ever
+  seeded a past run, so it had never been hit.
+
+- **The recipe page is a recipe until you say otherwise (2026-08-27).** The
+  ingredient list and the method each have their own **pencil**, the way the
+  header already did. Read one and you get a list and a method — no reorder
+  arrows, no delete buttons, no dialog waiting behind every row. Press the
+  pencil and that section **swaps in place** for its editable form; press
+  **Done** and it saves. The method's pencil used to open a **modal over the
+  thing you were reading**, and that's gone: steps, free text and photos are
+  all edited where they sit. The **step style** switch (Structured / Free text /
+  Photos) has moved up into the Method heading, and only appears while you're
+  editing, since it's not something a reader needs.
+- **Tap a step to see what it uses — and tap an ingredient to see where it's
+  used (2026-08-27).** Selecting a structured step highlights its ingredients on
+  the list beside it; selecting an ingredient highlights the steps that call for
+  it. It replaces a hover-only highlight that a phone could never trigger, and
+  it works both ways now instead of one. Tapping the lit thing again clears it.
+  The old **"Uses flour, butter"** line under every step is gone with it — that's
+  cook-mode detail on a page you read to decide what to cook.
+- **A Health Star Rating on your recipes (2026-08-27).** Dora can now work out
+  the Australian/New Zealand **Health Star Rating** for a recipe — the 0.5-to-5
+  scale off the front of a supermarket pack — calculated the way FSANZ publishes
+  it, from the foods your ingredients are linked to. It shows on the recipe's
+  nutrition panel with **its full working**: the points each of energy, saturated
+  fat, sugars and sodium cost it, and the points fruit-and-veg, protein and fibre
+  earned it back. Stars also appear on **every recipe in the cookbook**, with a
+  **"Health stars ≥"** filter and a **Health stars** sort axis to go with them.
+  It's **off by default everywhere** — it's a national scheme, and showing it as
+  though it applied worldwide would be wrong — but if **Settings → Region →
+  "Match this device"** works out you're in Australia or New Zealand, it offers
+  to turn it on. Needs nutrition set to **complex**, and **ratings are estimates**:
+  they're scored from the raw weight of what you listed, so a sauce that reduces
+  down or a soup made with water you didn't list will differ. Where Dora only
+  knew part of a figure — sugars in particular, which USDA states for about three
+  quarters of its foods — the panel **says which ones**, because a missing
+  number there quietly flatters the rating rather than lowering it.
+
 - **An evening brief, if you want one (2026-08-17).** A single notification at **7pm** telling you what tomorrow looks like: the meals on your plan (in slot order — "Tomorrow — Breakfast: Porridge; Dinner: Chicken curry"), and any **shopping day** that's due. Evening rather than morning on purpose: at 7pm you can still take something out of the freezer or fill a gap in the plan; by 9am tomorrow you can't. It's **off until you turn it on**, under Settings → Notifications, and it rides your existing push subscription. **It stays quiet when there's nothing to say** — no plan and no shopping day means no notification at all, which is the whole reason it's worth leaving switched on. If you've planned the week but tomorrow is empty, it says so; if you're not using the planner that week, it doesn't nag you about it every evening. There's deliberately **no "dinner's in an hour" reminder** and meal slots still have no clock time — a reminder per slot per day would be up to 35 notifications a week, and you know when dinner is. — one row per recipe (2026-08-17).** The card grid is lovely for browsing and hopeless for scanning a long shelf of recipes. A new toolbar button switches the cookbook to **one row per recipe**, the same shape the stock list uses: thumbnail, name, its cuisine/category line, the at-a-glance figures (time, ingredient count, kcal), and the same favourite / cook / add-to-list buttons the card carries. Your collections still group the list either way, and collapsing a group still works. **The choice is remembered** — pick compact once and the cookbook opens that way next time (per device, so your phone and your desktop can disagree). Hiding recipe photos hides them in both views.
 - **You can deactivate a user instead of deleting them (2026-08-17).** Deleting an account is permanent and takes their sessions, alert preferences and push subscriptions with it — which is far more than you want when a housemate moves out or an account just needs parking. Every user row now has an **Active** switch. Switch it off and they're signed out of every device and can't sign back in ("This account has been deactivated. Ask an admin to switch it back on."); the row stays in the list, dimmed and badged **deactivated**, with everything they created untouched. Switch it back on and they're straight back in. Dora refuses two cases outright: **you can't deactivate yourself**, and she won't let you deactivate (or demote) the **last admin who can still sign in** — so there's no route to locking the install out of its own admin pages.
 - **An admin can set a new user's password directly (2026-08-17).** Adding a user always minted a random 12-character password that you then had to copy and relay — fine when they're not with you, tedious when they're standing next to you. The Add-user dialog now has a **password field** you fill in yourself (with a show/hide eye, since you're probably about to read it out), and **"Generate one instead"** keeps the old behaviour for when they're not around. **Reset pwd** has become **Change password** and works the same way: type one, or generate one. A password you typed is never echoed back to you; a generated one is still shown once, to copy. Either way it has to clear the same strength rules a user's own password change does, and it signs that user out of every device.
@@ -15,6 +157,23 @@ semver — major bumps signal schema or breaking-config changes.
 - **Nutrition now carries vitamins and minerals (2026-08-17).** Answering "what else can be pulled?": a linked food's **Details** table gained an optional **"Vitamins & minerals"** block, collapsed until you open it, with **potassium, calcium, iron, magnesium, zinc, vitamins A, C, D, E and B12, folate, cholesterol, trans fat and the mono/polyunsaturated fats** — fifteen more nutrients, all of which USDA and Open Food Facts already carry. As before, **only what the source actually stated appears**: a nutrient it didn't state has no row, and if a food knows none of them the whole block is absent rather than empty. **Existing foods show nothing here until you re-run the import** under Settings → Admin → Nutrition — the values were never downloaded, so there's nothing to backfill from.
 
 ### Fixed
+- **Photo-step recipes show their photos (2026-08-27).** A recipe whose method
+  is photographs rendered nothing at all. Two causes, both fixed: the viewer
+  built its image links by hand instead of using the one place that knows where
+  the backend lives, and it only ever drew **saved** photos — so a photo you'd
+  just added stayed invisible until you saved and came back.
+- **Adding an ingredient stopped fighting you (2026-08-27).** Three things.
+  The **Pantry item** box no longer turns red the instant the dialog opens — it
+  waits until you actually try to save without picking anything, which is when
+  it has something to complain about. Adding a brand-new pantry item from the
+  box no longer reads the name back **twice** ("apple apple"). And once it's
+  added, it's **selected and the list closes**, instead of leaving you to pick
+  the thing you just created. Backing out of a row you never filled in now
+  removes it, rather than leaving a blank line that blocks the next save.
+- **The Save button is icon-only on a phone (2026-08-27).** It was the one
+  button on the recipe's action row still carrying its label, which pushed the
+  rest off the edge.
+
 - **A new version of a recipe kept its sections (2026-08-26).** *"New version
   doesn't copy all fields properly"* — the missing field was your ingredient
   **sections**. "For the sauce", "To serve" and everything in them were dropped
@@ -27,6 +186,38 @@ semver — major bumps signal schema or breaking-config changes.
   already done the thing. It closes on its own now.
 
 ### Changed
+- **Structured steps look like steps (2026-08-27).** The step list was cramped
+  and, on a wide screen, wasting most of it. Text now runs to a proper measure
+  instead of stopping two-thirds of the way across; a **sub-step's connecting
+  line runs through the centre of its parent's number** rather than starting
+  somewhere near it; and a sub-step is drawn as the same numbered bullet as a
+  step, outlined instead of filled, rather than a second colour. Editing a step
+  is the step itself with a field in it, and **what a step uses** — its
+  ingredients, its tools, its section — moved into a small dialog you open per
+  step, which is what had made the editor feel squished. Once a step has one
+  sub-step, an **Add sub-step** button appears under it.
+- **Photo steps are a grid you can actually read (2026-08-27).** Numbered,
+  rounded thumbnails that reflow across the width, instead of one full-width
+  photo per row stacked down the page. Hovering one shows it's clickable;
+  clicking opens it full-size with Previous/Next, which matters when the
+  "method" is a photo of a handwritten card.
+- **Tools belong to the steps that use them (2026-08-27).** On a recipe with
+  structured steps, the recipe's tool list is now **worked out from its steps** —
+  you set a tool on the step that needs it and nowhere else, and the cookbook's
+  tool filter keeps working off the total. Free-text and photo recipes have no
+  steps to read, so they keep a tool picker — inside the Method section, where a
+  tool belongs, rather than in a drawer at the bottom of the page.
+- **New recipes start as free text (2026-08-27).** Typing the method out is what
+  everyone does; structuring it step-by-step is something you graduate to on a
+  recipe you cook often. The server already defaulted this way — the page didn't.
+- **A tidier bottom of the recipe page (2026-08-27).** "Additional details" and
+  "Version information" now wear the same section heading Ingredients and Method
+  do, instead of reading like more body text. Their little summary captions are
+  gone — a caption listing what's inside a drawer one tap away isn't worth the
+  line. The version panel lost the sentence explaining what "New version" does
+  and gained **the button itself**, with the number of versions as a pill beside
+  the list it counts.
+
 - **The recipe page's header reads with icons (2026-08-26).** Collection,
   cuisine, category, serves, prep, cook, total, difficulty and when-you'd-eat-it
   each carry the same little glyph the cookbook's own filters use, so the same

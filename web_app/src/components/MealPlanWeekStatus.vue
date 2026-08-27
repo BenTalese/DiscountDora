@@ -17,14 +17,21 @@
                     </q-tooltip>
                 </q-icon>
             </span>
+            <!-- Owner feedback 2026-08-27 — this used to count everything the
+                 week needed that wasn't in the pantry, so it read "3 to buy"
+                 forever, including after you'd put all three on a list. The
+                 headline is now the outstanding half: what's still yours to
+                 do. The handled half is named next to it rather than vanishing,
+                 so the number can't look like it lost track of something. -->
             <span
                 class="week-status__cell"
-                :class="needToBuyCount > 0 ? 'text-negative' : 'text-positive'"
+                :class="outstandingCount > 0 ? 'text-negative' : 'text-positive'"
             >
                 <q-icon :name="ICONS.shopping_cart" size="14px" class="q-mr-xs" />
-                {{ needToBuyCount > 0
-                    ? `${needToBuyCount} to buy`
-                    : 'fully stocked' }}
+                {{ statusLabel }}
+            </span>
+            <span v-if="onListCount > 0" class="week-status__cell dora-text-muted">
+                {{ onListCount }} already on a list
             </span>
         </template>
         <span v-else class="week-status__empty dora-text-muted">
@@ -36,15 +43,28 @@
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
     import { useBatchEnabled } from 'src/composables/useBatchEnabled';
+    import { computed } from 'vue';
 
-    defineProps<{
+    const props = defineProps<{
         plannedCount: number;
         shortfallCount: number;
-        needToBuyCount: number;
+        /** Items the week needs that aren't in the pantry *and* aren't on a
+         *  list yet — the count that actually moves when you shop-plan. */
+        outstandingCount: number;
+        /** Items the week needs that are already sitting on an open list. */
+        onListCount: number;
         cookByLabel: string;
     }>();
 
     const { batchEnabled } = useBatchEnabled();
+
+    // Three states, because "fully stocked" and "nothing left to do" are
+    // different facts and saying the first when the second is true would be a
+    // lie the user can see through (there are items on a list).
+    const statusLabel = computed(() => {
+        if (props.outstandingCount > 0) return `${props.outstandingCount} to buy`;
+        return props.onListCount > 0 ? 'all on a list' : 'fully stocked';
+    });
 </script>
 
 <style scoped>

@@ -33,12 +33,18 @@
             <div v-if="phase === 'walk' && hasQueue" class="text-caption dora-text-muted-3 q-mr-sm">
                 {{ reviewedCount }} / {{ session.length }}
             </div>
+            <!-- Owner feedback 2026-08-27: *"Info button should take you to
+                 help and guides, not open a modal."* The explainer this used to
+                 open now lives in Help → Guides → Stocktake; the `?q=` seeds
+                 that page's filter so the deep-link lands on the one entry
+                 rather than the whole library. The title in the query string
+                 must match the guide entry's `title` in `HelpPage.vue`. -->
             <BaseButton
                 variant="icon"
                 :icon="ICONS.help_outline"
                 color="white"
                 aria-label="How stocktake works"
-                @click="helpOpen = true"
+                :to="{ path: '/help', query: { q: 'How stocktake works' } }"
             />
         </div>
 
@@ -311,63 +317,6 @@
         </BaseDialog>
 
         <!-- ── (?) help dialog — plain-English "how it works" -->
-        <BaseDialog v-model="helpOpen" title="How stocktake works" closable card-style="min-width: 320px; max-width: 480px">
-            <q-card-section class="runner-help">
-                <p v-if="rankedBy === 'belief'">
-                    Dora walks you through the items she thinks need a
-                    check — one at a time, <strong>least certain first</strong>.
-                    Checking something she's already worked out from your
-                    shopping and cooking tells you nothing new, so those wait
-                    until the end; the ones she can't call come first. Items
-                    she has no evidence about sit in the middle, ordered by how
-                    overdue they are. For each, you have five options:
-                </p>
-                <!-- Chunk 6 / D-4 — the three phases, explained where the
-                     runner already explains itself. Each phase is skipped
-                     silently when empty, so this describes the full shape
-                     rather than what this particular run happens to show. -->
-                <p v-if="rankedBy === 'belief'">
-                    A run has up to three parts. First, anything Dora is
-                    <strong>fairly sure about</strong> — agree in one tap from
-                    where you're sitting, or untick it to look yourself. Then the
-                    <strong>walk</strong>, below. Last, a
-                    <strong>tidy-up</strong> of anything that's dropped out of
-                    the rotation since your last run.
-                </p>
-                <p v-else>
-                    Dora walks you through the items she thinks need a
-                    check — one at a time, most-overdue first. For each,
-                    you have five options:
-                </p>
-                <dl>
-                    <dt>Still correct</dt>
-                    <dd>The level's right. Resets the check clock.</dd>
-                    <dt>Change level</dt>
-                    <dd>Pick a new level. Also resets the check clock.</dd>
-                    <dt>Skip</dt>
-                    <dd>
-                        Not this time — the item drops out of this run
-                        and isn't asked about again until the next one.
-                        Nothing is recorded.
-                    </dd>
-                    <dt>Push 3 days</dt>
-                    <dd>
-                        Not now — Dora stops asking about this item for
-                        three days. Doesn't count as a check.
-                    </dd>
-                    <dt>Mute</dt>
-                    <dd>
-                        Stop asking about this item entirely. You can
-                        un-mute later from the item's detail page.
-                    </dd>
-                </dl>
-                <p class="dora-text-muted-7">
-                    How often each item shows up (Weekly / Fortnightly /
-                    Monthly) is set globally in Settings → Stocktake, with
-                    Auto self-tuning by how fast the item actually moves.
-                </p>
-            </q-card-section>
-        </BaseDialog>
     </q-page>
 </template>
 
@@ -423,11 +372,6 @@
     const index = ref(0);
     const busy = ref(false);
     const changeOpen = ref(false);
-    const helpOpen = ref(false);
-    /** Which engine ordered the queue (Chunk 5 / D-1). Only used for copy —
-     *  the order itself is the server's and is never re-derived here. */
-    const rankedBy = ref<'belief' | 'cadence'>('cadence');
-
     // ── Three phases: shrink → work → tidy (Chunk 6 / D-4) ──────────────────
     // `done` is the existing summary card. Every phase can be empty and is then
     // skipped **silently** — an install younger than a few months has no
@@ -893,7 +837,6 @@
             reviewItems.value = result.review;
             session.value = result.walk;
             sweepItems.value = result.sweep;
-            rankedBy.value = result.ranked_by;
             phase.value = firstNonEmptyPhase();
         } finally {
             loading.value = false;
@@ -1010,19 +953,4 @@
         border-top: 1px solid var(--c-line, rgba(0, 0, 0, 0.12));
     }
 
-    .runner-help {
-        font-size: var(--text-sm, 0.9rem);
-        line-height: 1.4;
-    }
-    .runner-help dl {
-        margin: 12px 0;
-    }
-    .runner-help dt {
-        font-weight: 600;
-        margin-top: 8px;
-    }
-    .runner-help dd {
-        margin-left: 0;
-        color: var(--text-secondary, inherit);
-    }
 </style>

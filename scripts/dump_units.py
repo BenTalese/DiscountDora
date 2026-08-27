@@ -67,6 +67,44 @@ def _emit_unit_table() -> str:
     return "\n".join(lines)
 
 
+def _emit_measurement_systems() -> str:
+    """The metric / imperial / US axis, keyed by canonical unit.
+
+    The SPA needs it to narrow every unit dropdown to the install's chosen
+    system (owner feedback 2026-08-27). Emitted rather than restated on the
+    client for the same R-003 reason the conversion table is: one source, in
+    `dora_api/domain/units.py`.
+    """
+    lines = [
+        "export type MeasurementSystem = 'metric' | 'imperial' | 'us';",
+        "",
+        "export const MEASUREMENT_SYSTEMS: ReadonlyArray<MeasurementSystem> = ["
+        + ", ".join(
+            _ts_string(x)
+            for x in ("metric", "imperial", "us")
+        )
+        + "];",
+        "",
+        "/** Canonical units that belong to every system — the informal cooking",
+        " *  amounts, the count units, and energy. Always offered. */",
+        "export const UNIVERSAL_CANONICAL_UNITS: ReadonlySet<string> = new Set(["
+        + ", ".join(
+            _ts_string(u) for u in sorted(units.UNIVERSAL_CANONICAL_UNITS)
+        )
+        + "]);",
+        "",
+        "/** Canonical unit → the systems that offer it. Units absent from both",
+        " *  this map and `UNIVERSAL_CANONICAL_UNITS` are offered by no system. */",
+        "export const UNIT_SYSTEMS: Readonly<Record<string, ReadonlyArray<MeasurementSystem>>> = {",
+    ]
+    for canonical, systems in units.UNIT_SYSTEMS.items():
+        joined = ", ".join(_ts_string(x) for x in sorted(systems))
+        lines.append(f"    {_ts_string(canonical)}: [{joined}],")
+    lines.append("};")
+    lines.append("")
+    return "\n".join(lines)
+
+
 def _emit_density_table() -> str:
     lines = ["export const INGREDIENT_DENSITY_G_PER_ML: Readonly<Record<string, number>> = {"]
     for name, density in units.INGREDIENT_DENSITY_G_PER_ML.items():
@@ -117,6 +155,7 @@ def render() -> str:
         HEADER,
         DIMENSIONS_TS,
         _emit_unit_table(),
+        _emit_measurement_systems(),
         _emit_density_table(),
         _emit_gas_mark(),
         _emit_supported_price_units(),

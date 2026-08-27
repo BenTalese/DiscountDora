@@ -187,9 +187,11 @@ def test__update__replaces_and_unlinks_batch(api):
 #    ingredients so the comparison is non-trivial; skips if none is found.
 
 def _ingredients(meal_plan_id: str) -> list:
+    # Envelope since 2026-08-27 — `{items, unlinked}`; unlinked rows have no
+    # stock item so they can't ride inside the item list.
     resp = requests.get(f"{MEAL_PLANS}/{meal_plan_id}/ingredients")
     assert resp.status_code == 200, resp.text
-    return resp.json()["data"] if isinstance(resp.json(), dict) else resp.json()
+    return resp.json()["items"]
 
 
 def _recipe_with_ingredients() -> str | None:

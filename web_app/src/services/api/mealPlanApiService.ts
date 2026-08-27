@@ -1,5 +1,5 @@
 import type {
-    AutoBuildRequest, AutoBuildResponse, MealPlan, MealPlanIngredient, Shortfall,
+    AutoBuildRequest, AutoBuildResponse, MealPlan, MealPlanIngredients, Shortfall,
 } from 'src/models/mealPlan';
 import type { CreatedResponse } from './axiosHttpClient';
 import AxiosHttpClient from './axiosHttpClient';
@@ -53,8 +53,8 @@ export default class MealPlanApiService {
         await this.httpClient.patch<void>(`/meal-plans/${meal_plan_id}`, payload);
     };
 
-    getIngredientsAsync = async (mealPlanId: string): Promise<MealPlanIngredient[]> =>
-        await this.httpClient.get<MealPlanIngredient[]>(`/meal-plans/${mealPlanId}/ingredients`);
+    getIngredientsAsync = async (mealPlanId: string): Promise<MealPlanIngredients> =>
+        await this.httpClient.get<MealPlanIngredients>(`/meal-plans/${mealPlanId}/ingredients`);
 
     getShortfallAsync = async (): Promise<Shortfall[]> =>
         await this.httpClient.get<Shortfall[]>('/meal-plans/shortfall');
@@ -68,8 +68,8 @@ export default class MealPlanApiService {
      *  sequential builder). Same scaling math as the saved-plan endpoint. */
     previewIngredientsAsync = async (
         recipes: { recipe_id: string; servings: number }[],
-    ): Promise<MealPlanIngredient[]> =>
-        await this.httpClient.post<MealPlanIngredient[], { recipes: { recipe_id: string; servings: number }[] }>(
+    ): Promise<MealPlanIngredients> =>
+        await this.httpClient.post<MealPlanIngredients, { recipes: { recipe_id: string; servings: number }[] }>(
             '/meal-plans/preview-ingredients', { recipes },
         );
 

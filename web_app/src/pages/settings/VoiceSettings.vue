@@ -38,8 +38,30 @@
                     @update:model-value="onVoiceOutputChange"
                 />
             </template>
+            <!-- Owner feedback 2026-08-27: *"TTS isn't supported on Firefox
+                 for some reason? What browsers can we support?"* Three
+                 different situations used to collapse into one line about
+                 SpeechSynthesis, and the Firefox one — API present, zero
+                 voices installed — was the one it described worst. Each now
+                 says what is actually true and what to do about it. -->
             <div v-if="!voiceOutputAvailable" class="settings-page__note dora-text-muted">
-                Your browser doesn't expose SpeechSynthesis.
+                Nothing on this device can speak: your browser reports no
+                installed voices, and Dora's own neural voice isn't set up on
+                this server. Install Dora's neural voice server-side (the Docker
+                image and desktop app include it) and every browser works,
+                including Firefox.
+            </div>
+            <div
+                v-else-if="!browserVoiceUsable"
+                class="settings-page__note dora-text-muted"
+            >
+                Your browser has no text-to-speech voices installed, so the
+                device voice is unavailable here — Dora uses her own neural
+                voice instead, which works the same in every browser. This is
+                the usual state on Firefox (it only speaks through voices the
+                operating system gives it — SAPI on Windows,
+                <code>speech-dispatcher</code> on Linux, nothing at all on
+                Android) and on some hardened or minimal Linux setups.
             </div>
         </SettingsSection>
 
@@ -71,6 +93,7 @@
                     :voices="voices"
                     :piper-available="piperAvailable"
                     :device-default-active="currentUser.voice_engine === 'browser'"
+                    :device-voice-usable="browserVoiceUsable"
                     @update:model-value="onVoiceChange"
                     @select-device-default="onSelectDeviceDefault"
                     @download="onDownload"
@@ -109,6 +132,10 @@
     const voiceProbeOutput = useSpeechOutput();
     const voiceInputAvailable = computed(() => voiceProbeInput.available.value);
     const voiceOutputAvailable = computed(() => voiceProbeOutput.available.value);
+    /** Whether the *device* voice specifically can make a sound here — a
+     *  separate question from `voiceOutputAvailable`, which is true whenever
+     *  either engine works. See `useSpeechOutput`. */
+    const browserVoiceUsable = computed(() => voiceProbeOutput.browserVoiceUsable.value);
 
     async function onVoiceInputChange(value: boolean) {
         await update(

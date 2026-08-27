@@ -5,12 +5,24 @@
                 <div class="text-subtitle1">This week's shopping</div>
                 <template v-if="focusedPlan">
                     <div v-if="ingredientsLoading" class="text-caption dora-text-muted">Calculating…</div>
-                    <div v-else class="text-h5" :class="needToBuy.length ? 'text-negative' : 'text-positive'">
-                        {{ needToBuy.length }}
-                    </div>
-                    <div class="text-caption dora-text-muted">
-                        {{ needToBuy.length ? "item(s) you'll need to buy" : 'fully stocked for this week' }}
-                    </div>
+                    <template v-else>
+                        <!-- Owner feedback 2026-08-27 — the headline is what's
+                             left to do, not what the week needs. Adding three
+                             items to a list used to leave this reading "3"
+                             forever. -->
+                        <div
+                            class="text-h5"
+                            :class="outstanding.length ? 'text-negative' : 'text-positive'"
+                        >
+                            {{ outstanding.length }}
+                        </div>
+                        <div class="text-caption dora-text-muted">
+                            {{ outstandingCaption }}
+                        </div>
+                        <div v-if="onListCount" class="text-caption dora-text-muted">
+                            {{ onListCount }} already on a list
+                        </div>
+                    </template>
                     <div v-if="batchEnabled && shortfallCount" class="row items-center q-mt-sm text-warning">
                         <q-icon :name="ICONS.chef_hat" class="q-mr-xs" />
                         <span class="text-subtitle2">{{ cookByLabel }}</span>
@@ -21,6 +33,10 @@
                 </div>
             </q-card-section>
 
+            <!-- Still lists everything the week needs, handled or not: the
+                 rail is the "what does this week want" view, and hiding rows
+                 the moment they land on a list would make it lie by omission.
+                 The per-row caption says which list each one is on. -->
             <q-list v-if="focusedPlan && needToBuy.length" dense separator>
                 <q-item
                     v-for="ing in needToBuy"
@@ -54,13 +70,20 @@
             </q-list>
 
             <q-card-actions v-if="focusedPlan">
+                <!-- Owner feedback 2026-08-27 — was "Generate shopping list for
+                     this week", which swept the week server-side and dropped
+                     you on a new list with no say in it. Now it opens the same
+                     picker the recipe page opens (R-001). Still enabled when
+                     everything is already handled, because the picker is also
+                     how you deliberately add a second line or an optional
+                     ingredient. -->
                 <BaseButton
                     class="full-width"
-                    :icon="ICONS.shopping_cart"
-                    label="Generate shopping list for this week"
+                    :icon="ICONS.add_shopping_cart"
+                    :label="addToListLabel"
                     :loading="generating"
                     :disable="needToBuy.length === 0"
-                    @click="emit('generateList')"
+                    @click="emit('addToList')"
                 />
             </q-card-actions>
         </q-card>
@@ -97,14 +120,18 @@
     import { useBatchEnabled } from 'src/composables/useBatchEnabled';
     import { formatQuantity } from 'src/helpers/formatQuantity';
     import type { MealPlan, MealPlanIngredient } from 'src/models/mealPlan';
+    import { computed } from 'vue';
 
     const { batchEnabled } = useBatchEnabled();
 
-    defineProps<{
+    const props = defineProps<{
         focusedPlan: MealPlan | null;
         ingredientsLoading: boolean;
         ingredients: MealPlanIngredient[];
+        /** Everything the week needs that isn't in the pantry. */
         needToBuy: MealPlanIngredient[];
+        /** …of those, the ones not yet on any open list. */
+        outstanding: MealPlanIngredient[];
         shortfallCount: number;
         cookByLabel: string;
         generating: boolean;
@@ -114,8 +141,25 @@
     }>();
 
     const emit = defineEmits<{
-        (e: 'generateList'): void;
+        (e: 'addToList'): void;
         (e: 'hoverIngredient', ing: MealPlanIngredient): void;
         (e: 'clearHover'): void;
     }>();
+
+    const onListCount = computed(
+        () => props.needToBuy.length - props.outstanding.length,
+    );
+    const outstandingCaption = computed(() => {
+        if (props.outstanding.length) return "item(s) you'll need to buy";
+        return onListCount.value > 0
+            ? 'left to buy — the rest are on a list'
+            : 'fully stocked for this week';
+    });
+    // Names the button by what's actually left, the way the recipe page's
+    // "Add N missing" button does.
+    const addToListLabel = computed(() => (
+        props.outstanding.length > 0
+            ? `Add ${props.outstanding.length} to a list`
+            : 'Add to a list'
+    ));
 </script>

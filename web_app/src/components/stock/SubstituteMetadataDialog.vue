@@ -187,7 +187,14 @@
     // UNIT_TABLE keys include every alias ("ml", "millilitre", "millilitres").
     // De-duplicated by canonical form, searchable by alias — shared with the
     // recipe ingredient editor (R-001).
-    const { unitOptions, onUnitFilter } = useUnitOptions();
+    // Narrowed to the install's measurement system, with the currently-saved
+    // unit-in kept offered so an existing substitute row survives a system
+    // change. (unit-out shares the same list; the pair is nearly always in
+    // one system, and keeping both exceptions would mean two lists.)
+    const { unitOptions, onUnitFilter } = useUnitOptions(
+        undefined,
+        () => unitInDraft.value,
+    );
 
     // ── Validation ─────────────────────────────────────────────────────
     const notesError = computed<string | null>(() =>

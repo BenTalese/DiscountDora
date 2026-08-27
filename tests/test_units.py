@@ -194,3 +194,86 @@ def test__supported_price_units_no_duplicate_canonicals():
     rows = units.supported_price_units()
     canon = [r.canonical for r in rows]
     assert len(canon) == len(set(canon))
+
+
+# ── Measurement system ───────────────────────────────────────────────────
+#
+# Owner ask 2026-08-27 — the install-wide "which units do we use?" setting.
+# Pinned because the pickers are closed lists: anything `units_for_system`
+# leaves out is a unit the user can no longer choose, so a silent change here
+# is a silent removal in the UI.
+
+
+def test__units_for_system__EverySystem__KeepsTheUniversalUnits():
+    """Pinch, dash, teaspoon and the count units survive every setting —
+    the owner's explicit carve-out (*"for universal ones, e.g. 'dash', always
+    include those"*)."""
+    for system in units.SUPPORTED_MEASUREMENT_SYSTEMS:
+        offered = units.units_for_system(system)
+        for unit in ("pinch", "dash", "smidgen", "tsp", "ea", "pack", "dozen"):
+            assert unit in offered, f"{unit} missing under {system}"
+
+
+def test__units_for_system__Metric__ExcludesTheUsSizedNamesakes():
+    """`cup` and `tbsp` mean different volumes in the two systems, which is
+    why they are separate rows. Metric gets the 250 ml / 20 ml pair and must
+    not also be offered the US ones — two entries reading "cup" in one
+    dropdown is worse than either alone."""
+    offered = units.units_for_system(units.METRIC)
+    assert {"ml", "L", "g", "kg", "cup", "tbsp"} <= offered
+    assert not ({"US cup", "US tbsp", "qt", "gal", "fl oz", "oz", "lb"} & offered)
+
+
+def test__units_for_system__Imperial__IsMetricPlusImperial():
+    """The UK reality, and the reason `imperial` exists as a third value
+    rather than being folded into `us`: British shelves and recipes are metric,
+    with imperial weights and the 568 ml pint alongside — not instead."""
+    offered = units.units_for_system(units.IMPERIAL)
+    assert {"g", "kg", "ml", "L", "oz", "lb", "fl oz", "pt"} <= offered
+    # The US-specific sizes stay out: a US pint is 473 ml, not 568.
+    assert not ({"qt", "gal", "US cup", "US tbsp", "stick"} & offered)
+
+
+def test__units_for_system__UnknownValue__FallsBackToMetric():
+    """A bad value in one setting must not empty every dropdown in the app."""
+    assert units.units_for_system("klingon") == units.units_for_system(units.METRIC)
+
+
+def test__pricing_convention_for__OnlyUsPricesByTheQuart():
+    """Imperial maps to the AU convention on purpose: the UK sells in metric
+    by law and displays /100g and /L exactly as Australia does. The imperial
+    units it keeps are for cooking, not for shelf labels."""
+    assert units.pricing_convention_for(units.US_CUSTOMARY) == "US"
+    assert units.pricing_convention_for(units.IMPERIAL) == "AU"
+    assert units.pricing_convention_for(units.METRIC) == "AU"
+
+
+def test__display_denominator_for__FollowsTheMeasurementSystem():
+    """The denominator and the picker vocabulary now come off one setting, so
+    they cannot disagree — which is why `unit_pricing_locale` was replaced
+    rather than kept alongside."""
+    assert units.display_denominator_for(
+        units.MASS, 1.0, system=units.METRIC,
+    )[0] == "kg"
+    assert units.display_denominator_for(
+        units.MASS, 1.0, system=units.US_CUSTOMARY,
+    )[0] == "lb"
+    assert units.display_denominator_for(
+        units.MASS, 1.0, system=units.IMPERIAL,
+    )[0] == "kg"
+
+
+def test__unit_systems__EveryCanonicalUnit__IsOfferedBySomething():
+    """No unit may be unreachable. A canonical form that is neither universal
+    nor claimed by a system can never appear in any picker, which would make
+    it dead weight in the conversion table — and the failure is silent."""
+    orphans = {
+        udef.canonical
+        for udef in units.UNIT_TABLE.values()
+        if udef.canonical not in units.UNIVERSAL_CANONICAL_UNITS
+        and udef.canonical not in units.UNIT_SYSTEMS
+        # Temperature is never a picker choice — it is a recipe field with its
+        # own control, and the gas-mark scale sits beside it.
+        and udef.dimension != units.TEMPERATURE
+    }
+    assert orphans == set()

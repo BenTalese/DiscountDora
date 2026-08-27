@@ -19,42 +19,44 @@
             Cook mode will show them as a scrollable gallery.
         </div>
 
-        <div v-if="modelValue.length > 0" class="recipe-step-images-editor__list">
-            <div
-                v-for="(row, index) in modelValue"
-                :key="row.client_id"
-                class="recipe-step-images-editor__row"
-            >
-                <div class="recipe-step-images-editor__index">{{ index + 1 }}</div>
-                <img
-                    :src="row.preview_url"
-                    :alt="`Step image ${index + 1}`"
-                    class="recipe-step-images-editor__thumb"
-                />
-                <div class="recipe-step-images-editor__actions">
+        <!-- Owner feedback 2026-08-27 — the same grid of small rounded tiles
+             the read view uses, so switching the pencil on doesn't change what
+             the method looks like, only what you can do to it. Each tile keeps
+             its own reorder/remove cluster rather than a separate list row. -->
+        <ol v-if="modelValue.length > 0" class="rsie">
+            <li v-for="(row, index) in modelValue" :key="row.client_id" class="rsie__cell">
+                <div class="rsie__tile">
+                    <img
+                        :src="row.preview_url"
+                        :alt="`Step photo ${index + 1}`"
+                        class="rsie__img"
+                    />
+                </div>
+                <div class="rsie__acts">
+                    <span class="rsie__num">{{ index + 1 }}</span>
                     <BaseButton
-                        variant="icon"
+                        variant="icon" dense
                         :icon="ICONS.arrow_upward"
-                        aria-label="Move up"
-                        :disabled="index === 0"
+                        :aria-label="`Move step photo ${index + 1} earlier`"
+                        :disable="index === 0"
                         @click="onMove(row.client_id, -1)"
                     />
                     <BaseButton
-                        variant="icon"
+                        variant="icon" dense
                         :icon="ICONS.arrow_downward"
-                        aria-label="Move down"
-                        :disabled="index === modelValue.length - 1"
+                        :aria-label="`Move step photo ${index + 1} later`"
+                        :disable="index === modelValue.length - 1"
                         @click="onMove(row.client_id, +1)"
                     />
                     <BaseButton
-                        variant="ghost"
-                        :icon="ICONS.delete_outline"
-                        label="Remove"
+                        variant="danger-icon" dense
+                        :icon="ICONS.delete"
+                        :aria-label="`Remove step photo ${index + 1}`"
                         @click="onRemove(row.client_id)"
                     />
                 </div>
-            </div>
-        </div>
+            </li>
+        </ol>
 
         <div class="row q-gutter-sm q-mt-sm items-center">
             <ImageSourcePicker
@@ -170,37 +172,38 @@
 </script>
 
 <style scoped lang="scss">
-    .recipe-step-images-editor__list {
-        display: flex;
-        flex-direction: column;
-        gap: var(--space-sm);
+    /* Mirrors `RecipeStepImagesViewer`'s grid deliberately — the two faces of
+       the same block. (The old rules here reached for `--space-sm`,
+       `--c-line`, `--c-surface-2` and `--c-text-muted`, none of which are
+       tokens this app defines; every border and colour below was silently
+       inheriting nothing. D-017.) */
+    .rsie {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
+        gap: var(--space-4, 16px);
     }
-    .recipe-step-images-editor__row {
-        display: flex;
-        align-items: center;
-        gap: var(--space-sm);
-        padding: var(--space-sm);
-        background: var(--c-surface-2);
-        border: 1px solid var(--c-line);
-        border-radius: var(--radius-md);
+    .rsie__cell { display: flex; flex-direction: column; gap: var(--space-1, 4px); }
+    .rsie__tile {
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-lg, 10px);
+        overflow: hidden;
+        background: var(--surface-sunken);
     }
-    .recipe-step-images-editor__actions {
-        display: flex;
-        align-items: center;
-        gap: var(--space-xs);
-        margin-left: auto;
+    .rsie__img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .rsie__acts {
+        display: flex; align-items: center; gap: var(--space-1, 4px);
+        justify-content: center;
     }
-    .recipe-step-images-editor__index {
-        font-weight: 600;
-        min-width: 1.5em;
-        text-align: center;
-        color: var(--c-text-muted);
-    }
-    .recipe-step-images-editor__thumb {
-        width: 96px;
-        height: 96px;
-        object-fit: cover;
-        border-radius: var(--radius-sm);
-        flex: 0 0 auto;
+    .rsie__num {
+        font-size: 0.8125rem; font-weight: 700;
+        font-variant-numeric: tabular-nums;
+        color: var(--text-muted);
+        margin-right: auto;
+        padding-left: var(--space-1, 4px);
     }
 </style>

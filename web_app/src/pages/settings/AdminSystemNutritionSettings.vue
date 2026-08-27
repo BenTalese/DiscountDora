@@ -109,6 +109,39 @@
             <hr class="settings-divider" />
 
             <SettingsSection>
+                <template #title>Health Star Rating</template>
+                <template #description>
+                    The Australian and New Zealand government's front-of-pack
+                    rating, applied to your recipes. Needs complex nutrition —
+                    it's worked out from the foods your ingredients are linked
+                    to, so there's nothing to score without them.
+                </template>
+
+                <SettingsRow
+                    label="Show a Health Star Rating on recipes"
+                    help="Off by default outside Australia and New Zealand — it's a national scheme, so we don't show it as though it applied everywhere. Ratings are estimates: they're scored from the raw weight of the ingredients, not the finished dish."
+                >
+                    <q-toggle
+                        :model-value="healthStarRatingEnabled"
+                        :disable="saving || mode !== 'complex'"
+                        @update:model-value="onHealthStarRatingChange"
+                    />
+                </SettingsRow>
+
+                <q-banner
+                    v-if="healthStarRatingEnabled && mode !== 'complex'"
+                    dense
+                    rounded
+                    class="dora-bg-warning-soft q-mt-sm"
+                >
+                    Nutrition is in {{ mode }} mode, so no ratings can be worked
+                    out yet. Switch to complex above and import a dataset.
+                </q-banner>
+            </SettingsSection>
+
+            <hr class="settings-divider" />
+
+            <SettingsSection>
                 <template #title>Other sources</template>
                 <template #description>
                     Optional extras searched alongside the datasets. Every result
@@ -184,6 +217,9 @@
     const sources = ref<NutritionSourceStatus[]>([]);
     const anyAvailable = ref(false);
     const offLookupEnabled = ref(true);
+    // Owner ask 2026-08-27. Off by default everywhere; Settings →
+    // Region's "Match this device" is what offers it on an AU/NZ locale.
+    const healthStarRatingEnabled = ref(false);
     const usdaKeyDraft = ref('');
     const savedUsdaKey = ref('');
     const loading = ref(true);
@@ -248,6 +284,7 @@
         try {
             const settings = await appSettingsApi.getAsync();
             offLookupEnabled.value = settings.nutrition_off_lookup_enabled;
+            healthStarRatingEnabled.value = settings.health_star_rating_enabled ?? false;
             savedUsdaKey.value = settings.nutrition_usda_api_key ?? '';
             usdaKeyDraft.value = savedUsdaKey.value;
         } catch (err) {
@@ -277,6 +314,19 @@
             await refreshSources();
         } catch {
             mode.value = previous;
+        }
+    }
+
+    async function onHealthStarRatingChange(value: boolean) {
+        const previous = healthStarRatingEnabled.value;
+        healthStarRatingEnabled.value = value;
+        try {
+            await patch(
+                value ? 'Health Star Rating on.' : 'Health Star Rating off.',
+                { health_star_rating_enabled: value },
+            );
+        } catch {
+            healthStarRatingEnabled.value = previous;
         }
     }
 

@@ -97,6 +97,7 @@ def configure_mappings(db: SQLAlchemy):
         # AI mode is per-user only — no install-wide master kill-switch.
         # Per-user URL / model / provider / API key live on the User table.
         Column("scanning_enabled", Boolean, nullable=False, server_default=false()),
+        Column("health_star_rating_enabled", Boolean, nullable=False, server_default=false()),
         # buy-verdict oracle. Defaults on because it's pure-personal;
         # admin can turn off from Settings → System.
         # C-cross Chunk 1 — install-wide feature flags (proposal §2.6).
@@ -123,7 +124,7 @@ def configure_mappings(db: SQLAlchemy):
         Column("product_search_url", String(500), nullable=False, server_default=""),
         # AU vs US per-unit display convention. Compute
         # math is locale-independent; only the rendered denominator changes.
-        Column("unit_pricing_locale", String(8), nullable=False, server_default="AU"),
+        Column("measurement_system", String(16), nullable=False, server_default="metric"),
         # install-wide currency + display
         # locale for money rendering. Read via /api/health so every client
         # session pulls the same values; the client formatter is a thin
@@ -337,6 +338,7 @@ def configure_mappings(db: SQLAlchemy):
         Column("vitamin_e_mg_per_100g", Float, nullable=True),
         Column("vitamin_b12_ug_per_100g", Float, nullable=True),
         Column("folate_ug_per_100g", Float, nullable=True),
+        Column("food_category", String(128), nullable=True),
         Column("imported_at", DateTime(timezone=True), nullable=True),
         UniqueConstraint("source", "source_ref", name="uq_nutrition_food_source_ref"),
     )

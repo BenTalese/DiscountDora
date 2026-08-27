@@ -30,13 +30,15 @@ Optional ingredients sit outside both halves of the coverage ratio, matching
 the cookability rule's treatment of them (R-003): they aren't part of the
 recipe as written, so they neither add nutrients nor count as a gap.
 """
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Iterable, List
 
 from dora_api.domain import units
+from dora_api.domain import health_star_rating as hsr
 from dora_api.domain.entities.nutrition_food import NutritionFood
 from dora_api.domain.entities.nutrition_portion import NutritionPortion
 from dora_api.domain.entities.stock_item import StockItem
+from dora_api.features.nutrition.food_categories import is_fvnl_category
 from dora_api.features.nutrition.text_matching import singular
 from dora_api.infrastructure.ports import Repository
 from dora_api.persistence.field import EntityField as Field
@@ -78,6 +80,40 @@ _COUNT_MEASURE_PREFERENCE = (
 # Threshold lives here alone — the client reads the resulting boolean and never
 # re-derives it (R-003).
 RELIABLE_COVERAGE_RATIO = 0.8
+
+# Every nutrient the rollup sums, as `(rollup key, NutritionFood attribute)`.
+#
+# The first four are the display panel's macros and predate the Health Star
+# Rating; the last four were added for it (saturated fat, sugars and sodium are
+# three of HSR's four baseline nutrients, fibre is a modifying one). They are
+# summed the same way, in the same loop, because there is no reason for two
+# passes over the same ingredients — and listing them here rather than inline
+# means adding a fifth HSR input later is one line, not three (R-002).
+_SUMMED_NUTRIENTS = (
+    ("kcal", "kcal_per_100g"),
+    ("protein_g", "protein_g_per_100g"),
+    ("carbs_g", "carbs_g_per_100g"),
+    ("fat_g", "fat_g_per_100g"),
+    ("saturated_fat_g", "saturated_fat_g_per_100g"),
+    ("sugars_g", "sugars_g_per_100g"),
+    ("fibre_g", "fibre_g_per_100g"),
+    ("sodium_mg", "sodium_mg_per_100g"),
+)
+
+# How many decimal places each is rendered to. Sodium and energy are whole
+# numbers (nobody reads a fraction of a milligram of salt); the grams matter to
+# one place.
+_NUTRIENT_DECIMALS = {
+    "kcal": 0, "protein_g": 1, "carbs_g": 1, "fat_g": 1,
+    "saturated_fat_g": 1, "sugars_g": 1, "fibre_g": 1, "sodium_mg": 0,
+}
+
+# The four HSR baseline (penalty) nutrients. Coverage for these is reported
+# separately because a *missing* one flatters the recipe: no sugars figure
+# means no sugars points, which reads as a better rating rather than an
+# unknown one. The modifying nutrients fail safe in the other direction, so
+# they need no such warning.
+HSR_BASELINE_NUTRIENTS = ("kcal", "saturated_fat_g", "sugars_g", "sodium_mg")
 
 
 @dataclass(frozen=True, slots=True)
@@ -137,6 +173,30 @@ class RecipeNutrition:
     # figure shown with its coverage is honest; a partial figure used to hide a
     # recipe from a calorie search is not.
     is_reliable: bool = False
+    # ── Health Star Rating inputs and result (2026-08-27) ───────────────
+    saturated_fat_g: float | None = None
+    sugars_g: float | None = None
+    fibre_g: float | None = None
+    sodium_mg: float | None = None
+    # Raw weight of everything the rollup could resolve, in grams. HSR is
+    # scored per 100 g, so this is the denominator — and because it is the
+    # *raw* weight it is an estimate: a sauce that reduces is more
+    # concentrated than this says, and a soup made with water nobody listed
+    # as an ingredient is less. Owner's call 2026-08-27 was to accept that
+    # and label the rating an estimate rather than ask for a finished weight.
+    total_grams: float | None = None
+    # Percentage of `total_grams` that is fruit, vegetable, nut or legume.
+    # None when nothing was counted at all — distinct from 0.0, which means
+    # "counted, and none of it was fvnl".
+    fvnl_percent: float | None = None
+    # Per nutrient, the fraction (0..1) of counted grams whose food actually
+    # carried a figure. Keyed by the rollup names in `_SUMMED_NUTRIENTS`.
+    # Weighted by mass rather than by ingredient count: 200 g of an
+    # unmeasured ingredient distorts a per-100g figure far more than 2 g of
+    # one does, and HSR is entirely a per-100g question.
+    nutrient_coverage: dict[str, float] = field(default_factory=dict)
+    # The rating itself, or None when nothing could be weighed.
+    rating: hsr.HealthStarRating | None = None
 
 
 def _measure_words(measure: str) -> set[str]:
@@ -254,10 +314,15 @@ def _portions_by_food(repository: Repository, food_ids: list) -> dict:
 
 
 def _rollup_one(recipe: 'RecipeNutritionInput', food_ids_by_item: dict, foods: dict, portions: dict) -> RecipeNutrition:
-    totals = {"kcal": 0.0, "protein_g": 0.0, "carbs_g": 0.0, "fat_g": 0.0}
+    totals = {key: 0.0 for key, _ in _SUMMED_NUTRIENTS}
     contributors = dict.fromkeys(totals, 0)
+    # Grams of counted ingredient whose food knew this nutrient. The mass-
+    # weighted twin of `contributors`, and what the coverage line reports.
+    known_grams = dict.fromkeys(totals, 0.0)
     uncounted = {reason: 0 for reason in UNCOUNTED_REASONS}
     counted = 0
+    total_grams = 0.0
+    fvnl_grams = 0.0
 
     required = [ing for ing in recipe.ingredients if not ing.is_optional]
     for ingredient in required:
@@ -289,17 +354,20 @@ def _rollup_one(recipe: 'RecipeNutritionInput', food_ids_by_item: dict, foods: d
             continue
 
         counted += 1
+        total_grams += grams
+        # The HSR fvnl numerator. Keyed off USDA's own food-group description
+        # (see `food_categories.py`) — never off the user's StockGroup, which
+        # is their filing system and none of this feature's business.
+        if is_fvnl_category(getattr(food, "food_category", None)):
+            fvnl_grams += grams
         hundreds = grams / 100.0
-        for key, per_100g in (
-            ("kcal", food.kcal_per_100g),
-            ("protein_g", food.protein_g_per_100g),
-            ("carbs_g", food.carbs_g_per_100g),
-            ("fat_g", food.fat_g_per_100g),
-        ):
+        for key, attr in _SUMMED_NUTRIENTS:
+            per_100g = getattr(food, attr, None)
             if per_100g is None:
                 continue
             totals[key] += hundreds * float(per_100g)
             contributors[key] += 1
+            known_grams[key] += grams
 
     servings = recipe.servings if (recipe.servings or 0) > 0 else None
     divisor = float(servings) if servings else 1.0
@@ -310,13 +378,44 @@ def _rollup_one(recipe: 'RecipeNutritionInput', food_ids_by_item: dict, foods: d
             return None
         return round(totals[key] / divisor, places)
 
+    # ── Health Star Rating ──────────────────────────────────────────────
+    # Scored per 100 g of the dish, which is a different basis from every
+    # other figure here (those are per serving). `total_grams` is the raw
+    # summed weight — see the field's note for why that is an estimate.
+    rating = None
+    fvnl_percent = None
+    coverage: dict[str, float] = {}
+    if total_grams > 0:
+        fvnl_percent = round(100.0 * fvnl_grams / total_grams, 1)
+        coverage = {
+            key: round(known_grams[key] / total_grams, 3)
+            for key, _ in _SUMMED_NUTRIENTS
+        }
+
+        def per_100g(key: str) -> float | None:
+            # A nutrient nothing carried is None, not 0 — `rate()` reads the
+            # difference, and so does the coverage line.
+            if contributors[key] == 0:
+                return None
+            return totals[key] / (total_grams / 100.0)
+
+        rating = hsr.rate(hsr.NutrientProfile(
+            energy_kj = hsr.kcal_to_kj(per_100g("kcal")),
+            saturated_fat_g = per_100g("saturated_fat_g"),
+            total_sugars_g = per_100g("sugars_g"),
+            sodium_mg = per_100g("sodium_mg"),
+            protein_g = per_100g("protein_g"),
+            fibre_g = per_100g("fibre_g"),
+            fvnl_percent = fvnl_percent,
+        ))
+
     return RecipeNutrition(
         basis = BASIS_SERVING if servings else BASIS_RECIPE,
         servings = servings,
-        kcal = per_basis("kcal", 0),
-        protein_g = per_basis("protein_g", 1),
-        carbs_g = per_basis("carbs_g", 1),
-        fat_g = per_basis("fat_g", 1),
+        kcal = per_basis("kcal", _NUTRIENT_DECIMALS["kcal"]),
+        protein_g = per_basis("protein_g", _NUTRIENT_DECIMALS["protein_g"]),
+        carbs_g = per_basis("carbs_g", _NUTRIENT_DECIMALS["carbs_g"]),
+        fat_g = per_basis("fat_g", _NUTRIENT_DECIMALS["fat_g"]),
         counted_count = counted,
         total_count = total_count,
         uncounted = {reason: count for reason, count in uncounted.items() if count},
@@ -324,6 +423,14 @@ def _rollup_one(recipe: 'RecipeNutritionInput', food_ids_by_item: dict, foods: d
             counted > 0 and total_count > 0
             and (counted / total_count) >= RELIABLE_COVERAGE_RATIO
         ),
+        saturated_fat_g = per_basis("saturated_fat_g", _NUTRIENT_DECIMALS["saturated_fat_g"]),
+        sugars_g = per_basis("sugars_g", _NUTRIENT_DECIMALS["sugars_g"]),
+        fibre_g = per_basis("fibre_g", _NUTRIENT_DECIMALS["fibre_g"]),
+        sodium_mg = per_basis("sodium_mg", _NUTRIENT_DECIMALS["sodium_mg"]),
+        total_grams = round(total_grams, 1) if total_grams > 0 else None,
+        fvnl_percent = fvnl_percent,
+        nutrient_coverage = coverage,
+        rating = rating,
     )
 
 

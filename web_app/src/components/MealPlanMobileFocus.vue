@@ -135,17 +135,20 @@
                     <MealPlanWeekStatus
                         :planned-count="plannedCount"
                         :shortfall-count="shortfallCount"
-                        :need-to-buy-count="needToBuyCount"
+                        :outstanding-count="outstandingCount"
+                        :on-list-count="onListCount"
                         :cook-by-label="cookByLabel"
                     />
+                    <!-- Owner feedback 2026-08-27 — opens the shared picker
+                         instead of generating a list behind your back. -->
                     <BaseButton
                         v-if="needToBuyCount > 0"
                         variant="primary"
                         class="full-width q-mt-sm"
-                        :icon="ICONS.shopping_cart"
-                        label="Generate shopping list"
+                        :icon="ICONS.add_shopping_cart"
+                        :label="addToListLabel"
                         :loading="generating"
-                        @click="emit('generateList')"
+                        @click="emit('addToList')"
                     />
                 </q-card-section>
             </q-card>
@@ -202,7 +205,10 @@
         weekRangeLabel: string;
         plannedCount: number;
         shortfallCount: number;
+        /** Everything the week needs that isn't in the pantry. */
         needToBuyCount: number;
+        /** …of those, the ones not yet on any open list. */
+        outstandingCount: number;
         cookByLabel: string;
         generating: boolean;
     }>();
@@ -216,7 +222,7 @@
         (e: 'entryUnlink', entry: MealPlanEntry): void;
         (e: 'entryLighter', entry: MealPlanEntry): void;
         (e: 'addToSlot', dayIso: string, slot: string): void;
-        (e: 'generateList'): void;
+        (e: 'addToList'): void;
         (e: 'goPrevWeek'): void;
         (e: 'goNextWeek'): void;
         (e: 'print'): void;
@@ -265,12 +271,24 @@
         return new Date(iso).getDate();
     }
 
+    const onListCount = computed(
+        () => props.needToBuyCount - props.outstandingCount,
+    );
+    // The collapsed header's one-line summary. Owner feedback 2026-08-27 —
+    // this is the "8 planned, 3 to buy" line that never moved; it now counts
+    // what's outstanding and says where the rest went.
     const weekStatusCaption = computed(() => {
         const parts: string[] = [];
         if (props.shortfallCount) parts.push(`${props.shortfallCount} to cook`);
-        if (props.needToBuyCount) parts.push(`${props.needToBuyCount} to buy`);
+        if (props.outstandingCount) parts.push(`${props.outstandingCount} to buy`);
+        if (onListCount.value) parts.push(`${onListCount.value} on a list`);
         return parts.join(' · ');
     });
+    const addToListLabel = computed(() => (
+        props.outstandingCount > 0
+            ? `Add ${props.outstandingCount} to a list`
+            : 'Add to a list'
+    ));
 
     // ── Add-flow: slot picker → emit('addToSlot') (parent opens the recipe sheet) ──
     const slotSheetOpen = ref(false);

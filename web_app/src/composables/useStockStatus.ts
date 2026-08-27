@@ -1,6 +1,8 @@
 import { storeToRefs } from 'pinia';
 import { colourForSequence } from 'src/helpers/stockLevelLogic';
-import { needsRestockSequence } from 'src/helpers/stockStatus';
+import {
+    isLowStockSequence, isOutOfStockSequence, needsRestockSequence,
+} from 'src/helpers/stockStatus';
 import { useStockItemStore } from 'src/stores/stockItemStore';
 import { useStockLevelStore } from 'src/stores/stockLevelStore';
 import { computed } from 'vue';
@@ -42,5 +44,21 @@ export function useStockStatus() {
         return seq === null || needsRestockSequence(seq);
     }
 
-    return { levelSequenceForItem, stockStatusLabel, stockStatusColour, needsBuying };
+    // Owner feedback 2026-08-27 — the shared add-to-list picker needs the two
+    // bands separately (missing sorts above low, and "Select missing" means
+    // both). A recipe ingredient carries these as server-derived booleans; a
+    // meal-plan aggregate doesn't, so they're resolved from the level here
+    // rather than re-derived per surface (R-003).
+    function isMissing(stockItemId: string): boolean {
+        const seq = levelSequenceForItem(stockItemId);
+        return seq === null || isOutOfStockSequence(seq);
+    }
+    function isLowStock(stockItemId: string): boolean {
+        return isLowStockSequence(levelSequenceForItem(stockItemId));
+    }
+
+    return {
+        levelSequenceForItem, stockStatusLabel, stockStatusColour, needsBuying,
+        isMissing, isLowStock,
+    };
 }

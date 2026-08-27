@@ -154,6 +154,12 @@ def _feature_flags(setting) -> dict[str, bool]:
             # of the user's display preferences. An install-wide flag here would
             # have been answering for the wrong scope.
             flags["meal_planning"] = bool(setting.meal_planning_enabled)
+            # Owner ask 2026-08-27 — the recipe Health Star Rating. Off
+            # everywhere by default; it is an AU/NZ scheme, and Settings'
+            # "Match this device" is what offers it to the installs it was
+            # designed for.
+            flags["health_star_rating"] = bool(
+                getattr(setting, "health_star_rating_enabled", False))
             flags["money"] = bool(setting.money_enabled)
             flags["companion_ingestion"] = bool(setting.companion_ingestion_enabled)
             flags["deals_email"] = bool(setting.deals_email_enabled)
@@ -208,13 +214,28 @@ def _locale_policy(setting) -> dict[str, str]:
     defaults."""
     currency = "AUD"
     locale = "en-AU"
+    # Owner feedback 2026-08-27 — the measurement system rides along here for
+    # the same reason currency does: *every* user's unit dropdowns are built
+    # from it, not just an admin's, so it cannot live on the admin-only
+    # `/app-settings` payload. The client filters its picker vocabulary by
+    # this and never re-derives which units belong to which system (R-003 —
+    # the mapping is `units.UNIT_SYSTEMS`, mirrored into the generated
+    # `units_table.ts`).
+    measurement_system = "metric"
     try:
         if setting is not None:  # FU-388 — shared singleton, fetched once by health_check
             currency = (getattr(setting, "currency", None) or currency).strip() or currency
             locale = (getattr(setting, "locale", None) or locale).strip() or locale
+            measurement_system = (
+                getattr(setting, "measurement_system", None) or measurement_system
+            ).strip() or measurement_system
     except Exception:
         pass
-    return {"currency": currency, "locale": locale}
+    return {
+        "currency": currency,
+        "locale": locale,
+        "measurement_system": measurement_system,
+    }
 
 
 def _image_policy(setting) -> dict[str, int]:

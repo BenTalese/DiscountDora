@@ -1,7 +1,6 @@
-// shared types for the structured-steps editor. Extracted
-// from the .vue files so both `RecipeStepsEditor` and `RecipeStepRow` (and
-// the host page) import from a plain .ts module (cleaner than importing a
-// type from a .vue SFC).
+// Shared types for the structured method. A plain .ts module rather than an
+// SFC because `<script setup>` can't export — `RecipeStructuredMethod`,
+// `RecipeStepLinksDialog` and the host page all read from here.
 
 export type EditableStep = {
     client_id: string;
@@ -17,15 +16,6 @@ export type EditableStep = {
      *  group. Sub-steps inherit visually from their parent — the editor
      *  doesn't expose a picker on depth-1 rows. */
     section_client_id: string | null;
-};
-
-/** Display row enriched with the sibling index + depth, so the row
- *  component can decide whether move-up/down/sub-step are valid without
- *  re-deriving from the flat array. */
-export type StepRowView = EditableStep & {
-    depth: 0 | 1;
-    sibling_index: number;
-    sibling_total: number;
 };
 
 export type IngredientOption = {
@@ -47,4 +37,13 @@ export type ToolOption = {
 export type SectionOption = {
     value: string | null;
     label: string;
+};
+
+/** The slice of a step that `RecipeStepLinksDialog` owns — what the step
+ *  uses, and (top-level only) which section it belongs to. Lives here rather
+ *  than in the SFC because `<script setup>` can't export. */
+export type StepLinks = {
+    ingredient_client_ids: string[];
+    tool_ids: string[];
+    section_client_id: string | null;
 };

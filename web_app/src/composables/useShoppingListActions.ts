@@ -62,6 +62,33 @@ export function useShoppingListActions() {
     }
 
     /**
+     * Owner feedback 2026-08-27 — the commit half of the shared add-to-list
+     * flow (`AddToListDialog`). The dialog can offer "+ New list", so the
+     * target may not exist yet; creating it here keeps both callers from
+     * hand-rolling create-then-add in slightly different orders.
+     *
+     * Returns the list the items landed on, so a caller can navigate to it.
+     */
+    async function addStockItemsToList(
+        targetListId: string | null,
+        stockItemIds: string[],
+        newListName: string,
+    ): Promise<string | null> {
+        let listId = targetListId;
+        if (listId === null) {
+            try {
+                const created = await api.createAsync({ name: newListName });
+                listId = created.shopping_list_id;
+            } catch (err) {
+                notifyErr('Could not create the list.', String(err));
+                return null;
+            }
+        }
+        await addItems(listId, stockItemIds.map((id) => ({ stock_item_id: id })));
+        return listId;
+    }
+
+    /**
      * C-7 Chunk 1 — remove a stock item from a single list. Returns true on
      * success, false on failure. The caller composes higher-level UX
      * (toast, multi-list popover); this helper handles the API round-trip
@@ -140,5 +167,8 @@ export function useShoppingListActions() {
         }
     }
 
-    return { addItems, finishShopping, removeFromList, removeFromAllLists };
+    return {
+        addItems, addStockItemsToList, finishShopping, removeFromList,
+        removeFromAllLists,
+    };
 }

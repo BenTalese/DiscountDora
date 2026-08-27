@@ -74,8 +74,12 @@ export function expiryIndicatorFor(
         case 'none':
         default:
             return {
+                // An *empty* calendar, not the ticked one. `ok` and `none`
+                // used to share `event_available` and differ only by colour,
+                // so a far-future expiry and no-expiry-at-all read the same
+                // at a glance (owner feedback 2026-08-27).
                 tone,
-                icon: ICONS.event_available,
+                icon: ICONS.event_blank,
                 colour: null,
                 cssClass: 'dora-text-muted',
                 tooltip: 'No expiry set — click to push or set one',

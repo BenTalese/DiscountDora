@@ -22,6 +22,68 @@ top-to-bottom.
 
 ---
 
+## Meal plans: the 2026-08-27 add-to-list batch
+Driven live end-to-end in the pane on both surfaces: the shared picker opens
+from the planner and from a recipe, rows carry quantity + "for <meal>", already-
+on-a-list rows come up unticked and are skipped by Select all, the add round-
+trips, and the week's counts moved 6-to-buy/3-on-a-list → all-on-a-list. What's
+left is what a 0×0 non-painting pane can't show: pixels, and the desktop layout
+branch (`$q.screen` is permanently mobile there).
+- [ ] On a real phone, open **Build my week**. Confirm the card fits the screen
+      with no horizontal scroll, the three step labels sit under their dots, and
+      on the Review step each meal's day/slot pickers stack under the meal name
+      with the servings stepper and the swap/remove buttons on one line beneath.
+- [ ] Same modal, Review step: confirm the ingredient list scrolls with the
+      dialog rather than inside its own short window.
+- [ ] On a desktop width, confirm the planner's right-hand shopping card shows
+      the outstanding count as its headline number, "N already on a list"
+      beneath it, and a button reading **Add N to a list**.
+- [ ] Add to a list with **+ New list** chosen: confirm the name pre-fills as
+      *Meals: week of <date>* and that creating it lands you on the new list.
+
+## Settings: the 2026-08-27 units + voice batch
+The units setting was driven live end-to-end (saved, validated, propagated
+through `/api/health`, and confirmed to narrow the pickers to metric / imperial
+/ US). What's left is what the pane can't show.
+- [ ] Firefox: open Settings → Voice. Confirm the "no text-to-speech voices
+      installed" note matches what Firefox actually reports on your machine,
+      that the device-voice card's **Preview** button is hidden rather than
+      silent, and that Dora still speaks through her neural voice. — origin FU-751
+- [ ] Flip Units to **US customary**, then open a recipe's ingredient editor and
+      the price-entry widget on a real (non-dev) build. Confirm both dropdowns
+      offer US units, and that a recipe row already holding `g` still shows `g`
+      in its own dropdown.
+- [ ] Flip Units to **US customary** and confirm a per-unit price re-quotes in
+      `/lb` or `/oz` rather than `/kg` — the denominator and the picker come off
+      the one setting now, so they should never disagree.
+
+## Cook mode: the 2026-08-27 header + method batch
+Driven live in the pane: the step source follows `steps_mode` in both
+directions, Exit and Sous Chef are icon-only, Sous Chef's on-state is a filled
+primary circle with `aria-pressed`, the mic renders a real glyph, and the
+identity band is `nowrap` with an ellipsised name.
+- [ ] On a **real phone**, open a recipe with a long name. Confirm the name stays
+      on the exit button's line and truncates, and that the headcount control
+      sits on its own row without crushing the voice buttons.
+- [ ] Same phone: read a step. Is `text-h4` right at that width, or does a long
+      step need to shrink? — origin FU-752
+- [ ] Open **the recipe whose photo steps were broken**. If the photos render,
+      FU-755 closes. If they don't, you'll now get "This step's photo couldn't be
+      loaded" instead of the word "Step 1" — check the network tab for the URL
+      that failed. — origin FU-755
+
+## Stocktake: the 2026-08-27 dataset + help move
+Driven live against the dev seed: `/api/stocktake/session` returns a populated
+Review (1 confident item), a Walk spanning low and medium confidence, and a
+Sweep — and the runner's (?) is now an anchor to `#/help?q=How+stocktake+works`
+with no dialog in the DOM.
+- [ ] Walk a full run in the browser: confirm the Review phase renders its
+      pre-ticked card, the Walk's per-item reasons differ from each other rather
+      than all reading the same, and the Tidy-up phase appears at the end.
+- [ ] Demo mode (`DORA_DEMO_MODE=true`): confirm the showcase seed produces the
+      same three-phase shape, with the curated names (Plain Flour, Greek Yoghurt,
+      Tomato Passata, Bicarb Soda, Rice Wine Vinegar).
+
 ## Stock: the 2026-08-24 feedback batch
 Suites green, nothing walked — the verify configs reseed the DB, so the build
 session didn't run one.
@@ -2834,3 +2896,30 @@ answer.
       list both disappear — the *toggle* itself was walked live on 2026-08-19
       (it writes the per-user field); what's unverified is the two surfaces
       reacting to it.
+
+
+## Recipe page — the 2026-08-27 feedback batch
+Most of this batch was driven live (see the worklog); what's left needs a real
+device or a real file picker.
+
+- [ ] Pick a photo for a **photo-step** recipe through the OS file picker — the
+      native round-trip can't be agent-driven. Check the new photo appears in
+      the grid **before** you save, and survives the save.
+- [ ] Walk the recipe page on a **real phone**: the method heading wraps its
+      step-style switch onto its own line at 375px, and the ingredient rows'
+      cart button should be reachable with a thumb without hover.
+- [ ] Open the **step links** dialog (the 🔗 on a step while editing) on a phone
+      and confirm the ingredient/tool pickers behave — Quasar popups could not
+      be rendered in the agent's pane ([[FU-737]]).
+- [ ] Drag a step by its **number** to reorder it (the numeral is the drag
+      handle now). Pointer devices only; ↑/↓ is the phone path.
+
+## Recipe page — Health Star Rating
+- [ ] Import a **real USDA dataset** (Settings → Admin → Nutrition) and confirm
+      foods come back with a category — then check a genuinely vegetable-heavy
+      recipe rates well and a rich one doesn't. The agent verified this against
+      hand-seeded foods, not a real import.
+- [ ] Press **Settings → Region → "Match this device"** on a machine that is
+      *not* in AU/NZ and confirm the rating prompt does **not** appear.
+- [ ] With the rating on but nutrition in **simple** mode, confirm the admin
+      page's warning banner reads correctly and no stars appear anywhere.

@@ -27,11 +27,22 @@
                 />
             </div>
             <div class="voice-card__desc">
-                Uses your device or browser's built-in text-to-speech. Always
-                available — no download, but it sounds robotic next to the
-                neural voices.
+                Uses your device or browser's built-in text-to-speech. No
+                download needed, but it sounds robotic next to the neural
+                voices — and it only exists where the browser has voices
+                installed.
             </div>
-            <div v-if="browserTtsAvailable" class="voice-card__actions">
+            <!-- "Always available" was the old copy and it wasn't true: a
+                 browser can expose SpeechSynthesis and hold zero voices, in
+                 which case both this card and its Preview button are dead
+                 controls that fail silently (owner feedback 2026-08-27 —
+                 Firefox). Say so, and hide the Preview rather than offering a
+                 button that does nothing. -->
+            <div v-if="!deviceVoiceUsable" class="voice-card__desc voice-card__desc--warn">
+                Not available in this browser — no text-to-speech voices are
+                installed. Dora will use her neural voice instead.
+            </div>
+            <div v-if="canPreviewDevice" class="voice-card__actions">
                 <button
                     type="button"
                     class="voice-card__btn voice-card__btn--ghost"
@@ -135,7 +146,7 @@
 </template>
 
 <script lang="ts" setup>
-    import { onBeforeUnmount, ref } from 'vue';
+    import { computed, onBeforeUnmount, ref } from 'vue';
     import { useQuasar } from 'quasar';
     import AppSpinner from 'src/components/AppSpinner.vue';
     import { ICONS } from 'src/style/icons';
@@ -153,6 +164,11 @@
         piperAvailable: boolean;
         // True when the user is on the browser/device voice (engine = browser).
         deviceDefaultActive?: boolean;
+        /** Whether the device voice can actually make a sound here. Owned by
+         *  `useSpeechOutput` (one probe, one answer — R-003); this component
+         *  renders it rather than re-testing `'speechSynthesis' in window`,
+         *  which is the check that reported Firefox as working. */
+        deviceVoiceUsable?: boolean;
         disabled?: boolean;
     }>();
     const emit = defineEmits<{
@@ -176,6 +192,12 @@
     // mobile), separate from the neural <audio> path below.
     const browserTtsAvailable =
         typeof window !== 'undefined' && 'speechSynthesis' in window;
+    /** The API being present is necessary but not sufficient — the caller's
+     *  probe decides. Left permissive when the prop is absent so an existing
+     *  caller that doesn't pass it behaves as before. */
+    const canPreviewDevice = computed(
+        () => browserTtsAvailable && props.deviceVoiceUsable !== false,
+    );
     const browserPreviewing = ref(false);
 
     function onDeviceDefaultClick() {
@@ -184,7 +206,7 @@
     }
 
     function onDeviceDefaultPreview() {
-        if (!browserTtsAvailable) return;
+        if (!canPreviewDevice.value) return;
         const synth = window.speechSynthesis;
         if (browserPreviewing.value) {
             synth.cancel();
@@ -372,6 +394,12 @@
         font-size: 0.8125rem;
         line-height: 1.35;
         color: var(--text-secondary);
+    }
+
+    /* The "this control is dead here" note on the device-voice card. Muted
+       rather than alarming — nothing is broken, this device just can't do it. */
+    .voice-card__desc--warn {
+        color: var(--semantic-warning, var(--text-secondary));
     }
     .voice-card__actions {
         display: flex;

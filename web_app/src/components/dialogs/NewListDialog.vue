@@ -392,7 +392,7 @@
                 if (targetListId) {
                     const counts = await bulkAddToList(
                         targetListId,
-                        ingredients
+                        ingredients.items
                             .map((i) => i.stock_item_id)
                             .filter((id): id is string => Boolean(id)),
                     );

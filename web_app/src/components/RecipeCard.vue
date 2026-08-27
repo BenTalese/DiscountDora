@@ -49,6 +49,30 @@
                 <q-chip v-if="recipe.difficulty" dense :icon="ICONS.difficulty">
                     {{ recipe.difficulty }}
                 </q-chip>
+                <!-- Health Star Rating (owner ask 2026-08-27), beside the
+                     kcal chip it qualifies. Bare stars rather than a chip:
+                     this row is already a run of chips, and the one thing
+                     meant to be scannable across a grid shouldn't look like
+                     another fact box. -->
+                <span
+                    v-if="rating"
+                    class="recipe-card__hsr"
+                    :class="{ 'recipe-card__hsr--part': !ratingJudgeable }"
+                >
+                    <RecipeHealthStars
+                        :stars="rating.stars"
+                        size="sm"
+                        :show-value="false"
+                        :qualifier="ratingJudgeable ? 'estimated' : 'estimated from part of the recipe'"
+                    />
+                    <q-tooltip>
+                        Health Star Rating {{ rating.stars.toFixed(1) }} of 5{{
+                            ratingJudgeable
+                                ? ''
+                                : ' — worked out from only part of this recipe'
+                        }}
+                    </q-tooltip>
+                </span>
                 <!-- FU-637 — kcal per serving while you're choosing, which is
                      where it's actually useful. A thin complex-mode estimate
                      still shows (hiding it would be its own kind of lie) but
@@ -167,10 +191,12 @@
 <script lang="ts" setup>
     import BaseButton from 'src/components/BaseButton.vue';
     import ExpiringChip from 'src/components/recipes/ExpiringChip.vue';
+    import RecipeHealthStars from 'src/components/recipes/RecipeHealthStars.vue';
+    import { useHealthStarRating } from 'src/composables/useHealthStarRating';
     import { ICONS } from 'src/style/icons';
     import type { Recipe } from 'src/models/recipe';
     import { useRecipeDisplay } from 'src/composables/useRecipeDisplay';
-    import { ref } from 'vue';
+    import { computed, ref } from 'vue';
 
     const props = withDefaults(
         defineProps<{
@@ -220,6 +246,13 @@
         cookable, cookButtonColor, cookButtonTooltip, addListTooltip,
         inferenceTooltip, initial, mediaStyle, imageUrl,
     } = useRecipeDisplay(() => props.recipe);
+
+    // Same source as the compact row's stars — the list rollup that already
+    // runs for the whole page (R-003), so the grid costs nothing extra.
+    const { ratingAvailable, ratingOf } = useHealthStarRating();
+    const rating = computed(() =>
+        (ratingAvailable.value ? ratingOf(props.recipe).rating : null));
+    const ratingJudgeable = computed(() => ratingOf(props.recipe).judgeable);
 
     function onAddToList() {
         if (cookable.value) {
@@ -287,4 +320,9 @@
         -webkit-box-orient: vertical;
         overflow: hidden;
     }
+
+    /* Mirrors `.recipe-row__hsr`: a partial rating dims rather than gaining a
+       "(part)" suffix, because the stars still have to read as stars. */
+    .recipe-card__hsr { display: inline-flex; align-items: center; }
+    .recipe-card__hsr--part { opacity: 0.55; }
 </style>

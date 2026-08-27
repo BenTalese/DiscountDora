@@ -128,3 +128,25 @@ def test__resolve_newly_swept__DroppedOutExactlyAtTheWatermark__IsNotListed():
     activity = {item.id: NOW - timedelta(days=70)}
 
     assert _run([item], activity, last_session) == []
+
+
+def test__resolve_newly_swept__NaiveLastSessionAt__StillDatesTheDropOut():
+    """A naive ``last_session_at`` must not blow the endpoint up.
+
+    SQLite hands back naive datetimes for ``DateTime(timezone=True)`` columns,
+    so ``User.stocktake_last_session_at`` arrives naive on a SQLite install
+    while every value it is compared against here is tz-aware. The bare ``<=``
+    raised TypeError and 500'd ``GET /api/stocktake/session`` for any user who
+    had ever completed a run.
+
+    It stayed hidden because nothing ever seeded a *past* session: the field
+    was None on every dev and test user, and None short-circuits the whole
+    function before the comparison. Same trap as FU-526, one field along.
+    """
+    item = _Item(name="vinegar")
+    last_activity = NOW - timedelta(days=WINDOW + 5)   # dropped out 5 days ago
+    naive_last_session = (NOW - timedelta(days=10)).replace(tzinfo=None)
+
+    result = _run([item], {item.id: last_activity}, naive_last_session)
+
+    assert [s.item.name for s in result] == ["vinegar"]

@@ -19,7 +19,9 @@ from dora_api.domain.entities.stock_item import StockItem
 from dora_api.features.meal_slots.slot_validation import (
     get_valid_slot_names, invalid_slot_message)
 from dora_api.features.recipes.recipe_tag_access import set_tag_ids_for_recipe
-from dora_api.features.recipes.recipe_tool_access import set_tool_ids_for_recipe
+from dora_api.features.recipes.recipe_tool_access import (
+    set_tool_ids_for_recipe, sync_recipe_tools_from_steps,
+)
 from dora_api.features.recipes.recipe_step_access import (
     StepWrite, replace_steps_for_recipe,
 )
@@ -404,6 +406,17 @@ class UpdateRecipeHandler:
                 replace_steps_for_recipe(recipe_id, _StepWrites)
             except ValueError as exc:
                 return UpdateRecipeResponse(invalid_step_message=str(exc))
+
+        # Recipe-view feedback 2026-08-27 — in structured mode the recipe's
+        # tools are the union of its steps' tools, not a separate list the
+        # user maintains in a second place. Derived *after* the steps replace
+        # (it reads what was just written) and after the mode flip, so a
+        # recipe switched into structured mode picks up the tools its existing
+        # steps already declare. A client-sent `tool_ids` for a structured
+        # recipe is deliberately overwritten rather than rejected: the page
+        # stops sending one, and an older client shouldn't 400.
+        if _Recipe.steps_mode == "structured":
+            sync_recipe_tools_from_steps(recipe_id)
 
         # PROPOSAL_RECIPE_IMAGE_STEPS — full-replace semantics matching `steps`
         # above. Empty list clears all rows; mode flip alone (without

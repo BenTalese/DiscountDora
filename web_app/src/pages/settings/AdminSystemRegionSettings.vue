@@ -2,7 +2,7 @@
     <div class="settings-page">
         <SettingsPageHeader
             title="Region & locale"
-            description="Where this household lives. Sets how money and dates are written, and which day counts as today."
+            description="Where this household lives. Sets how money and dates are written, which units you measure in, and which day counts as today."
             :icon="ICONS.language"
         />
 
@@ -27,6 +27,10 @@
                 <div class="region-preview__row">
                     <span class="region-preview__label">Today is</span>
                     <span class="region-preview__value">{{ previewToday }}</span>
+                </div>
+                <div class="region-preview__row">
+                    <span class="region-preview__label">Units</span>
+                    <span class="region-preview__value">{{ previewUnits }}</span>
                 </div>
                 <!-- One button replaces the two "Use this device" buttons that
                      used to sit in separate sections doing overlapping jobs.
@@ -102,6 +106,33 @@
                     />
                 </SettingsRow>
 
+                <!-- Owner feedback 2026-08-27: *"Locale and region settings
+                     should also include units config, which then determines
+                     what units appear throughout the app."* It belongs beside
+                     currency and language for the same reason those two sit
+                     together — all three are "where does this household
+                     live?", expressed as conventions rather than as a country.
+                     A plain radio-style select: three options, all visible, no
+                     free text (an unlisted measurement system does not exist
+                     the way an unlisted currency does). -->
+                <SettingsRow
+                    label="Units"
+                    help="Which units the app offers when you enter a quantity or a price."
+                >
+                    <q-select
+                        :model-value="systemDraft"
+                        :options="SYSTEM_CHOICES"
+                        outlined
+                        dense
+                        emit-value
+                        map-options
+                        options-dense
+                        class="region-field"
+                        :disable="saving"
+                        @update:model-value="onPickSystem"
+                    />
+                </SettingsRow>
+
                 <SettingsRow
                     label="Timezone"
                     help="Fixes the &quot;today&quot; boundary, wherever the server runs."
@@ -137,7 +168,8 @@
     import { ICONS } from 'src/style/icons';
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';
-    import AppSettingsApiService from 'src/services/api/appSettingsApiService';
+    import AppSettingsApiService, { type AppSettings }
+        from 'src/services/api/appSettingsApiService';
     import BaseButton from 'src/components/BaseButton.vue';
     import { useAuthStore } from 'src/stores/authStore';
     import { computed, onMounted, ref } from 'vue';
@@ -146,16 +178,35 @@
     import SettingsRow from 'src/components/settings/SettingsRow.vue';
     import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
     import { refreshMoneyPolicy } from 'src/composables/useMoney';
+    import { useFeatureFlags } from 'src/composables/useFeatureFlags';
     import { CURRENCY_CHOICES, LOCALE_CHOICES } from 'src/models/regionChoices';
+    import { unitsForSystem, useMeasurementSystem } from 'src/composables/useMeasurementSystem';
+    import type { MeasurementSystem } from 'src/generated/units_table';
 
     const $q = useQuasar();
     const { isAdmin } = storeToRefs(useAuthStore());
     const api = new AppSettingsApiService();
+    // The Health Star Rating nudge flips an install-wide flag that /api/health
+    // publishes, so the cached map has to be re-read or the cookbook and recipe
+    // page keep running on the stale answer until a reload.
+    const { refresh: refreshFlags } = useFeatureFlags();
+    const { reload: reloadMeasurementSystem } = useMeasurementSystem();
 
     const loading = ref(true);
     const saving = ref(false);
 
     const timezoneDraft = ref<string>('UTC');
+    const systemDraft = ref<MeasurementSystem>('metric');
+    let lastSavedSystem: MeasurementSystem = 'metric';
+
+    /** The three systems, described by what you'll actually see rather than by
+     *  their names — "imperial" and "US customary" are the same word to most
+     *  people, and the difference that matters here is the pint and the cup. */
+    const SYSTEM_CHOICES: ReadonlyArray<{ value: MeasurementSystem; label: string }> = [
+        { value: 'metric', label: 'Metric — ml, L, g, kg, 250 ml cup' },
+        { value: 'imperial', label: 'Imperial (UK) — metric plus oz, lb, fl oz, pint' },
+        { value: 'us', label: 'US customary — fl oz, qt, oz, lb, 240 ml cup' },
+    ];
     const currencyDraft = ref<string>('AUD');
     const localeDraft = ref<string>('en-AU');
     const currencyError = ref<string | null>(null);
@@ -263,6 +314,17 @@
         }).format(new Date()),
         '—',
     ));
+
+    /** A handful of representative units from the chosen system, so the effect
+     *  of the setting is visible in the preview block alongside money and
+     *  dates rather than only discoverable by opening a dropdown elsewhere.
+     *  Drawn from the same generated mapping the pickers use (R-003), then cut
+     *  to a readable sample — this is a preview, not the vocabulary. */
+    const PREVIEW_UNIT_ORDER = ['ml', 'L', 'fl oz', 'pt', 'qt', 'g', 'kg', 'oz', 'lb', 'cup', 'US cup'];
+    const previewUnits = computed(() => {
+        const offered = unitsForSystem(systemDraft.value);
+        return PREVIEW_UNIT_ORDER.filter((u) => offered.has(u)).join(' · ');
+    });
 
     // ── Option lists ──────────────────────────────────────────────────
     const currencyOptions = ref([...CURRENCY_CHOICES]);
@@ -389,15 +451,177 @@
         }
     }
 
+    async function onPickSystem(value: MeasurementSystem) {
+        if (!value || value === lastSavedSystem) return;
+        const previous = systemDraft.value;
+        systemDraft.value = value;   // preview follows the pick immediately
+        saving.value = true;
+        try {
+            const result = await api.updateAsync({ measurement_system: value });
+            systemDraft.value = result.measurement_system;
+            lastSavedSystem = result.measurement_system;
+            // Same reason the currency save calls `refreshMoneyPolicy`: the
+            // value the rest of the app reads is the cached /api/health copy,
+            // so without this every unit dropdown keeps offering the old
+            // system's units until a page reload.
+            await reloadMeasurementSystem();
+        } catch (err) {
+            systemDraft.value = previous;
+            $q.notify({
+                type: 'negative', position: 'bottom-right',
+                message: 'Could not save the unit system.',
+                caption: toastCaption(err),
+            });
+        } finally {
+            saving.value = false;
+        }
+    }
+
     async function onMatchDevice() {
         const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
         const language = (typeof navigator !== 'undefined' && navigator.language) || '';
         if (zone) await onSaveTimezone(zone);
         if (language) await onPickLocale(language);
+        const detected = systemForRegion(language);
+        if (detected) await onPickSystem(detected);
         $q.notify({
             type: 'positive', position: 'bottom-right',
             message: 'Matched to this device. Currency is unchanged — set it below.',
         });
+        await offerHealthStarRating(language, zone);
+    }
+
+    /** The measurement system implied by a device's BCP-47 region subtag, or
+     *  null when we can't tell and shouldn't guess.
+     *
+     *  Only three regions get a non-metric answer, and the list is short
+     *  because it is genuinely short: the United States (and its territories
+     *  that follow it) use US customary; the UK uses metric-plus-imperial;
+     *  everywhere else is metric. Unlike the timezone-first rule the Health
+     *  Star nudge needed, this reads the *language tag* — an en-GB machine in
+     *  Sydney is telling us which conventions its user reads in, which is
+     *  exactly the question here, whereas the HSR prompt was asking where the
+     *  device physically is.
+     *
+     *  Returning null rather than 'metric' for an unparseable tag matters:
+     *  "Match this device" should leave a deliberately-chosen setting alone
+     *  when it learns nothing, not reset it. */
+    function systemForRegion(language: string): MeasurementSystem | null {
+        if (!language) return null;
+        let region: string | undefined;
+        try {
+            region = new Intl.Locale(language).region ?? undefined;
+        } catch {
+            region = undefined;
+        }
+        if (!region) {
+            const upper = language.toUpperCase();
+            const match = /-([A-Z]{2})$/.exec(upper);
+            region = match?.[1];
+        }
+        if (!region) return null;
+        if (region === 'US' || region === 'PR' || region === 'GU') return 'us';
+        if (region === 'GB') return 'imperial';
+        return 'metric';
+    }
+
+    /** Owner's call 2026-08-27 — the Health Star Rating ships off everywhere,
+     *  because it is an Australian/New Zealand government scheme and an
+     *  install elsewhere should not be handed a national rating as though it
+     *  were universal. But that leaves the people it *was* designed for
+     *  hunting for a switch they have no reason to know exists, so detecting
+     *  an AU or NZ device is the one moment where offering it is useful rather
+     *  than presumptuous.
+     *
+     *  Offered, never applied: this asks, and a "No thanks" is remembered by
+     *  simply leaving the setting off. Nothing here nags again — the prompt is
+     *  attached to an explicit button press, not to page load. */
+    async function offerHealthStarRating(language: string, zone: string) {
+        if (!isAustralasian(language, zone)) return;
+        let settings: AppSettings;
+        try {
+            settings = await api.getAsync();
+        } catch {
+            // The nudge is a convenience; a failed read is not worth a second
+            // error toast on top of the save that just succeeded.
+            return;
+        }
+        if (settings.health_star_rating_enabled) return;
+
+        $q.dialog({
+            title: 'Turn on Health Star Ratings?',
+            message:
+                'This device looks like it\'s in Australia or New Zealand, where '
+                + 'the Health Star Rating is the standard front-of-pack guide. Dora '
+                + 'can work one out for your recipes.<br><br>'
+                + 'It needs nutrition set to complex, and ratings are estimates — '
+                + 'they\'re scored from the raw weight of the ingredients, not the '
+                + 'finished dish. You can change this any time in Settings → '
+                + 'Nutrition.',
+            html: true,
+            ok: { label: 'Turn it on', color: 'primary', noCaps: true },
+            cancel: { label: 'No thanks', flat: true, noCaps: true },
+        }).onOk(() => { void enableHealthStarRating(); });
+    }
+
+    /** Is this device in Australia or New Zealand?
+     *
+     *  **Timezone first, language second** — found the hard way while testing
+     *  this: the machine reported `navigator.language === 'en-GB'` with
+     *  `timeZone === 'Australia/Sydney'`. Plenty of Australians run their OS
+     *  in en-GB, so a language-only test would have silently never fired for
+     *  exactly the people the prompt exists for. The timezone is a statement
+     *  about *where the device is*; the language tag is a statement about
+     *  which words it prefers, and only sometimes about geography.
+     *
+     *  Either signal is enough. Over-offering costs one dismissable prompt
+     *  behind a button the user pressed on purpose; under-offering means the
+     *  feature is never found. */
+    function isAustralasian(language: string, zone: string): boolean {
+        return isAustralasianZone(zone) || isAustralasianLanguage(language);
+    }
+
+    /** IANA zone ids are `Area/Location`. Australia has its own area; New
+     *  Zealand sits under `Pacific/` alongside a great many places that are
+     *  not New Zealand, so those are named rather than prefix-matched. */
+    function isAustralasianZone(zone: string): boolean {
+        if (!zone) return false;
+        if (zone.startsWith('Australia/')) return true;
+        return ['Pacific/Auckland', 'Pacific/Chatham'].includes(zone);
+    }
+
+    /** By the BCP-47 tag's *region* subtag, not by a substring match: `en-AU`
+     *  and `mi-NZ` both qualify, and a tag that merely contains those letters
+     *  does not. Falls back to a suffix read when `Intl.Locale` can't parse
+     *  what the browser handed us. */
+    function isAustralasianLanguage(language: string): boolean {
+        if (!language) return false;
+        try {
+            const region = new Intl.Locale(language).region;
+            if (region) return region === 'AU' || region === 'NZ';
+        } catch {
+            // fall through to the textual read below
+        }
+        const upper = language.toUpperCase();
+        return upper.endsWith('-AU') || upper.endsWith('-NZ');
+    }
+
+    async function enableHealthStarRating() {
+        try {
+            await api.updateAsync({ health_star_rating_enabled: true });
+            await refreshFlags();
+            $q.notify({
+                type: 'positive', position: 'bottom-right',
+                message: 'Health Star Ratings on.',
+                caption: 'They show on recipes once nutrition is set to complex.',
+            });
+        } catch (err) {
+            $q.notify({
+                type: 'negative', position: 'bottom-right',
+                message: "Couldn't turn on Health Star Ratings.",
+                caption: toastCaption(err),
+            });
+        }
     }
 
     onMounted(async () => {
@@ -415,6 +639,10 @@
             if (s.locale) {
                 localeDraft.value = s.locale;
                 lastSavedLocale = s.locale;
+            }
+            if (s.measurement_system) {
+                systemDraft.value = s.measurement_system;
+                lastSavedSystem = s.measurement_system;
             }
             // FU-600: with money features off, no money surface mounts to
             // trigger the policy read lazily — so force one, or the rest of

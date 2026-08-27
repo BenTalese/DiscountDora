@@ -39,6 +39,119 @@ long session summary. Distinct from the other logs:
 
 ---
 
+## [OPEN] FU-757 — "New shopping list → start from a meal plan" still drops unlinked ingredients silently
+- **Raised:** 2026-08-27 (meal-plan add-to-list unification)
+- **Type:** finding
+- **What:** `NewListDialog.vue`'s `startFrom: 'meal_plan'` branch calls
+  `mealPlanApi.getIngredientsAsync` and now reads `.items` off the new envelope,
+  but ignores the `unlinked` field beside it. So a plan whose recipes carry
+  unmatched ingredients seeds a list that quietly omits them — exactly the gap
+  FU-505 opened and the one the shared picker just closed on the planner and the
+  recipe page. Same file's `recipe` branch has the same shape.
+- **Why deferred:** R-007 — the ask was the meal-plan/recipe add-to-list flow;
+  the new-list dialog is a third surface with its own composed form and its own
+  "pre-seeded / skipped" counters, so folding the report in properly is its own
+  small piece of work rather than a line in this diff.
+- **Recommended resolution:** opportunistic — next time that dialog is open for
+  any reason. Cites **R-057**; the data is already on the wire, so it's a
+  rendering job, not an API change.
+
+## [OPEN] FU-756 — `web_app/test/` is outside the lint scope and has drifted
+- **Raised:** 2026-08-27 (meal-plan add-to-list unification)
+- **Type:** finding
+- **What:** the project lints `web_app/src` only. Running eslint over `test/` as
+  well surfaces one pre-existing error —
+  `test/unit/useBuyVerdict.spec.ts:34` uses an `import()` type annotation, which
+  `@typescript-eslint/consistent-type-imports` forbids. One error across 46 spec
+  files means the specs are essentially compliant already, so widening the scope
+  is cheap; leaving it means the next drift is equally invisible.
+- **Why deferred:** unrelated to the change in hand (R-007), and widening a lint
+  scope is the kind of thing that should land on its own so a red gate has one
+  obvious cause.
+- **Recommended resolution:** opportunistic — fix the one error and add `test` to
+  the lint script's paths in the same small change.
+
+## [OPEN] FU-755 — Cook-mode photo steps: reported broken, could not be reproduced
+- **Raised:** 2026-08-27 (owner feedback batch — cook mode)
+- **Type:** finding
+- **What:** Owner reported *"photo steps don't appear, it's just text like 'step 1',
+  and tapping on it shows a broken modal (again just text)."* Two real defects were
+  found and fixed on that surface — `RecipeCookModeImageView` hand-rolled its image
+  URL as a literal `/api/...` instead of going through `recipeStepImageUrl`
+  (R-003), and a failed image degraded to bare `alt` text that reads exactly like
+  "this step is just text". But **neither is proven to be the cause**: driven live,
+  images seeded through the API render correctly in cook mode both before and after
+  the URL change, because the Vite dev server proxies `/api` and hides the missing
+  base. The literal path would only 404 in a **built SPA, the desktop bundle, or a
+  reverse-proxied self-host on a sub-path** — which may well be what the owner was
+  looking at, but that is a hypothesis, not a reproduction.
+- **Why deferred:** the reported state (his own recipe, his own uploaded photos)
+  could not be recreated from the seed, which has no image-mode recipe at all.
+- **Recommended resolution:** confirm in browser — open the *same recipe* that
+  showed the bug. If the photos now render, close this. If they still don't, the
+  new "This step's photo couldn't be loaded" placeholder distinguishes a failed
+  fetch from an empty recipe, and the network tab will name the URL that 404'd.
+
+## [OPEN] FU-754 — No image-mode or structured-mode recipe in either seed
+- **Raised:** 2026-08-27 (owner feedback batch — cook mode)
+- **Type:** finding
+- **What:** Every seeded recipe is `steps_mode: 'freeform'` with no structured steps
+  and no step images, in both `seed.py` and `seed_showcase.py`. So cook mode's
+  structured and image faces — and the recipe page's editors for them — have no
+  fixture at all, and verifying either means hand-building a recipe through the UI
+  or PATCHing one through the API (which is how FU-755 above had to be tested).
+- **Why deferred:** out of scope for the stocktake seed work in this unit, and it
+  wants a considered fixture (a recipe whose *photos* are meaningful) rather than
+  two placeholder pixels.
+- **Recommended resolution:** opportunistic — next time either mode is touched.
+  A showcase recipe with real step photos would also be worth having for the demo.
+
+## [OPEN] FU-753 — `PRICE_PICKER_CANONICAL_UNITS` is not narrowed by measurement system
+- **Raised:** 2026-08-27 (owner feedback batch — units config)
+- **Type:** finding
+- **What:** `units.PRICE_PICKER_CANONICAL_UNITS` is a fixed server-side whitelist
+  (`ml`/`L`/`g`/`kg`/`oz`/`lb`/`ea`/`dozen`/`pack`) that predates the measurement
+  system and mixes metric and imperial mass in one list. The **client** picker in
+  `PriceEntry.vue` now filters it by the install's system, so the UI is right; the
+  server-side constant it derives from is not, and anything else reading that
+  constant directly still sees both systems.
+- **Why deferred:** the constant's only consumer is `supported_price_units()`,
+  which feeds the same picker, so narrowing it server-side would be a second filter
+  in front of the one that already works — and it is the sort of duplicate authority
+  R-003 exists to prevent. The right fix is probably to derive the whitelist from
+  `units_for_system` rather than to filter it twice.
+- **Recommended resolution:** later, when price-entry is next touched.
+
+## [OPEN] FU-752 — Cook mode's step text is `text-h4` at every viewport
+- **Raised:** 2026-08-27 (owner feedback batch — cook mode mobile pass)
+- **Type:** finding
+- **What:** The header was rebuilt for mobile this unit (identity band that never
+  wraps, headcount control that drops to its own row). The rest of the page was
+  left alone, and the one thing below the header that may still not be right on a
+  phone is the step card: `text-h4` is deliberate (you read it from across the
+  kitchen) but is untested against a long step on a narrow screen.
+- **Why deferred:** the owner's report named the top area specifically, and
+  shrinking cook-mode type is a judgement call about the feature's whole point,
+  not a layout bug.
+- **Recommended resolution:** when the owner next walks cook mode on a phone —
+  if the step card is fine, close this.
+
+## [OPEN] FU-751 — Firefox TTS improved but not verified on Firefox
+- **Raised:** 2026-08-27 (owner feedback batch — settings/voice)
+- **Type:** finding
+- **What:** Owner asked *"TTS isn't supported on Firefox for some reason? What
+  browsers can we support?"* The cause was identified as an empty voice list rather
+  than a missing API (`'speechSynthesis' in window` was true, so Dora reported
+  itself available and then said nothing), and the fix is shipped: the browser voice
+  is probed for actual voices, Piper is probed unconditionally, a user on the device
+  voice with no voices falls back to Piper, and Settings → Voice explains which
+  engine is live. **None of it has been run in Firefox** — this session's browser
+  pane is Chromium.
+- **Why deferred:** no Firefox available in the pane.
+- **Recommended resolution:** confirm in browser — open Dora in Firefox, go to
+  Settings → Voice, and check that the note about missing device voices matches
+  what Firefox actually reports, and that Dora still speaks via the neural voice.
+
 Resolved entries carry one extra line, and live in `DORA_FOLLOWUPS_RESOLVED.md`:
 
 ```
@@ -54,6 +167,106 @@ Resolved entries carry one extra line, and live in `DORA_FOLLOWUPS_RESOLVED.md`:
 ---
 
 # Open
+
+## [OPEN] FU-750 — Existing installs have no `food_category`, so every Health Star Rating scores 0% fvnl until a re-import
+- **Raised:** 2026-08-27 (Health Star Rating build)
+- **Type:** finding.
+- **What:** `NutritionFood.food_category` is populated by the dataset importer
+  from `food_category.csv`. It cannot be backfilled — the value lives in the
+  source archive, not in anything already stored — so foods imported before
+  migration `d1e5b8c3f7a2` keep NULL, `is_fvnl_category` returns False for all
+  of them, and every recipe scores **0 fvnl points**. That is not neutral: on a
+  dish with ≥13 baseline points it *also* locks out the protein credit (the
+  FSANZ gate), so an unmigrated install's ratings are systematically pessimistic
+  in exactly the wrong direction.
+- **Why deferred:** the fix is "re-run the import", which is a user action, not
+  a code change. What's missing is the *prompt* — the admin nutrition page says
+  nothing about it, so an existing install has no way to know its ratings are
+  thin.
+- **Recommended resolution:** now-ish, and small — a banner on
+  `AdminSystemNutritionSettings.vue` when `health_star_rating_enabled` is on and
+  some non-zero share of `NutritionFood` rows have a NULL `food_category`.
+  Needs one count endpoint or an extra field on the existing dataset-status
+  response.
+
+## [OPEN] FU-749 — Fruit *juices* and fried potato products score full fvnl points
+- **Raised:** 2026-08-27 (Health Star Rating build)
+- **Type:** finding.
+- **What:** the fvnl test keys off USDA's food-group description, and two of the
+  five qualifying groups contain members HSR would treat differently.
+  *Measured* on SR Legacy: "Fruits and Fruit Juices" is 355 rows of which **88
+  are juices/nectars**, and "Vegetables and Vegetable Products" is 814 rows of
+  which **36 are fried/chip-shaped** (french fries, crisps, tempura). The guide
+  does allow juice to score, so that half is arguably correct for a recipe; the
+  fried-potato half is the clearer miss.
+- **Why deferred:** it moves a rating by at most one V-point band on a recipe
+  built mostly of chips, and the fix is a name-level exclusion list, which is
+  the kind of heuristic that wants a real example to justify it rather than
+  being written speculatively.
+- **Recommended resolution:** opportunistic — revisit if a real recipe rates
+  visibly wrong. The place to fix it is `features/nutrition/food_categories.py`,
+  which already owns the vocabulary.
+
+## [OPEN] FU-748 — Health Star Rating uses raw ingredient weight as its per-100g denominator
+- **Raised:** 2026-08-27 (Health Star Rating build)
+- **Type:** decision, recorded rather than open.
+- **What:** HSR scores per 100 g of the food **as consumed**. Dora sums *raw*
+  ingredient weights, so a sauce that reduces reads too kindly and a soup made
+  with water nobody listed as an ingredient reads too harshly. An optional
+  "finished weight" field on the recipe would make it exact.
+- **Why deferred:** the owner's explicit call 2026-08-27 was to accept the
+  approximation and label the rating an estimate rather than add a field most
+  people would leave blank. Logged so the trade-off is findable rather than
+  buried in a module docstring, and so a future complaint about a soup's rating
+  has somewhere to land.
+- **Recommended resolution:** when <someone reports a rating that looks wrong on
+  a reduced or watered dish>.
+
+## [OPEN] FU-747 — `RecipeCard` and `RecipeRow` now carry the same rating block twice
+- **Raised:** 2026-08-27 (Health Star Rating build)
+- **Type:** finding.
+- **What:** the cookbook's two views each got the same ~18 lines — the
+  `RecipeHealthStars` call, the judgeable/partial tooltip, and a
+  `--part { opacity: .55 }` rule. The *stars* are shared
+  (`RecipeHealthStars.vue`); the wrapper around them is not. The pre-existing
+  kcal chip has the same duplication, which is how it got missed: the row-only
+  version shipped invisible, because the grid is the cookbook's default view and
+  I only found it by looking (see the worklog).
+- **Why deferred:** extracting a `RecipeRatingChip` is right but touches both
+  views, and doing it in the same pass as the feature would have put an
+  untested refactor under an untested feature.
+- **Recommended resolution:** opportunistic, and ideally together with the kcal
+  chip — one `RecipeSignalChips` for the pair would remove both copies (R-001).
+
+## [OPEN] FU-746 — The AU/NZ Health Star Rating nudge has no automated cover
+- **Raised:** 2026-08-27 (Health Star Rating build)
+- **Type:** finding.
+- **What:** `isAustralasian` in `AdminSystemRegionSettings.vue` decides whether
+  "Match this device" offers the rating. It reads the IANA timezone *and* the
+  BCP-47 region — the timezone half was added after finding this machine
+  reports `en-GB` with `Australia/Sydney`, which the language-only version would
+  have silently ignored forever. It was verified live, once, on one device.
+- **Why deferred:** the function is private to the SFC, so pinning it means
+  extracting it — worth doing, but it is a lookup with no state, and the verify
+  stance says automate stable contracts, not everything.
+- **Recommended resolution:** opportunistic — lift `isAustralasian` into a
+  plain `.ts` helper and give it a table test (`en-GB`+`Australia/Sydney` → true,
+  `en-AU`+`UTC` → true, `en-GB`+`Europe/London` → false, `Pacific/Fiji` → false).
+
+## [OPEN] FU-744 — Recipe tool derivation has no migration for existing structured recipes
+- **Raised:** 2026-08-27 (recipe-view feedback batch)
+- **Type:** finding.
+- **What:** a structured recipe's `tool_ids` is now the union of its steps'
+  tools, re-derived on every create/update. Recipes last saved *before* this
+  keep whatever tool set was typed by hand until something PATCHes them — so
+  the cookbook's tool filter can disagree with what the steps say, in either
+  direction, on untouched recipes.
+- **Why deferred:** pre-release, no real users, and the drift self-heals on the
+  next save of each recipe. A one-shot data migration over every structured
+  recipe is more risk than the inconsistency is worth right now.
+- **Recommended resolution:** opportunistic — a data migration calling
+  `sync_recipe_tools_from_steps` for every recipe with `steps_mode='structured'`
+  would close it in about ten lines, if the filter ever misbehaves visibly.
 
 ## [OPEN] FU-743 — `web_app/test/` is outside the lint script, and already has an error in it
 - **Raised:** 2026-08-26 (recipe-view feedback batch)

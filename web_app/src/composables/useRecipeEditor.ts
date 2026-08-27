@@ -117,7 +117,13 @@ export function emptyRecipeForm(): RecipeForm {
         tool_ids: [],
         image: null,
         steps: [],
-        steps_mode: 'structured',
+        // Owner call 2026-08-27: free text is what a new recipe should start
+        // as. Typing a method out is the thing everyone does; structuring it
+        // step-by-step, with per-step ingredient and tool links, is the thing
+        // you graduate to on a recipe you cook often. This matches the
+        // server's own default for `POST /recipes` — a form that opened on
+        // `structured` was the only place the two disagreed.
+        steps_mode: 'freeform',
         step_images: [],
         kcal: null,
         sections: [],

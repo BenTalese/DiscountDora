@@ -7,9 +7,14 @@ import { useReducedMotion } from 'src/composables/useReducedMotion';
 import { useStockStatus } from 'src/composables/useStockStatus';
 import { DEFAULT_MEAL_SLOTS } from 'src/helpers/recipeVocabulary';
 import { isoDate as toIso, localTodayIso, mondayOf, shiftDays } from 'src/helpers/weekDates';
-import type { MealPlan, MealPlanDayNutrition, MealPlanEntry, MealPlanIngredient } from 'src/models/mealPlan';
+import type {
+    MealPlan, MealPlanDayNutrition, MealPlanEntry, MealPlanIngredient, UnlinkedIngredient,
+} from 'src/models/mealPlan';
+import type { AddToListConfirm } from 'src/components/shoppingList/addToListTypes';
+import { rowsFromMealPlanIngredients, unlinkedFromMealPlan } from 'src/helpers/addToListRows';
+import { useShoppingListActions } from 'src/composables/useShoppingListActions';
+import { cartStateFor, type Membership } from 'src/models/shoppingList';
 import type { MealPlanEntryCommand } from 'src/services/api/mealPlanApiService';
-import ShoppingListApiService from 'src/services/api/shoppingListApiService';
 import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';
 import { useMealPlanStore } from 'src/stores/mealPlanStore';
 import { useMealPlanTemplateStore } from 'src/stores/mealPlanTemplateStore';
@@ -52,7 +57,7 @@ export function useMealPlanner() {
     const stockItemStore = useStockItemStore();
     const stockLevelStore = useStockLevelStore();
     const shoppingListStore = useShoppingListStore();
-    const shoppingListApi = new ShoppingListApiService();
+    const { addStockItemsToList } = useShoppingListActions();
 
     const { mealPlans, shortfall, today } = storeToRefs(mealPlanStore);
     const { mealSlotNames } = storeToRefs(mealSlotStore);
@@ -61,6 +66,10 @@ export function useMealPlanner() {
     const { recipes } = storeToRefs(recipeStore);
 
     const ingredients = ref<MealPlanIngredient[]>([]);
+    // FU-505's report, now that the picker (not the auto-generate endpoint)
+    // does the adding — ingredients with no linked stock item can't become
+    // lines, and the dialog names them rather than dropping them silently.
+    const unlinkedIngredients = ref<UnlinkedIngredient[]>([]);
     const ingredientsLoading = ref(false);
     const generating = ref(false);
     // FU-354 — the picker's search string survives navigate-away-and-back
@@ -411,9 +420,32 @@ export function useMealPlanner() {
     }
 
     // ── Stock status (shared composable, R-003) ────────────────────────────
-    const { stockStatusLabel, stockStatusColour, needsBuying } = useStockStatus();
+    const { stockStatusLabel, stockStatusColour, needsBuying, isMissing, isLowStock } =
+        useStockStatus();
     const needToBuy = computed(() =>
         ingredients.value.filter((ing) => needsBuying(ing.stock_item_id)),
+    );
+
+    // Owner feedback 2026-08-27 — "the shopping list area should account for
+    // the state of 'already on a list'. On mobile I can see 8 planned, 3 to
+    // buy, and it stays like that even after I add those 3 to a shopping
+    // list." `needToBuy` answers "what don't I have", which is a stock
+    // question and doesn't move when you go shopping-*planning*. What the
+    // week card is actually asking is "what's left for me to do", so the
+    // headline count is now the outstanding half and the handled half is
+    // named beneath it — the same shape the recipe page uses for its missing
+    // ingredients.
+    const listMembership = computed<Membership | null>(
+        () => (shoppingListStore.membership as Membership | null) ?? null,
+    );
+    function isOnAList(stockItemId: string): boolean {
+        return cartStateFor(stockItemId, listMembership.value) !== 'none';
+    }
+    const needToBuyOnList = computed(
+        () => needToBuy.value.filter((ing) => isOnAList(ing.stock_item_id)),
+    );
+    const needToBuyOutstanding = computed(
+        () => needToBuy.value.filter((ing) => !isOnAList(ing.stock_item_id)),
     );
 
     // ── Shopping-list status (F31) + hover-to-highlight (F30, C-2.H) ───────
@@ -469,100 +501,51 @@ export function useMealPlanner() {
     // "Manage rotating sets →" jump to `/meal-plans/templates`, so a
     // composable-level nav helper isn't needed.
 
-    // ── Generate shopping list (composes the C-7 target picker) ────────────
-    async function pickGenerateTarget(): Promise<string | null | undefined> {
-        const drafts = (shoppingListStore.membership?.active_lists ?? []).filter(
-            (l) => l.status === 'draft',
-        );
-        if (drafts.length === 0) return null;
-        const CREATE_NEW = '__create_new__';
-        return await new Promise<string | null | undefined>((resolve) => {
-            $q.dialog({
-                title: 'Add to which list?',
-                message: "Generate the week's shopping into an existing draft, or create a new list.",
-                options: {
-                    type: 'radio',
-                    model: drafts[0]!.shopping_list_id,
-                    items: [
-                        ...drafts.map((d) => ({ label: d.name, value: d.shopping_list_id })),
-                        { label: '+ Create new list', value: CREATE_NEW },
-                    ],
-                },
-                cancel: { noCaps: true },
-                ok: { label: 'Generate', noCaps: true, color: 'primary' },
-                persistent: false,
-            })
-                .onOk((val: string) => resolve(val === CREATE_NEW ? null : val))
-                .onCancel(() => resolve(undefined))
-                .onDismiss(() => {});
-        });
+    // ── Add to list (shared picker + flow, owner feedback 2026-08-27) ─────
+    // Replaces the old one-shot "Generate shopping list for this week", which
+    // asked the server to sweep the week and then dropped you on a brand-new
+    // list — you never saw the items and couldn't veto any of them. This runs
+    // the *same* `AddToListDialog` the recipe page runs, seeded with the
+    // week's aggregated demand. The dialog's "+ New list" option is what keeps
+    // the old button's one-tap "make me a list for this week" reachable, so
+    // nothing was lost in the swap.
+    const addToListOpen = ref(false);
+    const addToListRows = computed(() => rowsFromMealPlanIngredients(
+        ingredients.value, recipeNameById, isMissing, isLowStock,
+    ));
+    const addToListUnlinked = computed(() => unlinkedFromMealPlan(unlinkedIngredients.value));
+    const addToListNewName = computed(() => {
+        const plan = focusedPlan.value;
+        return plan ? `Meals: week of ${formatDate(plan.start_date)}` : 'Shopping list';
+    });
+
+    function recipeNameById(recipeId: string): string | null {
+        return recipes.value.find((r) => r.recipe_id === recipeId)?.name ?? null;
     }
 
-    // FU-596 — an optional `recipeIds` scopes generation to just those recipes
-    // (the "plan a single day → shop for that day" builder path), routed through
-    // the existing `recipes` auto-generate source. With no arg the whole focused
-    // week is generated via `meal_plan_week` (unchanged default; the sidebar and
-    // mobile "Generate list" buttons still call it arg-less).
-    async function generateListForWeek(recipeIds?: string[]) {
-        const plan = focusedPlan.value;
-        if (!plan) return;
-        const target = await pickGenerateTarget();
-        if (target === undefined) return;
+    function openAddToList() {
+        addToListOpen.value = true;
+    }
+
+    /** Commits the picker's selection. `newListName` comes from the dialog so
+     *  a user who renamed the proposed list gets the name they typed. */
+    async function confirmAddToList(
+        payload: AddToListConfirm, newListName: string,
+    ): Promise<void> {
         generating.value = true;
         try {
-            const startIso = toIso(plan.start_date);
-            const scoped = recipeIds !== undefined && recipeIds.length > 0;
-            const result = await shoppingListApi.autoGenerateAsync({
-                ...(target ? { merge_into_list_id: target } : { name: `Meals: week of ${formatDate(plan.start_date)}` }),
-                sources: scoped ? { recipes: recipeIds } : { meal_plan_week: startIso },
-            });
-            await shoppingListStore.refreshAsync();
-            if (result.nothing_to_add) {
-                $q.notify({
-                    type: 'info',
-                    position: 'bottom-right',
-                    message: 'Nothing to add — you have everything for this week already.',
-                });
-                return;
+            const listId = await addStockItemsToList(
+                payload.targetListId, payload.stockItemIds, newListName,
+            );
+            addToListOpen.value = false;
+            // Reload so the "already on a list" counts settle immediately —
+            // this is exactly the staleness the owner reported.
+            await loadIngredients();
+            if (payload.targetListId === null && listId) {
+                // Only a *brand-new* list navigates. Topping up an existing
+                // one leaves you on the planner, where you were working.
+                void router.push(`/shopping-lists/${listId}`);
             }
-            const itemWord = result.added_count === 1 ? 'item' : 'items';
-            $q.notify({
-                type: 'positive',
-                position: 'bottom-right',
-                message: target
-                    ? `Added ${result.added_count} ${itemWord} to your list.`
-                    : `Shopping list created with ${result.added_count} ${itemWord}.`,
-            });
-            // FU-505 — recipe ingredients that aren't linked to any StockItem
-            // can't be turned into shopping-list lines (there's no stock-item
-            // id to anchor the line). Surface them so the user knows what's
-            // still missing rather than silently dropping them.
-            if (result.unlinked_skipped && result.unlinked_skipped.length > 0) {
-                const lines = result.unlinked_skipped
-                    .map((u) => `• ${u.ingredient_name} (${u.recipe_name})`)
-                    .join('\n');
-                $q.dialog({
-                    title: 'Add these manually',
-                    message:
-                        `${result.unlinked_skipped.length} recipe `
-                        + `ingredient${result.unlinked_skipped.length === 1 ? '' : 's'} `
-                        + "aren't linked to your pantry, so we couldn't add "
-                        + `${result.unlinked_skipped.length === 1 ? 'it' : 'them'} to the list. `
-                        + 'Add them by hand or link them from the recipe next time:\n\n'
-                        + lines,
-                    ok: { label: 'Got it', noCaps: true },
-                });
-            }
-            if (result.shopping_list_id) {
-                void router.push(`/shopping-lists/${result.shopping_list_id}`);
-            }
-        } catch (err) {
-            $q.notify({
-                type: 'negative',
-                position: 'bottom-right',
-                message: 'Could not generate the list.',
-                caption: toastCaption(err),
-            });
         } finally {
             generating.value = false;
         }
@@ -573,10 +556,12 @@ export function useMealPlanner() {
     }
     async function loadIngredients() {
         const id = focusedPlan.value?.meal_plan_id;
-        if (!id) { ingredients.value = []; return; }
+        if (!id) { ingredients.value = []; unlinkedIngredients.value = []; return; }
         ingredientsLoading.value = true;
         try {
-            ingredients.value = await mealPlanStore.getIngredientsForPlanAsync(id);
+            const payload = await mealPlanStore.getIngredientsForPlanAsync(id);
+            ingredients.value = payload.items;
+            unlinkedIngredients.value = payload.unlinked;
         } finally {
             ingredientsLoading.value = false;
         }
@@ -869,6 +854,9 @@ export function useMealPlanner() {
         cookByLabel,
         shortfallRecipeIds,
         needToBuy,
+        needToBuyOnList,
+        needToBuyOutstanding,
+        unlinkedIngredients,
         hoveredRecipeIds,
         focusedTarget,
         dragAllowed,
@@ -896,8 +884,12 @@ export function useMealPlanner() {
         setCookDays,
         confirmClearWeek,
         loadIngredients,
-        generateListForWeek,
-        pickGenerateTarget,
+        addToListOpen,
+        addToListRows,
+        addToListUnlinked,
+        addToListNewName,
+        openAddToList,
+        confirmAddToList,
         adjustPaletteMeals,
         logPaletteCook,
         saveFocusedWeekAsTemplate,

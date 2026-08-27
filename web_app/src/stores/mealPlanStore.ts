@@ -1,5 +1,5 @@
 import { acceptHMRUpdate, defineStore } from 'pinia';
-import type { MealPlan, MealPlanIngredient, Shortfall } from 'src/models/mealPlan';
+import type { MealPlan, MealPlanIngredients, Shortfall } from 'src/models/mealPlan';
 import MealPlanApiService, {
     type CreateMealPlanCommand,
     type UpdateMealPlanCommand,
@@ -35,7 +35,7 @@ export const useMealPlanStore = defineStore('mealPlan', () => {
         mealPlans.value = mealPlans.value.filter((p) => p.meal_plan_id !== id);
     };
 
-    const getIngredientsForPlanAsync = async (id: string): Promise<MealPlanIngredient[]> =>
+    const getIngredientsForPlanAsync = async (id: string): Promise<MealPlanIngredients> =>
         await api.getIngredientsAsync(id);
 
     const getShortfallAsync = async () => {

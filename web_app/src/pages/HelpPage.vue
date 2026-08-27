@@ -118,25 +118,59 @@
                             </q-card-section>
                             <q-separator />
                             <q-list separator>
-                                <q-item
-                                    v-for="entry in group.entries"
-                                    :key="entry.title"
-                                    clickable
-                                    @click="onGuideClick(entry)"
-                                >
-                                    <q-item-section>
-                                        <q-item-label>{{ entry.title }}</q-item-label>
-                                        <q-item-label caption>
-                                            {{ entry.summary }}
-                                        </q-item-label>
-                                    </q-item-section>
-                                    <q-item-section side v-if="entry.path">
-                                        <q-icon :name="ICONS.arrow_forward" />
-                                    </q-item-section>
-                                    <q-item-section side v-else-if="entry.dialog">
-                                        <q-icon :name="ICONS.info_outline" />
-                                    </q-item-section>
-                                </q-item>
+                                <template v-for="entry in group.entries" :key="entry.title">
+                                    <!-- Long-form entries explain in place rather
+                                         than navigating away — a guide you have to
+                                         leave Help to read is not a guide. Opened
+                                         by default while a filter is active, since
+                                         a `?q=` deep-link from elsewhere in the app
+                                         means "show me this one". -->
+                                    <q-expansion-item
+                                        v-if="entry.details"
+                                        :label="entry.title"
+                                        :caption="entry.summary"
+                                        :default-opened="!!search"
+                                    >
+                                        <q-card flat>
+                                            <q-card-section class="guide-details">
+                                                <template v-for="(block, i) in entry.details" :key="i">
+                                                    <p v-if="block.kind === 'para'">{{ block.text }}</p>
+                                                    <dl v-else>
+                                                        <template v-for="t in block.terms" :key="t.term">
+                                                            <dt>{{ t.term }}</dt>
+                                                            <dd>{{ t.definition }}</dd>
+                                                        </template>
+                                                    </dl>
+                                                </template>
+                                                <BaseButton
+                                                    v-if="entry.path"
+                                                    variant="subtle"
+                                                    :icon="ICONS.arrow_forward"
+                                                    :label="`Go to ${entry.title.toLowerCase()}`"
+                                                    @click="onGuideClick(entry)"
+                                                />
+                                            </q-card-section>
+                                        </q-card>
+                                    </q-expansion-item>
+                                    <q-item
+                                        v-else
+                                        clickable
+                                        @click="onGuideClick(entry)"
+                                    >
+                                        <q-item-section>
+                                            <q-item-label>{{ entry.title }}</q-item-label>
+                                            <q-item-label caption>
+                                                {{ entry.summary }}
+                                            </q-item-label>
+                                        </q-item-section>
+                                        <q-item-section side v-if="entry.path">
+                                            <q-icon :name="ICONS.arrow_forward" />
+                                        </q-item-section>
+                                        <q-item-section side v-else-if="entry.dialog">
+                                            <q-icon :name="ICONS.info_outline" />
+                                        </q-item-section>
+                                    </q-item>
+                                </template>
                             </q-list>
                         </q-card>
                     </div>
@@ -268,6 +302,19 @@
         supportHref,
     } from 'src/composables/useSupportChannel';
 
+    /** A long-form block inside a guide entry. Most guides are a title + a
+     *  one-sentence summary and need nothing else; a few explain a mechanism
+     *  with named options, which reads as a definition list rather than prose.
+     *
+     *  This exists because the stocktake runner's (?) used to open a modal
+     *  holding several paragraphs and a five-term list. Owner feedback
+     *  2026-08-27: *"Info button should take you to help and guides, not open a
+     *  modal"* — so the content moved here, and Help had to grow somewhere to
+     *  put it. */
+    type GuideDetail =
+        | { kind: 'para'; text: string }
+        | { kind: 'terms'; terms: Array<{ term: string; definition: string }> };
+
     type GuideEntry = {
         title: string;
         summary: string;
@@ -275,6 +322,10 @@
         /** Opens an inline explainer dialog instead of navigating away.
          *  Used for visual-cue topics that benefit from swatches + tables. */
         dialog?: 'attention-rules';
+        /** Long-form explanation, shown inline in an expander. An entry may
+         *  carry both `details` and `path`: the expander explains, the link at
+         *  its foot takes you to the thing. */
+        details?: GuideDetail[];
     };
     type GuideGroup = { title: string; icon: string; entries: GuideEntry[] };
 
@@ -352,6 +403,44 @@
             ],
         },
         {
+            title: 'Stocktake',
+            icon: ICONS.fact_check,
+            entries: [
+                {
+                    // The runner's (?) deep-links here by exact title via
+                    // `?q=`; keep the two in step if this is ever reworded.
+                    title: 'How stocktake works',
+                    summary:
+                        'Dora walks you through the items she thinks need a check, one at a time. A run has up to three parts and each item offers five options.',
+                    path: '/stocktake',
+                    details: [
+                        {
+                            kind: 'para',
+                            text: 'A run has up to three parts. First, anything Dora is fairly sure about — agree in one tap from where you are sitting, or untick it to look yourself. Then the walk, one item at a time. Last, a tidy-up of anything that has dropped out of the rotation since your last run. Any part with nothing in it is skipped silently.',
+                        },
+                        {
+                            kind: 'para',
+                            text: 'With stock inference switched on, the walk is ordered least-certain first: checking something Dora has already worked out from your shopping and cooking tells her nothing new, so those wait until the end, and the ones she cannot call come first. Items she has no evidence about sit in the middle, ordered by how overdue they are. With inference off, the walk is simply most-overdue first.',
+                        },
+                        {
+                            kind: 'terms',
+                            terms: [
+                                { term: 'Still correct', definition: "The level's right. Resets the check clock." },
+                                { term: 'Change level', definition: 'Pick a new level. Also resets the check clock.' },
+                                { term: 'Skip', definition: "Not this time — the item drops out of this run and isn't asked about again until the next one. Nothing is recorded." },
+                                { term: 'Push 3 days', definition: 'Not now — Dora stops asking about this item for three days. Doesn\'t count as a check.' },
+                                { term: 'Mute', definition: "Stop asking about this item entirely. You can un-mute later from the item's detail page." },
+                            ],
+                        },
+                        {
+                            kind: 'para',
+                            text: 'How often each item shows up (Weekly / Fortnightly / Monthly) is set globally in Settings → Stocktake, with Auto self-tuning by how fast the item actually moves.',
+                        },
+                    ],
+                },
+            ],
+        },
+        {
             title: 'Recipes & meals',
             icon: ICONS.menu_book,
             entries: [
@@ -413,6 +502,30 @@
                     title: 'How does Dora know what page I\'m on?',
                     summary:
                         "I read the route. When you click 'What can I do on this page?' I look up a per-route summary. If I don't have one, I'll say so honestly.",
+                },
+                {
+                    // Owner question 2026-08-27: *"TTS isn't supported on
+                    // Firefox for some reason? What browsers can we support?"*
+                    // The answer has two halves and only one of them is a
+                    // browser fact, so it needs more than a tooltip.
+                    title: 'Which browsers can Dora speak in?',
+                    summary:
+                        "All of them, if her neural voice is installed on the server. The browser's own voice is the part that varies.",
+                    path: '/settings/voice',
+                    details: [
+                        {
+                            kind: 'para',
+                            text: "Dora has two ways to speak. Her own neural voice is generated on the server and played back as ordinary audio, so it works in every browser that can play sound — Firefox, Chrome, Safari, Edge, on desktop and mobile alike. It is the default, and it sounds the same everywhere.",
+                        },
+                        {
+                            kind: 'para',
+                            text: "The other way is your browser's built-in text-to-speech, and that is the one with gaps. A browser can only speak with voices the operating system gives it, so the API can be present while the voice list is empty — in which case nothing is said and no error is raised. Firefox is the common case: it speaks through SAPI on Windows, needs speech-dispatcher installed on Linux, and has no synthesis at all on Android.",
+                        },
+                        {
+                            kind: 'para',
+                            text: 'So: if Dora is silent, install her neural voice on the server (the Docker image and the desktop app already include it) rather than chasing browser support. Settings → Voice tells you which of the two is actually working on the device you are reading this on.',
+                        },
+                    ],
                 },
                 {
                     title: 'Can Dora do free-form questions?',
@@ -481,10 +594,23 @@
             entries: g.entries.filter(
                 (e) =>
                     e.title.toLowerCase().includes(q) ||
-                    e.summary.toLowerCase().includes(q),
+                    e.summary.toLowerCase().includes(q) ||
+                    detailText(e).includes(q),
             ),
         })).filter((g) => g.entries.length > 0);
     });
+
+    /** Flattened long-form text for the filter, so searching a term that only
+     *  appears inside an expander ("push 3 days") still finds its guide. */
+    function detailText(entry: GuideEntry): string {
+        if (!entry.details) return '';
+        return entry.details
+            .map((b) => (b.kind === 'para'
+                ? b.text
+                : b.terms.map((t) => `${t.term} ${t.definition}`).join(' ')))
+            .join(' ')
+            .toLowerCase();
+    }
 
     function onGuideClick(entry: GuideEntry) {
         if (entry.dialog === 'attention-rules') {
@@ -549,6 +675,27 @@
         white-space: pre-wrap;
         font-family: inherit;
         margin: 0;
+    }
+    /* Long-form guide bodies (see `GuideDetail`). Same typography the
+       stocktake runner's help modal used before its content moved here, so
+       the definition list still reads as a list of named options. */
+    .guide-details {
+        font-size: var(--text-sm, 0.9rem);
+        line-height: 1.4;
+    }
+    .guide-details p {
+        margin: 0 0 12px;
+    }
+    .guide-details dl {
+        margin: 12px 0;
+    }
+    .guide-details dt {
+        font-weight: 600;
+        margin-top: 8px;
+    }
+    .guide-details dd {
+        margin-left: 0;
+        color: var(--text-secondary, inherit);
     }
     .support-copy p {
         margin: 0 0 8px;

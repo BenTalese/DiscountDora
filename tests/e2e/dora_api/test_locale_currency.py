@@ -36,6 +36,7 @@ HEALTH = f"{BASE}/health"
 
 _DEFAULT_CURRENCY = "AUD"
 _DEFAULT_LOCALE = "en-AU"
+_DEFAULT_MEASUREMENT_SYSTEM = "metric"
 
 
 @pytest.fixture(autouse=True)
@@ -83,6 +84,10 @@ def test__health_locale_policy__defaults_to_au_shipping_values():
     assert health["locale_policy"] == {
         "currency": _DEFAULT_CURRENCY,
         "locale": _DEFAULT_LOCALE,
+        # 2026-08-27 — the measurement system rides in this payload too, for
+        # the same reason currency does: every session's unit pickers are
+        # built from it, not just an admin's. Metric is the shipping default.
+        "measurement_system": _DEFAULT_MEASUREMENT_SYSTEM,
     }
 
 

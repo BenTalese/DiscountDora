@@ -28,6 +28,359 @@ next.
 
 ---
 
+## 2026-08-27 (latest) — **Owner feedback batch: meal plans → one shared add-to-list flow**
+**Status:** all four items shipped and **driven live** in the browser pane on
+both surfaces. Backend **867 passed** / 1 skipped / 1 xfailed (unit suite;
+`TMP` must point at a real dir — see the memory note), frontend **527 vitest**,
+`vue-tsc` + lint clean. One new rule + ADR (**R-057 / ADR-054**), two findings
+logged.
+
+**The ask was four bullets, but the fourth was the actual job.** "I feel like a
+common component and flow is forming… we should ensure this common component and
+flow is *actually the same* on these areas." So the unit is one component —
+`components/shoppingList/AddToListDialog.vue` — rendered by the recipe detail
+page, the cookbook overview, the meal planner (mobile card + desktop card) and
+the Build-my-week wizard's final step. `RecipeIngredientPickerDialog.vue` is
+deleted; `helpers/addToListRows.ts` maps each surface's own shape into one row
+type, which is where the rules (required-wins, band ordering, what counts as
+unlinked) now live in plain functions with 16 tests on them.
+
+**One decision was put to the owner, and it was the right one to ask.** Replacing
+the planner's one-shot "Generate shopping list for this week" with a picker looks
+like a straight swap, but the old button was a single call to
+`auto-generate`, and its *response* carried four things the picker had nowhere to
+put: the unlinked-ingredient report (FU-505), `added_via=auto_meal_plan`
+provenance, the auto-generated list name, and the navigation into the new list.
+Owner chose replace-not-both. Three of the four were relocated — the unlinked
+report **server-side** into the ingredient aggregate, the list name into a new
+"+ New list" option in the picker, the navigation kept for the create-new branch
+only — and provenance was dropped as a named, accepted cost. That walk is now
+**R-057**: *a replaced endpoint's response is an inventory, not a casualty list.*
+It generalises past this task, because the loss mode is invisible — deleting a
+call deletes what it told the user, and nothing goes red.
+
+**The owner then asked for more than the swap** — "I wonder if there'd be value in
+showing where items have come from (what requires them). also what about optional
+ingredients?" Both needed the server. `MealPlanIngredientDto` gained
+`is_optional`, which is an *aggregation* rule rather than a per-row echo: one
+stock item arrives from several ingredient rows across several recipes, so it is
+optional only when every contributing row was, and one required row anywhere in
+the week makes it required. Provenance ("for Spaghetti Aglio e Olio, Tomato
+Pasta") needed nothing new on the wire — `used_in_recipe_ids` was already there
+and the planner already holds the recipe store, so name resolution stayed
+client-side as display glue. The quantity caption ("needs 750g") came free on
+both surfaces and is a genuine improvement to the recipe picker too.
+
+**Item 2 was the real bug and it was a definition problem, not a refresh
+problem.** `needToBuy` filters the week's ingredients by *stock level*, so it
+answers "what don't I have" — a question whose answer correctly does not change
+when you go shopping-*planning*. The card was asking it and labelling the answer
+"3 to buy", which is a to-do list. Split into `needToBuyOutstanding` /
+`needToBuyOnList`: the headline counts what's still yours to do, "N already on a
+list" sits beside it, and the settled state says **all on a list** rather than
+"fully stocked" — two different facts, and only one is ever true. Verified live:
+6-to-buy/3-on-a-list → add → all-on-a-list/9-already-on-a-list.
+
+**Item 1 (the builder modal on mobile) was two bugs, and I shipped the second one
+wrong first.** The card carried `min-width: 560px; max-width: 95vw` — a min-width
+is a floor, not a suggestion, so a 375px phone got a card ~185px too wide. Same
+fix the picker already had. The second bug is the review row: main + two ~125px
+selects + a servings stepper + two icon buttons is ~400px of controls that can
+only work stacked. I wrote that as a `@media (max-width: 599px)` block and
+**placed it before the base rules it overrides** — same specificity, so
+`.builder-list { max-height: 40vh }` won and only the one property whose base
+rule sat above the block actually applied. The pane caught it (`max-height`
+computed `0px`, not `none`, because `vh` is 0 there); moving the block to the end
+of the stylesheet fixed all four properties. Worth remembering: in a scoped
+stylesheet a media query is not automatically stronger than what it overrides.
+
+**Verified live, both surfaces.** Planner: picker opens with quantity +
+provenance captions, "On This week" chips on already-listed rows, Select all
+skips exactly those rows (6 of 9 ticked, matching the 6-to-buy count), Add
+round-trips with a toast and the counts settle. Builder: card style, alternative
+step labels, `flex-direction: column` rows, `max-height: none` list, and the Done
+step handing off to the *same* picker with the builder closed behind it (one
+dialog open, not two). Recipe page: same component, same title convention, new
+quantity captions, missing ticked / in-stock unticked, add round-trips.
+
+**Not verifiable here:** pixels. The pane is 0×0 and never paints, and
+`$q.screen` is permanently mobile, so the visual fit of the builder on a real
+phone and the desktop layout branch are in `DORA_VERIFY.md`.
+
+**Findings logged:** FU-757 (`NewListDialog`'s meal-plan/recipe start-from
+branches read the new envelope's `.items` but ignore `unlinked` — the same gap
+R-057 just closed elsewhere, on a third surface) and FU-756 (`web_app/test/` is
+outside the lint scope and carries one pre-existing error).
+
+**Next up:** nothing blocked. The meal-plan surface's remaining owner feedback is
+exhausted; `DORA_VERIFY.md` gained a Meal-plans section with four checks.
+
+---
+
+## 2026-08-27 (later) — **Owner feedback batch: stock overview, settings, stocktake, cook mode**
+**Status:** all nine items shipped and **driven live** in the browser pane.
+Backend **2075 passed** / 1 skipped / 1 xfailed, frontend **501 vitest**,
+`vue-tsc` + lint clean. Three owner decisions were taken up front; one reported
+defect could not be reproduced and is logged as a finding rather than claimed.
+
+**Three decisions, asked before building.**
+1. *Cook-mode method modes* — fix cook mode only; **mode switching stays
+   non-destructive**, all three payloads coexist. So the fix is that cook mode
+   reads `steps_mode` instead of inferring one from whichever payload happens to
+   be populated.
+2. *Units axis* — **metric / imperial / US, hard filter.** Not two values, and
+   not a soft re-ordering.
+3. *Stocktake test data* — **both seeds**, dev and showcase.
+
+**The units item is the one with an ADR behind it (R-056 / ADR-053).** The ask
+was "units config in Region & locale, driving the dropdowns everywhere, with
+universal ones like *dash* always included". The thing that made it more than a
+filter is that `AppSetting.unit_pricing_locale` already existed — an "AU"/"US"
+switch deciding whether a shelf price read `/100g` or `/lb`, **never surfaced in
+the UI**, read by exactly one module. Adding a units setting beside it would have
+been two names for one fact, with the invisible one quietly disagreeing. So it
+was **replaced**, not joined: `measurement_system` (`metric`|`imperial`|`us`)
+drives both the pickers and the denominator, migration `e4c7a2b9f1d3` maps
+AU→metric / US→us and drops the column.
+
+**Three values rather than two, because two could not express the UK** — it uses
+pounds, ounces and the 568 ml pint in the kitchen while pricing in metric on the
+shelf. `imperial` therefore resolves to the *AU* pricing convention while
+offering imperial cooking units. That asymmetry is the whole argument for the
+wider axis: one setting can serve two questions only if it can hold the real
+answers to both.
+
+The mapping lives once — `UNIT_SYSTEMS` keyed by **canonical** form (~20 rows,
+not ~150 aliases) plus a named `UNIVERSAL_CANONICAL_UNITS` set — in
+`domain/units.py`, emitted into `generated/units_table.ts` by the existing dump
+script. `useUnitOptions` was already the single choke point for picker
+vocabulary (R-001/R-003 work from 08-26), so **every dropdown in the app
+inherited the narrowing for free**. One deliberate escape hatch: `includeValue`
+keeps a row's *already-saved* unit offered, because a closed list that silently
+drops a stored `lb` is data loss wearing a filter's clothes.
+
+**The stocktake "test data" item was not really about copy.** The queue only
+admits items with `stocktake_alerts_are_enabled`, and the only such items in
+either seed had **no purchase history at all** — so every row ranked
+`overdue`/no-evidence and the runner had exactly one sentence available about
+any of them. The dev seed already carried belief fixtures spanning high/medium/
+low confidence; they were simply never in the rotation. Turning their alerts on
+(they are all ≥25 days stale, so they are genuinely overdue rather than forced
+in) gives a run all three ranks — and it is the only way the **Review** phase can
+appear at all, since that phase *is* the confident set. The showcase got the same
+treatment with curated names.
+
+**Seeding the Sweep phase found a 500.** The Tidy-up phase needs four things at
+once (level Out, last activity ~65 days ago, a *past* session watermark, not
+muted), which is why it had never occurred by accident. Setting
+`stocktake_last_session_at` for the first time made
+`GET /api/stocktake/session` **500 immediately**: `sweep.resolve_newly_swept`
+compared that stored stamp — naive, off SQLite — against tz-aware values. Exactly
+FU-526's trap, one field along, and invisible until now because the field was
+`None` on every dev and test user and `None` short-circuits before the
+comparison. Fixed with the module's own `_aware()` and pinned by a regression
+test.
+
+**The Firefox TTS answer has two halves and only one is a browser fact.**
+`'speechSynthesis' in window` was the wrong question: Firefox ships the API
+everywhere and only has *voices* where the OS provides them (SAPI on Windows,
+`speech-dispatcher` on Linux, nothing on Android), and `speak()` on an empty
+voice list is accepted and then silent. Dora now probes for actual voices, probes
+Piper **unconditionally** (it used to short-circuit whenever the API was
+present — precisely the Firefox case), and a user on the device voice with no
+voices **falls back to the neural voice** instead of going quiet. The honest
+answer to "what browsers can we support?" is *all of them*, because Piper is a
+WAV through an `<audio>` element; that is now said in Settings and in a Help
+guide.
+
+**The stocktake (?) moving to Help needed Help to grow.** The runner's modal held
+several paragraphs and a five-term definition list, and guide entries were
+title + one sentence. `GuideEntry` gained an optional `details` block that opens
+**in place** (a guide you must leave Help to read is not a guide), the filter now
+searches that body, and the runner's (?) is an anchor to
+`#/help?q=How stocktake works`, which lands on the single entry with it open.
+
+**What I could not reproduce: the photo-steps report (FU-755).** Two real defects
+were found and fixed on that surface — the image view hand-rolled `/api/...`
+instead of using `recipeStepImageUrl` (R-003), and a failed image degraded to
+bare `alt` text that reads exactly like "this step is just text". But driven
+live, images seeded through the API render fine **both before and after** the URL
+change, because the Vite dev server proxies `/api` and hides the missing base.
+The literal path only breaks in a built SPA, the desktop bundle, or a
+sub-path self-host. That may well be what the owner saw, but it is a hypothesis;
+logged as `[OPEN]` type finding per the mandatory rule, with a browser-verify.
+Related: **FU-754** — neither seed has an image-mode or structured-mode recipe at
+all, so both faces of cook mode are fixture-less.
+
+**One thing found by looking.** The mic button rendered the literal text
+`mic_off`: cook mode and Dora chat passed **Material** icon names to an app whose
+icon set is **MDI**, so Quasar emitted them as ligatures with no Material font
+loaded. Added `mic` / `mic_off` / `mic_none` to `icons.ts` and routed both
+callers through it.
+
+**Live verification (browser pane, dev seed):** units setting saves, rejects a
+bad value with a named 400, propagates through `/api/health`, and narrows the
+pickers correctly under all three systems (US → `fl oz, qt, gal, lb, oz, US cup,
+US tbsp` + universals; imperial → metric core *plus* `oz, lb, fl oz, pt`; the
+`includeValue` escape hatch keeps a lone `lb` on a metric install). Cook mode
+follows `steps_mode` in **both** directions (`FREE-TEXT ONE` vs `STRUCTURED ONE`
+off the same recipe). Sous Chef flips `dora-btn--icon` ↔ `dora-btn--filled-icon`
+with `aria-pressed` and **no label text**, filled reading `rgb(53,151,102)` once
+the pane's transition freeze is lifted. Exit is icon-only; the identity band is
+`nowrap` with an ellipsised name. `/api/stocktake/session` returns a populated
+Review (1), a Walk spanning low **and** medium confidence, and a Sweep (1). The
+runner's (?) is an anchor with no dialog in the DOM. Expiry `none` is now
+`mdi-calendar-blank-outline` against `ok`'s `mdi-calendar-check`.
+
+**Next up:** the browser-verify tail in `DORA_VERIFY.md` — Firefox for the voice
+work (FU-751), a real phone for cook mode's header and step-card type (FU-752),
+and the owner's own broken-photo recipe (FU-755).
+
+---
+
+## 2026-08-27 — **Recipe view: the 2026-08-27 owner feedback batch (26 items), and the Health Star Rating**
+**Status:** all 26 feedback items shipped and **driven live**; the Health Star
+Rating built, verified end-to-end, and **not** browser-verified against a real
+USDA import (hand-seeded foods instead — see DORA_VERIFY). Backend **2067
+passed** / 1 skipped / 1 xfailed, frontend **497 vitest**, `vue-tsc` + lint clean.
+
+**Three owner decisions were taken before building, and they shaped everything.**
+Tools: *"derive from structured steps and don't show anything else outside of
+the steps when in structured mode; give free text and image mode a section
+within the method area."* Method editing: in-place text, links in a per-step
+modal. Health score: full HSR, not a homegrown heuristic.
+
+**The batch's spine — R-055 arriving where it hadn't.** The header already had
+one pencil for the whole block; the ingredient rail and the method did not. The
+rail shipped with *every* editing affordance permanently on (a row that opened a
+dialog on tap, reorder arrows, a delete button) and the method's pencil opened a
+**modal over the thing you were reading** — which is neither of the two shapes
+R-055 is about, and which the owner rejected on sight. Both regions now flip
+whole, and the rule's **prose carve-out was retired** in
+`ENGINEERING_STANDARDS.md`: it had been written when the method's editor was a
+`q-popup-edit`, and what actually shipped behind it was a dialog.
+
+The load-bearing consequence is `RecipeStructuredMethod.vue`, which renders
+**both faces off one `editing` prop**. That replaced `RecipeStepsEditor` +
+`RecipeStepRow` + `RecipeMethodEditorDialog` (all three single-consumer, all
+three deleted). When read and edit were two components the numbering, the indent
+and the spacing were maintained twice and the block visibly changed character
+mid-edit — which is the thing the switch exists to prevent. Promoted to a
+**corollary on R-055** rather than a new rule: it is the same rule's mechanics,
+not a second idea.
+
+**"Indent sub-steps so the vertical line is centred on the main step number"** is
+the one item worth measuring rather than eyeballing. The geometry is named once
+(`--rsm-num`, `--rsm-gap`) because three things depend on it, and the rule sits
+at `calc((num / 2) - num - gap - 1px)`. Verified live: numeral centre **33.0px**,
+rule centre **33.0px**, delta **0**.
+
+**The image-steps bug had two causes, and the second was the real one.** The
+viewer hardcoded `/api/recipes/…` instead of `recipeStepImageUrl` (R-003) — which
+404s the moment the SPA and API are on different origins. But it also rendered
+`recipe.step_images`, the *last-loaded* list, so a photo picked in the current
+session was invisible until save-and-return. Both faces now read
+`form.step_images`. Proven live: three images, `naturalWidth: 64`, `complete:
+true`, absolute URLs.
+
+**Tools, derived.** `sync_recipe_tools_from_steps` runs after the steps replace
+**and after the `steps_mode` flip** — that ordering is the whole trick, and the
+test that pins it (`FlipToStructured__PicksUpTheToolsItsStepsAlreadyDeclare`) is
+the case a derivation hung off the steps-replace alone would miss. A
+client-sent `tool_ids` on a structured recipe is overwritten, not rejected: an
+older client has done nothing wrong. 5 e2e tests.
+
+**"Adding an ingredient is not fluid enough" — three distinct bugs.** The red
+validation was `:error="!!anchorError"` firing on an empty dialog (the dialog
+complaining about its own empty state); it arms on the first Done now. The
+"apple apple" duplication was a `q-select` with `use-input` and **no
+`hide-selected`/`fill-input`**, so the selected label rendered *beside* the text
+still sitting in the input. And the menu stayed open because nothing called
+`hidePopup()`. All three verified live: input reads `"Zucchini Verify"` once, the
+item is selected, `typed` cleared.
+
+**What counts as missing** (the owner's question): **out of stock only**, never
+low — `domain/stock_status.is_missing`, and a deliberate documented decision, not
+an accident. Answered in a tooltip on the chip rather than only in chat.
+
+---
+
+**The Health Star Rating — the part with real research in it.**
+
+I initially told the owner FVNL (fruit/veg/nut/legume %) had no source in Dora
+and recommended against HSR-proper. **That was wrong, and checking it changed the
+answer.** Every FoodData Central bundle the importer *already downloads* contains
+`food_category.csv`, and `food.csv` carries a `food_category_id`. Measured by
+downloading both bundles: **100% populated across all 7,793 SR Legacy foods**
+(zero blanks), ~96% on Foundation; 20.5% of SR Legacy sits in the four FVNL
+groups. The importer was opening neither file. So FVNL is not a heuristic — the
+rollup already resolves grams per ingredient, so it is **exact arithmetic**:
+fvnl grams over counted grams.
+
+The **algorithm was transcribed from the FSANZ source, not from memory** —
+Calculator and Style Guide v8.1 (June 2025), Tables 1/4/6/7 downloaded and read.
+`domain/health_star_rating.py` is pure and repository-free (the
+`domain/stock_status.py` shape) so the one thing anyone would want to audit is
+free of I/O. Category 2 only, because that is literally "all foods other than…"
+and the other five categories are defined by properties of a *packaged product*
+a recipe cannot assert. 84 tests, every one sitting on a published band edge —
+the risk here is a typo, not a design error. Two of them caught **my own**
+arithmetic, not the module's.
+
+The rule that makes FVNL load-bearing rather than a bonus: **"Products that score
+≥13 HSR baseline points are not permitted to score points for protein unless they
+score five or more HSR V points."** Without an FVNL figure an energy-dense dish
+scores zero V points, which then locks out its protein credit entirely. Verified
+live on real data: a parmesan/oil/chicken dish scored baseline 20, V 0,
+**`protein_counted: false`**, 1.5 stars — and a 82.4%-vegetable rice dish scored
+baseline 1, V 5, 4.0 stars. That gap is the feature working.
+
+**Two honest departures, both surfaced not hidden.** Per-100g uses **raw**
+ingredient weight (owner's call — [[FU-748]]), and the Step 1 automatic ratings
+(fresh produce → 5 stars) are **not** implemented, being rules about how a
+product is sold. Coverage is reported **per nutrient, mass-weighted**, because
+the gap is asymmetric: sugars is known for only **77%** of SR Legacy foods, and a
+missing *penalty* nutrient makes a recipe rate **better**. Pinned as an
+assertion, not just a comment.
+
+**Region.** Off everywhere by default; `AdminSystemRegionSettings`' existing
+"Match this device" offers it on an AU/NZ device. **Testing found the bug that
+mattered:** this machine reports `navigator.language === 'en-GB'` with
+`timeZone === 'Australia/Sydney'`. A language-only test — which is what I wrote
+first — would have **silently never fired for exactly the people the prompt
+exists for**. It reads the IANA timezone first now, language second. Verified:
+the prompt fires, "Turn it on" persists, the toast follows.
+
+**A second thing found only by looking:** the rating chip shipped **invisible**.
+I added it to `RecipeRow` and the cookbook's default view is `RecipeCard` — 18
+cards, 0 chips. Both carry it now, which is [[FU-747]].
+
+**Verification setup.** No owner backend was running (checked). Fresh scratch
+SQLite via `DORA_DB_PATH`, SPA on :5174 (the only dev port in the CORS
+allowlist). The temporary launch config and the scratch DB were removed. The
+known `#/cookbook` first-paint wedge is real — `#/` then back unwedges it — and
+`$q.screen.width` **does** measure in this pane now (contrary to the older note),
+so the 375px branches were verifiable after a reload at that size.
+
+**Standards close-gate.** No unexplained violations. R-001: `RecipeHealthStars`
+is shared by both cookbook views and the recipe panel; the *wrapper* is not, and
+that is [[FU-747]] rather than a silent duplication. R-003: the FSANZ tables
+exist once, server-side — the SPA reads a rating and never re-derives one; the
+rating is gated server-side so an install with it off is never shipped the data.
+R-010: `food_category` is its own isolated column with one consumer, explicitly
+**not** `StockGroup` — the owner's call, and it also avoids keying behaviour off
+a user-renameable label, which is the `stock_status` rule. D-013: the stars carry
+brand ink, not a semantic colour — a 1.5-star dinner is not a warning.
+**ADR evaluation:** one promotion — the R-055 corollary above. The FSANZ
+transcription deliberately did *not* become a rule: it is one table, and the
+module's own docstring carries the provenance.
+
+**Next up:** [[FU-750]] (existing installs need a re-import prompt or their
+ratings are pessimistic) is the highest-value follow-on, then the DORA_VERIFY
+walk — the real-import check and the phone pass.
+
+---
+
 ## 2026-08-26 (later) — **Recipe view: the 2026-08-26 owner feedback batch (5 items), and the FU-688 swap**
 **Status:** all 5 items shipped and **driven live** against an isolated instance.
 Backend **1964 passed** / 1 skipped / 1 xfailed, frontend **497 vitest** (3 new),

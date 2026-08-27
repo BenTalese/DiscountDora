@@ -43,6 +43,7 @@
                     :planned-count="plannedCount"
                     :shortfall-count="planner.shortfall.value.length"
                     :need-to-buy-count="planner.needToBuy.value.length"
+                    :outstanding-count="planner.needToBuyOutstanding.value.length"
                     :cook-by-label="planner.cookByLabel.value"
                     :generating="planner.generating.value"
                     @entry-view="planner.goToRecipe"
@@ -53,7 +54,7 @@
                     @entry-unlink="onEntryUnlink"
                     @entry-lighter="onEntryLighter"
                     @add-to-slot="onMobileAddToSlot"
-                    @generate-list="planner.generateListForWeek"
+                    @add-to-list="planner.openAddToList"
                     @open-builder="builderOpen = true"
                     @go-prev-week="planner.goPrevWeek"
                     @go-next-week="planner.goNextWeek"
@@ -155,7 +156,8 @@
                     <MealPlanWeekStatus
                         :planned-count="plannedCount"
                         :shortfall-count="planner.shortfall.value.length"
-                        :need-to-buy-count="planner.needToBuy.value.length"
+                        :outstanding-count="planner.needToBuyOutstanding.value.length"
+                        :on-list-count="planner.needToBuyOnList.value.length"
                         :cook-by-label="planner.cookByLabel.value"
                     />
 
@@ -243,13 +245,14 @@
                             :ingredients-loading="planner.ingredientsLoading.value"
                             :ingredients="planner.ingredients.value"
                             :need-to-buy="planner.needToBuy.value"
+                            :outstanding="planner.needToBuyOutstanding.value"
                             :shortfall-count="planner.shortfall.value.length"
                             :cook-by-label="planner.cookByLabel.value"
                             :generating="planner.generating.value"
                             :list-status-label="planner.listStatusLabel"
                             :stock-status-label="planner.stockStatusLabel"
                             :stock-status-colour="planner.stockStatusColour"
-                            @generate-list="planner.generateListForWeek"
+                            @add-to-list="planner.openAddToList"
                             @hover-ingredient="planner.hoverIngredient"
                             @clear-hover="planner.clearHover"
                         />
@@ -337,6 +340,20 @@
         </BaseDialog>
 
         <!-- "Build my week" auto-planner (FU-596) ──────────────────── -->
+        <!-- Owner feedback 2026-08-27 — one dialog for the page: the mobile
+             card, the desktop summary and the builder's final step all open
+             this same picker, so there is exactly one add-to-list flow on the
+             planner and it is the recipe page's flow (R-001). -->
+        <AddToListDialog
+            ref="addToListRef"
+            v-model="planner.addToListOpen.value"
+            title="Add this week's shopping to a list"
+            :rows="planner.addToListRows.value"
+            :unlinked="planner.addToListUnlinked.value"
+            :default-new-list-name="planner.addToListNewName.value"
+            @confirm="onAddToListConfirm"
+        />
+
         <MealPlanBuilderDialog
             v-model="builderOpen"
             :recipes="planner.recipes.value"
@@ -347,7 +364,7 @@
             :format-date="planner.formatDate"
             :money-enabled="moneyEnabled"
             :build-plan="planner.builderBuildPlan"
-            :generate-list="planner.generateListForWeek"
+            :open-add-to-list="planner.openAddToList"
             :print-week="planner.printFocusedWeek"
         />
 
@@ -393,6 +410,8 @@
     import MealPlanPickerSheet from 'src/components/MealPlanPickerSheet.vue';
     import MealPlanRecipePicker from 'src/components/MealPlanRecipePicker.vue';
     import MealPlanShoppingSummary from 'src/components/MealPlanShoppingSummary.vue';
+    import AddToListDialog from 'src/components/shoppingList/AddToListDialog.vue';
+    import type { AddToListConfirm } from 'src/components/shoppingList/addToListTypes';
     import MealPlanSkeleton from 'src/components/MealPlanSkeleton.vue';
     import MealPlanTemplatesDrawer from 'src/components/MealPlanTemplatesDrawer.vue';
     import MealPlanLighterDialog from 'src/components/MealPlanLighterDialog.vue';
@@ -455,6 +474,18 @@
             return localStorage.getItem(SHOW_ALL_SLOTS_KEY) === '1';
         } catch {
             return false;
+        }
+    }
+
+    const addToListRef = ref<{ setBusy: (v: boolean) => void; newListName: string } | null>(null);
+    async function onAddToListConfirm(payload: AddToListConfirm) {
+        addToListRef.value?.setBusy(true);
+        try {
+            await planner.confirmAddToList(
+                payload, addToListRef.value?.newListName ?? 'Shopping list',
+            );
+        } finally {
+            addToListRef.value?.setBusy(false);
         }
     }
 

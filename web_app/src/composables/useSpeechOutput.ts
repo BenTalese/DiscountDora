@@ -25,6 +25,63 @@ import { SILENT_WAV_DATA_URL } from 'src/utils/audioUnlock';
  * Settings → Voice toggle and the chat mute button appear on browsers without
  * SpeechSynthesis (FU-289).
  */
+/**
+ * Does the *browser* voice actually work here?
+ *
+ * `'speechSynthesis' in window` is not the question. Firefox ships the API
+ * object on every platform but only has voices where the OS gives it some:
+ *   - Firefox/Windows speaks through SAPI5, which is usually populated;
+ *   - Firefox/Linux needs `speech-dispatcher` installed, and reports **zero
+ *     voices** without it;
+ *   - Firefox/Android has no synthesis backend at all;
+ *   - Firefox honours `media.webspeech.synth.enabled`, which some hardened
+ *     profiles and forks ship off.
+ * In every one of those cases `speechSynthesis.speak()` is accepted and then
+ * silently does nothing — no error, no `onerror`, just silence. That is the
+ * reported *"TTS isn't supported on Firefox for some reason"* (owner feedback
+ * 2026-08-27): not a missing API, an empty voice list.
+ *
+ * So the real test is "are there voices?". They also load asynchronously —
+ * `getVoices()` returns `[]` on first call in Firefox and Chrome alike, and
+ * only fills in when `voiceschanged` fires — so this resolves rather than
+ * answering synchronously, with a timeout for the browsers that never fire the
+ * event at all. Cached per session: the voice list is an OS fact, not a
+ * per-utterance one.
+ *
+ * The answer to "what browsers can we support?" follows from this: Dora's own
+ * **Piper** engine is a `POST /api/tts` returning a WAV played through an
+ * `<audio>` element, so it works in *every* browser that can play audio —
+ * Firefox included, and identically on all of them. The browser voice is the
+ * fallback, not the floor. Where Piper is configured, Firefox is fully
+ * supported; where it isn't, we now say so plainly instead of being mute.
+ */
+const VOICE_LIST_TIMEOUT_MS = 2000;
+let browserVoicesProbe: Promise<boolean> | null = null;
+function probeBrowserVoices(): Promise<boolean> {
+    browserVoicesProbe ??= new Promise<boolean>((resolve) => {
+        if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+            resolve(false);
+            return;
+        }
+        const synth = window.speechSynthesis;
+        if (synth.getVoices().length > 0) {
+            resolve(true);
+            return;
+        }
+        let settled = false;
+        const finish = () => {
+            if (settled) return;
+            settled = true;
+            synth.removeEventListener('voiceschanged', finish);
+            window.clearTimeout(timer);
+            resolve(synth.getVoices().length > 0);
+        };
+        const timer = window.setTimeout(finish, VOICE_LIST_TIMEOUT_MS);
+        synth.addEventListener('voiceschanged', finish);
+    });
+    return browserVoicesProbe;
+}
+
 const ttsProbe = new TtsApiService();
 // Cached per session — `configured` is install-time server state, not
 // per-request. Resolves true when Piper would handle a `speak()`.
@@ -167,9 +224,19 @@ export function useSpeechOutput() {
     // Idempotent across composable instances.
     unlockAudioOnFirstGesture();
 
-    const browserAvailable =
+    // The API is present. Says nothing about whether it can make a sound —
+    // see `probeBrowserVoices`. Used only to decide whether it is worth
+    // *trying* the browser path; `browserVoiceUsable` decides whether to
+    // count on it.
+    const browserApiPresent =
         typeof window !== 'undefined' && 'speechSynthesis' in window;
-    const available = ref<boolean>(browserAvailable);
+    /** True once the browser has been confirmed to hold at least one voice.
+     *  Starts pessimistic and is corrected by the async probe below, because
+     *  the optimistic answer is the one that leaves Dora silently mute. */
+    const browserVoiceUsable = ref<boolean>(false);
+    /** True when Dora's own neural engine is configured server-side. */
+    const piperConfigured = ref<boolean>(false);
+    const available = ref<boolean>(false);
     const speaking = ref<boolean>(false);
     // `speaking` is only true once audio is actually coming out. `busy` also
     // covers the gap before that — the Piper fetch, and the browser path's
@@ -184,14 +251,21 @@ export function useSpeechOutput() {
     // (FU-722). Surfaced in cook mode's Sous Chef popover.
     const lastEngine = ref<'piper' | 'browser' | null>(null);
 
-    // If the browser already covers it, no need to probe. Otherwise ask the
-    // server whether Piper is configured — when yes, flip `available` true so
-    // the output toggle stops hiding on browsers without SpeechSynthesis.
-    if (!browserAvailable) {
-        void probePiperConfigured().then((piperOk) => {
-            if (piperOk) available.value = true;
-        });
-    }
+    // Both probes always run, and `available` is their OR. The old code short-
+    // circuited the Piper probe whenever `'speechSynthesis' in window` was
+    // true, which is exactly the Firefox case: the API was present, the answer
+    // was "available", and nothing ever came out. Knowing which of the two
+    // paths is live is also what lets Settings explain the situation rather
+    // than just hiding a toggle (FU-289 kept: the toggle still appears when
+    // Piper alone would work).
+    void probeBrowserVoices().then((ok) => {
+        browserVoiceUsable.value = ok;
+        if (ok) available.value = true;
+    });
+    void probePiperConfigured().then((ok) => {
+        piperConfigured.value = ok;
+        if (ok) available.value = true;
+    });
 
     const authStore = useAuthStore();
     const ttsApi = new TtsApiService();
@@ -219,7 +293,7 @@ export function useSpeechOutput() {
     }
 
     function speakBrowser(text: string, token: number) {
-        if (!browserAvailable) return;
+        if (!browserApiPresent) { releaseBusy(token); return; }
         const synth = window.speechSynthesis;
         const utter = new SpeechSynthesisUtterance(text);
         utter.onstart = () => {
@@ -300,8 +374,15 @@ export function useSpeechOutput() {
         const token = seq;
         busy.value = true;
         const user = authStore.currentUser;
-        const engine = user?.voice_engine ?? 'piper';
+        const chosen = user?.voice_engine ?? 'piper';
         const voiceId = user?.voice_id ?? 'amy';
+        // A user who picked the device voice on a browser that has none gets
+        // Piper instead of silence. The reverse already existed (Piper failing
+        // falls back to the browser); this closes the other direction, which is
+        // the one Firefox lands in.
+        const engine = chosen === 'browser' && !browserVoiceUsable.value && piperConfigured.value
+            ? 'piper'
+            : chosen;
         if (engine === 'piper') {
             void playPiper(trimmed, voiceId, token).then((handled) => {
                 // Only fall back if Piper failed AND we're still the current
@@ -322,7 +403,7 @@ export function useSpeechOutput() {
     function cancel() {
         seq += 1;
         stopAudio();
-        if (browserAvailable) window.speechSynthesis.cancel();
+        if (browserApiPresent) window.speechSynthesis.cancel();
         speaking.value = false;
         busy.value = false;
     }
@@ -335,6 +416,12 @@ export function useSpeechOutput() {
 
     return {
         available,
+        /** Whether the *device/browser* voice can actually produce sound here.
+         *  Settings reads this to explain a browser that exposes the API but
+         *  has no voices installed, rather than offering a dead choice. */
+        browserVoiceUsable,
+        /** Whether Dora's own neural engine is configured server-side. */
+        piperConfigured,
         speaking,
         busy,
         lastEngine,

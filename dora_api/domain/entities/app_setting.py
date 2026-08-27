@@ -51,6 +51,20 @@ class AppSetting(BaseEntity):
     # call 2026-08-12 — "allow users to use AI if they wish"). Per-user
     # URL / model / provider / API key live on User (see entity below).
     scanning_enabled: bool = False
+    # Owner ask 2026-08-27 — the Health Star Rating on recipes.
+    #
+    # Off everywhere by default, deliberately: HSR is an Australian/New Zealand
+    # government scheme, and an install in another country should not be shown
+    # a national rating as though it were universal. The nudge is the other
+    # half of that call — Settings' "Match this device" offers to switch it on
+    # when the detected locale is AU or NZ, so the people it was designed for
+    # get it without hunting, and everyone else is left alone.
+    #
+    # It also needs `nutrition_mode == complex` to produce anything: a rating
+    # is computed from the foods the ingredients link to, and simple mode has
+    # only a typed kcal. The flag being on with nutrition in simple mode is a
+    # no-op, not an error.
+    health_star_rating_enabled: bool = False
     # buy-verdict oracle ("should I buy this?"). Defaults **on**
     # because it's a pure-personal feature: no external calls, no crowd
     # data, no config required — the composer just needs the user's own
@@ -114,13 +128,20 @@ class AppSetting(BaseEntity):
     # is what makes the button appear). See
     # `docs/04_proposals/PROPOSAL_PRODUCTS_AS_OVERLAY.md` §4.1.
     product_search_url: str = ""
-    # the AU-shelf vs US-shelf display convention for
-    # per-unit prices. `"AU"` shows `/100ml`/`/100g`/`/L`/`/kg`/`/ea` with
-    # the flip at 1 L / 1 kg; `"US"` shows `/fl oz`/`/qt`/`/oz`/`/lb`/`/ea`
-    # with the flip at 1 qt / 1 lb. Compute math stays in canonical L/kg;
-    # only the display denominator changes. Default `"AU"` because Dora's
-    # built here and ships AU-first; admin can flip to `"US"` in Settings.
-    unit_pricing_locale: str = "AU"
+    # Which units this household measures in: `"metric"`, `"imperial"` or
+    # `"us"`. Two jobs, one fact (R-003):
+    #   1. every unit picker in the app offers that system's units plus the
+    #      universal ones (pinch / dash / ea / pack …) — see
+    #      `units.units_for_system`;
+    #   2. per-unit prices are quoted in that system's shelf convention —
+    #      `/100ml`,`/100g`,`/L`,`/kg` for metric and imperial (the UK prices
+    #      in metric too), `/fl oz`,`/qt`,`/oz`,`/lb` for US.
+    # Replaced `unit_pricing_locale` ("AU"/"US") on 2026-08-27, which covered
+    # only job 2, was never exposed in the UI, and would have been a second
+    # name for the same choice the moment job 1 landed. Compute math stays in
+    # canonical L/kg regardless; only the rendered denominator changes.
+    # Default metric — Dora is built here and ships AU-first.
+    measurement_system: str = "metric"
     # install-wide currency + display
     # locale, so a non-AU install renders money and dates in a form its users
     # recognise. Single-source (R-003): every money render on the client goes
@@ -259,6 +280,7 @@ class AppSetting(BaseEntity):
 
     class Fields(BaseEntity.Fields):
         SCANNING_ENABLED = "scanning_enabled"
+        HEALTH_STAR_RATING_ENABLED = "health_star_rating_enabled"
         MEAL_PLANNING_ENABLED = "meal_planning_enabled"
         MONEY_ENABLED = "money_enabled"
         COMPANION_INGESTION_ENABLED = "companion_ingestion_enabled"
@@ -269,7 +291,7 @@ class AppSetting(BaseEntity):
         TIMEZONE = "timezone"
         EXPIRING_SOON_WINDOW_DAYS = "expiring_soon_window_days"
         PRODUCT_SEARCH_URL = "product_search_url"
-        UNIT_PRICING_LOCALE = "unit_pricing_locale"
+        MEASUREMENT_SYSTEM = "measurement_system"
         CURRENCY = "currency"
         LOCALE = "locale"
         BACKUP_RETENTION_COUNT = "backup_retention_count"

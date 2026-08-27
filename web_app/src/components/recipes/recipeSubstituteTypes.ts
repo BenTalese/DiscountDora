@@ -10,4 +10,12 @@ export type SubstituteOption = {
     sub: Substitute;
     /** False when the substitute is itself out of stock or untracked. */
     inStock: boolean;
+    /** Level-dot sequence, resolved by the caller against the stock-item
+     *  store so the menu shows the *same* dot + tooltip the rest of the app
+     *  uses for a pantry item (owner feedback 2026-08-27: one presentation
+     *  and iconography for stock level everywhere). Null when untracked. */
+    levelSequence: number | null;
+    /** Human label behind the dot — the item's own level name where it has
+     *  one, else a plain out-of-stock reading. */
+    levelLabel: string;
 };

@@ -47,10 +47,19 @@ _NUTRIENT_CSV = (
 )
 
 _FOOD_CSV = (
-    "fdc_id,data_type,description\n"
-    "111,sr_legacy_food,\"Bananas, raw\"\n"
-    "222,sr_legacy_food,\"Flour, wheat, all-purpose\"\n"
-    "333,sr_legacy_food,\"Water, bottled\"\n"
+    "fdc_id,data_type,description,food_category_id\n"
+    "111,sr_legacy_food,\"Bananas, raw\",9\n"
+    "222,sr_legacy_food,\"Flour, wheat, all-purpose\",20\n"
+    "333,sr_legacy_food,\"Water, bottled\",14\n"
+)
+
+# Real ids and descriptions from the SR Legacy bundle. The Health Star
+# Rating's fvnl test keys off the description, so the exact strings matter.
+_FOOD_CATEGORY_CSV = (
+    "id,code,description\n"
+    "9,0900,\"Fruits and Fruit Juices\"\n"
+    "14,1400,Beverages\n"
+    "20,2000,\"Cereal Grains and Pasta\"\n"
 )
 
 _FOOD_NUTRIENT_CSV = (
@@ -93,6 +102,7 @@ def _parse(**overrides):
         "food_nutrient.csv": _FOOD_NUTRIENT_CSV,
         "measure_unit.csv": _MEASURE_UNIT_CSV,
         "food_portion.csv": _FOOD_PORTION_CSV,
+        "food_category.csv": _FOOD_CATEGORY_CSV,
     }
     files.update(overrides)
     return parse_fdc_csv_zip(_archive(files), _SOURCE)
@@ -216,3 +226,55 @@ def test__default_urls__PointAtTheOriginNotTheAkamaiMirror():
 
 
 #endregion
+
+
+def test__parse__FoodCategory__IsReadFromTheBundleAndAttachedToEachFood():
+    """The Health Star Rating's fvnl input. `food_category.csv` has always been
+    inside the bundle the importer downloads — it was simply never opened, and
+    that omission is why a recipe full of vegetables could not be told apart
+    from one full of butter."""
+    foods, _ = _parse()
+    by_ref = {food.source_ref: food for food in foods}
+
+    assert by_ref["111"].food_category == "Fruits and Fruit Juices"
+    assert by_ref["222"].food_category == "Cereal Grains and Pasta"
+
+
+def test__parse__FoodCategory__DrivesTheFvnlTest():
+    """End of the chain: the string the importer stored is the string the
+    rating asks about. Pinned together because they are only useful as a pair —
+    a typo in either would leave every recipe scoring zero fvnl, silently."""
+    from dora_api.features.nutrition.food_categories import is_fvnl_category
+
+    foods, _ = _parse()
+    by_ref = {food.source_ref: food for food in foods}
+
+    assert is_fvnl_category(by_ref["111"].food_category) is True    # banana
+    assert is_fvnl_category(by_ref["222"].food_category) is False   # flour
+
+
+def test__parse__ArchiveWithoutFoodCategoryCsv__StillImportsWithNullCategories():
+    """The category file is optional, unlike the three the parser insists on.
+    An older or hand-made bundle must still import its nutrients — refusing the
+    whole download over the Health Star Rating's input would be the wrong
+    trade, since the nutrients are what the app is actually for."""
+    files = {
+        "food.csv": _FOOD_CSV,
+        "nutrient.csv": _NUTRIENT_CSV,
+        "food_nutrient.csv": _FOOD_NUTRIENT_CSV,
+    }
+    foods, _ = parse_fdc_csv_zip(_archive(files), _SOURCE)
+
+    assert len(foods) == 2
+    assert all(food.food_category is None for food in foods)
+
+
+def test__parse__FoodWithAnUnknownCategoryId__LeavesTheCategoryNull():
+    """A dangling id is data we don't have, not a reason to invent one."""
+    orphan = (
+        "fdc_id,data_type,description,food_category_id\n"
+        "111,sr_legacy_food,\"Bananas, raw\",4242\n"
+    )
+    foods, _ = _parse(**{"food.csv": orphan})
+
+    assert foods[0].food_category is None

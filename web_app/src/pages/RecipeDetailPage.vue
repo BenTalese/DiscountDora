@@ -221,16 +221,21 @@
                  they're present Save is the primary and Cook mode steps back —
                  two primaries in one row is no primary at all. -->
             <div class="rn__actions">
+                <!-- Icon-only on a phone, like every other button in this
+                     row (owner feedback 2026-08-27) — it was the one that kept
+                     its label, which is what pushed the rest off-screen. -->
                 <BaseButton
                     v-if="dirty"
                     variant="primary"
                     :icon="ICONS.save"
-                    label="Save"
+                    :label="compact ? undefined : 'Save'"
                     aria-label="Save changes"
                     :loading="saveState === 'saving'"
                     :disable="!canSave"
                     @click="onSave"
-                />
+                >
+                    <q-tooltip v-if="compact">Save changes</q-tooltip>
+                </BaseButton>
                 <BaseButton
                     v-if="dirty"
                     variant="ghost"
@@ -309,9 +314,10 @@
                              things", so it belongs in the cell that answers it. -->
                         <span v-if="coverableCount > 0" class="rn__cellswap">
                             <q-icon :name="ICONS.swap_horiz" size="14px" />
-                            {{ coverableCount === 1
-                                ? '1 has a substitute you already have'
-                                : `${coverableCount} have substitutes you already have` }}
+                            <!-- Owner feedback 2026-08-27 — the long form ate a
+                                 mobile line and was wordy on desktop; the count
+                                 plus the swap icon already says it. -->
+                            {{ coverableCount }} can be swapped
                         </span>
                         <!-- Owner feedback 2026-08-24 — the action said nothing
                              about what was already on a list, so it offered to
@@ -398,20 +404,36 @@
             <div class="rn__body">
                 <div class="rn__rail">
                     <section aria-labelledby="rnIng">
+                        <!-- Owner feedback 2026-08-27 - the ingredient list is
+                             a *list* until you press the pencil. It shipped
+                             with every editing affordance permanently on: a
+                             row that opened an edit dialog on tap, reorder
+                             arrows, a delete button. Reading a recipe and
+                             rewriting one are different jobs, and the header
+                             already had the shape that separates them
+                             (R-055), so the rail wears it too. -->
                         <div class="rn__sechead">
                             <h2 class="rn__sectitle" id="rnIng">Ingredients</h2>
                             <span class="rn__seccount">{{ form.ingredients.length }}</span>
+                            <BaseButton
+                                class="rn__secedit"
+                                :variant="ingredientsEditing ? 'secondary' : 'icon'"
+                                dense
+                                :icon="ingredientsEditing ? ICONS.check : ICONS.edit"
+                                :label="ingredientsEditing ? 'Done' : undefined"
+                                :aria-label="ingredientsEditing ? 'Finish editing the ingredients' : 'Edit the ingredients'"
+                                :aria-pressed="ingredientsEditing"
+                                :loading="ingredientsEditing && saveState === 'saving'"
+                                @click="onToggleIngredientsEdit"
+                            >
+                                <q-tooltip v-if="!ingredientsEditing">Edit the ingredients</q-tooltip>
+                            </BaseButton>
                         </div>
 
                         <div class="rn__pane">
-                            <!-- Owner feedback 2026-08-24 — a section used to be a
-                                 bare underlined caption above its rows, which read
-                                 as another free-text ingredient, and its controls
-                                 lived in an "Organise ingredients" disclosure at the
-                                 very bottom of the page. A section is a container, so
-                                 it looks like one: a card holding its own name, its
-                                 own rows and its own add button. The disclosure is
-                                 gone with it. -->
+                            <!-- A section is a container, so it looks like one:
+                                 a card holding its own name, its own rows and
+                                 (while editing) its own add button. -->
                             <div
                                 v-for="group in ingredientGroups"
                                 :key="group.key"
@@ -419,29 +441,27 @@
                                 :class="{ 'rn__group--card': group.sectionId !== null }"
                             >
                                 <div v-if="group.sectionId !== null" class="rn__grouphead">
-                                    <InlineEditTarget
-                                        class="rn__groupname rn__edit"
-                                        :label="`Rename the ${group.name} section`"
-                                    >
+                                    <!-- "Look pretty for view mode, be a proper
+                                         input for edit mode" (owner, 2026-08-27).
+                                         The `q-popup-edit` this replaced was the
+                                         middle thing that is neither: a heading
+                                         you had to discover was clickable, which
+                                         then opened a field somewhere else. -->
+                                    <h3 v-if="!ingredientsEditing" class="rn__groupname">
                                         {{ group.name }}
-                                        <q-popup-edit
-                                            :model-value="sectionNameOf(group.sectionId)"
-                                            v-slot="scope"
-                                            auto-save
-                                            @save="(v) => renameSection(String(group.sectionId), String(v ?? ''))"
-                                        >
-                                            <q-input
-                                                v-model="scope.value"
-                                                dense
-                                                autofocus
-                                                label="Section name"
-                                                placeholder="For the sauce"
-                                                @keyup.enter="scope.set"
-                                            />
-                                        </q-popup-edit>
-                                    </InlineEditTarget>
+                                    </h3>
+                                    <q-input
+                                        v-else
+                                        :model-value="sectionNameOf(group.sectionId)"
+                                        dense outlined
+                                        class="rn__groupfield"
+                                        label="Section name"
+                                        placeholder="For the sauce"
+                                        @update:model-value="(v) => renameSection(String(group.sectionId), String(v ?? ''))"
+                                    />
                                     <span class="rn__groupcount">{{ group.rows.length }}</span>
                                     <BaseButton
+                                        v-if="ingredientsEditing"
                                         variant="icon"
                                         dense
                                         :icon="ICONS.more_vert"
@@ -494,19 +514,14 @@
                                         :class="{ 'rn__ing--lit': litIngredients.has(String(row.client_id)) }"
                                         role="button"
                                         tabindex="0"
-                                        :aria-label="`Edit ${ingredientLabel(row)}`"
-                                        @click="openRowEditor(String(row.client_id))"
-                                        @keydown.enter.prevent="openRowEditor(String(row.client_id))"
-                                        @keydown.space.prevent="openRowEditor(String(row.client_id))"
+                                        :aria-pressed="!ingredientsEditing && selectedIngredientId === row.client_id"
+                                        :aria-label="ingredientsEditing
+                                            ? `Edit ${ingredientLabel(row)}`
+                                            : `${ingredientLabel(row)} - highlight the steps that use it`"
+                                        @click="onIngredientRowActivate(String(row.client_id))"
+                                        @keydown.enter.prevent="onIngredientRowActivate(String(row.client_id))"
+                                        @keydown.space.prevent="onIngredientRowActivate(String(row.client_id))"
                                     >
-                                        <!-- Quantity, unit, name, section, note and
-                                             the optional flag are one thing to a
-                                             cook, so the whole row opens one editor
-                                             rather than the quantity and the name
-                                             each owning their own target. The
-                                             quantity popup also carried a free-text
-                                             unit, which the row editor's canonical
-                                             dropdown had already replaced. -->
                                         <span class="rn__qty">
                                             {{ formatQuantity(row.quantity, row.unit) || '—' }}
                                         </span>
@@ -524,7 +539,7 @@
                                                 text-color="dark"
                                                 class="rn__chip"
                                                 clickable
-                                                @click="openRowEditor(String(row.client_id))"
+                                                @click.stop="openRowEditor(String(row.client_id))"
                                             >
                                                 Needs an item
                                             </q-chip>
@@ -543,17 +558,24 @@
                                                  something you could use instead" are
                                                  different answers to tonight's
                                                  question, so the chip says which one
-                                                 this is (feedback 2026-08-24). The
-                                                 swap list itself stays one tap away in
-                                                 the substitutes chip beside it. -->
+                                                 this is (feedback 2026-08-24). Missing
+                                                 means **out of stock**, never low - the
+                                                 server's `is_missing`, whose whole point
+                                                 is that a low ingredient is one you can
+                                                 usually still cook with (owner asked
+                                                 which it was, 2026-08-27). -->
                                             <q-chip
                                                 v-else-if="isMissingItem(row.stock_item_id)"
                                                 dense square size="sm"
-                                                :color="hasSwapInStock(row) ? 'warning' : 'negative'"
-                                                :text-color="hasSwapInStock(row) ? 'dark' : 'white'"
-                                                class="rn__chip"
+                                                color="warning"
+                                                text-color="dark"
+                                                class="rn__chip rn__chip--missing"
                                             >
-                                                {{ hasSwapInStock(row) ? 'Missing — swap in stock' : 'Missing' }}
+                                                Missing
+                                                <q-tooltip>
+                                                    Out of stock. A low ingredient still
+                                                    counts as one you have.
+                                                </q-tooltip>
                                             </q-chip>
                                             <q-chip
                                                 v-if="expiringChipFor(row.stock_item_id)"
@@ -574,35 +596,40 @@
                                             </span>
                                             <span v-if="row.notes" class="rn__ingnote">{{ row.notes }}</span>
                                         </span>
-                                        <!-- Per-row actions. Reordering lives here now
-                                             that the organise disclosure is gone; on a
-                                             phone the cluster is permanently visible,
-                                             because hover isn't a gesture a thumb has. -->
+                                        <!-- Per-row actions, split by mode. Reading a
+                                             recipe, the only thing you want to *do* to
+                                             a row is put it on a list - and that has to
+                                             be visible, not hover-revealed, because a
+                                             thumb has no hover. Editing one, the cart
+                                             is noise and the structural controls are
+                                             the point (owner feedback 2026-08-27). -->
                                         <span class="rn__ingact" @click.stop>
-                                            <BaseButton
-                                                variant="icon" dense
-                                                :icon="ICONS.arrow_upward"
-                                                :disable="rowIndex === 0"
-                                                :aria-label="`Move ${ingredientLabel(row)} up`"
-                                                @click="moveIngredientWithin(group.rows, rowIndex, -1)"
-                                            />
-                                            <BaseButton
-                                                variant="icon" dense
-                                                :icon="ICONS.arrow_downward"
-                                                :disable="rowIndex === group.rows.length - 1"
-                                                :aria-label="`Move ${ingredientLabel(row)} down`"
-                                                @click="moveIngredientWithin(group.rows, rowIndex, 1)"
-                                            />
+                                            <template v-if="ingredientsEditing">
+                                                <BaseButton
+                                                    variant="icon" dense
+                                                    :icon="ICONS.arrow_upward"
+                                                    :disable="rowIndex === 0"
+                                                    :aria-label="`Move ${ingredientLabel(row)} up`"
+                                                    @click="moveIngredientWithin(group.rows, rowIndex, -1)"
+                                                />
+                                                <BaseButton
+                                                    variant="icon" dense
+                                                    :icon="ICONS.arrow_downward"
+                                                    :disable="rowIndex === group.rows.length - 1"
+                                                    :aria-label="`Move ${ingredientLabel(row)} down`"
+                                                    @click="moveIngredientWithin(group.rows, rowIndex, 1)"
+                                                />
+                                                <BaseButton
+                                                    variant="danger-icon" dense
+                                                    :icon="ICONS.delete"
+                                                    :aria-label="`Remove ${ingredientLabel(row)}`"
+                                                    @click="removeIngredient(String(row.client_id))"
+                                                />
+                                            </template>
                                             <AddToListButton
-                                                v-if="row.stock_item_id && isMissingItem(row.stock_item_id)"
+                                                v-else-if="row.stock_item_id && isMissingItem(row.stock_item_id)"
                                                 :stock-item-id="row.stock_item_id"
                                                 variant="row"
-                                            />
-                                            <BaseButton
-                                                variant="danger-icon" dense
-                                                :icon="ICONS.delete"
-                                                :aria-label="`Remove ${ingredientLabel(row)}`"
-                                                @click="removeIngredient(String(row.client_id))"
                                             />
                                         </span>
                                     </li>
@@ -613,6 +640,7 @@
                                 </p>
 
                                 <BaseButton
+                                    v-if="ingredientsEditing"
                                     variant="subtle"
                                     class="rn__add"
                                     :icon="ICONS.add"
@@ -622,15 +650,19 @@
                             </div>
                         </div>
 
+                        <!-- Same variant, same width, same icon as "Add
+                             ingredient" - the owner picked that one when he
+                             asked for the two to match. -->
                         <BaseButton
-                            variant="ghost"
-                            class="rn__addsec"
+                            v-if="ingredientsEditing"
+                            variant="subtle"
+                            class="rn__add rn__addsec"
                             :icon="ICONS.add"
                             label="Add section"
                             @click="addSection"
                         >
                             <q-tooltip>
-                                Sections group the list under headings — "For the
+                                Sections group the list under headings - "For the
                                 sauce", "To serve".
                             </q-tooltip>
                         </BaseButton>
@@ -638,163 +670,155 @@
                 </div>
 
                 <section aria-labelledby="rnMet">
+                    <!-- Owner feedback 2026-08-27, three asks with one answer:
+                         the step-style switch and the pencil belong *in* the
+                         heading rather than on a row of their own below it;
+                         the method should be read-only until the pencil is
+                         pressed; and pressing it should swap the block in
+                         place rather than open a dialog. The style switch only
+                         renders while editing, because picking how the method
+                         is stored is an edit — a reader has nothing to do with
+                         it, and a control you can't use is a control you have
+                         to read past. -->
                     <div class="rn__sechead">
                         <h2 class="rn__sectitle" id="rnMet">Method</h2>
                         <span class="rn__seccount">{{ methodCountLabel }}</span>
-                    </div>
-
-                    <!-- Owner feedback 2026-08-24 — the three-way control now
-                         says what it switches ("Step style") and names the
-                         styles in full, and the editor is one pencil shared by
-                         all three rather than a per-style disclosure whose
-                         label changed under you. One edit button, whatever the
-                         style, because it is always the same intent: change
-                         the method. -->
-                    <div class="rn__stylebar">
-                        <span class="rn__stylek">Step style</span>
                         <BaseSegmented
+                            v-if="methodEditing"
                             v-model="form.steps_mode"
                             dense
                             unelevated
                             class="rn__modes"
+                            aria-label="Step style"
                             :options="[
                                 { label: 'Structured', value: 'structured' },
                                 { label: 'Free text', value: 'freeform' },
-                                { label: 'Image', value: 'image' },
+                                { label: 'Photos', value: 'image' },
                             ]"
                             @update:model-value="markDirty"
                         />
                         <BaseButton
-                            variant="secondary"
+                            class="rn__secedit"
+                            :variant="methodEditing ? 'secondary' : 'icon'"
                             dense
-                            class="rn__styleedit"
-                            :icon="ICONS.edit"
-                            :label="compact ? undefined : 'Edit'"
-                            :aria-label="methodEditLabel"
-                            @click="methodEditorOpen = true"
+                            :icon="methodEditing ? ICONS.check : ICONS.edit"
+                            :label="methodEditing ? 'Done' : undefined"
+                            :aria-label="methodEditing ? 'Finish editing the method' : methodEditLabel"
+                            :aria-pressed="methodEditing"
+                            :loading="methodEditing && saveState === 'saving'"
+                            @click="onToggleMethodEdit"
                         >
-                            <q-tooltip>{{ methodEditLabel }}</q-tooltip>
+                            <q-tooltip v-if="!methodEditing">{{ methodEditLabel }}</q-tooltip>
                         </BaseButton>
                     </div>
 
                     <div class="rn__pane">
-                        <!-- Structured — the only mode that can tie a step to
+                        <!-- Structured - the only mode that can tie a step to
                              its ingredients, because it's the only one that
-                             stores the link. -->
-                        <template v-if="form.steps_mode === 'structured'">
-                            <ol v-if="topLevelSteps.length > 0" class="rn__steps">
-                                <!-- The `li` was focusable purely to drive the
-                                     ingredient highlight, which put two tab
-                                     stops on every step and named neither. The
-                                     edit target is the stop now, and focus/
-                                     hover on it lights the same rail rows. -->
-                                <li
-                                    v-for="step in topLevelSteps"
-                                    :key="step.client_id"
-                                    :class="{ 'rn__step--lit': litStep === step.client_id }"
-                                    @mouseenter="litStep = step.client_id"
-                                    @mouseleave="litStep = null"
-                                >
-                                    <InlineEditTarget
-                                        tag="p"
-                                        class="rn__edit"
-                                        :label="`Edit step ${step.sequence + 1}`"
-                                        @focusin="litStep = step.client_id"
-                                        @focusout="litStep = null"
-                                    >
-                                        {{ step.text || 'Empty step' }}
-                                        <q-popup-edit v-model="step.text" v-slot="scope" auto-save @save="markDirty">
-                                            <q-input v-model="scope.value" type="textarea" autogrow dense autofocus label="Step" />
-                                        </q-popup-edit>
-                                    </InlineEditTarget>
-                                    <span v-if="step.hint" class="rn__hint">{{ step.hint }}</span>
-                                    <span v-if="usesLabel(step)" class="rn__uses">Uses {{ usesLabel(step) }}</span>
-                                    <!-- Sub-steps read as the same kind of
-                                         thing as a step, one level in: same
-                                         numbered bullet, toned down and
-                                         indented rather than a plain bulleted
-                                         list in a different visual language
-                                         (feedback 2026-08-24). -->
-                                    <ol v-if="subStepsOf(step).length > 0" class="rn__substeps">
-                                        <li v-for="sub in subStepsOf(step)" :key="sub.client_id">
-                                            <p>{{ sub.text || 'Empty sub-step' }}</p>
-                                            <span v-if="sub.hint" class="rn__hint">{{ sub.hint }}</span>
-                                        </li>
-                                    </ol>
-                                </li>
-                            </ol>
-                            <p v-else class="rn__empty">No steps yet — tap Edit to add them.</p>
-                        </template>
+                             stores the link. Both faces live in one component
+                             so the geometry can't drift between them. -->
+                        <RecipeStructuredMethod
+                            v-if="form.steps_mode === 'structured'"
+                            :steps="form.steps"
+                            :editing="methodEditing"
+                            :ingredient-options="ingredientOptions"
+                            :tool-options="toolOptions"
+                            :section-options="sectionOptions"
+                            :selected-step-id="selectedStepId"
+                            :highlighted-step-ids="highlightedStepIds"
+                            @update:steps="onStepsChanged"
+                            @update:selected-step-id="onSelectStep"
+                        />
 
-                        <!-- Free text — one block, edited in the shared method
-                             editor. It used to edit through an inline popup,
-                             which on a phone opened the keyboard *over* the
-                             field with nothing to scroll (feedback
-                             2026-08-24); the dialog puts the field above the
-                             keyboard and scrolls itself. -->
+                        <!-- Free text - one block. Read it as paragraphs; edit
+                             it as the one field it actually is. -->
                         <template v-else-if="form.steps_mode === 'freeform'">
-                            <button
-                                v-if="freeformLines.length > 0"
-                                type="button"
-                                class="rn__free rn__edit rn__freebtn"
-                                aria-label="Edit the instructions"
-                                @click="methodEditorOpen = true"
-                            >
+                            <q-input
+                                v-if="methodEditing"
+                                v-model="form.instructions"
+                                type="textarea"
+                                outlined
+                                autogrow
+                                autofocus
+                                label="Instructions"
+                                hint="One line per step reads best in cook mode."
+                                @update:model-value="markDirty"
+                            />
+                            <div v-else-if="freeformLines.length > 0" class="rn__free">
                                 <p v-for="(line, i) in freeformLines" :key="`f-${i}`">{{ line }}</p>
-                            </button>
-                            <button
-                                v-else
-                                type="button"
-                                class="rn__empty rn__edit rn__freebtn"
-                                aria-label="Add instructions"
-                                @click="methodEditorOpen = true"
-                            >
-                                No instructions yet — tap to write them.
-                            </button>
+                            </div>
+                            <p v-else class="rn__empty">No instructions yet — tap the pencil to write them.</p>
                         </template>
 
-                        <!-- Photo steps. -->
+                        <!-- Photo steps. Both faces read the *form's* list, not
+                             the last-loaded recipe's: a photo picked in this
+                             session has no saved id yet, and rendering only the
+                             saved ones is why they "weren't showing" (owner,
+                             2026-08-27). -->
                         <template v-else>
-                            <RecipeStepImagesViewer
-                                v-if="(recipe.step_images ?? []).length > 0"
-                                :recipe-id="recipe.recipe_id"
-                                :images="recipe.step_images ?? []"
+                            <RecipeStepImagesEditor
+                                v-if="methodEditing"
+                                :model-value="form.step_images"
+                                @update:model-value="onStepImagesChanged"
                             />
-                            <p v-else class="rn__empty">No step photos yet — tap Edit to add them.</p>
+                            <RecipeStepImagesViewer v-else :images="form.step_images" />
                         </template>
+
+                        <!-- Tools. In structured mode they are *derived* from
+                             the steps that use them (server-side, on save) and
+                             have no home outside a step - which is the owner's
+                             call, and the only one that keeps the cookbook's
+                             tool filter honest without asking for the same
+                             facts twice. Free-text and photo recipes have no
+                             steps to derive from, so they keep a real field -
+                             here, inside the method, rather than in a
+                             general-purpose drawer at the bottom of the page. -->
+                        <div v-if="form.steps_mode !== 'structured'" class="rn__tools">
+                            <span class="rn__toolk">
+                                <q-icon :name="ICONS.blender" size="14px" />Tools
+                            </span>
+                            <BaseSelect
+                                v-if="methodEditing"
+                                v-model="form.tool_ids"
+                                label="Tools this recipe needs"
+                                :options="toolSelectOptions"
+                                emit-value map-options multiple use-chips clearable
+                                @update:model-value="markDirty"
+                            />
+                            <template v-else-if="toolNames.length > 0">
+                                <q-chip
+                                    v-for="name in toolNames"
+                                    :key="name"
+                                    dense square size="sm"
+                                    class="rn__chip"
+                                >{{ name }}</q-chip>
+                            </template>
+                            <span v-else class="rn__empty">None set</span>
+                        </div>
                     </div>
                 </section>
             </div>
 
             <!-- ═══ Details — everything administrative ═════════════════
-                 Owner feedback 2026-08-24 — dietary tags, tools, the source
-                 URL and the notes were four separate disclosures for four
-                 fields nobody opens twice. They are one "Additional details"
-                 chunk now. What stayed separate genuinely answers its own
-                 question: nutrition, the photo, and the version history. The
-                 cost breakdown left this list entirely — it is a modal on the
-                 status strip — and so did "Organise ingredients", which the
-                 ingredient section cards absorbed. -->
+                 Owner feedback 2026-08-27 — these panels' labels read as body
+                 text sitting on top of body text, so they now wear the same
+                 uppercase section title Ingredients and Method wear, and the
+                 captions are gone with them: a caption that lists what is
+                 inside a drawer you are about to open is a summary of a thing
+                 one tap away. Tools left this list entirely — they belong to
+                 the method now, derived from the steps that use them. -->
             <div class="rn__details">
-                <q-expansion-item
-                    v-model="detailOpen.extra"
-                    dense-toggle
-                    label="Additional details"
-                    :caption="extraCaption"
-                >
+                <q-expansion-item v-model="detailOpen.extra" dense-toggle>
+                    <template #header>
+                        <q-item-section>
+                            <h2 class="rn__sectitle">Additional details</h2>
+                        </q-item-section>
+                    </template>
                     <div class="rn__disc">
                         <BaseSelect
                             v-model="form.dietary_tag_ids"
                             label="Dietary tags"
                             :options="dietaryTagOptions"
-                            emit-value map-options multiple use-chips clearable
-                            class="q-mb-sm"
-                            @update:model-value="markDirty"
-                        />
-                        <BaseSelect
-                            v-model="form.tool_ids"
-                            label="Tools"
-                            :options="toolSelectOptions"
                             emit-value map-options multiple use-chips clearable
                             class="q-mb-sm"
                             @update:model-value="markDirty"
@@ -819,9 +843,15 @@
                     v-if="isComplex && recipe.nutrition"
                     v-model="detailOpen.nutrition"
                     dense-toggle
-                    label="Nutrition"
-                    :caption="nutritionCaption"
                 >
+                    <template #header>
+                        <q-item-section>
+                            <h2 class="rn__sectitle">Nutrition</h2>
+                        </q-item-section>
+                        <q-item-section side>
+                            <span class="rn__seccount">{{ nutritionCaption }}</span>
+                        </q-item-section>
+                    </template>
                     <div class="rn__disc">
                         <RecipeNutritionCard :nutrition="recipe.nutrition" />
                     </div>
@@ -831,9 +861,17 @@
                     v-if="!isComplex && nutritionEnabled"
                     v-model="detailOpen.kcal"
                     dense-toggle
-                    label="Calories"
-                    :caption="form.kcal ? `${form.kcal} kcal per serving` : 'Not set'"
                 >
+                    <template #header>
+                        <q-item-section>
+                            <h2 class="rn__sectitle">Calories</h2>
+                        </q-item-section>
+                        <q-item-section side>
+                            <span class="rn__seccount">
+                                {{ form.kcal ? `${form.kcal} kcal per serving` : 'Not set' }}
+                            </span>
+                        </q-item-section>
+                    </template>
                     <div class="rn__disc">
                         <q-input
                             v-model.number="form.kcal"
@@ -845,19 +883,14 @@
                     </div>
                 </q-expansion-item>
 
-                <!-- Version information. Was "Other versions", captioned "N
-                     siblings" — a word from the data model, not the kitchen.
-                     It now answers the two questions actually asked of a
-                     recipe's history: when did this one come about, and what
-                     other versions of it exist (feedback 2026-08-24). It
-                     renders even for a singleton, because created/updated are
-                     facts about every recipe. -->
-                <q-expansion-item
-                    v-model="detailOpen.versions"
-                    dense-toggle
-                    label="Version information"
-                    :caption="versionsCaption"
-                >
+                <!-- Version information. Renders even for a singleton, because
+                     created/updated are facts about every recipe. -->
+                <q-expansion-item v-model="detailOpen.versions" dense-toggle>
+                    <template #header>
+                        <q-item-section>
+                            <h2 class="rn__sectitle">Version information</h2>
+                        </q-item-section>
+                    </template>
                     <div class="rn__disc">
                         <div class="rn__vfacts">
                             <div class="rn__vfact">
@@ -874,42 +907,59 @@
                             </div>
                         </div>
 
-                        <template v-if="versionSiblings.length > 0">
-                            <div class="rn__discsub">Versions of this recipe</div>
-                            <q-list dense separator>
-                                <q-item class="rn__vthis">
-                                    <q-item-section>
-                                        <q-item-label>{{ recipe.name }}</q-item-label>
-                                        <q-item-label caption>
-                                            {{ recipe.created_at ? `Created ${formatDate(recipe.created_at)}` : 'Created — unknown' }}
-                                        </q-item-label>
-                                    </q-item-section>
-                                    <q-item-section side>
-                                        <q-badge outline color="primary" label="You're here" />
-                                    </q-item-section>
-                                </q-item>
-                                <q-item
-                                    v-for="sib in versionSiblings"
-                                    :key="sib.recipe_id"
-                                    clickable
-                                    @click="goToSibling(sib.recipe_id)"
-                                >
-                                    <q-item-section>
-                                        <q-item-label>{{ sib.name }}</q-item-label>
-                                        <q-item-label caption>
-                                            {{ sib.created_at ? `Created ${formatDate(sib.created_at)}` : 'Created — unknown' }}
-                                        </q-item-label>
-                                    </q-item-section>
-                                    <q-item-section side>
-                                        <q-icon :name="ICONS.chevron_right" />
-                                    </q-item-section>
-                                </q-item>
-                            </q-list>
-                        </template>
-                        <p v-else class="rn__hintblock rn__vnone">
-                            This is the only version. "New version" makes a copy you
-                            can change without losing this one.
-                        </p>
+                        <!-- The count is a pill on the sub-heading rather than
+                             a caption on the panel above, and the explanation
+                             of what "New version" does is gone: the button is
+                             right here now, which is a better explanation than
+                             the sentence was (owner feedback 2026-08-27). -->
+                        <div class="rn__vhead">
+                            <span class="rn__discsub">Versions of this recipe</span>
+                            <q-badge rounded class="rn__vcount" :label="versionSiblings.length + 1" />
+                            <BaseButton
+                                variant="ghost"
+                                dense
+                                class="rn__vnew"
+                                :icon="ICONS.content_copy"
+                                label="New version"
+                                aria-label="Make a new version of this recipe"
+                                :loading="newVersionLoading"
+                                @click="onNewVersion"
+                            >
+                                <q-tooltip>
+                                    Makes a copy you can change without losing this one.
+                                </q-tooltip>
+                            </BaseButton>
+                        </div>
+
+                        <q-list v-if="versionSiblings.length > 0" dense separator>
+                            <q-item class="rn__vthis">
+                                <q-item-section>
+                                    <q-item-label>{{ recipe.name }}</q-item-label>
+                                    <q-item-label caption>
+                                        {{ recipe.created_at ? `Created ${formatDate(recipe.created_at)}` : 'Created — unknown' }}
+                                    </q-item-label>
+                                </q-item-section>
+                                <q-item-section side>
+                                    <q-badge outline color="primary" label="You're here" />
+                                </q-item-section>
+                            </q-item>
+                            <q-item
+                                v-for="sib in versionSiblings"
+                                :key="sib.recipe_id"
+                                clickable
+                                @click="goToSibling(sib.recipe_id)"
+                            >
+                                <q-item-section>
+                                    <q-item-label>{{ sib.name }}</q-item-label>
+                                    <q-item-label caption>
+                                        {{ sib.created_at ? `Created ${formatDate(sib.created_at)}` : 'Created — unknown' }}
+                                    </q-item-label>
+                                </q-item-section>
+                                <q-item-section side>
+                                    <q-icon :name="ICONS.chevron_right" />
+                                </q-item-section>
+                            </q-item>
+                        </q-list>
                     </div>
                 </q-expansion-item>
 
@@ -946,20 +996,6 @@
             @save-and-start="onSaveAndCook"
         />
 
-        <RecipeMethodEditorDialog
-            v-model="methodEditorOpen"
-            :mode="form.steps_mode"
-            :steps="form.steps"
-            :instructions="form.instructions"
-            :step-images="form.step_images"
-            :ingredient-options="ingredientOptions"
-            :tool-options="toolOptions"
-            :section-options="sectionOptions"
-            @update:steps="onStepsChanged"
-            @update:instructions="onInstructionsChanged"
-            @update:step-images="onStepImagesChanged"
-        />
-
         <RecipeCostDialog
             v-if="recipe"
             v-model="costDialogOpen"
@@ -975,12 +1011,18 @@
             :row="rowEditorRow"
             :sections="form.sections"
             @save="onRowEditorSave"
+            @cancel="onRowEditorCancel"
         />
 
-        <RecipeIngredientPickerDialog
+        <!-- Owner feedback 2026-08-27 — shared with meal plans (R-001); the
+             recipe-only picker component is gone. -->
+        <AddToListDialog
             ref="pickerRef"
             v-model="pickerOpen"
-            :recipe="recipe"
+            title="Add ingredients to a list"
+            :rows="pickerRows"
+            :unlinked="pickerUnlinked"
+            :default-new-list-name="recipe ? `Shopping: ${recipe.name}` : 'Shopping list'"
             :initial-checked-ids="pickerInitialCheckedIds"
             @confirm="onPickerConfirm"
         />
@@ -1023,29 +1065,39 @@
      *
      * Three things made it different from the page it replaced:
      *
-     * 1. **No modes, but an explicit save.** The read/edit toggle is gone —
-     *    values render as text and edit in place via `q-popup-edit`. What is
-     *    *not* gone is the commit: edits mark the form dirty and a Save button
-     *    appears. The first cut autosaved on a 500ms debounce and the owner
+     * 1. **Three blocks that flip, and an explicit save.** The masthead, the
+     *    ingredient rail and the method each own one pencil that swaps that
+     *    region between reading and editing *in place* (R-055). The last two
+     *    arrived 2026-08-27: the rail had shipped with its editing chrome
+     *    permanently on, and the method's pencil opened a modal over the very
+     *    thing you were reading. What is *not* gone is the commit — edits mark
+     *    the form dirty, a Save button appears, and leaving any pencil
+     *    commits. The first cut autosaved on a 500ms debounce and the owner
      *    reversed it; see the save block below for the three ways that failed.
      *    D-015's "read-view + explicit edit mode for detail pages" clause was
      *    retired when this page won the comparison (FU-688) — it had been
      *    written against the old page's form-as-detail, which no longer
-     *    exists, and it was the only clause of that rule about detail pages.
-     *    Inline editing keeps the page reading as a recipe, which is what the
-     *    clause was actually protecting.
-     * 2. **Structural edits stay behind a disclosure.** Reordering steps,
-     *    linking ingredients to steps, managing photos — the things that need a
-     *    real editor — live in one expansion under the method, not inline.
+     *    exists. The block switches are that clause's intent arriving by a
+     *    different route: the page reads as a recipe until you say otherwise.
+     * 2. **Nothing edits somewhere else.** No disclosure holds structural
+     *    edits any more. Steps reorder, gain sub-steps and take their
+     *    ingredient/tool links where they are rendered
+     *    (`RecipeStructuredMethod`, one component for both faces); a tool
+     *    belongs to a step, so in structured mode the recipe's tool list is
+     *    *derived* server-side from its steps and has no field at all, and in
+     *    the two modes that have no steps it lives inside the method rather
+     *    than in a drawer at the bottom of the page.
      * 3. **No business logic of its own.** The form model, hydrate and PATCH
      *    build all come from `useRecipeEditor` (R-003); everything else reads
      *    server-derived values off the loaded recipe exactly as the old page
      *    does.
      *
      * All three step modes are supported. Only `structured` can highlight the
-     * ingredients a step uses, because it's the only mode that stores the link.
+     * ingredients a step uses, because it's the only mode that stores the
+     * link — and since 2026-08-27 that highlight runs both ways off a *tap*
+     * rather than one way off a hover a phone cannot perform.
      */
-    import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
+    import { computed, onBeforeUnmount, onMounted, reactive, ref, watch, type Ref } from 'vue';
     import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
     import { useQuasar } from 'quasar';
     import { storeToRefs } from 'pinia';
@@ -1055,15 +1107,17 @@
     import BaseDialog from 'src/components/BaseDialog.vue';
     import BaseSegmented from 'src/components/BaseSegmented.vue';
     import BaseSelect from 'src/components/BaseSelect.vue';
-    import InlineEditTarget from 'src/components/InlineEditTarget.vue';
     import ImageEditTile from 'src/components/ImageEditTile.vue';
     import MealStepper from 'src/components/recipes/MealStepper.vue';
     import RecipeNutritionCard from 'src/components/recipes/RecipeNutritionCard.vue';
     import RecipeStepImagesViewer from 'src/components/recipes/RecipeStepImagesViewer.vue';
+    import RecipeStepImagesEditor from 'src/components/recipes/RecipeStepImagesEditor.vue';
+    import RecipeStructuredMethod from 'src/components/recipes/RecipeStructuredMethod.vue';
     import RecipeCostDialog from 'src/components/recipes/RecipeCostDialog.vue';
-    import RecipeMethodEditorDialog from 'src/components/recipes/RecipeMethodEditorDialog.vue';
     import CookModeGuardDialog from 'src/components/recipes/CookModeGuardDialog.vue';
-    import RecipeIngredientPickerDialog from 'src/components/recipes/RecipeIngredientPickerDialog.vue';
+    import AddToListDialog from 'src/components/shoppingList/AddToListDialog.vue';
+    import type { AddToListConfirm } from 'src/components/shoppingList/addToListTypes';
+    import { rowsFromRecipe, unlinkedFromRecipe } from 'src/helpers/addToListRows';
     import RecipeIngredientRowEditor from 'src/components/recipes/RecipeIngredientRowEditor.vue';
     import RecipeIngredientSubstitutes from 'src/components/recipes/RecipeIngredientSubstitutes.vue';
     import AddToListButton from 'src/components/AddToListButton.vue';
@@ -1136,7 +1190,7 @@
     const { nutritionEnabled, isComplex } = useNutritionMode();
     const { batchEnabled } = useBatchEnabled();
     const { showRecipeImages } = useImagePrefs();
-    const { addItems } = useShoppingListActions();
+    const { addStockItemsToList } = useShoppingListActions();
     const recipeExport = useRecipeExport();
 
     const compact = computed(() => $q.screen.lt.sm);
@@ -1153,9 +1207,15 @@
     const imageDirty = ref(false);
     const stepImagesDirty = ref(false);
     const imageVersion = ref(0);
-    const litStep = ref<string | null>(null);
+    // Owner feedback 2026-08-27 — the step→ingredient highlight used to be
+    // driven by hover, which a phone can't do, and it only ran one way. It is
+    // a *selection* now: tap a step to light its ingredients, tap an
+    // ingredient to light the steps that use it. One selection at a time —
+    // two would produce two sets of lit rows with nothing saying which
+    // highlight belongs to which tap.
+    const selectedStepId = ref<string | null>(null);
+    const selectedIngredientId = ref<string | null>(null);
     const costDialogOpen = ref(false);
-    const methodEditorOpen = ref(false);
     const detailOpen = reactive({
         extra: false, nutrition: false, kcal: false, versions: false,
     });
@@ -1190,26 +1250,40 @@
     // empty Difficulty was a sliver. A block that flips whole keeps one grid
     // across both states, and a select is a select.
     //
-    // The other two editable regions don't need a switch: an ingredient row
-    // opens its editor on a tap of the row, and the method is prose, where an
-    // editor over the paragraph you're reading is the right shape — R-055's
-    // stated carve-out, served by `RecipeMethodEditorDialog`.
     const headerEditing = ref(false);
+    // Owner feedback 2026-08-27 extended the same shape to the other two
+    // regions. The ingredient list and the method were the two places still
+    // wearing their editing affordances permanently — a row that opened a
+    // dialog on tap, and a pencil that opened a modal over the method you
+    // were reading. Both now read as what they are until the pencil says
+    // otherwise, and both swap **in place** (R-055; the method's dialog
+    // carve-out in that rule is retired with the dialog).
+    const ingredientsEditing = ref(false);
+    const methodEditing = ref(false);
 
-    /** Leaving edit mode commits, because the pencil reads as "done" — see the
-     *  Done label it wears while open. A failed save keeps the block open so
-     *  the error has something to point at. */
-    async function onToggleHeaderEdit() {
-        if (!headerEditing.value) {
-            headerEditing.value = true;
+    /** Leaving any of the three edit modes commits, because the pencil reads
+     *  as "done" — see the Done label it wears while open. A failed save keeps
+     *  the block open so the error has something to point at. */
+    async function toggleEditRegion(flag: Ref<boolean>): Promise<void> {
+        if (!flag.value) {
+            flag.value = true;
             return;
         }
         if (dirty.value) {
             await onSave();
             if (saveState.value === 'error') return;
         }
-        headerEditing.value = false;
+        flag.value = false;
     }
+    const onToggleHeaderEdit = () => toggleEditRegion(headerEditing);
+    const onToggleMethodEdit = () => toggleEditRegion(methodEditing);
+    /** Entering ingredient edit mode drops any read-mode highlight: the rows
+     *  are about to mean "tap to edit", and a leftover "these are the ones
+     *  step 3 uses" tint would be read as part of that. */
+    const onToggleIngredientsEdit = async () => {
+        clearHighlight();
+        await toggleEditRegion(ingredientsEditing);
+    };
 
     /** Every edit path lands here. It records that there is something to
      *  save; it never saves. */
@@ -1265,10 +1339,12 @@
             await loadRecipe();
             if (didImageChange) imageVersion.value++;
             dirty.value = false;
-            // A save is the end of an edit: the masthead goes back to reading,
-            // whichever button asked for it (the Save button in the action row
-            // or the pencil).
+            // A save is the end of an edit: every region goes back to
+            // reading, whichever button asked for it (the Save button in the
+            // action row, or one of the three pencils).
             headerEditing.value = false;
+            ingredientsEditing.value = false;
+            methodEditing.value = false;
             saveState.value = 'saved';
             saveMessage.value = 'Saved';
             if (idleTimer) clearTimeout(idleTimer);
@@ -1295,6 +1371,8 @@
             stepImagesDirty.value = false;
             dirty.value = false;
             headerEditing.value = false;
+            ingredientsEditing.value = false;
+            methodEditing.value = false;
             saveState.value = 'idle';
         });
     }
@@ -1440,10 +1518,22 @@
             // it isn't worth a toast: substitutes are an enhancement to a row
             // that already reads "Missing" correctly without them.
             if (res.status !== 'fulfilled') return;
-            const entries = (res.value.substitutes ?? []).map((sub) => ({
-                sub,
-                inStock: !isMissingItem(sub.stock_item_id),
-            }));
+            const entries = (res.value.substitutes ?? []).map((sub) => {
+                // Resolved here, not in the chip: the store is the page's one
+                // source of truth about stock (R-003), and the menu renders
+                // the verdict it was handed.
+                const item = stockItems.value.find(
+                    (s) => s.stock_item_id === sub.stock_item_id,
+                );
+                return {
+                    sub,
+                    inStock: !isMissingItem(sub.stock_item_id),
+                    levelSequence: item?.stock_level_sequence ?? null,
+                    levelLabel: item?.stock_level_name
+                        ?? sub.stock_level_name
+                        ?? 'Out of stock or untracked',
+                };
+            });
             if (entries.length > 0) next.set(id, entries);
         });
         substitutesFor.value = next;
@@ -1468,13 +1558,6 @@
             (i) => stockItems.value.find((s) => s.stock_item_id === i.stock_item_id)?.name
                 ?? i.stock_item_name,
         ));
-
-    /** True when this row is missing but something in the pantry could stand
-     *  in for it. Drives the row chip's wording. */
-    function hasSwapInStock(row: IngredientForm): boolean {
-        if (!row.stock_item_id || !isMissingItem(row.stock_item_id)) return false;
-        return (substitutesFor.value.get(row.stock_item_id) ?? []).some((e) => e.inStock);
-    }
 
     // ── What's already on a shopping list ───────────────────────────────
     // Server-owned membership, not a client guess: the same map the cart
@@ -1565,11 +1648,6 @@
     // ── Method ──────────────────────────────────────────────────────────
     const topLevelSteps = computed(() =>
         [...form.steps].filter((s) => !s.parent_client_id).sort((a, b) => a.sequence - b.sequence));
-    function subStepsOf(step: EditableStep) {
-        return form.steps
-            .filter((s) => s.parent_client_id === step.client_id)
-            .sort((a, b) => a.sequence - b.sequence);
-    }
     const freeformLines = computed(() =>
         (form.instructions ?? '').split('\n').map((l) => l.trim()).filter((l) => l.length > 0));
     const methodCountLabel = computed(() => {
@@ -1578,27 +1656,52 @@
             return `${n} step${n === 1 ? '' : 's'}`;
         }
         if (form.steps_mode === 'image') {
-            const n = (recipe.value?.step_images ?? []).length;
+            const n = form.step_images.length;
             return `${n} photo${n === 1 ? '' : 's'}`;
         }
         return `${freeformLines.value.length} line${freeformLines.value.length === 1 ? '' : 's'}`;
     });
-    /** Ingredient names a structured step declares — the only mode that has
-     *  the link, which is why the highlight is structured-only. */
-    function usesLabel(step: EditableStep): string {
-        const names = step.ingredient_client_ids
-            .map((id) => form.ingredients.find((i) => i.client_id === id))
-            .filter((i): i is IngredientForm => !!i)
-            .map((i) => ingredientLabel(i));
-        return names.join(', ');
-    }
+    /** Ingredient rows lit by the currently selected step. */
     const litIngredients = computed(() => {
         const ids = new Set<string>();
-        if (!litStep.value) return ids;
-        const step = form.steps.find((s) => s.client_id === litStep.value);
+        if (!selectedStepId.value) return ids;
+        const step = form.steps.find((s) => s.client_id === selectedStepId.value);
         for (const id of step?.ingredient_client_ids ?? []) ids.add(id);
         return ids;
     });
+
+    /** The other direction: steps lit by the currently selected ingredient.
+     *  Structured-only, because it's the only mode that stores the link. */
+    const highlightedStepIds = computed<string[]>(() => {
+        const target = selectedIngredientId.value;
+        if (!target) return [];
+        return form.steps
+            .filter((s) => s.ingredient_client_ids.includes(target))
+            .map((s) => s.client_id);
+    });
+
+    function clearHighlight() {
+        selectedStepId.value = null;
+        selectedIngredientId.value = null;
+    }
+
+    function onSelectStep(clientId: string | null) {
+        selectedIngredientId.value = null;
+        selectedStepId.value = clientId;
+    }
+
+    /** One row, two meanings, decided by the pencil: editing opens the row's
+     *  editor, reading toggles the highlight. Tapping the lit row again
+     *  clears it — the only way back on a phone, where there is nothing else
+     *  to click "off" onto. */
+    function onIngredientRowActivate(clientId: string) {
+        if (ingredientsEditing.value) {
+            openRowEditor(clientId);
+            return;
+        }
+        selectedStepId.value = null;
+        selectedIngredientId.value = selectedIngredientId.value === clientId ? null : clientId;
+    }
 
     // The steps editor's option shape is {value,label} for all three lists.
     const ingredientOptions = computed(() =>
@@ -1617,12 +1720,16 @@
         }
     });
 
+    /** Read-side tool names for the free-text / photo method. Structured
+     *  recipes don't render this at all — their tools live on the steps and
+     *  the recipe-level set is derived from them server-side. */
+    const toolNames = computed(() =>
+        form.tool_ids
+            .map((id) => tools.value.find((t) => t.tool_id === id)?.name)
+            .filter((n): n is string => !!n));
+
     function onStepsChanged(steps: EditableStep[]) {
         form.steps = steps;
-        markDirty();
-    }
-    function onInstructionsChanged(text: string) {
-        form.instructions = text;
         markDirty();
     }
     function onStepImagesChanged(images: EditableStepImage[]) {
@@ -1632,24 +1739,10 @@
     }
 
     // ── Captions for the collapsed Details rows ─────────────────────────
-    /** Tags, tools, source and notes now share one row, so its caption has to
-     *  say which of the four are set without listing everything. */
-    const extraCaption = computed(() => {
-        const bits: string[] = [];
-        const names = [
-            ...form.dietary_tag_ids.map((id) => dietaryTags.value.find((t) => t.dietary_tag_id === id)?.name),
-            ...form.tool_ids.map((id) => tools.value.find((t) => t.tool_id === id)?.name),
-        ].filter(Boolean);
-        if (names.length > 0) bits.push(names.join(' · '));
-        if (form.source) bits.push('Has a source');
-        if (form.notes) bits.push('Has notes');
-        return bits.length > 0 ? bits.join(' · ') : 'Tags, tools, source, notes';
-    });
-    const versionsCaption = computed(() => {
-        const n = versionSiblings.value.length;
-        if (n === 0) return 'Only version';
-        return `${n + 1} versions`;
-    });
+    // `extraCaption` and `versionsCaption` went with the captions they fed
+    // (owner feedback 2026-08-27): a caption listing what is inside a drawer
+    // one tap away is a summary of nothing. The version *count* survived as a
+    // pill inside the panel, next to the list it counts.
     const nutritionCaption = computed(() => {
         const n = recipe.value?.nutrition;
         if (!n) return '';
@@ -1718,6 +1811,15 @@
     function openRowEditor(clientId: string) {
         rowEditorFor.value = clientId;
         rowEditorOpen.value = true;
+    }
+
+    /** Backed out of a row that was never anchored — `addIngredient` pushed
+     *  it before opening the editor, so "add, change your mind" would
+     *  otherwise leave a blank row that blocks the next save (owner: adding an
+     *  ingredient "is not fluid enough", 2026-08-27). */
+    function onRowEditorCancel() {
+        const id = rowEditorFor.value;
+        if (id) removeIngredient(id);
     }
 
     /** The editor hands back a whole patch rather than mutating the row, so
@@ -1888,31 +1990,27 @@
     // Reuses the shared picker (and its list-target step) rather than a
     // second, thinner add path — same flow the old page runs (R-001).
     const pickerOpen = ref(false);
-    const pickerRef = ref<InstanceType<typeof RecipeIngredientPickerDialog> | null>(null);
+    const pickerRef = ref<{ setBusy: (v: boolean) => void; newListName: string } | null>(null);
     const pickerInitialCheckedIds = ref<string[] | undefined>(undefined);
+    const pickerRows = computed(() => rowsFromRecipe(recipe.value));
+    const pickerUnlinked = computed(() => unlinkedFromRecipe(recipe.value));
 
     function onAddMissingToList() {
         if (missingIngredients.value.length === 0) return;
-        const hasActiveList = shoppingListStore.summaries.some((s) => s.status !== 'done');
-        if (!hasActiveList) {
-            $q.dialog({
-                title: 'No active shopping list',
-                message: 'Create or unarchive one first.',
-                ok: { label: 'Open lists', color: 'primary', noCaps: true },
-                cancel: { noCaps: true },
-            }).onOk(() => { void router.push('/shopping-lists'); });
-            return;
-        }
+        // The "no active shopping list" bounce is gone (2026-08-27) — the
+        // shared dialog offers "+ New list", so the first list gets made
+        // here rather than on a page you were sent to.
         pickerInitialCheckedIds.value = missingIngredients.value.map((i) => i.stock_item_id);
         pickerOpen.value = true;
     }
 
-    async function onPickerConfirm(payload: { stockItemIds: string[]; targetListId: string }) {
+    async function onPickerConfirm(payload: AddToListConfirm) {
         pickerRef.value?.setBusy(true);
         try {
-            await addItems(
+            await addStockItemsToList(
                 payload.targetListId,
-                payload.stockItemIds.map((id) => ({ stock_item_id: id })),
+                payload.stockItemIds,
+                pickerRef.value?.newListName ?? 'Shopping list',
             );
             pickerOpen.value = false;
             pickerInitialCheckedIds.value = undefined;
@@ -1977,6 +2075,9 @@
     watch(recipeId, () => {
         dirty.value = false;
         headerEditing.value = false;
+        ingredientsEditing.value = false;
+        methodEditing.value = false;
+        clearHighlight();
         saveState.value = 'idle';
         void loadRecipe();
     });
@@ -2193,21 +2294,14 @@
     }
     .rn__seccount {
         font-size: 0.8125rem; color: var(--text-muted);
-        font-variant-numeric: tabular-nums; margin-left: auto;
+        font-variant-numeric: tabular-nums;
     }
+    /* The heading row owns the section's controls now (owner feedback
+       2026-08-27): title, count, then everything you can do to the section,
+       pushed to the right edge. */
+    .rn__sechead > .rn__seccount { margin-right: auto; }
+    .rn__secedit { flex: none; }
     .rn__modes { min-width: 0; }
-    /* The style switch is a labelled control on its own line rather than a
-       nameless three-way crammed into the section heading. */
-    .rn__stylebar {
-        display: flex; align-items: center; gap: var(--space-2, 8px);
-        flex-wrap: wrap;
-        margin-bottom: var(--space-3, 12px);
-    }
-    .rn__stylek {
-        font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.07em;
-        text-transform: uppercase; color: var(--text-muted);
-    }
-    .rn__styleedit { margin-left: auto; }
 
     /* A section is a container, so it is drawn as one (owner feedback
        2026-08-24). The unsectioned group deliberately gets no card: a box
@@ -2229,7 +2323,11 @@
         font-size: 0.8125rem; font-weight: 700; letter-spacing: 0.06em;
         text-transform: uppercase; color: var(--brand-primary);
         min-width: 0;
+        margin: 0;
     }
+    /* Edit face of the same name: a real field, sized to the card rather than
+       to its own content (owner feedback 2026-08-27). */
+    .rn__groupfield { flex: 1 1 auto; min-width: 0; }
     .rn__groupcount {
         margin-left: auto;
         font-size: 0.8125rem; color: var(--text-muted);
@@ -2265,86 +2363,62 @@
     .rn__ingname { min-width: 0; }
     .rn__ingnote { display: block; font-size: 0.8125rem; color: var(--text-muted); }
     .rn__chip { margin-left: var(--space-1, 4px); }
+    /* The row's one severity signal, so it carries a touch more weight than
+       the chips beside it (owner feedback 2026-08-27). */
+    .rn__chip--missing {
+        min-height: 24px;
+        padding: 0 var(--space-2, 8px);
+        font-size: var(--font-size-xs, 0.75rem);
+        font-weight: 600;
+    }
     .rn__chip--unlinked { background: var(--surface-sunken); color: var(--text-muted); }
+    /* No hover-reveal any more. In read mode the only thing in here is the
+       cart button, which the owner asked to be permanently visible; in edit
+       mode everything in here is the point of the mode. Hiding either behind
+       a gesture a thumb doesn't have was the old compromise (2026-08-27). */
     .rn__ingact {
         display: flex; align-items: center; gap: var(--space-1, 4px);
-        opacity: 0;
-        transition: opacity 120ms ease;
         border-radius: var(--radius-sm, 4px);
     }
-    .rn__ing li:hover .rn__ingact,
-    .rn__ing li:focus-within .rn__ingact { opacity: 1; }
     .rn__add { margin-top: var(--space-3, 12px); width: 100%; }
 
-    /* Method — the v1 treatment the owner preferred: roomy rows, a filled
-       brand-soft numeral, generous measure. */
-    .rn__steps {
-        list-style: none; counter-reset: rnstep;
-        margin: 0; padding: 0;
-        display: flex; flex-direction: column; gap: var(--space-4, 16px);
-    }
-    .rn__steps > li {
-        counter-increment: rnstep;
-        display: grid; grid-template-columns: 34px 1fr;
-        gap: var(--space-4, 16px);
-        align-items: start;
-        padding: var(--space-2, 8px);
-        border-radius: var(--radius-md, 6px);
-    }
-    .rn__steps > li::before {
-        content: counter(rnstep);
-        display: flex; align-items: center; justify-content: center;
-        width: 34px; height: 34px; border-radius: 50%;
-        background: var(--brand-primary-soft);
-        color: var(--brand-primary);
-        font-weight: 700; font-variant-numeric: tabular-nums;
-    }
-    .rn__steps > li.rn__step--lit { background: var(--overlay-hover); }
-    .rn__steps > li.rn__step--lit::before {
-        background: var(--brand-primary); color: var(--text-on-primary);
-    }
-    .rn__steps p { margin: 0; max-width: 62ch; line-height: 1.6; }
-    .rn__hint { display: block; font-size: 0.8125rem; color: var(--text-muted); margin-top: var(--space-1, 4px); }
-    .rn__uses { display: block; font-size: 0.75rem; color: var(--text-muted); margin-top: var(--space-2, 8px); }
-    /* Sub-steps: the step treatment one level in — same numbered bullet, a
-       size down, toned and indented behind a rule (feedback 2026-08-24). */
-    .rn__substeps {
-        list-style: none; counter-reset: rnsub;
-        margin: var(--space-3, 12px) 0 0;
-        padding: 0 0 0 var(--space-4, 16px);
-        border-left: 2px solid var(--border-default);
-        display: flex; flex-direction: column; gap: var(--space-2, 8px);
-        color: var(--text-secondary);
-    }
-    .rn__substeps > li {
-        counter-increment: rnsub;
-        display: grid; grid-template-columns: 24px 1fr;
-        gap: var(--space-3, 12px);
-        align-items: start;
-    }
-    .rn__substeps > li::before {
-        content: counter(rnsub);
-        display: flex; align-items: center; justify-content: center;
-        width: 24px; height: 24px; border-radius: 50%;
-        background: var(--surface-sunken);
-        color: var(--text-muted);
-        font-size: 0.75rem; font-weight: 700; font-variant-numeric: tabular-nums;
-    }
-    .rn__substeps p { margin: 0; max-width: 62ch; line-height: 1.55; font-size: 0.9375rem; }
-    .rn__free p { margin: 0 0 var(--space-3, 12px); max-width: 62ch; line-height: 1.6; }
-    /* The free-text block is a real <button> (it opens the method editor), so
-       it has to be talked back out of looking like one — same trick as the
-       ingredient name. */
-    .rn__freebtn {
-        appearance: none; background: none; border: 0;
-        font: inherit; color: inherit; text-align: left;
-        display: block; width: 100%; padding: var(--space-1, 4px);
-    }
+    /* The structured method's own rules — the numbered bullets, the sub-step
+       indent, the lit state — moved into `RecipeStructuredMethod.vue` with
+       the markup, so the read and edit faces can't drift apart (owner
+       feedback 2026-08-27). What's left here is the free-text face. */
+    /* 78ch rather than the old 62ch, for the same reason the structured
+       steps widened: at 62ch the method column was mostly empty on a desktop
+       (owner: "serious lack of use of the horizontal space"). */
+    .rn__free p { margin: 0 0 var(--space-3, 12px); max-width: 78ch; line-height: 1.6; }
     .rn__empty { color: var(--text-muted); font-size: 0.875rem; }
+
+    /* Tools, for the two modes that have no steps to derive them from. Inside
+       the method, because that is what a tool belongs to — not a
+       general-purpose drawer at the bottom of the page (owner call
+       2026-08-27). */
+    .rn__tools {
+        display: flex; align-items: center; flex-wrap: wrap;
+        gap: var(--space-2, 8px);
+        margin-top: var(--space-6, 24px);
+        padding-top: var(--space-3, 12px);
+        border-top: 1px solid var(--divider);
+    }
+    .rn__toolk {
+        display: inline-flex; align-items: center; gap: var(--space-1, 4px);
+        font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.07em;
+        text-transform: uppercase; color: var(--text-muted);
+        flex: none;
+    }
+    .rn__toolk .q-icon { letter-spacing: normal; }
+    .rn__tools .q-select { flex: 1 1 240px; min-width: 0; }
     .rn__hintblock { color: var(--text-muted); font-size: 0.8125rem; margin: 0 0 var(--space-3, 12px); }
     .rn__editor { margin-top: var(--space-4, 16px); border-top: 1px solid var(--divider); }
 
     .rn__details { margin-top: var(--space-8, 32px); border-top: 1px solid var(--divider); }
+    /* The expansion headers wear the Ingredients/Method treatment now, so the
+       page has one voice for "this is a section" (owner feedback 2026-08-27).
+       Quasar's own header padding stays; only the label changes. */
+    .rn__details :deep(.q-expansion-item__toggle-icon) { color: var(--text-muted); }
     .rn__disc { padding: var(--space-3, 12px) var(--space-2, 8px) var(--space-4, 16px); }
     .rn__vfacts {
         display: flex; flex-wrap: wrap; gap: var(--space-2, 8px) var(--space-6, 24px);
@@ -2352,7 +2426,22 @@
     }
     .rn__vfact { display: flex; flex-direction: column; gap: 2px; }
     .rn__vthis { background: var(--surface-sunken); }
-    .rn__vnone { margin-bottom: 0; }
+    /* The count is a pill beside the list it counts, and "New version" is a
+       button in the panel that talks about versions rather than only an icon
+       in the page-wide action row (owner feedback 2026-08-27). */
+    .rn__vhead {
+        display: flex; align-items: center; gap: var(--space-2, 8px);
+        margin: var(--space-5, 20px) 0 var(--space-2, 8px);
+        flex-wrap: wrap;
+    }
+    .rn__vhead .rn__discsub { margin: 0; }
+    .rn__vcount {
+        background: var(--surface-sunken);
+        color: var(--text-secondary);
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+    }
+    .rn__vnew { margin-left: auto; }
     .rn__savebar {
         position: fixed; bottom: var(--space-5, 20px); left: 50%;
         transform: translateX(-50%); z-index: 6000;
@@ -2425,6 +2514,17 @@
 
     /* ── Phone ────────────────────────────────────────────────────────── */
     @media (max-width: 1023px) {
+        /* At 375px the method heading holds a title, a count, a three-way
+           switch and a Done button. Squeezed onto one line the switch got
+           144px and wrapped every label, so the heading grew to 71px of
+           stacked words. It takes its own full-width line instead, where the
+           three options are readable and evenly sized. */
+        .rn__sechead { flex-wrap: wrap; }
+        .rn__secedit { order: 2; }
+        .rn__modes { order: 3; flex: 1 1 100%; }
+        .rn__modes :deep(.q-btn-group) { width: 100%; }
+        .rn__modes :deep(.q-btn-group > .q-btn) { flex: 1 1 0; min-width: 0; }
+
         .rn__masthead { grid-template-columns: 1fr; }
         .rn__photo { aspect-ratio: 16 / 9; }
         .rn__body { grid-template-columns: 1fr; gap: var(--space-6, 24px); }
@@ -2441,9 +2541,6 @@
             scrollbar-width: none;
         }
         .rn__facts::-webkit-scrollbar { display: none; }
-        /* Hover isn't a gesture a thumb has, so the row cluster is always
-           there on a phone. */
-        .rn__ingact { opacity: 1; }
         /* Actions scroll sideways rather than stacking three deep (D-011:
            wide content scrolls inside its own container, never the page). */
         .rn__actions {

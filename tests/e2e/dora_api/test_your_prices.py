@@ -336,11 +336,16 @@ def test__your_prices__pack_count_rejected_when_not_positive(api):
 # ── US locale display ────────────────────────────────────────────────────
 
 
-def _set_locale(locale: str) -> None:
-    """Flip the install-wide unit_pricing_locale via the admin endpoint."""
+def _set_locale(system: str) -> None:
+    """Flip the install-wide measurement_system via the admin endpoint.
+
+    (Was `unit_pricing_locale` on an AU/US axis; replaced 2026-08-27 by the
+    three-value measurement system, which drives the unit pickers as well as
+    the price denominator. "AU" is now "metric", "US" is now "us".)
+    """
     r = requests.patch(
         f"{BASE}/app-settings",
-        json={"unit_pricing_locale": locale},
+        json={"measurement_system": system},
     )
     assert r.status_code in (200, 204), r.text
 
@@ -348,7 +353,7 @@ def _set_locale(locale: str) -> None:
 def test__your_prices__us_locale_displays_per_lb(api):
     """At-or-above 1 lb (0.4536 kg), US locale displays /lb."""
     try:
-        _set_locale("US")
+        _set_locale("us")
     except Exception:
         return
     try:
@@ -362,13 +367,13 @@ def test__your_prices__us_locale_displays_per_lb(api):
         # $10/kg × 0.4536 ≈ $4.54/lb
         assert abs(yp["baseline"] - 10.0 / 2.2046226218) < 1e-3
     finally:
-        _set_locale("AU")
+        _set_locale("metric")
 
 
 def test__your_prices__us_locale_displays_per_oz(api):
     """Below 1 lb under US locale displays /oz."""
     try:
-        _set_locale("US")
+        _set_locale("us")
     except Exception:
         return
     try:
@@ -382,4 +387,4 @@ def test__your_prices__us_locale_displays_per_oz(api):
         # $20/kg × 0.02835 ≈ $0.567/oz
         assert abs(yp["baseline"] - 20.0 / 35.27399072) < 1e-3
     finally:
-        _set_locale("AU")
+        _set_locale("metric")

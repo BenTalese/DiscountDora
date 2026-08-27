@@ -17,6 +17,7 @@ from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 @dataclass(frozen=True, slots=True)
 class AppSettingsDto:
     scanning_enabled: bool
+    health_star_rating_enabled: bool
     # buy-verdict oracle toggle.
     # C-cross Chunk 1 — install-wide feature flags (proposal §2.6).
     meal_planning_enabled: bool
@@ -35,8 +36,9 @@ class AppSettingsDto:
     expiring_soon_window_days: int
     # Phase D / FU-186 — admin-set URL the Product Search nav opens.
     product_search_url: str
-    # AU vs US per-unit display locale.
-    unit_pricing_locale: str
+    # Which units the install measures in: "metric" | "imperial" | "us".
+    # Drives both the unit pickers and the per-unit price denominator.
+    measurement_system: str
     # install-wide currency (ISO 4217) + display locale (BCP-47).
     # Layer A of PROPOSAL_LOCALE_I18N; also mirrored on /api/health so
     # every client session (not just admin) reads them.
@@ -92,6 +94,8 @@ class AppSettingsDto:
 def _to_dto(setting) -> AppSettingsDto:  # noqa: ANN001 — duck-typed AppSetting
     return AppSettingsDto(
         scanning_enabled=bool(setting.scanning_enabled),
+        health_star_rating_enabled=bool(
+            getattr(setting, "health_star_rating_enabled", False)),
         meal_planning_enabled=bool(setting.meal_planning_enabled),
         money_enabled=bool(setting.money_enabled),
         companion_ingestion_enabled=bool(setting.companion_ingestion_enabled),
@@ -102,7 +106,7 @@ def _to_dto(setting) -> AppSettingsDto:  # noqa: ANN001 — duck-typed AppSettin
         timezone=setting.timezone or "UTC",
         expiring_soon_window_days=int(setting.expiring_soon_window_days),
         product_search_url=setting.product_search_url or "",
-        unit_pricing_locale=getattr(setting, "unit_pricing_locale", None) or "AU",
+        measurement_system=getattr(setting, "measurement_system", None) or "metric",
         currency=getattr(setting, "currency", None) or "AUD",
         locale=getattr(setting, "locale", None) or "en-AU",
         backup_retention_count=int(getattr(setting, "backup_retention_count", 5) or 5),

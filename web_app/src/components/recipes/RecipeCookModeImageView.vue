@@ -24,11 +24,20 @@
                 Step {{ index + 1 }} of {{ images.length }}
             </div>
             <img
+                v-if="!failed.has(image.image_id)"
                 :src="srcFor(image)"
                 :alt="`Step ${index + 1}`"
                 class="cook-mode-image-view__image"
                 @click="openZoom(image)"
+                @error="failed.add(image.image_id)"
             />
+            <!-- A broken <img> renders its alt text, which here reads as a
+                 plain "Step 1" line and is indistinguishable from a recipe
+                 that simply has no photo. Say what actually happened. -->
+            <div v-else class="cook-mode-image-view__broken dora-text-muted text-center q-pa-md">
+                <q-icon :name="ICONS.image_not_supported" size="32px" />
+                <div class="text-caption q-mt-xs">This step's photo couldn't be loaded.</div>
+            </div>
         </div>
 
         <q-dialog v-model="zoomOpen" maximized>
@@ -44,11 +53,16 @@
                 </q-card-section>
                 <q-card-section class="cook-mode-image-view__zoom-body">
                     <img
-                        v-if="zoomImage"
+                        v-if="zoomImage && !failed.has(zoomImage.image_id)"
                         :src="srcFor(zoomImage)"
-                        :alt="`Zoomed step image`"
+                        alt="Zoomed step image"
                         class="cook-mode-image-view__zoom-image"
+                        @error="zoomImage && failed.add(zoomImage.image_id)"
                     />
+                    <div v-else class="dora-text-muted text-center q-pa-xl">
+                        <q-icon :name="ICONS.image_not_supported" size="48px" />
+                        <div class="q-mt-sm">This step's photo couldn't be loaded.</div>
+                    </div>
                 </q-card-section>
             </q-card>
         </q-dialog>
@@ -56,8 +70,9 @@
 </template>
 
 <script setup lang="ts">
-    import { ref } from 'vue';
+    import { reactive, ref } from 'vue';
     import BaseButton from 'src/components/BaseButton.vue';
+    import { recipeStepImageUrl } from 'src/services/api/recipeApiService';
     import { ICONS } from 'src/style/icons';
     import type { RecipeStepImage } from 'src/models/recipe';
 
@@ -68,9 +83,21 @@
 
     const zoomOpen = ref(false);
     const zoomImage = ref<RecipeStepImage | null>(null);
+    /** Image ids whose fetch failed, so the row can say so rather than
+     *  degrading to bare alt text. `reactive` (not `ref`) because a Set
+     *  mutated in place needs deep reactivity to re-render. */
+    const failed = reactive(new Set<string>());
 
+    /** R-003 — the step-image URL has one builder, `recipeStepImageUrl`, which
+     *  prefixes `resolveBaseURL()`. This component hand-rolled the path as a
+     *  literal `/api/...`, which only resolves when the SPA is served from the
+     *  same origin as the API. Anywhere else — the dev server, the desktop
+     *  bundle, a reverse-proxied self-host on a sub-path — every step image
+     *  404'd and the browser fell back to the `alt` text, which is exactly the
+     *  reported *"photo steps don't appear, it's just text like 'step 1', and
+     *  tapping it shows a broken modal"* (owner feedback 2026-08-27). */
     function srcFor(image: RecipeStepImage): string {
-        return `/api/recipes/${props.recipeId}/step-images/${image.image_id}`;
+        return recipeStepImageUrl(props.recipeId, image.image_id);
     }
 
     function openZoom(image: RecipeStepImage) {
@@ -100,6 +127,11 @@
         border: 1px solid var(--c-line);
         background: var(--c-surface-2);
         cursor: zoom-in;
+    }
+    .cook-mode-image-view__broken {
+        border: 1px dashed var(--c-line);
+        border-radius: var(--radius-md);
+        background: var(--c-surface-2);
     }
     .cook-mode-image-view__zoom {
         background: var(--c-surface-1);

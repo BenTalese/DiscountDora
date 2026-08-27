@@ -818,33 +818,59 @@ def seed_dev_data(
             occurred_at=now - timedelta(days=days_ago),
         ))
 
+    # 2026-08-27 — every one of these now has `stocktake_alerts=True`.
+    #
+    # Owner feedback: *"[stocktake] needs better test data — all of the items
+    # say Dora isn't sure on this one."* They did, and the seed was the reason.
+    # The stocktake queue only admits items with alerts enabled, and until now
+    # the only such items (Chippies, Brazil Nuts, Ice Cream, Broccoli) had no
+    # purchase history at all — so every row ranked `overdue`/no-evidence and
+    # the runner had exactly one thing it could say about any of them. These
+    # fixtures already carried engineered histories spanning high / medium /
+    # low confidence; they were just never in the rotation. Putting them in
+    # gives the runner all three ranks in one session, which is also the only
+    # way the three-phase shape (Review → Walk → Tidy-up) is visible at all:
+    # the Review phase is *by definition* the confident items, and there were
+    # none.
+    #
+    # Each item's `updated_days_ago` is ≥ 25, well past the fortnightly band,
+    # so they are genuinely overdue rather than being forced into the queue.
+    # None is within the model's 3-day fresh-hard-signal window, so the
+    # beliefs below are unchanged by this.
+    #
     # recorded Stocked · bought every ~20d, 16d in (progress ~0.8) → Dora
-    # thinks LOW at HIGH confidence (5 buys = rich history).
+    # thinks LOW at HIGH confidence (5 buys = rich history). ← the Review phase.
     b_weetbix = make_item(name="Belief: Weet-Bix", group=g_pantry, level=stocked,
-                          location=top_shelf, updated_days_ago=30)
+                          location=top_shelf, updated_days_ago=30,
+                          stocktake_alerts=True)
     # recorded Stocked · every ~14d, 17d in (past a full cycle) → Dora thinks
     # OUT at MEDIUM confidence.
     b_tuna = make_item(name="Belief: Tuna Tins", group=g_pantry, level=stocked,
-                       location=middle_right, updated_days_ago=30)
+                       location=middle_right, updated_days_ago=30,
+                       stocktake_alerts=True)
     # recorded Stocked · every ~14d, exactly one cycle in → Dora thinks LOW,
     # MEDIUM confidence.
     b_yoghurt = make_item(name="Belief: Greek Yoghurt", group=g_dairy, level=stocked,
-                          location=fridge, updated_days_ago=25)
+                          location=fridge, updated_days_ago=25,
+                          stocktake_alerts=True)
     # recorded Stocked · only 10d since a buy (calendar alone = stocked) but
     # cooked with 2× since → belief drawn down to LOW. Shows the cooking signal.
     b_passata = make_item(name="Belief: Passata (cooked down)", group=g_pantry,
-                          level=stocked, location=middle_left, updated_days_ago=25)
+                          level=stocked, location=middle_left, updated_days_ago=25,
+                          stocktake_alerts=True)
     # recorded Low · calendar ~2/3 through, plus 2 cooks → belief pushed all the
     # way to OUT. LOW confidence (thin history, deep extrapolation).
     b_stirfry = make_item(name="Belief: Stir-fry Veg (cooked out)", group=g_frozen,
-                          level=low, location=freezer, updated_days_ago=25)
+                          level=low, location=freezer, updated_days_ago=25,
+                          stocktake_alerts=True)
     # recorded Out (stale, 30d ago) but bought again 5d ago → Dora thinks
     # STOCKED. A reassuring disagreement — you're covered.
     b_oj = make_item(name="Belief: Orange Juice (just restocked)", group=g_dairy,
                      level=out, location=fridge, updated_days_ago=30)
     # recorded Low and Dora agrees it's Low → hint stays SILENT (the control).
     b_crackers = make_item(name="Belief: Crackers (agrees, silent)", group=g_pantry,
-                           level=low, location=middle_left, updated_days_ago=25)
+                           level=low, location=middle_left, updated_days_ago=25,
+                           stocktake_alerts=True)
     repo.save_changes()  # items need ids before their shops / consumption
 
     belief_shops(b_weetbix, [(96, 6.50), (76, 6.50), (56, 6.00), (36, 6.00), (16, 6.50)])
@@ -858,6 +884,32 @@ def seed_dev_data(
     cook_consume(b_stirfry, 6, 1, 2)
     belief_shops(b_oj, [(40, 4.00), (5, 4.20)])
     belief_shops(b_crackers, [(42, 3.00), (28, 3.00), (14, 3.20)])
+    repo.save_changes()
+
+    # ── Sweep-phase fixture (Chunk 6 / D-4) ──────────────────────────────
+    # The third phase needs an item that *just* fell out of rotation, which is
+    # a narrow state to be in and so never occurred by accident: the engagement
+    # gate drops an item ENGAGEMENT_WINDOW_DAYS (60) after its last level change
+    # or shopping-list appearance, and the Sweep only shows drop-outs that
+    # happened *since the user's last session*. So the fixture needs all four of
+    # these at once, and the seed is the only place they can be arranged:
+    #
+    #   • level Out + never opened            → fails `_is_engaged` outright
+    #   • last activity 65 days ago           → dropped out 5 days ago
+    #   • user's last session 10 days ago     → 5 days ago is "since then"
+    #   • not muted                           → mute means "you already said"
+    #
+    # Without it the phase is unreachable in a fresh dev DB and can only be
+    # verified by hand-editing timestamps, which is how it stayed unwalked.
+    b_swept = make_item(
+        name="Belief: Rice Wine Vinegar (fell out of rotation)", group=g_pantry,
+        level=out, location=middle_left, stocktake_alerts=True,
+        updated_days_ago=65,
+    )
+    repo.save_changes()
+    builders.level_change(b_swept, out, 65)
+    belief_shops(b_swept, [(95, 3.50), (65, 3.50)])
+    dev_user.stocktake_last_session_at = now - timedelta(days=10)
     repo.save_changes()
 
     # FU-653 — two recipes built ON the belief items above, so the recipe /

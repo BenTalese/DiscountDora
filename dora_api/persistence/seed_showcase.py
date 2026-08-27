@@ -28,6 +28,8 @@ re-seeds destructively on a schedule (see ``reset_showcase`` +
 from datetime import UTC, date, datetime, timedelta
 
 from dora_api.app import app, db
+from dora_api.domain.entities.consumption_event import (
+    CONSUMPTION_SOURCE_COOK, ConsumptionEvent)
 from dora_api.domain.entities.cook_event import CookEvent
 from dora_api.domain.entities.meal_plan import MealPlan
 from dora_api.domain.entities.meal_plan_entry import MealPlanEntry
@@ -146,13 +148,14 @@ def seed_showcase_data():
     # ---------------- USER ---------------- #
     # Showcase user. Username `demo`, password `demo`, admin so every
     # settings/admin screen is reachable in the demo.
-    repo.add(User(
+    demo_user = User(
         email="demo@dashydora.app",
         password_hash=hash_password("demo"),
         send_deals_on_day=6,
         username="demo",
         is_admin=True,
-    ))
+    )
+    repo.add(demo_user)
 
     # ---------------- LOCATION HIERARCHY ---------------- #
     pantry = StockLocation(name="Pantry", kind=LOCATION_KIND_ZONE, sequence=0)
@@ -226,6 +229,98 @@ def seed_showcase_data():
     chicken = make_item(name="Chicken Breast", group=g_meat, level=stocked, location=freezer)
     peas = make_item(name="Frozen Peas", group=g_frozen, level=stocked, location=freezer)
 
+    repo.save_changes()
+
+    # ---------------- STOCKTAKE ROTATION ---------------- #
+    # Owner feedback 2026-08-27: *"[stocktake] needs better test data — all of
+    # the items say Dora isn't sure on this one."*
+    #
+    # The showcase had exactly one item in the stocktake rotation (Broccoli)
+    # and no purchase history behind it, so the runner could only ever say the
+    # same thing about the same single row — and the Review and Tidy-up phases
+    # were unreachable, since those are defined by evidence the dataset didn't
+    # contain. This block gives the showcase a believable, complete session.
+    #
+    # The numbers are read straight off `pantry_belief.py`: cadence is the mean
+    # gap between purchase dates, progress = days-since-last-buy / cadence plus
+    # 0.34 per cook since, and confidence rises with more purchase dates and
+    # with being closer to a fresh buy (high ≥ 0.66, medium ≥ 0.33). What each
+    # line is *for* is noted against it, because a fixture whose intent isn't
+    # written down is a fixture nobody dares change.
+    def demo_shops(item, offsets_prices):
+        # One finished, priced shop per (days_ago, price) — each is a
+        # purchase date the belief model reads.
+        shops = []
+        for _i, (_days_ago, _price) in enumerate(offsets_prices):
+            _sl = ShoppingList(
+                name=f"{item.name} shop {_i + 1}",
+                created_at=now - timedelta(days=_days_ago + 1),
+                completed_at=now - timedelta(days=_days_ago),
+                status=SHOPPING_LIST_STATUS_DONE,
+            )
+            repo.add(_sl)
+            shops.append(_sl)
+        repo.save_changes()  # lines FK to persisted list ids
+        for _sl, (_days_ago, _price) in zip(shops, offsets_prices):
+            line(_sl.id, item, 0, ticked=True, actual_unit_price=_price)
+        repo.save_changes()  # line ids on the wire before the harvest FK
+        builders.harvest_price_observations(
+            {_sl.id: _sl.completed_at for _sl in shops}
+        )
+        repo.save_changes()
+
+    def demo_cook(item, days_ago, from_seq, to_seq):
+        repo.add(ConsumptionEvent(
+            stock_item_id=item.id, stock_item_name=item.name,
+            recipe_id=None, recipe_name=None, source=CONSUMPTION_SOURCE_COOK,
+            from_sequence=from_seq, to_sequence=to_seq,
+            occurred_at=now - timedelta(days=days_ago),
+        ))
+
+    # Review phase — 5 regular buys, 16 days into a ~20-day cycle. Rich
+    # history + shallow extrapolation = HIGH confidence, so Dora offers it
+    # pre-ticked from the couch instead of sending you to the pantry.
+    st_flour = make_item(name="Plain Flour", group=g_pantry, level=stocked,
+                         location=top_shelf, stocktake_alerts=True,
+                         updated_days_ago=30)
+    # Walk, least-certain first — 3 buys on a ~14-day cycle, a full cycle in.
+    # MEDIUM confidence: enough to have an opinion, not enough to act on.
+    st_yoghurt = make_item(name="Greek Yoghurt", group=g_dairy, level=stocked,
+                           location=fridge, stocktake_alerts=True,
+                           updated_days_ago=25)
+    # Walk — the cooking signal, not the calendar: bought 10 days into a
+    # 30-day cycle, but cooked with twice since, which is what draws it down.
+    st_passata = make_item(name="Tomato Passata", group=g_pantry, level=stocked,
+                           location=middle_left, stocktake_alerts=True,
+                           updated_days_ago=25)
+    # Walk — no purchase history at all. Kept on purpose: "no evidence, just
+    # overdue" is a real and common state, and the runner should be seen
+    # handling it. It just shouldn't be the *only* state, which it was.
+    st_baking_soda = make_item(name="Bicarb Soda", group=g_pantry, level=stocked,
+                               location=middle_right, stocktake_alerts=True,
+                               updated_days_ago=40)
+    # Tidy-up phase — see the four conditions below.
+    st_vinegar = make_item(name="Rice Wine Vinegar", group=g_pantry, level=out,
+                           location=middle_left, stocktake_alerts=True,
+                           updated_days_ago=65)
+    repo.save_changes()  # items need ids before their shops / cooks
+
+    demo_shops(st_flour, [(96, 2.20), (76, 2.20), (56, 2.00), (36, 2.20), (16, 2.40)])
+    demo_shops(st_yoghurt, [(42, 5.00), (28, 5.50), (14, 5.00)])
+    demo_shops(st_passata, [(70, 2.00), (40, 2.20), (10, 2.00)])
+    demo_cook(st_passata, 8, 0, 0)
+    demo_cook(st_passata, 4, 0, 1)
+
+    # The Tidy-up (Sweep) phase shows items that have *just* fallen out of
+    # rotation, which needs four things true at once — none of which happens
+    # by accident, which is why the phase was never visible in the showcase:
+    #   • level Out and never opened        → fails the engagement gate
+    #   • last activity 65 days ago         → dropped out 5 days ago (60d window)
+    #   • last session 10 days ago          → 5 days ago counts as "since then"
+    #   • not muted                         → mute means the user already said
+    level_change(st_vinegar, out, 65)
+    demo_shops(st_vinegar, [(95, 3.50), (65, 3.50)])
+    demo_user.stocktake_last_session_at = now - timedelta(days=10)
     repo.save_changes()
 
     # ---------------- SUBSTITUTES ---------------- #

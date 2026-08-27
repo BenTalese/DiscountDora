@@ -375,7 +375,7 @@
                     <BaseButton
                         v-if="voiceInputAvailable"
                         variant="icon"
-                        :icon="voiceListening ? 'mic' : 'mic_none'"
+                        :icon="voiceListening ? ICONS.mic : ICONS.mic_none"
                         :color="voiceListening ? 'negative' : undefined"
                         :class="voiceListening ? 'dora-mic-listening' : ''"
                         :aria-label="voiceListening ? 'Stop listening' : 'Start voice input'"

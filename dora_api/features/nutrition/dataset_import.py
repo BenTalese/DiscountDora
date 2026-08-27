@@ -38,6 +38,7 @@ from dora_api.domain.entities.nutrition_food import (
     NutritionFood,
 )
 from dora_api.domain.entities.nutrition_portion import NutritionPortion
+from dora_api.features.nutrition.food_categories import normalise_category
 from dora_api.features.nutrition.nutrients import USDA_NUTRIENT_ATTRS
 from dora_api.persistence.field import EntityField as Field
 
@@ -249,6 +250,11 @@ def parse_fdc_csv_zip(payload: bytes, source: str):
 
     food_member = _member(archive, "food.csv")
     nutrient_member = _member(archive, "nutrient.csv")
+    # Optional, unlike the three below: an older or hand-made bundle without it
+    # still imports, its foods simply carry no category. Failing the whole
+    # import over the Health Star Rating's input would be the wrong trade —
+    # the nutrients are what the app is actually for.
+    category_member = _member(archive, "food_category.csv")
     food_nutrient_member = _member(archive, "food_nutrient.csv")
     if not (food_member and nutrient_member and food_nutrient_member):
         raise ValueError(
@@ -264,6 +270,16 @@ def parse_fdc_csv_zip(payload: bytes, source: str):
         if attr:
             nutrient_attr[row["id"]] = attr
 
+    # USDA food-group id → its description. Read for the Health Star Rating's
+    # fvnl test and nothing else (see `food_categories.py`); the file has always
+    # been in the bundle and was simply never opened.
+    categories: Dict[str, str] = {}
+    if category_member:
+        for row in _rows(archive, category_member):
+            description = normalise_category(row.get("description"))
+            if row.get("id") and description:
+                categories[row["id"]] = description
+
     imported_at = datetime.now(timezone.utc)
     foods: Dict[str, NutritionFood] = {}
     for row in _rows(archive, food_member):
@@ -278,6 +294,7 @@ def parse_fdc_csv_zip(payload: bytes, source: str):
             name = description,
             brand = (row.get("brand_owner") or "").strip() or None,
             barcode = (row.get("gtin_upc") or "").strip() or None,
+            food_category = categories.get((row.get("food_category_id") or "").strip()),
             imported_at = imported_at,
         )
 

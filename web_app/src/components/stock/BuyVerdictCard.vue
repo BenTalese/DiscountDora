@@ -99,11 +99,11 @@
                     <strong>{{ reason.label }}</strong>
                 </div>
                 <div
-                    v-if="reason.detail"
+                    v-if="reasonDetail(reason)"
                     class="text-caption dora-text-muted"
                     style="margin-left: 26px"
                 >
-                    {{ reason.detail }}
+                    {{ reasonDetail(reason) }}
                 </div>
             </li>
         </ul>
@@ -134,6 +134,7 @@
 
 <script setup lang="ts">
     import BaseButton from 'src/components/BaseButton.vue';
+    import { axisIcon, reasonDetail } from 'src/components/stock/buyVerdictDisplay';
     import { formatDate as formatLocaleDate } from 'src/composables/useDateFormat';
     import type { BuyVerdict } from 'src/services/api/buyVerdictApiService';
     import { ICONS } from 'src/style/icons';
@@ -208,12 +209,6 @@
         if (days <= 14) return `Expect a dip in ~${days} days (${dateLabel})`;
         return `Expect a dip around ${dateLabel}`;
     });
-
-    function axisIcon(axis: 'price' | 'need' | 'waste'): string {
-        if (axis === 'price') return ICONS.price_check ?? 'mdi-cash-check';
-        if (axis === 'need') return ICONS.inventory_2 ?? 'mdi-package-variant-closed';
-        return ICONS.delete_outline ?? 'mdi-delete-outline';
-    }
 
     function onActionClick(): void {
         if (props.verdict) emit('action', props.verdict.one_tap_action.kind);

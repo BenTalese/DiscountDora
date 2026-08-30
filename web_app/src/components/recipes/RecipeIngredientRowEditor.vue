@@ -109,15 +109,39 @@
                      the free-text escape existed for ("pinch", "dash",
                      "stick"). `use-input` stays — it's the typeahead over ~22
                      options and their aliases, not an escape hatch. -->
+                <!-- Deliberately NOT `fill-input` + `hide-selected`, unlike
+                     the pantry-item picker above (owner-reported 2026-08-29:
+                     changing an ingredient from `loaf` to `g` and *"couldn't
+                     see g"*). Those two props park the selected label in the
+                     input, and QSelect re-runs `@filter` with the input's
+                     current text every time the popup opens
+                     (`QSelect.js showPopup`) — so opening the Unit list on a
+                     row that already had one filtered the whole vocabulary
+                     down to that one unit. You could only reach `g` by first
+                     deleting the word "loaf". The two props earn their place
+                     on the item picker, which is an open typeahead over
+                     hundreds of rows; this is a closed 22-option vocabulary,
+                     so the selection renders as the field's value and the
+                     input starts empty — which is the shape the substitute
+                     dialog's identical picker has always used.
+
+                     `emit-value` + `map-options` are the other half of that
+                     report ("an error was encountered"). `unitOptions` are
+                     `{label, value}` objects, so without them QSelect wrote
+                     the whole *option* into `draft.unit` — and the next read
+                     of it, `useUnitOptions`' `kept.trim()`, threw
+                     `kept.trim is not a function`, which the error boundary
+                     caught by tearing down the dialog. Reproduced live, and
+                     both halves re-walked in the running app after the fix. -->
                 <BaseSelect
                     v-model="draft.unit"
                     label="Unit"
                     class="col"
                     style="max-width: 160px"
                     :options="unitOptions"
+                    emit-value
+                    map-options
                     use-input
-                    fill-input
-                    hide-selected
                     clearable
                     input-debounce="0"
                     @filter="onUnitFilter"

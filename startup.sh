@@ -1,5 +1,5 @@
 #!/bin/bash
-# DiscountDora monolithic-container entrypoint.
+# Dashy Dora monolithic-container entrypoint.
 #
 # Phase D / FU-186: starts dora_api in the background and finishes with
 # nginx in the foreground so the container's lifecycle matches nginx's
@@ -20,7 +20,7 @@
 
 set -e
 
-echo "[startup] DiscountDora — booting monolithic container"
+echo "[startup] Dashy Dora — booting monolithic container"
 echo "[startup] DATA_DIR=${DORA_DATA_DIR:-/app/data} CACHE_DIR=${DORA_CACHE_DIR:-/app/cache} LOG_DIR=${DORA_LOG_DIR:-/app/data/logs}"
 
 # Pre-create the standard data directories so the Python processes

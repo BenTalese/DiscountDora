@@ -14,10 +14,11 @@ unit rather than a caller-supplied id array because the client already has a
 list id, and resolving the lines server-side keeps "which items are on this
 list" in one place (R-003).
 
-Deliberately *not* gated server-side: `buy_verdict_enabled` is the SPA's
-display opt-out and is about to move from a household AppSetting to a
-per-user field (D-12), so gating here now would need rewriting immediately.
-Parity with the per-item endpoint, which doesn't gate either.
+Gated on install-wide money, in parity with the per-item endpoint — see
+`get_buy_verdict.MONEY_DISABLED_DETAIL` for why money is a prerequisite for
+the surface rather than a per-reason suppression. `buy_verdict_enabled` is
+*not* gated here: that one is the SPA's per-user display opt-out (D-12), and
+a display preference belongs on the client that renders it.
 """
 import logging
 from dataclasses import asdict
@@ -26,11 +27,12 @@ from uuid import UUID
 from dora_api.domain.entities.shopping_list import (ShoppingList,
                                                     ShoppingListLine)
 from dora_api.domain.entities.stock_item import StockItem
+from dora_api.features.app_settings.access import money_features_enabled
 from dora_api.features.routers import SHOPPING_LIST_ROUTER
 from dora_api.features.stock_items.get_buy_verdict import (
-    compose_verdict, gather_verdict_inputs_for_items,
+    MONEY_DISABLED_DETAIL, compose_verdict, gather_verdict_inputs_for_items,
 )
-from dora_api.infrastructure.api_response import not_found, ok
+from dora_api.infrastructure.api_response import forbidden, not_found, ok
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 
@@ -41,6 +43,8 @@ _LOGGER = logging.getLogger(__name__)
 @SHOPPING_LIST_ROUTER.route("/<uuid:shopping_list_id>/buy-verdicts", methods=["GET"])
 def get_list_buy_verdicts(shopping_list_id: UUID):
     repo = SqlAlchemyRepository()
+    if not money_features_enabled(repo):
+        return forbidden(MONEY_DISABLED_DETAIL)
 
     shopping_list: ShoppingList | None = repo.get(ShoppingList).by_id(shopping_list_id)
     if shopping_list is None:

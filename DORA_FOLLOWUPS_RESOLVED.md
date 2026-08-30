@@ -10,6 +10,205 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-782 — ⚠️ Meal-planner rail/shell/calendar redesign is designed and **blocked on eight owner decisions**
+- **Raised:** 2026-08-28 (owner feedback: *"I really hate the look and feel of
+  the left side where you pick and search for recipes… the calendar also looks
+  not that great"*, then a synthesis after a round of nine options)
+- **Type:** deferred job (design complete, build gated)
+- **What:** [BRIEF_MEAL_PLANNER_RAIL_AND_SHELL.md](docs/04_proposals/BRIEF_MEAL_PLANNER_RAIL_AND_SHELL.md)
+  specifies three units — (1) convert `MealPlansOverview.vue` to the fixed-height
+  three-pane app shell with a consolidated toolbar, (2) rebuild the recipe rail
+  as a collapsible in-place rail with filter chips, compact cookbook-style rows,
+  a *Dora suggests* chip and clearer slot-targeting, (3) rebuild the calendar as
+  a month grid with focusable days and pips. **No code was written.** The brief
+  is detailed enough for another agent to build from, and §10 holds its
+  don't-do list.
+- **Why deferred:** eight decisions in the brief's §9 are the owner's, and
+  **four of them revise the owner's own earlier feedback** (brief §2.5), so none
+  can be inferred:
+  - **D1** retire drag-and-drop? It breaks below the fold under the new scroll
+    model (native HTML5 drag, no `dataTransfer`, no edge auto-scroll anywhere in
+    the app) — but **F9** asked for drag *and* tap, *"let the user pick"*.
+  - **D2** collapsed rail = 46px labelled strip, or gone entirely?
+  - **D3** remember the rail's open state, or derive it (two house precedents
+    disagree — `useListViewMode` vs `useFilterPanelExpanded`)?
+  - **D4** is the week range the page title? The page has no title today.
+  - **D5** one work unit or three?
+  - **D6** does *Dora suggests* keep a `cookable_now` reason? **F43** says
+    cookable-now *"doesn't belong"* on the planner.
+  - **D7** month grid, keep the **F13** widget, or take DR-12's 14-day strip?
+    **The calendar the owner dislikes is the calendar the owner specified** in
+    F13, and the rebuild plan called it *"on-brief and elegant"*. Choosing the
+    grid also overrules a standing `DESIGN_REMEDIATION_PLAN.md` DR-12 directive
+    that is recorded as *"rides the redesign"*.
+  - **D8** status strip in the toolbar, or a sticky footer? The owner has asked
+    three times app-wide (L93/L212/L231) for counts as a *componentised sticky
+    footer*, and `PageCountsFooter.vue` exists.
+  Blocking order: D1/D2/D5/D8 gate Unit 1 · D3/D4/D6 gate Unit 2 · D7 gates
+  Unit 3.
+- **Cheapest finding, for scoping:** *Dora suggests* is nearly free. The ranker,
+  the candidate model and a **frozen reason-chip vocabulary** already exist
+  server-side as pure functions in
+  `dora_api/features/meal_plans/build_week.py` — the endpoint reuses
+  `select_recipes` and adds no domain logic.
+- **Two live bugs the brief found in passing** (fixed as side-effects of Unit 1
+  and Unit 2, not separately logged): `.planner-sticky` uses
+  `calc(100vh - 32px)` with no account for the 64px header, so both rails
+  overhang the viewport — the exact failure R-036's "never hardcode the offset"
+  clause exists to prevent; and the week carousel hand-rolls
+  `transition: transform 0.18s ease`, a literal-`ms` D-010 violation.
+- **Ledger debt it inherits:** `IMPL_PLAN_MEAL_PLANS_REBUILD.md` §15 instructed
+  a `COVERAGE_GAPS.md` flip for the 13 bullets its §13 re-graded 🟡 — that never
+  happened, and the brief's §11 is where it gets done. Also touches **FU-693**
+  (a rail row is a third site for the off-scale `1.05rem` name), **FU-088**
+  (cooked-pool stepper relocation, still unimplemented), **FU-617** (the cook
+  marker must survive the new slot shape) and supersedes **FU-578 #47**'s tray
+  dedup.
+- **Recommended resolution:** **now** — walk §9 with the owner before any build
+  starts. The brief is otherwise ready to hand to a builder.
+- **Resolved 2026-08-29:** the owner answered all eight §9 decisions in one
+  confirmation pass. Six went as the brief recommended (D1 retire drag, D2 46px
+  labelled strip, D5 three units, D6 keep the reason chip reworded, D7 month grid,
+  D8 status strip stays in the toolbar); **D3 and D4 were answered against the
+  recommendation** — the rail is always collapsed on arrival and opens only on a
+  slot selection or a click on the strip itself (no empty-week auto-open), and the
+  page gains no title at all, keeping today's week range between the prev/next
+  buttons. Answers are recorded inline per-decision in the brief's §9, which is now
+  headed **CLOSED**; the brief's status banner flips to approved-to-build. The build
+  gate is cleared and the three units are unblocked.
+
+---
+
+## [RESOLVED] FU-789 — The weekly deals email has a settings page, a schema, and no implementation
+- **Raised:** 2026-08-29 (settings feedback batch — owner asked "does the weekly
+  deals email actually work?")
+- **Type:** finding
+- **What:** it does not. `User.deals_email_enabled`, `deals_email_compact` and
+  `send_deals_on_day` all exist and persist; the Notifications page writes them;
+  `update_user_as_admin` exposes a column for them; `health_check` reports a
+  `deals_email` flag; migration `a7f4d2c8e1b6` shipped the columns back on
+  2026-08-14. What does **not** exist anywhere in `dora_api/`: a scheduler job
+  (the `startup.py` scheduler registers audit retention, snooze pruning, alerts
+  push and the daily brief — nothing for deals), a sender, or an email template
+  (`dora_api/email_templates/` holds only the four auth transactional ones).
+  `startup.py` even carries a comment siting the audit sweep "well clear of any
+  deals-email schedule" for a schedule that was never added. Subscribing today
+  sets a boolean nothing reads.
+- **Why deferred:** owner split the work into two batches (2026-08-29) — batch 1
+  was the settings UI/copy feedback, this is batch 2. It is a real feature
+  (weekly cron in household time like `send_daily_brief`, a compact + expanded
+  Jinja template, the best-deals query as its source), not a copy fix.
+- **Resolved:** 2026-08-29 — built. `features/deals/deals_digest.py` (content +
+  policy, pure functions), `features/deals/send_deals_email.py` (the job),
+  `email_templates/weekly_deals.html` (compact + expanded), and an hourly
+  `deals_email` cron at :15 in `startup.py`. Dedup rides the existing
+  `AlertInteraction` ledger under a week-scoped key, so no migration. Driven end
+  to end against the scratch DB with a captured sender: the whole gate chain
+  refuses (wrong hour, wrong weekday, install flag off, unverified address),
+  the on-time send delivers one mail ranked by discount, and a second tick in
+  the same week sends nothing. 19 new unit tests.
+
+## [RESOLVED] FU-783 — `StoreSpendCard` expansion is computed once at setup, so resize never re-evaluates it
+- **Raised:** 2026-08-29 (shopping-list UX v3 audit)
+- **Type:** finding
+- **What:** `components/shoppingList/StoreSpendCard.vue:113` is
+  `const expanded = ref(!props.collapsible)`, and both callers pass
+  `:collapsible="$q.screen.lt.md"` (`ShoppingListDetail.vue:418`,
+  `ShoppingListReceiptFace.vue:149`). Because it is a `ref` seeded once at setup
+  and not a `computed`/`watch`, resizing across the `md` breakpoint after mount
+  leaves the card in the wrong default state. Also worth noting it is the app's
+  **only** collapsible that opens expanded by default (every other one —
+  `PantryBeliefCard`, `RecipeNutritionCard`, `RecipeDetailPage`, ~11
+  `q-expansion-item`s — starts closed and persists nothing).
+- **Why deferred:** out of scope for the v3 proposal itself; v3 §7.6 settles the
+  default as "collapsed every visit", which changes this component's desktop
+  behaviour anyway.
+- **Recommended resolution:** opportunistic — fold into the
+  `CollapsibleCard.vue` extraction in v3 §8 step 2, which touches this file.
+- **State:** RESOLVED 2026-08-29 — dissolved rather than patched. The
+  `CollapsibleCard.vue` extraction moved expansion state out of `StoreSpendCard`
+  entirely, and the app-wide rule ("collapsed on mount, every visit, never
+  persisted") removed the screen-size input the stale `ref` was reading. The
+  `collapsible` prop survives but now means "can this close at all" — the plan
+  face passes `false` because that card sits inside the overview card's expanded
+  region, where a second tap would be a tax; the receipt face takes the default
+  and starts closed at every width.
+
+
+
+## [RESOLVED] FU-747 — `RecipeCard` and `RecipeRow` now carry the same rating block twice
+- **Raised:** 2026-08-27 (Health Star Rating build)
+- **Type:** finding.
+- **What:** the cookbook's two views each got the same ~18 lines — the
+  `RecipeHealthStars` call, the judgeable/partial tooltip, and a
+  `--part { opacity: .55 }` rule. The *stars* are shared
+  (`RecipeHealthStars.vue`); the wrapper around them is not. The pre-existing
+  kcal chip has the same duplication, which is how it got missed: the row-only
+  version shipped invisible, because the grid is the cookbook's default view and
+  I only found it by looking (see the worklog).
+- **Why deferred:** extracting a `RecipeRatingChip` is right but touches both
+  views, and doing it in the same pass as the feature would have put an
+  untested refactor under an untested feature.
+- **Recommended resolution:** opportunistic, and ideally together with the kcal
+  chip — one `RecipeSignalChips` for the pair would remove both copies (R-001).
+- **Resolved:** 2026-08-28 (cookbook rating + kcal batch) — the rating half is
+  done. `RecipeRatingChip` now owns the whole block (score pill, partial marker,
+  tooltip, per-scheme branch) and both hosts render one tag; the duplicated
+  wrapper and the `--part { opacity: .55 }` rule are gone from each. The kcal
+  half is **not** merged and deliberately diverged on owner instruction — the
+  card renders a chip, the row renders meta-line text — re-raised as **FU-770**.
+
+## [RESOLVED] FU-755 — Cook-mode photo steps: reported broken, could not be reproduced
+- **Raised:** 2026-08-27 (owner feedback batch — cook mode)
+- **Type:** finding
+- **What:** Owner reported *"photo steps don't appear, it's just text like 'step 1',
+  and tapping on it shows a broken modal (again just text)."* Two real defects were
+  found and fixed on that surface — `RecipeCookModeImageView` hand-rolled its image
+  URL as a literal `/api/...` instead of going through `recipeStepImageUrl`
+  (R-003), and a failed image degraded to bare `alt` text that reads exactly like
+  "this step is just text". But **neither is proven to be the cause**: driven live,
+  images seeded through the API render correctly in cook mode both before and after
+  the URL change, because the Vite dev server proxies `/api` and hides the missing
+  base. The literal path would only 404 in a **built SPA, the desktop bundle, or a
+  reverse-proxied self-host on a sub-path** — which may well be what the owner was
+  looking at, but that is a hypothesis, not a reproduction.
+- **Why deferred:** the reported state (his own recipe, his own uploaded photos)
+  could not be recreated from the seed, which has no image-mode recipe at all.
+- **Recommended resolution:** confirm in browser — open the *same recipe* that
+  showed the bug. If the photos now render, close this. If they still don't, the
+  new "This step's photo couldn't be loaded" placeholder distinguishes a failed
+  fetch from an empty recipe, and the network tab will name the URL that 404'd.
+- **Resolved 2026-08-28:** driven live. An image-mode recipe with five real
+  photos was created through the API on a scratch instance and walked end to end in
+  cook mode: photos render (`naturalWidth` 1200, not `alt` text), page forward and
+  back, zoom opens, magnify pans, and the last photo finishes the cook. The
+  `recipeStepImageUrl` (R-003) fix is what makes the URL correct off-origin; the
+  reported *"just text like 'step 1'"* state is now also impossible to mistake,
+  because a failed fetch renders "This step's photo couldn't be loaded" instead of
+  bare alt text. The whole face was rebuilt in the same unit (one photo at a time,
+  Previous/Next, zoom). Not proven against the owner's own recipe on a built SPA —
+  that single check moved to `DORA_VERIFY.md` → Cook mode.
+
+## [RESOLVED] FU-752 — Cook mode's step text is `text-h4` at every viewport
+- **Raised:** 2026-08-27 (owner feedback batch — cook mode mobile pass)
+- **Type:** finding
+- **What:** The header was rebuilt for mobile this unit (identity band that never
+  wraps, headcount control that drops to its own row). The rest of the page was
+  left alone, and the one thing below the header that may still not be right on a
+  phone is the step card: `text-h4` is deliberate (you read it from across the
+  kitchen) but is untested against a long step on a narrow screen.
+- **Why deferred:** the owner's report named the top area specifically, and
+  shrinking cook-mode type is a judgement call about the feature's whole point,
+  not a layout bug.
+- **Recommended resolution:** when the owner next walks cook mode on a phone —
+  if the step card is fine, close this.
+- **Resolved 2026-08-28:** the phone walk this asked for was done (375x812, live).
+  The step card does not overflow and wraps cleanly; zero horizontal scroll on the
+  page. No defect. What remains is a taste question the owner owns — whether
+  `text-h4` is too tall on a phone — re-raised as **FU-763** so it is tracked as a
+  judgement call rather than a pending verification.
+
+
 ## [RESOLVED] FU-688 — the redesigned recipe page won; the old page, the duplicate form model and both hatch buttons still have to go
 - **Raised:** 2026-08-20 (audit of the un-logged recipe-view redesign).
 - **Type:** deferred job.

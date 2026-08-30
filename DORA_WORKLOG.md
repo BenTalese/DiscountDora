@@ -28,7 +28,1849 @@ next.
 
 ---
 
-## 2026-08-27 (latest) — **Owner feedback batch: meal plans → one shared add-to-list flow**
+## 2026-08-30 (last, latest) — **Meal planner Unit 3: the month grid — the brief is finished**
+**Status:** complete and **driven live** at 1280 against the scratch pairing
+(`data/scratch-verify.db`, backend :5171 / SPA :5174; the owner's :5170
+untouched). Backend **2201 passed** / 1 skipped / 1 xfailed (four pre-existing
+buy-verdict failures, FU-762). Frontend `vue-tsc` + `eslint src/` clean, **564
+vitest**. No migration, no backend change. **DR-12 partly overruled and updated.**
+
+**All three units of `BRIEF_MEAL_PLANNER_RAIL_AND_SHELL.md` are now built.**
+
+### What was wrong with the old widget
+
+It was a **week picker wearing a calendar costume**: only the week *row* was
+clickable, yet the day squares carried the status colour — so a day invited a
+click that did something else entirely. Its status was a 2px underline on a
+~20px square, meaning the `aria-label` carried more information than the visual;
+and only each Monday showed a number, so six rows read as a barcode.
+
+**F13 asked for both of those**, which is exactly why this needed D7 rather than
+a bug fix.
+
+### The grid
+
+Seven columns Monday-first with weekday letters, six rows always (a calendar
+that grows a row inside a fixed-height pane would shove the shopping summary
+around beneath it), month paging on `‹ ›`. Every cell carries its real date in
+`tabular-nums`. Out-of-month days are dimmed but **still real buttons** —
+they belong to real weeks and clicking one is a legitimate way to reach that
+week. Verified: 42 cells, 42 numbered, 11 dimmed, all still enabled buttons.
+
+**Pips are per-meal** (capped at three plus `+N`) where the old status was
+per-day, but they read the **same server shortfall set** — `dayStatus` was kept
+rather than rewritten precisely so nothing re-judges cookability client-side
+(R-003). **Today is a filled disc, never a ring** — a ring would collide with
+the focus ring the moment days became focusable, which they now are. Measured:
+filled `rgb(37,147,92)`, `border-radius: 999px`, weight 700.
+
+**Hover names the meals rather than reporting a status word** — measured live:
+*"24/08/2026 / Dinner · Spaghetti Aglio e Olio — cooked"*. That is the reason to
+make days interactive at all: the calendar becomes a **read** surface, not only
+a picker, and it satisfies B2/D-013 because a coloured pip is never the only
+signal.
+
+**Click a day → focus that week AND scroll the week pane to that day's card**,
+with one `dora-settle` on the arriving card. This is the payoff of the whole
+redesign and it is **only possible because of Unit 1** — under document-scroll
+there was no pane to scroll within. The page owns the scroll (it owns the
+scroller); the calendar only names the day. The card is found by a
+`data-day-iso` attribute rather than a collected ref, because the week
+re-renders through a `<transition>` on every week change and a ref gathered
+before that points at a card on its way out.
+
+### Two bugs found by driving it, one of them subtle and total
+
+1. **Arrow keys across a month boundary killed the keyboard entirely.** The
+   first cut paged the month whenever the target belonged to a different month.
+   But the grid renders six weeks from the Monday on/before the 1st, so it
+   spills into both neighbours — **July's grid already runs to 9 August**. So
+   arrowing from 2 Aug to 3 Aug paged unnecessarily, and the cost was invisible
+   but complete: `focusCell` found the cell in the *outgoing* grid, focused it,
+   and the transition then unmounted it, leaving focus on `<body>`. Because the
+   keydown handler lives on the grid, it went with it — every subsequent arrow
+   fell through to the **page's** week paging instead, so pressing Down twice
+   silently moved the week. Now it pages only when the day is genuinely not
+   rendered (`isRendered`), and a `pendingFocusIso` + `@after-enter` handles the
+   case where it really does have to cross. Verified: ArrowRight 2→3 Aug,
+   ArrowDown 3→10 Aug, PageDown Aug→Sep, and **the week label does not move**.
+2. **A measurement trap worth recording, not a bug.** The scroll-to-day check
+   read `scrollTop` and got 0 — twice. The first time I had picked a Monday (the
+   first card, so 0 is correct); the second time the target week was *empty*, so
+   seven collapsed cards don't overflow the pane at all (`paneOverflows: false`).
+   The requirement is "the day's card is in view", not "the pane scrolled", and
+   asserting the latter would have been a false failure. `cardInView: true`.
+
+### DR-12 is overruled for this surface, and says so
+
+`DESIGN_REMEDIATION_PLAN.md` directed a *"labelled 14-day strip (counts on
+cells)"* and recorded the meal-plans mini-month as *"rides the redesign"*. The
+redesign arrived and went the other way. Both the DR-12 entry and its mapping
+row now record that, **with the reasoning**, so a later session doesn't
+"correct" it back: DR-12's rationale is a calendar *competing with an actionable
+list*, which is the Alerts page's problem — on the planner the calendar **is**
+the navigation, and the fault was the opposite of bloat. Shrinking it would have
+preserved the click-does-nothing-useful bug. **The Alerts half of DR-12 is still
+open** and untouched.
+
+**Kept deliberately:** `weekAccessibleLabel`'s wording, `dayTitle` and
+`STATUS_LABEL` were **ported to day cells, not rewritten** — they were good work
+against 1.4.1 and the brief said so.
+
+**Files touched:** `components/MealPlanCalendar.vue` (rewritten),
+`pages/MealPlansOverview.vue` (day-selected wiring, `data-day-iso` anchors, the
+settle, the scroller ref), `docs/04_proposals/DESIGN_REMEDIATION_PLAN.md`,
+`PROJECT_STATE.md`, `CHANGELOG.md`.
+
+**Standards close-gate:** R-003 — the shortfall set is still the server's, and
+per-meal pips read the same input as the per-day status. R-001 — the grid is one
+component; the brief's L61 note (a small read-only twin for the Dashboard) was
+built *toward* by keeping all state in props/model, but deliberately **not used
+here** (out of scope, dashboard-owned). D-004 — cells are 34px minimum, but they
+are a dense calendar grid rather than primary tap targets and sit above the pip
+legibility floor the brief specifies; the day is also reachable from the week
+pane itself. D-010 — month paging rides `--motion-normal`/`--motion-ease`, and
+the arrival cue is a one-shot `useMicroFeedback`, never bound to a persistent
+condition. D-013/B2 — pips are never the only signal (tooltip names the meals,
+`aria-label` spells the status). D-016 — default/hover/focus-visible/today/
+out-of-month/focused-week are six distinct treatments. No unexplained violation.
+
+**Next up:** the brief's own ledger debt — **§11's `COVERAGE_GAPS.md` flip** for
+the 13 bullets `IMPL_PLAN_MEAL_PLANS_REBUILD.md` §13 re-graded 🟡, which is the
+one thing the brief asked for that no unit has done. Also still owed from Unit 1:
+re-measure `WEEK_TOOLBAR_COMPACT_BELOW_PX` now the collapsed rail hands the week
+~234px back. Everything else on this surface is browser-verify in `DORA_VERIFY`.
+
+---
+
+## 2026-08-30 (later) — **Meal planner Unit 2: the rail rebuilt — chips, Dora suggests, the collapse contract**
+**Status:** complete and **driven live** at 1280 and 375 against the scratch
+pairing (`data/scratch-verify.db`, backend :5171 / SPA :5174; the owner's :5170
+untouched). Backend **2201 passed** / 1 skipped / 1 xfailed (+6 new), with only
+the four pre-existing buy-verdict e2e failures (FU-762). Frontend `vue-tsc` +
+`eslint src/` clean, **564 vitest** (net +4: ten new filter tests in, the six
+tray tests deleted with the module they covered). No migration. **New: FU-791.**
+
+**Unit 3 (the month-grid calendar) is the only piece of the brief left.**
+
+### The server side was the cheap half, as the brief predicted
+
+`build_week.py` already held the whole ranking apparatus as pure functions —
+`RecipeCandidate`, `select_recipes`, and a **frozen reason-chip vocabulary**
+annotated "frozen server-side, R-003". So `GET /meal-plans/suggestions` adds
+**no domain logic**: it extracts the candidate-construction block out of
+`compute_auto_build` into a shared `build_candidates()` (both callers must build
+candidates the same way or the rail would recommend on different evidence than
+the week builder), excludes what's already planned that week, and returns
+`[{recipe_id, reason_chip}]`.
+
+Two deliberate calls: it passes **no rng**, because a rail that reshuffled on
+every render is unscannable — there's a test pinning that; and it ships
+**tokens, not prose**, so the server owns *why* and the client owns *how it's
+said*. The copy map is `helpers/mealPlanSuggestionCopy.ts`.
+
+**D6 is honoured in the wording.** `cookable_now` reads *"Nothing to buy for
+this"* — the planner-relevant consequence — rather than cookability language.
+The owner's reasoning narrows the F43 revision usefully: having the ingredients
+is a legitimate input **to a suggestion**, and the chip's value comes from
+having several indicators. F43 still stands everywhere outside that reason line.
+
+### Trays → filters, and why FU-578 #47 is superseded rather than regressed
+
+`recipeTrays.ts` is **deleted**. It went out of its way to give each recipe
+exactly one tray (FU-578 #47: a favourite rendered two checkboxes in the
+wizard), which as *filters* is simply wrong — you ask for Regulars, so every
+regular shows, favourites included. Filters solve the double-render inherently:
+one active filter, one list. `recipeRailFilters.ts` is therefore **independent
+predicates with no claiming and no caps**, and its docstring says all of this so
+the next reader doesn't file it as a regression. Its spec replaces the deleted
+one and leads with exactly that inversion.
+
+It also closes the **R-003 leak** the brief flagged: the old builder sorted
+"haven't had in a while" by `last_made_on` on the client while selecting on the
+server's `not_made_recently` flag. The client recency computation is gone —
+selection is the server flag, ordering is by name, and a test asserts the order
+is by *name and not by date* so it can't quietly come back.
+
+**Reused rather than rebuilt.** The brief specified a new chip component because
+neither `BaseSegmented` (capped at 2–4 by B2a; this is five) nor
+`BaseToggleGroup` (independent choices; these are exclusive) fits. That's true of
+the **row** — but the individual chip already existed with D-020's indicator
+token and DR-15's press/bump feedback solved on it. So `MealPlanRailFilterChips`
+is new and `FilterChip` was not; it gained only a `disabled` prop, which B2a
+wanted anyway (an empty chip stays in place, greyed and tooltip'd, instead of
+reflowing the row and costing the user their spatial memory).
+
+### Three bugs found by driving it, none of them reported
+
+1. **Focus never moved into the rail.** §4.6 calls this not optional — the open
+   animation is visual-only, so moving focus is its keyboard equivalent. It was
+   measured dead at 300ms *and* at 1500ms, and it took three passes to find why,
+   because there were **two independent causes stacked**: the page set `railOpen`
+   and then reached for the picker through a template ref, but the picker mounts
+   *as a result of that very state change*, so the ref was still null; and once
+   the picker owned its own focus, `QMenu` undid it twice on close — first by
+   restoring focus to the button that opened it (`no-refocus`), then by blurring
+   the active element during teardown. The slot selection now emits on the
+   menu's `@hide`, so nothing further touches focus afterwards. Focus lands and
+   stays.
+2. **The armed slot was never named on the week.** The brief requires the
+   destination named at **both** ends because at 1280px+ the rail and the day
+   are far apart. Arming "Breakfast" from the add-meal menu outlined the day
+   card and nothing else — the slot row didn't exist to be highlighted, because
+   an unused slot renders no row with "show all slots" off. An armed slot is now
+   always visible.
+3. **The targeted slot still looked like a drop zone** (`outline: 2px dashed`
+   over a sunken fill). With drag retired that idiom isn't merely dated, it's
+   misleading — there is nothing to drop. It's a filled accent surface with an
+   inset bar now, and the hint reads `← pick a recipe`.
+
+### The collapse contract — read this before "fixing" the rail
+
+D-023 lands directly on a collapsible rail; its establishing case is a
+shopping-list side rail hidden per mode, with the owner's *"this will only lead
+to confusion with UI elements shape shifting."* A user-operated disclosure is
+compliant (D-023's violation signal is two differently-shaped controls `v-if`'d
+per mode; this is one control whose size the user chose, and the collapsed form
+is a **labelled** strip, not a bare icon). But the asymmetry is the whole point
+and is commented in the template:
+
+> **The system may only ever OPEN the rail. It may never close it.**
+
+Verified live: after `Esc` cancels a target, the rail is still open at 280px.
+
+**D3 as answered, not as recommended.** Always collapsed on arrival; opens on a
+slot selection or a click on the strip; **no empty-week auto-open** and nothing
+persisted.
+
+### One acceptance detail that differs from the brief
+
+§4.3 expects the chip row to wrap to **two** lines at 262px. Measured at the
+built rail's 280px it wraps to **three** (119px tall), because the chips carry
+counts. No rule is broken — D-011 only forbids horizontal scroll, and the rail
+has none — but it is a visible difference from the spec and is the owner's call,
+so it's in `DORA_VERIFY`.
+
+### Verified, and what isn't
+
+Driven live: collapsed-on-arrival (46px, "Recipes · 15", picker not even
+mounted), open-by-strip → 280px, chip mutual exclusion via `aria-pressed`,
+Favourites narrowing 15 → 1, Dora suggests returning 8 ranked rows with real
+server reasons, user-collapse, auto-open on arming, the focus hand-off, the
+day-card highlight, the slot hint, `Esc` cancelling while leaving the rail open,
+and the mobile sheet getting the **same** five chips and rows (§4.8 — both
+breakpoints teach one model). The virtual-scroll row-height contract the brief
+warns about is confirmed exactly: `.recipe-list__slot` measures **64px**, equal
+to `VIRTUAL_ROW_HEIGHT_PX`.
+
+**Not verified: the virtualised path itself** — the seed has 15 recipes and the
+threshold is 50. In `DORA_VERIFY`, with the batch-cook pool controls (F42's
+"make the number bigger") which need `batch_features_enabled`.
+
+**Files touched:** new `features/meal_plans` suggestions endpoint +
+`build_candidates` in `build_week.py`; new `helpers/recipeRailFilters.ts`,
+`helpers/mealPlanSuggestionCopy.ts`, `components/MealPlanRailFilterChips.vue`,
+`components/MealPlanRecipeRow.vue`, `test/unit/recipeRailFilters.spec.ts`;
+deleted `helpers/recipeTrays.ts` + its spec; rewritten
+`MealPlanRecipePicker.vue`; edits to `MealPlanWeekDayCard.vue`,
+`MealPlanPickerSheet.vue`, `MealPlanBuilderDialog.vue`, `chips/FilterChip.vue`,
+`useMealPlanner.ts`, `stores/mealPlanStore.ts`, `mealPlanApiService.ts`,
+`models/mealPlan.ts`, `pages/MealPlansOverview.vue`,
+`tests/e2e/dora_api/test_meal_plan_router.py`.
+
+**Standards close-gate:** R-001 — one violation, **explained in place and
+logged**: the rail row is a third copy of the list-row chrome the brief wanted
+promoted to a shared class; doing that properly means re-skinning `StockItemRow`
+and `RecipeRow`, which is the adjacent-surface creep R-007 forbids in a
+rail-scoped unit (**FU-791**). R-003 — the client recency sort removed, the
+reason vocabulary kept server-side, candidate construction unified. R-019 — row
+density is an explicit prop, never a viewport sniff. D-004 — rail rows measure
+63px. D-010 — collapse animates on `--motion-*`. D-011 — no horizontal scroll,
+measured. D-016/A6 — the rail row is a real focusable control with a visible
+ring, which `RecipeRow` still lacks. D-020 — chips read the indicator token via
+`FilterChip`. D-023 — carve-out documented in the template. **FU-693 updated**:
+a third off-scale name site was avoided rather than created.
+
+**Next up:** **Unit 3 — the calendar as a month grid** (D7), which must also
+update `DESIGN_REMEDIATION_PLAN.md` to record **DR-12 as overruled**. Then the
+brief's §11 ledger debt: the `COVERAGE_GAPS.md` flip for the 13 bullets
+`IMPL_PLAN_MEAL_PLANS_REBUILD.md` §13 re-graded 🟡. Also still open from Unit 1:
+re-measure `WEEK_TOOLBAR_COMPACT_BELOW_PX` now the collapsed rail hands the week
+~234px back.
+
+---
+
+## 2026-08-30 — **Meal planner unparked: all eight FU-782 decisions answered, Unit 1 (app-shell) built**
+**Status:** decisions **closed**, Unit 1 complete and **driven live** at 1024 /
+1280 / 1440 / 375 against the scratch pairing (`data/scratch-verify.db`, backend
+:5171 / SPA :5174; the owner's :5170 was running throughout and was **not**
+touched). Frontend `vue-tsc` + `eslint src/` clean, **560 vitest** (unchanged
+from baseline; the single reported "error" is a passing test that throws on
+purpose — `globalErrorHandler.spec.ts`). No migration, no backend change.
+**FU-782 resolved.** Units 2 and 3 are unblocked and unbuilt.
+
+**Trigger:** the owner asked to progress the parked meal-planner work and
+answer every outstanding question in one pass.
+
+### The eight decisions (BRIEF_MEAL_PLANNER_RAIL_AND_SHELL §9)
+
+Six went as the brief recommended: **D1** retire drag-and-drop, **D2** the 46px
+labelled collapsed rail, **D5** three units, **D6** keep *Dora suggests*' reason
+chip reworded off cookability language, **D7** the month grid, **D8** status
+strip stays in the toolbar. Answers are recorded **inline per-decision** in §9,
+which is now headed CLOSED; the brief's status banner flips to approved-to-build.
+
+**Two were answered against the recommendation, and the builder follows the
+answer:**
+- **D3 — the rail derives its open state, but more narrowly than proposed.**
+  Always collapsed on arrival; opens on exactly two events (a slot is selected,
+  or the strip itself is clicked). **The empty-week auto-open is dropped.** Do
+  not reintroduce it from the recommendation text.
+- **D4 — no page title at all.** Not "Meal plans", and *not* the week range
+  promoted to title role either. The range stays exactly where it already is,
+  between the prev/next buttons. F40 stands as written.
+
+The owner's D6 reasoning narrows that revision usefully and is worth carrying
+into Unit 2: *"do you have all the ingredients for this already?"* is a
+legitimate input **to a suggestion**, and the value of *Dora suggests* comes
+from having **several** indicators — a single-reason suggestion isn't worth
+looking at. So F43's objection stands everywhere except inside the suggestion
+chip.
+
+### Unit 1 — what was built
+
+**Document-scroll → fixed-height app-shell**, copying `StockOverview.vue`
+verbatim rather than inventing (`pageStyleFn`, the `.stock-list` scroller
+shape, padding on the scroller not the pane). Three panes: rail 280px, week
+fluid, context 300px; each owns its scroll, the document owns none.
+
+**This fixed a live bug, and it is the textbook case for R-036's "never
+hardcode the offset" clause.** `.planner-sticky` used
+`max-height: calc(100vh - 32px)` accounting for neither the 64px header nor a
+rendered `OfflineBanner`, so **both rails overhung the viewport by about a
+header's height**. Measured after conversion: all three pane bottoms at 884px
+in a 900px viewport. R-036's "Apply" list updated (Meal Plans moved
+document-scroll → app-shell), recorded as an application of **ADR-032**, not a
+new ADR.
+
+**The consolidated toolbar** (§3.2) replaced five separate things: three
+toolbar siblings (duplicate / print / Clear week), a full row holding one
+toggle, a right-pane card wrapping a single button, `MealPlanWeekStatus` as a
+block that scrolled away, and the bottom next-week arrow. Row 1 is
+`‹ range/relative ›` + Build my week + `⋮`; row 2 is the status strip, now
+pinned — which is what its own comment always claimed it was for.
+
+**Two decisions worth recording.**
+1. **F17 is reversed deliberately, and the reason is the shell.** F17 asked for
+   the next-week arrow *below* the working area. Under an internally-scrolling
+   week pane, a control at the foot of the scroller is only reachable after
+   scrolling seven day cards — so both arrows sit together in pinned chrome,
+   which is the *intent* F17 was after even though it isn't the letter.
+2. **D8's divergence is deliberate and must not be "made consistent".** The
+   status strip stays in the toolbar rather than becoming a `PageCountsFooter`,
+   against three app-wide owner asks (L93/L212/L231). It's a *status* strip, not
+   a count of listed records, and F45 wants the shortfall to have one home near
+   the week nav. Commented in place at the call site so a later session doesn't
+   "fix" it.
+
+**D1 removed end to end** — `dragAllowed` / `draggingRecipeId` /
+`onRecipePointerDown` / `onDragStart` / `onDragEnd` / `onDropOnSlot` out of
+`useMealPlanner`, the `draggable` binding and three emits out of
+`MealPlanRecipePicker`, `@dragover`/`@drop` + the `dropOnSlot` emit out of
+`MealPlanWeekDayCard`. The other two picker call sites already passed
+`:drag-allowed="false"`, so the prop's removal was clean. Also killed
+`.recipe-row { cursor: grab }` — a grab cursor on a row that can no longer be
+grabbed is a promise the page doesn't keep.
+
+**Two side-effect fixes the brief called for.** The week carousel's hand-rolled
+`transition: transform 0.18s ease` was a literal-duration **D-010** violation
+(0.18s sat between two tokens for no reason) → `--motion-normal` +
+`--motion-ease`. And `MealPlanRecipePicker`'s `max-height: 65vh` — a second
+viewport formula inside a correctly-sized pane — became a flex scroller, so the
+search box and target banner pin while the recipes move under them.
+
+### One thing the brief's acceptance criteria missed
+
+§3.2 specifies "≤ 96px at 1280×900". It passed there (90px) — **and wrapped to
+129px at 1024**, which is the FU-738 failure mode the brief itself cites. The
+week pane is only what the two fixed side panes leave behind: ~380px at 1024
+against ~636px at 1280. Fixed with `StockOverview`'s own `compactToolbar`
+pattern — the action drops its label and rides its icon, tooltip carrying the
+name. The threshold (`WEEK_TOOLBAR_COMPACT_BELOW_PX = 1120`) is expressed
+against the viewport because that's what Quasar makes reactive, but it's derived
+from the pane and commented as such. **Re-measure it in Unit 2** — a collapsed
+rail hands the week ~234px back, at which point it may be able to relax.
+Now 90px and non-wrapping at 1024 / 1280 / 1440, no horizontal page scroll at
+any of them (D-011).
+
+**Mobile is genuinely untouched** (§3.4) — `lt.md` still routes to
+`MealPlanMobileFocus`, every shell rule is scoped `≥1024px`, and the desktop
+branch isn't mounted below that. One trap: `:style-fn` is a **prop, not a media
+query**, so it set its inline height on phones too and left a viewport-locked
+page whose content could only overflow. `SettingsShell.vue`'s escape hatch
+(`height: auto !important` under 1024) was already the house answer; applied and
+re-verified at 375 (page height back to natural 520px).
+
+**Files touched:** `pages/MealPlansOverview.vue`,
+`composables/useMealPlanner.ts` (drag removed, `weekRelativeLabel` added),
+`components/MealPlanRecipePicker.vue`, `components/MealPlanWeekDayCard.vue`,
+`components/MealPlanPickerSheet.vue`, `components/MealPlanBuilderDialog.vue`,
+`docs/01_charter/ENGINEERING_STANDARDS.md` (R-036 Apply),
+`docs/04_proposals/BRIEF_MEAL_PLANNER_RAIL_AND_SHELL.md` (§9 closed + banner),
+`CHANGELOG.md`, the two follow-up ledgers.
+
+**Standards close-gate:** R-001 (no new duplication — `canSaveCurrentWeek` is
+one computed feeding both the menu and the templates drawer, not two copies of
+the predicate), R-003 (nothing domain-derived moved to the client;
+`weekRelativeLabel` is date presentation), R-036 + ADR-032 (the conversion
+itself, Apply list updated), D-010 (fixed), D-011 (verified at three widths),
+D-023 (D2's labelled strip preserves shape-and-place — lands in Unit 2). No
+unexplained violation introduced.
+
+**Next up:** **Unit 2 — the rail** (collapse contract per D3-as-answered, filter
+chips, compact cookbook rows, *Dora suggests* with its reason chip reworded per
+D6). The cheapest finding still holds: the ranker, the candidate model and a
+frozen reason-chip vocabulary already exist server-side as pure functions in
+`dora_api/features/meal_plans/build_week.py`, so the endpoint reuses
+`select_recipes` and adds no domain logic. Then **Unit 3 — the month grid**,
+which must also update `DESIGN_REMEDIATION_PLAN.md` to record DR-12 as overruled
+by D7. Ledger debt still owed from the brief's §11: the `COVERAGE_GAPS.md` flip
+for the 13 bullets `IMPL_PLAN_MEAL_PLANS_REBUILD.md` §13 re-graded 🟡.
+
+---
+
+## 2026-08-29 (ops) — **Deploy broke on a container-name conflict: the `name:` pin orphaned the running stack**
+**Status:** diagnosed, fix **partially applied**, **not verified against the
+server** (SSH was blocked this session). **FU-790** logged open. No repo code
+changed — the affected file is `~/Desktop/deploy-dora.sh`, which this repo
+doesn't track.
+
+**Symptom:** `./deploy-dora.sh` →
+*Conflict. The container name "/dashy_dora" is already in use by container d1b2518e…*
+
+**Cause, and it's ours.** `compose.yml` has an **uncommitted** `name: dashy-dora`
+in the working tree, pinning the Compose project name so generated volumes stop
+carrying the retired "discountdora" name. The server was deployed before that
+line existed, so its stack lives under the directory-derived project
+`discountdora`. Once the rsync ships the new file, every `docker compose` call
+in the script addresses the *new* project: `down -v` matches nothing and leaves
+the old container up, then `up` collides. It's fatal rather than harmless
+because `container_name: dashy_dora` is a **global** name that ignores project
+namespacing — drop it and the two projects coexist as
+`<project>-dashy_dora-1`. Compose can't fix it itself: to the new project that
+container is a stranger, not an orphan, so `--remove-orphans` is no help. That
+`name:` change's own comment warned about the volumes it renames and missed
+this.
+
+**Owner call:** keep `container_name`, harden the script (over dropping
+`container_name`, or reverting the `name:` pin).
+
+**Applied:** a `CONTAINER_NAME` constant and a `reclaim_container_name` function
+in `deploy-dora.sh`. It deliberately needs **no** knowledge of project names,
+current or historical — if something holds the name and it isn't in
+`docker compose ps -aq` for the current project, it's a stray by definition. It
+tears the stray down through *its own* project rather than `docker rm -f`, so
+with `WIPE_DB=true` the old project's volumes go too instead of stranding on
+disk; with `WIPE_DB=false` it stops without `-v` and says plainly that the data
+is still in the old volumes.
+
+**Not applied:** wiring the call into `deploy()` (three lines — the
+`reclaim_container_name` call after the WIPE_DB block, plus two step labels).
+The edit was refused twice by a session permission check on that path, so I
+stopped rather than routing around it and handed the diff to the owner. The
+function is currently **defined but never called**, which is a no-op — the
+script behaves exactly as it did before, so nothing is half-broken.
+
+**Owed:** the one-time server cleanup (`docker compose -p discountdora down -v`
+from `~/DiscountDora`), the three-line wiring, and a first successful deploy.
+None of it could be confirmed here. Also still true, and now twice-bitten: the
+deploy script exists **only on the desktop**, so every fix to it is one `rm`
+from gone.
+
+---
+
+## 2026-08-29 (later) — **Settings feedback, batch 2 of 2: building the weekly deals email that never existed**
+**Status:** complete and **driven end to end** against the scratch DB
+(`data/scratch-verify.db`, backend :5171 / SPA :5174; dev :5170 untouched).
+Backend **2195 passed** / 1 skipped / 1 xfailed, with only the four pre-existing
+buy-verdict e2e failures (FU-762). Frontend `vue-tsc` + `eslint src/` clean,
+**560 vitest** (the one reported "error" is pre-existing `close-popup` Vue warns
+in `baseSelect.spec.ts`, untouched here). **No migration.** **FU-789 resolved.**
+
+**Trigger:** batch 2 of the owner's settings feedback, split at his direction.
+Batch 1's finding was that "does the weekly deals email actually work?" answers
+*no* — this unit is the fix.
+
+**What was actually missing was the entire feature.** The columns, the settings
+page, the admin column, the health flag and migration `a7f4d2c8e1b6` had all
+shipped on 2026-08-14. There was no job, no sender and no template. Now there
+are three modules and a cron:
+
+- **`features/deals/deals_digest.py`** — the *what*: which deals qualify, how
+  they're worded, when a send is due. Pure functions over plain values, split on
+  the same seam as `meal_plans/daily_brief.py`, so the policy is testable
+  without a DB, a clock or an SMTP server.
+- **`features/deals/send_deals_email.py`** — the *when/whether*. Registered
+  **hourly** and self-gated on the household clock, exactly like
+  `send_daily_brief`: the cron is built once at startup from the server's
+  timezone while the household zone is a runtime AppSetting (R-021).
+- **`email_templates/weekly_deals.html`** — one template, both formats.
+- **`startup.py`** — `deals_email` at `CronTrigger(minute=15)`, staggered off the
+  :30 alerts push and the :45 brief. Its neighbouring comment, which had been
+  siting the audit sweep "well clear of any deals-email schedule" for a schedule
+  nobody ever added, now describes something real.
+
+**Three decisions worth recording.**
+1. **No migration.** Dedup rides the existing `AlertInteraction` ledger — the
+   daily brief already set that precedent with a date-scoped key. This one is
+   **ISO-week-scoped**, because subscribers pick their own weekday and a user who
+   moves theirs from Friday to Monday mid-week must not get the same deals twice.
+   The ISO *year* matters too and has its own test: 2027-01-01 is ISO week 53 of
+   2026, which a `%Y-%W` key would have collided with the following January.
+2. **`email_verified` is a hard gate.** This is the only mail Dora sends
+   repeatedly and unprompted; every other one replies to something the recipient
+   just did. Mailing an unverified address weekly is the exact harm verification
+   exists to prevent. But silently skipping would recreate batch 1's whole
+   complaint, so the skip is **visible**: Settings → Notifications shows a card
+   explaining it with a working "Send verification email" button (the
+   `/auth/resend-verification` endpoint existed and had a client method; nothing
+   in-app had ever called it for a signed-in user).
+3. **No images, and the settings copy was corrected to match.** Product images
+   are served from an authenticated endpoint, so an `<img>` in an email would be
+   a broken box for every recipient forever. The "Compact format" help text I
+   wrote in batch 1 promised the expanded format had "images and store logos" —
+   copy inherited from the unbuilt feature's description. Building it proved that
+   false, so it now describes what the card actually carries.
+
+**Driven, not just compiled.** A capture-sender harness against the scratch DB
+walked the whole gate chain: wrong hour → 0, wrong weekday → 0, install flag off
+→ 0, unverified address → 0; on-time with every gate open → **1 mail**, 10 deals
+ranked 50%→10% off with correct dollar savings; a second tick in the same week →
+**0** (dedup). Both formats were rendered and screenshotted (expanded cards,
+compact 15-line list), and the HTML confirmed to contain exactly one `<img>` —
+the layout's inline-CID brand banner. Scheduler registration was verified by
+spying `add_job` through a real `bootstrap()` call: `deals_email` /
+`send_deals_email` / `cron[minute='15']` sits alongside the other four.
+
+**Standards close-gate:** checked; no violations introduced. **No new
+R-rule/ADR.** The candidates all landed under existing ones — R-021 (household
+clock, hourly self-gating), R-003 (the ranked pool is built once per tick and
+shared; the digest never re-derives "what's a deal" — it re-checks
+`discount_percent`, the same domain function the dashboard ranks by), R-018
+(optional/absent infrastructure degrades quietly rather than blocking boot).
+
+**Next up:** nothing outstanding on this surface. `DORA_VERIFY.md` carries the
+two checks a captured-sender run can't make — a real send through real SMTP, and
+how both formats render in an actual mail client.
+
+---
+
+## 2026-08-29 (earlier) — **Settings feedback, batch 1 of 2: the notifications/voice/assistant pass (deals email deferred to batch 2)**
+**Status:** complete and **driven live** at 1280×900 on the isolated scratch
+pairing (SPA :5174 → API :5171, `data/scratch-verify.db`; dev :5170 untouched).
+`vue-tsc` and `eslint src/` clean, **560 vitest** across 49 files (three
+consecutive runs — one run reported a non-reproducing teardown error that did not
+recur). No backend files touched. New components: `InfoTip.vue`,
+`SettingsNotice.vue`. New FUs: **787, 788, 789**.
+
+**Trigger:** an owner feedback batch on Settings — Notifications, Voice,
+Assistant, plus the nav order. Batch split was his call: *"lets build in two
+batches. second batch is the deals email, first batch is everything else."*
+
+**The headline finding is an answer to one of his questions, and it's a no.**
+*"Does the weekly deals email actually work?"* — it does not, and never has.
+`deals_email_enabled`, `deals_email_compact` and `send_deals_on_day` all persist;
+the settings page writes them; `update_user_as_admin` exposes a column;
+`health_check` publishes a `deals_email` flag; migration `a7f4d2c8e1b6` shipped
+the columns on 2026-08-14. There is **no scheduler job, no sender, and no
+template** anywhere in `dora_api/`. `startup.py` even sites the audit sweep "well
+clear of any deals-email schedule" — for a schedule nothing ever added. Logged as
+**FU-789**; it is batch 2 and the next unit of work on this surface. (His other
+question — is the deals email gated on products? — is **yes**: `v-if
+="productsEnabled"` around the whole section, plus the SMTP gate.)
+
+**Notifications was restructured around the channel, not the message.** Four peer
+sections meant "Evening brief" gave no hint it rides push, which is exactly the
+kind of invisible dependency that makes a toggle look broken when you turn push
+off. Two sections now — **Push** first, **Email** second — each opening with its
+own blocker banner and then listing what it can deliver as child rows. Blockers
+moved above the controls they explain: the answer to "why is this dead?" was
+sitting underneath the dead thing.
+
+**Two components came out of the feedback rather than one page's fix.**
+*"The info chip for mode feels a bit small. Are the other info chips this size?
+Consistency!"* — they weren't: the same (?)-plus-tooltip shape was hand-rolled at
+14px on Assistant, MealPlanWeekStatus and DoraScoreCard, and 16px on the stock
+row legend. `InfoTip.vue` is now the one of them (18px, one tooltip width, a 26px
+tap box for D-004); the three clean call sites were converted. `SettingsNotice
+.vue` is the generic sibling of `ChannelSetupNote` for *"make the not supported
+text more like a warning card, more obvious"*.
+
+**The toggle-alignment complaint was real and app-wide.** *"The toggles also
+don't seem to be inline with the option text. Seems to be a broader issue across
+the board."* It was: `SettingsRow` and `SettingsSection`'s header both
+top-aligned a ~40px control against an ~18–21px label, putting every toggle in
+Settings ~11px low. Fixed in the two primitives (D-018), measured live afterwards
+— label-centre to control-centre offset is now **0px** on all three notification
+rows. The section header only centres when it has no `#description`, so the
+Admin → Data pages keep a button level with their heading instead of floating it
+into the middle of a paragraph.
+
+**Two Voice answers required going and finding out, not rewording.** *"In what
+situations does this happen? I'd expect it to always work."* — Piper is
+deliberately not a hard dependency (R-018 / ADR-013: `piper-phonemize` has no
+Windows wheel), so Docker installs it, the desktop bundle ships it, and a
+from-source install has no neural voice at all. The card says that now. And
+*"if the neural voice engine isn't available then why let people download voices
+at all?"* — no good reason, so the catalogue is hidden in that state rather than
+explained. That is **R-029**, not its settings-screen carve-out: the carve-out is
+for the surface that owns the config, and this page doesn't own Piper's
+installation (Admin → Voice does, which is where the card links). Verified live —
+the scratch install genuinely has no Piper, so the hidden-catalogue branch is the
+one the screenshot shows. Owner picked "better messaging only" for speech
+*recognition*; the card names Chrome/Edge/Safari and states that Firefox has
+never shipped it, with server-side transcription logged as **FU-788**.
+
+**Assistant: one of the four items was a missing form field, not a copy fix.**
+*"Why does anthropic and openai have base url optional, and gemini has
+nothing?"* — no reason at all: `GeminiClient` has taken a `base_url` since it was
+written and `factory.py` passes it through, so the input was the only missing
+part. Added, with the real default as its placeholder; confirmed live that the
+expanded Gemini card now renders API key / Model / Base URL (optional). The (?)
+glyphs on unconfigured provider cards were a status readout wearing a control's
+costume (a D-005 metaphor failure) — unconfigured is `circle_outline` now,
+untested is `warning_amber`.
+
+**Standards close-gate:** checked; no violations introduced. **No new
+R-rule/ADR** — each decision landed under an existing one (R-001 for the two new
+shared components, R-029 for the hidden voice catalogue, D-005 for the status
+glyphs, D-018 for the alignment fix). The alignment bug is the interesting near
+miss: it looked like a per-page problem and was a primitive problem, which is
+R-001 working as intended once the fix went to the right place.
+
+**Next up:** **batch 2 — build the weekly deals email (FU-789)**: a weekly
+scheduler job gated on the household clock the way `send_daily_brief` is, a
+compact + expanded Jinja template over the existing best-deals query, and tests.
+
+---
+
+## 2026-08-29 (appearance) — **Cut `show_recipe_images`: a preference that had decayed to nothing**
+**Status:** complete and **driven live** at 1280×900 (scratch stack :5172/:5175;
+dev :5170 untouched). `vue-tsc` and `eslint src/` clean, **560 vitest**, backend
+**2176 passed** / 1 skipped / 1 xfailed with only the four pre-existing
+buy-verdict e2e failures (FU-762). New: **R-065 / ADR-062**, migration
+`e3b1d7f5a904`. `useImagePrefs.ts` deleted.
+
+**Trigger:** the owner, on Settings → Appearance — *"I'm thoroughly confused
+about the recipe photos toggle in appearance settings. What is this even for??"*
+I traced it before answering, offered four options with a recommendation, and he
+picked the cut.
+
+**The answer to his question was "almost nothing", and the interesting part is
+how it got there.** `PROPOSAL_CONFIG_AND_OPTINS §2.8` designed
+`User.show_recipe_images` to govern **every** recipe photo — cards, detail
+header, edit preview, cook mode, print/export — so a user could run a
+text-dense, low-bandwidth UI, written from an inline cookbook-toolbar button,
+with an explicit *"No Settings page entry"*. Then: FU-508 deleted its
+`show_stock_images` twin; the 2026-08-18 owner call gave the cookbook's
+cards/compact switch ownership of photos there (which is *why* the write button
+left the toolbar — the write surface moved while the read surfaces evaporated);
+and cook mode, print and the planner rail turned out never to have consulted it
+at all. Every step was locally reasonable; none looked like a change to the
+preference. What survived governed the recipe page's hero image and the
+`RecipeCard`s on the stock-item detail page, from the settings page the proposal
+had ruled out — and it couldn't even deliver the density it implied, because the
+photo tile is a fixed grid column, so switching photos off painted a same-sized
+"Photo hidden" box. The tell was already in the UI: the help text read *"The
+cookbook decides its own — cards show photos, compact rows don't."* A setting
+that has to name where it doesn't apply has already lost its meaning. That's
+**R-065 / ADR-062** — and it is the *second* instance (FU-508 was the first),
+which is what makes it a rule rather than a tidy.
+
+**Cut, end to end.** Frontend: the Appearance section, `useImagePrefs.ts`
+(deleted), both consumers, the `show_recipe_images` field on the auth model and
+the API type, and `RecipeCard`'s `showImage` prop — which became dead once both
+callers passed `true`, so the media strip is unconditional now. Backend: the
+entity field, its `Fields` constant, the register/`update_me` DTO fields and the
+apply block, the `table_mappings` column, and migration `e3b1d7f5a904` dropping
+it. Two collapses fell out: `hasPhoto` and `photoUrl` on the recipe page only
+ever differed to express "a photo exists but you asked not to see it", so
+`hasPhoto` is now `photoUrl !== null`; and the placeholder's
+`hasPhoto ? 'Photo hidden' : 'Add a photo'` branch was dead, so it just says
+"Add a photo". Five stale comments elsewhere that described the flag as live were
+rewritten rather than left to mislead.
+
+**Verified live, not just compiled.** Appearance now has exactly four sections
+(Theme mode / Theme / Font family / Text size), zero toggles, and no occurrence
+of the word "photo"; the surviving controls still save (flipped text size to
+Large, toast fired, `/auth/me` came back `font_size: "lg"` — worth checking
+because the cut removed a sibling section). `show_recipe_images` is absent from
+`/auth/me`, and `PATCH /auth/me {show_recipe_images: false}` now **400s**
+(`extra_forbidden`) rather than silently no-opping, which is the honest answer to
+a stale client. Seeded recipes have no photos, so I gave one a real JPEG via the
+API: the hero renders unconditionally (`naturalWidth 400`, no placeholder), a
+photo-less recipe still offers "Add a photo", and all three `RecipeCard`s on the
+stock item's Recipes tab render their 110px media strip — the one with a photo
+showing it, the other two showing their initial tiles, exactly as the cookbook
+does. DTO snapshots regenerated.
+
+**The R-065 audit came back clean, with a reason worth keeping.** I counted
+consumers for the other seven per-user flags: `buy_verdict_enabled` (3 files) and
+`show_assistant` (2) are fine, and the four `inference_*` flags look like
+one-file preferences but aren't — they're enforced **server-side** by
+`inference_overlay.py`'s surface→flag map, so their single Vue file is just the
+write surface. `show_recipe_images` was the only one whose enforcement was purely
+client-side, and that is precisely why it could rot silently: no server test
+notices when a component stops reading a flag. Noted rather than logged as an FU
+— nothing is currently broken.
+
+**Standards check.** R-065 is the rule this unit establishes; R-064 untouched.
+Migration is clean per the repo convention — one `batch_alter_table`, no
+idempotent guards, a real `downgrade` restoring the column with its original
+`server_default='1'`. R-001: the cut *removed* a component-level prop rather than
+adding indirection. R-035/D-rules: no new UI, and the page's remaining sections
+keep their existing dividers (checked live — Text size is last, with no dangling
+rule). `PROPOSAL_CONFIG_AND_OPTINS §2.8` is stamped **📦 SUPERSEDED** in place so
+the next reader doesn't implement it back.
+
+**Next up:** unchanged — FU-785 (the rollback half is a correctness bug), then
+FU-780's `ShoppingListDetail.vue` extraction.
+
+---
+
+## 2026-08-29 — **Recipe-view + cookbook feedback batch: six items, two of them the same bug**
+**Status:** code-complete and **driven live end to end** at 1280×900 against a
+scratch stack (backend :5172 / SPA :5175, dev :5170 untouched). `vue-tsc` and
+`eslint src/` clean, **560 vitest** (unchanged), backend **2176 passed** / 1
+skipped / 1 xfailed with the four pre-existing buy-verdict e2e failures
+(FU-762) and nothing else. New: **R-064 / ADR-061**, two "known fixes" entries,
+**FU-786**, an update to **FU-773**. No migration.
+
+**Shipped:** `RecipeInfoCard.vue` (new, shared), and edits to
+`RecipeDetailPage.vue`, `RecipeNutritionCard.vue`, `RecipeIngredientRowEditor.vue`,
+`RecipeRatingChip.vue`, `FilterRow.vue`, `RecipesOverview.vue`,
+`dora_api/features/recipes/update_recipe.py`, plus
+`tests/e2e/dora_api/test_recipe_step_ingredient_links.py` (new, 2 tests).
+
+**The headline: "linking ingredients to step is broken (cannot save)" and "tried
+changing loaf to g … an error was encountered" were the same bug wearing two
+faces, and it was worse than reported.** Reproduced at the API in one PATCH:
+400 *"Step references ingredients not on this recipe"*, naming two ids that were
+neither what the request sent nor wrong — they were the correctly-resolved
+post-replace ids. The rows just weren't in the table yet. `update_recipe` builds
+its replacement ingredient rows in the ORM session, and
+`replace_steps_for_recipe`'s link check reads with a **Core**
+`db.session.execute(select(...))`, which does not autoflush the way an ORM query
+does. `create_recipe` had been flushing for exactly this reason since FU-456 and
+said so in a comment; the PATCH path never did. One `repository.flush()` at the
+seam. **The blast radius is why it reads as two reports:** the page re-sends
+`steps` on every save of a structured recipe, so *one* linked step made *every*
+later edit to that recipe unsaveable regardless of what you changed — which is
+almost certainly the owner's unit-change error. Promoted to **R-064 / ADR-061**
+because the two access styles look interchangeable and are not, and the failure
+mode is a validation error that blames the user's own data. I then audited the
+other handlers that pair ORM writes with `*_access` helpers —
+`new_recipe_version` flushes correctly, `create_recipe` flushes, and the
+attachments / pantry-belief callers do no ORM writes — so no sweep FU.
+
+**The unit picker had a second, independent bug the report's other half named.**
+Two causes, both in one control, both proven live rather than reasoned about:
+(1) `fill-input` + `hide-selected` park the selected label in the input, and
+`QSelect.showPopup` re-runs `@filter` with that text every open — so the Unit
+dropdown on a row measured in `loaf` filtered the whole vocabulary down to
+`loaf`, and since `loaf` isn't in `UNIT_TABLE` at all the list came out
+**empty**. You could only reach `g` by deleting the word first. (2) The select
+had no `emit-value` / `map-options` over `{label, value}` options, so picking a
+unit wrote the **option object** into `draft.unit` and the next read of it threw
+`kept.trim is not a function` in `useUnitOptions`, which the error boundary
+"handled" by tearing the dialog down. Captured that exact stack in the browser
+before touching it. Both fixed by aligning with `SubstituteMetadataDialog`'s
+identical picker, which had always had it right — after which the dropdown
+offers 14 units, `g` among them, and picking one leaves the dialog standing.
+Neither is catchable by `vue-tsc`: the v-model target is typed `string | null`
+and the write comes through QSelect's untyped `update:model-value`. Both are now
+"known fixes" cookbook entries. The one thing I did **not** fix is that `loaf`
+can never be re-selected once changed away — that's a vocabulary decision, not a
+code one (**FU-786**).
+
+**"Copy the nutrition card style" became one component, not two copies.** The
+nutrition rollup already wore the treatment and the panels either side of it wore
+nothing, so the details list read as one card between two loose stacks of fields.
+The chrome moved into `RecipeInfoCard` and **all three** callers render through it
+— including the nutrition card itself, which is the half that stops them drifting
+apart again (R-001). Verified in the browser: three cards, same `1px solid`
+border, same 4px radius, no shadow, one muted glyph each
+(`note-text-outline` / `heart-pulse` / `history`).
+
+**The filter-width complaint had a fossil at the bottom of it.** `FilterRow` ran
+two width tracks — 210px for text-ish controls, 230px for numeric bounds — and
+the 230 was justified by a label, "Missing ingredients ≤", that was **deleted on
+2026-08-20**. So the only thing holding the tracks apart was that they existed.
+Collapsed to one; measured live, all thirteen controls now 210px with zero
+clipped labels. The sort control keeps its wider track, which is a real
+difference (it packs a direction chip inside the field) rather than a difference
+in species. Side effect: the row lost ~100px, so I re-measured **FU-773** —
+still three lines at 1280px, so that ask is unchanged and stays the owner's call.
+
+**Standards check.** R-001 drove both the `RecipeInfoCard` extraction (three
+callers, not one) and the decision to fix the unit picker by matching its
+existing sibling rather than inventing a third shape. R-002 held — no Quasar
+palette literals; the star is `--brand-primary` on `--brand-primary-soft`.
+R-060 checked: every token the new component references (`--space-1`,
+`--space-4`) is declared in `tokens.scss`. D-004/D-005 unaffected — the star
+grew inside a pill whose height is set by its text, so no touch target moved.
+Per the LEAN verification stance the backend invariant got two tests (confirmed
+red before the fix, green after) and the two frontend template fixes got the one
+live walk instead of specs.
+
+**Deliberate leftovers:** FU-772 (rating pill has still had no dark-theme pass)
+now also covers the enlarged star; two dark-theme/375px checks are in
+`DORA_VERIFY.md`.
+
+**Next up:** unchanged from the previous entry — FU-785 (the rollback half is a
+correctness bug), then FU-780's `ShoppingListDetail.vue` extraction.
+
+---
+
+## 2026-08-29 — **Shopping lists v3 built: the overview card**
+**Status:** code-complete and **driven live end to end** — all three faces at
+1280px and 375px, every relocated action fired, not just rendered. `vue-tsc` and
+`eslint src/` clean, **560 vitest** (unchanged). Backend untouched, no migration.
+One follow-up resolved (**FU-783**), one updated (**FU-784**), one new
+(**FU-785**). Three deviations from the proposal, all recorded in its new §10.
+
+**Shipped:** `CollapsibleCard.vue` (new, shared), `ShoppingListOverviewCard.vue`
+(new), `TripCard.vue` **deleted**, and edits to `ShoppingListDetail.vue`,
+`StoreSpendCard.vue`, `ShoppingListRunFace.vue`, `ShoppingListReceiptFace.vue`,
+`PantryBeliefCard.vue`, `useLineSections.ts`.
+
+**The three reported bugs were all one-liners once located, and two shared a
+cause.** `load()` nulls `detail` before refetching so a *navigation* shows a
+skeleton instead of the list you just left — correct for navigation, wrong for
+every list-level edit, which is why saving a shop day, clearing one *and*
+renaming all flashed the page through the skeleton and back. New
+`refreshAllQuietly()` routes those three through the existing
+`refreshDetailQuietly()` and still refreshes the rail and the trim banner (the
+shop date decides which budget period applies). Verified by counting skeleton
+frames during the save: **0**. The vanishing status chip was structural — one
+`v-if="!editingName"` wrapped the title, the pill and the pencil — and is now
+moot, because renaming is a dialog.
+
+**Renaming became a dialog on desktop too, against the proposal.** §5 had said
+inline-on-desktop, modal-on-mobile. Once the card gave the name a stable row an
+inline input was possible, but the complaint it answers was true at both widths,
+and one editor beats two for something used this rarely. Measured: the card
+moves `dy=0.0 dh=0.0` while the dialog is open, and the pill stays visible.
+
+**The finish action ended up as one label, in two passes.** His call was
+"Finish & restock" → "Finish"; I also took `& restock` off the dialog it opens,
+which was still headed "Finish early & restock". He then cut the rest — *"just
+make the finish button always say finish, people know if they are finishing
+early or not"* — so the button is always **Finish** and the dialog always
+**Finish shopping**. The button had been reading the user's own tick count back
+to them. Nothing is lost: the dialog body enumerates every item about to be
+restocked, and the leftovers section appears exactly when you are finishing
+early — a decision you must act on, rather than an adjective in a heading.
+Verified on a 0/5-ticked list: button "Finish", dialog "Finish shopping",
+leftovers section present. Separately, the run face was passing
+`tense="receipt"` to `StoreSpendCard`, so a trip with $7.99 still to spend was
+headed *"Where you spent it"*. That component deliberately centralises all its
+wordings so callers can't drift, so a third `shop` tense went there.
+
+**FU-783 dissolved rather than being fixed.** `StoreSpendCard`'s stale
+`ref(!collapsible)` stopped existing: `CollapsibleCard` owns expansion, the
+app-wide rule is collapsed-on-mount-never-persisted, and the screen-size input
+the ref was reading is gone. `collapsible` now means "can this close at all" —
+the plan face passes `false` because that card sits *inside* the overview card's
+expanded region, where a second tap is a tax.
+
+**An "Oops, something went wrong" toast in the verify pass cost the most time
+and was not mine.** Resizing across the `md` breakpoint on the shopping list
+threw *"ResizeObserver loop completed with undelivered notifications"*. First
+hypothesis — nested `q-slide-transition`s measuring inside a hidden subtree —
+was wrong; the fix didn't move the count, so I instrumented `ResizeObserver`'s
+constructor and got the real culprit: `MainMenuButtonStrip.vue:47`, app chrome.
+Then disproved authorship properly, since a plausible story is not evidence:
+hiding the overview card entirely changes nothing, and **the dashboard and meal
+planner reproduce it identically**. Logged as **FU-785** — and the toast is the
+lesser half, because `window.onerror` also runs `executeRollbacks()`, so a
+layout hiccup can revert an in-flight optimistic mutation. The comment I'd
+written on the wrong hypothesis was rewritten to say only what's true.
+(`git stash` was blocked by the sandbox, so the "is it pre-existing" test was
+done by control pages rather than by reverting.)
+
+**Standards check.** R-003 held: every figure on the card reads `detail.totals`
+and the only client math is the progress percentage over server-owned counts
+(the sanctioned Type-C case). R-001 drove the `CollapsibleCard` extraction, which
+took two existing callers with it rather than shipping a component with one user
+— and the owner's *"componentise always where there is a candidate"* is now
+twice-applied, so it is closer to a real R-rule (still not promoted; see the ADR
+note in the earlier entry). R-002 held — no Quasar palette names in templates;
+the pill's colours are `sld-status-pill--{status}` classes over semantic tokens.
+D-002/D-003/D-004/D-005/D-013 on the upsized pill and the icon-only
+pencil/chevron: soft background + full-strength ink, `--font-size-sm`, 44px
+targets, `aria-label` + tooltip, and the pill carries a glyph so the three states
+survive greyscale. Deliberate leftover: `ShoppingListDetail.vue` is still ~3,600
+lines (**FU-780**, R-001) — this unit took ~200 lines out of it but the split is
+its own job.
+
+**Next up:** FU-785 (the rollback half is a correctness bug, not cosmetics),
+then FU-780's extraction now that the page's top section has settled.
+
+---
+
+## 2026-08-29 — **Shopping lists v3: the overview card (proposal)**
+**Status:** proposal written and owner-reviewed to the point of every fork being
+closed. **No code written** in this unit — it shipped in the entry above. Two
+new findings (**FU-783**, **FU-784**).
+Deliverable: [PROPOSAL_SHOPPING_LIST_UX_V3.md](docs/04_proposals/PROPOSAL_SHOPPING_LIST_UX_V3.md).
+
+Owner brought an 11-bullet batch on the shopping-list detail page, headlined by
+*"I feel we could do a much better job with the top section of draft mode… a
+polished overview card with detail review."* Rather than take it at face value I
+audited the page first, which changed the shape of the answer three times:
+
+**Three of the eleven bullets are bugs, not design.** The "why does the whole
+page refresh when I pick a shop date?" complaint is `load()` setting
+`detail.value = null` at `ShoppingListDetail.vue:2511` before refetching, which
+flips the `FadeTransition` at `:267` to the skeleton branch and back. A sibling
+`refreshDetailQuietly()` at `:2535` already exists and is what the date save,
+date clear and **name save** should all be calling. Separately, "why does the
+state disappear when editing the list name?" is the `v-if="!editingName"` at
+`:309` wrapping the title, the pill *and* the pencil in one template. Both are
+one-liners; neither needed a design decision.
+
+**Owner's premise for V10 was based on a page that doesn't really exist.** "Move
+new list to only be with the shopping lists list" — but `ShoppingListsOverview.vue`
+is 82 lines of empty state, and `routes.ts:124` redirects `/shopping-lists` to
+the first list whenever one exists. The only live list-of-lists is the rail and
+the mobile dropdown. Put that to the owner; he chose the rail (option A) over
+rebuilding an index page. The empty-state page therefore stays as the sole
+no-lists surface and needs a test, since the redirect makes it easy to forget.
+
+**Owner's assumption about collapse defaults was right in general and wrong in
+the specific.** He asked "reset to collapsed on every visit — this is how most
+other expandable cards work through the app, right?" Correct: nothing in the app
+persists expansion (`useFilterPanelExpanded.ts` had localStorage *removed* by his
+own 2026-08-20 call; the one survivor is `StockLocationsSettings.vue:135`). But
+`StoreSpendCard.vue:113` is `ref(!props.collapsible)` with callers passing
+`$q.screen.lt.md` — so it opens *expanded* on desktop, and being a `ref` seeded
+at setup it never re-evaluates on resize. Logged as **FU-783**; the chosen
+"collapsed always" rule changes that component's desktop behaviour.
+
+**The sticky footer he wanted replaced turned out to be worse than he knew.**
+`.sld-shop-footer` (`:3574`) is `position: sticky; bottom: 8px; z-index: 3`, the
+last child of the content column, with no spacer, no container `padding-bottom`
+and no safe-area handling — so it overlays the last rows and the danger footer
+for the whole scroll. And `DoraBubble` is fixed bottom-right at **z-index 3000**,
+landing on the "Finish & restock" CTA. Quasar toasts were already lifted 112px
+for the same reason (`app.scss:54`) — a one-off, never a rule. v3 deletes the
+footer, which kills the instance; the class of bug is **FU-784** against D-009.
+
+**Decisions closed (all 11, proposal §7):** all four lifecycle actions move into
+the card (not just Start shopping) and "Finish & restock" becomes just "Finish";
+Set shop date vanishes from the toolbar once shopping starts; a fuller toolbar is
+accepted for now (FU-738 untouched); shop-mode headline is *remaining* spend with
+the full total behind the chevron; receipt gets the slimmest card and surfaces
+`total_savings` for the first time (it is currently shown nowhere on that face);
+sort control folds into the card's collapsed row, deduping the copy in
+`ShoppingListRunFace.vue:6`; and — owner directive, worth generalising — *"componentise
+always where there is a candidate"*, so a shared `CollapsibleCard.vue` gets
+extracted and adopted by two existing callers rather than hand-rolled a fourth time.
+
+**Standards check:** no code, so no R-rule violations introduced. The proposal
+itself pins the constraints the build must honour — R-003 (the card reads
+`detail.totals`, never re-sums lines; the existing Type-B comment at `:2237`
+stays true), R-001 + the componentise directive (`CollapsibleCard.vue`), and
+D-002/D-004/D-005/D-013 on the upsized state chip and the icon-only
+pencil/chevron. **ADR evaluation:** the "componentise always where there is a
+candidate" directive is a plausible new R-rule, but one owner utterance is not
+yet a recurring decision — revisit after the extraction lands and a second
+surface reuses it.
+
+**Next up:** build, in the proposal's §8 order — bug fixes first (independently
+verifiable one-liners), then `CollapsibleCard.vue` + adopt in `StoreSpendCard` /
+`PantryBeliefCard`, then the card's draft face, then shop + receipt with the
+sticky footer deleted, then the toolbar and New-list relocation. Awaiting owner
+go-ahead on the proposal.
+
+---
+
+## 2026-08-28 — **Shopping lists batch 3: planning and recording stop sharing a field**
+**Status:** code-complete, suites green, **frontend driven live at 1280px and
+375px — one backend behaviour is owed a walk** (see "What's owed"). Backend
+**2174 passed** / 1 skipped / 1 xfailed (was 2167; +7), frontend **560 vitest**,
+`vue-tsc` + `eslint src/` clean. Same 4 buy-verdict e2e failures (**FU-762**).
+One migration (`b2d9f4a7c3e1`), one new R-003 chokepoint, two findings
+(**FU-780** carried, **FU-781** new).
+
+**The last third of the 21-item shopping-list batch.** Batches 1 and 2 shipped
+earlier today. Owner waived **FU-738** for this unit ("disregard this issue for
+now, i'm going to remove buttons from the toolbar at some point"), so the
+toolbar band is untouched and Log price simply joins it.
+
+**The owner's diagnosis was right and the fix is a column.** *"People are unable
+to change which store they want to get the item from on the list before shopping,
+they can only mark where they actually got it from at the end."* Exactly so: the
+plan face's only writable store was `purchased_store_id`, which means "where I
+bought it". Using it to express intent *worked* — it is rung 1 of the store
+ladder, so setting it did re-group the line — but it made planning and recording
+the same field, so a list could not distinguish "I mean to get this at Aldi" from
+"I got this at Aldi". The other candidate, `StockItem.usual_store_id`, is the
+wrong **scope**: a standing preference, so setting it from one list silently
+changes every future list.
+
+Hence `ShoppingListLine.planned_store_id`. The prefill chain the owner asked for
+— `usual → planned → purchased` — is implemented as *defaults*, never
+write-backs, and deliberately **not** as stored copies: the migration does no
+backfill, and adding a line writes nothing, because a NULL planned store falls
+through the ladder to the usual store, which is what every existing line already
+does. Copying values in would freeze a live inference into a stale literal. This
+is ADR-058's concern from the other direction — an incidental purchase is not a
+change of habit, and neither is a one-off plan.
+
+**The ladder grew a fifth rung, so it stopped being an if/elif nobody could
+test.** `resolve_store_id` now lives in `_line_price.py` beside
+`line_paid_unit_price` — the money ladder's twin, same file, same R-003 posture.
+Two orderings are pinned by `tests/test_store_ladder.py` and both are
+counter-intuitive in one direction: **intent beats history** (the reverse of the
+money ladder — that one answers "what did this cost", where what you really paid
+beats an advertised price), and **the more specific intent wins** (`planned`
+outranks `usual`, because an exception must not be overruled by the rule).
+Mutation-checked: swapping those two rungs turns the suite red on exactly the
+case that names them.
+
+**The mutation check nearly lied, which is worth remembering.** After restoring
+the swapped ladder the test still failed — not because the restore didn't take
+(the file was correct) but because Python was executing a stale `__pycache__`
+`.pyc` while `inspect.getsource` dutifully printed the *new* file text. Clearing
+`__pycache__` fixed it. Anything that mutates a module mid-session should clear
+bytecode before trusting the "restored" run.
+
+**Draft rows stopped pretending to record purchases.** Price is now read-only
+(`~$8.00` with *from your last receipt* / *from Coles offer* under it); the
+control that used to sit there wrote `actual_unit_price` — "what you paid" — on a
+list where nothing had been bought. Quantity steppers stay inline, which is the
+one thing you actually do repeatedly while curating.
+
+**The shop sheet became a line editor.** It was price-only, so the discovery you
+make *at the shelf* — "they only had the 2-pack" — couldn't be recorded without
+leaving shop mode. Now price + quantity + store. Quantity is a stepper, not a
+number field: a second keyboard on a sheet that already has one open is a worse
+target than two 44px buttons (D-004). It saves quantity **separately and first**,
+because `savePriceEditor` short-circuits to `clearPriceOverride` on a blank
+price — which would have silently dropped a quantity edit on an unpriced line.
+
+**One UI bug found by looking.** The new store select rendered as an empty box:
+I passed `placeholder`, which only reaches a QSelect that has a real `<input>`
+(i.e. `use-input`). `BaseSelect` already documents this and offers `emptyText`
+for exactly the non-input case. Now reads `Store / Coles (default)` — the
+"(default)" marks it as inherited from the ladder rather than chosen, a
+distinction the field would otherwise lose.
+
+**What's owed — one item, and it is blocked, not skipped.** The
+`planned_store_id` **round trip** (set a store → it persists → the line moves
+section under Order-by → Store) has **not** been walked. The scratch backend on
+:5171 has been up since before these changes and Dora hard-codes
+`is_reloader_enabled() → False`, so it is still serving pre-batch-3 code; the
+PATCH is accepted and the field ignored. I could not restart it: `preview_stop`
+and a `kill` were both denied, `preview_start` reuses the running process, and
+both scratch pairings (5171/5174, 5172/5175) are occupied by parallel sessions.
+Pointing the SPA at :5170 was never an option. **Everything else was driven
+live** at both widths: read-only prices, the store picker offering all four
+stores with correct inherited defaults, Log price present in shop mode and absent
+on a draft, and the sheet's quantity round-tripping (1→2→…→5, row re-rendering as
+`5× Olive Oil`, persisted across reload). The migration itself is covered by
+three passing tests — single-head, upgrade-from-empty, and
+schema-matches-ORM-metadata — so the column and its FK are verified even though
+the running fixture DB was patched by hand.
+
+**Follow-up landed the same session — the spend bar's "No store set" slice.**
+Owner: *"also allocate space for 'no store' and give it a grey or off-white
+colour (also keep theme in mind)."* Two problems, and the second was only
+findable by measuring. **Space:** with money on a segment's width is its
+*spend*, so the catch-all (items unpriced) computed to `0%` and disappeared from
+a bar whose own chip legend still listed it. Any bucket with lines now gets a 7%
+floor and the valued buckets share the remainder in true proportion — the
+money comparison between two priced stores is untouched, only the "this exists"
+floor is synthetic. **Colour:** the old `--surface-sunken` is the card's own
+recessed surface — white-ish against the card in light themes, `hsl(165 60% 3%)`
+in Pesto Dark — invisible either way. `--border-strong` fixed light (3.55:1
+against its neighbour) and **failed dark**: 1.19:1 in Pesto Dark, **1.02:1** in
+Cherry Cola Dark, i.e. identical lightness to the segment beside it. That is not
+fixable by picking a better grey, because the fills it competes with include
+*logo-derived brand colours* — arbitrary, and free to be grey. So the segment is
+distinguished by **texture**: a themed hatch, which no neighbouring colour can
+collide with and which reads as *unallocated* rather than as one more store.
+Walked in Pesto, Pesto Dark and Cherry Cola Dark, plus money-off (where the
+bucket sizes by item count and the hatch simply gets wider). This is an
+application of **D-001** (colour is never the only channel), not a new rule.
+
+**Second follow-up — the picker's shape and direction.** Three owner items.
+**Newest-first** (`out.sort(..., reverse=True)`): oldest-first put a wall of
+history above the only lists you can act on, and got worse the longer the
+household used Dora. `_next_up_list_id` picks with min/max so it was unaffected;
+`olderDoneSummaries` was not — with the flip, the 5 recent done are the *head*
+of the done slice, so its `slice(0, len-5)` became `slice(5)`. **"See older"
+under the lists**: the rail's `q-virtual-scroll` had `class="col"` and the rail
+had `height: calc(100vh - 110px)`, so the scroller ate the column and stranded
+the button at the floor. Virtualising is dead weight now the picker is capped at
+~8 rows, so it's a plain `v-for` and the rail is `max-height` — which also
+retired `railScrollRef` / `scrollRailToSelection` (nothing to scroll to in eight
+rows). **"Manage templates…" deleted**: the toolbar's Templates button targets
+the same `/shopping-lists/templates`, and the toolbar's own comment says it was
+promoted there *because* this link buried it — the link just never got removed.
+
+**Removing the scroller broke truncation, and only measuring found it.** The old
+`.sld-rail-scroll` pinned the width, which is what let `.ellipsis` engage. Without
+it the names were *hard-clipped* by the rail's `overflow-x` — visible in a
+screenshot as text running under the edge with no ellipsis. Measured at 1280px
+inside the 300px rail: the `q-item` root was **433px** and the name span
+**341px**, both still `min-width: auto`. One `min-width: 0` in the middle of the
+chain did nothing; the row now owns its own truncation (root, section, label,
+span), so it behaves the same in the rail, the dropdown and the See-older dialog.
+After: 300px / 208px, ellipsis working, zero page overflow.
+
+**Verified in two halves, because the scratch backend still can't be restarted.**
+The sort was run **in-process against the real scratch DB** through
+`GetShoppingListsHandler` — 29 lists, strictly non-increasing, drafts on top and
+2026-05-24 at the bottom. The client half was driven with a Playwright route
+intercept reversing the stale server's payload, which is a faithful stand-in
+because that server sorts by exactly the same key. Both widths: rail 8 rows
+newest-first, See older 8px under the last row, rail box 505px instead of
+full-height, no templates link, no horizontal overflow, and the See-older modal
+still holds 21 rows and scrolls.
+
+**Next up:** restart a scratch backend and walk the planned-store round trip
+(checklist in `DORA_VERIFY.md`). Then **FU-768** — the four surfaces still
+reading "has a price" as "was bought" — which is the highest-value thing left
+adjacent to this work, and **FU-780**, extracting `ShoppingListPlanFace.vue` now
+that batch 3 has settled the row's shape.
+
+---
+
+## 2026-08-28 — **Shopping lists batch 2: one picker, one name, one header**
+**Status:** code-complete **and driven live** at 1280px + 375px. Backend **2167
+passed** / 1 skipped / 1 xfailed, frontend **560 vitest**, `vue-tsc` +
+`eslint src/` clean. Same 4 buy-verdict e2e failures (**FU-762**), still not
+mine. One finding logged (**FU-780**).
+
+**Batch 2 of 3** from the 21-item shopping-list feedback. Batch 1 landed earlier
+today; batch 3 (`planned_store_id` + the line editor + the log-price button) is
+scoped and still gated on **FU-738**.
+
+**The picker had three separate problems and they shared a cause: it was
+carrying jobs that weren't picking.**
+
+*It grew without bound.* Every list ever, forever — 29 rows on the dev seed, 26
+of them belief-demo receipts. Now: every draft, everything being shopped, and
+the **5 most recent done**, with the rest behind a searchable **See older**
+dialog. 29 → 8. The one non-obvious rule is that the currently-open list is
+always included even when it's an old one, so opening something from "See older"
+doesn't leave the picker pointing at a list it refuses to show.
+
+*It changed shape mid-shop.* The rail and the dropdown were both `v-if="!runFace"`
+and a "Switch list" toolbar button appeared in their place — the same capability,
+different shape, different place, at the moment the user is least able to go
+hunting. Both are now unconditional and the button and its dialog are deleted.
+Worth noting the stated reason for hiding the rail ("it's the widest thing
+competing with the run face for a phone's screen") was never true: it's a
+`gt-sm` column, so a phone never rendered it either way.
+
+*Every row had a kebab.* Copy-to-new and delete — two uncommon actions, one
+destructive, on every row of a control whose only job is navigation, both already
+reachable from the list you're looking at. Gone.
+
+**Copy-to-new was cut entirely, not relocated.** The owner asked directly whether
+it was "a genuine use case at all or just fluff". It isn't fluff exactly — "shop
+this list again" is real — but **Save as template** already does it, explicitly,
+by name, from the same Export menu. Two paths to one outcome, one of them
+better-named. Cutting it took `copyAsync` + `CopyShoppingListCommand` out of the
+client; the server endpoint joins `bulk-tick` on **FU-766**.
+
+**The name-twice fix is asymmetric, and that's deliberate.** On mobile the picker
+dropdown's label *is* the name, so the page title was a literal duplicate — title
+dropped, pencil moved beside the dropdown. On desktop the "second" instance is a
+highlighted row in a side rail, which reads as navigation, not as "you are here" —
+so the title stays. Measured live: exactly one visible occurrence at 375px, and
+the pencil visible exactly once at both widths.
+
+**The header absorbed the shop day, and that fixed a gap nobody had filed.** The
+shop day lived on `TripCard`, which is plan-face-only — so **a list you were
+actively shopping never showed which day it was for**. The meta row is now
+*count · shop day · created*, where the day is a button while it's still
+changeable (draft), plain text with overdue tone while shopping, and replaced
+outright by the completion date on a receipt. Verified all three by forcing a
+planned date onto the seeded shopping list, which the seed doesn't set.
+
+**`TripCard` came out the other side as a money card** — the count and the day
+both moved to the header, so what's left is estimated cost / savings / how much
+is guessed. It now renders nothing when money is off, instead of being an
+almost-empty card.
+
+**Four vitest cases were deleted, not fixed.** `shoppingListRailItem.spec.ts`
+tested the kebab's copy and delete behaviour; the kebab is intentionally gone, so
+the tests went with it rather than being adapted to something that no longer
+exists. Two cases added in their place for the draft caption branch (a draft now
+reads "5 items", not "0/5 ticked" — batch 1's change, previously untested).
+
+**Verification took a detour worth recording.** Another chat holds 4 of the 5 dev
+server slots in this folder, so `dora-spa-5171` wouldn't start. Rather than take
+a slot or point anything at :5170, the driver sets the SPA's own runtime override
+— `localStorage['dora.backendBaseUrl']`, which `backendUrl.ts` reads per request —
+so a single Playwright context talks to the scratch backend on :5171 while the
+other chat's SPA keeps its own target. Fresh context per run, nothing leaks. This
+is a genuinely useful trick for a shared box; it is in `DORA_VERIFY_TRIAGE.md`.
+
+**What's owed:** nothing for batch 2 — all three faces, both widths, the See-older
+modal (opened, searched, navigated from, scrolled to row 21 of 21 on both desktop
+and mobile) were driven live.
+
+**Next up:** **batch 3** — `planned_store_id` on the line + the ladder rung, the
+draft/shop line editors, and the log-price button. It needs **FU-738** decided
+first (the toolbar CTA already overflows at 1280px and batch 3 adds a button to
+that band). **FU-768** — the four surfaces still reading "has a price" as "was
+bought" — remains the highest-value thing adjacent to this work.
+
+---
+
+## 2026-08-28 — **Five-item owner batch: toast theming, download progress, QR logo, compose rename, and a plan-axis brief**
+**Status:** code-complete, suites green, **no browser pass** — both scratch verify
+pairings (5171/5174 and 5172/5175) were held by other sessions and the :5170 dev
+backend is off-limits, so the visual half is owed in `DORA_VERIFY`. Backend
+**2167 passed** / 1 skipped / 1 xfailed with the four pre-existing FU-762
+buy-verdict e2e failures unchanged; frontend **562 vitest**, `vue-tsc` +
+`eslint src/` clean. Two new test files (13 tests). Three new FUs (774–776).
+No new R-rule.
+
+Five owner items, four built and one answered as a design brief. Three were
+questions rather than bug reports, and two of those turned out to have a
+concrete defect underneath.
+
+**1 — "What happened to the barcode/QR features?"** Answered rather than
+changed: two different things live behind one word, which is why the docs read
+as contradictory. Real-world EAN/UPC resolves to a *Product* (and/or directly
+to a StockItem, the FU-056 hybrid) and is a **navigation aid only** — P6-02
+deal lookup is a removed feature. Dora's own `dora://stock-item/<uuid>` QR
+labels are the other thing. Both sit behind `scanning_enabled`, off by default,
+and since 08-24 they share one "Scanning" tab. FU-648 and FU-710 are still open
+on that surface and both root-cause to a server older than the page.
+
+**2 — the QR centre logo, which does work.** The blocker looked like the asset:
+`logo-mascot.png` and twenty `dorabot-*` illustrations are all far too detailed
+to read at ~100px. But `web_app/public/icons/safari-pinned-tab.svg` is exactly
+the flat monochrome D/D wordmark, so it was rasterised once with inkscape,
+cropped to its ink, and committed as `dora_api/assets/dora_qr_mark.png`.
+Rasterised rather than rendered at runtime because Pillow has no SVG support
+and the alternative is a cairo dependency in the container for one static
+image. `_render_qr_png` went `ERROR_CORRECT_M` → `_H` and composites the mark
+at 26% of the edge inside a white knockout ring — the ring is what stops the
+glyph merging into an adjacent dark module and turning a recoverable erasure
+into a blob.
+
+**The part worth recording is the verification.** Decoding was checked
+out-of-band with opencv (installed into the venv, then uninstalled — it is not
+a project dependency) across sizes 120/180/256/512/1024 and three payloads: 15
+of 15 decoded. Then a degradation sweep — blur, gaussian noise, rotation — run
+twice, once marked and once with the mark suppressed via `_MARK_MIN_SIZE`.
+**Marked and unmarked outcomes were identical in all 16 trials**, which is the
+actual claim worth making: the mark costs no measurable error-correction
+headroom. (The rotation failures are opencv's detector on a warped border, not
+the code.) That evidence can't live in the repo without a native decoder
+dependency, so `tests/test_qr_centre_mark.py` pins the things that *would*
+invalidate it instead — the correction level, the knockout's area against H's
+budget, the ring being genuinely blank, and the small-size floor. It also
+caught a real bug on first run: `_mark_image`'s except-branch called `_LOG`,
+which this module doesn't define (it builds loggers locally in two other
+functions).
+
+**The owner saw the render and called the mark crap, correctly.** The
+engineering is sound and the codes scan; the *asset* is wrong. The pinned-tab
+wordmark is 2.5:1, so at 26% of the code's width it lands as a thin strip of
+letterforms — small text sitting on a QR rather than a logo embedded in one. It
+was picked because it was the only flat monochrome mark in the repo, not because
+it suited the job. **FU-779** specifies what a real one needs (roughly square,
+one solid colour on transparent, chunky strokes, no hairlines) and notes the two
+knobs a squarer mark will move — `_MARK_WIDTH_RATIO` and the hardcoded aspect in
+the test — plus the warning that a squarer mark at the same *width* covers ~2.4×
+the *area*, so the decode + degradation sweep has to be re-run rather than
+assumed. The `_MARK_MIN_SIZE` one-liner turns it off meanwhile.
+
+**3 — the light-blue megaphone toast is ours, not the library's.**
+`notifyTypeRegistration.ts` registered `info` with `color: 'blue'` and
+`iconColor: 'amber'` — Quasar *Material palette literals*, not Dora tokens. So
+it was the one toast in the app that ignored the theme entirely, because
+`themeService` re-points `--q-info`/`--q-positive`/`--q-negative` at the active
+palette on every change and `bg-blue` never consults it. Firing from 24 call
+sites as ordinary as "Swap undone." with a bullhorn on it. Audited the other
+three registered types: `positive`/`negative`/`warning` are palette *keys*, not
+literals, so they already follow the theme — only `info` was broken.
+
+The fix is not `color: 'info'`. **B7 says info is the neutral kind** ("success
+`--semantic-positive`, error `--semantic-negative`, info neutral"), and
+`--semantic-info` in a dark theme is a light blue that would fail the D-002
+contrast floor under white text. So the type now passes *no* colour props at
+all — each would emit a `bg-*`/`text-*` palette class — and `.dora-toast--info`
+in `app.scss` carries elevated surface, primary text, an info spine and icon,
+all tokens. Two things checked in Quasar's own stylesheet rather than assumed:
+`.q-notification` is a single class (`background: #323232; color: #fff`) so the
+two-class override wins without `!important`, and `.q-notification__actions`
+already reads `var(--q-primary)` — so a planned button override was **deleted
+as a second copy of a value that already follows the theme**.
+
+**4 — download progress.** Only two genuinely large downloads exist and both
+already had polling machinery with nothing to poll: `ImportState` carried
+`phase` alone, and `voice_provision._fetch` was already counting bytes into a
+local `total` it never published. Both now report. The design point is the
+**asymmetry between the phases**: `downloading` gets a real percentage from
+`Content-Length`, but `parsing` deliberately gets a live row count and *no*
+denominator — the archive's row count isn't known until it has been read, and a
+bar driven to 90% by a guessed total is exactly the P12 No-invent failure. The
+`0 means unknown` convention is carried explicitly through the DTOs and checked
+before division on both clients. `tests/test_download_progress.py` pins the two
+lying-bar shapes: dividing by an absent `Content-Length`, and the completed
+download resting under 100% because the trailing partial chunk never reached
+the reporting tick.
+
+**5 — planned meals feeding the buy verdict: good idea, blocked on a
+directive.** `_need_axis` reads the recorded level and the pantry belief and
+nothing else; meal plans are invisible to it. The brief
+(`docs/04_proposals/BRIEF_BUY_VERDICT_PLAN_AXIS.md`) argues it is the
+*strongest* need evidence the oracle can hold — every other input is an
+inference about the past projected forward, whereas a planned meal is a stated
+intention with a date and a serving count. It must be a **fourth axis, not an
+extension of `need`**: since the 08-24 regrade `strength` and `confidence` are
+separate dials precisely so evidence quality can differ, and cadence
+(low-confidence, timeless) and a plan (high-confidence, dated) sit at opposite
+ends of that split; there is also only one reason slot per axis and the two
+have completely different sentences to say.
+
+**But it is currently forbidden.** `inference_overlay.py:23` records an owner
+directive of 2026-08-17 that "a planned meal's shortfall is unchanged" and that
+all plan-derived output is additive commentary. An axis that moves a verdict
+from `unsure` to `buy` breaks that directly — so nothing was built, and it is
+**FU-774** as an owner call. The failure mode the design has to survive is a
+plan you never cook, and the guard is already in the database:
+`MealPlanReconcileReceipt` records `resolved_confirmed` vs `resolved_not_cooked`
+per past entry, so adherence gates the *strength boost* while the reason still
+renders (hiding a true fact about the user's own stated intention would fail
+P3). FU-775 (which flag) and FU-776 (discount items already on a list) are
+downstream of the FU-774 answer.
+
+**Also:** `compose.yml` gained a top-level `name: dashy-dora`. The
+`discountdora_*` volume prefix in the deploy log was Compose defaulting to the
+checkout directory name, which is still `DiscountDora/`. Owner accepted fresh
+volumes, so no migration — but the rename orphans all four, which is flagged in
+the file and in the changelog. `startup.sh`'s two old-name strings went with it.
+
+**Next up:** unchanged from the previous entry — **FU-768**, then shopping-list
+**batch 2** (picker + header). **FU-774 wants an answer before anything else**,
+since it gates two other FUs and a whole axis.
+
+---
+
+## 2026-08-28 — **Cookbook: "the nutrition filters don't work" — three causes, and a rating redesign**
+**Status:** code-complete, **driven live** on the isolated scratch pairing
+(SPA :5175 → API :5172, `data/scratch-verify-2.db`). Frontend **562 vitest** (was
+550), `vue-tsc` + `eslint src/` clean. No Python touched, so the backend suite
+wasn't re-run. New: **R-062 / ADR-059**. Four new FUs (770–773); **FU-747
+resolved** (half of it).
+
+**The reported bug had three causes and only one was the filters.** Worth
+separating, because two of them would have survived fixing the third.
+
+1. **The recipe list was a permanent session cache.** `ensureLoadedAsync`
+   returned early forever once `recipesHydrated` flipped, and nothing anywhere
+   invalidated it on a stock write — so linking nutrition to a stock item and
+   walking to the cookbook rendered the pre-edit payload. That alone explains
+   every symptom the owner listed, *including* "I don't see the health star
+   rating on the recipe cards": the chip has been on the card since 08-27, it
+   just had no `nutrition` block to draw. This is the owner's own UPDATE, and it
+   is the dominant cause. A recipe DTO carries five stock-derived fields
+   (`cookable`, `missing_count`, `expiring_ingredient_count`, the Zero-Input
+   hint, the whole nutrition rollup) and none of them is visible in a diff of the
+   recipe — **R-062 / ADR-059**. Invalidation lives in `stockItemStore`'s
+   mutations, on the whole entity rather than a field allow-list (a second copy
+   of server knowledge, R-003); the two paths that bypass the store —
+   `bulkSetLevelAsync` and the server-side bulk food link — do it at their call
+   sites. A `stale` flag, not a cleared `hydrated` one, or FU-109's deep-link
+   chip reports a missing recipe mid-refetch. Three features had already invented
+   private versions of this idea (`invalidateBuyVerdict`,
+   `usePantryBeliefs.invalidate`, `invalidateReconcileQueue`), which is what made
+   it worth a rule rather than a fix.
+
+2. **The thresholds exempted exactly the recipe he was testing.** `meetsThreshold`
+   and the kcal predicate both let through anything whose rollup was under
+   `RELIABLE_COVERAGE_RATIO` (0.8). Defensible when written — don't hide a dinner
+   on a 2-of-9 estimate — and unusable in practice: on a pantry where most foods
+   aren't linked, *every* recipe is exempt, so the control filtered nothing.
+   **Owner reversed it: judge the figure you displayed.** A recipe with no rating
+   at all still passes; the sort axes were changed to match, because a card
+   showing 412 kcal that sinks to the bottom of a kcal sort is the same
+   contradiction in a different place. `judgeable` now drives presentation only.
+   Verified live: `Kcal ≤ 500` cut 15 cards to 13, dropping the 530 and 680
+   recipes, keeping the 412 and all twelve unrated ones.
+
+3. **The chip styling was a symptom, not a taste issue.** "kcal might look better
+   following the styling of the ingredients/easy/etc" — the kcal chip was the
+   *only* one in the run rendering `:outline`, and it did that precisely when
+   `kcal_is_reliable` was false. So the owner's styling note and his broken-filter
+   note were the same underlying fact. Filled now, with an asterisk for a partial
+   figure.
+
+**The rating redesign.** Five 14px stars inline in the chip run carry their
+signal in *which* glyphs are filled — on a 0.5-star recipe that is four-and-a-half
+grey outlines, ~75px spent saying almost nothing. Owner picked the score pill:
+one glyph plus the number, in a tinted pill, with the full five-star render moved
+to the hover (his addition). It left the chip run entirely and sits beside the
+favourite heart, which also fixes a real problem — in the chip run it landed at a
+different x on every card, because the chips before it vary per recipe, so the one
+figure meant to be scanned *down* a grid never lined up. Nutri-Score keeps its
+badge: the A–E strip is already compact and the colour is the signal. The old
+`opacity: .55` partial treatment went — it reads as "disabled", not
+"approximate", and dies against a tinted background.
+
+**Filters:** kcal and the rating moved to the end of the row (they are the two
+that only exist on a nutrition install, so the row keeps its shape without them),
+and `FilterRow` gained an opt-in `wide-wraps` — wrap above 600px, scroll below.
+One CSS defect found by measuring rather than reasoning: setting `overflow-x:
+visible` alone computed straight back to `auto`, because CSS promotes a visible
+axis whenever its partner is `hidden`. It needs `overflow: visible`.
+
+**Verification needed the Playwright fallback, and the reason is new.** The
+Browser pane never advances a CSS transition — every route froze at
+`dora-fade-enter-from` / `-leave-from` and no page content rendered at all
+(measured: still frame-zero 1.5s later, across reload, resize and refront). The
+footer counts rendered correctly the whole time, which is what proved it was the
+pane and not the app. Drove it with a throwaway Playwright script instead (not a
+committed spec, per the DORA_VERIFY_TRIAGE stance). Two traps worth recording:
+the cache test **must stay inside one page session** — a `page.goto` between
+visits refetches regardless and proves nothing — and on desktop a stock row click
+opens the peek panel, whose dialog backdrop then swallows every subsequent click,
+so the stock write has to go through the row's level menu instead.
+
+**What could not be driven, and why it got a spec instead.** The rating chip only
+paints in complex nutrition mode with a food catalogue imported, which no verify
+instance has (`nutrition_complex_usable: false`) — and the partial case is the one
+the owner actually hit, which no amount of clicking on a healthy pantry
+reproduces. That is a stable, low-churn contract that is expensive to re-check by
+hand, so it got `test/unit/recipeRatingChip.spec.ts` (9 tests) under the verify
+stance rather than a `DORA_VERIFY` line nobody can walk. The visual half —
+the hover, the dark-theme tint — is still owed and is in `DORA_VERIFY`.
+
+**Next up:** unchanged — **FU-768**, then shopping-list **batch 2** (picker +
+header). **FU-773 needs an owner call** (three wrapped filter lines at 1280px,
+not two).
+
+---
+
+## 2026-08-28 — **Stock overview feedback: create-dialog fields + filter-row breathing room**
+**Status:** code-complete **and driven live** against a *second* isolated scratch
+instance (SPA :5175 → API :5172), because another session held :5171/:5174.
+Backend **2154 passed** / 1 skipped / 1 xfailed, frontend **550 vitest**,
+`vue-tsc` + `eslint` clean. The same 4 buy-verdict e2e failures remain — still
+**FU-762**, still not mine. No new follow-ups.
+
+Two owner items, both small, one with a real design question underneath.
+
+**Usual store + Stocktake on the create dialog.** Both are permanent properties
+of a stock item — the same class as location and group, which the dialog already
+carried — and both could only be set *after* the item existed. The store picker
+is a straight lift of the detail page's (logo'd options, same `storeOptions`
+shape); the create endpoint gained `usual_store_id`, not re-validated for the
+same reason `update_stock_item` doesn't (FK is SET NULL, the picker only offers
+real rows).
+
+**The toggle's default is where the thinking went.** A create-time toggle has to
+render a starting position, and the honest one is the install's
+`stocktake_new_items_opt_in` — which the server has been applying silently since
+2026-08-20. Hardcoding `true` client-side would have been a second copy of a
+server-owned default (R-003) that lies on any install that flipped it. But
+`/api/app-settings` is admin-gated, so the dialog can't read it. Followed the
+established seam instead: a **`stocktake_policy` block on `/api/health`**
+(`{new_items_opt_in}`) plus a `useStocktakePolicy` composable — the same shape as
+`cooking_policy` / `budget_policy` / `reconcile_policy`, each of which exists for
+exactly this reason (a setting every session needs, not just admins). The admin
+Stocktake page re-probes after saving, or the cached-per-session health answer
+would keep handing the dialog the old default until a full reload.
+`stocktake_alerts_are_enabled` is **tri-state on the request** — omitted still
+means "install default", so the import and scan paths are untouched, and the
+dialog omits it when the feature is off install-wide rather than posting a value
+the user never saw.
+
+**Filter rows: one rule, not one per page.** The owner asked for "1 or 2 px
+extra space between filter rows… commonly applied across pages with filters" —
+the second half is the instruction. Every stacked filter band in the app already
+comes through `FilterRow`, so the gap is a `.filter-row + .filter-row` sibling
+rule there: Stock and Cookbook picked it up together and a future page gets it
+free. A lone row still sits flush.
+
+**Verification needed a workaround worth recording.** The Browser pane can't
+resolve refs inside a teleported `q-dialog` — every ref click resolved to viewport
+centre and hit the backdrop, closing the dialog, and a programmatic `.click()`
+opens a QSelect menu whose virtual-scroll content never renders (reproduced on the
+*pre-existing* Stock group picker too, so it's the tool, not the code). Drove it
+with a throwaway Playwright script from the scratchpad instead — **not** a
+committed spec, per the DORA_VERIFY_TRIAGE stance. Confirmed: options render with
+logos; the toggle starts at the install default; flipping the admin *New items*
+switch moves it with no reload; an explicit off persists as
+`stocktake_alerts_are_enabled=false`; with stocktake off install-wide the toggle
+is absent and the server applies its own default; and both pages measure 2px.
+
+**`.claude/launch.json` gained a `dora-verify-backend-5172-linux` +
+`dora-spa-5172` pair** (own DB `data/scratch-verify-2.db`, own CORS origin) so two
+sessions can verify at once without either touching :5170 or fighting over :5171.
+
+**Next up:** unchanged from the entry below — **FU-768**, then shopping-list
+**batch 2** (picker + header).
+
+---
+
+## 2026-08-28 — **Shopping lists batch 1: draft stops pretending to be shop mode**
+**Status:** code-complete **and driven live** at 1280px + 375px against the
+isolated scratch instance (SPA :5174 → API :5171 — *not* the :5170 dev backend).
+Backend **2154 passed** / 1 skipped / 1 xfailed (was 2151; +3 new), frontend
+**550 vitest**, `vue-tsc` + `eslint src/` clean. The same 4 buy-verdict e2e
+failures remain, still **FU-762**, still not mine. Four findings logged
+(**FU-766/767/768/769**).
+
+**This was batch 1 of 3** from a 21-item owner feedback list on the shopping
+list. Batches 2 (picker + header) and 3 (`planned_store_id` + the line editor)
+are scoped and not started.
+
+**The owner asked two questions and both had real bugs underneath.**
+
+*"Is money shown on the item rows without money feature being turned on?"* — yes,
+in exactly one place. Every other price surface on the page checked the flag (run
+face, sticky footer, TripCard, StoreSpendCard, receipt total); the draft face's
+Set price button never had a gate at all.
+
+*"Are unticked items polluting receipt money and reporting?"* — the receipt is
+clean (`compute_list_totals` has applied `spent_only` on done lists all along),
+but **the budget was not**. `period_spent` summed every line on an archived list.
+That looks harmless until you notice `picked_offer_price` is snapshotted at
+**add** time (`snapshot_offer_price`), not at tick time — so any line with a
+linked offer carries a price it never cost. Tick 6 of 10 and finish: the list
+says $60, the budget card says $100, and `period_headroom` hands that inflated
+number to the trim-to-budget optimiser, which then trims a *future* list to fit
+money nobody spent. Same defect duplicated in budget history. Both now filter
+`is_ticked` **and** `deferred_by_budget`, matching the receipt's own rule.
+
+**The budget fix got a test, and the test got mutation-checked.** This is the bar
+`DORA_VERIFY_TRIAGE.md` sets — a stable money contract, cheap to pin, expensive
+to re-check by hand. `tests/test_budget_spend_excludes_unticked.py` uses a *real*
+repository against a throwaway SQLite engine (the `test_daily_brief_repo.py`
+isolation pattern) rather than a fake, because **the thing under test is the
+query filter** — a fake that ignored the predicate would have passed with the bug
+intact. Reverting the filter makes it report $95 against an expected $30, so it
+demonstrably catches the thing it exists for.
+
+**Draft ticking and the draft ring were one item, not two.** The ring measured
+tick progress; on a draft it could only ever read 0%. Removing ticking removed
+the ring's subject, so the count fell out for free. The knock-ons were the
+interesting part: `space`/`u` guarded only on `'done'`, which left a keyboard
+back door into the state the plan face no longer had a control for (now
+shop-mode only), and the rail caption still said "0/5 ticked" on drafts.
+
+**Deleting the bulk bar cost nothing, and the audit is why.** Of its four
+actions: Tick/Untick died with draft ticking, "Select visible"/"Deselect all"
+only existed to serve them, and **"Move to list" was already in the finish
+dialog** — which offers exactly the move the owner proposed, with a target picker
+and duplicate-skipping. So the mode's whole cost was being paid for one action
+available in a better place. `pickTargetList` + `reportMove` went callerless and
+were deleted with it (R-057 posture: check the inventory, don't assume).
+
+**The finish dialog now refuses to be ambiguous.** Owner's call: force discard /
+move-to-existing / move-to-new, with **Go back** as the fourth door. No default is
+pre-selected and the CTA is disabled until a choice is made — verified live. This
+needed a new endpoint: `POST /shopping-lists/<id>/discard-unticked`, one request
+rather than the delete-per-line loop the bulk endpoints exist to stamp out.
+
+**The "white store colour" was not a missing fallback.** `storeColour()` has
+always fallen back to a deterministic name hash. The palette was the bug: its six
+entries are *pale surface tints* designed for a logo placeholder that draws a
+dark initial on top. As an 8px chip dot or a bar segment — shapes with nothing
+drawn on them — `#dfe1e8` on a light page is white. Each entry now carries a
+third value, a saturated `fill`, used for solid shapes; `background`+`ink` stay
+for the placeholder. Measured live: `rgb(66,121,143)` and `rgb(82,93,122)` where
+the report said white. All four seeded stores have `brand_colour = NULL`, which
+is exactly the owner's scenario.
+
+**One R-003 violation, mine, caught at the close-gate.** The new Picked section's
+trolley subtotal was a `reduce` over the fetched lines — a cross-line aggregate
+computed client-side, which is precisely what the state-ownership rule puts on
+the server, and it would have been a second copy of the money ladder in the
+browser. Fixed properly rather than flagged: `ShoppingListTotalsDto` gained
+`picked_price`, computed in the same loop that already produces `remaining_price`,
+and the component takes it as a prop.
+
+**What's owed:** nothing for batch 1 — draft and shop faces, the Picked section
+(expand, untick, re-tick), the finish dialog in all its states, and a real
+discard-and-finish round trip were all driven live at both widths, and the
+discarded line was confirmed gone from the DB. Batches 2 and 3 are unstarted.
+
+**Next up:** owner decides whether **FU-768** (four surfaces still reading
+"has a price" as "was bought" — suggestions, pantry belief, buy verdict, waste)
+gets done before batch 2, since it's the same defect class as the budget bug and
+feeds surfaces they read as signal. Then **batch 2** (picker + header).
+Note **FU-738** (the toolbar CTA scrolling off at 1280px) still gates batch 3,
+which adds another button to that band.
+
+---
+
+## 2026-08-28 — **Cook mode: the squish had a cause, and it wasn't the layout**
+**Status:** code-complete and **driven live** at 1280×900 and 375×812. Frontend
+**550 vitest** passed, `vue-tsc` clean, `eslint src/` clean. Backend untouched
+(no server change in this unit). Three findings logged (**FU-763/764/765**), two
+resolved (**FU-752**, **FU-755**). One new rule + ADR (**R-060 / ADR-057**).
+
+**The ask was eight visual complaints about cook mode.** Image mode should show
+one photo at a time with next/prev and a zoom; the Sous Chef button too small
+for fingers on mobile and with no margin; the info button probably shouldn't
+show when Sous Chef is off; *"Cooking for input looks god awful. All squished
+together. Looks like a 5 year old did it"*; the mobile top area odd; a preference
+for the big labelled Sous Chef button on desktop with icon-only kept for mobile;
+*"Everything is squished badly on desktop too for the header"*; and a step
+indicator that is *"a bit boring… could be stylish/cool/fancy and in-line with
+the progress bar."*
+
+**The header had been rebuilt for mobile eight days earlier and the owner filed
+the same complaint again, wider.** That is the interesting part. The layout was
+not wrong twice. Every gap declaration in `RecipeCookMode.vue` —
+`.cook-header`, `.cook-header__identity`, `.cook-header__cooking-for` — was
+written as `var(--space-sm)` or `var(--space-xs)`, and **neither token has ever
+existed**: Dora's spacing scale is numeric, `--space-1..--space-12`. An
+undefined custom property with no fallback invalidates the whole declaration, so
+`gap` fell back to its initial value — zero. The controls were touching because
+the CSS never ran, not because the flex was wrong. `background:
+var(--surface-card)` on the ingredient cards was dead the same way, and the image
+view had four more against `--c-line` / `--c-surface-2`.
+
+Nothing in the toolchain catches this. It passes `vue-tsc`, passes `eslint`,
+passes review, and renders — just without the property you wrote. A repo-wide
+grep showed the two cook-mode files were the **only** users of the fictional
+spacing aliases (introduced once, copied once), while five other files use
+undefined colour tokens *with* fallbacks — so they render the fallback and never
+follow the theme. That's **FU-764**, along with the durable fix (a stylelint rule
+that fails on a custom property `css/` never declares). The rule itself is
+**R-060 / ADR-057**: only reference tokens `tokens.scss` actually declares, and
+grep before using an unfamiliar one. Worth noting the asymmetry the ADR records —
+a hardcoded `8px` is a violation reviewers catch *and it renders*; an undefined
+token is invisible and renders nothing. The cheap-to-catch mistake is the safe one.
+
+**What was built.** The header is three stacked bands (identity / voice cluster /
+headcount) and the controls never share a line with the title at any width —
+that sharing *was* the desktop squish. Sous Chef is a labelled `primary` /
+`secondary` button above `$q.screen.lt.sm` and a `filled-icon` / `icon` below it,
+at a 44px floor (D-004) rather than BaseButton's 36px desktop default. The help
+popover is `v-if="speechEnabled || listening"`. **Cooking for** became a bordered
+pill with a ±44px stepper; typing was dropped deliberately — the value seeds from
+the install-wide household headcount and gets nudged by one or two, and a
+keyboard opening over the hob is the thing a cook least wants.
+
+The step indicator and the image counter are one extracted component,
+`CookStepProgress.vue` (R-001 — two uses, and they should read identically): a
+tinted badge with the number at display size, beside a track with one segment per
+step, the current segment raised and ringed, falling back to a continuous fill
+past 14. It is an indicator only, not a jump control, so there is no sub-44px tap
+target to answer for — "All steps" already owns jumping.
+
+`RecipeCookModeImageView` was rewritten from a scroll-everything gallery to a
+pager, with a zoom that actually magnifies (2.5× in a scroll container, so panning
+is free) rather than showing the same fit-to-screen image bigger.
+
+**Two bugs found while verifying, neither reported:**
+- **Image mode had no way to finish a cook.** `openFinish()` is only reachable
+  from the step view's nav row, which image mode never renders. You could cook
+  from photos, but no stock came down and no meals were logged. The last photo's
+  Next is now **Finish** and emits to the host, which owns what that means.
+- **`:icon-right="… ? 'check' : 'arrow_forward'"`** — raw Material names on an MDI
+  icon set, so the step view's Next/Finish arrow rendered nothing. Now via `ICONS`.
+
+**Verification.** The browser pane's `screenshot` action times out in this
+environment (three attempts, no console errors, page responsive to
+`javascript_tool` throughout) and its viewport emulation does not reach Quasar's
+`Screen` plugin — `window.innerWidth` reported 375 while `$q.screen.width` stayed
+1280, so the `lt.sm` branch could not be exercised there at all. Fell back to a
+throwaway Playwright script against the isolated scratch instance (backend 5171 +
+SPA 5174, per the standing rule never to touch the owner's :5170), which reports
+`ltSm: true` correctly and produces screenshots. Both viewports: zero horizontal
+overflow, gaps present, 44px targets measured, badge text and segment states
+correct at step 1 and step 3, headcount clamping at 1 with the minus disabled,
+and the image face paged, zoomed, magnified (938px wide inside a 343px frame) and
+finished into the finish dialog.
+
+**FU-754 (no image-mode recipe in either seed) bit again** — verifying meant
+generating five PNGs and POSTing a recipe through the API, for the third time in
+two sessions. Left open with the cost now recorded rather than hypothetical.
+
+**Next up:** nothing blocking. The owner owes two device-only checks in
+`DORA_VERIFY.md` (44px-with-floury-hands, and photo steps on a *built* SPA — the
+last unverified corner of FU-755). **FU-765** (cook mode never re-fetches when the
+route's recipe id changes — it keeps rendering the previous recipe) is the most
+substantive thing this unit found and deliberately did not fix: the honest
+solution is probably `:key` on the route component rather than a watcher that
+mutates a live cook session underneath the user.
+
+## 2026-08-27 — **Nutri-Score, and the rating becomes a picker**
+**Status:** code-complete, **no browser pass** (see "What's owed"). Backend
+**2151 passed** / 1 skipped / 1 xfailed, frontend **550 vitest** (was 533),
+`vue-tsc` + `eslint src/` clean. 4 pre-existing e2e failures remain, **not
+mine** — logged as **FU-762**. Three findings logged (**FU-760/761/762**).
+
+**The ask started as a misreading, and the misreading was the bug.** Owner:
+*"i think i misunderstood the health rating feature just implemented. reading
+the settings page it looks like people outside AU/NZ dont benefit at all?"* The
+code was fine — `health_star_rating_enabled` was never region-gated, only its
+default and its detect-nudge were. The **settings copy** was the defect: "Off by
+default outside Australia and New Zealand" reads as "not for you". Fixed the
+copy first, then the owner's better idea landed: reframe the whole thing as
+*"which framework do you prefer?"*.
+
+**The transcription is the work, and it was sourced properly.** Santé publique
+France publishes a scientific/technical FAQ (V11, English) *and* an official
+calculation workbook — the exact analogue of the FSANZ guide the HSR module came
+from. Both were pulled; every threshold in `domain/nutri_score.py` is
+cross-checked between FAQ Tables 5/6 and the workbook's *General foods* sheet.
+
+**Two things nearly went wrong, both caught:**
+- A widely-cited third-party methodology page gives the grade-A cut-off as
+  `< 1`. I initially told the owner that was wrong and the answer was `< 0`.
+  **I was wrong** — `< 0` is the *2017* algorithm. The workbook computes both
+  generations side by side on one sheet (columns K–U original, W–AE updated)
+  and I had read the wrong columns. Same mistake also produced a phantom
+  "doc-vs-tool conflict" over the protein carve-out: the FVL-scores-5 exception
+  is the original's, and the 2023 prose and tool agree. Corrected before any
+  code was written.
+- The three worked examples that ship *inside* the workbook are now golden
+  vectors in `tests/test_nutri_score.py`. "Apple sauce tinned" scores exactly 0
+  → **A**, which is the cheapest possible guard against the file drifting back a
+  generation (0 is a B under the 2017 bands).
+
+**FVL ≠ FVNL — the one real trap.** The 2023 update moved nuts and seeds out of
+the positive component into their own calculation category. They still count
+toward the denominator. The FAQ's own worked example puts numbers on it: the
+same dish is 46% under the original and 37% under the update, purely because
+15 g of nuts changed sides. So `food_categories` gained `is_fvl_category`
+alongside `is_fvnl_category` and the rollup carries **both** percentages —
+feeding either scheme the other's numerator silently misgrades food. Pinned by
+`test__fvl_percent__excludes_nuts_where_fvnl_includes_them`.
+
+**Three published rules deliberately not implemented**, each documented in the
+module docstring rather than silently skipped: the ×2 weighting for dried/
+concentrated produce (not answerable from a USDA category), the red-meat protein
+cap (a judgement about a product, not arithmetic about a recipe), and the four
+non-general calculation categories (a dish is general foods; the FAQ says so).
+
+**`health_star_rating_enabled` → `nutrition_rating_scheme`.** Closed-set string
+sentinel, R-010 carve-out, same shape as `nutrition_mode`. New migration rather
+than amending d1e5b8c3f7a2 — it is committed, and CLAUDE.md warns other machines
+may have applied it. Existing choices are carried across, not reset. Migration
+SQL uses a bare boolean predicate and `= true` rather than `= 1`, because
+Postgres refuses the integer comparison (§7.5 portability).
+
+**One scheme at a time, and `none` everywhere by default** — including in
+Australia. Both are national programmes; Dora does not pick a nutritional
+authority for a household at install time. The Region nudge now offers whichever
+scheme the *device's* region recognises (AU/NZ → stars, an explicit seven-country
+list → Nutri-Score) rather than only the Australian one.
+
+**Trademark handled by not borrowing the mark.** The Nutri-Score logo is a
+registered collective trademark with a registration process aimed at food
+business operators. `RecipeNutriScore.vue` draws its own A–E badge — same call
+`RecipeHealthStars.vue` already made with generic star icons. The published
+five-colour scale *is* reproduced (D-002 carve-out, documented in place): those
+colours are the scheme, and repainting them in brand tokens would make the badge
+say something different from every Nutri-Score the reader has seen on a package.
+
+**Two cleanups taken rather than duplicated.** `RecipeCard` and `RecipeRow`
+already rendered the same rating block twice; adding a per-scheme branch would
+have made it four copies, so both now use one `RecipeRatingChip` (R-001). And
+`RecipesOverview` holds *no* per-scheme knowledge — `rankOf` normalises both
+onto one higher-is-better scale and the threshold options come from the
+composable, so a third scheme wouldn't touch that page.
+
+**A test found a real gap.** `ratingAvailable` was `scheme !== 'none'`, which
+would light up the chip, filter and sort axis for any unrecognised scheme string
+and then render nothing into them. Now narrowed to recognised-or-none in the
+composable as well as in `useFeatureFlags`.
+
+**What's owed:** a browser pass. Not attempted — a rating only paints in complex
+mode with a dataset imported, and every verify config in `.claude/launch.json`
+points at :5170 with `DORA_ALLOW_DESTRUCTIVE=true`, which would wipe the dev DB
+(FU-758). Checklist in `DORA_VERIFY.md`.
+
+**Next up:** owner decides on **FU-762** (the 4 red buy-verdict e2e tests, which
+should be fixed before that work is committed).
+
+---
+
+## 2026-08-27 — **Buy verdict is money-gated; price prose respects locale**
+**Status:** code-complete, **no browser pass** (see "What's owed"). Backend
+**870 passed** / 1 skipped / 1 xfailed (unit suite, was 867), frontend **533
+vitest** (was 527) — 3 new pytest cases + 6 new vitest cases across 2 files.
+`vue-tsc` + lint clean. One new rule + ADR
+(**R-058 / ADR-055**), two findings logged (**FU-758**, **FU-759**).
+
+**The ask started as a question, not a task.** Owner: *"How useful is buy verdict
+with money turned off? Also noted that buy verdict shows price related text even
+with the money feature off… ensure it's properly gated (or don't show at all if
+money is a prerequisite — what do you think?)"* The audit answered the question
+in the owner's favour and then some — the leak was wider than the visible strings:
+
+- `_price_axis` reasoned entirely in money and was never gated.
+- The `wait` direction was reachable **only** via `above_usual` / `fake_markdown`,
+  so with money off it was a coded-but-unexplainable outcome.
+- `_PRICE_STRENGTH_MODIFIER` shifted `strength`, so the *ranking* was silently
+  price-weighted on installs that had opted out of money.
+- Neither endpoint nor any of the three render sites referenced `money_enabled`
+  at all — the only gate was the per-user `buy_verdict_enabled` display opt-out.
+
+**Recommended prerequisite over per-reason suppression; owner agreed.** What
+survives money-off is need + waste, which `PantryBeliefCard` — *directly above it
+on the same page* — already states in the same words. Half-gating would have cost
+more (money-free headline vocabulary, non-dollar icon, rewritten footer, dead
+`wait` branch) for a weaker duplicate, and would have left the strength
+modulation in place. Charter Anti-creep tiebreak.
+
+**Gated at three seams, deliberately.** Endpoint refuses (403,
+`MONEY_DISABLED_DETAIL`) on both `/stock-items/<id>/buy-verdict` and the bulk
+`/shopping-lists/<id>/buy-verdicts`; `useBuyVerdictEnabled` ANDs install money
+with the per-user preference; the Assistant toggle disables with a caption naming
+the prerequisite (`emailSmtpConfigured` precedent — R-029 carve-out). The user's
+own preference survives underneath, so money returning restores their setting
+rather than resetting it. Also gated the **read** in `useBuyVerdict`, not just
+`fetchIfNeeded`: the module cache outlives a flag flip, so verdicts already
+painted would otherwise have stayed on screen until remount.
+
+**Locale fix, as asked.** `_price_axis` was emitting `f"${x:.2f}"` into `detail`
+— a server formatting currency (D-006) with a hardcoded symbol, so a EUR
+household saw dollars. Reasons now carry `amount_last` / `amount_usual` as raw
+numbers and the SPA composes the line through `formatMoney`. A guard test asserts
+no `$` survives anywhere in the reason set, so future prose can't reintroduce it.
+
+**Two small cleanups taken rather than duplicated.** `money_features_enabled()`
+landed in `app_settings/access.py` beside the memoised singleton (gating costs no
+extra query) instead of a third private copy — FU-759 tracks folding the two
+existing copies in. And `axisIcon` was already copy-pasted across `BuyVerdictCard`
++ `BuyVerdictBadge`; rather than add `reasonDetail` as a second copy, both moved
+into `components/stock/buyVerdictDisplay.ts`.
+
+**What's owed — browser pass, and why I didn't take it.** Every
+`dora-verify-backend*` config in `.claude/launch.json` binds **:5170** (the dev
+backend, real DB) while setting `DORA_ALLOW_DESTRUCTIVE=true`, which drop_alls on
+boot. The intended isolated instance is a scratch backend on **5171**. Starting
+one as configured would have destroyed the dev database, so I stopped and raised
+**FU-758** instead of guessing a port + `DORA_DB_PATH` into the owner's tooling.
+Verify checklist (money off / money on / mid-session flip / EUR formatting / raw
+403) is in `DORA_VERIFY.md`.
+
+**Next up:** FU-758 (fix the launch configs, then walk the verify list). FU-759
+is opportunistic.
+
+---
+
+## 2026-08-27 — **Owner feedback batch: meal plans → one shared add-to-list flow**
 **Status:** all four items shipped and **driven live** in the browser pane on
 both surfaces. Backend **867 passed** / 1 skipped / 1 xfailed (unit suite;
 `TMP` must point at a real dir — see the memory note), frontend **527 vitest**,

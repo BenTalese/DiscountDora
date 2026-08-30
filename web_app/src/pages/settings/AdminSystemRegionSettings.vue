@@ -488,7 +488,7 @@
             type: 'positive', position: 'bottom-right',
             message: 'Matched to this device. Currency is unchanged — set it below.',
         });
-        await offerHealthStarRating(language, zone);
+        await offerRatingScheme(language, zone);
     }
 
     /** The measurement system implied by a device's BCP-47 region subtag, or
@@ -525,19 +525,25 @@
         return 'metric';
     }
 
-    /** Owner's call 2026-08-27 — the Health Star Rating ships off everywhere,
-     *  because it is an Australian/New Zealand government scheme and an
-     *  install elsewhere should not be handed a national rating as though it
-     *  were universal. But that leaves the people it *was* designed for
-     *  hunting for a switch they have no reason to know exists, so detecting
-     *  an AU or NZ device is the one moment where offering it is useful rather
-     *  than presumptuous.
+    /** Owner's call 2026-08-27 — a recipe rating ships off everywhere, because
+     *  both schemes are national programmes and no install should be handed
+     *  one as though it were universal. But that leaves the people each was
+     *  designed for hunting for a setting they have no reason to know exists,
+     *  so detecting the device's region is the one moment where offering the
+     *  locally recognised scheme is useful rather than presumptuous.
+     *
+     *  Offers *one* scheme — whichever matches the device — rather than
+     *  presenting the menu. Someone in Lyon does not need to be asked to
+     *  choose between the Australian scheme and the European one; they need to
+     *  be told the European one exists. The full picker is in Settings →
+     *  Nutrition for anyone who wants the other.
      *
      *  Offered, never applied: this asks, and a "No thanks" is remembered by
-     *  simply leaving the setting off. Nothing here nags again — the prompt is
-     *  attached to an explicit button press, not to page load. */
-    async function offerHealthStarRating(language: string, zone: string) {
-        if (!isAustralasian(language, zone)) return;
+     *  simply leaving the setting at `none`. Nothing here nags again — the
+     *  prompt is attached to an explicit button press, not to page load. */
+    async function offerRatingScheme(language: string, zone: string) {
+        const scheme = localRatingScheme(language, zone);
+        if (scheme === null) return;
         let settings: AppSettings;
         try {
             settings = await api.getAsync();
@@ -546,13 +552,26 @@
             // error toast on top of the save that just succeeded.
             return;
         }
-        if (settings.health_star_rating_enabled) return;
+        // Already chosen something — including deliberately choosing one
+        // scheme in the other's region. Not our place to second-guess it.
+        if (settings.nutrition_rating_scheme !== 'none') return;
+
+        const copy = scheme === 'health_star'
+            ? {
+                title: 'Turn on Health Star Ratings?',
+                where: 'in Australia or New Zealand, where the Health Star '
+                    + 'Rating is the standard front-of-pack guide',
+            }
+            : {
+                title: 'Turn on Nutri-Score?',
+                where: 'somewhere Nutri-Score is the standard front-of-pack '
+                    + 'guide',
+            };
 
         $q.dialog({
-            title: 'Turn on Health Star Ratings?',
+            title: copy.title,
             message:
-                'This device looks like it\'s in Australia or New Zealand, where '
-                + 'the Health Star Rating is the standard front-of-pack guide. Dora '
+                `This device looks like it's ${copy.where}. Dora `
                 + 'can work one out for your recipes.<br><br>'
                 + 'It needs nutrition set to complex, and ratings are estimates — '
                 + 'they\'re scored from the raw weight of the ingredients, not the '
@@ -561,7 +580,43 @@
             html: true,
             ok: { label: 'Turn it on', color: 'primary', noCaps: true },
             cancel: { label: 'No thanks', flat: true, noCaps: true },
-        }).onOk(() => { void enableHealthStarRating(); });
+        }).onOk(() => { void enableRatingScheme(scheme); });
+    }
+
+    /** The countries currently using Nutri-Score, by BCP-47 region subtag:
+     *  France, Belgium, Germany, the Netherlands, Luxembourg, Spain and
+     *  Switzerland. Kept as an explicit list rather than "Europe" — most of
+     *  Europe has not adopted it, and offering it to an install in Warsaw
+     *  would be exactly the presumption this whole design avoids. */
+    const NUTRI_SCORE_REGIONS = ['FR', 'BE', 'DE', 'NL', 'LU', 'ES', 'CH'];
+
+    /** IANA zones for the same set, for the timezone-first read below. */
+    const NUTRI_SCORE_ZONES = [
+        'Europe/Paris', 'Europe/Brussels', 'Europe/Berlin', 'Europe/Busingen',
+        'Europe/Amsterdam', 'Europe/Luxembourg', 'Europe/Madrid',
+        'Atlantic/Canary', 'Africa/Ceuta', 'Europe/Zurich',
+    ];
+
+    /** Which scheme, if any, this device's region recognises. Null means "no
+     *  local scheme" — most of the world — and nothing is offered. */
+    function localRatingScheme(
+        language: string, zone: string,
+    ): 'health_star' | 'nutri_score' | null {
+        if (isAustralasian(language, zone)) return 'health_star';
+        if (NUTRI_SCORE_ZONES.includes(zone)) return 'nutri_score';
+        if (NUTRI_SCORE_REGIONS.includes(regionOf(language))) return 'nutri_score';
+        return null;
+    }
+
+    /** The BCP-47 region subtag, uppercased, or '' when it can't be read. */
+    function regionOf(language: string): string {
+        if (!language) return '';
+        try {
+            return new Intl.Locale(language).region ?? '';
+        } catch {
+            const parts = language.toUpperCase().split('-');
+            return parts.length > 1 ? (parts[parts.length - 1] ?? '') : '';
+        }
     }
 
     /** Is this device in Australia or New Zealand?
@@ -606,13 +661,15 @@
         return upper.endsWith('-AU') || upper.endsWith('-NZ');
     }
 
-    async function enableHealthStarRating() {
+    async function enableRatingScheme(scheme: 'health_star' | 'nutri_score') {
         try {
-            await api.updateAsync({ health_star_rating_enabled: true });
+            await api.updateAsync({ nutrition_rating_scheme: scheme });
             await refreshFlags();
             $q.notify({
                 type: 'positive', position: 'bottom-right',
-                message: 'Health Star Ratings on.',
+                message: scheme === 'health_star'
+                    ? 'Health Star Ratings on.'
+                    : 'Nutri-Score on.',
                 caption: 'They show on recipes once nutrition is set to complex.',
             });
         } catch (err) {

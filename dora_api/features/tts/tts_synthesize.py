@@ -90,8 +90,15 @@ def list_voices():
     engine gating; the SPA falls back to the browser voice when nothing's
     usable."""
     piper_ready = _piper_bin() is not None
-    voices = [
-        {
+    voices = []
+    for v in VOICE_CATALOG:
+        # Live bytes while a model is coming down, so the settings page can
+        # draw a real bar over a 60–110MB fetch instead of an open-ended
+        # spinner. `downloaded_bytes_total` is 0 when the origin declared no
+        # Content-Length — the client must read that as unknown, not as a
+        # denominator. Both are 0 for any voice not currently downloading.
+        done, total = voice_provision.progress_for(v.id)
+        voices.append({
             "id": v.id,
             "label": v.label,
             "description": v.description,
@@ -102,9 +109,9 @@ def list_voices():
             # usable for synthesis right now (downloaded AND piper present)
             "available": piper_ready and voice_provision.is_downloaded(v),
             "error": voice_provision.error_for(v.id),
-        }
-        for v in VOICE_CATALOG
-    ]
+            "downloaded_bytes": done,
+            "downloaded_bytes_total": total,
+        })
     # `configured` = Piper can actually speak right now (binary present AND at
     # least one model available).
     has_model = any(v["available"] for v in voices)

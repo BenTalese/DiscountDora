@@ -327,10 +327,8 @@
             <div class="builder-picker">
                 <MealPlanRecipePicker
                     v-model:recipe-search="recipeSearch"
-                    :trays="trays"
                     :recipes="recipes"
                     :focused-target="null"
-                    :drag-allowed="false"
                     :format-date="formatDate"
                     :log-cook="noopLogCook"
                     @recipe-pick="onPickRecipe"
@@ -347,7 +345,6 @@
     import BaseSegmented from 'src/components/BaseSegmented.vue';
     import BaseToggleGroup, { type ToggleOption } from 'src/components/BaseToggleGroup.vue';
     import MealPlanRecipePicker from 'src/components/MealPlanRecipePicker.vue';
-    import { buildRecipeTrays } from 'src/helpers/recipeTrays';
     import { useStockStatus } from 'src/composables/useStockStatus';
     import type {
         AutoBuildEmphasis, AutoBuildReason, MealPlanIngredient, ProposedEntry,
@@ -515,12 +512,15 @@
         return REASON_LABELS[r] ?? 'Added';
     }
 
-    // ── Recipe trays for the add/swap picker ────────────────────────────────
-    // R-003: shares the planner rail's builder rather than mirroring it. The
-    // two copies had already been edited independently once; the FU-578 #47
-    // one-instance-per-recipe dedupe lives in that one module.
+    // ── The add/swap picker's search ────────────────────────────────────────
+    // The tray builder this used to call was retired on 2026-08-30 (Unit 2 of
+    // BRIEF_MEAL_PLANNER_RAIL_AND_SHELL): the picker now owns its own filter
+    // chips, so the wizard gets the same five-chip model as the rail without
+    // passing anything. Its checkboxes still work — the chips narrow the list,
+    // the checkboxes select within it, and because exactly one filter is active
+    // at a time a recipe can no longer render twice (which is what FU-578 #47's
+    // dedupe existed to prevent; see `helpers/recipeRailFilters.ts`).
     const recipeSearch = ref('');
-    const trays = computed(() => buildRecipeTrays(props.recipes, recipeSearch.value));
 
     // ── Ingredient preview (aggregate demand) ───────────────────────────────
     const needToBuyCount = computed(

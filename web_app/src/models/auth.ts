@@ -101,10 +101,9 @@ export type AuthenticatedUser = {
     // `nutrition_mode` removed (2026-08-14) — nutrition is install-wide.
     // Read it with `useNutritionMode()`, which sources it from
     // /api/health `features.nutrition_mode`.
-    // C-cross Chunk 5 — per-user recipe-image opt-in (proposal §2.8).
-    // Defaults true. Use `useImagePrefs()` to read + write. FU-508
-    // dropped the stock-image companion.
-    show_recipe_images: boolean;
+    // `show_recipe_images` removed (2026-08-29) — the per-user recipe-image
+    // opt-in is cut. Photo density on the cookbook is the cards/compact view
+    // switch; every other surface renders photos unconditionally.
     // FU-615 — `household_headcount` moved to the install-wide AppSetting
     // (read via `useCookingPolicy()`, edited in Settings → System → Cooking).
     // No longer a per-user field.

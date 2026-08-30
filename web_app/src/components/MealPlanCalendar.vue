@@ -1,43 +1,110 @@
 <template>
-    <q-card flat bordered>
+    <!-- BRIEF_MEAL_PLANNER_RAIL_AND_SHELL §5 (Unit 3) — the calendar as a real
+         month grid.
+
+         **This revises F13, which the previous widget built faithfully**, and
+         it overrules DESIGN_REMEDIATION_PLAN's DR-12 "labelled 14-day strip"
+         directive. Both were confirmed by the owner as D7 on 2026-08-29 — do
+         not "restore" either without a fresh decision.
+
+         The diagnosis it fixes: the old component was a **week picker wearing a
+         calendar costume**. Only the week ROW was clickable, yet the day squares
+         carried the status colour, so a day invited a click that did something
+         else. Its status was a 2px underline on a ~20px square (the aria-label
+         carried more than the visual), and only each Monday showed a number, so
+         six rows read as a barcode.
+
+         Kept deliberately: `dayStatus` still derives from the server's
+         shortfall set rather than re-judging cookability (R-003), and
+         `STATUS_LABEL` / the accessible labels are ported to day cells rather
+         than rewritten — they were good work against 1.4.1. -->
+    <q-card flat bordered class="cal">
         <q-card-section class="row items-center q-py-xs no-wrap">
-            <BaseButton variant="icon" size="sm" :icon="ICONS.arrow_upward" @click="pageWindow(-WINDOW_WEEKS)">
-                <q-tooltip>Earlier weeks</q-tooltip>
+            <BaseButton
+                variant="icon" size="sm"
+                :icon="ICONS.chevron_left"
+                aria-label="Previous month"
+                @click="pageMonth(-1)"
+            >
+                <q-tooltip>Previous month</q-tooltip>
             </BaseButton>
             <q-space />
             <div class="text-subtitle2 text-weight-bold cal__month">{{ monthBanner }}</div>
             <q-space />
-            <BaseButton variant="icon" size="sm" :icon="ICONS.arrow_downward" @click="pageWindow(WINDOW_WEEKS)">
-                <q-tooltip>Later weeks</q-tooltip>
+            <BaseButton
+                variant="icon" size="sm"
+                :icon="ICONS.chevron_right"
+                aria-label="Next month"
+                @click="pageMonth(1)"
+            >
+                <q-tooltip>Next month</q-tooltip>
             </BaseButton>
         </q-card-section>
         <q-separator />
-        <q-card-section class="q-pa-sm column q-gutter-xs">
-            <!-- R-Phase 6 §4.6 / 4.1.2 — week row is a real button; status
-                isn't colour-only any more (aria-label spells it out and a
-                tooltip mirrors it for sighted users). -->
-            <button
-                type="button"
-                v-for="week in weeks"
-                :key="week.monday"
-                class="cal-week"
-                :class="{ 'cal-week--focused': week.monday === focusedMonday }"
-                :aria-label="weekAccessibleLabel(week)"
-                :aria-current="week.monday === focusedMonday ? 'true' : undefined"
-                @click="selectWeek(week.monday)"
-            >
+
+        <q-card-section class="q-pa-sm">
+            <div class="cal__dows" aria-hidden="true">
+                <span v-for="dow in DOW_LETTERS" :key="dow.key">{{ dow.letter }}</span>
+            </div>
+
+            <!-- Month paging slides horizontally, direction-aware, mirroring the
+                 week carousel. Tokens only (D-010). -->
+            <transition :name="monthTransition" mode="out-in" @after-enter="flushPendingFocus">
                 <div
-                    v-for="cell in week.days"
-                    :key="cell.iso"
-                    class="cal-day"
-                    :class="`cal-day--${cell.status}`"
-                    :title="dayTitle(cell)"
+                    :key="viewMonthKey"
+                    class="cal__grid"
+                    role="grid"
+                    :aria-label="`Meal plan calendar, ${monthBanner}`"
+                    @keydown="onGridKeydown"
                 >
-                    <span v-if="cell.showLabel" class="cal-day__dd">{{ cell.dd }}</span>
-                    <span v-if="cell.isToday" class="cal-day__today" />
+                    <div
+                        v-for="week in weeks"
+                        :key="week.monday"
+                        class="cal__week"
+                        :class="{ 'cal__week--focused': week.monday === focusedMonday }"
+                        role="row"
+                    >
+                        <button
+                            v-for="cell in week.days"
+                            :key="cell.iso"
+                            type="button"
+                            role="gridcell"
+                            class="cal-day"
+                            :class="{
+                                'cal-day--outside': !cell.inMonth,
+                                'cal-day--today': cell.isToday,
+                            }"
+                            :aria-label="dayTitle(cell)"
+                            :aria-current="cell.isToday ? 'date' : undefined"
+                            :aria-selected="week.monday === focusedMonday ? 'true' : 'false'"
+                            :tabindex="cell.iso === rovingIso ? 0 : -1"
+                            :data-cal-iso="cell.iso"
+                            @click="selectDay(cell.iso)"
+                            @focus="rovingIso = cell.iso"
+                        >
+                            <span class="cal-day__dd">{{ cell.dd }}</span>
+                            <!-- One pip per meal, capped. B2 / D-013: a coloured
+                                 pip is never the only signal — the tooltip below
+                                 names the meals, and `aria-label` spells the
+                                 day's status out. -->
+                            <span class="cal-day__pips">
+                                <span
+                                    v-for="(pip, i) in cell.pips"
+                                    :key="i"
+                                    class="cal-day__pip"
+                                    :class="`cal-day__pip--${pip}`"
+                                />
+                                <span v-if="cell.overflow > 0" class="cal-day__more">
+                                    +{{ cell.overflow }}
+                                </span>
+                            </span>
+                            <q-tooltip v-if="cell.tooltip" anchor="top middle" self="bottom middle">
+                                {{ cell.tooltip }}
+                            </q-tooltip>
+                        </button>
+                    </div>
                 </div>
-                <q-tooltip>{{ weekTooltip(week) }}</q-tooltip>
-            </button>
+            </transition>
         </q-card-section>
     </q-card>
 </template>
@@ -50,11 +117,33 @@
     import { isoDate, localTodayIso, mondayOf, shiftDays } from 'src/helpers/weekDates';
     import type { MealPlanEntry } from 'src/models/mealPlan';
     import { useMealPlanStore } from 'src/stores/mealPlanStore';
-    import { computed, ref, watch } from 'vue';
+    import { computed, nextTick, ref, watch } from 'vue';
 
     const focusedMonday = defineModel<string>('focusedMonday', { required: true });
 
-    const WINDOW_WEEKS = 6;
+    const emit = defineEmits<{
+        /** §5 — clicking a day focuses its week AND asks the host to scroll the
+         *  week pane to that day's card. The scroll is the host's job because
+         *  only it owns the scroller; this component just names the day. That
+         *  payoff is only possible because Unit 1 gave the week its own scroll
+         *  container. */
+        (e: 'daySelected', dayIso: string): void;
+    }>();
+
+    /** Six rows always, so the grid's height never changes between months — a
+     *  calendar that grows a row in a fixed-height pane pushes the shopping
+     *  summary around underneath it. */
+    const GRID_WEEKS = 6;
+    /** Pips per day before collapsing to "+N". Three reads at a glance; four
+     *  starts to look like a progress bar. */
+    const MAX_PIPS = 3;
+
+    const DOW_LETTERS = [
+        { key: 'mon', letter: 'M' }, { key: 'tue', letter: 'T' },
+        { key: 'wed', letter: 'W' }, { key: 'thu', letter: 'T' },
+        { key: 'fri', letter: 'F' }, { key: 'sat', letter: 'S' },
+        { key: 'sun', letter: 'S' },
+    ];
 
     const mealPlanStore = useMealPlanStore();
     const { mealPlans, shortfall, today } = storeToRefs(mealPlanStore);
@@ -87,34 +176,77 @@
         return 'planned';
     }
 
-    // Visible window: 6 weeks. It re-anchors only when the focused week scrolls
-    // out of view (so clicking a visible week doesn't make the list jump).
-    const calendarStart = ref(shiftDays(mondayOf(focusedMonday.value), -7));
-    watch(focusedMonday, (m) => {
-        const start = calendarStart.value;
-        const end = shiftDays(start, WINDOW_WEEKS * 7);
-        if (m < start || m >= end) calendarStart.value = shiftDays(mondayOf(m), -7);
-    });
-    function pageWindow(deltaWeeks: number) {
-        calendarStart.value = shiftDays(calendarStart.value, deltaWeeks * 7);
+    /** Per-MEAL pip, where `dayStatus` is per-day. Same inputs, same R-003
+     *  discipline — the shortfall set is the server's. */
+    type Pip = 'planned' | 'short' | 'consumed';
+    function pipFor(entry: MealPlanEntry): Pip {
+        if (entry.consumed_at) return 'consumed';
+        return shortfallRecipeIds.value.has(entry.recipe_id) ? 'short' : 'planned';
     }
+
+    // ── The visible month ──────────────────────────────────────────────────
+    // Anchored on the 1st of a month. Follows the focused week when that week
+    // leaves the visible month, so toolbar nav and the calendar stay two views
+    // of one `focusedMonday` (F17).
+    const viewMonth = ref(firstOfMonth(focusedMonday.value));
+    const monthSlide = ref<'cal-next' | 'cal-prev'>('cal-next');
+    const monthTransition = computed(() => monthSlide.value);
+    const viewMonthKey = computed(() => viewMonth.value);
+
+    function firstOfMonth(iso: string): string {
+        return `${iso.slice(0, 7)}-01`;
+    }
+    function addMonths(firstIso: string, delta: number): string {
+        const [y, m] = firstIso.split('-').map(Number);
+        const base = new Date(Date.UTC(y!, m! - 1 + delta, 1));
+        return base.toISOString().slice(0, 10);
+    }
+    function pageMonth(delta: number) {
+        monthSlide.value = delta > 0 ? 'cal-next' : 'cal-prev';
+        viewMonth.value = addMonths(viewMonth.value, delta);
+    }
+
+    watch(focusedMonday, (next, prev) => {
+        const wanted = firstOfMonth(next);
+        if (wanted === viewMonth.value) return;
+        // Only re-anchor when the focused week genuinely leaves the month on
+        // screen; direction keeps the slide honest.
+        monthSlide.value = next >= (prev ?? next) ? 'cal-next' : 'cal-prev';
+        viewMonth.value = wanted;
+    });
 
     const todayIso = computed(() => today.value ?? localTodayIso());
 
-    type CalCell = { iso: string; dd: string; showLabel: boolean; status: DayStatus; isToday: boolean };
+    type CalCell = {
+        iso: string;
+        dd: string;
+        inMonth: boolean;
+        isToday: boolean;
+        status: DayStatus;
+        pips: Pip[];
+        overflow: number;
+        tooltip: string;
+    };
+
     const weeks = computed<{ monday: string; days: CalCell[] }[]>(() => {
+        const gridStart = mondayOf(viewMonth.value);
+        const month = viewMonth.value.slice(0, 7);
         const out: { monday: string; days: CalCell[] }[] = [];
-        for (let w = 0; w < WINDOW_WEEKS; w++) {
-            const monday = shiftDays(calendarStart.value, w * 7);
+        for (let w = 0; w < GRID_WEEKS; w++) {
+            const monday = shiftDays(gridStart, w * 7);
             const days: CalCell[] = [];
             for (let i = 0; i < 7; i++) {
                 const iso = shiftDays(monday, i);
+                const entries = entriesByDay.value.get(iso) ?? [];
                 days.push({
                     iso,
-                    dd: iso.slice(8, 10),
-                    showLabel: i === 0,
-                    status: dayStatus(iso),
+                    dd: String(Number(iso.slice(8, 10))),
+                    inMonth: iso.slice(0, 7) === month,
                     isToday: iso === todayIso.value,
+                    status: dayStatus(iso),
+                    pips: entries.slice(0, MAX_PIPS).map(pipFor),
+                    overflow: Math.max(0, entries.length - MAX_PIPS),
+                    tooltip: dayTooltip(iso, entries),
                 });
             }
             out.push({ monday, days });
@@ -123,19 +255,105 @@
     });
 
     const monthBanner = computed(() => {
-        const [y, m, d] = focusedMonday.value.split('-').map(Number);
+        const [y, m, d] = viewMonth.value.split('-').map(Number);
         return formatLocaleDate(new Date(Date.UTC(y!, m! - 1, d)), { month: 'long', year: 'numeric' })
             .toUpperCase();
     });
 
-    function selectWeek(monday: string) {
-        focusedMonday.value = monday;
+    // ── Selection ──────────────────────────────────────────────────────────
+    function selectDay(dayIso: string) {
+        focusedMonday.value = mondayOf(dayIso);
+        emit('daySelected', dayIso);
     }
+
+    // ── Keyboard: roving tabindex over the grid (§5) ───────────────────────
+    // The old six-button list had no grid navigation at all. Exactly one cell
+    // is tabbable; arrows move focus within the month, PageUp/PageDown page it.
+    const rovingIso = ref(todayIso.value);
+    watch([viewMonth, todayIso], () => {
+        const visible = weeks.value.flatMap((w) => w.days.map((d) => d.iso));
+        if (!visible.includes(rovingIso.value)) {
+            rovingIso.value = visible.includes(todayIso.value)
+                ? todayIso.value
+                : (visible.find((iso) => iso.slice(0, 7) === viewMonth.value.slice(0, 7)) ?? visible[0]!);
+        }
+    });
+
+    /**
+     * Arrowing across a month boundary re-renders the whole grid through a
+     * `mode="out-in"` transition: the old month leaves *before* the new one
+     * enters, so one `nextTick` later the destination cell does not exist yet.
+     * Measured — ArrowDown from 27 Jul focused nothing at all, and because the
+     * keydown handler lives on the grid, losing focus killed every subsequent
+     * key. So when the cell isn't there we park it and let `@after-enter` place
+     * the focus once the new month has actually arrived.
+     */
+    const pendingFocusIso = ref<string | null>(null);
+
+    /** Is this day one of the 42 currently drawn? The grid starts on the Monday
+     *  on/before the 1st and always runs six weeks, so it reaches into both
+     *  neighbouring months. */
+    function isRendered(iso: string): boolean {
+        const start = mondayOf(viewMonth.value);
+        return iso >= start && iso <= shiftDays(start, GRID_WEEKS * 7 - 1);
+    }
+
+    async function focusCell(iso: string) {
+        rovingIso.value = iso;
+        await nextTick();
+        const el = document.querySelector<HTMLElement>(`[data-cal-iso="${iso}"]`);
+        if (el) el.focus();
+        else pendingFocusIso.value = iso;
+    }
+
+    function flushPendingFocus() {
+        const iso = pendingFocusIso.value;
+        pendingFocusIso.value = null;
+        if (iso) document.querySelector<HTMLElement>(`[data-cal-iso="${iso}"]`)?.focus();
+    }
+
+    function onGridKeydown(e: KeyboardEvent) {
+        const DELTAS: Record<string, number> = {
+            ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7,
+        };
+        const delta = DELTAS[e.key];
+        if (delta !== undefined) {
+            e.preventDefault();
+            // Stop the page's own ArrowUp/ArrowDown week paging from also
+            // firing — inside the grid, arrows move the grid.
+            e.stopPropagation();
+            const next = shiftDays(rovingIso.value, delta);
+            // Page the month only when the day is genuinely NOT on screen —
+            // not merely when it belongs to another month. The grid always
+            // renders six weeks from the Monday on/before the 1st, so it spills
+            // into both neighbours: July's grid runs to 9 August. Comparing
+            // months instead of the rendered range paged unnecessarily, and the
+            // cost was invisible but total — `focusCell` found the cell in the
+            // OUTGOING grid, focused it, and the transition then unmounted it,
+            // leaving focus on <body>. With the grid's own keydown handler gone
+            // with it, every subsequent arrow fell through to the page's week
+            // paging instead (measured: arrowing twice silently moved the week).
+            if (!isRendered(next)) {
+                monthSlide.value = delta > 0 ? 'cal-next' : 'cal-prev';
+                viewMonth.value = firstOfMonth(next);
+            }
+            void focusCell(next);
+            return;
+        }
+        if (e.key === 'PageUp' || e.key === 'PageDown') {
+            e.preventDefault();
+            e.stopPropagation();
+            pageMonth(e.key === 'PageDown' ? 1 : -1);
+            void focusCell(addMonths(firstOfMonth(rovingIso.value), e.key === 'PageDown' ? 1 : -1));
+        }
+    }
+
     function formatDate(iso: string): string {
         return formatLocaleDate(iso);
     }
 
     // R-Phase 6 §4.6 — text alternatives for the colour-only status (1.4.1).
+    // Ported from the week rows to day cells; the wording is unchanged.
     const STATUS_LABEL: Record<DayStatus, string> = {
         empty: 'no meals planned',
         planned: 'meals planned',
@@ -145,15 +363,20 @@
     function dayTitle(cell: CalCell): string {
         return `${formatDate(cell.iso)} — ${STATUS_LABEL[cell.status]}`;
     }
-    function weekAccessibleLabel(week: { monday: string; days: CalCell[] }): string {
-        const plannedDays = week.days.filter((d) => d.status === 'planned' || d.status === 'consumed' || d.status === 'short').length;
-        const summary = plannedDays === 0
-            ? 'no meals planned'
-            : `${plannedDays} day${plannedDays === 1 ? '' : 's'} with meals`;
-        return `Week of ${formatDate(week.monday)}, ${summary}`;
-    }
-    function weekTooltip(week: { monday: string; days: CalCell[] }): string {
-        return weekAccessibleLabel(week);
+
+    /** §5 — hover NAMES the meals rather than reporting a status word. This is
+     *  the reason to make days interactive at all: the calendar becomes a read
+     *  surface, not only a picker. */
+    function dayTooltip(iso: string, entries: MealPlanEntry[]): string {
+        if (!entries.length) return `${formatDate(iso)} — no meals planned`;
+        const lines = entries.map((e) => {
+            const short = !e.consumed_at && shortfallRecipeIds.value.has(e.recipe_id)
+                ? ' — short'
+                : '';
+            const cooked = e.consumed_at ? ' — cooked' : '';
+            return `${e.slot} · ${e.recipe_name}${short}${cooked}`;
+        });
+        return `${formatDate(iso)}\n${lines.join('\n')}`;
     }
 </script>
 
@@ -161,66 +384,116 @@
     .cal__month {
         letter-spacing: 0.06em;
     }
-    .cal-week {
-        display: flex;
-        gap: 4px;
-        padding: 3px;
-        border-radius: 6px;
-        border: 2px solid transparent;
-        cursor: pointer;
-        transition: background 0.12s ease;
-        /* Reset the native <button> chrome — the row reads as a calm
-            cell row, not a button. Outline restored on focus-visible. */
-        background: transparent;
-        width: 100%;
-        font: inherit;
-        text-align: left;
-        position: relative;
+
+    .cal__dows,
+    .cal__week {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 2px;
     }
-    .cal-week:hover,
-    .cal-week:focus-visible {
-        background: var(--surface-sunken);
-        outline: none;
-    }
-    .cal-week:focus-visible {
-        border-color: var(--q-primary);
-    }
-    .cal-week--focused {
-        border-color: var(--brand-primary);
-    }
-    .cal-day {
-        position: relative;
-        flex: 1 1 0;
-        min-width: 0;
-        aspect-ratio: 1 / 1;
-        border-radius: 5px;
-        background: var(--surface-sunken);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        border-bottom: 2px solid transparent;
-    }
-    .cal-day__dd {
-        font-size: 0.68rem;
+    .cal__dows {
+        margin-bottom: 4px;
+        text-align: center;
+        font-size: calc(var(--font-size-xs) * 1rem);
+        font-weight: 600;
         color: var(--text-secondary);
     }
-    .cal-day--planned {
-        border-bottom-color: var(--semantic-positive);
+    .cal__grid {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
     }
-    .cal-day--short {
-        border-bottom-color: var(--semantic-warning);
+
+    /* The focused week is a tinted BAND across all seven cells, with the outer
+       corners rounded, so a week reads as one selected object even though every
+       cell inside it is independently clickable. */
+    .cal__week--focused {
+        background: color-mix(in srgb, var(--brand-primary) 12%, transparent);
+        border-radius: var(--radius-sm);
+        box-shadow: 0 0 0 1px color-mix(in srgb, var(--brand-primary) 35%, transparent);
     }
-    .cal-day--consumed {
-        border-bottom-style: dotted;
-        border-bottom-color: var(--text-muted);
+
+    .cal-day {
+        position: relative;
+        aspect-ratio: 1 / 1;
+        min-height: 34px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 2px;
+        border: none;
+        border-radius: 5px;
+        background: var(--surface-sunken);
+        color: var(--text-primary);
+        cursor: pointer;
+        font: inherit;
+        transition: background var(--motion-fast) var(--motion-ease),
+            transform var(--motion-fast) var(--motion-ease);
     }
-    .cal-day__today {
-        position: absolute;
-        top: 3px;
-        right: 3px;
+    .cal-day:hover {
+        background: color-mix(in srgb, var(--brand-primary) 16%, var(--surface-sunken));
+        transform: translateY(-1px);
+    }
+    .cal-day:focus-visible {
+        outline: 2px solid var(--brand-primary);
+        outline-offset: 2px;
+    }
+    /* Out-of-month days are dimmed but still clickable — they belong to real
+       weeks, and clicking one is a legitimate way to reach that week. */
+    .cal-day--outside {
+        opacity: 0.45;
+    }
+
+    .cal-day__dd {
+        font-size: calc(var(--font-size-xs) * 1rem);
+        line-height: 1;
+        /* Real dates in every cell now, so the column of numbers has to align —
+           the old grid showed a number only on Mondays. */
+        font-variant-numeric: tabular-nums;
+    }
+    /* Today is a FILLED disc, never a ring: a ring would collide with the focus
+       ring the moment days became focusable, which they now are. */
+    .cal-day--today .cal-day__dd {
+        background: var(--brand-primary);
+        color: var(--text-on-primary);
+        border-radius: 999px;
+        padding: 1px 5px;
+        font-weight: 700;
+    }
+
+    .cal-day__pips {
+        display: flex;
+        align-items: center;
+        gap: 2px;
+        min-height: 5px;
+    }
+    .cal-day__pip {
         width: 5px;
         height: 5px;
         border-radius: 50%;
-        background: var(--brand-primary);
     }
+    .cal-day__pip--planned { background: var(--semantic-positive); }
+    .cal-day__pip--short { background: var(--semantic-warning); }
+    .cal-day__pip--consumed { background: var(--text-muted); }
+    .cal-day__more {
+        font-size: calc(var(--font-size-xs) * 1rem);
+        line-height: 1;
+        color: var(--text-secondary);
+    }
+
+    /* Direction-aware month paging, mirroring the week carousel's transition
+       and riding the same tokens (D-010 — no literal ms). */
+    .cal-next-enter-active,
+    .cal-next-leave-active,
+    .cal-prev-enter-active,
+    .cal-prev-leave-active {
+        transition:
+            transform var(--motion-normal) var(--motion-ease),
+            opacity var(--motion-normal) var(--motion-ease);
+    }
+    .cal-next-enter-from { transform: translateX(16px); opacity: 0; }
+    .cal-next-leave-to { transform: translateX(-16px); opacity: 0; }
+    .cal-prev-enter-from { transform: translateX(-16px); opacity: 0; }
+    .cal-prev-leave-to { transform: translateX(16px); opacity: 0; }
 </style>

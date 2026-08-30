@@ -336,6 +336,17 @@ class UpdateRecipeHandler:
             _IngredientClientToReal = {
                 cid: ing.id for cid, ing in _NewPairs if cid
             }
+            # Owner-reported 2026-08-29: "linking ingredients to step is
+            # broken (cannot save)". The ingredient replace above leaves the
+            # new rows *pending* in the ORM session, and every downstream
+            # access helper reaches the DB through a Core
+            # `db.session.execute(select(table))` — which, unlike an ORM
+            # query, does not autoflush. So `replace_steps_for_recipe`'s
+            # "do these ingredients belong to this recipe?" check saw the old
+            # rows only and 400'd with the resolved-but-uninserted ids. Same
+            # flush, for the same reason, as `create_recipe` does before its
+            # own Core-level inserts.
+            self.repository.flush()
 
         for _Attr in _NULLABLE_PLAIN_ATTRS:
             if _Attr in _SetFields:

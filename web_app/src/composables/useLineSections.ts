@@ -23,6 +23,16 @@ export type SectionMode = 'location' | 'group' | 'store' | 'manual';
 
 export const SECTION_MODES: SectionMode[] = ['location', 'group', 'store', 'manual'];
 
+/** The plan face offers only these two.
+ *
+ *  Curating a list is a different job from walking a shop. Location groups by
+ *  where things live in *your kitchen*, which answers a putting-away question,
+ *  not a buying one; Group is a taxonomy you're not shopping by either. Store
+ *  earns its place because the plan face already shows the store breakdown, and
+ *  Manual is the user's own order. The run face keeps all four — mid-shop,
+ *  sectioning is how you walk the place. */
+export const PLAN_SECTION_MODES: SectionMode[] = ['store', 'manual'];
+
 export const SECTION_MODE_LABELS: Record<SectionMode, string> = {
     location: 'Location',
     group: 'Group',
@@ -120,20 +130,36 @@ export type UseLineSectionsOptions = {
     /** Run face: a ticked line leaves its section entirely (the list shrinks as
      *  you shop). Plan face leaves them in place, dimmed. */
     hideTicked?: Ref<boolean> | ComputedRef<boolean>;
+    /** Restricts which modes this caller offers at all (see
+     *  `PLAN_SECTION_MODES`). Enforced here rather than by the caller hiding
+     *  buttons, because `groupBy` is persisted per session: a preference set on
+     *  one face must not strand another face in a mode it can't display a
+     *  control for. Omit for all four.
+     *
+     *  Accepts a ref because one caller's answer changes without it
+     *  remounting: the overview card renders on all three faces and offers a
+     *  different mode list on each, and a list goes draft → shopping in place. */
+    allowedModes?: SectionMode[] | ComputedRef<SectionMode[]>;
 };
 
 export function useLineSections(
     lines: Ref<ShoppingListLine[]> | ComputedRef<ShoppingListLine[]>,
-    mode: Ref<SectionMode>,
+    mode: Ref<SectionMode> | ComputedRef<SectionMode>,
     options: UseLineSectionsOptions = {},
 ) {
-    /** Which modes have any data to section by. `manual` is always in. */
+    /** Which modes have any data to section by. `manual` is always in. A mode
+     *  this caller doesn't offer is reported unavailable, so it can neither be
+     *  rendered nor inherited from a stored preference. */
     const availableModes = computed<Record<SectionMode, boolean>>(() => {
         const source = lines.value;
+        const allowed = Array.isArray(options.allowedModes)
+            ? options.allowedModes
+            : options.allowedModes?.value;
+        const offered = (mode: SectionMode) => !allowed || allowed.includes(mode);
         return {
-            location: source.some((l) => locationKeyFor(l) !== null),
-            group: source.some((l) => l.stock_group_name !== null),
-            store: source.some((l) => l.resolved_store_name !== null),
+            location: offered('location') && source.some((l) => locationKeyFor(l) !== null),
+            group: offered('group') && source.some((l) => l.stock_group_name !== null),
+            store: offered('store') && source.some((l) => l.resolved_store_name !== null),
             manual: true,
         };
     });

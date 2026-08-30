@@ -102,10 +102,30 @@ class ParsedPortion:
 @dataclass
 class ImportState:
     """In-memory progress for one dataset. `phase` drives the admin page's
-    wording; `foods` is what actually landed."""
+    wording; `foods` is what actually landed.
+
+    The counters exist because `phase` alone left the admin page showing an
+    indeterminate spinner for the whole run, and an SR Legacy import is
+    minutes long — there was no way to tell a slow import from a wedged one.
+    Each phase reports the only figure it honestly knows:
+
+      * ``downloading`` — ``bytes_done`` / ``bytes_total``. A real percentage,
+        because USDA sends ``Content-Length``. ``bytes_total`` is 0 when the
+        server declines to, and the page must fall back to indeterminate
+        rather than divide by it.
+      * ``parsing`` — ``rows_done`` only. Deliberately *not* a percentage:
+        the row count of the archive isn't known until it has been read, and
+        inventing a denominator to drive a bar to 90% and stall is the kind
+        of fake progress P12 (No-invent) rules out. A live, climbing count is
+        honest and answers the actual question ("is it stuck?").
+      * ``saving`` — ``foods``/``portions``, already set before the write.
+    """
     phase: str = "idle"       # idle | downloading | parsing | saving | done | error
     foods: int = 0
     portions: int = 0
+    bytes_done: int = 0
+    bytes_total: int = 0      # 0 = the server didn't say
+    rows_done: int = 0
     error: Optional[str] = None
 
 
@@ -170,10 +190,21 @@ def _run_import(source: str, url: str) -> None:
 
     try:
         _LOG.info("Importing nutrition dataset '%s' from %s", source, url)
-        payload = _download(url)
+        payload = _download(
+            url,
+            on_progress = lambda done, total: _set(
+                source, bytes_done=done, bytes_total=total,
+            ),
+        )
 
-        _set(source, phase="parsing")
-        foods, portions = parse_fdc_csv_zip(payload, source)
+        # `rows_done` resets here rather than carrying the download's figures
+        # forward: the page reads one counter per phase, and a stale row count
+        # sitting under a fresh "Parsing…" is worse than none.
+        _set(source, phase="parsing", rows_done=0)
+        foods, portions = parse_fdc_csv_zip(
+            payload, source,
+            on_rows = lambda seen: _set(source, rows_done=seen),
+        )
         if not foods:
             raise ValueError(
                 "The download contained no usable foods — check the URL points "
@@ -216,10 +247,49 @@ def _friendly_error(message: str) -> str:
     return message
 
 
-def _download(url: str) -> bytes:
+# How much has to arrive before the state is updated again. The admin page
+# polls on a timer, so ticking more often than it reads is pure lock traffic;
+# 256KB is a visible step on a 3.7MB download and a small one on a 55MB.
+_DOWNLOAD_TICK_BYTES = 256 * 1024
+_DOWNLOAD_CHUNK_BYTES = 64 * 1024
+
+
+def _download(url: str, on_progress=None) -> bytes:  # noqa: ANN001
+    """Fetch the bundle, reporting bytes as they arrive.
+
+    Read in chunks rather than `response.read()` purely so there is something
+    to report — the whole payload still lands in memory, which is fine at the
+    sizes offered (Branded Foods, the one that wouldn't be, is deliberately
+    not on the menu; see the module docstring).
+    """
     request = Request(url, headers={"User-Agent": _USER_AGENT})
     with urlopen(request, timeout=_FETCH_TIMEOUT_SECONDS) as response:  # noqa: S310
-        return response.read()
+        # Absent on a chunked response, and not to be trusted as a promise —
+        # it seeds the bar's denominator, nothing more.
+        try:
+            total = int(response.headers.get("Content-Length") or 0)
+        except ValueError:
+            total = 0
+        if on_progress is not None:
+            on_progress(0, total)
+
+        buffer = io.BytesIO()
+        done = 0
+        last_reported = 0
+        while True:
+            chunk = response.read(_DOWNLOAD_CHUNK_BYTES)
+            if not chunk:
+                break
+            buffer.write(chunk)
+            done += len(chunk)
+            if on_progress is not None and done - last_reported >= _DOWNLOAD_TICK_BYTES:
+                on_progress(done, total)
+                last_reported = done
+        if on_progress is not None:
+            # A final exact figure, so a finished download never rests at 97%
+            # because the last chunk fell short of the tick.
+            on_progress(done, total or done)
+        return buffer.getvalue()
 
 
 def _norm(value: str) -> str:
@@ -235,17 +305,52 @@ def _member(archive: zipfile.ZipFile, basename: str) -> Optional[str]:
     return None
 
 
-def _rows(archive: zipfile.ZipFile, member: str) -> Iterable[dict]:
+# Rows between progress reports while parsing. `food_nutrient.csv` is millions
+# of rows and dominates the phase, so this is what the counter is really for.
+_PARSE_TICK_ROWS = 25_000
+
+
+class _RowCounter:
+    """Cumulative row tally across every CSV in the bundle, reported on a tick.
+
+    Cumulative rather than per-file on purpose: the user is watching one
+    "parsing" phase, and a count that reset to zero five times over would read
+    as five restarts. Not thread-safe and doesn't need to be — one import runs
+    on one worker thread, and `_set` does its own locking.
+    """
+
+    def __init__(self, on_tick=None):  # noqa: ANN001
+        self.seen = 0
+        self._on_tick = on_tick
+        self._last = 0
+
+    def count(self) -> None:
+        self.seen += 1
+        if self._on_tick is not None and self.seen - self._last >= _PARSE_TICK_ROWS:
+            self._on_tick(self.seen)
+            self._last = self.seen
+
+
+def _rows(archive: zipfile.ZipFile, member: str, counter=None) -> Iterable[dict]:  # noqa: ANN001
     with archive.open(member) as raw:
         # utf-8-sig: FDC ships a BOM, which would otherwise corrupt the first
         # column name and silently break every lookup against it.
         text = io.TextIOWrapper(raw, encoding="utf-8-sig", newline="")
-        yield from csv.DictReader(text)
+        for row in csv.DictReader(text):
+            if counter is not None:
+                counter.count()
+            yield row
 
 
-def parse_fdc_csv_zip(payload: bytes, source: str):
+def parse_fdc_csv_zip(payload: bytes, source: str, on_rows=None):  # noqa: ANN001
     """Pure parse step — bytes in, entities out. Separated from the download
-    and the DB write so it can be tested against a small fixture archive."""
+    and the DB write so it can be tested against a small fixture archive.
+
+    `on_rows` is an optional progress sink called with the cumulative row
+    count every `_PARSE_TICK_ROWS`; it stays optional so the parser tests keep
+    calling this with two arguments and no fake sink.
+    """
+    counter = _RowCounter(on_rows)
     archive = zipfile.ZipFile(io.BytesIO(payload))
 
     food_member = _member(archive, "food.csv")
@@ -264,7 +369,7 @@ def parse_fdc_csv_zip(payload: bytes, source: str):
 
     # nutrient id → the NutritionFood attribute it feeds.
     nutrient_attr: Dict[str, str] = {}
-    for row in _rows(archive, nutrient_member):
+    for row in _rows(archive, nutrient_member, counter):
         key = (_norm(row.get("name", "")), _norm(row.get("unit_name", "")))
         attr = _WANTED_NUTRIENTS.get(key)
         if attr:
@@ -275,14 +380,14 @@ def parse_fdc_csv_zip(payload: bytes, source: str):
     # been in the bundle and was simply never opened.
     categories: Dict[str, str] = {}
     if category_member:
-        for row in _rows(archive, category_member):
+        for row in _rows(archive, category_member, counter):
             description = normalise_category(row.get("description"))
             if row.get("id") and description:
                 categories[row["id"]] = description
 
     imported_at = datetime.now(timezone.utc)
     foods: Dict[str, NutritionFood] = {}
-    for row in _rows(archive, food_member):
+    for row in _rows(archive, food_member, counter):
         fdc_id = row.get("fdc_id")
         description = (row.get("description") or "").strip()
         if not fdc_id or not description:
@@ -298,7 +403,7 @@ def parse_fdc_csv_zip(payload: bytes, source: str):
             imported_at = imported_at,
         )
 
-    for row in _rows(archive, food_nutrient_member):
+    for row in _rows(archive, food_nutrient_member, counter):
         attr = nutrient_attr.get(row.get("nutrient_id", ""))
         if not attr:
             continue

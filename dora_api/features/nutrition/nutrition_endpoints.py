@@ -88,6 +88,15 @@ def _source_payload():
                 "phase": state.phase,
                 "error": state.error,
                 "default_url": default_url(status.id),
+                # Live counters so the page can draw a real bar instead of an
+                # open-ended spinner. `bytes_total` is 0 when the origin sent
+                # no Content-Length, which the client reads as "indeterminate"
+                # — it must not be treated as a denominator.
+                "bytes_done": state.bytes_done,
+                "bytes_total": state.bytes_total,
+                "rows_done": state.rows_done,
+                "foods": state.foods,
+                "portions": state.portions,
             })
         sources.append(entry)
 

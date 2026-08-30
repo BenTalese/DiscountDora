@@ -19,6 +19,15 @@
              section stays scannable. -->
         <SettingsSection>
             <template #title>Assistant chat</template>
+            <!-- Owner 2026-08-29: *"should more clearly define the sections…
+                 one section is about the assistant chat, the other is about
+                 zero input pantry."* Both now carry a one-line description
+                 saying which job they belong to, the way the Notifications
+                 channels do. -->
+            <template #description>
+                The chat bubble you talk to — whether it appears, and which
+                brain answers it.
+            </template>
 
             <SettingsRow label="Show digital assistant chat bubble">
                 <q-toggle
@@ -30,17 +39,11 @@
             <SettingsRow>
                 <template #label>
                     Mode
-                    <q-icon :name="ICONS.help_outline" size="14px" class="q-ml-xs dora-text-muted">
-                        <q-tooltip max-width="320px">
-                            <strong>Basic</strong> (the default, no setup)
-                            answers questions about your pantry, meals, and
-                            lists and can add items when you type things like
-                            "add milk". Selecting a language model routes
-                            tool-able requests through it for richer,
-                            multi-step help. Only providers you've connected
-                            below can be picked.
-                        </q-tooltip>
-                    </q-icon>
+                    <InfoTip label="Mode">
+                        Choose between basic mode and configured providers for
+                        AI mode for your assistant chat. See help for more
+                        information.
+                    </InfoTip>
                 </template>
                 <q-select
                     :model-value="modeValue"
@@ -164,7 +167,15 @@
                     </template>
 
                     <!-- Paid providers: API key (write-only) + model + optional
-                         base URL (a self-hosted relay). Gemini has no base URL. -->
+                         base URL (a self-hosted relay or proxy).
+
+                         Owner 2026-08-29: *"Why does anthropic and openai have
+                         base url optional, and gemini has nothing?"* No reason
+                         — `GeminiClient` has taken a `base_url` since it was
+                         written (defaulting to generativelanguage.googleapis
+                         .com) and `factory.py` passes it through, so the field
+                         was the only part missing. All three paid providers
+                         offer it now. -->
                     <template v-else>
                         <SettingsRow label="API key" stacked>
                             <q-input
@@ -195,7 +206,7 @@
                                 @keydown.enter.prevent="onPaidModelBlur(provider)"
                             />
                         </SettingsRow>
-                        <SettingsRow v-if="provider !== 'gemini'" label="Base URL (optional)" stacked>
+                        <SettingsRow label="Base URL (optional)" stacked>
                             <q-input
                                 v-model="state[provider].base_url"
                                 outlined
@@ -227,13 +238,17 @@
 
         <SettingsSection>
             <template #title>Zero-Input Pantry</template>
+            <!-- Owner 2026-08-29: the last two sentences went. They restated
+                 the same reassurance twice ("your recorded level stays the
+                 source of truth" / "what she thinks never changes what the app
+                 does") and the per-surface rows below already say where each
+                 opinion shows up. The dash after "rhythm" went with them —
+                 the clause reads as a plain sentence now. -->
             <template #description>
                 Dora can infer each item's stock level from your shopping,
-                cooking, and buying rhythm — showing what it thinks beside the
+                cooking, and buying rhythm, showing what it thinks beside the
                 level you last recorded, and asking a quick check only when it's
-                unsure. Your recorded level always stays the source of truth for
-                shopping and cooking. Pick where she's allowed to mention it;
-                what she thinks never changes what the app does.
+                unsure.
                 <router-link
                     :to="{ path: '/help', query: { q: 'Dora thinks' } }"
                     class="settings-page__link"
@@ -288,12 +303,30 @@
                  was an install-wide setting despite only changing what one
                  person sees. It belongs with the other "Dora's opinions"
                  toggles above. -->
-            <SettingsRow
-                label='"Should I buy this?"'
-                help="On a stock item and on your shopping list, Dora gives a buy / wait / skip verdict from your own price, cadence and waste history — nothing external, no crowd data. Turn it off to hide it; it's your view only, not the household's."
-            >
+            <!-- Money is a prerequisite, not a co-equal toggle (owner call
+                 2026-08-27): the verdict reasons in money end-to-end, so with
+                 money off there is nothing honest for it to say. Disabled
+                 rather than hidden, per the `emailSmtpConfigured` precedent on
+                 Notifications — a toggle that vanishes leaves the dependency
+                 undiscoverable, and the user's own preference is preserved
+                 underneath for whenever money comes back on. -->
+            <SettingsRow label='"Should I buy this?"'>
+                <template #help>
+                    On a stock item and on your shopping list, Dora gives a buy
+                    / wait / skip verdict from your own price, cadence and waste
+                    history — nothing external, no crowd data. Turn it off to
+                    hide it; it's your view only, not the household's.
+                    <template v-if="!moneyEnabled">
+                        <br />
+                        <strong>
+                            Needs money features, which are off for this
+                            install{{ isAdmin ? '' : ' — ask an admin to turn them on' }}.
+                        </strong>
+                    </template>
+                </template>
                 <q-toggle
                     :model-value="currentUser.buy_verdict_enabled"
+                    :disable="!moneyEnabled"
                     @update:model-value="onBuyVerdictChange"
                 />
             </SettingsRow>
@@ -312,16 +345,23 @@
     import { useAuthStore } from 'src/stores/authStore';
     import { computed, onMounted, reactive, ref } from 'vue';
     import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';
+    import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
     import { useSettingsSave } from 'src/composables/useSettingsSave';
     import SettingsSection from 'src/components/settings/SettingsSection.vue';
     import SettingsRow from 'src/components/settings/SettingsRow.vue';
     import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
     import EncryptionKeyBanner from 'src/components/settings/EncryptionKeyBanner.vue';
+    import InfoTip from 'src/components/help/InfoTip.vue';
 
     const authStore = useAuthStore();
     const { currentUser } = storeToRefs(authStore);
     const assistantApi = new AssistantApiService();
     const { update } = useSettingsSave();
+
+    // Prerequisite for the "Should I buy this?" toggle below — install-wide,
+    // so a non-admin can't clear it themselves and the hint says who can.
+    const { moneyEnabled } = useMoneyEnabled();
+    const isAdmin = computed(() => currentUser.value?.is_admin === true);
 
     const PROVIDERS: LlmProviderName[] = ['ollama', 'openai', 'anthropic', 'gemini'];
 
@@ -371,10 +411,15 @@
         }
     }
 
+    // Placeholder for the optional Base URL field — the endpoint each client
+    // falls back to when the field is left empty, so the placeholder is the
+    // literal default rather than a hint. Must stay in step with each client's
+    // own `_DEFAULT_BASE_URL`.
     function defaultBaseUrl(p: LlmProviderName): string {
         switch (p) {
             case 'openai': return 'https://api.openai.com/v1';
             case 'anthropic': return 'https://api.anthropic.com';
+            case 'gemini': return 'https://generativelanguage.googleapis.com';
             default: return '';
         }
     }
@@ -434,12 +479,21 @@
         }
     }
 
+    // Owner feedback 2026-08-29 — *"Why is there info chip icons used in the
+    // provider cards for when they aren't configured? It gives the impression
+    // they will tell you something but I think it's just to show there's no
+    // connection."* Exactly right: both the empty and untested states drew the
+    // same `help_outline` glyph the rest of the app uses for "hover me for an
+    // explanation", so a status readout was wearing the costume of a control.
+    // Each state gets a glyph that only reports state now — an empty ring for
+    // nothing-configured, an alert for details we haven't been able to
+    // confirm.
     function statusIcon(p: LlmProviderName): string {
         switch (state[p].status) {
             case 'connected': return ICONS.check_circle;
             case 'error': return ICONS.warning;
-            case 'unverified': return ICONS.help_outline;
-            default: return ICONS.help_outline;
+            case 'unverified': return ICONS.warning_amber;
+            default: return ICONS.circle_outline;
         }
     }
 

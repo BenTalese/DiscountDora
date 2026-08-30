@@ -1,8 +1,19 @@
 <template>
     <!-- FU-609 / R-036 — root on <q-page> for the layout height contract.
-         Document-scroll page (sticky planner side-columns rely on the window
-         scroll container); no :style-fn. -->
-    <q-page class="q-pa-md">
+         **Fixed-height app-shell page** (the second shape R-036 sanctions, and
+         an application of ADR-032 — not a new pattern). Converted from
+         document-scroll on 2026-08-29 by Unit 1 of
+         BRIEF_MEAL_PLANNER_RAIL_AND_SHELL.
+         The three panes own their own scroll; the document does not scroll at
+         all above 1024px. This replaced `.planner-sticky`, whose sticky
+         columns kept the rails visible while the page's own chrome scrolled
+         away — and which subtracted a hardcoded 32px while ignoring the 64px
+         header entirely, so both rails overhung the viewport by about a
+         header's height (and a further 48px whenever OfflineBanner rendered).
+         `:style-fn` takes the *live* offset instead, which is exactly what
+         R-036's "never hardcode the offset" clause exists for. Do not
+         reintroduce a `calc(100vh - Npx)` here. -->
+    <q-page class="q-pa-md meal-plans" :style-fn="pageStyleFn">
         <!-- R-Phase 6 §9-I — skeleton during the initial parallel mount load
             so the planner shape arrives instantly instead of popcorning in. -->
         <MealPlanSkeleton
@@ -62,184 +73,380 @@
                     @print="planner.printFocusedWeek"
                 />
             </template>
+            <!-- ── Desktop: the fixed-height three-pane shell (Unit 1 §3.1) ──
+                 Panes scroll, the page does not. The rail keeps its search and
+                 target banner pinned; the week keeps its toolbar pinned; the
+                 right pane keeps the calendar pinned. -->
             <template v-else>
-            <div class="row items-center q-mb-sm">
-                <q-space />
-                <!-- FU-304 closed 2026-07-07 — Direction A won; the A/B
-                     `BaseSegmented` toggle and the sibling `/meal-plans/board`
-                     page were retired. -->
-                <BaseButton
-                    variant="secondary"
-                    :icon="ICONS.auto_awesome"
-                    label="Build my week"
-                    @click="builderOpen = true"
-                />
-            </div>
+            <div class="planner-shell">
+                <!-- ── Left: the recipe rail (Unit 2, §4.1-§4.2) ──────────── -->
+                <!--
+                     THE COLLAPSE CONTRACT — D-023 carve-out, read before changing.
 
-            <div class="row q-col-gutter-md">
-                <!-- ── Left: recipe list ──────────────────────────────────── -->
-                <div class="col-12 col-md-3 planner-side">
-                    <div class="planner-sticky">
+                     D-023 says a persistent control keeps its shape and its
+                     place across modes, and its establishing case is *a
+                     shopping-list side rail hidden per mode*, with the owner's
+                     verdict: "this will only lead to confusion with UI elements
+                     shape shifting." That rule lands directly on this rail, and
+                     it is why the predecessor plan's "picker drawer" route was
+                     rejected — a drawer that appears per mode is exactly the
+                     shape D-023 forbids.
+
+                     A user-operated disclosure is nonetheless compliant:
+                     D-023's stated violation signal is "two controls with
+                     different shapes and the same verb, each v-if'd to a
+                     different mode". This is ONE control in ONE place whose
+                     size the user chose, and the collapsed form is a LABELLED
+                     strip rather than a bare icon, so it reads as the same
+                     rail, smaller.
+
+                     **The system may only ever OPEN the rail. It may never
+                     close it.** No auto-collapse after an add, on target
+                     cancel, or on week change. Nothing shape-shifts under the
+                     user unless the user did it. Do not "fix" this to close
+                     after an add — that reintroduces precisely the confusion
+                     D-023 exists to prevent. -->
+                <div
+                    class="planner-pane planner-pane--rail"
+                    :class="{ 'planner-pane--rail-collapsed': !railOpen }"
+                >
+                    <!-- S1 — resting, collapsed. This is the DEFAULT on every
+                         arrival (D4/D3, owner 2026-08-29): the rail does not
+                         remember being open, and it does NOT auto-open on an
+                         empty week — the brief recommended that and the owner
+                         declined it. It opens on exactly two events: a slot is
+                         selected, or this strip is clicked. -->
+                    <button
+                        v-if="!railOpen"
+                        type="button"
+                        class="rail-strip"
+                        aria-label="Show recipes"
+                        :aria-expanded="false"
+                        @click="openRail"
+                    >
+                        <q-icon :name="ICONS.search" size="18px" />
+                        <!-- L100 — "filter button changes based on filter
+                             state": a dot when the list is narrowed, so the
+                             collapsed rail still says something is filtered. -->
+                        <span v-if="railFilterActive" class="rail-strip__dot" />
+                        <span class="rail-strip__label">
+                            Recipes · {{ planner.recipes.value.length }}
+                        </span>
+                        <q-icon :name="ICONS.chevron_right" size="18px" />
+                        <q-tooltip anchor="center right" self="center left">
+                            Show recipes
+                        </q-tooltip>
+                    </button>
+
+                    <!-- S2 / S3 — open. The picker owns browsing vs targeting;
+                         the page owns only whether the rail is open. -->
+                    <template v-else>
+                        <div class="rail-head">
+                            <BaseButton
+                                variant="icon"
+                                size="sm"
+                                :icon="ICONS.chevron_left"
+                                aria-label="Hide recipes"
+                                @click="railOpen = false"
+                            >
+                                <q-tooltip>Hide recipes</q-tooltip>
+                            </BaseButton>
+                            <span class="rail-head__label">Recipes</span>
+                        </div>
                         <MealPlanRecipePicker
                             v-model:recipe-search="planner.recipeSearch.value"
-                            :trays="planner.trays.value"
+                            class="planner-pane__fill"
                             :recipes="planner.recipes.value"
                             :focused-target="planner.focusedTarget.value"
-                            :drag-allowed="planner.dragAllowed.value"
+                            :suggestions="planner.suggestions.value"
                             :format-date="planner.formatDate"
                             :log-cook="planner.logPaletteCook"
                             @cancel-target="planner.clearFocusedTarget"
                             @recipe-pick="planner.pickRecipe"
-                            @recipe-pointer-down="planner.onRecipePointerDown"
-                            @recipe-drag-start="planner.onDragStart"
-                            @recipe-drag-end="planner.onDragEnd"
                             @palette-meal-adjust="planner.adjustPaletteMeals"
+                            @suggestions-requested="planner.loadSuggestions"
                         />
-                    </div>
+                    </template>
                 </div>
 
-                <!-- ── Main: vertical week carousel ───────────────────────── -->
-                <div class="col-12 col-md-6">
-                    <div class="row items-center q-mb-xs">
-                        <BaseButton variant="icon" :icon="ICONS.arrow_upward" @click="planner.goPrevWeek">
-                            <q-tooltip>Previous week</q-tooltip>
-                        </BaseButton>
-                        <div class="text-subtitle2 q-ml-sm">{{ planner.weekRangeLabel.value }}</div>
-                        <q-space />
-                        <BaseButton
-                            v-if="planner.focusedPlan.value"
-                            variant="icon"
-                            :icon="ICONS.content_copy"
-                            aria-label="Duplicate to next week"
-                            @click="planner.confirmDuplicateToNextWeek"
-                        >
-                            <q-tooltip>Duplicate to next week</q-tooltip>
-                        </BaseButton>
-                        <BaseButton
-                            v-if="planner.focusedPlan.value"
-                            variant="icon"
-                            :icon="ICONS.print"
-                            @click="planner.printFocusedWeek"
-                        >
-                            <q-tooltip>Print this week</q-tooltip>
-                        </BaseButton>
-                        <!-- U7 — destructive action is labelled, not an icon-only
-                            sibling of "print". Confirm dialog is unchanged. -->
-                        <BaseButton
-                            v-if="planner.focusedPlan.value"
-                            variant="danger-ghost"
-                            dense
-                            :icon="ICONS.delete_outline"
-                            label="Clear week"
-                            class="q-ml-sm"
-                            @click="planner.confirmClearWeek"
-                        />
-                    </div>
-
-                    <!-- Secondary row: show-all toggle (Q2) -->
-                    <div class="row items-center justify-end q-mb-sm">
-                        <q-toggle
-                            v-model="showAllSlots"
-                            dense
-                            size="sm"
-                            label="Show all slots"
-                            class="dora-text-muted"
-                            :title="showAllSlots
-                                ? 'Showing every household meal slot per day'
-                                : 'Showing only slots with planned meals'"
-                        />
-                    </div>
-
-                    <!-- R-Phase 2 — promoted week status (U2 + H1). Stays at the
-                        top of the working column so the answer-bearing summary
-                        is always glanceable as the carousel scrolls. -->
-                    <MealPlanWeekStatus
-                        :planned-count="plannedCount"
-                        :shortfall-count="planner.shortfall.value.length"
-                        :outstanding-count="planner.needToBuyOutstanding.value.length"
-                        :on-list-count="planner.needToBuyOnList.value.length"
-                        :cook-by-label="planner.cookByLabel.value"
-                    />
-
-                    <!-- Empty-week banner (recipes exist, this week is
-                        empty). Replaces 7 days of "tap to add" sprawl with
-                        one designed CTA. Calm empty state, distinct from
-                        R-029 hide-when-off. -->
-                    <q-card
-                        v-if="plannedCount === 0"
-                        flat bordered
-                        class="empty-week-banner q-mb-sm"
-                    >
-                        <q-card-section class="row items-center">
-                            <div>
-                                <div class="text-subtitle2">Plan this week</div>
+                <!-- ── Middle: consolidated toolbar + the week ─────────────── -->
+                <div class="planner-pane planner-pane--week">
+                    <!-- Pinned chrome (§3.2). Row 1 is navigation + the two
+                         primary actions; row 2 is the week's status. Neither
+                         scrolls away, which is the whole point of the shell.
+                         Acceptance: <= 96px at 1280x900 with batchEnabled and a
+                         full week, and nothing wraps to a third line. FU-738 is
+                         the cautionary tale — a toolbar band allowed to overflow
+                         put the primary CTA off-screen on the shopping list. -->
+                    <div class="planner-toolbar">
+                        <div class="row items-center no-wrap planner-toolbar__nav">
+                            <!-- D4 (owner, 2026-08-29) — the page takes NO
+                                 title. The week range is not promoted to one
+                                 either; it stays exactly where it is, between
+                                 the prev/next buttons. F40 stands: no "Week
+                                 of…" prefix. The relative sub-label is what
+                                 says *which* week, since a bare date range
+                                 doesn't. -->
+                            <BaseButton
+                                variant="icon"
+                                :icon="ICONS.chevron_left"
+                                aria-label="Previous week"
+                                @click="planner.goPrevWeek"
+                            >
+                                <q-tooltip>Previous week</q-tooltip>
+                            </BaseButton>
+                            <div class="planner-toolbar__week">
+                                <div class="text-subtitle2">{{ planner.weekRangeLabel.value }}</div>
                                 <div class="text-caption dora-text-muted">
-                                    Let Dora build it for you, or tap any day below to add a meal.
+                                    {{ planner.weekRelativeLabel.value }}
                                 </div>
                             </div>
-                            <q-space />
+                            <!-- F17 asked for the next-week arrow *below* the
+                                 working area. That bottom arrow is removed:
+                                 under the shell the week pane scrolls
+                                 internally, so a control at the foot of the
+                                 scroller is only reachable after scrolling
+                                 seven day cards. Both arrows now sit together
+                                 in pinned chrome, reachable at any scroll
+                                 position — which is the intent F17 was after. -->
                             <BaseButton
-                                variant="primary"
+                                variant="icon"
+                                :icon="ICONS.chevron_right"
+                                aria-label="Next week"
+                                @click="planner.goNextWeek"
+                            >
+                                <q-tooltip>Next week</q-tooltip>
+                            </BaseButton>
+
+                            <q-space />
+
+                            <!-- FU-304 closed 2026-07-07 — Direction A won; the
+                                 A/B `BaseSegmented` toggle and the sibling
+                                 `/meal-plans/board` page were retired. -->
+                            <BaseButton
+                                variant="secondary"
                                 :icon="ICONS.auto_awesome"
-                                label="Build my week"
+                                :label="compactToolbar ? undefined : 'Build my week'"
                                 @click="builderOpen = true"
-                            />
-                        </q-card-section>
-                    </q-card>
+                            >
+                                <q-tooltip>Build my week</q-tooltip>
+                            </BaseButton>
 
-                    <transition :name="planner.weekTransition.value" mode="out-in">
-                        <div
-                            :key="planner.focusedMonday.value"
-                            @touchstart.passive="planner.onTouchStart"
-                            @touchend.passive="planner.onTouchEnd"
-                        >
-                            <MealPlanWeekDayCard
-                                v-for="day in planner.weekDays.value"
-                                :key="day.iso"
-                                :day="day"
-                                :is-past="planner.isPastDay(day.iso)"
-                                :is-today="day.iso === planner.currentDayIso.value"
-                                :slot-names="planner.slotNames.value"
-                                :slot-entries="(slot: string) => planner.slotEntries(day.iso, slot)"
-                                :other-entries="planner.otherSlotEntries(day.iso)"
-                                :is-targeted-slot="(slot: string) => planner.isTargeted(day.iso, slot)"
-                                :shortfall-recipe-ids="planner.shortfallRecipeIds.value"
-                                :hovered-recipe-ids="planner.hoveredRecipeIds.value"
-                                :format-date="planner.formatDate"
-                                :show-all-slots="showAllSlots"
-                                :nutrition="planner.dayNutrition(day.iso)"
-                                @select-slot="(slot: string) => planner.selectSlot(day.iso, slot)"
-                                @drop-on-slot="(slot: string) => planner.onDropOnSlot(day.iso, slot)"
-                                @entry-view="planner.goToRecipe"
-                                @entry-cook="planner.cookRecipe"
-                                @entry-remove="planner.removeEntry"
-                                @entry-adjust="planner.adjustEntryServings"
-                                @entry-link="onEntryLink"
-                                @entry-unlink="onEntryUnlink"
-                                @entry-lighter="onEntryLighter"
-                            />
+                            <!-- The overflow menu (§3.2). Absorbs what used to
+                                 be three toolbar siblings (duplicate, print,
+                                 Clear week), a full row for one toggle, and a
+                                 right-pane card that wrapped a single button.
+                                 F37 keeps Clear week labelled and destructive
+                                 rather than an icon-only sibling of print. -->
+                            <BaseButton
+                                variant="icon"
+                                :icon="ICONS.more_vert"
+                                aria-label="More week actions"
+                                class="q-ml-xs"
+                            >
+                                <q-tooltip>More week actions</q-tooltip>
+                                <q-menu anchor="bottom right" self="top right">
+                                    <q-list style="min-width: 220px">
+                                        <q-item
+                                            v-close-popup clickable
+                                            :disable="!planner.focusedPlan.value"
+                                            @click="planner.confirmDuplicateToNextWeek"
+                                        >
+                                            <q-item-section avatar>
+                                                <q-icon :name="ICONS.content_copy" />
+                                            </q-item-section>
+                                            <q-item-section>Duplicate to next week</q-item-section>
+                                        </q-item>
+                                        <q-item
+                                            v-close-popup clickable
+                                            :disable="!planner.focusedPlan.value"
+                                            @click="planner.printFocusedWeek"
+                                        >
+                                            <q-item-section avatar>
+                                                <q-icon :name="ICONS.print" />
+                                            </q-item-section>
+                                            <q-item-section>Print this week</q-item-section>
+                                        </q-item>
+
+                                        <q-separator />
+
+                                        <!-- F12 stays satisfied — the templates
+                                             drawer itself is unchanged; only the
+                                             card that wrapped its button is
+                                             gone. -->
+                                        <q-item
+                                            v-close-popup clickable
+                                            :disable="!canSaveCurrentWeek"
+                                            @click="openSaveTemplate"
+                                        >
+                                            <q-item-section avatar>
+                                                <q-icon :name="ICONS.save" />
+                                            </q-item-section>
+                                            <q-item-section>Save week as template…</q-item-section>
+                                        </q-item>
+                                        <q-item
+                                            v-close-popup clickable
+                                            @click="templatesDrawerOpen = true"
+                                        >
+                                            <q-item-section avatar>
+                                                <q-icon :name="ICONS.event_repeat" />
+                                            </q-item-section>
+                                            <q-item-section>Browse + apply templates…</q-item-section>
+                                        </q-item>
+
+                                        <q-separator />
+
+                                        <q-item>
+                                            <q-item-section>
+                                                <q-toggle
+                                                    v-model="showAllSlots"
+                                                    dense
+                                                    size="sm"
+                                                    label="Show all meal slots"
+                                                    :title="showAllSlots
+                                                        ? 'Showing every household meal slot per day'
+                                                        : 'Showing only slots with planned meals'"
+                                                />
+                                            </q-item-section>
+                                        </q-item>
+
+                                        <q-separator />
+
+                                        <!-- U7 / F37 — the destructive action
+                                             keeps its label and its colour. -->
+                                        <q-item
+                                            v-close-popup clickable
+                                            :disable="!planner.focusedPlan.value"
+                                            class="text-negative"
+                                            @click="planner.confirmClearWeek"
+                                        >
+                                            <q-item-section avatar>
+                                                <q-icon :name="ICONS.delete_outline" color="negative" />
+                                            </q-item-section>
+                                            <q-item-section>Clear week</q-item-section>
+                                        </q-item>
+                                    </q-list>
+                                </q-menu>
+                            </BaseButton>
                         </div>
-                    </transition>
 
-                    <div class="row items-center justify-center q-mt-xs">
-                        <BaseButton variant="icon" :icon="ICONS.arrow_downward" @click="planner.goNextWeek">
-                            <q-tooltip>Next week</q-tooltip>
-                        </BaseButton>
+                        <!-- Row 2 — the status strip (D8: it stays in the
+                             toolbar rather than becoming a `PageCountsFooter`).
+                             This is a *status* strip, not a count of listed
+                             records, and F45 wants the shortfall to have exactly
+                             one home, near the week nav. The divergence from the
+                             app-wide sticky-footer convention (L93/L212/L231) is
+                             deliberate and recorded in the worklog — it is not
+                             an oversight, and it should not be "made
+                             consistent" without revisiting D8.
+                             R-Phase 2 (U2 + H1) promoted this block; it now
+                             lives in pinned chrome, which is what its own
+                             comment always said it was for. -->
+                        <MealPlanWeekStatus
+                            class="planner-toolbar__status"
+                            :planned-count="plannedCount"
+                            :shortfall-count="planner.shortfall.value.length"
+                            :outstanding-count="planner.needToBuyOutstanding.value.length"
+                            :on-list-count="planner.needToBuyOnList.value.length"
+                            :cook-by-label="planner.cookByLabel.value"
+                        />
                     </div>
 
-                    <!-- FU-451 — budget-defense swaps (renders itself only when
-                         money features are on AND the week is over budget). -->
-                    <SwapSuggestionsPanel
-                        :meal-plan-id="planner.focusedPlan.value?.meal_plan_id ?? null"
-                        @changed="onSwapApplied"
-                    />
+                    <!-- The week itself — the only scrolling part of this
+                         pane. §3.7: day cards MUST stay a vertical stack of
+                         full-width blocks with slot rows inside them. When the
+                         rail expands in Unit 2 the pane narrows, and because the
+                         cards are full-width stacked blocks that reflow is
+                         horizontal only — so a card's vertical position doesn't
+                         move and the slot just clicked stays under the cursor.
+                         Make the week columnar and the rail's auto-open stops
+                         being safe. (Also F46/F27, already implemented.) -->
+                    <div ref="weekScrollRef" class="planner-pane__scroll">
+                        <!-- Empty-week banner (recipes exist, this week is
+                            empty). Replaces 7 days of "tap to add" sprawl with
+                            one designed CTA. Calm empty state, distinct from
+                            R-029 hide-when-off. -->
+                        <q-card
+                            v-if="plannedCount === 0"
+                            flat bordered
+                            class="empty-week-banner q-mb-sm"
+                        >
+                            <q-card-section class="row items-center">
+                                <div>
+                                    <div class="text-subtitle2">Plan this week</div>
+                                    <div class="text-caption dora-text-muted">
+                                        Let Dora build it for you, or tap any day below to add a meal.
+                                    </div>
+                                </div>
+                                <q-space />
+                                <BaseButton
+                                    variant="primary"
+                                    :icon="ICONS.auto_awesome"
+                                    label="Build my week"
+                                    @click="builderOpen = true"
+                                />
+                            </q-card-section>
+                        </q-card>
+
+                        <transition :name="planner.weekTransition.value" mode="out-in">
+                            <div
+                                :key="planner.focusedMonday.value"
+                                @touchstart.passive="planner.onTouchStart"
+                                @touchend.passive="planner.onTouchEnd"
+                            >
+                                <MealPlanWeekDayCard
+                                    v-for="day in planner.weekDays.value"
+                                    :key="day.iso"
+                                    :data-day-iso="day.iso"
+                                    :class="day.iso === arrivedDayIso ? arrivalFeedback : undefined"
+                                    :day="day"
+                                    :is-past="planner.isPastDay(day.iso)"
+                                    :is-today="day.iso === planner.currentDayIso.value"
+                                    :slot-names="planner.slotNames.value"
+                                    :slot-entries="(slot: string) => planner.slotEntries(day.iso, slot)"
+                                    :other-entries="planner.otherSlotEntries(day.iso)"
+                                    :is-targeted-slot="(slot: string) => planner.isTargeted(day.iso, slot)"
+                                    :shortfall-recipe-ids="planner.shortfallRecipeIds.value"
+                                    :hovered-recipe-ids="planner.hoveredRecipeIds.value"
+                                    :format-date="planner.formatDate"
+                                    :show-all-slots="showAllSlots"
+                                    :nutrition="planner.dayNutrition(day.iso)"
+                                    @select-slot="(slot: string) => planner.selectSlot(day.iso, slot)"
+                                    @entry-view="planner.goToRecipe"
+                                    @entry-cook="planner.cookRecipe"
+                                    @entry-remove="planner.removeEntry"
+                                    @entry-adjust="planner.adjustEntryServings"
+                                    @entry-link="onEntryLink"
+                                    @entry-unlink="onEntryUnlink"
+                                    @entry-lighter="onEntryLighter"
+                                />
+                            </div>
+                        </transition>
+
+                        <!-- FU-451 — budget-defense swaps (renders itself only when
+                             money features are on AND the week is over budget). -->
+                        <SwapSuggestionsPanel
+                            :meal-plan-id="planner.focusedPlan.value?.meal_plan_id ?? null"
+                            @changed="onSwapApplied"
+                        />
+                    </div>
                 </div>
 
-                <!-- ── Right: calendar + shopping summary ─────────────────── -->
-                <div class="col-12 col-md-3 planner-side">
-                    <div class="planner-sticky">
-                        <MealPlanCalendar v-model:focused-monday="planner.focusedMonday.value" class="q-mb-sm" />
+                <!-- ── Right: calendar pinned, shopping summary scrolling ──── -->
+                <!-- §3.3 — deliberately NOT merged into the middle pane. The
+                     calendar is navigation, and scrolling navigation away
+                     repeats the bottom-arrow mistake; the shopping summary is
+                     the payoff of planning, so putting it below seven day cards
+                     buries it. F14 is honoured verbatim: the calendar widget
+                     sits on the right, above the shopping info. -->
+                <div class="planner-pane planner-pane--context">
+                    <MealPlanCalendar
+                        v-model:focused-monday="planner.focusedMonday.value"
+                        class="q-mb-sm"
+                        @day-selected="scrollWeekToDay"
+                    />
 
+                    <div class="planner-pane__scroll">
                         <MealPlanShoppingSummary
                             :focused-plan="planner.focusedPlan.value"
                             :ingredients-loading="planner.ingredientsLoading.value"
@@ -256,24 +463,6 @@
                             @hover-ingredient="planner.hoverIngredient"
                             @clear-hover="planner.clearHover"
                         />
-
-                        <!-- Templates (C-2.F / §9-E unified drawer) ─────── -->
-                        <q-card flat bordered class="q-mt-sm">
-                            <q-card-section class="q-pb-none">
-                                <div class="text-subtitle1">Templates</div>
-                                <div class="text-caption dora-text-muted">
-                                    Save a week's meals and re-use them on any other week.
-                                </div>
-                            </q-card-section>
-                            <q-card-actions class="column items-stretch q-gutter-xs">
-                                <BaseButton
-                                    variant="secondary"
-                                    :icon="ICONS.event_repeat"
-                                    label="Browse + apply templates…"
-                                    @click="templatesDrawerOpen = true"
-                                />
-                            </q-card-actions>
-                        </q-card>
                     </div>
                 </div>
             </div>
@@ -285,7 +474,7 @@
             v-if="$q.screen.lt.md"
             v-model="pickerSheetOpen"
             v-model:recipe-search="planner.recipeSearch.value"
-            :trays="planner.trays.value"
+            :suggestions="planner.suggestions.value"
             :recipes="planner.recipes.value"
             :focused-target="planner.focusedTarget.value"
             :format-date="planner.formatDate"
@@ -293,6 +482,7 @@
             @cancel-target="planner.clearFocusedTarget"
             @recipe-pick="planner.pickRecipe"
             @palette-meal-adjust="planner.adjustPaletteMeals"
+            @suggestions-requested="planner.loadSuggestions"
         />
 
         <!-- FU-637 — "find a lighter option" for one meal. Opened from the
@@ -309,10 +499,7 @@
         <MealPlanTemplatesDrawer
             v-model="templatesDrawerOpen"
             :templates="planner.templates.value"
-            :can-save-current-week="
-                !!planner.focusedPlan.value
-                    && planner.focusedPlan.value.entries.length > 0
-            "
+            :can-save-current-week="canSaveCurrentWeek"
             @save-current-week="openSaveTemplate"
             @apply-recurring="openRecurring"
             @apply-template="onTemplateApply"
@@ -427,7 +614,8 @@
     import { shiftDays } from 'src/helpers/weekDates';
     import { useQuasar } from 'quasar';
     import type { MealPlanEntry } from 'src/models/mealPlan';
-    import { computed, ref, watch } from 'vue';
+    import { useMicroFeedback } from 'src/composables/useMicroFeedback';
+    import { computed, nextTick, ref, watch } from 'vue';
 
     const planner = useMealPlanner();
     const { moneyEnabled } = useMoneyEnabled();
@@ -491,6 +679,102 @@
 
     const plannedCount = computed(
         () => (planner.focusedPlan.value?.entries ?? []).filter((e) => !e.consumed_at).length,
+    );
+
+    // R-036 / ADR-032 — the fixed-height app-shell contract, copied verbatim
+    // from `StockOverview.vue` (the canonical implementation) rather than
+    // reinvented. `offset` is the live chrome height Quasar measures, so the
+    // header and a rendered OfflineBanner are both accounted for; the
+    // `height === 0` branch is Quasar's pre-measurement first paint.
+    function pageStyleFn(offset: number, height: number) {
+        return {
+            height: height === 0 ? `calc(100vh - ${offset}px)` : `${height - offset}px`,
+        };
+    }
+
+    // ── The rail's open state (§4.2, D3 as answered) ───────────────────────
+    //
+    // DERIVED, never remembered. Two house precedents disagreed —
+    // `useListViewMode` persists to localStorage, `useFilterPanelExpanded`
+    // deliberately stopped in favour of "the panel is open when there is
+    // something in it" (owner, 2026-08-20, annotated "adopt elsewhere") — and
+    // the owner chose derivation, narrower than the brief proposed: the rail is
+    // **always collapsed on arrival**, and the brief's empty-week auto-open was
+    // explicitly declined. Do not add it back, and do not persist this.
+    const railOpen = ref(false);
+
+    function openRail() {
+        railOpen.value = true;
+    }
+
+    // Arming a slot opens the rail — one of the only two things that may.
+    // This watcher deliberately has NO symmetric close: it fires on every
+    // target change, so a close branch would yank the rail out from under a
+    // user who was mid-scroll. See the collapse contract in the template.
+    //
+    // Moving focus into the rail's search (§4.6) is the picker's own job, not
+    // this watcher's — it mounts as a *result* of `openRail()`, so a template
+    // ref read here is still null. See `MealPlanRecipePicker`'s focus block.
+    watch(() => planner.focusedTarget.value, (target) => {
+        if (target) openRail();
+    });
+
+    // ── Calendar → week pane (Unit 3, §5) ─────────────────────────────────
+    //
+    // Clicking a day in the calendar focuses its week AND scrolls the week pane
+    // to that day's card. This is the payoff of the whole redesign and is only
+    // possible because Unit 1 gave the middle pane its own scroll container —
+    // under document-scroll there was nothing to scroll *within*.
+    //
+    // The page owns this rather than the calendar because the page owns the
+    // scroller; the calendar only names the day. The card is found by a
+    // `data-day-iso` attribute rather than a ref array: the week re-renders
+    // through a <transition> on every week change, so a ref collected before
+    // the change points at a card that is on its way out.
+    const weekScrollRef = ref<HTMLElement | null>(null);
+    const arrivedDayIso = ref<string | null>(null);
+    // One `dora-settle` on the arriving card — a one-shot marking the arrival,
+    // never bound to a persistent condition (§4.7 / D-010: an animation that
+    // repeats on its own becomes wallpaper).
+    const arrivalFeedback = useMicroFeedback(() => arrivedDayIso.value, 'settle');
+
+    async function scrollWeekToDay(dayIso: string) {
+        // The week may have just changed, so wait for the new cards to render.
+        await nextTick();
+        const card = weekScrollRef.value
+            ?.querySelector<HTMLElement>(`[data-day-iso="${dayIso}"]`);
+        if (!card) return;
+        card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        arrivedDayIso.value = dayIso;
+    }
+
+    // L100 — the collapsed strip shows a dot when the list is narrowed. The
+    // search box is the only narrowing the page can see from out here; the chip
+    // selection lives inside the picker, which is unmounted while collapsed.
+    const railFilterActive = computed(() => !!planner.recipeSearch.value.trim());
+
+    // §3.2 acceptance — the toolbar must not wrap to a third line. Measured at
+    // 1024px it did (129px tall, the FU-738 failure mode where an overflowing
+    // toolbar band pushes the primary CTA out of reach), because the week pane
+    // is whatever the two fixed side panes leave behind: 280 + 300 + gutters,
+    // so ~380px at 1024 against ~636px at 1280.
+    //
+    // Same treatment as `StockOverview.vue`'s `compactToolbar`: the action drops
+    // its label and rides its icon alone, with the tooltip carrying the name.
+    // The threshold is expressed against the *viewport* because that is what
+    // Quasar makes reactive, but it is derived from the pane: below ~1120px the
+    // week pane falls under ~480px, which is where the labelled button stops
+    // fitting beside the week nav. Re-measure this if the side-pane widths
+    // change — Unit 2's collapsible rail will hand the week ~234px back, at
+    // which point this may be able to relax.
+    const WEEK_TOOLBAR_COMPACT_BELOW_PX = 1120;
+    const compactToolbar = computed(() => $q.screen.width < WEEK_TOOLBAR_COMPACT_BELOW_PX);
+
+    // Shared by the toolbar's overflow menu and the templates drawer, which
+    // both gate "save this week" on the same fact (R-003: one source, not two
+    // copies of the same predicate).
+    const canSaveCurrentWeek = computed(
+        () => !!planner.focusedPlan.value && planner.focusedPlan.value.entries.length > 0,
     );
 
     // ── Save-template dialog (page-local UI state) ─────────────────────────
@@ -614,29 +898,189 @@
 </script>
 
 <style scoped>
+    /* D-010 — the week carousel hand-rolled `transform 0.18s ease` — a literal
+       duration and a stock easing curve, which the rule names as the violation
+       ("all animation reads `--motion-*` tokens — no literal `ms`"). 0.18s sat
+       between two existing tokens for no reason; `--motion-normal` (200ms) is
+       the nearest and is what the rest of the app's page-level transitions
+       use. Fixed here as a side-effect of Unit 1, per the brief. */
     .wk-down-enter-active,
     .wk-down-leave-active,
     .wk-up-enter-active,
     .wk-up-leave-active {
-        transition: transform 0.18s ease, opacity 0.18s ease;
+        transition:
+            transform var(--motion-normal) var(--motion-ease),
+            opacity var(--motion-normal) var(--motion-ease);
     }
     .wk-down-enter-from { transform: translateY(20px); opacity: 0; }
     .wk-down-leave-to { transform: translateY(-20px); opacity: 0; }
     .wk-up-enter-from { transform: translateY(-20px); opacity: 0; }
     .wk-up-leave-to { transform: translateY(20px); opacity: 0; }
 
-    /* U2 — sticky context columns (desktop). The carousel column is the only
-        one that scrolls; the palette and shopping rail stay visible. */
+    /* ── The fixed-height three-pane shell (Unit 1 §3.1) ────────────────────
+       Replaces U2's `.planner-side` / `.planner-sticky`, which pinned the two
+       side columns inside the *document* scroller: the rails stayed visible but
+       the page's own chrome scrolled away, and `max-height: calc(100vh - 32px)`
+       ignored the 64px header entirely, so both rails overhung the viewport.
+       The page no longer scrolls at all here — each pane does.
+
+       §3.4 — mobile is untouched. `$q.screen.lt.md` routes to
+       `MealPlanMobileFocus` and every rule below is scoped to >= 1024px, exactly
+       as `.planner-sticky` was. Below that the shell is a plain block and the
+       document scrolls as before. */
+    .planner-shell {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-4);
+        min-height: 0;
+    }
+
+    /* §3.4 — mobile reverts to a single window-scrolled column. `:style-fn` is
+       a prop, not a media query, so it sets its inline height at every width;
+       without this the phone gets a viewport-locked page whose content can only
+       overflow rather than scroll. Same escape hatch, same reason, as
+       `SettingsShell.vue` (FU-609). Below 1024px the desktop branch isn't even
+       mounted — `MealPlanMobileFocus` is. */
+    @media (max-width: 1023px) {
+        .meal-plans {
+            height: auto !important;
+        }
+    }
+
     @media (min-width: 1024px) {
-        .planner-side {
-            align-self: flex-start;
+        /* The q-page root is sized by `pageStyleFn`; this makes it the flex
+           column that hands the remaining height down to the pane row. */
+        .meal-plans {
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
         }
-        .planner-sticky {
-            position: sticky;
-            top: 16px;
-            max-height: calc(100vh - 32px);
+        /* Page-level chrome above the shell (the reconcile nudge) keeps its
+           natural height; the pane row takes what's left. */
+        .planner-shell {
+            flex: 1 1 auto;
+            flex-direction: row;
+            align-items: stretch;
+            min-height: 0;
+        }
+        .planner-pane {
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+        }
+        /* D2 — the rail collapses to a 46px LABELLED strip, not to nothing.
+           The width animates on tokens (D-010: no literal ms), and because the
+           week pane is `flex: 1 1 auto` it simply absorbs the difference — §3.7
+           is what makes that safe, since the day cards are full-width stacked
+           blocks and so the reflow is horizontal only. A slot the user just
+           clicked does not move vertically under the cursor while the rail
+           opens. */
+        .planner-pane--rail {
+            flex: 0 0 280px;
+            width: 280px;
+            transition: flex-basis var(--motion-normal) var(--motion-ease),
+                width var(--motion-normal) var(--motion-ease);
+        }
+        .planner-pane--rail-collapsed {
+            flex: 0 0 46px;
+            width: 46px;
+        }
+        .planner-pane--week {
+            flex: 1 1 auto;
+            min-width: 0;
+        }
+        .planner-pane--context {
+            flex: 0 0 300px;
+            width: 300px;
+        }
+        /* A pane child that fills the pane and scrolls internally itself
+           (the recipe picker card owns its own scroller). */
+        .planner-pane__fill {
+            flex: 1 1 auto;
+            min-height: 0;
+        }
+        /* The canonical inner scroller (`.stock-list`, StockOverview.vue).
+           The padding lives HERE, on the scroller, not on the pane: a
+           scrollbar paints at the scroller's outer edge, so holding the
+           padding here puts the bar hard against the pane edge with the gap
+           between it and the content. On the pane instead, the scroller stops
+           short and the bar reads as floating inside the content. */
+        .planner-pane__scroll {
+            flex: 1 1 auto;
+            min-height: 0;
             overflow-y: auto;
+            padding-right: var(--space-4);
+            /* Reserve the gutter so content doesn't jump width when a week
+               crosses from non-scrolling to scrolling. */
+            scrollbar-gutter: stable;
         }
+        /* Pinned chrome — the consolidated toolbar (§3.2). Natural height,
+           never scrolls. */
+        .planner-toolbar {
+            flex: 0 0 auto;
+            padding-right: var(--space-4);
+        }
+    }
+
+    /* S1 — the collapsed rail. A labelled vertical strip, deliberately not a
+       bare icon: D-023 is satisfied by this reading as *the same rail, smaller*
+       rather than a differently-shaped stand-in for it. */
+    .rail-strip {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: var(--space-2);
+        height: 100%;
+        width: 100%;
+        padding: var(--space-2) 0;
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-sm);
+        background: var(--surface-component);
+        color: var(--text-secondary);
+        cursor: pointer;
+        transition: background var(--motion-fast) var(--motion-ease);
+    }
+    .rail-strip:hover {
+        background: color-mix(in srgb, var(--brand-primary) 8%, var(--surface-component));
+    }
+    .rail-strip:focus-visible {
+        outline: 2px solid var(--brand-primary);
+        outline-offset: 2px;
+    }
+    .rail-strip__label {
+        writing-mode: vertical-rl;
+        white-space: nowrap;
+        font-size: calc(var(--font-size-sm) * 1rem);
+        font-weight: 500;
+    }
+    /* L100 — "filter button changes based on filter state". */
+    .rail-strip__dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--brand-secondary-strong);
+    }
+
+    .rail-head {
+        display: flex;
+        align-items: center;
+        gap: var(--space-1);
+        flex: 0 0 auto;
+        padding-bottom: var(--space-1);
+    }
+    .rail-head__label {
+        font-size: calc(var(--font-size-sm) * 1rem);
+        font-weight: 600;
+        color: var(--text-secondary);
+    }
+
+    .planner-toolbar__week {
+        margin-left: var(--space-2);
+        margin-right: var(--space-2);
+        line-height: 1.2;
+    }
+    .planner-toolbar__status {
+        margin-top: var(--space-2);
     }
 
     .empty-week-banner {

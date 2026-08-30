@@ -109,8 +109,8 @@
     // Owner call 2026-08-14 — "Account" used to be a catch-all holding your
     // identity, five unrelated preference pages, and About (which isn't
     // personal at all). Account is its own destination now, the preferences
-    // sit under their own header, and About is a standalone entry at the
-    // bottom. Both standalone groups are `headerless` — they're single
+    // sit under their own header, and About is a standalone entry beside
+    // Account. Both standalone groups are `headerless` — they're single
     // destinations, not categories.
     const accountSections: SettingsNavEntry[] = [
         { path: '/settings/account', label: 'Account', icon: ICONS.person },
@@ -316,11 +316,14 @@
                 { label: 'Data & access', items: adminData, icon: ICONS.storage },
             ];
         }
+        // Owner 2026-08-29: About moved up under Account so the two
+        // single-destination entries sit together instead of bookending the
+        // preference and kitchen-setup groups between them.
         return [
             { label: 'Account', items: accountSections, headerless: true },
+            { label: 'About', items: aboutSections, headerless: true },
             { label: 'Preferences', items: preferenceSections },
             { label: 'Kitchen setup', items: kitchenSetupSections.value },
-            { label: 'About', items: aboutSections, headerless: true },
         ];
     });
 

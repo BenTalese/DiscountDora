@@ -22,6 +22,159 @@ top-to-bottom.
 
 ---
 
+## Weekly deals email (2026-08-29) — origin FU-789
+Built and driven end to end with a captured sender: the gate chain, the send, the
+dedup, both rendered formats and the scheduler registration are all confirmed.
+What a captured sender can't prove:
+- [ ] **A real send through real SMTP arrives.** Configure SMTP, subscribe with a
+      verified address, set today as your send day, and confirm the mail lands —
+      the job's own SMTP short-circuit means a dry-run install never exercises
+      `smtplib` at all.
+- [ ] **Both formats render in an actual mail client** (Gmail web + a phone).
+      The cards are table-based inline-styled HTML; the brand banner is an
+      inline-CID image, which only resolves in a real client.
+- [ ] The 07:00 send fires **on the household clock** after changing the install
+      timezone — the job is registered hourly and gates internally, so this is
+      the check that the gate, not the cron, is picking the hour.
+
+## Settings feedback batch 1 (2026-08-29)
+Driven live at 1280×900: nav order (Account → About), both notification sections
+with banners above their rows, the voice-input and no-Piper warning cards, the
+Gemini Base URL field, and toggle-to-label centre offset measured at 0px on every
+row. Only what that run can't reach:
+- [ ] At **375px** the Settings rows still stack label-above-control, and the
+      (?) chips stay tappable rather than colliding with the wrapped label.
+- [ ] An **info chip tooltip opens on a touch device** (long-press) — the chips
+      now carry the whole explanation for Evening brief and Weekly deals, so a
+      phone that can't open one loses the copy entirely.
+- [ ] On an install that **does** have Piper, Settings → Voice still shows the
+      voice catalogue with the lede above it (only the missing-engine branch was
+      exercised live).
+- [ ] Warning cards on Notifications and Voice read correctly in a **dark
+      theme** — they use `dora-bg-warning-soft` on `text-primary`.
+
+## Recipe + cookbook feedback batch (2026-08-29)
+All six items driven live at 1280×900: the cook-now sub-line is gone, both
+details drawers render the nutrition card, all 13 filters measure 210px with no
+clipped labels, the star computes 18px, and the two bugs were reproduced and
+re-walked (unit `loaf`→`g` picks cleanly; a step's ingredient links save 204 and
+persist). Only what a light-theme desktop run can't judge:
+- [ ] The **Additional details** and **Version information** cards read as cards
+      in a dark theme — they use the same border + surface as the nutrition one.
+- [ ] At 375px the 18px star still sits level with the heart and cart icons on a
+      recipe card, and the filter fields still scroll sideways rather than wrap.
+
+## Shopping list — overview card (2026-08-29)
+Built and driven live at 1280px and 375px on all three faces, so the layout,
+the figures, the rename dialog, the quiet shop-day save and every relocated
+lifecycle action are already confirmed. Only what a headless run can't judge:
+- [ ] The status pill reads cleanly in a **dark theme** (Cherry Cola Dark,
+      Pesto Dark) — it gained a border and a glyph, and draft/shopping/done use
+      soft-background + full-strength ink.
+- [ ] On a real phone, the card's chevron and the rename pencil are comfortable
+      thumb targets, and the card doesn't push the first list row off-screen.
+
+## Toasts, download progress, QR logo (2026-08-28)
+Code-complete, suites green; no browser pass — both scratch verify pairings
+were held by other sessions.
+- [ ] The `info` toast (e.g. "Swap undone." from a meal-plan swap) reads as a
+      Dora surface: elevated background, normal text, info-coloured spine and
+      icon. No blue slab, no bullhorn.
+- [ ] Same toast in a dark theme, and again after switching theme with one on
+      screen.
+- [ ] Settings → Nutrition → Download a USDA dataset: the bar fills with real
+      MB during the download, then goes indeterminate under a climbing row
+      count while parsing.
+- [ ] Settings → Voice → download a Piper voice: MB-of-MB and a filling bar,
+      not a spinner.
+- [ ] Stock item → Scanning → QR: the D/D mark is centred and crisp, and a
+      phone scans both the dialog code and a printed sheet cell.
+
+## Cookbook: the 2026-08-28 rating + kcal batch
+Driven live at 1280×900 on the scratch instance: the filter order, the desktop
+wrap vs the mobile scroll, the kcal chip beside Difficulty, the compact row's
+"N ingredients", the "Kcal ≤ 500" cut (15 → 13, unrated kept), and the recipe
+list refetching after a stock write. What's left needs **complex mode with a
+food catalogue imported**, which no verify instance has.
+- [ ] Rating pill on cards and rows: hover shows the five-star reading; the
+      pill sits in the same spot on every card down a grid.
+- [ ] A partial rating shows its asterisk and the "part of this recipe" hover.
+- [ ] "Health stars ≥ 3" hides a 0.5-star recipe and keeps an unrated one.
+- [ ] Nutri-Score install: the A–E badge renders in both views, and the filter
+      label reads "Nutri-Score at least".
+- [ ] The pill's tint reads correctly in a dark theme (it sits on
+      `--brand-primary-soft`, which dark themes define as translucent).
+
+## Recipe rating: the scheme picker + Nutri-Score (2026-08-27)
+No browser pass — the rating only paints in complex mode with a dataset
+imported, and every verify backend resets the dev DB. Arithmetic is pinned
+server-side against the official worked examples; what's owed is pixels and
+plumbing.
+- [ ] Settings → Nutrition: the three-way picker saves and survives reload.
+- [ ] Nutri-Score badge: right letter lit, readable in light **and** dark, and
+      the yellow C's dark ink actually lands.
+- [ ] Cookbook: chip renders on card + row, filter says "Nutri-Score at least",
+      sort axis is named for the chosen scheme and puts A above E.
+- [ ] Switch scheme with the cookbook open — chips swap, no stale stars.
+- [ ] Recipe page: "How this was scored" ledger opens, salt row present (not
+      sodium), fruit-and-veg line says "fruit, veg or legumes" with no nuts.
+- [ ] Region → "Match this device" on a `fr-FR`/`Europe/Paris` device offers
+      Nutri-Score, not Health Stars.
+
+## Meal planner — the month-grid calendar (2026-08-30) — Unit 3
+Driven live at 1280: 42 numbered cells over six rows, out-of-month days dimmed
+but still clickable buttons, today a filled disc (not a ring), focused-week
+band, per-meal pips, hover naming the actual meals, click-a-day moving the week
+and bringing that day's card into view, and arrow / PageUp / PageDown grid
+navigation that doesn't leak into the week paging. What's left is your eye.
+- [ ] Walk the **five theme families in light and dark**: the focused-week band,
+      the dimmed out-of-month days and the three pip colours all need to stay
+      apart from each other and from the cell background. F38 was a
+      theme-awareness complaint on this page.
+- [ ] With **4+ meals on one day**, confirm the "+N" reads cleanly at the pip
+      size and doesn't crowd the date.
+- [ ] Confirm the **scroll-to-day** on a full week — the scratch week was empty,
+      so the pane didn't need to scroll (the card was already in view).
+- [ ] With **reduced motion** on, confirm month paging still changes month
+      (the slide flattens; nothing should depend on the animation).
+
+## Meal planner — the rebuilt rail (2026-08-30) — Unit 2
+Driven live at 1280 and 375: collapsed on arrival (46px labelled strip), opens
+on click and on arming a slot, chips are mutually exclusive with `aria-pressed`,
+empty chips stay greyed in place, Dora suggests returns ranked rows with server
+reasons, focus lands in the search on auto-open, Esc cancels the target and the
+rail stays open, the armed slot is named at both ends, and the mobile sheet gets
+the same chips. Row-height contract measured exact (64px). What's left needs a
+dataset or your eye.
+- [ ] **Owner call:** the chip row wraps to **three** lines at the rail's 280px
+      (the brief expected two — the counts add width). Fine, or drop the counts?
+- [ ] With **50+ recipes**, confirm the list virtualises smoothly and doesn't
+      judder mid-scroll — the seed has 15, so that path has never run.
+- [ ] With **batch cooking on**, confirm each rail row's `− N +` pool controls
+      and "Log a cook" work, and that the bigger on-hand number answers F42
+      ("a bit hidden… make the number bigger maybe").
+- [ ] In the **Build my week** wizard, confirm the chips work alongside the row
+      checkboxes and that no recipe can appear twice.
+
+## Meal planner — app-shell conversion (2026-08-30) — Unit 1
+Driven live at 1024/1280/1440/375 on the scratch stack: no document scroll, no
+h-scroll, toolbar 90px and non-wrapping at all three desktop widths, all three
+pane bottoms inside the viewport (884/900 — the old sticky-rail overhang is
+gone), the week pane scrolls, the ⋮ menu carries all six actions, and mobile
+still routes to the untouched focus view. What's left needs your eye or a state
+the scratch seed doesn't have.
+- [ ] Run the ⋮ actions for real: **Duplicate to next week**, **Print this
+      week** (native print dialog), **Save week as template…**, and **Clear
+      week** — only the menu's contents were confirmed, not the verbs.
+- [ ] With the **OfflineBanner** showing (go offline), confirm the three panes
+      still end inside the viewport. The banner is the second offset the old
+      hardcoded `calc(100vh - 32px)` ignored.
+- [ ] With a **large cookbook** (~50+ recipes), confirm the rail's list scrolls
+      inside the card with the search box and target banner staying pinned —
+      the scratch seed only has eight.
+- [ ] At **1024px**, confirm "Build my week" as an icon-only button still reads
+      as the primary action next to the ⋮ (it drops its label under 1120px).
+
 ## Meal plans: the 2026-08-27 add-to-list batch
 Driven live end-to-end in the pane on both surfaces: the shared picker opens
 from the planner and from a recipe, rows carry quantity + "for <meal>", already-
@@ -41,6 +194,27 @@ branch (`$q.screen` is permanently mobile there).
 - [ ] Add to a list with **+ New list** chosen: confirm the name pre-fills as
       *Meals: week of <date>* and that creating it lands you on the new list.
 
+## Buy verdict is money-gated (2026-08-27)
+Backend + vitest green; no browser pass, because every `dora-verify-backend*`
+launch config points at :5170 with `DORA_ALLOW_DESTRUCTIVE=true` (see FU-758).
+Needs one run **with money off** and one **with money on**.
+- [ ] Money **off**: stock item detail shows the "Dora thinks" belief card and
+      **no** buy-verdict card beneath it; Stock overview rows and shopping-list
+      lines show no buy/wait/skip badge; no `$` or "N price samples" text anywhere
+      those used to render.
+- [ ] Money **off**: Settings → Assistant, the *"Should I buy this?"* toggle is
+      greyed out with the "Needs money features…" line under it (and reads
+      "ask an admin" only when you're not an admin).
+- [ ] Flip money **on** in Admin → Features without reloading: the verdict card
+      and badges appear, and the Assistant toggle re-enables **still holding your
+      previous choice** rather than resetting.
+- [ ] Money **on**, currency set to something non-`$` (Settings → Region → EUR):
+      expand a verdict card and confirm the price reason reads *€3.85 last shop ·
+      usually €3.80* — the amounts now format client-side, so this is the line
+      that used to hardcode a dollar sign.
+- [ ] Money **off**, hit `GET /api/stock-items/<id>/buy-verdict` directly →
+      403 with "Buy verdicts need money features…", not a composed verdict.
+
 ## Settings: the 2026-08-27 units + voice batch
 The units setting was driven live end-to-end (saved, validated, propagated
 through `/api/health`, and confirmed to narrow the pickers to metric / imperial
@@ -57,20 +231,20 @@ through `/api/health`, and confirmed to narrow the pickers to metric / imperial
       `/lb` or `/oz` rather than `/kg` — the denominator and the picker come off
       the one setting now, so they should never disagree.
 
-## Cook mode: the 2026-08-27 header + method batch
-Driven live in the pane: the step source follows `steps_mode` in both
-directions, Exit and Sous Chef are icon-only, Sous Chef's on-state is a filled
-primary circle with `aria-pressed`, the mic renders a real glyph, and the
-identity band is `nowrap` with an ellipsised name.
-- [ ] On a **real phone**, open a recipe with a long name. Confirm the name stays
-      on the exit button's line and truncates, and that the headcount control
-      sits on its own row without crushing the voice buttons.
-- [ ] Same phone: read a step. Is `text-h4` right at that width, or does a long
-      step need to shrink? — origin FU-752
-- [ ] Open **the recipe whose photo steps were broken**. If the photos render,
-      FU-755 closes. If they don't, you'll now get "This step's photo couldn't be
-      loaded" instead of the word "Step 1" — check the network tab for the URL
-      that failed. — origin FU-755
+## Cook mode: the 2026-08-28 header + image-mode batch
+Driven live at 1280 and 375 (Playwright, scratch instance): three header bands
+with real gaps, Sous Chef labelled on desktop / icon-only at 375, the info
+button only present while Sous Chef or the mic is live, headcount a ±44px
+stepper that clamps at 1, "Step 3 of 6" as a badge over a six-segment bar, and
+image mode paging one photo at a time with a magnify-and-pan zoom and a Finish
+that opens the finish dialog. Nothing below is a re-check of those.
+- [ ] On a **real phone**, with wet or floury hands: are the Sous Chef / mic
+      icons and the headcount ± actually hittable at 44px, or do they want 48?
+      (Measured, not felt, in the pane.)
+- [ ] Open **your own photo recipe** in a **built** SPA or the desktop bundle —
+      not the dev server, which proxies `/api` and hides a wrong base URL. Photos
+      should render; a failure now says "This step's photo couldn't be loaded"
+      rather than showing the word "Step 1". Last unverified corner of FU-755.
 
 ## Stocktake: the 2026-08-27 dataset + help move
 Driven live against the dev seed: `/api/stocktake/session` returns a populated
@@ -168,15 +342,33 @@ viewport, so every `$q.screen` branch renders in its mobile form:
 - [ ] A recipe with **no** version siblings shows Version information with created,
       last-updated and the "only version" line (verified with siblings; not without).
 
+## Shopping list — planned store round trip (2026-08-28) — origin batch 3
+The only part of batches 1–3 not walked live: the scratch backend was serving
+pre-change code and couldn't be restarted (both scratch pairings were taken by
+parallel sessions). Everything around it was verified — see
+`DORA_VERIFY_TRIAGE.md`.
+- [ ] On a **draft**, set **Store** on a row to somewhere it doesn't already
+      resolve to (e.g. Aldi on an item whose default reads "Coles (default)").
+      Reload the page: the field still says Aldi, without "(default)".
+- [ ] With that set, switch **Order by → Store**: the row is now under an
+      **Aldi** section, and "Where you'll spend it" counts it against Aldi.
+- [ ] Clear the field: it reverts to `<the inherited store> (default)` and the
+      row goes back to its old section — *not* to "No store set".
+- [ ] Start shopping, open a line's price sheet: **Bought from** is pre-filled
+      with the planned store. Change it to somewhere else and save — the plan
+      face's Store field must be **unchanged** (buying somewhere once is not a
+      change of plan, and must not write back).
+- [ ] Check the item's own **usual store** on its detail page is also unchanged
+      by any of the above.
+
 ## Shopping list — the 2026-08-26 feedback batch
-Plan face was driven live at 375px and 1280px (rows, bulk bar, store card, finish
-dialog, a real move-to-new-list). Left for you:
-- [ ] On a real phone: long-press an item enters bulk select with it ticked, and
-      unticking the last one drops back out. Touch-hold only — desktop mouse won't.
+Plan face was driven live at 375px and 1280px (rows, store card, finish dialog, a
+real move-to-new-list); the bulk bar this section used to cover was deleted
+2026-08-28. Left for you:
 - [ ] Upload a logo for a store you use, then check its colour on "Where you'll
-      spend it". A greyscale logo should keep the old name-derived colour.
-- [ ] Turn money off: the card reads "Where you'll shop" and its bar sizes by
-      item count.
+      spend it" *and* on its logo placeholder elsewhere. A greyscale logo should
+      fall back to the name-derived colour — saturated in the bar/dot, pale
+      behind the placeholder's letter.
 - [ ] Run and receipt faces on the rebuilt toolbar — FU-739. Watch the bottom of
       the run face: the sticky shop footer and the new Clear-all/Delete footer
       are both down there.
@@ -203,8 +395,6 @@ observation in place. These are the parts a headless viewport can't prove.
       the row back in its section (not at the end of the list).
 - [ ] **Screen stays awake** across a few minutes of the run face (the wake lock
       is real-device-only).
-- [ ] **More → Switch list** mid-shop: it's there, it lists every list, and
-      picking one leaves shop mode cleanly.
 - [ ] **Receipt in the dark themes** (Pesto Dark, Cherry Cola Dark): the amber
       Amend banner, the receipt card and the "Didn't buy" chips all read.
 - [ ] **A receipt where nothing was priced:** the header total and the store card
@@ -224,14 +414,17 @@ reconciling with the trip card. These are the parts it could **not** reach.
 - [ ] **Mobile (375px):** the store card and the budget/insight banner each
       collapse to one tappable line, and the first item is visible without
       scrolling. Desktop keeps both expanded. (The preview pane wouldn't resize.)
-- [ ] **Toolbar at 375px and 1280px:** no horizontal scroll, page title doesn't
-      wrap to "Shopping / lists". Refresh deals and Select now live in **More**.
+- [ ] **Toolbar at 375px and 1280px:** no horizontal scroll. (The page title is
+      desktop-only as of 2026-08-28 — on mobile the picker button carries the
+      name — so the old "doesn't wrap to Shopping / lists" check is 1280px only.)
 - [ ] **Up/down reorder arrows** in Manual mode: press on the first/last row is
       disabled, a move persists across a reload, and it doesn't fight drag.
-- [ ] **A list with no locations, groups or stores at all:** those three ordering
+- [ ] **A list with no locations, groups or stores at all** (check in *shop* mode
+      — the draft face now offers only Store + Manual): the unavailable ordering
       options are greyed out with a tooltip saying why, and Manual is selected.
 - [ ] **Themes:** trip card, store card and the store colour dots read correctly
-      in Pesto Dark and Cherry Cola Dark (the store dots use `--chart-1..5`).
+      in Pesto Dark and Cherry Cola Dark (the dots are identity colours — a brand
+      colour, else a sealed hash swatch — not theme tokens).
 
 ## Offline is read-only (2026-08-23)
 - [ ] **Kill the VPN mid-session:** the banner reads "Can't reach Dora — you can
@@ -874,10 +1067,12 @@ seed now ships two purpose-built recipes:
       be out of…"* strip sits above the items with a "Belief: Tuna Tins" chip.
       Tap it → it becomes a normal line. Reopen the list; tap the **×** →
       the strip goes for the session and comes back next visit.
-- [ ] **Meal planner** — drop "Belief demo: Tuna Bake" onto any day (it's
-      deliberately not pre-planned — a seventh seeded entry broke two e2e
-      tests' ingredient-demand assertions). Its entry chip should carry the
-      hunch glyph, and the week's "need to buy" figures should be unchanged.
+- [ ] **Meal planner** — tap any day's slot, then pick "Belief demo: Tuna Bake"
+      from the rail (it's deliberately not pre-planned — a seventh seeded entry
+      broke two e2e tests' ingredient-demand assertions). Its entry chip should
+      carry the hunch glyph, and the week's "need to buy" figures should be
+      unchanged. (Was "drop onto any day" — drag-and-drop was retired 2026-08-30,
+      D1.)
 - [ ] **Off means silent** — switch the three off again and confirm all four
       surfaces go quiet.
 

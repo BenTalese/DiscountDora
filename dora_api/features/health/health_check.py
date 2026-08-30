@@ -18,7 +18,10 @@ from pathlib import Path
 
 from flask import jsonify
 
-from dora_api.domain.entities.app_setting import NUTRITION_MODE_OFF
+from dora_api.domain.entities.app_setting import (
+    NUTRITION_MODE_OFF,
+    RATING_SCHEME_NONE,
+)
 from dora_api.features.help.version_info import CURRENT_VERSION
 from dora_api.features.routers import HEALTH_ROUTER
 
@@ -154,12 +157,18 @@ def _feature_flags(setting) -> dict[str, bool]:
             # of the user's display preferences. An install-wide flag here would
             # have been answering for the wrong scope.
             flags["meal_planning"] = bool(setting.meal_planning_enabled)
-            # Owner ask 2026-08-27 — the recipe Health Star Rating. Off
-            # everywhere by default; it is an AU/NZ scheme, and Settings'
-            # "Match this device" is what offers it to the installs it was
-            # designed for.
-            flags["health_star_rating"] = bool(
-                getattr(setting, "health_star_rating_enabled", False))
+            # Owner ask 2026-08-27 — which front-of-pack rating recipes carry.
+            # `none` everywhere by default; Settings' "Match this device"
+            # offers the locally-recognised scheme, and the picker takes any of
+            # them anywhere.
+            #
+            # Published as the scheme string rather than a bool because the
+            # client has to render a different badge per scheme, not just
+            # decide whether to render one (R-003 — the SPA must not re-derive
+            # "which scheme" from anything else).
+            flags["nutrition_rating_scheme"] = str(
+                getattr(setting, "nutrition_rating_scheme", RATING_SCHEME_NONE)
+                or RATING_SCHEME_NONE)
             flags["money"] = bool(setting.money_enabled)
             flags["companion_ingestion"] = bool(setting.companion_ingestion_enabled)
             flags["deals_email"] = bool(setting.deals_email_enabled)
@@ -315,6 +324,22 @@ def _reconcile_policy(setting) -> dict:
     return {"auto_drain": auto_drain}
 
 
+def _stocktake_policy(setting) -> dict:
+    """Install-wide stocktake defaults, surfaced here (not on `/app-settings`,
+    which is admin-gated) because every logged-in user's client needs one of
+    them: the create-stock-item dialog seeds its Stocktake toggle from
+    `new_items_opt_in` so the switch shows the position the item will actually
+    be created in. Defaults True (matches `create_stock_item` + AppSetting).
+    Wrapped so a read hiccup can't 500 the probe."""
+    new_items_opt_in = True
+    try:
+        if setting is not None:  # shared singleton, fetched once by health_check
+            new_items_opt_in = bool(getattr(setting, "stocktake_new_items_opt_in", True))
+    except Exception:
+        pass
+    return {"new_items_opt_in": new_items_opt_in}
+
+
 def _support_channel() -> dict[str, str]:
     """FU-370 — install's support/report-an-issue channel, surfaced here (not
     on `/app-settings`) because every logged-in user's browser needs it to
@@ -361,5 +386,6 @@ def health_check():
         "cooking_policy": _cooking_policy(setting),
         "budget_policy": _budget_policy(setting),
         "reconcile_policy": _reconcile_policy(setting),
+        "stocktake_policy": _stocktake_policy(setting),
         "support": _support_channel(),
     }), 200

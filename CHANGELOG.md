@@ -6,6 +6,404 @@ semver — major bumps signal schema or breaking-config changes.
 ## [Unreleased]
 
 ### Added
+- **Dora can suggest what to cook, right where you pick it (2026-08-30).** The
+  meal planner's recipe list has a new "Dora suggests" chip. It ranks your
+  cookbook for the week you're looking at and tells you *why* each one is
+  there — "Uses stock that's expiring", "Haven't had in a while", "Nothing to
+  buy for this", "Cheaper — keeps you on budget". Anything already planned that
+  week is left out. It's the same engine behind "Build my week", so the two
+  agree with each other; the difference is that this one hands you a shortlist
+  and lets you choose.
+
+### Changed
+- **The meal planner's calendar is a real calendar now (2026-08-30).** It was
+  six rows of squares where only the row did anything — the day squares carried
+  the colour, so they looked clickable and weren't, and only Mondays showed a
+  date. It's a proper month grid: every day has its number, days from the
+  neighbouring months are dimmed but still work, and today is a filled dot.
+  Each day carries one small marker per meal planned on it — up to three, then
+  "+2" — and hovering a day tells you what's actually on it ("Dinner ·
+  Spaghetti Aglio e Olio — cooked") rather than a status word. **Clicking a day
+  now jumps the week to it and scrolls straight to that day**, which is the
+  thing the old widget looked like it should do and didn't. Arrow keys move
+  around the grid, Page Up/Down change month.
+- **The meal planner's recipe list is filterable, and it stays out of your way
+  (2026-08-30).** It was four collapsible accordions — Favourites, Haven't had
+  in a while, Frequently planned, Everything else — that capped their shortcuts
+  at ten and gave each recipe exactly one home, so a favourite you cooked every
+  week never appeared under "Frequently planned". It's now one flat list with
+  filter chips across the top: All, Favourites, Not lately, Regulars. A recipe
+  shows up under every chip it qualifies for, a chip with nothing behind it
+  stays visible and greyed rather than disappearing, and searching narrows
+  whichever filter you're on instead of throwing it away. Long cookbooks scroll
+  smoothly rather than hiding behind headers.
+- **The recipe list now folds away until you want it (2026-08-30).** It sits
+  collapsed as a labelled strip down the left, giving the week the width, and
+  opens when you click it — or on its own the moment you tap a day's meal slot,
+  with your cursor already in the search box so you can type straight away. It
+  never closes itself: not after you add a meal, not when you change week. If
+  it's open, you opened it.
+- **Choosing a day, then a recipe, is now obvious at both ends (2026-08-30).**
+  Tapping a slot fills it with colour, outlines the day, and labels it "← pick a
+  recipe", while every recipe in the list grows a "→ Breakfast" marker showing
+  where it would go. The slot you picked stays visible even if it was empty.
+  Press Escape to back out.
+- **The meal planner is one screen again, and it stays put while you plan
+  (2026-08-30).** The page used to scroll as a whole: pick a recipe at the top,
+  scroll down to the day you wanted, and the week's status, the arrows and the
+  "Build my week" button had all scrolled away above you — while the two side
+  columns, which were pinned, hung off the bottom of the window by about a
+  header's height. Now the planner fills the window exactly. The recipe list,
+  the week, and the calendar + shopping summary each scroll on their own, and
+  nothing that tells you something scrolls out of reach. The week's toolbar is
+  pinned above it: back and forward a week with the dates between them and
+  which week it is in plain words underneath ("This week", "3 weeks ago"), then
+  the planned/to-buy/cook-by status line directly under that.
+- **The planner's week actions moved into one menu (2026-08-30).** Duplicate to
+  next week, print, save as a template, browse templates, "show all meal slots"
+  and Clear week were spread across three toolbar buttons, a row of their own
+  holding a single switch, a card in the right-hand column wrapping one button,
+  and an arrow stranded at the very bottom of the page. They're one "⋮" menu
+  beside "Build my week" now. Clear week keeps its name and its red, and the
+  next-week arrow moved up beside the back arrow so both are always reachable.
+
+### Removed
+- **Dragging a recipe onto a day is gone; tap the day, then pick the recipe
+  (2026-08-30).** Dragging only ever worked with a mouse, and once the week got
+  its own scroll region a drag toward a day below the fold would have quietly
+  stopped working instead of scrolling to it. Tapping a slot and picking a
+  recipe does the same job, works the same on a phone, and is unchanged. If you
+  wanted more of a meal, the servings ± control is still the way — it always was.
+
+### Added
+- **The weekly deals email now actually sends (2026-08-29).** It had a settings
+  page, a send-day picker, a format preference, an admin column and a database
+  migration — and nothing behind any of it. No scheduled job, no sender, no
+  template: subscribing set a flag nothing read. It's built. One email a week,
+  at 7am on the day you pick, in your household's timezone, listing the biggest
+  discounts across the product data pushed into your install — ranked by how
+  much they're off, with what you save spelled out in dollars. **Compact** is
+  one line per deal; the expanded format gives each one a card with its brand,
+  size and store. A week with no specials sends nothing rather than an empty
+  mail, and you can't get the same week twice however you change your send day.
+  Scheduled email only goes to a **verified** address; Settings → Notifications
+  now says so, with a button to send yourself a fresh verification link, instead
+  of leaving a switched-on toggle that quietly delivers nothing.
+
+### Removed
+- **Settings → Voice no longer offers neural-voice downloads on an install that
+  can't run them (2026-08-29).** Dora's neural voice needs a separate engine
+  (Piper) alongside the server. The Docker image and the desktop app include it;
+  an install running from source may not — and the page used to show the voice
+  catalogue anyway, inviting you to fetch a 60–110MB model "for when it's
+  available". The catalogue is hidden in that state now, replaced by one card
+  that says why the engine is missing and links an admin to the setup page.
+- **The "Recipe photos" toggle is gone from Settings → Appearance
+  (2026-08-29).** It was built to let you run a text-light, low-bandwidth app,
+  governing every recipe photo everywhere. Its pantry-photo twin was deleted, the
+  cookbook's cards/compact switch took photos over there, and cook mode, print
+  and the meal-planner rail never honoured it — so what was left switched off one
+  photo, on one page, and left a same-sized "Photo hidden" box where the picture
+  had been. Recipe photos now always show; if you want the dense view, the
+  cookbook's cards/compact switch is the control. Your photos were never affected
+  either way.
+
+### Changed
+- **Notifications is organised by how the message reaches you (2026-08-29).**
+  The page was a flat run of sections where "Weekly deals email", "Push
+  notifications" and "Evening brief" sat as peers, so nothing told you the
+  evening brief arrives *by push* — or that turning push off silences it. There
+  are two sections now, one per channel: **Push notifications** first, then
+  **Email notifications**, each listing what it can deliver as rows underneath.
+  When a channel isn't set up, the banner explaining why now sits at the top of
+  its section rather than under the dead toggle it explains.
+- **Settings toggles line up with their labels.** Every toggle in Settings sat
+  about 11px below the option it belonged to — a top-aligned 40px control
+  against an 18px label, on every row of every page. Fixed in the shared row and
+  section primitives, so it's corrected everywhere at once.
+- **Long explanations in Settings moved into (?) chips.** "Evening brief" is now
+  just that, with *"A notification at 7pm with tomorrow's agenda"* behind the
+  chip; "Weekly deals" and "Compact format" got the same treatment. Info chips
+  are also one consistent size app-wide now — they had drifted between 14px and
+  16px across the pages that hand-rolled them.
+- **Settings → About sits directly under Account.** The two single-destination
+  entries were separated by the whole Preferences and Kitchen-setup lists.
+- **Voice explains what your browser can and can't do, in a warning card.** The
+  "your browser doesn't expose the Web Speech API" line was a flat grey footnote
+  that read like a misconfiguration. It's a proper card now that names the
+  browsers speech recognition works in (Chrome, Edge, Safari) and says plainly
+  that Firefox has never shipped it — so there's nothing to fix on your end.
+- **The Assistant page's provider cards no longer use a (?) to mean "not
+  connected".** An unconfigured provider drew the same question-mark glyph the
+  rest of the app uses for "hover me for an explanation", so a status readout
+  looked like a control. Unconfigured is an empty ring; saved-but-untested is an
+  alert.
+- **Google Gemini has an optional Base URL field, like OpenAI and Anthropic.**
+  The server had accepted one for Gemini all along — only the form was missing.
+- **The recipe page's details drawers all wear the same card (2026-08-29).**
+  "Additional details" and "Version information" were unstyled panels either
+  side of a styled one, so the details list read as one card between two
+  loose stacks of fields. All three now render through one shared card — flat,
+  bordered, a single muted glyph in the margin — so the section is one family.
+- **The cookbook's rating star is bigger.** 14px → 18px, matching the leading
+  glyphs on the cookbook's own filter fields. The chip's height is unchanged.
+- **Every cookbook filter is the same width.** The numeric bounds (Serves,
+  Ingredient count, Kcal) and the rating threshold ran 20px wider than their
+  neighbours, on a track that had been justified by a label deleted a week
+  earlier. One width for all thirteen controls; the sort field keeps its own,
+  because it packs a direction chip inside itself.
+- **The recipe page no longer says "You can cook this now."** The cell's own
+  headline and its green edge already said it.
+- **The shopping list has one overview card instead of five stacked blocks
+  (2026-08-29).** The top of the page was a header cluster, an estimated-cost
+  card, a store-spend card and an "Order by" bar — plus, mid-shop, a sticky
+  footer at the bottom repeating the money and the main button. It is now a
+  single card that answers, at a glance: what this list is, what it will cost,
+  when you're going, and the one thing to do next. Everything you only ask once
+  — where the money is going, what you're saving, how firm the numbers are, when
+  the list was created — is behind a chevron. Each face gets the figure it
+  actually wants: a draft leads with the estimated cost, a shop in progress with
+  what's **left** to spend beside a progress ring, and a finished list with what
+  you spent. A receipt now also tells you what you **saved**, which it never did
+  before — that number existed only while you were still planning the shop.
+- **The mid-shop sticky footer is gone.** Its ring, its remaining total and its
+  finish button all live on the card at the top of the page now. The footer had
+  been floating over the last rows of your list, and over "Clear all items" and
+  "Delete list", for the whole scroll rather than only at the end — and on a
+  phone the Dora bubble sat squarely on top of its button.
+- **"Finish & restock" is now just "Finish"** — one word, whether or not you're
+  finishing early. The button used to read your own tick count back to you. The
+  confirmation it opens still lists every item it's about to restock, and still
+  makes you decide what happens to anything you didn't buy.
+- **The shopping toolbar carries utilities, not lifecycle.** Start shopping,
+  Finish, Amend and Put away moved onto the overview card, next to the summary
+  they act on. **New list** moved to the lists picker — the rail on desktop, the
+  top of the dropdown on a phone — because sitting next to "Add item" it read as
+  a second way to add to *this* list; Add item takes over its primary styling.
+  **Export** was a menu wrapping exactly two things, so **Print** and **Save as
+  template** are now buttons in their own right. **Shop day** became a real
+  toolbar button, and disappears once you've started shopping — by then it's a
+  fact, not a decision, and the card still shows it.
+- **One "Order by" control, not two.** The plan face and the shop face each had
+  their own copy; both now use the one on the card.
+
+### Fixed
+- **A recipe with ingredients linked to its steps can be saved again
+  (2026-08-29).** Linking ingredients to a step failed with "Step references
+  ingredients not on this recipe" — and because the page re-sends those links
+  on every save, one linked step made *every* later edit to that recipe
+  unsaveable, whatever you had changed. The ingredient rows are replaced on
+  each save, and the check that the links point at rows on this recipe ran
+  before the replacements had reached the database, so it only ever saw the
+  rows they were replacing.
+- **Changing an ingredient's unit works, and shows you the units.** Opening the
+  Unit dropdown on a row that already had one filtered the whole list down to
+  that single unit, so you could not reach `g` from `loaf` without first
+  deleting the word. Picking any unit then threw an error that tore down the
+  dialog, because the picker was storing the dropdown option rather than the
+  unit itself.
+- **Picking a shop day no longer flashes the whole page (2026-08-29).** Saving a
+  shop day, clearing one, or renaming a list blanked the list and replayed the
+  loading skeleton before painting the same page back. They now refresh in
+  place.
+- **Renaming a list no longer hides its status or shoves the page around
+  (2026-08-29).** The rename input replaced the title, the status chip *and* the
+  pencil, so a list stopped saying "Draft" for as long as you were renaming it —
+  and the field appearing and disappearing moved everything below it. Renaming
+  is a dialog now, on every screen size; nothing behind it moves. The hint under
+  the field is gone too, and what it explained is said in the dialog instead.
+
+### Added
+- **QR labels carry the Dora mark (2026-08-28).** The D/D wordmark now sits in
+  the middle of every stock-item QR, on both the dialog code and the print
+  sheet. The codes are generated with stronger error correction to pay for it
+  and were checked to still scan; very small codes are left plain, where a logo
+  would be an illegible smudge. The mark itself is provisional — it reuses the
+  wide Safari pinned-tab wordmark, which is the wrong shape for the middle of a
+  square code (FU-779).
+- **Long downloads show real progress (2026-08-28).** Downloading a USDA
+  nutrition dataset or a Piper voice used to be an open-ended spinner — with a
+  multi-minute import there was no way to tell slow from stuck. You now get
+  megabytes-of-megabytes and a filling bar while it downloads, and a live count
+  of rows read while it's being parsed. The parsing step deliberately has no
+  percentage: the total isn't knowable until it's been read, and a bar that
+  sticks at 90% would be a guess.
+
+### Fixed
+- **The stray blue toast now looks like Dora (2026-08-28).** The "info" kind of
+  notification — the one behind messages like *Swap undone.* — was drawn in a
+  saturated library blue with an amber megaphone, because it named two colours
+  from the UI framework's own palette instead of Dora's. It never followed your
+  theme, which is why it stood out. It's now the same elevated surface every
+  other panel uses, with an information icon and a coloured spine, and it
+  changes with the theme like everything else. The success and error toasts were
+  already correct and are unchanged.
+- **Docker volumes are no longer named after the old product name
+  (2026-08-28).** A deploy log full of `discountdora_dora_logs` was Compose
+  falling back to the checkout's directory name. The stack now names itself
+  `dashy-dora`. **Existing deployments: this renames the four data volumes**, so
+  the stack will come up with empty ones — copy `discountdora_dora_data` across
+  first if it holds anything you want.
+- **The cookbook now sees nutrition you just added (2026-08-28).** Linking a food
+  to a stock item, then walking to the cookbook, showed the recipes exactly as
+  they were before the edit — no rating, no calories, and filters with nothing to
+  work on. The recipe list was cached for the whole session and nothing told it
+  the pantry had moved. It now refreshes after any stock change, which also fixes
+  stale *Cookable now* / missing-ingredient counts on the same page.
+- **"Health stars ≥" and "Kcal ≤" actually filter now (2026-08-28).** Both quietly
+  let through any recipe whose figure Dora wasn't fully confident in — which, on a
+  pantry where most foods aren't linked yet, is nearly all of them, so the filters
+  appeared dead. They now judge the number the card shows you. A recipe with *no*
+  figure at all still passes; the sort axes follow the same rule.
+
+### Changed
+- **A cleaner health rating on recipe cards and rows (2026-08-28).** Five small
+  stars in the middle of the chip run said very little and took a lot of width —
+  on a low-rated recipe it was four-and-a-half grey outlines. The rating is now a
+  compact pill (one star and the number) sitting next to the favourite heart, in
+  the same spot on every card, so you can scan straight down a grid. Hover it for
+  the full five-star reading and the caveat. Nutri-Score keeps its A–E badge.
+  Calories moved next to **Difficulty**, and a partial figure is marked with an
+  asterisk instead of being drawn as a differently-shaped chip.
+- **The compact row says "ingredients" (2026-08-28).** The counter icon under the
+  recipe name is gone and the word is there instead, with the calorie figure
+  joining the same line. The rating pill now shows in compact view too.
+- **Cookbook filters reordered, and they wrap on desktop (2026-08-28).** Calories
+  and the health rating moved to the end of the row — they're the two that only
+  exist if you've turned nutrition on. On a desktop window the row now wraps onto
+  further lines instead of scrolling sideways; on a phone it still scrolls.
+- **Usual store and Stocktake are settable when you add an item (2026-08-28).**
+  Both were permanent properties of a stock item that could only be set *after*
+  creating it, from the detail page. The Add-a-stock-item form now carries them:
+  a **Usual store** picker (same logo'd option list as the detail page) and a
+  **Stocktake** toggle that starts in the position your install's *New items*
+  default puts it in, so you can mute an item on the way in rather than adding it
+  and then going hunting for the switch. The toggle is absent entirely when
+  stocktake is switched off install-wide.
+- **A little air between filter rows (2026-08-28).** The quick-filter chips and
+  the dropdown row underneath them sat flush; they now have a 2px gap. Applied
+  once in the shared filter row, so every page with stacked filters — Stock,
+  Cookbook — picked it up together.
+- **The list picker reads newest-first (2026-08-28).** Your drafts and the shop
+  you're on are at the top; finished lists trail off below them. It ran
+  oldest-first, which put a wall of history above the only lists you can still
+  act on — and got worse the longer you'd used Dora. Done and active are still
+  interleaved by date rather than grouped by status, so it stays one timeline.
+- **The picker is only as tall as its lists (2026-08-28).** **See older** now
+  sits directly under the last list instead of at the floor of a full-height
+  column, and the **Manage templates…** link under it is gone — the toolbar's
+  **Templates** button goes to the same place.
+- **"No store set" now has a place on the spend bar (2026-08-28).** With money
+  on, a segment's width is its *spend* — so the catch-all bucket, whose items are
+  usually unpriced, computed to zero width and vanished from the bar while still
+  being listed as a chip beneath it. Any bucket holding items now gets a visible
+  minimum slice, and the priced stores share the rest in true proportion. The
+  catch-all is drawn as a hatched grey rather than a flat one: a plain grey is
+  fine in light themes but lands within 1.02:1 of a neighbouring store in Cherry
+  Cola Dark, and no single grey can be guaranteed to separate from fills that are
+  partly derived from store logos. The hatch also says the right thing — that
+  slice isn't a shop, it's the part of your list that hasn't got one.
+- **You can say where you plan to buy each item (2026-08-28).** Every draft row
+  has a **Store** picker offering all your stores. Before this, the only writable
+  store on a line was *Bought from* — a record of where you got something, which
+  is meaningless on a list you haven't shopped yet. So there was no way to say
+  "get this one at Aldi" for a single trip; the alternative, the item's usual
+  store, would have changed every future list too. A row with no explicit choice
+  shows the store it inherits, marked *(default)*.
+- **The draft face stopped pretending to record purchases (2026-08-28).** Prices
+  on a draft row are now shown, not edited: `~$8.00` with the source underneath
+  (*from your last receipt*, *from Coles offer*). The old control wrote "what you
+  actually paid" on a list where nothing had been bought.
+- **Quantity is editable mid-shop (2026-08-28).** The shop-mode line editor was
+  price-only, so the one thing you routinely discover at the shelf — *they only
+  had the 2-pack*, *grab three while they're on special* — couldn't be recorded
+  without leaving shop mode. It now carries **price, quantity and store**, with
+  the quantity as a stepper rather than a second keyboard on a sheet that already
+  has one open.
+- **Log a price for something that isn't on your list (2026-08-28).** A **Log
+  price** button appears in the toolbar while you're shopping — for the price you
+  notice on the shelf for something you weren't shopping for. It opens the same
+  sheet Stock overview and the dashboard use.
+- **The list picker stops growing forever (2026-08-28).** It now shows your drafts,
+  anything you're shopping, and the **5 most recent finished lists** — everything
+  older sits behind **See older**, a searchable dialog. On the dev seed that took
+  the picker from 29 rows to 8. Open a list from there and it stays in the picker
+  while you're on it, so you never end up looking at a list the picker can't show.
+- **The picker is always there, in every mode (2026-08-28).** It used to disappear
+  while you were shopping and be replaced by a **Switch list** toolbar button — the
+  same capability in a different shape, in a different place, at the moment you're
+  least able to go hunting for it. One control, always in the same spot.
+- **The picker's row menu is gone (2026-08-28).** Every row carried a ⋮ with *Copy
+  to new list* and *Delete list*. Both were already reachable from the list you're
+  looking at, which put two uncommon actions — one destructive — on every row of a
+  control whose only job is "take me to that list". **Copy to new list is removed
+  entirely**: *Save as template* is the same idea under a name that says what it's
+  for. Delete stays on the open list's footer, where you can see what you're
+  deleting.
+- **The list's name appears once on a phone (2026-08-28).** It was printed as the
+  page title *and* on the picker button directly above it. On mobile the title is
+  gone and the rename pencil sits beside the picker; on desktop the title stays,
+  because there the picker is a side rail that only highlights the current list.
+- **A header line that works on all three faces (2026-08-28).** Under the name you
+  now get **item count · shop day · created**, where the shop day is a button while
+  you can still change it, plain text once you're shopping, and replaced by the
+  **completion date** on a finished list. It used to live on the trip card, which
+  meant only a draft ever showed it — a list you were actively shopping never said
+  which day it was for. The trip card is now just the money: estimated cost,
+  savings, and how much of it is guessed from past receipts. With money off it
+  doesn't render at all.
+- **A draft shopping list is for building, not ticking (2026-08-28).** Tick boxes
+  are gone from the draft face — a tick means "I picked this up", which can only
+  be true once you're shopping. The progress ring that measured those ticks went
+  with them: a draft now shows a plain **item count**, because a ring stuck at 0%
+  was telling you to do something the page had no control for. The keyboard
+  shortcuts (`space`, `u`) are shop-mode only for the same reason. The list picker
+  shows drafts as *"5 items"* rather than *"0/5 ticked"*.
+- **Picked items no longer vanish mid-shop (2026-08-28).** Ticking an item still
+  removes it from its aisle, but it now collects in a **Picked (N)** section at the
+  bottom of the list — collapsed by default, with the trolley subtotal in its
+  header when money is on. Tap any row there to put it back on the list. Before,
+  a mis-tap made an item disappear with nothing to undo from.
+- **The shop-mode progress ring earns its keep (2026-08-28).** It's bigger, carries
+  the count inside it, has a visible track, and animates as it fills. The line
+  beside it stopped repeating the same number and now says what's left to pick.
+- **Draft lists group by store or your own order (2026-08-28).** *Location* and
+  *Group* are gone from the draft face's **Order by** — location sorts by where
+  things live in your kitchen, which answers a putting-away question, not a buying
+  one. Both remain in shop mode, where sectioning is how you walk the place. The
+  pantry-location crumb also came off the draft rows.
+- **Fewer controls on a draft row (2026-08-28).** The **substitute swap** is gone
+  from the shopping list entirely: the substitutes Dora records are cook-oriented
+  ("what can I use instead in this recipe"), not "which product on the shelf will
+  do" — that's what offers answer. The **bulk-select** bar is gone too; of its four
+  actions, Tick and Untick went with draft ticking, and *Move to list* was only
+  ever needed for leftovers, which the finish dialog now handles.
+- **Finishing a shop makes you decide about what you didn't buy (2026-08-28).** A
+  finished list is a receipt, and a receipt doesn't record what you didn't buy — so
+  *"Leave them on this list"* is no longer an option, and no choice is pre-selected.
+  Unticked items must be **moved to another list**, **moved to a new list**, or
+  **discarded**; the fourth way out is **Go back**, and tick them off after all.
+  Leftovers used to strand on the archived list forever.
+- **Stores without a logo are visible again (2026-08-28).** The colour a store
+  falls back to when it has no uploaded logo was a pale surface tint meant to be
+  drawn on top of — as a bar segment or an 8px chip dot it read as white. Those
+  shapes now use a saturated fill; the pale tint stays where it belongs, behind the
+  letter in a logo placeholder. Still deterministic from the store's name, so a
+  store keeps its colour between visits.
+
+### Fixed
+- **The budget counted items you didn't buy (2026-08-28).** Finishing a shop with
+  leftovers billed the whole list to your household budget, not just what you
+  ticked — because an item's price is captured when it's *added* to the list, not
+  when it's bought. A $60 shop with $40 of leftovers reported $100 spent, in both
+  the budget card and budget history, and the trim-to-budget optimiser then trimmed
+  future lists to fit money that was never spent. The list's own receipt was always
+  right, which is what made the two disagree.
+- **Draft rows showed prices with the money feature off (2026-08-28).** Every other
+  price surface on the shopping list checked the setting; the draft face's
+  **Set price** button never did.
+
+### Added
 - **One add-to-list flow, shared by recipes and meal plans (2026-08-27).** The
   meal planner's **Generate shopping list for this week** button is gone. In its
   place is **Add to a list**, which opens the same picker the recipe page opens:
@@ -48,6 +446,74 @@ semver — major bumps signal schema or breaking-config changes.
   rotation. The showcase dataset gets the same treatment.
 
 ### Changed
+- **Cook mode's header stops fighting itself (2026-08-28).** The recipe name,
+  the voice controls and the headcount used to share one row and collide on
+  every screen size — worse on desktop than on a phone. They're now three
+  stacked bands: the recipe name on its own line, then the voice controls, then
+  **Cooking for**. Underneath that, a real cause: every gap in the header was
+  written against spacing tokens that don't exist, which in CSS means no gap at
+  all rather than a default one, so the controls were literally touching. Those
+  are fixed, and the same silent failure is now a standing rule for new work.
+- **Sous Chef is a button again on desktop (2026-08-28).** Above phone width it
+  reads **Sous Chef** with its icon — filled green when it's listening to you,
+  outlined when it's off. On a phone it stays the icon it was, but at a 44px
+  finger-sized target rather than 36px, as do the mic and the headcount's ± .
+- **The "what can I say?" button only appears when something can hear you
+  (2026-08-28).** It lists spoken commands and names the voice engine, neither
+  of which is a question you have during a silent cook, so it now shows up only
+  once Sous Chef or the mic is on.
+- **Cooking for is a stepper (2026-08-28).** A cramped number box with the
+  browser's own hairline spinner arrows became a single bordered control: the
+  label, a **−**, the number, a **+**. It still rescales quantities for this cook
+  only and still won't go below one.
+- **The step counter is worth looking at (2026-08-28).** "Step 1 of 6" in small
+  grey text above an unrelated progress bar is now one object — the number at
+  display size in a tinted badge, beside a bar with one segment per step, the
+  segment you're standing on raised and ringed. Recipes long enough to make
+  segments unreadable fall back to a single fill bar.
+- **Photo recipes show one photo at a time (2026-08-28).** Image mode was a
+  scroll of every photo at once, which meant hunting for your place after every
+  glance. It now pages: one photo, **Previous** / **Next**, and a counter that
+  matches the step view's. Tapping the photo (or the magnifier on it) opens it
+  full-screen, where a second tap magnifies it 2.5× and lets you drag around —
+  the point when the photo is of a page of small print. Previous / Next stay
+  available while zoomed.
+- **A photo recipe can be finished (2026-08-28).** The last photo's button says
+  **Finish** and opens the same finish flow the step view uses. Until now image
+  mode had no ending at all: you could cook from photos, but nothing came off
+  your stock levels and no meals were logged, because the only Finish button
+  lived in a row image mode never rendered.
+- **Recipe ratings are a choice now, not an Australian toggle (2026-08-27).**
+  Settings → Nutrition used to offer one switch — the Health Star Rating — and
+  told everyone outside Australia and New Zealand it was off by default *for
+  them*, which read as "this isn't for you". It never was region-locked; only
+  its default was. That switch is now a **Rating scheme** picker: **None**,
+  **Health stars**, or **Nutri-Score**. Nutri-Score is the European
+  front-of-pack grade — A to E, A best — calculated the way Santé publique
+  France publishes the updated 2023 algorithm, and it shows up everywhere the
+  stars did: the cookbook card and row, the "at least this good" filter, the
+  sort axis, and the recipe page's nutrition panel with the same **How this was
+  scored** ledger behind it. Either scheme works wherever you are; neither is on
+  unless you pick it, because a national rating isn't a universal fact about
+  food. **Match this device** now offers whichever one your region actually
+  recognises rather than only the Australian one. One scheme at a time on
+  purpose — two competing verdicts on the same recipe just moves the question to
+  "which do I believe?". Ratings stay estimates, and say so: both schemes score
+  per 100 g of the *finished* dish and Dora works from raw ingredient weights.
+- **"Should I buy this?" now needs money features on (2026-08-27).** The buy
+  verdict reasons in money end to end — the price axis is money, *Might be worth
+  waiting* only ever fires on a price signal, and how strongly it recommends
+  something is nudged up and down by what you last paid. With money features
+  turned off it kept doing all of that: it just kept printing dollar amounts and
+  "N price samples" at a household that had opted out of money, and quietly went
+  on ranking items by prices they'd said they didn't want considered. What was
+  left over — you're out, you waste this — is what the **Dora thinks** card
+  directly above it already says. So money is now a prerequisite for the whole
+  surface rather than a half-hidden ingredient: with it off, the verdict card,
+  the row badges and the shopping-list badges are all absent, and Settings →
+  Assistant shows the *"Should I buy this?"* toggle greyed out with a line
+  explaining what it needs. Your own on/off choice is remembered underneath —
+  turning money back on restores the verdict exactly as you had it.
 - **Stocktake's (?) opens Help, not a modal (2026-08-27).** The explainer —
   the three phases, and what each of the five per-item options does — now lives
   in **Help → Guides → Stocktake**, where it can be found by someone who isn't
@@ -80,6 +546,11 @@ semver — major bumps signal schema or breaking-config changes.
   guide answering "which browsers can Dora speak in?".
 
 ### Fixed
+- **Buy-verdict prices are shown in your currency (2026-08-27).** The price
+  line inside a verdict — *$3.85 last shop · usually $3.80* — was built on the
+  server with a hardcoded dollar sign, so a household set to euros or pounds was
+  shown dollars regardless. It now formats where every other price in the app
+  does, honouring Settings → Region's currency and locale.
 - **The meal planner's "to buy" count now moves when you shop-plan
   (2026-08-27).** It counted everything the week needed that wasn't in the
   pantry, so *3 to buy* stayed *3 to buy* after you'd put all three on a list.

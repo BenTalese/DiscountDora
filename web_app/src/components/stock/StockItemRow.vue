@@ -753,8 +753,11 @@
                 timeout: 5000,
                 actions: [
                     {
+                        // No `color` — an info toast is a light elevated
+                        // surface now, so a white Undo would be invisible on
+                        // it. Quasar's default for notification actions is
+                        // `var(--q-primary)`, which follows the theme.
                         label: 'Undo',
-                        color: 'white',
                         handler: () => {
                             void (async () => {
                                 try {

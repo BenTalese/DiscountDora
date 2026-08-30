@@ -18,6 +18,13 @@ export type TtsVoice = {
     // Usable for synthesis right now (downloaded AND the Piper binary present).
     available: boolean;
     error: string | null;
+    /** Bytes of the model received so far. 0 unless `status` is
+     *  `downloading`. */
+    downloaded_bytes?: number;
+    /** Total from the origin's `Content-Length`. **0 means unknown** — before
+     *  the first chunk, or when the origin sent no header. Never divide by it
+     *  without checking. */
+    downloaded_bytes_total?: number;
 };
 
 export type TtsVoicesResponse = {

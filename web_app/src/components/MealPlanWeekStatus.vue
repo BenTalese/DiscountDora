@@ -9,13 +9,11 @@
             <span v-if="batchEnabled && shortfallCount > 0" class="week-status__cell text-warning">
                 <q-icon :name="ICONS.chef_hat" size="14px" class="q-mr-xs" />
                 {{ cookByLabel }}
-                <q-icon :name="ICONS.help_outline" size="14px" class="q-ml-xs">
-                    <q-tooltip>
-                        Meal-plan slots whose recipe doesn't have enough
-                        cooked-and-frozen portions to cover them. You'll need to
-                        cook or shop for the missing ingredients.
-                    </q-tooltip>
-                </q-icon>
+                <InfoTip label="Cook by">
+                    Meal-plan slots whose recipe doesn't have enough
+                    cooked-and-frozen portions to cover them. You'll need to
+                    cook or shop for the missing ingredients.
+                </InfoTip>
             </span>
             <!-- Owner feedback 2026-08-27 — this used to count everything the
                  week needed that wasn't in the pantry, so it read "3 to buy"
@@ -42,6 +40,7 @@
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
+    import InfoTip from 'src/components/help/InfoTip.vue';
     import { useBatchEnabled } from 'src/composables/useBatchEnabled';
     import { computed } from 'vue';
 

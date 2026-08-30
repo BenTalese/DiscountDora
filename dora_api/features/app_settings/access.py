@@ -5,7 +5,10 @@ assistant. Get-or-create means the install works before anyone visits Settings.
 """
 from flask import g, has_app_context
 
-from dora_api.domain.entities.app_setting import AppSetting
+from dora_api.domain.entities.app_setting import (
+    RATING_SCHEME_NONE,
+    AppSetting,
+)
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 
 # FU-560 — key under which the singleton is memoised on the Flask
@@ -50,6 +53,18 @@ def get_or_create_app_setting(repository: SqlAlchemyRepository) -> AppSetting:
     return setting
 
 
+def money_features_enabled(repository: SqlAlchemyRepository) -> bool:
+    """True when this install has money features switched on.
+
+    Money is a single install-wide concern (`AppSetting.money_enabled`); there
+    is no per-user layer. Server-side gates read it through here so a feature
+    that is *about* money can refuse outright rather than answer with dollar
+    prose an install has opted out of. Goes through the memoised singleton
+    accessor, so gating costs no extra query.
+    """
+    return bool(get_or_create_app_setting(repository).money_enabled)
+
+
 def _get_or_create(repository: SqlAlchemyRepository) -> AppSetting:
     existing = repository.get(AppSetting).all()
     if existing:
@@ -59,7 +74,7 @@ def _get_or_create(repository: SqlAlchemyRepository) -> AppSetting:
     # opt in to AI mode individually on Settings → Assistant.
     setting = AppSetting(
         scanning_enabled=False,
-        health_star_rating_enabled=False,
+        nutrition_rating_scheme=RATING_SCHEME_NONE,
         # PROPOSAL_STOCKTAKE_MODE §8 — fresh installs get Fortnightly +
         # Auto-on so the queue "just works" without a Settings visit.
         stocktake_default_cadence_band="fortnightly",

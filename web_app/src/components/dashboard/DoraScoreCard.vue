@@ -7,14 +7,12 @@
     <DashboardCard :icon="ICONS.favorite">
         <template #title>
             Kitchen health
-            <q-icon :name="ICONS.help_outline" size="14px" class="q-ml-xs">
-                <q-tooltip>
-                    A 0–100 score of how your kitchen's tracking right now — waste,
-                    on-budget, freshness, unplanned run-outs, and stocktake staleness,
-                    averaged. Only signals with real data count; missing signals
-                    don't drag the score down.
-                </q-tooltip>
-            </q-icon>
+            <InfoTip label="Kitchen health">
+                A 0–100 score of how your kitchen's tracking right now — waste,
+                on-budget, freshness, unplanned run-outs, and stocktake staleness,
+                averaged. Only signals with real data count; missing signals
+                don't drag the score down.
+            </InfoTip>
         </template>
         <template #action>
             <span
@@ -116,6 +114,7 @@
     import { computed } from 'vue';
     import DashboardCard from 'src/components/dashboard/DashboardCard.vue';
     import { ICONS } from 'src/style/icons';
+    import InfoTip from 'src/components/help/InfoTip.vue';
     import { useDoraScore } from 'src/composables/useDoraScore';
     import type {
         DoraScoreComponentKey,

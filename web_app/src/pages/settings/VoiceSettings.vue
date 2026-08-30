@@ -20,10 +20,34 @@
                     @update:model-value="onVoiceInputChange"
                 />
             </template>
-            <div v-if="!voiceInputAvailable" class="settings-page__note dora-text-muted">
-                Your browser doesn't expose the Web Speech API for
-                recognition. Try Chrome or Edge.
-            </div>
+            <!--
+                Owner feedback 2026-08-29 — *"Still seeing 'Your browser doesn't
+                expose the Web Speech API for recognition' on Firefox. What
+                browsers can we really support?"*
+
+                The honest answer, and the reason the old line felt like a bug
+                report: speech *recognition* is not ours to fix from the client.
+                It is the browser's `SpeechRecognition` API, which Chrome, Edge,
+                Safari and the other Chromium browsers ship and Firefox has
+                never shipped — there is no flag, and no polyfill that works
+                without shipping audio to a third party. So the card names the
+                browsers that do work rather than implying the user has
+                misconfigured something. Making this work everywhere needs
+                server-side transcription (FU-788), which is a real feature, not
+                a copy fix.
+            -->
+            <SettingsNotice
+                v-if="!voiceInputAvailable"
+                title="Not available in this browser"
+            >
+                Speaking to Dora uses your browser's own speech-recognition
+                engine, and this browser doesn't have one. It works in
+                <strong>Chrome</strong>, <strong>Edge</strong>,
+                <strong>Safari</strong> and other Chromium-based browsers.
+                <strong>Firefox has never shipped speech recognition</strong>,
+                so there's nothing to turn on here — everything else on this
+                page, including Dora's voice, still works normally.
+            </SettingsNotice>
         </SettingsSection>
 
         <hr class="settings-divider" />
@@ -44,61 +68,114 @@
                  SpeechSynthesis, and the Firefox one — API present, zero
                  voices installed — was the one it described worst. Each now
                  says what is actually true and what to do about it. -->
-            <div v-if="!voiceOutputAvailable" class="settings-page__note dora-text-muted">
-                Nothing on this device can speak: your browser reports no
-                installed voices, and Dora's own neural voice isn't set up on
-                this server. Install Dora's neural voice server-side (the Docker
-                image and desktop app include it) and every browser works,
-                including Firefox.
-            </div>
-            <div
+            <SettingsNotice v-if="!voiceOutputAvailable" title="Nothing here can speak">
+                Your browser reports no installed text-to-speech voices, and
+                Dora's own neural voice isn't installed on this server either,
+                so there is no engine left to read her replies. Installing the
+                neural voice server-side fixes it for every browser — see
+                "Dora's voice" below.
+            </SettingsNotice>
+            <SettingsNotice
                 v-else-if="!browserVoiceUsable"
-                class="settings-page__note dora-text-muted"
+                tone="info"
+                title="Using Dora's neural voice"
             >
                 Your browser has no text-to-speech voices installed, so the
                 device voice is unavailable here — Dora uses her own neural
-                voice instead, which works the same in every browser. This is
+                voice instead, which sounds the same in every browser. This is
                 the usual state on Firefox (it only speaks through voices the
                 operating system gives it — SAPI on Windows,
                 <code>speech-dispatcher</code> on Linux, nothing at all on
                 Android) and on some hardened or minimal Linux setups.
-            </div>
+            </SettingsNotice>
         </SettingsSection>
 
         <hr class="settings-divider" />
 
         <SettingsSection>
             <template #title>Dora's voice</template>
-            <template #description>
-                Choose how Dora sounds when she speaks her replies and reads cook-mode steps.
-                Download a neural voice you like and select it, or use the default device text-to-speech voice.
-            </template>
 
-            <div v-if="!piperAvailable" class="settings-page__note dora-text-muted">
-                Dora's neural-voice engine isn't installed on this server, so
-                replies use the browser voice. (The Docker image and desktop app
-                include it; you can still download voices below for when it's
-                available.)
-            </div>
-            <div
-                v-else-if="!anyVoiceReady"
-                class="settings-page__note dora-text-muted"
+            <!--
+                Owner feedback 2026-08-29 — *"I'm confused by 'Dora's
+                neural-voice engine isn't installed on this server'. In what
+                situations does this happen? I'd expect it to always work. Also
+                if the neural voice engine isn't available then why let people
+                download voices at all?"*
+
+                Both fair. The situation is narrow and nameable: Piper is
+                deliberately NOT a hard dependency (R-018 / ADR-013 — its
+                `piper-phonemize` wheel won't build on Windows), so the Docker
+                image installs it and the desktop bundle ships it, but an
+                install running from source on a machine without it has no
+                engine. That is now what the card says, instead of leaving the
+                reader to guess.
+
+                And the download cards are gone in that state rather than
+                explained: offering a 60–110MB model for an engine that cannot
+                run it is a dead control with a rationalisation attached. There
+                is nothing to choose between while Piper is missing — replies
+                fall back to the device voice automatically — so the picker only
+                appears once there is a real choice to make.
+
+                R-029 (hide, don't nag) rather than its settings-screen
+                carve-out: that carve-out is for the surface that *owns* the
+                config, and this page doesn't own Piper's installation — the
+                binary is an operator/packaging concern whose setting lives on
+                Admin → Voice, which is where the card points.
+            -->
+            <SettingsNotice
+                v-if="!loadingVoices && !piperAvailable"
+                title="No neural voice on this install"
             >
-                Download a voice below to start using Dora's neural voice.
-            </div>
+                Dora's neural voice runs as a separate engine (Piper) alongside
+                the server, and this install doesn't have it. The
+                <strong>Docker image</strong> and the <strong>desktop app</strong>
+                both include it and need no setup; an install running from
+                source doesn't, because the engine can't be installed from
+                Python on Windows and so isn't a required dependency.
+                <template v-if="isAdmin">
+                    An admin can install it and point Dora at it under
+                    Admin → Voice.
+                </template>
+                <template v-else>
+                    Ask an admin to install it if you'd like the natural voice.
+                </template>
+                Until then Dora speaks with your device's built-in voice.
+                <template #actions>
+                    <BaseButton
+                        v-if="isAdmin"
+                        variant="secondary"
+                        :icon="ICONS.settings"
+                        label="Voice engine setup"
+                        to="/settings/admin/system/voice"
+                    />
+                </template>
+            </SettingsNotice>
 
-            <div v-if="!loadingVoices" class="settings-page__voices">
-                <VoicePicker
-                    :model-value="currentUser.voice_id"
-                    :voices="voices"
-                    :piper-available="piperAvailable"
-                    :device-default-active="currentUser.voice_engine === 'browser'"
-                    :device-voice-usable="browserVoiceUsable"
-                    @update:model-value="onVoiceChange"
-                    @select-device-default="onSelectDeviceDefault"
-                    @download="onDownload"
-                />
-            </div>
+            <template v-else-if="!loadingVoices">
+                <p class="settings-page__lede">
+                    Choose how Dora sounds when she speaks her replies and reads
+                    cook-mode steps. Download a neural voice you like and select
+                    it, or use your device's built-in text-to-speech voice.
+                </p>
+
+                <SettingsNotice v-if="!anyVoiceReady" tone="info">
+                    Download a voice below to start using Dora's neural voice.
+                </SettingsNotice>
+
+                <div class="settings-page__voices">
+                    <VoicePicker
+                        :model-value="currentUser.voice_id"
+                        :voices="voices"
+                        :piper-available="piperAvailable"
+                        :device-default-active="currentUser.voice_engine === 'browser'"
+                        :device-voice-usable="browserVoiceUsable"
+                        @update:model-value="onVoiceChange"
+                        @select-device-default="onSelectDeviceDefault"
+                        @download="onDownload"
+                    />
+                </div>
+            </template>
         </SettingsSection>
     </div>
 </template>
@@ -115,10 +192,16 @@
     import { ICONS } from 'src/style/icons';
     import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
     import VoicePicker from 'src/components/settings/VoicePicker.vue';
+    import SettingsNotice from 'src/components/settings/SettingsNotice.vue';
+    import BaseButton from 'src/components/BaseButton.vue';
 
     const authStore = useAuthStore();
     const { currentUser } = storeToRefs(authStore);
     const ttsApi = new TtsApiService();
+
+    // Decides whether the "no neural voice" card offers the setup page or
+    // "ask an admin" — same split ChannelSetupNote makes on Notifications.
+    const isAdmin = computed(() => currentUser.value?.is_admin === true);
 
     // R-003 / FU-601 — shared save-toast helper (see useSettingsSave).
     const { notifySuccess, notifyError, update } = useSettingsSave();
@@ -226,6 +309,13 @@
         font-size: 0.8125rem;
         line-height: 1.4;
         margin-top: 4px;
+    }
+    .settings-page__lede {
+        margin: 0;
+        max-width: 60ch;
+        color: var(--text-secondary);
+        font-size: 0.875rem;
+        line-height: 1.4;
     }
     .settings-page__voices { margin-top: 12px; }
     .settings-divider {

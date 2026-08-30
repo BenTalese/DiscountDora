@@ -67,6 +67,14 @@ export interface HealthInfo {
     reconcile_policy?: {
         auto_drain: boolean;
     };
+    // install-wide stocktake defaults. Every client reads it: the create
+    // stock-item dialog seeds its Stocktake toggle from `new_items_opt_in`
+    // so the switch shows the position the item will really be created in.
+    // Optional in the type because older backends won't emit it; callers
+    // default to opted-in (matches the server).
+    stocktake_policy?: {
+        new_items_opt_in: boolean;
+    };
     // FU-370 — install's support / report-an-issue channel. Optional in the
     // type because older backends won't emit it; both strings empty ⇒ dormant
     // (no report affordance renders). `url` wins over `email` when both set.

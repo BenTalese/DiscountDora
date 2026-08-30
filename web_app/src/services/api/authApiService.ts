@@ -61,10 +61,6 @@ export type UpdateMeCommand = {
     /** C-cross Chunk 3 — per-user nutrition mode. Server rejects `complex`
      *  when no nutrition source has been configured (admin seam). */
     nutrition_mode?: 'off' | 'simple' | 'complex';
-    /** C-cross Chunk 5 — per-user recipe-image opt-in. Saved photos
-     *  survive a toggle (only rendering is suppressed). FU-508 dropped
-     *  the stock-image companion. */
-    show_recipe_images?: boolean;
     /** Settings rebuild Phase 4 — profile picture. Data-URL string to set,
      *  `clear_image: true` to remove. Omitting both leaves it untouched. */
     image?: string | null;

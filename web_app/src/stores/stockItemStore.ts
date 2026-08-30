@@ -8,6 +8,7 @@ import type {
 } from 'src/services/api/stockItemApiService';
 import StockItemApiService from 'src/services/api/stockItemApiService';
 import { clearRollbacks, registerRollback } from 'src/services/errorHandling/rollbackRegistry';
+import { useRecipeStore } from 'src/stores/recipeStore';
 import { useShoppingListStore } from 'src/stores/shoppingListStore';
 import type { Ref } from 'vue';
 import { readonly, ref } from 'vue';
@@ -53,6 +54,22 @@ export const useStockItemStore = defineStore('stockItem', () => {
         });
     }
 
+    /** Every recipe DTO carries pantry-derived facts — cookability, the
+     *  missing/expiring counts, the Zero-Input hint, and in complex nutrition
+     *  mode the rollup behind the kcal figure and the front-of-pack rating.
+     *  A stock write can move any of them, so the recipe list is marked stale
+     *  here rather than each recipe surface guessing which writes matter
+     *  (R-003). Called from every mutation below, not just the nutrition
+     *  link: a level change moves `cookable`, a delete moves `missing_count`.
+     *
+     *  This only sets a flag — the refetch happens on the next
+     *  `ensureLoadedAsync`, so a stocktake run doesn't fire one request per
+     *  item. Store lookup is inside the function (not module scope) because
+     *  Pinia stores can only be resolved once the active pinia exists. */
+    function invalidateDerivedRecipeFacts(): void {
+        useRecipeStore().invalidateRecipes();
+    }
+
     let hydrated = false;
     let inflight: Promise<void> | null = null;
 
@@ -89,6 +106,7 @@ export const useStockItemStore = defineStore('stockItem', () => {
                 : await stockItemApiService.getAsync(created.id as string);
         stockItems.value.push(entity);
         stockItems.value.sort((a, b) => collator.compare(a.name, b.name));
+        invalidateDerivedRecipeFacts();
         return entity;
     };
 
@@ -116,6 +134,7 @@ export const useStockItemStore = defineStore('stockItem', () => {
         // (timestamps, normalised values, the attention flag) are picked up.
         stockItems.value[stockItemIndex] = await stockItemApiService.getAsync(stock_item_id);
         clearRollbacks();
+        invalidateDerivedRecipeFacts();
         // level transition may have triggered the auto-add hook.
         await handleAutoAddedResponse(stock_item_id, result);
     }
@@ -132,6 +151,7 @@ export const useStockItemStore = defineStore('stockItem', () => {
             stockItems.value[idx] = refreshed;
             stockItems.value.sort((a, b) => collator.compare(a.name, b.name));
         }
+        invalidateDerivedRecipeFacts();
         // `saveField`-style level changes on the detail page also
         // go through this path (they carry `stock_level_id`), so the
         // auto-add hook can fire here too.
@@ -141,6 +161,7 @@ export const useStockItemStore = defineStore('stockItem', () => {
     const deleteStockItemAsync = async (stockItemID: string) => {
         await stockItemApiService.deleteAsync(stockItemID);
         stockItems.value = stockItems.value.filter((si) => si.stock_item_id !== stockItemID);
+        invalidateDerivedRecipeFacts();
     };
 
     return {

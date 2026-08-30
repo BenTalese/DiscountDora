@@ -148,6 +148,48 @@
                         @update:model-value="clearField('stock_group_id')"
                     />
 
+                    <!-- 2026-08-28 feedback: usual store is a permanent
+                         property of the item (same class as group/location),
+                         so it belongs on the create form rather than only on
+                         the detail page. Option list mirrors the detail
+                         page's picker, logo and all, so the two surfaces
+                         read the same. Plain q-select, matching its siblings
+                         here — this dialog is still on the pre-BaseSelect
+                         shape (FU-675); migrate the whole form at once, not
+                         one field into a different scale. -->
+                    <q-select
+                        v-model="form.usual_store_id"
+                        :options="storeOptions"
+                        emit-value
+                        map-options
+                        clearable
+                        outlined
+                        label="Usual store (optional)"
+                        :error="!!fieldErrors.usual_store_id"
+                        :error-message="fieldErrors.usual_store_id"
+                        @update:model-value="clearField('usual_store_id')"
+                    >
+                        <template #option="{ opt, itemProps }">
+                            <q-item v-bind="itemProps">
+                                <q-item-section
+                                    avatar
+                                    style="min-width: 0; padding-right: 8px"
+                                >
+                                    <StoreLogo
+                                        :name="opt.label"
+                                        :store-id="opt.value"
+                                        :has-image="opt.has_image"
+                                        :height="20"
+                                        :width="34"
+                                    />
+                                </q-item-section>
+                                <q-item-section>
+                                    <q-item-label>{{ opt.label }}</q-item-label>
+                                </q-item-section>
+                            </q-item>
+                        </template>
+                    </q-select>
+
                     <div class="row items-center q-gutter-sm">
                         <q-toggle v-model="form.is_essential" label="Essential" />
                         <q-icon :name="ICONS.info_outline" size="16px" class="dora-text-secondary">
@@ -169,6 +211,26 @@
                         </q-icon>
                     </div>
 
+                    <!-- 2026-08-28 feedback. Gated on the install-wide
+                         stocktake switch for the same reason the detail
+                         page's row is: a per-item opt-in to a feature the
+                         install has turned off is just a confusing switch.
+                         Starts at the install's new-item default
+                         (`stocktake_policy.new_items_opt_in`) so the toggle
+                         shows the position the item is really created in —
+                         the server applies that same default when the field
+                         is omitted. Copy kept word-identical to the detail
+                         page's tooltip. -->
+                    <div v-if="stocktakeEnabled" class="row items-center q-gutter-sm">
+                        <q-toggle v-model="form.stocktake_alerts_are_enabled" label="Stocktake" />
+                        <q-icon :name="ICONS.info_outline" size="16px" class="dora-text-secondary">
+                            <q-tooltip max-width="320px">
+                                Controls whether this item ever joins the
+                                stocktake queue.
+                            </q-tooltip>
+                        </q-icon>
+                    </div>
+
                 </q-form>
             </q-card-section>
             <template #actions>
@@ -184,6 +246,7 @@
     import BaseDialog from 'src/components/BaseDialog.vue';
     import FormErrorSummary from 'src/components/FormErrorSummary.vue';
     import StockLevelDot from 'src/components/stock/StockLevelDot.vue';
+    import StoreLogo from 'src/components/StoreLogo.vue';
     import type { LocationNode } from 'src/models/location';
     import type { StockLevel } from 'src/models/stockLevel';
     import type { CreateStockItemPrefill } from 'src/components/stock/createStockItemPrefill';
@@ -195,6 +258,9 @@
     import { useLocationStore } from 'src/stores/locationStore';
     import { useStockItemStore } from 'src/stores/stockItemStore';
     import { useStockLevelStore } from 'src/stores/stockLevelStore';
+    import { useStoresStore } from 'src/stores/storesStore';
+    import { useFeatureFlags } from 'src/composables/useFeatureFlags';
+    import { useStocktakePolicy } from 'src/composables/useStocktakePolicy';
     import { useQuasar } from 'quasar';
     import { ICONS } from 'src/style/icons';
     import { computed, reactive, ref, watch } from 'vue';
@@ -222,7 +288,10 @@
     const stockItemStore = useStockItemStore();
     const stockLevelStore = useStockLevelStore();
     const locationStore = useLocationStore();
+    const storesStore = useStoresStore();
     const { stockLevels } = storeToRefs(stockLevelStore);
+    const { stocktake: stocktakeEnabled } = useFeatureFlags();
+    const { newItemsOptIn } = useStocktakePolicy();
 
     // Walk the location tree into path-labelled options — same shape as
     // the Stock Overview filter and the detail-page picker so the user
@@ -259,12 +328,24 @@
         stockGroups.value.map((g) => ({ label: g.name, value: g.stock_group_id })),
     );
 
+    // Same option shape as the detail-page picker (label/value plus the flag
+    // StoreLogo needs to choose an uploaded image over its swatch fallback).
+    const storeOptions = computed(() =>
+        storesStore.stores.map((s) => ({
+            label: s.name,
+            value: s.store_id,
+            has_image: s.has_image,
+        })),
+    );
+
     const defaultForm = (): CreateStockItemCommand => ({
         name: props.prefill?.name?.trim() || '',
         stock_level_id: stockLevels.value[0]?.stock_level_id ?? '',
         stock_location_id: null,
         stock_group_id: null,
         is_essential: false,
+        usual_store_id: null,
+        stocktake_alerts_are_enabled: newItemsOptIn.value,
     });
 
     const form: CreateStockItemCommand = reactive(defaultForm());
@@ -307,6 +388,7 @@
             if (open) {
                 resetForm();
                 void locationStore.ensureLoadedAsync();
+                void storesStore.ensureLoadedAsync();
                 void loadStockGroupsAsync();
             }
         },
@@ -330,6 +412,14 @@
                 stock_location_id: form.stock_location_id,
                 stock_group_id: form.stock_group_id || null,
                 is_essential: form.is_essential ?? false,
+                usual_store_id: form.usual_store_id || null,
+                // Send only when the toggle is actually on screen — with
+                // stocktake switched off install-wide there is no toggle, so
+                // let the server apply its own default rather than posting a
+                // value the user never saw.
+                ...(stocktakeEnabled.value
+                    ? { stocktake_alerts_are_enabled: form.stocktake_alerts_are_enabled ?? true }
+                    : {}),
             });
             // if the dialog was opened from a scan flow with a
             // barcode prefill, register the EAN against the new stock

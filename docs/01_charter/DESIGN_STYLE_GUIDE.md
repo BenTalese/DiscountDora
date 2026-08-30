@@ -633,6 +633,37 @@ Quasar's raw defaults (casing, sizing, shadows) unstyled.
   `themeService` / the font-picker vocabulary; a `--*-display` custom property;
   a `@fontsource*` import for a face the picker doesn't offer.
 
+### D-023 — A persistent control keeps its shape and its place across modes
+- **Rule:** when a surface has modes (a shopping list's draft / shopping /
+  receipt faces, cook mode's step / image views, an edit-vs-read flip), a control
+  that exists in more than one of them must be the **same control in the same
+  place**. Change what it *contains* — its label, its state, whether it's
+  disabled — but do not re-home it, and do not swap a persistent control for a
+  differently-shaped stand-in that does the same job. If a control genuinely
+  doesn't apply in a mode, **remove it**; that is a different, honest thing from
+  moving it somewhere else.
+- **Why:** the shopping list hid its list picker (a dropdown on mobile, a side
+  rail on desktop) the moment you started shopping, and grew a **"Switch list"**
+  toolbar button in its place — the same capability, a different shape, a
+  different place, at the moment the user is least able to go hunting for it. The
+  owner's verdict (2026-08-28): *"this will only lead to confusion with UI
+  elements shape shifting."* The stated reason for hiding it didn't survive
+  contact either — "the rail is the widest thing competing for a phone's screen"
+  was written about a `gt-sm` column a phone never rendered. Mode-conditional
+  chrome is also how a control quietly goes missing in exactly one mode: the same
+  page kept its shop day on a plan-face-only card, so a list you were **actively
+  shopping** never showed which day it was for, and nobody noticed for months.
+- **Apply:** before adding a mode-conditional stand-in, ask what the original
+  control costs in that mode. Usually the answer is "nothing" and it should just
+  stay. A control worth showing in two modes is worth showing in the same place
+  in both. Check the inverse too: when something lives on a mode-specific
+  component, confirm the other modes genuinely don't need it.
+- **Violation signal:** two controls with different shapes and the same verb,
+  each `v-if`'d to a different mode; a `v-if="!someFace"` on a navigation or
+  identity control; a toolbar button whose tooltip describes a thing that exists
+  elsewhere on the page in another mode.
+- **Established by:** shopping-list feedback batch 2, 2026-08-28.
+
 ---
 
 ## Exemplars (the bar — protect these)

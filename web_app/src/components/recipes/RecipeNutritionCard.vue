@@ -1,103 +1,157 @@
 <template>
-    <q-card flat bordered class="q-mb-md">
-        <q-card-section class="row items-start q-gutter-sm no-wrap">
-            <q-icon :name="ICONS.monitor_heart" size="22px" class="dora-text-muted" />
-            <div class="col">
-                <div class="text-caption dora-text-muted">
-                    {{ basisLabel }}
-                    <q-icon :name="ICONS.help_outline" size="14px" class="q-ml-xs">
-                        <q-tooltip>
-                            Summed from the foods your ingredients are linked
-                            to, converted to grams. Link more ingredients to a
-                            food on their stock item to fill the gaps.
-                        </q-tooltip>
-                    </q-icon>
-                </div>
+    <!-- The card chrome is `RecipeInfoCard` (R-001) — shared with the version
+         and additional-details panels so the three read as one family. -->
+    <RecipeInfoCard :icon="ICONS.monitor_heart" :heading="basisLabel">
+        <template #heading-after>
+            <InfoTip label="Nutrition basis">
+                Summed from the foods your ingredients are linked
+                to, converted to grams. Link more ingredients to a
+                food on their stock item to fill the gaps.
+            </InfoTip>
+        </template>
 
-                <div v-if="nutrition.kcal !== null" class="text-body2">
-                    <strong>{{ Math.round(nutrition.kcal) }}</strong>
-                    <span class="dora-text-muted q-ml-xs">kcal</span>
-                </div>
-                <div v-else class="text-body2 dora-text-muted">
-                    Nothing to add up yet
-                </div>
+        <div v-if="nutrition.kcal !== null" class="text-body2">
+            <strong>{{ Math.round(nutrition.kcal) }}</strong>
+            <span class="dora-text-muted q-ml-xs">kcal</span>
+        </div>
+        <div v-else class="text-body2 dora-text-muted">
+            Nothing to add up yet
+        </div>
 
-                <div v-if="macros.length" class="text-caption dora-text-muted q-mt-xs">
-                    <span v-for="(macro, index) in macros" :key="macro.label">
-                        <span v-if="index > 0"> · </span>{{ macro.label }} {{ macro.value }}g
-                    </span>
-                </div>
+        <div v-if="macros.length" class="text-caption dora-text-muted q-mt-xs">
+            <span v-for="(macro, index) in macros" :key="macro.label">
+                <span v-if="index > 0"> · </span>{{ macro.label }} {{ macro.value }}g
+            </span>
+        </div>
 
-                <!-- Health Star Rating (owner ask 2026-08-27). Renders only
-                     when the install has it on; the server simply omits the
-                     field otherwise, so there is no second gate here. -->
-                <div v-if="rating" class="dora-hsr q-mt-sm">
-                    <div class="dora-hsr__row">
-                        <RecipeHealthStars :stars="rating.stars" qualifier="estimated" />
-                        <BaseButton
-                            variant="subtle"
-                            dense
-                            :icon="ICONS.help_outline"
-                            :label="breakdownOpen ? 'Hide working' : 'How this was scored'"
-                            :aria-expanded="breakdownOpen"
-                            @click="breakdownOpen = !breakdownOpen"
-                        />
-                    </div>
-                    <div class="text-caption dora-text-muted">{{ ratingCaption }}</div>
-
-                    <q-slide-transition>
-                        <div v-show="breakdownOpen" class="dora-hsr__working text-caption">
-                            <!-- The point ledger, in the order the FSANZ
-                                 method computes it. A star count nobody can
-                                 interrogate is the one thing this feature
-                                 must not be. -->
-                            <div class="dora-hsr__ledger">
-                                <span
-                                    v-for="row in breakdown"
-                                    :key="row.label"
-                                    class="dora-hsr__cell"
-                                >
-                                    <span class="dora-hsr__k">{{ row.label }}</span>
-                                    <span class="dora-hsr__v">{{ row.value }}</span>
-                                </span>
-                            </div>
-                            <p class="dora-hsr__note">
-                                Score {{ rating.score }} — {{ rating.baseline_points }} baseline
-                                point{{ s(rating.baseline_points) }} less
-                                {{ rating.baseline_points - rating.score }} for what the dish
-                                has going for it. Lower scores earn more stars.
-                            </p>
-                            <p v-if="!rating.protein_counted" class="dora-hsr__note">
-                                Protein didn't count towards this rating. The scheme only
-                                credits protein on an energy-dense dish when at least 80%
-                                of it is fruit, vegetables, nuts or legumes.
-                            </p>
-                            <p v-if="thinNutrients.length" class="dora-hsr__note">
-                                Scored without a full picture:
-                                {{ thinNutrients.join(', ') }}. A missing figure here scores
-                                nothing, which flatters the rating rather than lowering it.
-                            </p>
-                            <p class="dora-hsr__note">
-                                Health Star Rating, calculated the way FSANZ publishes it,
-                                from the raw weight of the ingredients — a dish that reduces
-                                down or is made with water you haven't listed will differ.
-                            </p>
-                        </div>
-                    </q-slide-transition>
-                </div>
-
-                <!-- The coverage line is always visible, even at full
-                     coverage: a number whose basis is invisible reads as
-                     complete whether it is or not. -->
-                <div class="text-caption dora-text-muted q-mt-xs">
-                    {{ coverageLine }}
-                </div>
-                <ul v-if="gaps.length" class="dora-gaps text-caption dora-text-muted">
-                    <li v-for="gap in gaps" :key="gap.reason">{{ gap.text }}</li>
-                </ul>
+        <!-- Health Star Rating (owner ask 2026-08-27). Renders only
+             when the install has it on; the server simply omits the
+             field otherwise, so there is no second gate here. -->
+        <div v-if="rating" class="dora-hsr q-mt-sm">
+            <div class="dora-hsr__row">
+                <RecipeHealthStars :stars="rating.stars" qualifier="estimated" />
+                <BaseButton
+                    variant="subtle"
+                    dense
+                    :icon="ICONS.help_outline"
+                    :label="breakdownOpen ? 'Hide working' : 'How this was scored'"
+                    :aria-expanded="breakdownOpen"
+                    @click="breakdownOpen = !breakdownOpen"
+                />
             </div>
-        </q-card-section>
-    </q-card>
+            <div class="text-caption dora-text-muted">{{ ratingCaption }}</div>
+
+            <q-slide-transition>
+                <div v-show="breakdownOpen" class="dora-hsr__working text-caption">
+                    <!-- The point ledger, in the order the FSANZ
+                         method computes it. A star count nobody can
+                         interrogate is the one thing this feature
+                         must not be. -->
+                    <div class="dora-hsr__ledger">
+                        <span
+                            v-for="row in breakdown"
+                            :key="row.label"
+                            class="dora-hsr__cell"
+                        >
+                            <span class="dora-hsr__k">{{ row.label }}</span>
+                            <span class="dora-hsr__v">{{ row.value }}</span>
+                        </span>
+                    </div>
+                    <p class="dora-hsr__note">
+                        Score {{ rating.score }} — {{ rating.baseline_points }} baseline
+                        point{{ s(rating.baseline_points) }} less
+                        {{ rating.baseline_points - rating.score }} for what the dish
+                        has going for it. Lower scores earn more stars.
+                    </p>
+                    <p v-if="!rating.protein_counted" class="dora-hsr__note">
+                        Protein didn't count towards this rating. The scheme only
+                        credits protein on an energy-dense dish when at least 80%
+                        of it is fruit, vegetables, nuts or legumes.
+                    </p>
+                    <p v-if="thinNutrients.length" class="dora-hsr__note">
+                        Scored without a full picture:
+                        {{ thinNutrients.join(', ') }}. A missing figure here scores
+                        nothing, which flatters the rating rather than lowering it.
+                    </p>
+                    <p class="dora-hsr__note">
+                        Health Star Rating, calculated the way FSANZ publishes it,
+                        from the raw weight of the ingredients — a dish that reduces
+                        down or is made with water you haven't listed will differ.
+                    </p>
+                </div>
+            </q-slide-transition>
+        </div>
+
+        <!-- Nutri-Score, when that is the install's scheme. Never
+             rendered alongside the block above — the server sends one
+             or the other, never both. Deliberately a sibling rather
+             than the same block parameterised: the two schemes weight
+             different things and their explanations have to say
+             different things, and collapsing them would produce copy
+             that is vague about both. -->
+        <div v-if="nutriScore" class="dora-hsr q-mt-sm">
+            <div class="dora-hsr__row">
+                <RecipeNutriScore :grade="nutriScore.grade" qualifier="estimated" />
+                <BaseButton
+                    variant="subtle"
+                    dense
+                    :icon="ICONS.help_outline"
+                    :label="nsBreakdownOpen ? 'Hide working' : 'How this was scored'"
+                    :aria-expanded="nsBreakdownOpen"
+                    @click="nsBreakdownOpen = !nsBreakdownOpen"
+                />
+            </div>
+            <div class="text-caption dora-text-muted">{{ nutriScoreCaption }}</div>
+
+            <q-slide-transition>
+                <div v-show="nsBreakdownOpen" class="dora-hsr__working text-caption">
+                    <div class="dora-hsr__ledger">
+                        <span
+                            v-for="row in nutriScoreBreakdown"
+                            :key="row.label"
+                            class="dora-hsr__cell"
+                        >
+                            <span class="dora-hsr__k">{{ row.label }}</span>
+                            <span class="dora-hsr__v">{{ row.value }}</span>
+                        </span>
+                    </div>
+                    <p class="dora-hsr__note">
+                        Score {{ nutriScore.score }} —
+                        {{ nutriScore.negative_points }} point{{
+                            s(nutriScore.negative_points) }} against, less
+                        {{ nutriScore.negative_points - nutriScore.score }} for what
+                        the dish has going for it. Lower scores earn better grades.
+                    </p>
+                    <p v-if="!nutriScore.protein_counted" class="dora-hsr__note">
+                        Protein didn't count towards this grade. Once a dish reaches
+                        11 points against, the scheme stops crediting protein and
+                        counts only fibre and produce.
+                    </p>
+                    <p v-if="thinNutrients.length" class="dora-hsr__note">
+                        Scored without a full picture:
+                        {{ thinNutrients.join(', ') }}. A missing figure here scores
+                        nothing, which flatters the grade rather than lowering it.
+                    </p>
+                    <p class="dora-hsr__note">
+                        Nutri-Score, calculated the way Santé publique France
+                        publishes the 2023 algorithm, from the raw weight of the
+                        ingredients — the published method asks for the cooked
+                        weights, so a dish that reduces down will differ.
+                    </p>
+                </div>
+            </q-slide-transition>
+        </div>
+
+        <!-- The coverage line is always visible, even at full
+             coverage: a number whose basis is invisible reads as
+             complete whether it is or not. -->
+        <div class="text-caption dora-text-muted q-mt-xs">
+            {{ coverageLine }}
+        </div>
+        <ul v-if="gaps.length" class="dora-gaps text-caption dora-text-muted">
+            <li v-for="gap in gaps" :key="gap.reason">{{ gap.text }}</li>
+        </ul>
+    </RecipeInfoCard>
 </template>
 
 <script lang="ts" setup>
@@ -117,8 +171,11 @@
 
     import BaseButton from 'src/components/BaseButton.vue';
     import RecipeHealthStars from 'src/components/recipes/RecipeHealthStars.vue';
+    import RecipeInfoCard from 'src/components/recipes/RecipeInfoCard.vue';
+    import RecipeNutriScore from 'src/components/recipes/RecipeNutriScore.vue';
     import type { RecipeNutrition, RecipeNutritionGap } from 'src/models/recipe';
     import { ICONS } from 'src/style/icons';
+    import InfoTip from 'src/components/help/InfoTip.vue';
 
     const props = defineProps<{ nutrition: RecipeNutrition }>();
 
@@ -191,6 +248,45 @@
             { label: 'Sugars', value: `+${value.total_sugars_points}` },
             { label: 'Sodium', value: `+${value.sodium_points}` },
             { label: 'Fruit & veg', value: `−${value.v_points}` },
+            { label: 'Protein', value: `−${value.protein_points}` },
+            { label: 'Fibre', value: `−${value.fibre_points}` },
+        ];
+    });
+
+    // ── Nutri-Score ─────────────────────────────────────────────────────
+    // Its own state and its own computeds rather than a shared "rating"
+    // abstraction: the two schemes name different components (salt vs sodium,
+    // fruit-veg-legumes vs fruit-veg-nuts-legumes) with different ceilings,
+    // and the only thing a shared shape would buy is copy that is imprecise
+    // about both.
+    const nsBreakdownOpen = ref(false);
+    const nutriScore = computed(() => props.nutrition.nutri_score);
+
+    const nutriScoreCaption = computed(() => {
+        const value = nutriScore.value;
+        if (!value) return '';
+        const fvl = value.fvl_percent;
+        // Nuts are excluded from this figure where the Health Star Rating
+        // includes them, so the wording has to differ from the caption above —
+        // saying "nuts" here would misdescribe the number.
+        const produce = fvl === null
+            ? ''
+            : ` · ${Math.round(fvl)}% fruit, veg or legumes`;
+        return `Nutri-Score — estimated${produce}`;
+    });
+
+    /** The point ledger. Negative points count against the recipe and positive
+     *  ones count for it, so the signs are shown rather than left to the
+     *  reader to infer from the label. */
+    const nutriScoreBreakdown = computed(() => {
+        const value = nutriScore.value;
+        if (!value) return [];
+        return [
+            { label: 'Energy', value: `+${value.energy_points}` },
+            { label: 'Sat fat', value: `+${value.saturated_fat_points}` },
+            { label: 'Sugars', value: `+${value.total_sugars_points}` },
+            { label: 'Salt', value: `+${value.salt_points}` },
+            { label: 'Fruit & veg', value: `−${value.fvl_points}` },
             { label: 'Protein', value: `−${value.protein_points}` },
             { label: 'Fibre', value: `−${value.fibre_points}` },
         ];

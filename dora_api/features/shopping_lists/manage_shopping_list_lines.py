@@ -202,6 +202,11 @@ class UpdateLineRequest(BaseModel):
     clear_actual_unit_price: bool = False
     purchased_store_id: UUID | None = None
     clear_purchased_store: bool = False
+    # Where the user *plans* to buy this line, set from the plan face. Not a
+    # purchase record — it never feeds a price observation, which is why it is
+    # absent from `observation_fields_touched` below.
+    planned_store_id: UUID | None = None
+    clear_planned_store: bool = False
     # optional PreferredBuy hint on the line (clear-vs-unset flag).
     preferred_buy_id: UUID | None = None
     clear_preferred_buy: bool = False
@@ -291,6 +296,10 @@ class UpdateLineHandler:
             line.purchased_store_id = None
         elif "purchased_store_id" in set_fields and request.purchased_store_id is not None:
             line.purchased_store_id = request.purchased_store_id
+        if request.clear_planned_store:
+            line.planned_store_id = None
+        elif "planned_store_id" in set_fields and request.planned_store_id is not None:
+            line.planned_store_id = request.planned_store_id
 
         # preferred-buy hint (a reminder; doesn't flip provenance).
         if request.clear_preferred_buy:

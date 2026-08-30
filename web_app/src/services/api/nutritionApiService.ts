@@ -18,6 +18,18 @@ export interface NutritionSourceStatus {
     phase?: 'idle' | 'downloading' | 'parsing' | 'saving' | 'done' | 'error';
     error?: string | null;
     default_url?: string;
+    /** Bytes received so far in the `downloading` phase. */
+    bytes_done?: number;
+    /** Total download size from `Content-Length`. **0 means the origin didn't
+     *  say** — treat it as unknown and fall back to an indeterminate bar
+     *  rather than dividing by it. */
+    bytes_total?: number;
+    /** Cumulative CSV rows read in the `parsing` phase. There is deliberately
+     *  no total to divide by: the archive's row count isn't known until it has
+     *  been read, so this is a live count, not a percentage. */
+    rows_done?: number;
+    foods?: number;
+    portions?: number;
 }
 
 export interface NutritionSourcesResponse {

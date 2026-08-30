@@ -6,6 +6,11 @@ from uuid import UUID
 
 from flask import request
 
+from dora_api.domain.entities.app_setting import (
+    RATING_SCHEME_HEALTH_STAR,
+    RATING_SCHEME_NONE,
+    RATING_SCHEME_NUTRI_SCORE,
+)
 from dora_api.domain.entities.dietary_tag import DietaryTag
 from dora_api.domain.entities.recipe import Recipe
 from dora_api.domain.entities.recipe_ingredient import RecipeIngredient
@@ -207,9 +212,9 @@ class RecipeCostLineDto:
 class RecipeHealthStarRatingDto:
     """The Health Star Rating for a recipe (owner ask 2026-08-27).
 
-    Present only when the install has `health_star_rating_enabled` **and** is
-    in complex nutrition mode — a rating is computed from the foods the
-    ingredients link to, and simple mode has only a typed kcal.
+    Present only when the install's `nutrition_rating_scheme` is `health_star`
+    **and** it is in complex nutrition mode — a rating is computed from the
+    foods the ingredients link to, and simple mode has only a typed kcal.
 
     Every intermediate the FSANZ method names is carried, not just the star
     count, because the one thing this feature must not be is an unexplained
@@ -236,6 +241,49 @@ class RecipeHealthStarRatingDto:
     # Raw summed ingredient weight, in grams. HSR is scored per 100 g of the
     # food *as consumed*; this is the raw weight, so the rating is an estimate
     # and the client says so. Owner's call 2026-08-27.
+    total_grams: float | None
+
+
+@dataclass(frozen=True, slots=True)
+class RecipeNutriScoreDto:
+    """The Nutri-Score for a recipe (owner ask 2026-08-27).
+
+    The European sibling of `RecipeHealthStarRatingDto`, present only when the
+    install's `nutrition_rating_scheme` is `nutri_score` and it is in complex
+    nutrition mode. Never present at the same time as the Health Star Rating —
+    the scheme is a single choice.
+
+    Carries every intermediate the published method names, for the same reason
+    its HSR twin does: a cook who disagrees with a D should be able to see it
+    was 14 negative points against 2 fibre and no fruit. `protein_counted` is
+    here because the N ≥ 11 gate silently dropping a recipe's protein credit
+    reads as a bug unless the UI can say why.
+
+    Note the shapes deliberately do **not** share a base class. They look
+    similar but the components are not the same quantities — HSR's `v_points`
+    (max 8, fvnl) and Nutri-Score's `fvl_points` (max 5, no nuts) would be a
+    trap to unify, and the point ceilings differ throughout.
+    """
+    grade: str                  # 'A'..'E'
+    score: int
+    negative_points: int
+    energy_points: int
+    saturated_fat_points: int
+    total_sugars_points: int
+    salt_points: int
+    positive_points: int
+    protein_points: int
+    fibre_points: int
+    fvl_points: int
+    protein_counted: bool
+    # Percentage of the dish's counted weight that is fruit, vegetable or
+    # legume. **Not** the HSR fvnl figure — nuts and seeds are excluded from
+    # this numerator (see `features/nutrition/food_categories.py`).
+    fvl_percent: float | None
+    # Raw summed ingredient weight, in grams. The published recipe modality
+    # asks for ingredient values *as consumed*, with cooking yield accounted
+    # for; this is the raw weight, so the grade is an estimate and the client
+    # says so. See `domain/nutri_score.py` and FU-748.
     total_grams: float | None
 
 
@@ -277,7 +325,13 @@ class RecipeNutritionDto:
     # Legacy) makes a recipe rate *better*, so the panel has to be able to say
     # which figures were thin rather than present the score as complete.
     nutrient_coverage: dict = field(default_factory=dict)
+    # At most one of these is ever non-null — the install picks one scheme.
+    # They are separate fields rather than one polymorphic `rating` because a
+    # client rendering stars and a client rendering an A–E badge need different
+    # shapes, and a discriminated union in JSON would just move the branch into
+    # the SPA without removing it.
     health_star_rating: 'RecipeHealthStarRatingDto | None' = None
+    nutri_score: 'RecipeNutriScoreDto | None' = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -923,13 +977,17 @@ class GetRecipesHandler:
 
         return nutrition_mode(get_or_create_app_setting(self.repository))
 
-    def _health_star_rating_enabled(self) -> bool:
-        """The install's Health Star Rating switch. Off everywhere by default —
-        HSR is an AU/NZ government scheme (see the AppSetting's note)."""
+    def _rating_scheme(self) -> str:
+        """Which front-of-pack rating this install shows, if any. `none` by
+        default everywhere (see the AppSetting's note)."""
+        from dora_api.domain.entities.app_setting import RATING_SCHEME_NONE
         from dora_api.features.app_settings.access import get_or_create_app_setting
 
         setting = get_or_create_app_setting(self.repository)
-        return bool(getattr(setting, "health_star_rating_enabled", False))
+        return str(
+            getattr(setting, "nutrition_rating_scheme", RATING_SCHEME_NONE)
+            or RATING_SCHEME_NONE
+        )
 
     @staticmethod
     def _rating_dto(rollup) -> 'RecipeHealthStarRatingDto | None':  # noqa: ANN001
@@ -952,8 +1010,30 @@ class GetRecipesHandler:
             total_grams=rollup.total_grams,
         )
 
+    @staticmethod
+    def _nutri_score_dto(rollup) -> 'RecipeNutriScoreDto | None':  # noqa: ANN001
+        score = rollup.nutri_score
+        if score is None:
+            return None
+        return RecipeNutriScoreDto(
+            grade=score.grade,
+            score=score.score,
+            negative_points=score.negative_points,
+            energy_points=score.energy_points,
+            saturated_fat_points=score.saturated_fat_points,
+            total_sugars_points=score.total_sugars_points,
+            salt_points=score.salt_points,
+            positive_points=score.positive_points,
+            protein_points=score.protein_points,
+            fibre_points=score.fibre_points,
+            fvl_points=score.fvl_points,
+            protein_counted=score.protein_counted,
+            fvl_percent=rollup.fvl_percent,
+            total_grams=rollup.total_grams,
+        )
+
     @classmethod
-    def _nutrition_dto(cls, rollup, rating_enabled: bool = False) -> 'RecipeNutritionDto':  # noqa: ANN001
+    def _nutrition_dto(cls, rollup, scheme: str = RATING_SCHEME_NONE) -> 'RecipeNutritionDto':  # noqa: ANN001
         return RecipeNutritionDto(
             basis=rollup.basis,
             servings=rollup.servings,
@@ -970,10 +1050,18 @@ class GetRecipesHandler:
             fibre_g=rollup.fibre_g,
             sodium_mg=rollup.sodium_mg,
             nutrient_coverage=rollup.nutrient_coverage,
-            # Gated server-side rather than in the client: an install with the
-            # feature off should not be shipped a rating it has decided not to
-            # show, and one gate beats one per surface (R-003).
-            health_star_rating=cls._rating_dto(rollup) if rating_enabled else None,
+            # Gated server-side rather than in the client: an install should
+            # not be shipped a rating it has decided not to show, nor the
+            # scheme it didn't pick, and one gate beats one per surface
+            # (R-003). The rollup computes both; exactly one leaves the API.
+            health_star_rating=(
+                cls._rating_dto(rollup)
+                if scheme == RATING_SCHEME_HEALTH_STAR else None
+            ),
+            nutri_score=(
+                cls._nutri_score_dto(rollup)
+                if scheme == RATING_SCHEME_NUTRI_SCORE else None
+            ),
         )
 
     def _compute_nutrition(self, dto: RecipeDto, entity: Recipe) -> RecipeDto:
@@ -995,11 +1083,11 @@ class GetRecipesHandler:
             if mode == NUTRITION_MODE_COMPLEX else None
         )
         kcal, reliable = effective_kcal_per_serving(mode, dto.kcal, rollup)
-        rating_enabled = rollup is not None and self._health_star_rating_enabled()
+        scheme = self._rating_scheme() if rollup is not None else RATING_SCHEME_NONE
         return dataclasses.replace(
             dto,
             nutrition=(
-                self._nutrition_dto(rollup, rating_enabled)
+                self._nutrition_dto(rollup, scheme)
                 if rollup is not None else None
             ),
             kcal_per_serving=kcal,
@@ -1058,7 +1146,7 @@ class GetRecipesHandler:
         rollups = rollup_recipes_nutrition(self.repository, inputs)
         # Read once for the whole page, not once per recipe — the cookbook
         # renders a rating chip on every row.
-        rating_enabled = self._health_star_rating_enabled()
+        scheme = self._rating_scheme()
 
         def _with_nutrition(dto: RecipeDto) -> RecipeDto:
             rollup = rollups.get(dto.recipe_id)
@@ -1067,7 +1155,7 @@ class GetRecipesHandler:
             kcal, reliable = effective_kcal_per_serving(mode, dto.kcal, rollup)
             return dataclasses.replace(
                 dto,
-                nutrition=self._nutrition_dto(rollup, rating_enabled),
+                nutrition=self._nutrition_dto(rollup, scheme),
                 kcal_per_serving=kcal,
                 kcal_is_reliable=reliable,
             )

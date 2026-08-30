@@ -81,6 +81,16 @@ exceptions, which still must be commented) · **Source** (where it was establish
   `color=`/`text-color="white"` props (white-on-saturated is theme-stable).
 - **Violation signal:**
   `grep -nE "#[0-9a-f]{3,8}|rgba?\(|text-(grey|red|green|amber|blue)-[0-9]|bg-\w+-[0-9]|'grey-[0-9]'"`
+  — **plus the JS-config surface**, which the pattern above misses because it
+  looks for template classes and numbered swatches:
+  `grep -rnE "(color|textColor|iconColor|trackColor):\s*'(red|pink|purple|indigo|blue|light-blue|cyan|teal|green|lime|yellow|amber|orange|brown|grey|blue-grey|white|black)'" web_app/src`
+  Plugin registrations and options objects (`Notify.registerType`, `Dialog.create`,
+  chart/option builders) take the same palette names as a template prop and are
+  the same violation — `themeService` re-points `--q-*` per theme and a literal
+  never consults it. Found 2026-08-28: the `info` toast had shipped as
+  `color: 'blue'` + `iconColor: 'amber'`, firing from 24 call sites as the one
+  surface in the app that ignored the theme. Bare `'blue'` (no numeric suffix)
+  is what slipped past every prior sweep.
 - **Carve-outs (must be commented):** brand-logo hex (Aldi/Coles/IGA),
   deterministic hash swatches (`ProductSearchCard` DEC-8), `ScanOverlay` rings
   (DEC-4), `MerchantLogo` placeholder (DEC-9), settings theme-picker swatches
@@ -1404,9 +1414,20 @@ exceptions, which still must be commented) · **Source** (where it was establish
   is dual-host (also embedded in the Stock Overview peek) — it roots on `<component :is>`
   that resolves to `QPage` when routed and a plain `<div>` when embedded, so it stays
   layout-agnostic in the peek. Shapes chosen: **document-scroll** (bare `<q-page>`) for
-  Dashboard, Meal Plans, Meal-Plan Templates, Price History, Cook Mode, Reports, Shop-Now
+  Dashboard, Meal-Plan Templates, Price History, Cook Mode, Reports, Shop-Now
   redirect, Stock Item detail; **app-shell** (`<q-page :style-fn>`) for the two runner
-  shells (Meal Reconcile, Stocktake) + SettingsShell.
+  shells (Meal Reconcile, Stocktake), SettingsShell + **Meal Plans**.
+  **Meal Plans moved document-scroll → app-shell on 2026-08-29** (Unit 1 of
+  `BRIEF_MEAL_PLANNER_RAIL_AND_SHELL.md`; an *application* of ADR-032, not a new
+  ADR). It is the worked example of the failure this rule's "never hardcode the
+  offset" clause exists for: its `.planner-sticky` side columns used
+  `max-height: calc(100vh - 32px)` and accounted for neither the 64px header nor
+  a rendered `OfflineBanner`, so both rails overhung the viewport by about a
+  header's height. Taking the live `offset` removed it — measured after the
+  conversion, all three pane bottoms land at 884px in a 900px viewport.
+  A page converting to app-shell must also neutralise the inline height below
+  its shell breakpoint (`height: auto !important`), since `:style-fn` is a prop
+  and applies at every width — see `SettingsShell.vue` and now `MealPlansOverview.vue`.
 - **Violation signal:** a `<div class="q-pa-md">` (or any bare root) as the top
   element of a `pages/*.vue` routed under `MainLayout`; a `calc(100vh − <literal>px)`
   / `height: calc(100dvh − 64px)` in a page or shell; a `position: sticky` footer on
@@ -2086,6 +2107,274 @@ exceptions, which still must be commented) · **Source** (where it was establish
   change to the endpoints the new UI calls; a response field that becomes unused
   in the same commit as a new flow.
 - **Established by:** the meal-plan add-to-list unification, 2026-08-27. See ADR-054.
+
+### R-058 — A feature that *reasons* in a gated domain is gated by that domain, not stripped of it
+- **Rule:** when a surface's reasoning depends on a feature-flagged domain
+  (money, nutrition, products, scanning), decide **prerequisite or independent**
+  — and gate the whole surface when it's a prerequisite. Do not ship the surface
+  with the gated domain's *output* suppressed while its *input* still moves the
+  answer. Apply the test: with the flag off, is what remains (a) still correct,
+  and (b) not already said better by an adjacent surface? Both must hold, or the
+  feature is a prerequisite.
+- **Why:** partial gating fails silently and in the direction nobody develops in.
+  Dora's buy verdict is the case: the price axis reasons entirely in money, the
+  `wait` direction is only reachable from a price signal, and price modulates
+  `strength`. With money off, the card still rendered — dollar glyph, "$3.85 last
+  shop", "N price samples" — and, worse, still *ranked* items using price data the
+  household had opted out of. Every developer runs with money on, so nothing looks
+  wrong; only the money-off install sees it, and it can't tell the numbers are
+  weighted by something it disabled. Suppressing just the visible dollar strings
+  would have left that half intact and looked like a fix.
+- **Apply:** gate at three seams, not one — the **endpoint** refuses (403 with a
+  named reason), the **render** composable folds the flag into its enabled
+  computed, and the **settings toggle** disables with a caption naming the
+  prerequisite. The endpoint gate is what makes it a real gate rather than a
+  render trick; the toggle caption is what makes the dependency discoverable
+  instead of a feature that mysteriously vanished. Preserve the user's own
+  preference underneath — the prerequisite returning must restore their setting,
+  not reset it.
+- **Prefer disabled-with-caption over hidden** for the dependent toggle, per the
+  `emailSmtpConfigured` precedent on Notifications: a control that vanishes leaves
+  the user unable to discover why. (This is the R-029 carve-out — a disabled
+  control is legitimate on the settings screen that *owns* the preference, and
+  only there. Other surfaces `v-if`.)
+- **Violation signal:** a component whose gated-domain flag appears nowhere in it
+  but whose strings contain that domain's vocabulary; a composer that computes a
+  score from an axis the install disabled; a "hide the price line" commit that
+  doesn't touch the ranking.
+- **Established by:** the buy-verdict money gate, 2026-08-27. See ADR-055.
+
+### R-059 — A transcribed external standard cites its primary source and is pinned by that source's own worked examples
+- **Rule:** when code reproduces a published external standard — a scoring
+  algorithm, a threshold table, a classification scheme — it must (a) name the
+  document, **version**, and table it came from, in place; (b) be transcribed
+  from the **primary** source, never a secondary write-up; and (c) be pinned by
+  test cases taken from the source's *own* worked examples, not from expectations
+  computed by hand or by the implementation being tested. Where the standard has
+  revisions, state which revision this is and list the specific values where the
+  revisions disagree.
+- **Why:** a mis-typed threshold does not crash, does not fail review, and does
+  not look wrong on screen — it just quietly returns a defensible-looking answer
+  that is not the standard's answer. Nutri-Score is the case. A widely-cited
+  third-party methodology page gives the grade-A cut-off as `< 1`; another gives
+  `< 0`. Both are "correct" — for different generations of the algorithm, which
+  the pages do not say. The official workbook computes the 2017 and 2023 versions
+  side by side **on the same sheet**, so even the primary source will hand you the
+  wrong number if you read the wrong columns, which is exactly what happened once
+  during this build before the worked examples caught it. Hand-computed test
+  expectations cannot catch this class of error, because they are derived from the
+  same misreading as the code.
+- **Apply:** obtain the primary document (and its calculator/tool, if one is
+  published — a tool encodes tie-breaks and carve-outs that prose omits, and it is
+  what the industry actually runs). Cite the table beside each constant. Lift the
+  source's worked examples verbatim into tests, inputs *and* outputs. Add one test
+  that asserts the values where revisions differ, so a future edit that reaches for
+  the wrong generation fails loudly. Where the standard cannot be honestly applied
+  to Dora's data, say so in the module docstring with the reason and the direction
+  of the error — never silently approximate.
+- **Violation signal:** a threshold table with no citation; a test whose expected
+  value was produced by running the function; a module that reproduces a national
+  or international standard without naming its version; a "cleanup" commit that
+  smooths an irregular published series into a regular one.
+- **Established by:** the Nutri-Score 2023 transcription, 2026-08-27, generalising
+  the practice the Health Star Rating module set informally. See ADR-056.
+
+### R-060 — Only reference design tokens that `tokens.scss` actually declares
+- **Rule:** every `var(--token)` in a component must name a custom property
+  declared in `css/tokens.scss` (or `themes.scss` / `motion.scss`). Do not invent
+  a token name that "looks like" the scale — the spacing scale is
+  `--space-1..--space-12`, not `--space-sm`; the card surface is
+  `--surface-component`, not `--surface-card`. If a genuinely new token is needed,
+  add it to `tokens.scss` (both themes) in the same change. A bare
+  `var(--maybe-defined)` with no fallback is not permitted; where a fallback is
+  the honest intent, write it (`var(--x, 8px)`).
+- **Why:** an undefined custom property with no fallback makes the **whole
+  declaration invalid at computed-value time**, so the property silently falls
+  back to its initial value. It does not warn, does not fail the build, does not
+  fail lint, and does not fail `vue-tsc`. `gap: var(--space-sm)` is not "roughly
+  8px" — it is **zero**, and it looks exactly like a layout you never wrote
+  spacing for. Cook mode's header was reported three separate times as "squished",
+  "no margin from other elements" and "looks like a 5 year old did it" across two
+  feedback rounds; two rounds of layout work went into it before anyone checked
+  whether the six gap declarations in the file resolved to anything at all. They
+  did not. The layout was fine; the tokens were fiction.
+- **Apply:** when writing a token you have not personally used before,
+  `grep -- '--token-name:' web_app/src/css/` before using it. When touching a file
+  that already uses one, check it the same way — this class of bug is invisible in
+  review because the *code* reads correctly. Colour tokens fail more quietly still
+  (an invalid `background` just inherits), so they are worth the same check.
+- **Violation signal:** a `var(--…)` whose name appears nowhere in `css/`; a
+  spacing/surface/colour token in a diff that matches no entry in the scale; a
+  "the gap isn't applying and I can't see why" debugging session.
+- **Established by:** the cook-mode header rebuild, 2026-08-28. See ADR-057.
+
+### R-061 — A stored price is not evidence a purchase happened
+- **Rule:** any aggregate that means *money actually spent* — a budget, a
+  spend report, purchase history, a price sample, a value-at-risk figure — must
+  filter on the flag that records **the purchase event** (`ShoppingListLine.
+  is_ticked`, plus `deferred_by_budget` for lines the trim optimiser set aside).
+  Never infer "this was bought" from the mere presence of a price. Where a
+  feature needs "what this line actually cost, if anything", it goes through a
+  named chokepoint in `_line_price.py` that encodes the rule once — not an
+  inline `if price is not None` in each caller.
+- **Why:** `picked_offer_price` is snapshotted at **add** time
+  (`snapshot_offer_price`, State-ownership Chunk 6), deliberately, so historic
+  reporting stays honest if a price moves before you shop. The side effect is
+  that *every* line with a linked offer carries a price from the moment it lands
+  on the list. So `price is not None` reads as "was bought" and is wrong for
+  exactly the lines a real shop leaves behind. `period_spent` had this bug twice
+  (current period and history): a $60 shop with $40 of leftovers reported **$100
+  spent**, and `period_headroom` then fed that figure to the trim-to-budget
+  optimiser, which trimmed a *future* list to fit money nobody spent. The list's
+  own receipt was right the whole time (`compute_list_totals` applies
+  `spent_only`), which is what made the surfaces disagree rather than fail.
+- **Apply:** when reading `ShoppingListLine` for anything money-shaped, ask "does
+  this figure claim a purchase happened?" If yes, filter on `is_ticked`. Mirror
+  `compute_list_totals`' `spent_only` rather than inventing a second rule. Note
+  that a comment asserting the fallback is safe is not evidence — `generators.py`
+  carries one and it is false.
+- **Violation signal:** a query over `ShoppingListLine` filtered only by list id
+  or list status; `line_paid_unit_price(line)` called without an adjacent
+  `is_ticked` check; two surfaces reporting different totals for the same shop.
+- **Established by:** the shopping-list batch-1 budget fix, 2026-08-28. Four more
+  call sites remain open as FU-768. See ADR-058.
+
+### R-062 — A lazily-hydrated collection carrying derived facts is invalidated by the writes those facts derive from
+- **Rule:** an `ensureLoadedAsync`-style store (R-016) is a cache with **no
+  expiry** — it holds for the whole SPA session. If its DTOs carry fields
+  computed from *another* entity, the store that writes that other entity must
+  mark this one stale. Put the invalidation in the **writing store's**
+  mutations, not in each consuming page, and invalidate on the whole entity
+  rather than on a hand-picked list of "fields that matter".
+- **Why:** R-016 was written to stop redundant refetches, and it does — but a
+  list DTO is rarely just its own row. `RecipeDto` carries `cookable`,
+  `missing_count`, `expiring_ingredient_count`, the Zero-Input hint, and in
+  complex nutrition mode the whole rollup behind `kcal_per_serving` and the
+  front-of-pack rating. Every one of those moves when a **stock item** does, and
+  none of it is visible in a diff of the recipe. The owner hit this as "the
+  cookbook filters don't work": he linked nutrition data to a stock item, walked
+  to the cookbook, and got the payload fetched before the edit — no rating, no
+  kcal, and thresholds filtering figures that were no longer true. The filters
+  were fine. Note the failure mode is *silent and plausible*: stale derived data
+  renders perfectly, so it reads as a logic bug in whatever consumed it.
+- **Apply:** when adding a server-derived field to a list DTO, ask "which entity
+  is this derived from, and does that entity's store invalidate mine?" Set a
+  `stale` flag rather than clearing the `hydrated` one — consumers that
+  distinguish "still hydrating" from "hydrated and genuinely absent" (FU-109's
+  deep-link chip) will report a missing row mid-refetch otherwise. Invalidate a
+  flag, never fire a refetch: a stocktake run must not cost one request per item.
+  Endpoints that bypass the store (bulk verbs, server-side batch links) have to
+  invalidate at their own call site — they never reach the store's mutations.
+- **Violation signal:** an `ensureLoadedAsync` whose store has no `invalidate*`;
+  a DTO field computed from a foreign entity with no corresponding invalidation;
+  "it fixes itself if I reload" in a bug report; per-feature ad-hoc caches each
+  inventing their own invalidation (`invalidateBuyVerdict`,
+  `usePantryBeliefs.invalidate`, `invalidateReconcileQueue` — three copies of
+  this idea before it was named).
+- **Established by:** the cookbook nutrition-filter batch, 2026-08-28. See
+  ADR-059.
+
+
+### R-063 — A field that records what happened must not double as the field that states what is intended
+- **Rule:** intent and record are two facts, so they get two fields. A column
+  whose name is past-tense (`purchased_store_id`, `actual_unit_price`,
+  `completed_at`) may only be written when the thing has actually happened. When
+  a surface needs to express the *plan* — where I mean to buy this, what I expect
+  it to cost — add the intent field rather than pre-filling the record. Relate
+  them as a **prefill chain**, each rung the default for the next and never a
+  write-back, and order the chain by specificity (a choice made for *this* list
+  outranks a standing preference for the item).
+- **Why:** a record field written early is indistinguishable from one written
+  honestly, and everything downstream reads it as fact. The shopping list had
+  this twice on one surface. `purchased_store_id` was the only writable store on
+  the plan face, so "get this at Aldi this week" and "I got this at Aldi" were
+  the same edit — and because that field is rung 1 of the store ladder, the
+  conflation *worked*, which is why it survived. Meanwhile the draft face's price
+  control wrote `actual_unit_price` — "what you actually paid" — on a list where
+  nothing had been bought. Both look harmless until you notice who reads those
+  fields: price observations, purchase history, the money ladder's `historic`
+  rung, spend reports. Compare ADR-058, where a snapshot taken for *provenance*
+  was read as *proof of purchase* by five call sites; same class, different
+  direction.
+- **Apply:** when a UI needs to write a past-tense field on an entity that hasn't
+  reached that state, stop — that is the signal. Ask what the *third* scope is,
+  too: the alternative to a per-line planned store was the item's standing
+  `usual_store_id`, which is a habit spanning every list, and using it would have
+  made a one-off plan rewrite a preference. Per-occurrence, per-entity and
+  per-install intents are different fields, not the same one at different
+  altitudes. Prefer NULL-means-inherit over copying a value down the chain: a
+  copy freezes a live inference into a stale literal, which is also why the
+  matching migration should not backfill.
+- **Violation signal:** a past-tense column written from a create/draft/plan
+  surface; a form labelled "planned" or "target" bound to a field named
+  `actual_*` / `purchased_*`; a migration that backfills an intent column from a
+  record column; a feature request phrased as "we can only record where we
+  actually got it, not where we want to get it".
+- **Established by:** shopping-list feedback batch 3, 2026-08-28
+  (`planned_store_id`). See ADR-060.
+
+### R-064 — Flush ORM mutations before a Core-level access helper reads them
+- **Rule:** a handler that mutates mapped entities (`repository.add`, assigning a
+  relationship, `repository.remove`) and then calls one of the `*_access.py`
+  helpers must `repository.flush()` first. Those helpers reach the DB through
+  Core statements — `db.session.execute(select(db.metadata.tables[...]))` — and
+  **a Core statement does not autoflush**, unlike an ORM query. Pending inserts
+  and deletes are invisible to them until you flush.
+- **Why:** the two access styles look interchangeable and are not. `create_recipe`
+  already flushed and said why in a comment; `update_recipe`, doing the same
+  replace-then-write-steps dance, did not — so `replace_steps_for_recipe`'s
+  "do these ingredients belong to this recipe?" check compared the resolved *new*
+  ingredient ids against the *old* rows still sitting in the table, and every save
+  of a recipe with a step-to-ingredient link 400'd. The failure mode is the worst
+  shape available: it is not a crash, it is a **validation error blaming the
+  user's data**, on a save the user cannot avoid making, and it survives review
+  because the resolution map it depends on is demonstrably correct.
+- **Apply:** the trigger is the *pairing*, not the size of the change — ORM write
+  followed by any Core read or write in the same request. Flush at the seam, once,
+  with a comment naming what downstream reader needs it. Don't push the flush
+  inside the helper: the helper cannot know whether its caller has finished
+  mutating, and a flush in the middle of a half-built graph is its own bug (which
+  is why `seed.py` explicitly turns autoflush *off*).
+- **Violation signal:** a `*_access.py` call in the same block as
+  `repository.add` / an entity-collection assignment with no intervening flush; a
+  "references X not on this Y" error whose ids provably were resolved from the
+  request; a per-recipe/per-list validation that passes on a create and fails on
+  the equivalent update.
+- **Established by:** recipe-view feedback, 2026-08-29 (step ingredient links
+  could not be saved). See ADR-061.
+
+### R-065 — A preference governs everything its name claims, or it gets cut
+- **Rule:** when a surface stops honouring a user preference — because a better
+  control took the job, or because the surface was rebuilt and never wired it —
+  that is a decision about the **preference**, not just about the surface. Either
+  re-wire it, or cut it. What is not allowed is leaving it in Settings with its
+  original name and narrowing the help text until the text has to say where the
+  setting *doesn't* apply.
+- **Why:** preferences decay silently, because nothing fails. `show_recipe_images`
+  was designed to govern every recipe photo in the app so a user could run a
+  text-dense, low-bandwidth UI. Its stock-image twin was deleted; the cookbook
+  took photos over via cards/compact; cook mode, print and the planner rail never
+  honoured it. Each of those was individually reasonable and none of them looked
+  like a change to the preference — so it survived, in Appearance, governing one
+  hero image, and the owner's reaction on finding it was *"what is this even
+  for??"*. Worse than useless: switching it off left a same-sized "Photo hidden"
+  box, so it did not even deliver the density its existence implied. This is the
+  second instance (FU-508 dropped `show_stock_images` for the adjacent reason),
+  which is what makes it a rule rather than a one-off tidy.
+- **Apply:** the trigger is **removing a consumer**, not adding one. When you
+  delete or rewire the last-but-one reader of a preference, count the readers that
+  are left and ask whether the preference still means what it says. Two specific
+  smells, both cheap to check: (a) the help text has to name a surface the setting
+  excludes; (b) the *write* surface and the *read* surfaces have drifted apart
+  (this one's write button left the cookbook in 2026-08-18 precisely because the
+  cookbook had stopped reading it). And when the answer is "cut", cut the column
+  too — a dead boolean on `User` is a future reader's trap.
+- **Violation signal:** a settings row whose help text contains "except", "the X
+  decides its own", or a surface name; a preference with one remaining consumer; a
+  toggle that suppresses content without reclaiming its space; a `User` column
+  read by nothing.
+- **Established by:** the `show_recipe_images` cut, 2026-08-29 (owner: *"I'm
+  thoroughly confused about the recipe photos toggle"*). See ADR-062.
 
 
 ## ADR process (evaluate every task)
@@ -3656,12 +3945,318 @@ one-off, or purely product/UX decisions (those go to the Charter check + worklog
   item to be a decision with a name on it.
 - **Promotes rule:** R-057.
 
+
+### ADR-055 — A gated domain a feature reasons in is a prerequisite, not a suppression (promotes R-058)
+- **Date / task:** 2026-08-27 (owner question: "how useful is buy verdict with money turned off?")
+- **Status:** accepted
+- **Context:** The owner noticed the buy verdict rendering price prose on an
+  install with money features off, and asked whether it should be properly gated
+  or not shown at all. The audit found the leak was wider than the visible
+  strings: `_price_axis` reasoned entirely in money, the `wait` direction was
+  reachable *only* via `above_usual` / `fake_markdown`, and
+  `_PRICE_STRENGTH_MODIFIER` shifted the verdict's strength. Neither the endpoint
+  nor any of the three render sites referenced `money_enabled` at all — the only
+  gate was the per-user display opt-out. What survived money-off was need + waste,
+  both of which `PantryBeliefCard` (directly above it on the same page) and
+  `stock_attention` already state in the same words.
+- **Decision:** money is a **prerequisite** for the whole surface. The two
+  endpoints refuse with 403 when the install has money off; `useBuyVerdictEnabled`
+  ANDs the install flag with the per-user preference; the Assistant settings
+  toggle disables with a caption naming the prerequisite (and the per-user
+  preference survives underneath). Rejected the alternative — per-reason
+  suppression — because it is strictly more work (a money-free headline
+  vocabulary, a non-dollar icon, a rewritten footer, a dead `wait` branch) for a
+  weaker result that still duplicates its own neighbour, and because it would
+  have left the strength modulation silently in place.
+- **Consequences:** commits us to answering "prerequisite or independent?" for
+  every flag-adjacent surface, and to gating at all three seams when the answer is
+  prerequisite. Costs a real capability on money-off installs — accepted, on the
+  Charter's Anti-creep tiebreak: two cards saying one thing is worse than one card
+  saying it. Rules out the pattern where a feature keeps reasoning over data the
+  install disabled as long as it doesn't print it. Does **not** mean every flag is
+  a prerequisite — `useMoneyEnabled`'s existing render gates on Stock Overview and
+  Shopping List Detail are the independent case, where hiding a column leaves the
+  rest correct.
+- **Promotes rule:** R-058.
+
+### ADR-056 — A transcribed standard is only as trustworthy as its citation and its worked examples (promotes R-059)
+- **Date / task:** 2026-08-27 (adding Nutri-Score alongside the Health Star Rating)
+- **Status:** accepted
+- **Context:** Dora needed a second national front-of-pack rating. The first one
+  (HSR) had been transcribed carefully from the FSANZ guide with per-table
+  citations, but that was a habit rather than a rule, and nothing in the repo
+  said how to do it again. Scoping Nutri-Score surfaced how easily it goes
+  wrong: the algorithm was revised in 2023, most third-party write-ups blend the
+  two generations without saying so, and the two generations disagree on values
+  that change a food's letter — sugars 0–10 vs 0–15, sodium(mg) vs salt(g),
+  protein 0–5 vs 0–7, grade-A at `< 0` vs `< 1`, and a protein carve-out that
+  exists only in the original. The official workbook is authoritative but
+  computes **both** generations on one sheet, so it will also hand you the wrong
+  answer if you read the wrong columns — which happened once during this build,
+  and produced both a confidently-wrong statement to the owner and a phantom
+  "the docs contradict the tool" conclusion. What caught it was replaying the
+  three worked examples that ship inside the workbook.
+- **Decision:** transcription of an external standard is a distinct kind of work
+  with its own bar: primary source only, version named, table cited beside each
+  constant, revisions' disagreements asserted explicitly, and tests built from
+  the source's own worked examples rather than hand-computed or
+  implementation-derived expectations. Where the standard cannot be honestly
+  applied to Dora's data (a recipe is not a packaged product), the departure is
+  documented in the module docstring with its direction of error rather than
+  quietly approximated.
+- **Consequences:** transcription tasks cost more up front — obtaining a
+  primary document and its calculator is real work, and this one meant reading
+  an official `.xlsx`'s formulas. Accepted: the alternative failure is silent,
+  survives review and manual testing, and mis-scores users' food under the name
+  of a government scheme, which is the specific kind of wrong this product
+  cannot afford. Also commits us to re-checking these modules when a standard
+  revises, and gives that check a cheap trigger — the revision-disagreement test
+  fails the moment someone reaches for the wrong generation. Does **not** apply
+  to internal domain constants (a "7-day window" is Dora's own choice, governed
+  by R-003) — only to arithmetic we are reproducing from someone else's
+  published authority.
+- **Promotes rule:** R-059.
+
+### ADR-057 — A design token that does not exist is worse than a hardcoded value (promotes R-060)
+- **Date:** 2026-08-28.
+- **Context:** the cook-mode header was rebuilt for mobile on 2026-08-27 in
+  response to *"it just squishes in the desktop UI"*. The owner came back on
+  2026-08-28 with the same complaint, wider: *"Everything is squished badly on
+  desktop too"*, *"no margin from other elements"*, *"Cooking for input looks god
+  awful. All squished together."* The obvious reading is that the layout was
+  wrong twice. It wasn't. Every gap in the file — `.cook-header`,
+  `.cook-header__identity`, `.cook-header__cooking-for` — was written as
+  `var(--space-sm)` or `var(--space-xs)`, and neither token has ever existed;
+  Dora's spacing scale is numeric (`--space-1..--space-12`). Those declarations
+  were invalid, so the gaps were **zero**. The same file also had
+  `background: var(--surface-card)` (also undefined), and the image view had four
+  more against `--c-line` / `--c-surface-2`. A repo-wide grep found the two
+  cook-mode files were the *only* users of the fictional spacing aliases — the
+  bug was introduced once and copied once.
+- **Decision:** treat "token exists" as a checkable precondition, not an
+  assumption (R-060). Grep `css/` before using an unfamiliar token; add real
+  tokens to `tokens.scss` rather than inventing names at the call site; never
+  ship a bare `var()` whose fallback is not either present or verified.
+- **Consequences:** costs one grep per unfamiliar token. Buys the thing this
+  session actually needed: the ability to tell "my layout is wrong" apart from
+  "my CSS never ran". Note the failure mode is *asymmetric* — a hardcoded `8px`
+  is a token violation (R-002) that reviewers catch and that at least renders;
+  an undefined token passes review, passes lint, passes typecheck, and renders
+  nothing. The cheap-to-catch mistake is the safe one.
+- **Alternative considered:** a stylelint rule or a build-time check that fails
+  on unknown custom properties. Correct long-term and worth doing when the CSS
+  surface is next worked on — logged as FU-764 — but it is a tooling change with
+  its own rollout, and it should not gate a feedback fix.
+- **Promotes rule:** R-060.
+
+### ADR-058 — A stored price is not evidence a purchase happened (promotes R-061)
+- **Date:** 2026-08-28.
+- **Context:** the owner asked, during the shopping-list feedback batch, whether
+  unticked items were "polluting/poisoning receipt money amounts and reporting".
+  The receipt was clean — `compute_list_totals` has applied `spent_only` on done
+  lists all along. `period_spent` was not: it summed every line on an archived
+  list, in both the current-period and the history path. The reason this is a
+  real defect rather than a theoretical one is a *deliberate* design decision
+  made elsewhere: `snapshot_offer_price` freezes the offer price when a line is
+  **added**, so historic reporting stays honest if prices move before the shop.
+  Correct on its own terms — and it means an unticked line reliably carries a
+  price it never cost. A $60 shop with $40 of leftovers reported $100 spent, and
+  `period_headroom` passed that to the trim-to-budget optimiser. Auditing the
+  rest of the codebase found the same "has a price ⇒ was bought" inference in
+  four more places (suggestions, pantry belief, buy verdict, waste), one of them
+  carrying a comment explicitly asserting the opposite — logged as FU-768.
+- **Decision:** make the purchase *event* the filter, never the price's presence
+  (R-061), and mirror `compute_list_totals`' existing rule rather than inventing
+  a second one.
+- **Consequences:** one predicate per money query. The wider value is naming the
+  trap: a snapshot taken for provenance and a snapshot taken as proof-of-purchase
+  look identical in the schema, and only the *write path* distinguishes them —
+  which is invisible at every read site. Anywhere two features disagree about the
+  same shop, this is the first thing to check.
+- **Alternative considered:** clearing `picked_offer_price` on unticked lines at
+  finish time, so the data itself could not lie. Rejected — it destroys the
+  planning-time provenance the snapshot exists to preserve, and it would fix the
+  five known readers by corrupting the record for every future one.
+- **Testing note:** the regression test uses a **real** repository against a
+  throwaway SQLite engine, not the codebase's usual fake-repo pattern, because
+  the unit under test *is* a query predicate — a fake that ignores the filter
+  passes with the bug intact. It was mutation-checked (revert the filter → $95
+  against an expected $30) before being trusted. Worth repeating whenever a test
+  covers a filter rather than a calculation.
+- **Promotes rule:** R-061.
+
+### ADR-059 — A lazy-hydration cache is invalidated by the writes its derived fields depend on (promotes R-062)
+- **Date:** 2026-08-28 (cookbook nutrition-filter batch).
+- **Context:** the owner reported that the cookbook's health-star and kcal
+  filters didn't work. Three causes sat underneath, and the dominant one was
+  not the filters: `recipeStore.ensureLoadedAsync` returned early forever once
+  `recipesHydrated` flipped, so linking nutrition data to a stock item and then
+  navigating to the cookbook rendered the pre-edit payload. Nothing in the
+  codebase invalidated the recipe list on a stock write, even though a recipe
+  DTO carries five distinct stock-derived fields. Three features had already
+  each invented a private cache-invalidation helper for their own version of
+  this problem, which is the signal that the idea deserved a name.
+- **Decision:** the writing store owns the invalidation (R-062). `stockItemStore`
+  marks recipes stale on create/update/level-change/delete; the two paths that
+  bypass it — `bulkSetLevelAsync` and the server-side bulk food link — do it at
+  their call sites.
+- **Consequences:** one flag per store rather than a subscription mechanism. It
+  deliberately over-invalidates (a rename marks the list stale too) because the
+  alternative is a per-field allow-list that is a second copy of server
+  knowledge (R-003) and goes wrong the first time a DTO gains a field. Cost is
+  one extra list fetch after a stock write, and only on the next visit.
+- **Alternative considered:** dropping the lazy cache and refetching on every
+  cookbook mount. Rejected — it re-creates exactly the redundant-fetch problem
+  R-016 exists to prevent, and the cookbook pages until exhausted (500 rows).
+- **Verification note:** proven by driving the running app twice in one page
+  session — revisit with no stock write issued no `/api/recipes` request;
+  revisit after a real `PATCH /api/stock-items/...` issued one. A page reload
+  between visits would have refetched regardless and proved nothing; any future
+  test of this must stay inside a single SPA session.
+- **Promotes rule:** R-062.
+
+### ADR-060 — Planning and recording are two fields, chained by prefill (promotes R-063)
+- **Date:** 2026-08-28.
+- **Context:** owner, on the shopping list: *"I noticed changing the store for
+  the item does not move it between store groupings… the way I interpret this is
+  this field is only for stamping at the end. The gap I then see is people are
+  unable to change which store they want to get the item from on the list before
+  shopping, they can only mark where they actually got it from at the end."* The
+  diagnosis was right. `ShoppingListLine.purchased_store_id` was the only
+  writable store on the plan face, and it is rung 1 of the store ladder — so
+  setting it *did* re-group the line, which is precisely why nobody had noticed
+  that planning and recording were sharing a field. The same surface had the
+  same bug in money: the draft price editor wrote `actual_unit_price`.
+- **Decision:** add `planned_store_id` per line (R-063). Chain it
+  `usual → planned → purchased` as *defaults only*; insert it into the store
+  ladder between bought-from and the item's usual store.
+- **Consequences:** one column, one migration, one extra ladder rung. Buys the
+  ability to plan a shop that differs from habit without rewriting the habit, and
+  it makes the store breakdown answer "where am I about to spend" honestly rather
+  than by reading a field that means something else.
+- **Why not `StockItem.usual_store_id`:** wrong scope. It is a standing
+  preference; setting it from one list silently changes every future list. The
+  scope ladder (per-occurrence → per-entity → per-install) is a real distinction
+  and collapsing two of its rungs is the same mistake as collapsing intent and
+  record.
+- **Why no backfill and no write-back:** a NULL planned store already falls
+  through to the usual store, so copying values in would freeze a live inference
+  into a stale literal — and buying somewhere once is not a change of plan, just
+  as it is not a change of habit (`usual_store_id` has never had a write-back
+  either; ADR-058's sibling concern).
+- **Side effect worth noting:** the ladder reached five rungs as an if/elif chain
+  inline in the detail handler, where nothing could test its ordering. It moved
+  to `_line_price.resolve_store_id`, beside the money ladder, and is now pinned
+  by `tests/test_store_ladder.py` — including the two orderings that are
+  counter-intuitive (intent beats history; the more specific intent wins).
+- **Promotes rule:** R-063.
+
+### ADR-061 — The ORM session and the Core access helpers are one transaction with two visibility rules (promotes R-064)
+- **Date:** 2026-08-29.
+- **Context:** owner, on the recipe page: *"Bug: linking ingredients to step is
+  broken (cannot save)."* Reproduced at the API in one PATCH: the server answered
+  400 *"Step references ingredients not on this recipe"*, naming two ids — and
+  those ids were neither what the request sent nor wrong. They were the correct
+  post-replace ids, resolved by a map that worked exactly as designed. The rows
+  simply were not in the table yet: `update_recipe` had added them to the ORM
+  session, and `_validate_link_targets` looked for them with a Core
+  `select(RecipeIngredient)`, which does not autoflush.
+- **Decision:** the caller flushes at the seam (R-064), matching what
+  `create_recipe` had already been doing for the same reason since FU-456.
+- **Consequences:** one `repository.flush()` and a comment. The blast radius was
+  larger than the report suggested: because the page re-sends `steps` on every
+  save of a structured recipe, a single linked step made *every* subsequent edit
+  to that recipe unsaveable — which is almost certainly the "an error was
+  encountered" in the owner's unrelated unit-change report in the same batch.
+- **Why not fix it inside the access helper:** a helper that flushes on entry
+  cannot know whether its caller is mid-way through building an object graph, and
+  flushing a half-built graph is a worse bug than the one being fixed —
+  `seed.py` disables autoflush outright for exactly that reason. Visibility is
+  the caller's concern because only the caller knows when its mutations are
+  complete.
+- **Why not convert the helpers to ORM queries:** the Core style is deliberate
+  (portable, no lazy-load surprises, one place per table) and R-005's
+  portability posture leans on it. The rule is cheaper than the rewrite.
+- **Covered by:** `tests/e2e/dora_api/test_recipe_step_ingredient_links.py` — two
+  tests, both confirmed red before the fix and green after.
+- **Promotes rule:** R-064.
+
+### ADR-062 — `show_recipe_images` is cut; the cookbook's view switch is the only photo control (promotes R-065)
+- **Date:** 2026-08-29.
+- **Context:** owner, on Settings → Appearance: *"I'm thoroughly confused about
+  the recipe photos toggle in appearance settings. What is this even for??"* The
+  honest answer was "almost nothing". PROPOSAL_CONFIG_AND_OPTINS §2.8 designed
+  `User.show_recipe_images` to govern recipe cards, the detail header, the edit
+  preview, cook mode and print/export — so a user could *"run a text-dense, fast,
+  low-bandwidth UI without losing the underlying data"* — written from an inline
+  cookbook-toolbar button, with an explicit "No Settings page entry". By 08-29 it
+  governed the recipe page's hero image and the recipe cards on the stock-item
+  detail page, and it lived in the settings page the proposal ruled out.
+- **Decision:** cut it — the flag, the composable, the `RecipeCard.showImage`
+  prop, and the `User` column (migration `e3b1d7f5a904`). Recipe photos render
+  unconditionally; photo density on the cookbook is the cards/compact switch.
+- **How it decayed, because that's the transferable part:** FU-508 deleted the
+  `show_stock_images` half; the 2026-08-18 owner call gave the cookbook's
+  cards/compact switch ownership of photos *there* (which is why the write button
+  left the toolbar — the write surface moved while the read surfaces evaporated);
+  and cook mode, print/export and the meal-planner rail never consulted it at all.
+  Each step was locally reasonable. None looked like a change to the preference.
+- **The tell that it was already dead:** the help text had become *"The cookbook
+  decides its own — cards show photos, compact rows don't."* A setting that has to
+  name where it doesn't apply has already lost its meaning (R-065).
+- **Consequences:** one fewer settings row, one fewer column, one fewer prop, and
+  `hasPhoto`/`photoUrl` on the recipe page collapse into each other — they only
+  ever differed to express "a photo exists but you asked not to see it". The
+  low-bandwidth use case is genuinely lost on the recipe page; it was already lost
+  everywhere else, and the cookbook — the grid of many photos, i.e. the actual
+  bandwidth — has the better control for it.
+- **Why not re-wire it to its original scope:** that rebuilds a feature the owner
+  already replaced on the cookbook, and would put two competing photo controls on
+  the same page. The offered alternative was declined in favour of the cut.
+- **Why drop the column rather than leave it:** a boolean nothing reads is a trap
+  for the next person, and it would show up in `/auth/me` forever. Dropping it
+  also makes `PATCH /auth/me {show_recipe_images}` a 400 rather than a silent
+  no-op, which is the honest answer to a stale client (verified).
+- **Promotes rule:** R-065.
+
+
 ---
 
 ## Known fixes / things to try
 
 A non-binding cookbook of solutions to recurring problems. Not rules — just a
 "if you're chasing X, here are previously-found answers worth trying first."
+
+### A `q-select` dropdown only offers the value already selected
+- **Symptom:** opening a `use-input` select on a row that already has a value
+  shows one option — its own current value — or "No results" if that value isn't
+  in the option list. Clearing the input by hand reveals the real list.
+- **Cause:** `fill-input` parks the selected label in the input, and
+  `QSelect.showPopup` re-runs your `@filter` handler with the input's current
+  text every time the menu opens. So the vocabulary is filtered by the selection
+  before you can see it.
+- **Try first:** drop `fill-input` + `hide-selected`. They earn their place on an
+  *open* typeahead (hundreds of rows, free-text creation — the "apple apple" fix
+  on the ingredient item picker) and cost you the whole list on a *closed*
+  vocabulary, where the selection should render as the field's value and the
+  input should start empty. Found on the recipe ingredient editor's Unit picker,
+  2026-08-29; the substitute dialog's identical picker had always been right.
+- **If you must keep them:** clear the input on `@popup-show` via a ref
+  (`updateInputValue('', true)`); `fill-input`'s own watcher restores the label
+  when the menu closes.
+
+### A `q-select` stores `{label, value}` instead of the value
+- **Symptom:** picking an option "works" visually, then something downstream
+  throws on the model — classically `x.trim is not a function` — and the error
+  boundary tears down the dialog.
+- **Cause:** `:options` are objects but the select has no `emit-value` +
+  `map-options`, so QSelect writes the whole option into the model. Nothing in
+  `vue-tsc` catches it: the v-model target is typed `string | null`, and the
+  write happens through QSelect's untyped `update:model-value`.
+- **Try first:** add `emit-value map-options` wherever `:options` is an array of
+  objects and the model is a scalar. Found on the recipe ingredient editor's Unit
+  picker, 2026-08-29 — its sibling in `SubstituteMetadataDialog` had both props
+  and worked, which is the fastest way to spot the omission.
 
 ### Snap / jump at the end of a `q-slide-transition` close
 - **Symptom:** The collapsing panel slides smoothly, then a small gap

@@ -44,11 +44,10 @@
                  carry a separate "Hide photos" toggle beside it, which made
                  four states out of two real ones — "compact with photos" and
                  "cards without" were both just a smaller/emptier version of
-                 the other mode. Cards show photos, compact doesn't. The
-                 per-user `show_recipe_images` preference still exists and
-                 still gates the recipe *detail* page; it moved to
-                 Settings → Appearance, so choosing a cookbook layout can't
-                 silently change what you see while cooking. -->
+                 the other mode. Cards show photos, compact doesn't — and
+                 since 2026-08-29 this is the only photo control in the app:
+                 the per-user `show_recipe_images` preference was cut once it
+                 governed nothing but the recipe page's hero image. -->
             <BaseButton
                 variant="secondary"
                 :icon="viewMode === 'grid' ? ICONS.view_list : ICONS.view_module"
@@ -171,14 +170,28 @@
             </FilterRow>
 
             <!-- ── Row 2: input filters ──────────────────────────────── -->
-            <FilterRow variant="fields">
+            <!-- `wide-wraps` — owner feedback 2026-08-28: "on desktop only,
+                 make it two rows of filters under the quick filters; mobile
+                 stays one row". Wraps rather than being forced to exactly two:
+                 how many lines fourteen controls take depends on the window,
+                 and pinning it at two would either overflow at 1024px or leave
+                 a half-empty second line at 1920px. The phone keeps the
+                 sideways scroll. -->
+            <FilterRow variant="fields" wide-wraps>
             <!-- Order — owner feedback 2026-08-20: "Collection and dietary
                  tags filters should be near the front." They were dead last
                  and second-to-last, behind six facets and four numeric
                  bounds. Now: sort · Collection · Dietary tags (the two he
                  reaches for) · the recipe's own facets · numeric bounds ·
                  Tools (genuinely occasional). The earlier FU-108 ordering was
-                 by *guessed* frequency; this is by reported use. -->
+                 by *guessed* frequency; this is by reported use.
+
+                 2026-08-28: Kcal and the front-of-pack rating moved from the
+                 middle of the numeric bounds to the very end ("health star and
+                 kcal at the end"). They are the two facets that only exist on
+                 an install that opted into nutrition, and the only two that
+                 disappear entirely for everyone else — so a row that ends with
+                 them keeps the same shape whether or not they render. -->
 
             <!-- Axis + direction are one control (SortControl) — the direction
                  toggle rides in the select's append slot rather than sitting
@@ -304,7 +317,6 @@
                 outlined
                 type="number"
                 min="0"
-                class="filter-row__wide"
                 label="Serves ≥"
                 hide-bottom-space
             >
@@ -316,41 +328,11 @@
                 outlined
                 type="number"
                 min="0"
-                class="filter-row__wide"
                 label="Ingredient count ≤"
                 hide-bottom-space
             >
                 <template #prepend><q-icon :name="ICONS.ingredientCount" size="18px" /></template>
             </q-input>
-            <!-- kcal upper-bound filter (gated). -->
-            <q-input
-                v-if="kcalAxisAvailable"
-                v-model.number="kcalMax"
-                dense
-                outlined
-                type="number"
-                min="0"
-                class="filter-row__wide"
-                label="Kcal ≤"
-                hide-bottom-space
-            >
-                <template #prepend><q-icon :name="ICONS.local_fire_department" size="18px" /></template>
-            </q-input>
-            <!-- Health Star Rating lower-bound filter (gated on the
-                 install switch + complex nutrition). A minimum rather than a
-                 maximum, unlike Kcal: nobody browses for the worst dinner. -->
-            <BaseSelect
-                v-if="ratingAvailable"
-                v-model="healthStarsMin"
-                class="filter-row__wide"
-                label="Health stars ≥"
-                :options="HEALTH_STAR_OPTIONS"
-                emit-value
-                map-options
-                clearable
-            >
-                <template #prepend><q-icon :name="ICONS.star" size="18px" /></template>
-            </BaseSelect>
             <q-input
                 v-if="batchEnabled"
                 v-model.number="mealCountMin"
@@ -358,7 +340,6 @@
                 outlined
                 type="number"
                 min="0"
-                class="filter-row__wide"
                 label="Meals prepared ≥"
                 hide-bottom-space
             >
@@ -373,6 +354,38 @@
                 v-model:include="toolsInclude"
                 v-model:exclude="toolsExclude"
             />
+
+            <!-- ── The nutrition axes, last (owner 2026-08-28) ────────── -->
+            <!-- kcal upper-bound filter (gated). -->
+            <q-input
+                v-if="kcalAxisAvailable"
+                v-model.number="kcalMax"
+                dense
+                outlined
+                type="number"
+                min="0"
+                label="Kcal ≤"
+                hide-bottom-space
+            >
+                <template #prepend><q-icon :name="ICONS.local_fire_department" size="18px" /></template>
+            </q-input>
+            <!-- Front-of-pack rating lower-bound filter (gated on the
+                 install's scheme + complex nutrition). A minimum rather than a
+                 maximum, unlike Kcal: nobody browses for the worst dinner.
+                 Label and options come from the composable because they differ
+                 per scheme — stars count up, Nutri-Score letters count
+                 down. -->
+            <BaseSelect
+                v-if="ratingAvailable"
+                v-model="ratingMin"
+                :label="thresholdLabel"
+                :options="thresholdOptions"
+                emit-value
+                map-options
+                clearable
+            >
+                <template #prepend><q-icon :name="ICONS.star" size="18px" /></template>
+            </BaseSelect>
             <!-- Two filters used to live here and no longer do:
                  • "Missing ingredients ≤" — removed 2026-08-20 (owner: "feels
                    a bit useless?"). The zero case IS the "Cookable now" chip,
@@ -444,7 +457,6 @@
                 >
                     <RecipeCard
                         :recipe="recipeWithExpiringCount(recipe)"
-                        :show-image="true"
                         :show-expiring-badge="expiringOnly"
                         @open="onOpenRecipe"
                         @cook="onCookClick"
@@ -562,7 +574,7 @@
     import { useRoute, useRouter } from 'vue-router';
     import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';
     import { useNutritionMode } from 'src/composables/useNutritionMode';
-    import { useHealthStarRating } from 'src/composables/useHealthStarRating';
+    import { useNutritionRating } from 'src/composables/useNutritionRating';
 
     const $q = useQuasar();
     const router = useRouter();
@@ -592,33 +604,30 @@
         viewMode.value = viewMode.value === 'grid' ? 'compact' : 'grid';
     }
     // FU-637 — the kcal axis works in both modes now. Which figure a recipe
-    // carries (typed in simple, rolled-up in complex) and whether it's solid
-    // enough to judge on are both the server's call — the list DTO ships the
-    // answer, so nothing is re-derived here (R-003).
+    // carries (typed in simple, rolled-up in complex) is the server's call —
+    // the list DTO ships the answer, so nothing is re-derived here (R-003).
+    // `kcal_is_reliable` rides along on the DTO and is read by the card and
+    // row for their "partial" styling; the filter and sort axes here stopped
+    // consulting it on 2026-08-28 (see the filter note below).
     const { nutritionEnabled: kcalAxisAvailable } = useNutritionMode();
     // Install-wide cook-style. "fresh" installs have no cooked-ahead portions,
     // so every meals-prepared affordance (chip, minimum-count input, sort axis)
     // is hidden rather than left to always match nothing.
     const { batchEnabled } = useBatchEnabled();
-    const kcalOf = (recipe: Recipe) => ({
-        value: recipe.kcal_per_serving ?? null,
-        judgeable: recipe.kcal_is_reliable === true,
-    });
-    // Health Star Rating axis (owner ask 2026-08-27). Gated on the install
-    // switch *and* complex nutrition — see `useHealthStarRating`. The rating
-    // rides the rollup that already runs for the whole page, so having it on
-    // the list costs no extra query.
-    const { ratingAvailable, ratingOf } = useHealthStarRating();
-    const starsOf = (recipe: Recipe) => {
-        const { rating, judgeable } = ratingOf(recipe);
-        return { value: rating?.stars ?? null, judgeable };
-    };
-    // Half steps, matching the scheme. 0.5 is deliberately absent: a floor of
-    // "at least the worst possible rating" filters nothing.
-    const HEALTH_STAR_OPTIONS = [1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5].map((value) => ({
-        label: `${value.toFixed(1)} stars`,
-        value,
-    }));
+    const kcalOf = (recipe: Recipe) => ({ value: recipe.kcal_per_serving ?? null });
+    // Front-of-pack rating axis (owner ask 2026-08-27). Gated on the install's
+    // chosen scheme *and* complex nutrition — see `useNutritionRating`. The
+    // rating rides the rollup that already runs for the whole page, so having
+    // it on the list costs no extra query.
+    //
+    // The page deliberately holds no per-scheme knowledge: `rankOf` puts both
+    // schemes on one higher-is-better scale for sorting, and the threshold
+    // options and label come from the composable. Adding a third scheme should
+    // not mean editing this file.
+    const {
+        ratingAvailable, ratingLabel, rankOf,
+        thresholdOptions, thresholdLabel, meetsThreshold,
+    } = useNutritionRating();
     // Two conditional axes, each gated on the feature that gives it meaning:
     // Kcal on the nutrition opt-in, "Meals prepared" on batch cook-style.
     const SORT_OPTIONS = computed<SortAxisFor<SortKey>[]>(() => {
@@ -637,7 +646,7 @@
         }
         if (ratingAvailable.value) {
             options.push({
-                label: 'Health stars', value: 'health_stars',
+                label: ratingLabel.value, value: 'rating',
                 ascLabel: 'Lowest first', descLabel: 'Highest first', defaultDir: 'desc',
             });
         }
@@ -673,7 +682,7 @@
         // "Kcal ≤" filter (only renders when nutrition opt-in
         // is on). Recipes with no kcal value pass through.
         kcalMax: ref<number | null>(null),
-        healthStarsMin: ref<number | null>(null),
+        ratingMin: ref<number | null>(null),
         collectionFilter: ref<string | null>(null),
         // L235 — cuisine + category are distinct single-select id filters.
         cuisineFilter: ref<string | null>(null),
@@ -692,7 +701,7 @@
     const {
         searchText, favouritesOnly, cookableNowOnly, inStockOnly,
         plannedFilterState, expiringOnly, mealCountMin, servesMin, kcalMax,
-        healthStarsMin,
+        ratingMin,
         collectionFilter, cuisineFilter, categoryFilter, timeOfDayFilter,
         difficultyFilter, ingredientsMax, usesStockItemIds, excludesStockItemIds,
     } = cookbookState;
@@ -711,7 +720,7 @@
         | 'meal_count'
         | 'total_time'
         | 'kcal'
-        | 'health_stars'
+        | 'rating'
         | 'ingredient_count'
         | 'difficulty';
     type SortDir = 'asc' | 'desc';
@@ -964,31 +973,23 @@
             ) {
                 return false;
             }
-            // "Kcal ≤" filter. Recipes we can't put a trustworthy number on
-            // pass through rather than being hidden — that covers both an
-            // unannotated recipe and a complex-mode rollup too thin to judge
-            // (excluding a recipe on a 1-of-8 estimate would mislead exactly
-            // the person filtering by calories).
+            // "Kcal ≤" filter. Judges the figure the card displayed, whether
+            // or not the rollup behind it cleared the coverage bar (owner
+            // decision 2026-08-28 — see `meetsThreshold` for the full note).
+            // A recipe with *no* figure still passes: nothing to judge.
             if (
                 kcalAxisAvailable.value
                 && kcalMax.value !== null
                 && Number.isFinite(kcalMax.value)
             ) {
-                const { value, judgeable } = kcalOf(r);
-                if (judgeable && value !== null && value > kcalMax.value) return false;
+                const { value } = kcalOf(r);
+                if (value !== null && value > kcalMax.value) return false;
             }
-            // "Health stars ≥" filter. Same rule as Kcal, and for the same
-            // reason: a recipe we can't put a trustworthy rating on passes
-            // through rather than being hidden. Excluding a dinner on the
-            // strength of a 2-of-9 estimate is exactly the misleading move
-            // R-041 exists to stop.
-            if (
-                ratingAvailable.value
-                && healthStarsMin.value !== null
-                && Number.isFinite(healthStarsMin.value)
-            ) {
-                const { value, judgeable } = starsOf(r);
-                if (judgeable && value !== null && value < healthStarsMin.value) return false;
+            // "Health stars ≥" / "Nutri-Score at least" filter. Same rule as
+            // Kcal, and the composable owns it because the two schemes rank on
+            // different scales.
+            if (ratingAvailable.value && !meetsThreshold(r, ratingMin.value)) {
+                return false;
             }
 
             // '__none__' is a real value meaning "uncategorised".
@@ -1134,25 +1135,24 @@
                     return (av - bv) * dirSign;
                 }
                 case 'kcal': {
-                    // Thin estimates sort last alongside "no figure at all" —
-                    // ranking on one would put a half-known recipe above a
-                    // fully-known one on nothing but missing data.
-                    const ak = kcalOf(a);
-                    const bk = kcalOf(b);
-                    const av = ak.judgeable ? ak.value : null;
-                    const bv = bk.judgeable ? bk.value : null;
+                    // Sorts on the displayed figure, thin or not — the same
+                    // rule the filter follows since 2026-08-28. Sinking a
+                    // half-known recipe here while the card shows its number
+                    // is the contradiction the owner hit on the filter.
+                    // Only "no figure at all" sinks.
+                    const av = kcalOf(a).value;
+                    const bv = kcalOf(b).value;
                     if (av === null && bv === null) return a.name.localeCompare(b.name);
                     if (av === null) return 1;
                     if (bv === null) return -1;
                     if (av === bv) return a.name.localeCompare(b.name);
                     return (av - bv) * dirSign;
                 }
-                case 'health_stars': {
-                    // Thin estimates sink, as on the kcal axis — ranking a
-                    // half-known recipe above a fully-known one on nothing but
-                    // missing data is the same mistake in a different unit.
-                    const av = starsOf(a).judgeable ? starsOf(a).value : null;
-                    const bv = starsOf(b).judgeable ? starsOf(b).value : null;
+                case 'rating': {
+                    // Same rule as the kcal axis: rank on what was shown.
+                    // Only an unrated recipe sinks.
+                    const av = rankOf(a);
+                    const bv = rankOf(b);
                     if (av === null && bv === null) return a.name.localeCompare(b.name);
                     if (av === null) return 1;
                     if (bv === null) return -1;
@@ -1204,7 +1204,7 @@
             || (mealCountMin.value !== null && Number.isFinite(mealCountMin.value))
             || (servesMin.value !== null && Number.isFinite(servesMin.value))
             || (kcalMax.value !== null && Number.isFinite(kcalMax.value))
-            || (healthStarsMin.value !== null && Number.isFinite(healthStarsMin.value))
+            || (ratingMin.value !== null && Number.isFinite(ratingMin.value))
             || collectionFilter.value !== null
             || cuisineFilter.value !== null
             || categoryFilter.value !== null
@@ -1232,7 +1232,7 @@
         if (mealCountMin.value !== null && Number.isFinite(mealCountMin.value)) n++;
         if (servesMin.value !== null && Number.isFinite(servesMin.value)) n++;
         if (kcalMax.value !== null && Number.isFinite(kcalMax.value)) n++;
-        if (healthStarsMin.value !== null && Number.isFinite(healthStarsMin.value)) n++;
+        if (ratingMin.value !== null && Number.isFinite(ratingMin.value)) n++;
         if (collectionFilter.value !== null) n++;
         if (cuisineFilter.value !== null) n++;
         if (categoryFilter.value !== null) n++;
@@ -1332,7 +1332,7 @@
         mealCountMin.value = null;
         servesMin.value = null;
         kcalMax.value = null;
-        healthStarsMin.value = null;
+        ratingMin.value = null;
         collectionFilter.value = null;
         cuisineFilter.value = null;
         categoryFilter.value = null;
@@ -1690,7 +1690,8 @@
        StockOverview had grown a copy of the same ~40 lines, which is how they
        drifted to different control heights; the tri-state dropdown overrides
        that used to live here are gone entirely now that TriStateFilter renders
-       a real field (see `BaseFilterField`). Only per-control track opt-outs
-       remain, and those are `filter-row__wide` / `filter-row__auto` classes
-       applied at the call site. */
+       a real field (see `BaseFilterField`). The one per-control track opt-out
+       left is the `filter-row__auto` class applied at the call site — the
+       wider numeric track went on 2026-08-29 (owner: the numeric bounds
+       "seem bigger than others for no reason"). */
 </style>

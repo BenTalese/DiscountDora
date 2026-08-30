@@ -45,12 +45,24 @@ _LOG = logging.getLogger(__name__)
 _LOCK = threading.Lock()
 _IN_FLIGHT: set[str] = set()
 _ERRORS: dict[str, str] = {}
+# `_PROGRESS` holds (bytes_done, bytes_total) for the voice model currently
+# downloading. A Piper voice is 60–110MB, which on a slow line is long enough
+# that a bare "downloading" spinner is indistinguishable from a stall — the
+# same complaint the nutrition dataset import answered. `bytes_total` is 0
+# when the origin sent no Content-Length; callers must treat that as unknown
+# rather than as a denominator. Cleared when the download settles, because
+# this is a live-progress hint and not a record of what happened.
+_PROGRESS: dict[str, tuple[int, int]] = {}
 
 # Hard ceiling so a bad URL / redirect to something huge can't fill the disk.
 # Larger than any current catalog voice with headroom for future "high" tier
 # (~120 MB) models without bumping the ceiling.
 _MAX_BYTES = 200 * 1024 * 1024
 _CHUNK = 1024 * 256
+# Bytes between progress updates. The settings page polls on a timer, so
+# publishing more often than it reads is just lock traffic; 1MB is a visible
+# step on a 60–110MB voice.
+_PROGRESS_TICK = 1024 * 1024
 # (connect, read) — separate so a stuck stream times out instead of hanging
 # the worker thread forever. Connect stays generous for slow networks.
 _TIMEOUT = (60, 30)
@@ -147,6 +159,13 @@ def error_for(voice_id: str) -> str | None:
         return _ERRORS.get(voice_id)
 
 
+def progress_for(voice_id: str) -> tuple[int, int]:
+    """(bytes_done, bytes_total) for an in-flight download; (0, 0) otherwise.
+    A `bytes_total` of 0 means the origin didn't declare a size."""
+    with _LOCK:
+        return _PROGRESS.get(voice_id, (0, 0))
+
+
 def start_download(voice: VoiceDef) -> str:
     """Begin (or no-op) a background download. Returns the resulting status:
     `ready` (already present), `downloading` (started or already running)."""
@@ -177,6 +196,7 @@ def _run_download(voice: VoiceDef) -> None:
     finally:
         with _LOCK:
             _IN_FLIGHT.discard(voice.id)
+            _PROGRESS.pop(voice.id, None)
 
 
 def _download_voice(voice: VoiceDef) -> None:
@@ -187,8 +207,19 @@ def _download_voice(voice: VoiceDef) -> None:
     json_tmp = dest_dir / f"{voice.filename}.json.part"
 
     # The model first (big, integrity-checked), then the small config sidecar.
-    _fetch(voice.onnx_url, onnx_tmp, expected_sha256=voice.sha256)
+    # Only the model reports progress — the sidecar is a few KB, and letting it
+    # write to `_PROGRESS` would snap a nearly-full bar back to ~0% at the very
+    # end of the download.
+    _fetch(
+        voice.onnx_url, onnx_tmp, expected_sha256=voice.sha256,
+        on_progress = lambda done, total: _record_progress(voice.id, done, total),
+    )
     _fetch(voice.json_url, json_tmp, expected_sha256=None)
+
+
+def _record_progress(voice_id: str, done: int, total: int) -> None:
+    with _LOCK:
+        _PROGRESS[voice_id] = (done, total)
 
     # Atomic-ish swap: rename both only once both fetched + verified, so a
     # partial download never looks "ready". A worker reload between the
@@ -198,7 +229,7 @@ def _download_voice(voice: VoiceDef) -> None:
     json_tmp.replace(json_final)
 
 
-def _fetch(url: str, tmp_path: Path, expected_sha256: str | None) -> None:
+def _fetch(url: str, tmp_path: Path, expected_sha256: str | None, on_progress=None) -> None:  # noqa: ANN001
     hasher = hashlib.sha256()
     total = 0
     try:
@@ -207,6 +238,7 @@ def _fetch(url: str, tmp_path: Path, expected_sha256: str | None) -> None:
             # Cheap pre-flight: a redirect-to-something-huge fails fast
             # without opening the file at all.
             declared = resp.headers.get("Content-Length")
+            declared_bytes = 0
             if declared is not None:
                 try:
                     declared_bytes = int(declared)
@@ -216,6 +248,12 @@ def _fetch(url: str, tmp_path: Path, expected_sha256: str | None) -> None:
                     raise ValueError(
                         f"server declared {declared_bytes} bytes, ceiling is {_MAX_BYTES}"
                     )
+            # A malformed header parsed to -1 above; that sentinel drives the
+            # ceiling check only and must not reach the UI as a denominator.
+            size_hint = declared_bytes if declared_bytes > 0 else 0
+            if on_progress is not None:
+                on_progress(0, size_hint)
+            last_reported = 0
             with open(tmp_path, "wb") as handle:
                 for chunk in resp.iter_content(chunk_size=_CHUNK):
                     if not chunk:
@@ -225,6 +263,13 @@ def _fetch(url: str, tmp_path: Path, expected_sha256: str | None) -> None:
                         raise ValueError(f"download exceeded {_MAX_BYTES} bytes")
                     hasher.update(chunk)
                     handle.write(chunk)
+                    if on_progress is not None and total - last_reported >= _PROGRESS_TICK:
+                        on_progress(total, size_hint)
+                        last_reported = total
+            if on_progress is not None:
+                # Exact final figure, so a finished fetch never rests short of
+                # 100% because the last chunk didn't reach the tick.
+                on_progress(total, size_hint or total)
         if total == 0:
             raise ValueError("empty download")
         if expected_sha256 and hasher.hexdigest() != expected_sha256:

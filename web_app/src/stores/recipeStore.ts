@@ -23,6 +23,12 @@ export const useRecipeStore = defineStore('recipe', () => {
     // "hydrated and the id genuinely doesn't resolve" (FU-109 deep-link chip).
     const recipesHydrated = ref(false);
     let recipesInflight: Promise<void> | null = null;
+    // Separate from `recipesHydrated` deliberately: the collection is still
+    // populated and still renderable, it just no longer matches the server.
+    // Flipping `recipesHydrated` back to false instead would make every
+    // consumer that distinguishes "hydrating" from "hydrated but absent"
+    // (FU-109's deep-link chip) report a missing recipe mid-refetch.
+    const recipesStale = ref(false);
     let collectionsHydrated = false;
     let collectionsInflight: Promise<void> | null = null;
 
@@ -33,6 +39,7 @@ export const useRecipeStore = defineStore('recipe', () => {
         recipeApiService.getAllPagesAsync().then((items) => {
             recipes.value = [...items].sort((a, b) => collator.compare(a.name, b.name));
             recipesHydrated.value = true;
+            recipesStale.value = false;
         });
 
     const getRecipeCollectionsAsync = () =>
@@ -46,10 +53,25 @@ export const useRecipeStore = defineStore('recipe', () => {
      *  refresh. Call `getRecipesAsync` directly for an explicit refetch
      *  (post-mutation, pull-to-refresh). */
     const ensureLoadedAsync = (): Promise<void> => {
-        if (recipesHydrated.value) return Promise.resolve();
+        if (recipesHydrated.value && !recipesStale.value) return Promise.resolve();
         recipesInflight ??= getRecipesAsync().finally(() => { recipesInflight = null; });
         return recipesInflight;
     };
+
+    /** Mark the collection as no longer matching the server, so the next
+     *  `ensureLoadedAsync` refetches instead of returning the cached list.
+     *
+     *  A recipe DTO is not just the recipe: it carries a whole layer of facts
+     *  derived from the pantry — `cookable`, `missing_count`,
+     *  `expiring_ingredient_count`, the Zero-Input hint, and in complex
+     *  nutrition mode the entire rollup behind `kcal_per_serving` and the
+     *  front-of-pack rating. Every one of those moves when a stock item does,
+     *  and none of them is visible in a diff of the recipe itself. Before
+     *  this, `ensureLoadedAsync` was a permanent cache for the session: link a
+     *  food to a stock item, walk to the cookbook, and the cards rendered the
+     *  payload fetched before the edit — no rating, no kcal, and the
+     *  thresholds filtering on figures that were no longer true. */
+    const invalidateRecipes = (): void => { recipesStale.value = true; };
 
     /** R-016 — lazy hydration for the collections list (independent fetch). */
     const ensureCollectionsLoadedAsync = (): Promise<void> => {
@@ -132,6 +154,7 @@ export const useRecipeStore = defineStore('recipe', () => {
         getRecipeCollectionsAsync,
         ensureLoadedAsync,
         ensureCollectionsLoadedAsync,
+        invalidateRecipes,
         createRecipeAsync,
         updateRecipeAsync,
         deleteRecipeAsync,

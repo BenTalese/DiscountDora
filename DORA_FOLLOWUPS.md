@@ -39,6 +39,660 @@ long session summary. Distinct from the other logs:
 
 ---
 
+## [OPEN] FU-791 — the list-row chrome is now a third private copy (bordered card + accent hover)
+- **Raised:** 2026-08-30 (meal-planner rail, Unit 2)
+- **Type:** finding
+- **What:** the "bordered flat surface, accent-tinted hover, no lift" list-row
+  look exists three times now. It originated on `StockItemRow.vue`, was copied
+  to `RecipeRow.vue`, and `MealPlanRecipeRow.vue` (new) is the third. The rail
+  brief's §4.5 explicitly asked for it to be **promoted to a shared class**
+  rather than copied again, citing the `.dora-subbar` extraction as precedent
+  (R-022 / ADR-018).
+- **Why deferred:** doing it properly means re-skinning `StockItemRow` and
+  `RecipeRow` — two heavily-used surfaces the owner has signed off visually —
+  inside a work unit whose scope was the meal-planner rail. That is exactly the
+  adjacent-surface creep R-007 exists to stop, and a silent re-skin of the stock
+  row is how you get a "why does my pantry look different" report. The
+  duplication is commented in place in `MealPlanRecipeRow.vue` naming R-001.
+- **Fix shape:** extract a `.dora-list-row` class (border, radius, surface,
+  hover tint, focus ring) into `app.scss`, then have all three rows compose it
+  and keep only their own layout. Diff the three current declarations first —
+  they are *not* byte-identical, so the extraction has to pick a winner per
+  property and that choice is visible on the stock row.
+- **Recommended resolution:** opportunistic — pairs naturally with [[FU-691]]'s
+  off-token stylesheet sweep or the next design-remediation chunk, since all
+  three are the same class of drift. Not urgent; nothing is broken.
+
+---
+
+## [OPEN] FU-790 — `name: dashy-dora` orphans the deployed container, and `container_name` makes it fatal
+- **Raised:** 2026-08-29 (owner hit it on a real deploy)
+- **Type:** finding
+- **What:** the uncommitted `name: dashy-dora` in `compose.yml` pins the Compose
+  project name. The server had already been deployed *without* it, so its stack
+  runs under the directory-derived project **`discountdora`**. After the deploy
+  rsyncs the new file, every `docker compose` call addresses the **new** project:
+  `down -v` matches nothing and leaves the old container running, then `up` fails
+  with *Conflict. The container name "/dashy_dora" is already in use*. The
+  conflict is fatal rather than harmless because `container_name: dashy_dora`
+  (compose.yml:30) is a **global** name that ignores Compose's per-project
+  namespace — without it the two projects would coexist as
+  `discountdora-dashy_dora-1` / `dashy-dora-dashy_dora-1`. Compose can't
+  self-heal this: from the new project's view that container is a stranger, not
+  an orphan, so `--remove-orphans` doesn't touch it.
+- **State:** owner chose (2026-08-29) to **keep** `container_name` and harden the
+  deploy script instead of dropping it. A `reclaim_container_name` step was
+  written into `~/Desktop/deploy-dora.sh` — it detects a container holding the
+  name that isn't in `docker compose ps -aq` for the current project, and tears
+  it down through *its own* project (taking that project's volumes too when
+  `WIPE_DB=true`, so the old `discountdora_*` volumes don't strand). **The
+  function is defined but not yet wired into `deploy()`** — the final edit was
+  blocked by a session permission check, so the script still behaves exactly as
+  before. Three lines are outstanding; they're in the 2026-08-29 worklog entry.
+- **Why it stays open:** (a) the wiring above; (b) the one-time server cleanup
+  (`docker compose -p discountdora down -v`) has not been confirmed run — SSH
+  was blocked this session, so nothing here was verified against the live
+  daemon; (c) the script remains **only** on the desktop, untracked by this repo
+  (see the existing note under PROJECT_STATE's needs-attention item on
+  `deploy-dora.sh`), so this hardening is one `rm` from being lost.
+- **Recommended resolution:** now — it blocks deploying.
+
+## [OPEN] FU-788 — Voice input can't work in Firefox without server-side transcription
+- **Raised:** 2026-08-29 (settings feedback batch)
+- **Type:** follow-up
+- **What:** speech *recognition* is the browser's `SpeechRecognition` API, which
+  Firefox has never shipped and offers no flag for. Batch 1 replaced the flat
+  grey "your browser doesn't expose the Web Speech API" line with a warning card
+  that names the browsers that do work (owner picked "better messaging only"),
+  so nobody is left thinking they've misconfigured something — but Firefox users
+  still cannot talk to Dora. Making them able to needs Dora to transcribe
+  server-side (record audio in the browser, POST it, run Whisper or similar),
+  which is the input-side mirror of what Piper already does for output.
+- **Why deferred:** owner call 2026-08-29 — messaging now, the feature later. It
+  would add a second optional heavyweight binary dependency with the same
+  "not installable from pip on Windows" shape as Piper (R-018 / ADR-013), so it
+  wants the same packaging treatment and its own decision.
+- **Recommended resolution:** when voice input is worth a phase of its own — or
+  opportunistically alongside any future Piper/packaging work, since the
+  install story is shared.
+
+## [OPEN] FU-787 — Piper's absence from a from-source install is a packaging gap, not just a copy problem
+- **Raised:** 2026-08-29 (settings feedback batch)
+- **Type:** finding
+- **What:** the owner's reaction to "Dora's neural-voice engine isn't installed
+  on this server" was *"In what situations does this happen? I'd expect it to
+  always work."* The honest answer is that Piper is deliberately not a hard
+  dependency (R-018 / ADR-013 — `piper-phonemize` has no Windows wheel), so the
+  Docker image installs it and the desktop bundle ships it, but `pip install -r
+  requirements.txt` + `python -m dora_api.startup` gets you an install with no
+  neural voice at all. Batch 1 made the Voice page say exactly that and stopped
+  offering 60–110MB voice downloads for an engine that cannot run them — but the
+  expectation the owner voiced ("I'd expect it to always work") is the right one
+  and the copy is only managing the gap.
+- **Why deferred:** closing it for real means either finding a Windows-safe
+  install path for Piper, vendoring the standalone binary per-platform the way
+  `packaging/fetch_piper.py` already does for the desktop build, or picking a
+  different engine. That is a packaging decision, out of scope for a settings
+  copy pass.
+- **Recommended resolution:** opportunistic — next time the packaging or
+  desktop-build story is open.
+
+## [OPEN] FU-786 — A legacy free-text ingredient unit can never be re-selected once changed away
+- **Raised:** 2026-08-29 (recipe-view feedback batch)
+- **Type:** finding
+- **What:** the owner's reproduction case was an ingredient measured in
+  **`loaf`** — a word that predates the closed unit vocabulary and is not in
+  `UNIT_TABLE` at all. `useUnitOptions`' `includeValue` escape hatch exists so a
+  row keeps its own unit offered, but it only works for canonical units the
+  *measurement system* excludes (a `lb` on a metric install); a unit with no
+  table entry has no dimension, so `isOffered` can never return true for it.
+  Confirmed live: the dropdown on that row offered 14 units and `loaf` was not
+  among them. The field still *displays* `loaf` and saving without touching it
+  preserves it, so nothing is silently lost — but change it once and it is
+  unrecoverable from the UI.
+- **Why deferred:** the fix is a vocabulary decision, not a code one. Either
+  (a) add the genuinely-common count words (`loaf`, `slice`, `clove`, `sprig`,
+  `head`, `bunch`, `can`, `tin`, `jar`, `bottle`) to `dora_api/domain/units.py`
+  as universal count units — which is the pantry-shaped answer and also fixes
+  every recipe importer that parses them — or (b) widen `includeValue` to pass
+  an unknown unit straight through as a synthetic option, which keeps one row
+  working and leaves the importer producing units nothing can offer. (a) is
+  clearly better and clearly out of a feedback batch's scope.
+- **Recommended resolution:** **opportunistic** — next time the unit table or the
+  recipe importer is open. Worth a count of what's actually in the wild first:
+  `SELECT unit, COUNT(*) FROM RecipeIngredient WHERE unit IS NOT NULL GROUP BY 1`
+  names the words users have really typed.
+
+## [OPEN] FU-785 — A benign `ResizeObserver` loop warning shows an "Oops" toast **and rolls back optimistic mutations**
+- **Raised:** 2026-08-29 (shopping-list UX v3 verify pass)
+- **Type:** finding
+- **What:** `boot/globalErrorHandler.ts:24` installs a blanket `window.onerror`
+  that calls `executeRollbacks()` and `Notify.create({ type: 'oopsie' })` for
+  *anything* the browser reports. Browsers report **"ResizeObserver loop
+  completed with undelivered notifications"** through that channel — a
+  spec-benign signal meaning an observation was deferred a frame, carrying no
+  `Error` and nothing to act on. The user sees a red *"Oops, something went
+  wrong"* for a successful interaction, and — the worse half — **every
+  registered rollback fires**, so an in-flight optimistic mutation can be
+  reverted by a layout hiccup.
+- **Reproduction (verified live, 2026-08-29):** resize the viewport across the
+  `md` breakpoint on `/#/shopping-lists/<id>`, `/#/meal-plans` or the dashboard —
+  2 errors, 1 toast, every time. The observer is
+  `components/menu/MainMenuButtonStrip.vue:47`, i.e. app chrome, not any one
+  page. `/#/stock`, `/#/recipes` and the templates page do **not** trip it.
+- **Why deferred:** found while verifying UX-v3 and initially mistaken for its
+  cause; confirmed pre-existing by hiding the new overview card (no change) and
+  by reproducing on two untouched pages. Fixing it means changing app-wide
+  error handling and/or the menu strip's measurement — cross-cutting work that
+  deserves its own consideration, not a drive-by inside a shopping-list unit.
+- **Recommended resolution:** now-ish — the rollback half is a correctness bug,
+  not cosmetics. Smallest honest fix is an ignore-list in `window.onerror` for
+  `ResizeObserver loop` messages (they are unactionable by contract); the
+  better one also stops `MainMenuButtonStrip` from writing layout inside its own
+  observer callback.
+
+## [OPEN] FU-784 — `DoraBubble` has no placement budget against page-level bottom chrome
+- **Raised:** 2026-08-29 (shopping-list UX v3 audit)
+- **Type:** finding
+- **What:** `components/dora/DoraBubble.vue:396-406` is `position: fixed; bottom:
+  18px + safe-area; z-index: 3000`, ~88px tall, bottom-right. Any page-level
+  bottom chrome lands underneath it. Today's concrete collision is the shopping
+  list's `.sld-shop-footer` (`ShoppingListDetail.vue:3574`, z-index **3**), whose
+  "Finish & restock" CTA sits exactly there on narrow screens. Quasar toasts were
+  already lifted 112px for the same reason (`css/app.scss:54`) — a one-off patch,
+  not a rule. D-009 ("toasts & floating chrome respect a placement budget") says
+  this should be systematic.
+- **Why deferred:** v3 shipped 2026-08-29 and deleted `.sld-shop-footer`
+  outright, so **the instance is gone** — the shopping list has no bottom chrome
+  left for the mascot to sit on. The *class* of bug survives for the next page
+  that grows some.
+- **Recommended resolution:** when another page adds fixed/sticky bottom chrome —
+  at that point define the budget once (a `--bottom-chrome-offset` token or a
+  shared composable) rather than patching a third caller.
+
+
+
+## [OPEN] FU-781 — A hypothesis property test fails intermittently, full-suite only
+- **Raised:** 2026-08-28 (shopping-list batch 3 — seen in a close-gate suite run)
+- **Type:** finding
+- **What:** `tests/test_domain_properties.py::test__discount_percent__property__
+  lower_price_never_ranks_worse` failed once in a full `pytest tests/` run, then
+  passed on every re-run in isolation (7 explicit `--hypothesis-seed` values, 6
+  plain re-runs). The file is unmodified since commit `22a11bc4` and nothing in
+  this session touches `discount_percent`.
+- **Two candidate causes, neither confirmed** (the traceback wasn't captured
+  before the re-run, which is the mistake to avoid next time):
+  1. **`filter_too_much` health check.** The property is
+     `assume(now_a < was and now_b < was)` over three independent price floats,
+     so ~⅚ of generated inputs are discarded. Reproducing the same shape
+     standalone trips `FailedHealthCheck: 8 inputs generated, 50 filtered out`
+     — so the test is genuinely near that threshold and whether it crosses
+     depends on the seed. `pytest-randomly` reseeds every run, which is exactly
+     how a seed-sensitive test becomes an intermittent one.
+  2. **`DeadlineExceeded`.** Hypothesis's default 200ms-per-example deadline is
+     easy to blow under a loaded full-suite run and impossible to hit alone.
+  Both fit "passes alone, fails in the suite"; they want different fixes
+  (restructure the strategy to generate `was` then two prices below it, vs
+  `deadline=None`).
+- **The maths looks sound**, for what it's worth: `discount_percent` is
+  `round((was - now) / was * 100)` with a `now >= was → None` guard, and `round`
+  is monotone, so the property itself should hold. This reads as a test-harness
+  flake, not a domain bug — but that is a static read, not proof.
+- **Recommended resolution:** opportunistic — **capture the traceback next time
+  the full suite goes red** rather than re-running immediately. Cheap to fix
+  once the cause is known; noisy to leave, because a suite that fails at random
+  trains everyone to re-run instead of read.
+
+## [OPEN] FU-780 — `ShoppingListDetail.vue` is 3,784 lines and violates R-001
+- **Raised:** 2026-08-28 (shopping-list feedback batch 2)
+- **Type:** finding (R-001 — componentisation-first)
+- **What:** the page is **3,784 lines** against 110–344 for every component beside
+  it. Two feedback batches have now *deleted* from it (the bulk bar, the substitute
+  swap, draft ticking, copy-to-new, the switch-list dialog — several hundred lines)
+  and it is still by far the largest file on the surface, because the plan face's
+  row template alone runs ~450 lines inside a single `v-for`. The run and receipt
+  faces are already their own components; the plan face never was.
+- **Why deferred:** extracting `ShoppingListPlanFace.vue` is a real chunk — the row
+  template reaches ~20 handlers and several composables on the page — and doing it
+  inside a visual-feedback batch would have buried a large mechanical refactor in a
+  diff the owner needs to read for behaviour. Batch 3 rebuilds the same row
+  (`planned_store_id` + the line editor), so the honest sequence is to land that
+  behaviour first and extract once the shape has settled.
+- **Recommended resolution:** later — immediately after shopping-list batch 3,
+  while the surface is still fresh. `ShoppingListRunFace.vue` is the template to
+  copy.
+
+## [OPEN] FU-779 — The QR centre mark needs a proper asset; the wordmark reads as crap
+- **Raised:** 2026-08-28 (owner, on seeing the first render)
+- **Type:** design / needs an asset from the owner
+- **What:** the D/D mark now centred in every stock-item QR
+  (`dora_api/assets/dora_qr_mark.png`, composited by `_paste_centre_mark` in
+  [barcodes.py](dora_api/features/data/barcodes.py)) was rasterised from
+  `web_app/public/icons/safari-pinned-tab.svg` — chosen because it was the only
+  flat monochrome mark in the repo, not because it suits this job. It doesn't.
+  It's a **2.5:1 wordmark**, so at 26% of the code's width it lands as a thin
+  horizontal strip of letterforms: it reads as small text sitting on the code
+  rather than as a logo embedded in it, and the two `D` bowls are close enough
+  to the surrounding module noise that the eye doesn't lock onto it. A centre
+  mark wants a compact, roughly square, high-contrast glyph — the shape the rest
+  of the industry uses — and Dora doesn't currently own one.
+- **What's needed from the owner:** a single flat mark, ideally SVG:
+  - **roughly square** (1:1 to 4:3). This is the main thing the current asset
+    gets wrong.
+  - **one solid colour on transparent**, pure black preferred (it is composited
+    onto a white knockout; a mid-tone or a gradient loses contrast against the
+    quiet ring and reads muddy at label size).
+  - **chunky strokes, no hairlines and no fine interior detail** — the mark
+    renders ~47px wide on a 180px print-sheet cell.
+  - not the `dorabot-*` illustrations: already ruled out, far too detailed to
+    survive that size.
+- **Then what:** genuinely a drop-in. Re-run
+  `inkscape <mark>.svg --export-type=png --export-filename=dora_api/assets/dora_qr_mark.png --export-width=1520 --export-background-opacity=0`,
+  crop to the alpha bbox, and it works — the compositor derives its aspect from
+  the asset. Two knobs may want a nudge for a squarer mark: `_MARK_WIDTH_RATIO`
+  (0.26) and, in `tests/test_qr_centre_mark.py`, the hardcoded `544 / 1350`
+  aspect used to locate the ring. The area guard in that file
+  (`box_w * box_h < 0.08`) is the safety rail — a squarer mark at the same width
+  covers ~2.4× the area, so **re-run the decode + degradation sweep** rather
+  than assuming the ERROR_CORRECT_H budget still covers it.
+- **Meanwhile:** the codes scan correctly, so this is cosmetic only. If it
+  bothers you before an asset exists, setting `_MARK_MIN_SIZE` above
+  `QR_MAX_SIZE` (1024) turns the mark off everywhere in one line and renders
+  plain codes — the missing-asset path is already tested to degrade that way.
+- **Recommended resolution:** **when you have a mark** — blocked on the asset,
+  nothing to investigate.
+
+## [OPEN] FU-778 — A Quasar portal timer fires after teardown in the vitest run
+- **Raised:** 2026-08-28 (seen while re-running the suite for the toast change)
+- **Type:** finding
+- **What:** `npx vitest run` reports **`Errors 1 error`** alongside its 562 passes:
+  `ReferenceError: document is not defined` from `quasar.client.js` →
+  `showPortal` → `removeFocusWaitFlag`, originating in
+  `test/unit/addToListButton.spec.ts`. A QDialog's portal timeout fires after the
+  jsdom environment has been torn down. Vitest's own message is the reason this
+  is worth logging: *"This might cause false positive tests."*
+- **Confirmed pre-existing:** the full suite was re-run with that session's
+  `notifyTypeRegistration.ts` + `app.scss` changes stashed and the error appeared
+  **identically** — so it is not a regression from the toast work. It also does
+  not reproduce when that spec runs alone, only in the full run.
+- **Why deferred:** unrelated to the batch that found it, and it fails nothing today.
+- **Recommended resolution:** **opportunistic** — next time `AddToListButton` or
+  its spec is touched. Likely fixed by awaiting the dialog's close (or a
+  `vi.useFakeTimers()` drain) before the test ends.
+
+## [OPEN] FU-777 — `ExpiringChip`'s neutral state uses a numbered Quasar palette class
+- **Raised:** 2026-08-28 (found by the widened R-002 detector during the toast fix)
+- **Type:** finding
+- **What:** [ExpiringChip.vue:67](web_app/src/components/recipes/ExpiringChip.vue)'s
+  default branch returns `{ color: 'grey-7', textColor: 'white' }`. `grey-7` is a
+  numbered Quasar palette class, which **R-002 names explicitly** as a violation —
+  it's a fixed mid-grey that ignores the theme, so the "at risk but not urgent"
+  chip reads the same in every palette and sits wrong on the dark ones. R-002's
+  own **Apply** clause prescribes the fix: route the neutral branch through
+  `dora-bg-sunken dora-text-secondary` and keep only the saturated
+  `negative`/`warning` branches on `color=`/`text-color="white"`.
+- **Why deferred:** scope — the session that found it was fixing toasts, and this
+  is a different component on a different surface. Pre-existing, not introduced.
+- **Recommended resolution:** **opportunistic** — next time anything touches the
+  recipe chip run or a theme-compliance sweep runs. One-line change.
+
+## [OPEN] FU-776 — Should the buy verdict's plan axis discount items already on a shopping list?
+- **Raised:** 2026-08-28 (buy-verdict plan-axis brief)
+- **Type:** design question
+- **What:** if the plan axis (see
+  [BRIEF_BUY_VERDICT_PLAN_AXIS.md](docs/04_proposals/BRIEF_BUY_VERDICT_PLAN_AXIS.md))
+  pushes tomato sauce to `buy` for Thursday's Bolognese, but the user already
+  put it on a list via the meal planner's one-shot add, the verdict is noise —
+  the need is handled. Reading open-list membership would suppress that, at the
+  cost of a further cross-entity read in `_gather_inputs`.
+- **Why deferred:** it only matters if the axis is built at all (FU-774 gates it).
+- **Recommended resolution:** **when FU-774 is answered yes** — decide it as part
+  of the implementation plan, not before. Note it must be server-side: a client
+  computing "is this already on a list" is a straight state-ownership violation.
+
+## [OPEN] FU-775 — Pick the gate for the buy-verdict plan axis
+- **Raised:** 2026-08-28 (buy-verdict plan-axis brief)
+- **Type:** design question
+- **What:** the inference overlay's per-surface opt-ins live on `User`
+  (`inference_meal_plan_enabled` et al.), but the buy verdict is gated
+  install-wide by `AppSetting.buy_verdict_enabled` plus the R-058 money
+  prerequisite. A per-user flag on an install-wide surface is a mismatch. The
+  brief recommends a new install-wide `AppSetting.buy_verdict_plan_axis_enabled`
+  defaulting **off**, matching how the overlay's three newer surface flags
+  default.
+- **Why deferred:** downstream of FU-774; pointless to migrate a column for an
+  axis that may not be approved.
+- **Recommended resolution:** **when FU-774 is answered yes.**
+
+## [OPEN] FU-774 — Owner call: may a planned meal change a buy verdict?
+- **Raised:** 2026-08-28 (owner asked whether planned meals should feed the buy verdict)
+- **Type:** decision
+- **What:** the owner's idea — *"high confidence you should buy tomato sauce
+  because you planned spaghetti Bolognese but you're out"* — is a good one, and
+  the brief
+  ([BRIEF_BUY_VERDICT_PLAN_AXIS.md](docs/04_proposals/BRIEF_BUY_VERDICT_PLAN_AXIS.md))
+  argues it is the *strongest* need evidence the oracle can hold, because unlike
+  the recorded level and the cadence estimate it is a stated intention rather
+  than an inference. **But it is currently forbidden.** `inference_overlay.py:23`
+  records an explicit owner directive of 2026-08-17 that "a planned meal's
+  shortfall is unchanged" and that everything plan-derived is additive
+  commentary only. An axis that moves a verdict from `unsure` to `buy` breaks
+  that directly.
+  - Argument for reversing *on this surface*: the directive was written about
+    the inference overlay, whose remarks come from a Dora-generated *belief*.
+    A planned meal is user-entered data, so the directive's stated rationale
+    ("a low-confidence guess contradicting a recorded fact is noise") doesn't
+    obviously reach it.
+  - Argument against: the buy verdict is exactly the surface the directive was
+    protecting, and the overlay's `SURFACE_MEAL_PLAN` flag exists because
+    annotating meal plans at all was thought intrusive enough to need an opt-in.
+  - If the answer is **no**, the fallback is a reason line that names the meal
+    but never affects strength or direction — worth much less, and the brief
+    closes as considered-and-declined.
+- **Why deferred:** it is a product call about how much authority Dora's own
+  plans get over its own advice. Not an agent's to make.
+- **Recommended resolution:** **now** — it gates FU-775 and FU-776 and the whole
+  axis. Nothing was built.
+
+## [OPEN] FU-773 — The desktop filter row wraps to three lines at 1280px, not the two the owner asked for
+- **Raised:** 2026-08-28 (cookbook rating + kcal batch)
+- **Type:** finding
+- **What:** the ask was "on desktop only, make it two rows of filters under the
+  quick filters". `FilterRow` gained a `wide-wraps` mode that wraps instead of
+  scrolling sideways above 600px; measured at 1280×900 the cookbook's twelve
+  visible controls take **three** lines (`flex-wrap: wrap`, `overflow: visible`
+  — both confirmed in the browser). Wrapping was chosen over pinning it at two
+  because the count is window-dependent: two rows would overflow at 1024px and
+  leave a half-empty second line at 1920px, and the row grows or shrinks by two
+  controls depending on whether nutrition and batch cooking are on.
+- **Why deferred:** it's a judgement call about what "two rows" meant — a literal
+  count, or "stop making me scroll sideways". The second reading is delivered.
+- **Recommended resolution:** **owner call** — say the word if you want it forced
+  to two lines (achievable by narrowing the shared control width track on the
+  cookbook only) or if three lines at your usual window size is fine.
+- **2026-08-29 update:** the width-consistency fix in the same feedback batch
+  retired the 230px numeric track, so five controls shrank to 210px and the row
+  lost ~100px of total width. Re-measured live at 1280×900 with nutrition on:
+  still **three** lines (5 / 5 / 3 controls, thirteen visible), no clipped
+  labels. So the ask is still open on the same terms — the lever left is
+  narrowing the shared track below 210px, which the owner already pushed *up*
+  from 180 on 2026-08-21.
+
+## [OPEN] FU-772 — The rating pill's tint has had no dark-theme pass
+- **Raised:** 2026-08-28 (cookbook rating + kcal batch)
+- **Type:** finding
+- **What:** `RecipeRatingChip`'s score pill paints `--brand-primary-soft` behind
+  `--text-primary`, with the star glyph on `--brand-primary`. Light themes define
+  that token as a pale opaque tint, but **every dark theme defines it as a
+  translucent wash of the theme's own accent** (`hsla(...)` — see
+  `themes.scss`), so the pill's effective contrast in dark mode depends on what
+  it happens to sit on. Reasoned to be safe (D-002) and not measured: the chip
+  only paints in complex nutrition mode, which no verify instance can reach.
+- **Why deferred:** unreachable without an imported food catalogue; the same
+  wall that has kept the whole rating surface unverified since 2026-08-27.
+- **Recommended resolution:** with the `DORA_VERIFY` → "Cookbook: the 2026-08-28
+  rating + kcal batch" walk, on a dark theme. Cites **D-002**.
+
+## [OPEN] FU-771 — Nutrition mode/scheme changes don't invalidate the recipe list
+- **Raised:** 2026-08-28 (cookbook rating + kcal batch)
+- **Type:** finding
+- **What:** R-062's invalidation covers stock writes, which is where the owner's
+  bug was. Two install-wide levers move every recipe's rollup and are **not**
+  covered: switching nutrition mode / rating scheme on
+  `AdminSystemNutritionSettings.vue`, and a dataset import completing. Both
+  currently rely on the user reloading — plausible for a settings change, less so
+  for an import that finishes while they're on another page.
+- **Why deferred:** both also change cached *feature flags*, which the SPA reads
+  once per session, so a store invalidation alone wouldn't make the surfaces
+  correct — it needs the flag-refresh seam thought through, which is wider than
+  this batch.
+- **Recommended resolution:** opportunistic — next time the health-flag caching
+  or the admin nutrition page is open. Cites **R-062**.
+
+## [OPEN] FU-770 — `RecipeCard` and `RecipeRow` still carry the kcal chip twice (FU-747's other half)
+- **Raised:** 2026-08-28 (cookbook rating + kcal batch)
+- **Type:** finding
+- **What:** FU-747 called for one `RecipeSignalChips` covering both the rating and
+  the kcal block. Half of it landed — the rating is now wholly inside
+  `RecipeRatingChip`, and this batch removed the duplicated rating wrapper and the
+  `--part { opacity: .55 }` rule from both hosts. The **kcal** figure is still
+  written out in both files, and they have now deliberately *diverged*: the card
+  renders a `q-chip` beside Difficulty, the row renders plain text on its meta
+  line. Same data, same asterisk rule, two renderings.
+- **Why deferred:** they diverged because the owner asked them to — a shared
+  component would need a `variant` prop, which is worth doing only if a third
+  caller appears. The duplication that actually bites (the asterisk rule and the
+  tooltip copy) is two lines.
+- **Recommended resolution:** opportunistic, and only if a third surface needs a
+  kcal figure. Supersedes the kcal half of **FU-747**; cites **R-001**.
+
+## [OPEN] FU-769 — Changing a line's store reportedly doesn't move it between store groups
+- **Raised:** 2026-08-28 (shopping-list feedback batch 1)
+- **Type:** finding
+- **What:** owner reports that setting "Bought from" on a line leaves it in its old
+  bucket under **Order by → Store**. A static read says it should work: the price
+  editor writes `purchased_store_id`, which is **rung 1** of the server's store
+  ladder (`get_shopping_list_detail.py:591`), and the grouping key is
+  `resolved_store_name` (`useLineSections.ts:69`), so a refetch ought to re-bucket
+  the row. Did **not** reproduce in the read — but the report came from real usage
+  and the plausible failure is a *refresh* gap (the popover's save path patches the
+  line optimistically and may not refetch the detail), which a code read is bad at
+  seeing.
+- **Why deferred:** batch 1 was deletions + the tick model; this sits on the store
+  work in batch 3, which rebuilds the same editor anyway.
+- **Recommended resolution:** **confirm in browser** — set a store on a draft line
+  with Order-by=Store active and watch whether the row moves without a reload. Fold
+  into batch 3 (`planned_store_id`).
+
+## [OPEN] FU-768 — Four surfaces still treat "line has a price" as "line was bought"
+- **Raised:** 2026-08-28 (shopping-list feedback batch 1)
+- **Type:** finding
+- **What:** the sibling of the budget bug fixed this session. `picked_offer_price`
+  is snapshotted at **add** time, so an unticked line carries a price it never cost.
+  These four read that price with no `is_ticked` filter:
+  `suggestions/generators.py:186` (whose comment asserts the opposite is true),
+  `stock_items/pantry_belief.py:329` (invents purchase dates for items never
+  bought), `stock_items/get_buy_verdict.py:762` (pollutes `price_samples` /
+  `purchases_12mo`), and `waste/waste.py:113` (value-at-risk — and it doesn't even
+  filter to done lists).
+- **Why deferred:** unlike the budget, this isn't one filter — it's a question about
+  what counts as proof of purchase across four features with different tolerances
+  for a false positive. `_line_price.py` is the natural chokepoint for a
+  `line_purchased_unit_price()` that answers it once (R-003), but that's a design
+  call, not a reflex.
+- **Recommended resolution:** now-ish — these feed belief, verdicts and waste, all
+  of which the owner reads as signal. One decision, then mechanical.
+
+## [OPEN] FU-767 — Unticked leftovers still inflate the dashboard's "queued" count
+- **Raised:** 2026-08-28 (shopping-list feedback batch 1)
+- **Type:** finding
+- **What:** `get_dashboard_summary.py:154` counts `ShoppingListLine` where
+  `is_ticked == False` with **no join to list status**, so unticked lines stranded
+  on finished lists are counted as queued forever. Batch 1 shut the *tap* — the
+  finish dialog now forces discard-or-move, so no new strandings — but any list
+  finished before today still carries its leftovers.
+- **Why deferred:** the fix has two halves and only one is a filter. The count needs
+  a status join; the historical rows need a decision (leave them, or a one-off
+  cleanup migration).
+- **Recommended resolution:** now-ish — pairs naturally with [[FU-768]].
+
+## [OPEN] FU-766 — Server-side `bulk-tick` endpoint and `has_substitutes` are now unread
+- **Raised:** 2026-08-28 (shopping-list feedback batch 1)
+- **Type:** leftover
+- **What:** removing the bulk-select bar and the substitute swap left two server
+  contracts with no client caller: `POST /shopping-lists/<id>/lines/bulk-tick`
+  (`bulk_operations.py:82`) and the per-line `has_substitutes` flag on the detail
+  DTO (`shoppingList.ts:113`), which the server computes on every line of every
+  read for nobody. The client-side `bulkTickAsync` was deleted this session; these
+  weren't.
+- **Why deferred:** deleting a live endpoint plus its tests is a bigger call than a
+  UI batch should make unilaterally, and R-057/ADR-054 is explicit that a replaced
+  endpoint's response is an inventory to check, not a casualty list. `has_substitutes`
+  in particular may be wanted by a future shop-mode swap if INV-8's original
+  recommendation is ever revisited.
+- **Recommended resolution:** opportunistic — owner's call. Delete both, or keep
+  `has_substitutes` and note why.
+
+## [OPEN] FU-765 — Cook mode never re-fetches when the route's recipe id changes
+- **Raised:** 2026-08-28 (cook-mode feedback batch — found while verifying)
+- **Type:** finding
+- **What:** `RecipeCookMode.vue` fetches its recipe in `onMounted` only. Vue reuses
+  the component instance across `/cookbook/A/cook` → `/cookbook/B/cook`, so the
+  page keeps rendering recipe **A** — right down to its steps, ingredients and
+  finish flow — under recipe B's URL. Reproduced live: hopping between two cook
+  routes left the first recipe's step card on screen indefinitely; only a hard
+  reload corrected it. There is no `watch` on `route.params.id`.
+- **Why deferred:** out of scope for a visual-feedback batch, and it needs a
+  decision rather than a reflex `watch`: re-fetching mid-cook must not silently
+  discard session state (headcount, session swaps, the timer, the step position),
+  so the honest fix may be `:key="route.params.id"` on the route component — which
+  remounts and resets deliberately — rather than a watcher that mutates a live
+  cook session underneath the user.
+- **Why it may not matter much:** no in-app path currently jumps between two cook
+  routes (you exit to the cookbook first), so this is reachable mainly by a pasted
+  link or a back/forward pair. Worth fixing anyway — the failure is silent and
+  wrong, not merely stale.
+- **Recommended resolution:** opportunistic — next time cook mode is touched.
+
+## [OPEN] FU-764 — No lint gate on undefined CSS custom properties (four more files affected)
+- **Raised:** 2026-08-28 (cook-mode feedback batch — root cause of the squish)
+- **Type:** finding
+- **What:** an undefined `var(--token)` with no fallback invalidates its whole
+  declaration and silently falls back to the initial value; nothing in the
+  toolchain catches it (see R-060 / ADR-057). The cook-mode files are fixed. A
+  repo-wide grep found the remaining users of tokens that `css/` never declares:
+  - `components/filters/TriStateFilter.vue:278` — `background: var(--surface-card)`,
+    **no fallback**, so the control has no background at all. Same class of bug as
+    the cook-mode one, still live.
+  - `components/settings/VoicePicker.vue:355` — `var(--surface-card, transparent)`.
+  - `components/stock/MarkAsWastedDialog.vue:112-123` — `--c-line`, `--c-surface-2`,
+    `--c-surface-3`, `--c-line-strong`.
+  - `pages/StocktakeRunner.vue:953` — `--c-line`.
+  - `pages/DashboardPage.vue` declares `--c-line` locally at :2303 and then uses it
+    at four sites, which works but entrenches a second naming scheme.
+
+  All but `TriStateFilter` carry fallbacks, so they render — but they render the
+  fallback, never the theme value, which means they do not follow the theme.
+- **Why deferred:** the fix is two things and only one is urgent. Repointing five
+  files at real tokens is mechanical; the durable answer is a stylelint rule (or a
+  small build check) that fails on a custom property `css/` never declares, and
+  that is a tooling change with its own rollout.
+- **Recommended resolution:** later, when the CSS/design-token surface is next
+  worked on — but pull the `TriStateFilter` one-liner forward opportunistically,
+  since that one is visibly broken today.
+
+## [OPEN] FU-763 — Cook-mode step text at `text-h4` on a phone: observed, owner's call
+- **Raised:** 2026-08-28 (supersedes the browser-pass ask in FU-752)
+- **Type:** finding
+- **What:** FU-752 asked for a phone walk of the step card. Done at 375×812 this
+  session: the card does not overflow, wraps cleanly, and the page has zero
+  horizontal scroll. A six-word step fills roughly five lines and about half the
+  viewport height, which pushes the Previous/Repeat/Next row toward the fold.
+  That is the *intent* (read it from across the kitchen), so there is no bug —
+  only a taste question the owner owns.
+- **Why deferred:** shrinking cook-mode type is a judgement about the feature's
+  whole point, not a layout defect, and the owner did not raise it in this round.
+- **Recommended resolution:** when the owner next cooks from a phone — if the step
+  card feels too tall in real use, drop it to `text-h5` below `sm`; otherwise close.
+
+## [OPEN] FU-762 — Four buy-verdict e2e tests fail against the (uncommitted) money gate
+- **Raised:** 2026-08-27 (Nutri-Score build — found incidentally)
+- **Type:** finding
+- **What:** `tests/e2e/dora_api/test_list_buy_verdicts.py` fails 4 of 4 —
+  `one_entry_per_line_item`, `match_the_per_item_endpoint`,
+  `empty_list_is_an_empty_map`, `unknown_list_is_404`. All four get a 403
+  *"Buy verdicts need money features, which are turned off for this install"*
+  where they expect 200/404. The money prerequisite added by the previous
+  session's (still uncommitted) buy-verdict work is correct; these four fixtures
+  simply never enabled money, and the unit suite the worklog quotes (**870
+  passed**) does not include the e2e directory, so they went unnoticed.
+- **Verified pre-existing:** stashing *all* uncommitted work makes them pass,
+  and nothing in this unit touches the buy verdict. Not caused by the
+  rating-scheme change.
+- **Why deferred:** R-007 — it is the other work unit's fixture to fix, and
+  guessing at its intent (enable money in the fixture vs. assert the 403) could
+  contradict what that session meant to assert.
+- **Recommended resolution:** **now**, before the buy-verdict work is committed
+  — a red e2e suite blocks everyone. Likely a one-line fixture change.
+
+## [OPEN] FU-761 — `kcal_to_kj` is imported from the HSR module by a Nutri-Score caller
+- **Raised:** 2026-08-27 (Nutri-Score build)
+- **Type:** finding
+- **What:** `recipe_rollup.py` builds the Nutri-Score profile with
+  `hsr.kcal_to_kj(...)`, because the kcal→kJ factor lives in
+  `domain/health_star_rating.py` and both schemes score energy in kJ.
+  Duplicating the constant into `domain/nutri_score.py` would have been a
+  straight **R-003** violation, so the shared read is the lesser evil — but a
+  generic unit conversion sitting inside one scheme's module, imported by the
+  other's caller, reads oddly and will read worse if a third scheme appears.
+- **Why deferred:** `domain/units.py` is the natural home, but moving it churns
+  a module that shipped hours earlier and whose tests import the symbol by name.
+  Not worth bundling into this diff.
+- **Recommended resolution:** opportunistic — next time `domain/units.py` or
+  either rating module is open. Cites **R-003**.
+
+## [OPEN] FU-760 — The cookbook's stored rating filter/sort keys were renamed, so saved views silently reset
+- **Raised:** 2026-08-27 (Nutri-Score build)
+- **Type:** finding
+- **What:** `RecipesOverview` renamed its filter ref `healthStarsMin` →
+  `ratingMin` and its sort key `'health_stars'` → `'rating'`, both of which are
+  persisted. A user whose stored cookbook view held either will find that facet
+  quietly back at its default on next load. Correct rename — neither name was
+  true once Nutri-Score existed — but the reset is real.
+- **Why deferred:** pre-release, and the blast radius is one filter chip and one
+  sort axis reverting to default, not data loss. A migration shim for stored
+  view state is exactly the compat scaffolding this project has said it doesn't
+  want before release.
+- **Recommended resolution:** **no action expected** — logged so it isn't
+  mistaken for a bug if it's noticed. Close it if release is still ahead.
+
+## [OPEN] FU-759 — Two more copies of the install-wide money read, now that `access.money_features_enabled` exists
+- **Raised:** 2026-08-27 (buy-verdict money gate)
+- **Type:** finding
+- **What:** the buy-verdict gate needed an install-wide money read in two files,
+  so one was added as `money_features_enabled()` in
+  `dora_api/features/app_settings/access.py` — beside the memoised singleton
+  accessor, so gating costs no extra query. Two pre-existing private copies now
+  duplicate it: `swap_suggestions._money_features_on` (line ~324) and the money
+  half of `build_week._household_budget_amount` (line ~377). Both do their own
+  `repository.get(AppSetting).all()` rather than going through the memoised
+  accessor, so they also re-query a single-row table FU-560 already cached.
+- **Why deferred:** R-007 — the ask was gating the buy verdict. Both call sites
+  are inside meal-plan reasoning with their own tests; folding them in means
+  re-reading that suite, which is its own piece of work rather than a line in
+  this diff.
+- **Recommended resolution:** opportunistic — next time either meal-plan file is
+  open. Cites **R-003** (one domain fact, one reader) and FU-560.
+
+## [OPEN] FU-758 — `.claude/launch.json` verify configs point at :5170 with `DORA_ALLOW_DESTRUCTIVE=true`
+- **Raised:** 2026-08-27 (buy-verdict money gate)
+- **Type:** finding
+- **What:** all four `dora-verify-backend*` configs bind **port 5170** — the dev
+  backend's port, against the real dev DB — while setting
+  `DORA_ALLOW_DESTRUCTIVE=true`, which drop_alls on boot. The intended isolated
+  verify setup is a **scratch backend on 5171** with the SPA on 5174 (CORS, hash
+  routing, seeded e2e fixture login); an agent following the launch config as
+  written would destroy the dev database instead. This session declined to start
+  a preview for exactly this reason, so the browser pass for the money gate is
+  owed (logged in `DORA_VERIFY.md`).
+- **Why deferred:** it's the owner's local tooling and the safe port/DB pairing
+  is his call — guessing a port and a `DORA_DB_PATH` into a committed config is
+  how the next agent gets a *differently* wrong instance.
+- **Update 2026-08-28 — the safe pairing now exists and is proven, but the four
+  dangerous configs are still there.** The cook-mode session needed a live verify
+  with the owner's backend running on :5170, and added two configs rather than
+  editing his: **`dora-verify-backend-5171-linux`** (`DORA_API_PORT=5171`,
+  `DORA_DB_PATH=data/scratch-verify.db` — gitignored, `DORA_ALLOW_DESTRUCTIVE=true`)
+  and **`dora-spa-5171`** (SPA on 5174 with `VITE_API_BASE_URL` pointed at 5171).
+  Both were driven end to end: fresh DB seeded on boot, login, cook mode at two
+  viewports, screenshots. So the port/DB pairing is no longer a guess. What
+  remains is the owner's call on the **four `dora-verify-backend*` entries that
+  still bind :5170 with destructive mode on** — the footgun is unchanged for
+  anyone who picks one of those by name.
+- **Recommended resolution:** **now-ish** — either point those four at the proven
+  5171 pairing, or delete them in favour of the new pair. One decision, no
+  investigation left to do.
+
 ## [OPEN] FU-757 — "New shopping list → start from a meal plan" still drops unlinked ingredients silently
 - **Raised:** 2026-08-27 (meal-plan add-to-list unification)
 - **Type:** finding
@@ -71,27 +725,6 @@ long session summary. Distinct from the other logs:
 - **Recommended resolution:** opportunistic — fix the one error and add `test` to
   the lint script's paths in the same small change.
 
-## [OPEN] FU-755 — Cook-mode photo steps: reported broken, could not be reproduced
-- **Raised:** 2026-08-27 (owner feedback batch — cook mode)
-- **Type:** finding
-- **What:** Owner reported *"photo steps don't appear, it's just text like 'step 1',
-  and tapping on it shows a broken modal (again just text)."* Two real defects were
-  found and fixed on that surface — `RecipeCookModeImageView` hand-rolled its image
-  URL as a literal `/api/...` instead of going through `recipeStepImageUrl`
-  (R-003), and a failed image degraded to bare `alt` text that reads exactly like
-  "this step is just text". But **neither is proven to be the cause**: driven live,
-  images seeded through the API render correctly in cook mode both before and after
-  the URL change, because the Vite dev server proxies `/api` and hides the missing
-  base. The literal path would only 404 in a **built SPA, the desktop bundle, or a
-  reverse-proxied self-host on a sub-path** — which may well be what the owner was
-  looking at, but that is a hypothesis, not a reproduction.
-- **Why deferred:** the reported state (his own recipe, his own uploaded photos)
-  could not be recreated from the seed, which has no image-mode recipe at all.
-- **Recommended resolution:** confirm in browser — open the *same recipe* that
-  showed the bug. If the photos now render, close this. If they still don't, the
-  new "This step's photo couldn't be loaded" placeholder distinguishes a failed
-  fetch from an empty recipe, and the network tab will name the URL that 404'd.
-
 ## [OPEN] FU-754 — No image-mode or structured-mode recipe in either seed
 - **Raised:** 2026-08-27 (owner feedback batch — cook mode)
 - **Type:** finding
@@ -99,10 +732,15 @@ long session summary. Distinct from the other logs:
   and no step images, in both `seed.py` and `seed_showcase.py`. So cook mode's
   structured and image faces — and the recipe page's editors for them — have no
   fixture at all, and verifying either means hand-building a recipe through the UI
-  or PATCHing one through the API (which is how FU-755 above had to be tested).
-- **Why deferred:** out of scope for the stocktake seed work in this unit, and it
-  wants a considered fixture (a recipe whose *photos* are meaningful) rather than
-  two placeholder pixels.
+  or PATCHing one through the API (which is how FU-755 had to be tested; it is now
+  resolved, in `DORA_FOLLOWUPS_RESOLVED.md`).
+- **Why deferred:** out of scope for the stocktake seed work in the unit that
+  raised it, and it wants a considered fixture (a recipe whose *photos* are
+  meaningful) rather than two placeholder pixels.
+- **Still open after the 2026-08-28 cook-mode rebuild:** verifying the rewritten
+  image face again meant generating five photos and POSTing a recipe through the
+  API against a scratch DB — the third time in two sessions that a seed gap has
+  cost a fixture build. The cost is now demonstrated, not hypothetical.
 - **Recommended resolution:** opportunistic — next time either mode is touched.
   A showcase recipe with real step photos would also be worth having for the demo.
 
@@ -121,20 +759,6 @@ long session summary. Distinct from the other logs:
   R-003 exists to prevent. The right fix is probably to derive the whitelist from
   `units_for_system` rather than to filter it twice.
 - **Recommended resolution:** later, when price-entry is next touched.
-
-## [OPEN] FU-752 — Cook mode's step text is `text-h4` at every viewport
-- **Raised:** 2026-08-27 (owner feedback batch — cook mode mobile pass)
-- **Type:** finding
-- **What:** The header was rebuilt for mobile this unit (identity band that never
-  wraps, headcount control that drops to its own row). The rest of the page was
-  left alone, and the one thing below the header that may still not be right on a
-  phone is the step card: `text-h4` is deliberate (you read it from across the
-  kitchen) but is untested against a long step on a narrow screen.
-- **Why deferred:** the owner's report named the top area specifically, and
-  shrinking cook-mode type is a judgement call about the feature's whole point,
-  not a layout bug.
-- **Recommended resolution:** when the owner next walks cook mode on a phone —
-  if the step card is fine, close this.
 
 ## [OPEN] FU-751 — Firefox TTS improved but not verified on Firefox
 - **Raised:** 2026-08-27 (owner feedback batch — settings/voice)
@@ -221,22 +845,6 @@ Resolved entries carry one extra line, and live in `DORA_FOLLOWUPS_RESOLVED.md`:
   has somewhere to land.
 - **Recommended resolution:** when <someone reports a rating that looks wrong on
   a reduced or watered dish>.
-
-## [OPEN] FU-747 — `RecipeCard` and `RecipeRow` now carry the same rating block twice
-- **Raised:** 2026-08-27 (Health Star Rating build)
-- **Type:** finding.
-- **What:** the cookbook's two views each got the same ~18 lines — the
-  `RecipeHealthStars` call, the judgeable/partial tooltip, and a
-  `--part { opacity: .55 }` rule. The *stars* are shared
-  (`RecipeHealthStars.vue`); the wrapper around them is not. The pre-existing
-  kcal chip has the same duplication, which is how it got missed: the row-only
-  version shipped invisible, because the grid is the cookbook's default view and
-  I only found it by looking (see the worklog).
-- **Why deferred:** extracting a `RecipeRatingChip` is right but touches both
-  views, and doing it in the same pass as the feature would have put an
-  untested refactor under an untested feature.
-- **Recommended resolution:** opportunistic, and ideally together with the kcal
-  chip — one `RecipeSignalChips` for the pair would remove both copies (R-001).
 
 ## [OPEN] FU-746 — The AU/NZ Health Star Rating nudge has no automated cover
 - **Raised:** 2026-08-27 (Health Star Rating build)
@@ -1128,6 +1736,14 @@ Resolved entries carry one extra line, and live in `DORA_FOLLOWUPS_RESOLVED.md`:
   down a step) or earns a new `--font-size-md-plus` ratio, then change both
   declarations in the same commit. Check any other `.…__name` in a list row for
   the same value while there.
+- **2026-08-30 update — a third site was AVOIDED, not created.** The meal
+  planner's new rail row (`MealPlanRecipeRow.vue`, Unit 2 of the rail brief)
+  would have been the third `.…__name` at `1.05rem`; the brief's §4.5 asked for
+  a decision either way and the recommendation was to tokenise. It uses
+  `--font-size-md`, on the grounds that a 280px rail is not where a 0.05rem
+  parity with a full-width stock row is legible. So the pair described above is
+  unchanged and still has to move together — but the rail is already on the
+  scale and must NOT be "brought back into line" with them if they stay raw.
 - **Recommended resolution:** opportunistic — pairs with the next design-
   remediation chunk, or with [[FU-691]] since both are D-rule type/token drift.
 

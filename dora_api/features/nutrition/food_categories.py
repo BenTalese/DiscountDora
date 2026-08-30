@@ -66,3 +66,40 @@ def is_fvnl_category(description: Optional[str]) -> bool:
     """
     normalised = normalise_category(description)
     return normalised is not None and normalised.lower() in FVNL_CATEGORIES
+
+
+# The categories that count toward the **Nutri-Score** positive component, per
+# the Updated Algorithm (2023). Deliberately a separate set rather than a
+# derived one, because the difference is a published decision and not a tweak:
+#
+#   * **Nuts and seeds are excluded.** The 2023 update moved them out of the
+#     general-foods positive component into their own calculation category.
+#     They still count toward the *denominator* — a dish is not made smaller by
+#     containing nuts — so this predicate only narrows the numerator. The FAQ's
+#     own worked example puts numbers on it: cherries + raisins + nuts + other
+#     is 46% under the original algorithm and 37% under the updated one,
+#     entirely because 15 g of nuts changed sides.
+#   * **Spices and herbs are excluded**, where HSR includes them. The HSR guide
+#     names "spices, herbs" in the component outright; Nutri-Score instead
+#     defines the component by an explicit Eurocode 2 food list (FAQ Appendix
+#     2) in which culinary herbs appear individually under leaf vegetables,
+#     with no blanket entry for the seasoning aisle. USDA's "Spices and Herbs"
+#     category is dominated by things used in trace amounts, so the practical
+#     effect is small either way, and excluding is the conservative reading.
+FVL_CATEGORIES: frozenset[str] = frozenset({
+    "fruits and fruit juices",
+    "vegetables and vegetable products",
+    "legumes and legume products",
+})
+
+
+def is_fvl_category(description: Optional[str]) -> bool:
+    """Whether a food in this category counts toward the Nutri-Score fvl
+    percentage.
+
+    Same conservative treatment of an unknown category as `is_fvnl_category`,
+    and the same reason. **Not interchangeable with it** — see `FVL_CATEGORIES`
+    for what the two published methods disagree about.
+    """
+    normalised = normalise_category(description)
+    return normalised is not None and normalised.lower() in FVL_CATEGORIES

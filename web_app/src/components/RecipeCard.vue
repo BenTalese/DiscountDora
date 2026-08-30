@@ -5,7 +5,12 @@
         class="recipe-card cursor-pointer column no-wrap"
         @click="onCardClick"
     >
-        <div v-if="showImage" class="recipe-card__media" :style="mediaStyle">
+        <!-- Unconditional since 2026-08-29: a card IS the with-photos shape.
+             The `showImage` prop existed only so a caller could pass the
+             per-user `show_recipe_images` preference instead; that preference
+             is cut, both callers were passing `true`, and the density choice
+             on the cookbook is the cards/compact switch. -->
+        <div class="recipe-card__media" :style="mediaStyle">
             <img
                 v-if="recipe.has_image && !imgFailed"
                 class="recipe-card__img"
@@ -49,42 +54,25 @@
                 <q-chip v-if="recipe.difficulty" dense :icon="ICONS.difficulty">
                     {{ recipe.difficulty }}
                 </q-chip>
-                <!-- Health Star Rating (owner ask 2026-08-27), beside the
-                     kcal chip it qualifies. Bare stars rather than a chip:
-                     this row is already a run of chips, and the one thing
-                     meant to be scannable across a grid shouldn't look like
-                     another fact box. -->
-                <span
-                    v-if="rating"
-                    class="recipe-card__hsr"
-                    :class="{ 'recipe-card__hsr--part': !ratingJudgeable }"
-                >
-                    <RecipeHealthStars
-                        :stars="rating.stars"
-                        size="sm"
-                        :show-value="false"
-                        :qualifier="ratingJudgeable ? 'estimated' : 'estimated from part of the recipe'"
-                    />
-                    <q-tooltip>
-                        Health Star Rating {{ rating.stars.toFixed(1) }} of 5{{
-                            ratingJudgeable
-                                ? ''
-                                : ' — worked out from only part of this recipe'
-                        }}
-                    </q-tooltip>
-                </span>
                 <!-- FU-637 — kcal per serving while you're choosing, which is
-                     where it's actually useful. A thin complex-mode estimate
-                     still shows (hiding it would be its own kind of lie) but
-                     says so, rather than passing for a solid figure. -->
+                     where it's actually useful. Sits directly after difficulty
+                     (owner 2026-08-28): both are one-word judgements of the
+                     dish rather than counts of its parts.
+                     A thin complex-mode estimate still shows (hiding it would
+                     be its own kind of lie) but is marked with an asterisk
+                     rather than switched to an outline chip — the outline made
+                     it the one chip in the run that looked like a different
+                     species, which is what the owner reported. -->
                 <q-chip
                     v-if="kcal.value !== null"
                     dense
                     :icon="ICONS.monitor_heart"
-                    :outline="!kcal.judgeable"
                 >
-                    {{ Math.round(kcal.value) }} kcal
-                    <span v-if="!kcal.judgeable" class="q-ml-xs">(part)</span>
+                    {{ Math.round(kcal.value) }} kcal<span
+                        v-if="!kcal.judgeable"
+                        class="recipe-card__part"
+                        aria-hidden="true"
+                    >*</span>
                     <q-tooltip v-if="!kcal.judgeable">
                         Worked out from only part of this recipe — open it to
                         see what's missing.
@@ -148,6 +136,14 @@
         <q-space />
         <q-separator />
         <q-card-actions class="row items-center no-wrap q-px-sm">
+            <!-- The install's front-of-pack rating (owner ask 2026-08-27),
+                 moved out of the chip run and next to the favourite button
+                 2026-08-28. Two reasons: in the chip run it landed at a
+                 different x on every card, because the chips before it vary
+                 per recipe — so the one figure meant to be scannable *down* a
+                 grid never lined up. Here it does, and it reads as the
+                 card's verdict rather than one more fact about it. -->
+            <RecipeRatingChip :recipe="recipe" class="q-mr-xs" />
             <BaseButton
                 variant="icon"
                 :icon="recipe.is_favourite ? ICONS.favorite : ICONS.favorite_border"
@@ -191,12 +187,11 @@
 <script lang="ts" setup>
     import BaseButton from 'src/components/BaseButton.vue';
     import ExpiringChip from 'src/components/recipes/ExpiringChip.vue';
-    import RecipeHealthStars from 'src/components/recipes/RecipeHealthStars.vue';
-    import { useHealthStarRating } from 'src/composables/useHealthStarRating';
+    import RecipeRatingChip from 'src/components/recipes/RecipeRatingChip.vue';
     import { ICONS } from 'src/style/icons';
     import type { Recipe } from 'src/models/recipe';
     import { useRecipeDisplay } from 'src/composables/useRecipeDisplay';
-    import { computed, ref } from 'vue';
+    import { ref } from 'vue';
 
     const props = withDefaults(
         defineProps<{
@@ -212,14 +207,6 @@
              *  "Recipes using this" tab so the user can jump from a
              *  recipe back to the rest of its pantry footprint. */
             showFilterByIngredients?: boolean;
-            /** Render the photo strip. Owner call 2026-08-18 merged the
-             *  cookbook's "show/hide photos" toggle into its cards/compact
-             *  view switch, so the cookbook now passes `true` unconditionally
-             *  (a card IS the with-photos shape) while other surfaces pass the
-             *  user's `show_recipe_images` preference. Explicit prop rather
-             *  than reading the preference in here, so a call site can't be
-             *  surprised by which of the two rules it gets. */
-            showImage: boolean;
         }>(),
         {
             showExpiringBadge: false,
@@ -246,13 +233,6 @@
         cookable, cookButtonColor, cookButtonTooltip, addListTooltip,
         inferenceTooltip, initial, mediaStyle, imageUrl,
     } = useRecipeDisplay(() => props.recipe);
-
-    // Same source as the compact row's stars — the list rollup that already
-    // runs for the whole page (R-003), so the grid costs nothing extra.
-    const { ratingAvailable, ratingOf } = useHealthStarRating();
-    const rating = computed(() =>
-        (ratingAvailable.value ? ratingOf(props.recipe).rating : null));
-    const ratingJudgeable = computed(() => ratingOf(props.recipe).judgeable);
 
     function onAddToList() {
         if (cookable.value) {
@@ -283,6 +263,12 @@
     .recipe-card:hover {
         box-shadow: var(--elevation-card-hover);
         transform: translateY(-1px);
+    }
+    /* Marks a figure worked out from only part of the recipe. Matches the
+       rating pill's asterisk so both caveats read as the same claim. */
+    .recipe-card__part {
+        margin-left: 2px;
+        color: var(--text-secondary);
     }
     .recipe-card__media {
         position: relative;
@@ -323,6 +309,4 @@
 
     /* Mirrors `.recipe-row__hsr`: a partial rating dims rather than gaining a
        "(part)" suffix, because the stars still have to read as stars. */
-    .recipe-card__hsr { display: inline-flex; align-items: center; }
-    .recipe-card__hsr--part { opacity: 0.55; }
 </style>

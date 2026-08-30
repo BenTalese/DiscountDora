@@ -54,6 +54,45 @@ body {
     bottom: calc(env(safe-area-inset-bottom, 0px) + 112px);
 }
 
+// B7 / D-002 — the `info` toast kind (registered in `boot/notifyTypeRegistration`).
+//
+// Toasts are teleported to <body>, so like the rule above this has to be
+// global; and because the registered type deliberately passes no `color`,
+// Quasar emits no `bg-*` class and `.q-notification`'s own #323232 default
+// would show through. `.q-notification` is one class, so this selector wins
+// on specificity without `!important`.
+//
+// Neutral by spec: success and error carry a semantic fill because the colour
+// *is* the message, but "Swap undone." is not an alarm — info gets the plain
+// elevated surface every other panel in Dora uses, with `--semantic-info`
+// spent only on the icon and a 3px spine. Everything here is a token, so all
+// ten themes (and any future one) are covered without touching this file.
+.q-notification.dora-toast--info {
+    background: var(--surface-elevated);
+    color: var(--text-primary);
+    border-left: 3px solid var(--semantic-info);
+    border-radius: var(--radius-md);
+    box-shadow: var(--elevation-2);
+
+    .q-notification__icon {
+        color: var(--semantic-info);
+    }
+
+    // The progress bar inherits `currentColor`, which is now `--text-primary`
+    // — a near-black bar under a quiet toast. Tie it to the same accent as the
+    // spine instead. (Quasar keeps it at `opacity: .3`, so this reads as a
+    // tint, and its `z-index: -1` paints it above this background but below
+    // the message, which is what we want.)
+    .q-notification__progress {
+        background: var(--semantic-info);
+    }
+
+    // Action buttons are deliberately not restyled: Quasar already sets
+    // `.q-notification__actions { color: var(--q-primary) }`, and
+    // `themeService` keeps `--q-primary` on the active theme — so an override
+    // here would be a second copy of a value that already follows the theme.
+}
+
 // FU-025 — the sibling of the Quasar SCSS-var overrides in
 // `quasar.variables.scss`. Quasar computes `$field-with-bottom-padding-bottom`
 // and `$bar-dense-height` from these font-size vars via `+ 10px` / `+ 8px`

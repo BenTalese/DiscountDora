@@ -55,6 +55,7 @@ from dora_api.domain.entities.stock_level import StockLevel
 from dora_api.domain.stock_status import (
     is_low_stock, is_out_of_stock,
 )
+from dora_api.features.app_settings.access import money_features_enabled
 from dora_api.features.app_settings.clock import (
     household_timezone, household_today,
 )
@@ -64,12 +65,26 @@ from dora_api.features.stock_items._level_access import resolve_levels_by_item
 from dora_api.features.stock_items.pantry_belief import (
     PantryBelief, gather_beliefs_for_items,
 )
-from dora_api.infrastructure.api_response import not_found, ok
+from dora_api.infrastructure.api_response import forbidden, not_found, ok
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 
 
 _LOGGER = logging.getLogger(__name__)
+
+# Money is a prerequisite for the whole verdict surface, not a per-reason
+# suppression (owner call 2026-08-27). Two of the three axes are price-driven:
+# `_price_axis` reasons entirely in money, and the `wait` direction is only
+# reachable via `above_usual` / `fake_markdown`. With money off, what's left is
+# need + waste — which `PantryBeliefCard` and `stock_attention` already say, in
+# the same words. So an install with money off gets no verdict at all rather
+# than a dollar-branded restatement of its neighbour whose strength is still
+# being silently modulated by price data the household opted out of.
+#
+# Shared with `get_list_buy_verdicts`, which gates identically.
+MONEY_DISABLED_DETAIL = (
+    "Buy verdicts need money features, which are turned off for this install."
+)
 
 
 def _as_utc(dt: datetime | None) -> datetime | None:
@@ -148,6 +163,15 @@ class VerdictReasonDto:
     signal: str    # see PROPOSAL §2.3
     label: str
     detail: Optional[str] = None
+    # The two money amounts a price-axis detail line is about, unformatted.
+    # The server never formats currency (D-006): it emits raw numbers and the
+    # SPA renders them through `formatMoney`, so the install's currency +
+    # locale apply. These used to be baked into `detail` as a hardcoded
+    # `f"${x:.2f}"`, which rendered a dollar sign to a household on EUR.
+    # Set only by `_price_axis`; every other axis leaves them None and uses
+    # `detail` for its prose.
+    amount_last: Optional[float] = None
+    amount_usual: Optional[float] = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -274,25 +298,32 @@ def _price_axis(inputs: _AxisInputs) -> tuple[Optional[VerdictReasonDto], str]:
     recent = [p for p, ts in samples if ts >= horizon]
     recent_min = min(recent) if recent else last_price
 
+    # Every branch carries the same two amounts; only the label differs. They
+    # travel as numbers, not prose — see `VerdictReasonDto.amount_last`.
+    amounts = {
+        "amount_last": round(last_price, 2),
+        "amount_usual": round(usual, 2),
+    }
+
     if last_price <= _CHEAP_BAND_FRACTION * usual and last_price <= recent_min:
         return VerdictReasonDto(
             axis="price",
             signal="cheapest_3mo",
             label="Cheapest you've paid in 3 months",
-            detail=f"${last_price:.2f} last shop · usually ${usual:.2f}",
+            **amounts,
         ), "cheapest_3mo"
     if last_price >= _ABOVE_BAND_FRACTION * usual:
         return VerdictReasonDto(
             axis="price",
             signal="above_usual",
             label="Above your usual price",
-            detail=f"${last_price:.2f} last shop · usually ${usual:.2f}",
+            **amounts,
         ), "above_usual"
     return VerdictReasonDto(
         axis="price",
         signal="usual_price",
         label="Usual price",
-        detail=f"${last_price:.2f} last shop · usually ${usual:.2f}",
+        **amounts,
     ), "usual_price"
 
 
@@ -806,6 +837,8 @@ def _items_with_fake_markdown(
 @STOCK_ITEM_ROUTER.route("/<uuid:stock_item_id>/buy-verdict", methods=["GET"])
 def get_buy_verdict(stock_item_id: UUID):
     repo = SqlAlchemyRepository()
+    if not money_features_enabled(repo):
+        return forbidden(MONEY_DISABLED_DETAIL)
     # No `.include(STOCK_LEVEL)` here: the gather resolves the recorded level
     # by foreign key (`_level_access`) because the include doesn't reliably
     # hydrate it, which is what made this endpoint answer `unsure/low` for

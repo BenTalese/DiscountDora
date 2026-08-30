@@ -6,7 +6,10 @@ endpoint exists so the admin page can show and edit them.
 import logging
 from dataclasses import dataclass
 
-from dora_api.domain.entities.app_setting import NUTRITION_MODE_OFF
+from dora_api.domain.entities.app_setting import (
+    NUTRITION_MODE_OFF,
+    RATING_SCHEME_NONE,
+)
 from dora_api.features.app_settings.access import get_or_create_app_setting
 from dora_api.features.routers import APP_SETTINGS_ROUTER
 from dora_api.features.users.update_user_as_admin import _require_admin
@@ -17,7 +20,7 @@ from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 @dataclass(frozen=True, slots=True)
 class AppSettingsDto:
     scanning_enabled: bool
-    health_star_rating_enabled: bool
+    nutrition_rating_scheme: str
     # buy-verdict oracle toggle.
     # C-cross Chunk 1 — install-wide feature flags (proposal §2.6).
     meal_planning_enabled: bool
@@ -94,8 +97,9 @@ class AppSettingsDto:
 def _to_dto(setting) -> AppSettingsDto:  # noqa: ANN001 — duck-typed AppSetting
     return AppSettingsDto(
         scanning_enabled=bool(setting.scanning_enabled),
-        health_star_rating_enabled=bool(
-            getattr(setting, "health_star_rating_enabled", False)),
+        nutrition_rating_scheme=str(
+            getattr(setting, "nutrition_rating_scheme", RATING_SCHEME_NONE)
+            or RATING_SCHEME_NONE),
         meal_planning_enabled=bool(setting.meal_planning_enabled),
         money_enabled=bool(setting.money_enabled),
         companion_ingestion_enabled=bool(setting.companion_ingestion_enabled),

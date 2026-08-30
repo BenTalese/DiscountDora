@@ -9,7 +9,10 @@ from dataclasses import dataclass
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from dora_api.domain.entities.app_setting import NUTRITION_MODE_VALUES
+from dora_api.domain.entities.app_setting import (
+    NUTRITION_MODE_VALUES,
+    RATING_SCHEME_VALUES,
+)
 from dora_api.features.app_settings.access import get_or_create_app_setting
 from dora_api.features.app_settings.clock import is_valid_timezone
 from dora_api.features.app_settings.get_app_settings import AppSettingsDto, _to_dto
@@ -26,7 +29,10 @@ class UpdateAppSettingsRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     scanning_enabled: bool | None = None
-    health_star_rating_enabled: bool | None = None
+    # Closed set; validated in the handler against RATING_SCHEME_VALUES so the
+    # rejection message can name the options (R-010 carve-out, as per
+    # nutrition_mode).
+    nutrition_rating_scheme: str | None = None
     # `buy_verdict_enabled` left this request on 2026-08-19 (D-12) — it is a
     # per-user display preference now, patched via PATCH /auth/me. `extra=forbid`
     # means an old client still sending it here gets a 4xx rather than a silent
@@ -137,9 +143,17 @@ class UpdateAppSettingsHandler:
 
         if "scanning_enabled" in set_fields and request.scanning_enabled is not None:
             setting.scanning_enabled = request.scanning_enabled
-        if ("health_star_rating_enabled" in set_fields
-                and request.health_star_rating_enabled is not None):
-            setting.health_star_rating_enabled = request.health_star_rating_enabled
+        if ("nutrition_rating_scheme" in set_fields
+                and request.nutrition_rating_scheme is not None):
+            _Scheme = request.nutrition_rating_scheme.strip().lower()
+            if _Scheme not in RATING_SCHEME_VALUES:
+                return UpdateAppSettingsResponse(
+                    invalid_reason=(
+                        f"'{request.nutrition_rating_scheme}' is not a nutrition "
+                        f"rating scheme. Supported: {sorted(RATING_SCHEME_VALUES)}."
+                    ),
+                )
+            setting.nutrition_rating_scheme = _Scheme
         # C-cross Chunk 1 — install feature flags. Partial-update semantics
         # like every other field above: only fields present in the body
         # change; the rest are left alone.

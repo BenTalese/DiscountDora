@@ -4,13 +4,22 @@
          the chip's *state* flips, which is the bit that matters on a filter bar
          where several chips look similar and only the tone tells them apart.
          Both ride motion.scss tokens, so reduced-motion flattens them. -->
+    <!-- B2a — a chip that can't be chosen stays in place, disabled, rather than
+         vanishing: a row that reflows as options drop away costs the user their
+         spatial memory of where a control was. `aria-pressed` is explicit
+         because a q-chip is a div, so nothing announces its on/off state
+         otherwise. -->
     <q-chip
-        clickable
+        :clickable="!disabled"
         outline
-        :class="['dora-press', toggleFeedback]"
+        :class="['dora-press', toggleFeedback, { 'filter-chip--disabled': disabled }]"
         :selected="modelValue"
+        :disable="disabled"
         :style="modelValue ? { color: activeToneColour } : undefined"
-        @click="emit('update:modelValue', !modelValue)"
+        role="button"
+        :aria-pressed="modelValue ? 'true' : 'false'"
+        :aria-disabled="disabled ? 'true' : undefined"
+        @click="!disabled && emit('update:modelValue', !modelValue)"
     >
         <q-icon v-if="icon" :name="icon" size="14px" class="q-mr-xs" />
         <slot />
@@ -28,11 +37,16 @@
         | 'negative'
         | 'warning';
 
-    const props = defineProps<{
-        modelValue: boolean;
-        icon?: string;
-        activeColor?: ActiveTone;
-    }>();
+    const props = withDefaults(
+        defineProps<{
+            modelValue: boolean;
+            icon?: string | undefined;
+            activeColor?: ActiveTone | undefined;
+            /** B2a — render in place but unusable, instead of being removed. */
+            disabled?: boolean;
+        }>(),
+        { disabled: false },
+    );
 
     const emit = defineEmits<{
         (e: 'update:modelValue', value: boolean): void;
@@ -61,3 +75,13 @@
 
     const toggleFeedback = useMicroFeedback(() => props.modelValue, 'bump');
 </script>
+
+<style scoped>
+    /* Quasar's `disable` already drops opacity and blocks pointer events; this
+       only restores a cursor that says "not this one" rather than the default
+       arrow, so a disabled chip is distinguishable on hover as well as by tone
+       (D-016 asks for the full state set). */
+    .filter-chip--disabled {
+        cursor: not-allowed;
+    }
+</style>

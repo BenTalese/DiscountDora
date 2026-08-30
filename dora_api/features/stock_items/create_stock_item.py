@@ -40,6 +40,14 @@ class CreateStockItemRequest(BaseModel):
     expiry_date: date | None = None
     is_essential: bool = False
     is_open: bool = False
+    # Per-item stocktake mute, settable at create time (2026-08-28 feedback).
+    # Tri-state on purpose: omitted ⇒ the handler falls back to the install-wide
+    # `stocktake_new_items_opt_in` default, so a caller that doesn't render the
+    # toggle (the import path, a scan flow) keeps the previous behaviour.
+    stocktake_alerts_are_enabled: bool | None = None
+    # usual store hint. No clear flag needed — a create has nothing
+    # to clear, so omitted/None both mean "no usual store".
+    usual_store_id: UUID | None = None
 
     # Normalise the name at the request boundary: strip surrounding whitespace
     # BEFORE the length checks run, so a whitespace-only name ("   ") collapses
@@ -97,12 +105,18 @@ class CreateStockItemHandler:
         if _ExistingStockItem:
             return CreateStockItemResponse(stock_item_already_exists=True)
 
-        # 2026-08-20 — install-wide default for the per-item mute flag.
-        _StocktakeOptIn = bool(getattr(
-            get_or_create_app_setting(self.repository),
-            "stocktake_new_items_opt_in",
-            True,
-        ))
+        # 2026-08-20 — install-wide default for the per-item mute flag. An
+        # explicit value on the request wins (the create dialog's Stocktake
+        # toggle, 2026-08-28); omitted still falls back to the install default.
+        _StocktakeOptIn = (
+            request.stocktake_alerts_are_enabled
+            if request.stocktake_alerts_are_enabled is not None
+            else bool(getattr(
+                get_or_create_app_setting(self.repository),
+                "stocktake_new_items_opt_in",
+                True,
+            ))
+        )
 
         # PROPOSAL_STOCKTAKE_MODE — per-item cadence is no longer a stored
         # field; the queue resolves it from the household default band +
@@ -130,6 +144,11 @@ class CreateStockItemHandler:
             expiry_date = request.expiry_date,
             is_essential = request.is_essential,
             is_open = request.is_open,
+            # usual store hint. Not re-validated here for the same reason
+            # `update_stock_item` doesn't: the FK is SET NULL ondelete, so a
+            # stale id degrades to "no usual store" rather than breaking the
+            # item, and the picker only ever offers real rows.
+            usual_store_id = request.usual_store_id,
             # R-021 — opened_on is the household calendar day, not server-local.
             opened_on = household_today(self.repository) if request.is_open else None,
         )

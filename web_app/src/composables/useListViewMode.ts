@@ -12,9 +12,10 @@ export type ListViewMode = 'grid' | 'compact';
 // which persists the same way for the same reason.
 //
 // Deliberately NOT a per-user server setting: it's a device-shaped
-// choice (a phone and a desktop reasonably want different answers), and
-// `show_recipe_images` — which is a genuine cross-device preference —
-// stays where it is on /api/users/me.
+// choice (a phone and a desktop reasonably want different answers).
+// Since 2026-08-29 it is also the *only* photo-density control the
+// cookbook has — the `show_recipe_images` preference it used to sit
+// beside is cut.
 export function useListViewMode(pageKey: string, fallback: ListViewMode = 'grid') {
     const storageKey = `dora.listView.${pageKey}`;
 

@@ -23,6 +23,8 @@ import logging
 import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from functools import lru_cache
+from pathlib import Path
 from typing import Iterable
 from urllib.parse import urlparse
 from uuid import UUID
@@ -86,9 +88,80 @@ QR_MIN_SIZE = 64
 # inlined data: URIs stays a sane page weight, large enough to scan reliably.
 QR_SHEET_CELL_SIZE = 180
 
+# ── Centre mark ──────────────────────────────────────────────────────────
+# The D/D wordmark sitting in the middle of every Dora QR. This works only
+# because Reed-Solomon error correction lets a decoder rebuild modules the
+# mark covers: at ERROR_CORRECT_H roughly 30% of the codewords are
+# recoverable, so a mark well under that budget is read back byte-identical.
+# Hence the bump from _M (~15%) below — _M leaves too little headroom once a
+# real-world label is also scuffed, printed slightly off, or read at an angle.
+#
+# The asset is `assets/dora_qr_mark.png`: the same monochrome wordmark the SPA
+# ships as its Safari pinned-tab icon, rasterised once and cropped to its ink
+# so the sizing below is about the glyph rather than the SVG's viewBox padding.
+# Rasterised rather than rendered from SVG at runtime because Pillow has no
+# SVG support and the alternative is a new native dependency (cairo) in the
+# container for one static image.
+_MARK_PATH = Path(__file__).resolve().parents[2] / "assets" / "dora_qr_mark.png"
+
+# Mark width as a fraction of the QR's edge. The mark is ~2.5:1, so 0.26 wide
+# is ~0.105 tall — together with the quiet ring below that is ~5% of the
+# code's area against H's ~30% budget. Deliberately conservative: the budget
+# is shared with whatever damage the physical label picks up later.
+_MARK_WIDTH_RATIO = 0.26
+# White ring around the mark, as a fraction of the QR's edge. Without it the
+# glyph merges into any dark module it happens to abut and the decoder sees
+# one large blob rather than a clean erasure.
+_MARK_PAD_RATIO = 0.02
+# Below this edge length the mark is skipped entirely. At 64px (QR_MIN_SIZE)
+# the wordmark is ~17px wide — unreadable as a logo, and pure lost budget.
+_MARK_MIN_SIZE = 120
+
 
 def _qr_payload_for_item(stock_item_id: UUID) -> str:
     return f"{DORA_SCHEME_PREFIX}{stock_item_id}"
+
+
+@lru_cache(maxsize=1)
+def _mark_image():
+    """The D/D mark as RGBA, loaded once. Returns None if the asset is
+    missing so a packaging slip degrades to a plain QR rather than a 500 —
+    the code still scans; it just isn't branded."""
+    from PIL import Image
+    try:
+        with Image.open(_MARK_PATH) as raw:
+            return raw.convert("RGBA")
+    except OSError:
+        _Logger = logging.getLogger(__name__)
+        _Logger.warning("QR centre mark not readable at %s — rendering unbranded.", _MARK_PATH)
+        return None
+
+
+def _paste_centre_mark(pil, size: int) -> None:
+    """Composite the D/D wordmark into the middle of an RGB QR, in place."""
+    from PIL import Image, ImageDraw
+
+    mark = _mark_image()
+    if mark is None:
+        return
+
+    mark_w = max(1, round(size * _MARK_WIDTH_RATIO))
+    mark_h = max(1, round(mark_w * mark.height / mark.width))
+    pad = max(1, round(size * _MARK_PAD_RATIO))
+
+    # Knock out a white rectangle first, then lay the glyph inside it. Doing
+    # it in this order means the ring is genuinely blank rather than
+    # semi-transparent over dark modules.
+    box_w, box_h = mark_w + pad * 2, mark_h + pad * 2
+    left, top = (size - box_w) // 2, (size - box_h) // 2
+    ImageDraw.Draw(pil).rectangle(
+        [left, top, left + box_w - 1, top + box_h - 1], fill="white",
+    )
+
+    # LANCZOS here, unlike the NEAREST used for the matrix: the mark is
+    # curved artwork, and nearest-neighbour would alias its bowls badly.
+    scaled = mark.resize((mark_w, mark_h), Image.LANCZOS)
+    pil.paste(scaled, (left + pad, top + pad), scaled)
 
 
 def _render_qr_png(payload: str, size: int) -> bytes:
@@ -99,7 +172,7 @@ def _render_qr_png(payload: str, size: int) -> bytes:
     # scannable when surrounded by other ink.
     qr = qrcode.QRCode(
         version=None,
-        error_correction=qrcode.constants.ERROR_CORRECT_M,
+        error_correction=qrcode.constants.ERROR_CORRECT_H,
         box_size=10,
         border=2,
     )
@@ -112,6 +185,11 @@ def _render_qr_png(payload: str, size: int) -> bytes:
     pil = img.convert("RGB")
     if pil.size != (size, size):
         pil = pil.resize((size, size), Image.NEAREST)
+    # After the resize, so the mark is sized against the edge length the
+    # caller actually asked for and never picks up the matrix's NEAREST
+    # rescale.
+    if size >= _MARK_MIN_SIZE:
+        _paste_centre_mark(pil, size)
     buffer = io.BytesIO()
     pil.save(buffer, format="PNG")
     return buffer.getvalue()

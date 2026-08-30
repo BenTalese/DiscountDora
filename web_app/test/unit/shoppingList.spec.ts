@@ -58,6 +58,8 @@ function line(overrides: Partial<ShoppingListLine> = {}): ShoppingListLine {
         actual_unit_price: null,
         purchased_store_id: null,
         purchased_store_name: null,
+        planned_store_id: null,
+        planned_store_name: null,
         prefill_unit_price: null,
         prefill_source_label: null,
         offers: [],

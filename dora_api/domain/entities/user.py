@@ -230,14 +230,13 @@ class User(BaseEntity):
     inference_recipes_enabled: bool = False
     inference_shopping_enabled: bool = False
     inference_meal_plan_enabled: bool = False
-    # C-cross Chunk 5 — per-user image-display opt-in (proposal §2.8).
-    # **Default True** — Charter P1 Effortless leans toward visual
-    # richness; users who prefer a text-only UI flip it via the inline
-    # button on the recipes overview. Image upload/edit/delete keeps
-    # working regardless; only the *render* is suppressed. FU-508
-    # dropped the stock-image half of this pair (photos of pantry items
-    # were never meaningfully used; a linked Product carries the visual).
-    show_recipe_images: bool = True
+    # `show_recipe_images` removed 2026-08-29. The C-cross Chunk 5 opt-in
+    # was designed to govern every recipe photo in the app so a user could
+    # run a text-dense, low-bandwidth UI; FU-508 dropped its stock-image
+    # half, the cookbook's cards/compact switch took photos over there, and
+    # cook mode / print / the planner rail never honoured it — leaving one
+    # hero image, behind a toggle that swapped it for a same-sized "Photo
+    # hidden" box. See ADR-062.
     # FU-615 — `household_headcount` moved to AppSetting (install-wide;
     # a household has one headcount). Cook mode reads it via /api/health.
     # (No alerts-email fields — the digest was cut at Step-0 Q4,
@@ -325,7 +324,6 @@ class User(BaseEntity):
         INFERENCE_RECIPES_ENABLED = "inference_recipes_enabled"
         INFERENCE_SHOPPING_ENABLED = "inference_shopping_enabled"
         INFERENCE_MEAL_PLAN_ENABLED = "inference_meal_plan_enabled"
-        SHOW_RECIPE_IMAGES = "show_recipe_images"
         IMAGE = "image"
         DASHBOARD_LAYOUT = "dashboard_layout"
         LLM_ENABLED = "llm_enabled"

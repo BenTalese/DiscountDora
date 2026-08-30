@@ -141,12 +141,14 @@
         </q-card>
 
         <!-- Where the money went. Same card as the plan face, past tense —
-             the numbers are the same aggregate, only the trip has happened. -->
+             the numbers are the same aggregate, only the trip has happened.
+             Collapsible on every width now, and starting closed on every width:
+             it used to open expanded above `md`, which was the app's one
+             disclosure that didn't (FU-783). -->
         <StoreSpendCard
             class="q-mt-sm"
             tense="receipt"
             :buckets="detail.totals.by_store"
-            :collapsible="$q.screen.lt.md"
         />
     </div>
 </template>
@@ -166,7 +168,6 @@
      * the default state of a historical record is "you cannot fat-finger it".
      */
     import { computed } from 'vue';
-    import { useQuasar } from 'quasar';
     import { ICONS } from 'src/style/icons';
     import BaseButton from 'src/components/BaseButton.vue';
     import StoreSpendCard from 'src/components/shoppingList/StoreSpendCard.vue';
@@ -187,7 +188,6 @@
         'adjust-quantity': [line: ShoppingListLine, delta: number];
     }>();
 
-    const $q = useQuasar();
     const { moneyEnabled } = useMoneyEnabled();
 
     // Deferred-by-budget lines are not part of the active list and the server's

@@ -29,6 +29,37 @@ NUTRITION_MODE_VALUES = (
     NUTRITION_MODE_COMPLEX,
 )
 
+# Which front-of-pack nutrition rating, if any, this install puts on recipes
+# (owner call 2026-08-27). Same R-010 carve-out shape as the nutrition mode
+# above: closed-set string sentinel, one validation point, named constants at
+# every read.
+#
+#   none         — no rating anywhere. The default.
+#   health_star  — the Australian/New Zealand Health Star Rating (FSANZ),
+#                  0.5–5 stars. See `domain/health_star_rating.py`.
+#   nutri_score  — the European Nutri-Score, updated (2023) algorithm, A–E.
+#                  See `domain/nutri_score.py`.
+#
+# **Deliberately one choice rather than a set.** Both schemes answer the same
+# question with different national arithmetic, and two competing verdicts on
+# one recipe card is a worse product than either alone — the reader's next
+# question becomes "which do I believe?", which Dora cannot answer for them.
+# Charter Anti-creep tiebreak.
+#
+# `none` is the default for every install, including Australian ones. Neither
+# scheme is a universal fact about food, and Dora does not pick a nutritional
+# authority on a household's behalf at install time; Settings' "Match this
+# device" offers the locally-recognised one and the picker takes any of them
+# anywhere.
+RATING_SCHEME_NONE = "none"
+RATING_SCHEME_HEALTH_STAR = "health_star"
+RATING_SCHEME_NUTRI_SCORE = "nutri_score"
+RATING_SCHEME_VALUES = (
+    RATING_SCHEME_NONE,
+    RATING_SCHEME_HEALTH_STAR,
+    RATING_SCHEME_NUTRI_SCORE,
+)
+
 
 @dataclass
 class AppSetting(BaseEntity):
@@ -51,20 +82,19 @@ class AppSetting(BaseEntity):
     # call 2026-08-12 — "allow users to use AI if they wish"). Per-user
     # URL / model / provider / API key live on User (see entity below).
     scanning_enabled: bool = False
-    # Owner ask 2026-08-27 — the Health Star Rating on recipes.
+    # Owner ask 2026-08-27 — which front-of-pack rating goes on recipes.
     #
-    # Off everywhere by default, deliberately: HSR is an Australian/New Zealand
-    # government scheme, and an install in another country should not be shown
-    # a national rating as though it were universal. The nudge is the other
-    # half of that call — Settings' "Match this device" offers to switch it on
-    # when the detected locale is AU or NZ, so the people it was designed for
-    # get it without hunting, and everyone else is left alone.
+    # Started life as `health_star_rating_enabled`, a bool. It became a picker
+    # the same week, because a boolean could only ever mean "the Australian one
+    # or nothing", which read to everyone else as "this feature is not for
+    # you". See `RATING_SCHEME_VALUES` for the options and why only one may be
+    # active at a time.
     #
-    # It also needs `nutrition_mode == complex` to produce anything: a rating
-    # is computed from the foods the ingredients link to, and simple mode has
-    # only a typed kcal. The flag being on with nutrition in simple mode is a
-    # no-op, not an error.
-    health_star_rating_enabled: bool = False
+    # Whichever scheme is chosen also needs `nutrition_mode == complex` to
+    # produce anything: a rating is computed from the foods the ingredients
+    # link to, and simple mode has only a typed kcal. A scheme selected while
+    # nutrition is in simple mode is a no-op, not an error.
+    nutrition_rating_scheme: str = RATING_SCHEME_NONE
     # buy-verdict oracle ("should I buy this?"). Defaults **on**
     # because it's a pure-personal feature: no external calls, no crowd
     # data, no config required — the composer just needs the user's own
@@ -280,7 +310,7 @@ class AppSetting(BaseEntity):
 
     class Fields(BaseEntity.Fields):
         SCANNING_ENABLED = "scanning_enabled"
-        HEALTH_STAR_RATING_ENABLED = "health_star_rating_enabled"
+        NUTRITION_RATING_SCHEME = "nutrition_rating_scheme"
         MEAL_PLANNING_ENABLED = "meal_planning_enabled"
         MONEY_ENABLED = "money_enabled"
         COMPANION_INGESTION_ENABLED = "companion_ingestion_enabled"

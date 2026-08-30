@@ -82,6 +82,89 @@
             }
         },
         {
+            "name": "dora-verify-backend-5171-linux",
+            "runtimeExecutable": ".venv/bin/python",
+            "runtimeArgs": [
+                "-m",
+                "dora_api.startup"
+            ],
+            "port": 5171,
+            "env": {
+                "DORA_API_PORT": "5171",
+                "DORA_DB_PATH": "data/scratch-verify.db",
+                "DORA_DEBUG": "true",
+                "DORA_ALLOW_DESTRUCTIVE": "true",
+                "DORA_SEED_BULK_ITEMS": "40",
+                "DORA_LOG_LEVEL": "WARNING"
+            }
+        },
+        {
+            "name": "dora-verify-backend-5171-money-linux",
+            "runtimeExecutable": ".venv/bin/python",
+            "runtimeArgs": [
+                "-m",
+                "dora_api.startup"
+            ],
+            "port": 5171,
+            "env": {
+                "DORA_API_PORT": "5171",
+                "DORA_DB_PATH": "data/scratch-verify.db",
+                "DORA_DEBUG": "true",
+                "DORA_ALLOW_DESTRUCTIVE": "true",
+                "DORA_SEED_BULK_ITEMS": "40",
+                "DORA_LOG_LEVEL": "WARNING",
+                "DORA_SEED_MONEY_ON": "true"
+            }
+        },
+        {
+            "name": "dora-verify-backend-5172-linux",
+            "runtimeExecutable": ".venv/bin/python",
+            "runtimeArgs": [
+                "-m",
+                "dora_api.startup"
+            ],
+            "port": 5172,
+            "env": {
+                "DORA_API_PORT": "5172",
+                "DORA_DB_PATH": "data/scratch-verify-2.db",
+                "DORA_CORS_ORIGINS": "http://localhost:5175,http://127.0.0.1:5175",
+                "DORA_DEBUG": "true",
+                "DORA_ALLOW_DESTRUCTIVE": "true",
+                "DORA_SEED_BULK_ITEMS": "40",
+                "DORA_LOG_LEVEL": "WARNING"
+            }
+        },
+        {
+            "name": "dora-spa-5172",
+            "runtimeExecutable": "npx",
+            "runtimeArgs": [
+                "quasar",
+                "dev",
+                "--port",
+                "5175"
+            ],
+            "cwd": "web_app",
+            "port": 5175,
+            "env": {
+                "VITE_API_BASE_URL": "http://localhost:5172/api"
+            }
+        },
+        {
+            "name": "dora-spa-5171",
+            "runtimeExecutable": "npx",
+            "runtimeArgs": [
+                "quasar",
+                "dev",
+                "--port",
+                "5174"
+            ],
+            "cwd": "web_app",
+            "port": 5174,
+            "env": {
+                "VITE_API_BASE_URL": "http://localhost:5171/api"
+            }
+        },
+        {
             "name": "dora-spa",
             "runtimeExecutable": "npm",
             "runtimeArgs": [

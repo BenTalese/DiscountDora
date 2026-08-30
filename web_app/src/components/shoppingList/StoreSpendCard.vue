@@ -2,49 +2,45 @@
     <!-- "Where you'll spend it" — the plan-face store breakdown.
          Renders nothing at all unless the server resolved at least one real
          store, so it never nags installs that don't use stores. -->
-    <q-card v-if="buckets.length > 0" flat bordered class="sl-store-card">
-        <q-card-section class="q-pb-none row items-center no-wrap q-gutter-x-sm">
-            <q-icon :name="ICONS.storefront" size="18px" class="dora-text-secondary" />
-            <span class="text-subtitle2">{{ title }}</span>
-            <q-space />
-            <!-- Mobile collapses this to the one-line summary below; desktop
-                 has the room, so it stays open (D-011 — don't stack blocks
-                 above the content on a phone). -->
-            <BaseButton
-                v-if="collapsible"
-                variant="icon"
-                :icon="expanded ? ICONS.collapse : ICONS.expand"
-                :aria-label="expanded ? 'Hide store breakdown' : 'Show store breakdown'"
-                @click="expanded = !expanded"
-            />
-        </q-card-section>
+    <CollapsibleCard
+        v-if="buckets.length > 0"
+        class="sl-store-card"
+        :collapsible="collapsible"
+        header-toggles
+        reveals="store breakdown"
+    >
+        <template #header>
+            <div class="row items-center no-wrap q-gutter-x-sm sl-store-card__title">
+                <q-icon :name="ICONS.storefront" size="18px" class="dora-text-secondary" />
+                <span class="text-subtitle2">{{ title }}</span>
+            </div>
+        </template>
 
-        <q-card-section v-if="!expanded" class="q-pt-sm">
+        <template #collapsed>
             <div class="text-caption dora-text-muted ellipsis">{{ summaryLine }}</div>
-        </q-card-section>
+        </template>
 
-        <template v-else>
-            <q-card-section class="q-pt-sm q-pb-xs">
+        <template #default>
+            <div class="q-pt-sm q-pb-xs">
                 <!-- Proportional bar. With money on, segments are spend
-                     share, so an unpriced-only bucket contributes nothing
-                     and the bar honestly reflects money rather than item
-                     counts. With money off there is no spend to share out,
-                     so it falls back to how many items each store is
-                     carrying — the same question, minus the dollars. -->
-                <div v-if="barTotal > 0" class="sl-store-bar" role="presentation">
+                     share; with money off there is no spend to share out, so
+                     it falls back to how many items each store is carrying —
+                     the same question, minus the dollars. Buckets that have
+                     items but no value still get a floor width so they can't
+                     vanish from a bar whose own legend lists them; see
+                     `segments`. -->
+                <div v-if="segments.length > 0" class="sl-store-bar" role="presentation">
                     <div
-                        v-for="b in buckets"
-                        :key="b.store_id ?? '__none__'"
+                        v-for="seg in segments"
+                        :key="seg.key"
                         class="sl-store-bar__seg"
-                        :style="{
-                            width: `${(barValue(b) / barTotal) * 100}%`,
-                            background: segmentColour(b),
-                        }"
+                        :class="{ 'sl-store-bar__seg--unassigned': seg.isUnassigned }"
+                        :style="{ width: `${seg.width}%`, background: seg.colour }"
                     />
                 </div>
-            </q-card-section>
+            </div>
 
-            <q-card-section class="q-pt-xs">
+            <div class="q-pt-xs">
                 <div class="row q-gutter-xs">
                     <q-chip
                         v-for="b in buckets"
@@ -72,9 +68,9 @@
                 <div v-if="footnote" class="text-caption dora-text-muted q-mt-sm">
                     {{ footnote }}
                 </div>
-            </q-card-section>
+            </div>
         </template>
-    </q-card>
+    </CollapsibleCard>
 </template>
 
 <script lang="ts" setup>
@@ -93,9 +89,9 @@
      * explicit footnote when some lines have no price. A total that silently
      * omits a third of the list is worse than one that admits the gap.
      */
-    import { computed, ref } from 'vue';
+    import { computed } from 'vue';
     import { ICONS } from 'src/style/icons';
-    import BaseButton from 'src/components/BaseButton.vue';
+    import CollapsibleCard from 'src/components/CollapsibleCard.vue';
     import { formatMoney } from 'src/composables/useMoney';
     import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
     import { storeColour } from 'src/style/storeSwatch';
@@ -103,26 +99,44 @@
 
     const props = withDefaults(defineProps<{
         buckets: StoreSpend[];
-        /** Mobile passes true so the card starts as a one-line summary. */
+        /**
+         * Whether this card can close at all — *not* whether it starts closed.
+         * It always starts closed (`CollapsibleCard` owns that, and it is the
+         * app-wide default).
+         *
+         * It used to be `ref(!collapsible)` with both callers passing
+         * `$q.screen.lt.md`, which meant "expanded on desktop, collapsed on a
+         * phone" — and, being a `ref` seeded once at setup, it never
+         * re-evaluated when the window crossed the breakpoint (FU-783). The
+         * screen-size question is gone entirely rather than fixed: the one
+         * caller that genuinely shouldn't collapse is the plan face's, because
+         * that card now sits *inside* the overview card's expanded region,
+         * where a second tap to reach the same information is a tax.
+         */
         collapsible?: boolean;
-        /** Which face is asking. Past tense on the receipt. */
-        tense?: 'plan' | 'receipt';
-    }>(), { collapsible: false, tense: 'plan' });
+        /** Which face is asking. All three tenses are real: a draft hasn't
+         *  spent anything, a receipt has spent all of it, and mid-shop is
+         *  genuinely neither — some of the trolley is paid for and some isn't,
+         *  so past tense there reads as a shop you've already finished. */
+        tense?: 'plan' | 'shop' | 'receipt';
+    }>(), { collapsible: true, tense: 'plan' });
 
     const { moneyEnabled } = useMoneyEnabled();
 
-    const expanded = ref(!props.collapsible);
-
     /** 2026-08-26 feedback: *"'Where you spent it' is a bit odd when budgets
      *  and money are off"* — and it was, because the card kept its money
-     *  wording while showing nothing but item counts. All four wordings live
-     *  here so the two callers can't drift: the face picks the tense, the
-     *  money flag picks the verb. */
+     *  wording while showing nothing but item counts. All six wordings live
+     *  here so the callers can't drift: the face picks the tense, the money
+     *  flag picks the verb. */
     const title = computed(() => {
-        if (props.tense === 'receipt') {
-            return moneyEnabled.value ? 'Where you spent it' : 'Where you shopped';
+        switch (props.tense) {
+            case 'receipt':
+                return moneyEnabled.value ? 'Where you spent it' : 'Where you shopped';
+            case 'shop':
+                return moneyEnabled.value ? "Where you're spending" : "Where you're shopping";
+            default:
+                return moneyEnabled.value ? "Where you'll spend it" : "Where you'll shop";
         }
-        return moneyEnabled.value ? "Where you'll spend it" : "Where you'll shop";
     });
 
     /** What each segment's width is proportional to. Money when there is
@@ -131,9 +145,56 @@
         return moneyEnabled.value ? bucket.subtotal : bucket.line_count;
     }
 
-    const barTotal = computed(() =>
-        props.buckets.reduce((sum, b) => sum + barValue(b), 0)
-    );
+    /** Floor width for a bucket that has items but nothing to weigh them by.
+     *  Enough to read as a segment at a phone's width, small enough that it
+     *  doesn't misrepresent a bucket carrying two unpriced items as a big
+     *  share of the shop. */
+    const MIN_SEGMENT_PCT = 7;
+
+    /**
+     * The bar's segments, with widths already resolved.
+     *
+     * Why this isn't just `value / total` inline: with money **on**, a bucket's
+     * width is its *spend*, and a bucket can hold items while contributing no
+     * money — the "No store set" catch-all whose lines are unpriced, or a real
+     * store whose lines you haven't priced yet. Those computed to `0%` and
+     * vanished from the bar while still being listed as a chip underneath it,
+     * so the bar quietly disagreed with its own legend (2026-08-28 owner
+     * feedback: *"also allocate space for 'no store'"*).
+     *
+     * So every bucket that has lines gets at least `MIN_SEGMENT_PCT`, and the
+     * buckets that do carry value share what's left in true proportion. The
+     * segments still sum to 100%, and the money comparison between two priced
+     * stores stays honest — only the "this exists" floor is synthetic.
+     */
+    const segments = computed(() => {
+        const present = props.buckets.filter((b) => b.line_count > 0);
+        const valued = present.filter((b) => barValue(b) > 0);
+        const total = valued.reduce((sum, b) => sum + barValue(b), 0);
+
+        // Nothing anywhere has a value (money on, nothing priced yet): there is
+        // no proportion to draw, so show the buckets as equal presences rather
+        // than inventing a ranking out of item counts the bar isn't measuring.
+        if (valued.length === 0) {
+            return present.map((b) => ({
+                key: b.store_id ?? '__none__',
+                width: 100 / present.length,
+                colour: segmentColour(b),
+                isUnassigned: b.store_id === null,
+            }));
+        }
+
+        const floors = (present.length - valued.length) * MIN_SEGMENT_PCT;
+        const share = (100 - floors) / 100;
+        return present.map((b) => ({
+            key: b.store_id ?? '__none__',
+            width: barValue(b) > 0
+                ? (barValue(b) / total) * 100 * share
+                : MIN_SEGMENT_PCT,
+            colour: segmentColour(b),
+            isUnassigned: b.store_id === null,
+        }));
+    });
 
     const unpricedCount = computed(() =>
         props.buckets.reduce((sum, b) => sum + (b.line_count - b.priced_line_count), 0)
@@ -152,8 +213,11 @@
      *  logo-derived `brand_colour` first and falls back to the deterministic
      *  name hash; D-001 is satisfied because the colour never encodes a state
      *  and never travels without the store's name beside it. */
-    function segmentColour(bucket: StoreSpend): string {
-        if (bucket.store_id === null) return 'var(--surface-sunken)';
+    /** `undefined` for the catch-all: it has no identity colour, and the
+     *  stylesheet owns its fill (an inline `background` shorthand would clobber
+     *  the hatch's `background-image`). Every real store keeps its own. */
+    function segmentColour(bucket: StoreSpend): string | undefined {
+        if (bucket.store_id === null) return undefined;
         return storeColour(bucket.store_name, bucket.brand_colour);
     }
 
@@ -194,6 +258,18 @@
 </script>
 
 <style scoped>
+    /* Was `q-card flat bordered`. `CollapsibleCard` owns the disclosure and
+       nothing else, so the surface is stated here — the same flat-bordered
+       look, minus a component wrapper that only ever contributed padding. */
+    .sl-store-card {
+        padding: var(--space-3);
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-md);
+        background: var(--surface-component);
+    }
+    .sl-store-card__title {
+        min-height: 44px;
+    }
     .sl-store-bar {
         display: flex;
         height: 8px;
@@ -204,6 +280,31 @@
     .sl-store-bar__seg {
         height: 100%;
         min-width: 2px;
+    }
+    /* The catch-all: a themed grey, hatched.
+
+       The grey alone is `--border-strong`, the neutral every theme defines to
+       be seen against a surface — which is right in light themes and measurably
+       wrong in dark ones. Measured against the store fills either side of it:
+       3.55:1 in Pesto light, but **1.19:1** in Pesto Dark and **1.02:1** in
+       Cherry Cola Dark, i.e. the same lightness as its neighbour. That isn't
+       fixable by picking a better grey, because the fills it competes with are
+       partly *logo-derived brand colours* — arbitrary, and free to be grey
+       themselves. No single neutral can be guaranteed to separate from them.
+
+       So the segment is distinguished by **texture**, which no neighbouring
+       colour can collide with, and which says the right thing: a hatch reads as
+       unallocated rather than as one more store. Both stripe colours are theme
+       tokens, so it inverts correctly — dark stripes on grey in light themes,
+       light stripes on grey in dark ones. Colour is still carrying the message
+       for anyone who sees it, but it is no longer carrying it alone (D-001). */
+    .sl-store-bar__seg--unassigned {
+        background-color: var(--border-strong);
+        background-image: repeating-linear-gradient(
+            135deg,
+            transparent 0 3px,
+            var(--surface-component) 3px 5px
+        );
     }
     .sl-store-chip {
         background: var(--surface-sunken);

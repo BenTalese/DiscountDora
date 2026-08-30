@@ -8,7 +8,8 @@ import { useStockStatus } from 'src/composables/useStockStatus';
 import { DEFAULT_MEAL_SLOTS } from 'src/helpers/recipeVocabulary';
 import { isoDate as toIso, localTodayIso, mondayOf, shiftDays } from 'src/helpers/weekDates';
 import type {
-    MealPlan, MealPlanDayNutrition, MealPlanEntry, MealPlanIngredient, UnlinkedIngredient,
+    MealPlan, MealPlanDayNutrition, MealPlanEntry, MealPlanIngredient,
+    MealPlanSuggestion, UnlinkedIngredient,
 } from 'src/models/mealPlan';
 import type { AddToListConfirm } from 'src/components/shoppingList/addToListTypes';
 import { rowsFromMealPlanIngredients, unlinkedFromMealPlan } from 'src/helpers/addToListRows';
@@ -25,15 +26,15 @@ import { useShoppingListStore } from 'src/stores/shoppingListStore';
 import { useStockItemStore } from 'src/stores/stockItemStore';
 import { useStockLevelStore } from 'src/stores/stockLevelStore';
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
-import { buildRecipeTrays } from 'src/helpers/recipeTrays';
 import { useRoute, useRouter } from 'vue-router';
 
-/* R-003 — the tray builder + its `RecipeTray` type moved to
-   `helpers/recipeTrays.ts` when the FU-578 #47 dedupe landed: the identical
-   logic also lived in MealPlanBuilderDialog.vue, and a dedupe written in one
-   place only would have left the two pickers disagreeing. Re-exported here
-   because three components import the type from this module. */
-export type { RecipeTray } from 'src/helpers/recipeTrays';
+/* The recipe trays (and their `RecipeTray` type) were retired on 2026-08-30
+   with Unit 2 of BRIEF_MEAL_PLANNER_RAIL_AND_SHELL: the rail's four collapsible
+   accordions became one flat list plus a row of filter chips, so there is no
+   grouping left to build. Their replacement is `helpers/recipeRailFilters.ts`,
+   which is a set of independent predicates rather than a claiming/capping
+   grouper — see that file for why FU-578 #47's dedupe is superseded and not
+   regressed. */
 
 export type WeekDay = { label: string; iso: string };
 
@@ -116,6 +117,23 @@ export function useMealPlanner() {
     const weekRangeLabel = computed(
         () => `${formatDate(focusedMonday.value)} – ${formatDate(shiftDays(focusedMonday.value, 6))}`,
     );
+    // BRIEF_MEAL_PLANNER_RAIL_AND_SHELL §3.2 — the toolbar carries the range as
+    // its only week label (D4: the page has no title, and F40 killed the
+    // "Week of…" prefix), so the range needs a relative anchor or "13 Oct –
+    // 19 Oct" never says *which* week you're looking at.
+    //
+    // Both sides parse as UTC midnight, so the difference is always an exact
+    // multiple of seven days and no DST boundary can round this the wrong way.
+    const weekRelativeLabel = computed(() => {
+        const MS_PER_WEEK = 7 * 24 * 60 * 60 * 1000;
+        const weeks = Math.round(
+            (Date.parse(focusedMonday.value) - Date.parse(mondayOf(localTodayIso()))) / MS_PER_WEEK,
+        );
+        if (weeks === 0) return 'This week';
+        if (weeks === 1) return 'Next week';
+        if (weeks === -1) return 'Last week';
+        return weeks > 0 ? `In ${weeks} weeks` : `${-weeks} weeks ago`;
+    });
 
     // ── Slots (household vocabulary, C-2.A) ────────────────────────────────
     const slotNames = computed(() =>
@@ -157,11 +175,36 @@ export function useMealPlanner() {
         return `${shortfall.value.length} to cook${earliest ? ` by ${formatDate(earliest)}` : ''}`;
     });
 
-    // ── Recipe trays (C-2.I) ───────────────────────────────────────────────
-    // The search filter moved into `buildRecipeTrays` with the R-003 merge —
-    // it only ever fed the trays' `Results` case, and keeping a second copy of
-    // the name match out here is how the two pickers drifted apart before.
-    const trays = computed(() => buildRecipeTrays(recipes.value, recipeSearch.value ?? ''));
+    // ── "Dora suggests" (§4.4) ─────────────────────────────────────────────
+    // Replaces the recipe trays, which the rail's filter chips retired on
+    // 2026-08-30. Fetched **lazily** — only when the user actually selects the
+    // chip — because it is a ranking over the whole cookbook and most visits to
+    // the planner never ask for it.
+    //
+    // Cached per focused week: the ranking excludes recipes already planned in
+    // that week, so it is only valid for the week it was asked about. Changing
+    // week invalidates it rather than showing last week's answer.
+    const suggestions = ref<MealPlanSuggestion[]>([]);
+    const suggestionsLoading = ref(false);
+    const suggestionsWeek = ref<string | null>(null);
+
+    async function loadSuggestions() {
+        if (suggestionsLoading.value) return;
+        if (suggestionsWeek.value === focusedMonday.value && suggestions.value.length) return;
+        suggestionsLoading.value = true;
+        try {
+            suggestions.value = await mealPlanStore.getWeekSuggestionsAsync(focusedMonday.value);
+            suggestionsWeek.value = focusedMonday.value;
+        } catch {
+            // A failed ranking is not worth a toast: the chip falls back to the
+            // plain list, which is a usable rail. Staying silent beats an error
+            // for something the user did not explicitly ask to be told about.
+            suggestions.value = [];
+            suggestionsWeek.value = null;
+        } finally {
+            suggestionsLoading.value = false;
+        }
+    }
 
     // ── Tap-to-add: focus a slot, then pick a recipe ───────────────────────
     const focusedTarget = ref<{ dayIso: string; slot: string } | null>(null);
@@ -190,28 +233,21 @@ export function useMealPlanner() {
         focusedTarget.value = null;
     }
 
-    // ── Drag-to-add (desktop pointer only) ─────────────────────────────────
-    const dragAllowed = ref(true);
-    const draggingRecipeId = ref<string | null>(null);
-    function onRecipePointerDown(e: PointerEvent) {
-        dragAllowed.value = e.pointerType === 'mouse';
-    }
-    function onDragStart(recipeId: string) {
-        draggingRecipeId.value = recipeId;
-    }
-    function onDragEnd() {
-        draggingRecipeId.value = null;
-    }
-    async function onDropOnSlot(dayIso: string, slot: string) {
-        const recipeId = draggingRecipeId.value;
-        draggingRecipeId.value = null;
-        if (!recipeId) return;
-        if (isPastDay(dayIso)) {
-            $q.notify({ type: 'warning', position: 'bottom-right', message: 'Past days are read-only.' });
-            return;
-        }
-        await addEntry(dayIso, slot, recipeId);
-    }
+    // ── Drag-to-add: RETIRED 2026-08-29 (BRIEF_MEAL_PLANNER_RAIL_AND_SHELL D1)
+    //
+    // `dragAllowed` / `draggingRecipeId` / `onRecipePointerDown` / `onDragStart`
+    // / `onDragEnd` / `onDropOnSlot` all lived here. Unit 1 gives the week pane
+    // its own scroll container, and the planner's drag was native HTML5 with no
+    // edge auto-scroll anywhere in the app — so a drag toward a day below the
+    // fold would have silently stopped working rather than scrolling to it.
+    // It was also mouse-only by construction (`pointerType === 'mouse'`) and
+    // carried its payload on a module ref rather than `dataTransfer`, so a slot
+    // accepted any drag and merely early-returned. F9 asked for drag *and* tap;
+    // the owner revised that on 2026-08-29 — tap-to-target is the one way to
+    // place a recipe. F47/F48 were answered by the servings stepper, not drag.
+    //
+    // Do not reinstate without building edge auto-scroll first; `useDragDropList`
+    // is the reorderable-list editor and is a different job.
 
     // ── Entry mutations ────────────────────────────────────────────────────
     // PROPOSAL_MEAL_PLANS_PART_2 — map a saved entry to a write command, carrying
@@ -396,16 +432,35 @@ export function useMealPlanner() {
     watch(focusedMonday, (next, prev) => {
         slideDir.value = next >= prev ? 'down' : 'up';
         focusedTarget.value = null;
+        // The ranking excludes what's already planned in the week it was asked
+        // about, so it does not survive a week change — drop it rather than
+        // show last week's answer under this week's heading.
+        suggestions.value = [];
+        suggestionsWeek.value = null;
         void router.replace({ query: { ...route.query, monday: next } });
     });
     function onKeydown(e: KeyboardEvent) {
+        const t = e.target as HTMLElement | null;
+        if (!t) return;
+
+        // §4.6 — Esc cancels the armed slot. Checked BEFORE the editable/
+        // interactive guards below, deliberately: the rail's auto-open moves
+        // focus into the search input, so by the time you want to back out of
+        // targeting your focus is nearly always in a text field — and the guard
+        // that stops Arrow keys stealing focus would have swallowed every Esc.
+        // Cancelling is also the one binding that is unambiguous everywhere:
+        // there is nothing else on this page for Esc to mean.
+        if (e.key === 'Escape' && focusedTarget.value) {
+            e.preventDefault();
+            clearFocusedTarget();
+            return;
+        }
+
         // R-Phase 6 §9-J — global Arrow nav must NOT steal focus from
         // the active control. Skip when typing in any editable region
         // (INPUT/TEXTAREA/contentEditable) OR when an interactive element
         // has focus (button/link/select/details/summary) — arrowing off a
         // slot button used to jump the week.
-        const t = e.target as HTMLElement | null;
-        if (!t) return;
         if (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable) return;
         if (t.closest('button, a, select, [role="button"], [role="menuitem"], [role="tab"], [contenteditable="true"]')) return;
         if (e.key === 'ArrowUp') { e.preventDefault(); goPrevWeek(); }
@@ -833,7 +888,6 @@ export function useMealPlanner() {
         // state
         recipes,
         recipeSearch,
-        trays,
         templates,
         sets,
         mealPlans,
@@ -848,6 +902,10 @@ export function useMealPlanner() {
         weekDays,
         dayNutrition,
         weekRangeLabel,
+        weekRelativeLabel,
+        suggestions,
+        suggestionsLoading,
+        loadSuggestions,
         slotNames,
         slotNameSet,
         currentDayIso,
@@ -859,8 +917,6 @@ export function useMealPlanner() {
         unlinkedIngredients,
         hoveredRecipeIds,
         focusedTarget,
-        dragAllowed,
-        draggingRecipeId,
         slideDir,
         weekTransition,
         prefersReducedMotion,
@@ -908,14 +964,10 @@ export function useMealPlanner() {
         onKeydown,
         onTouchStart,
         onTouchEnd,
-        // tap / drag
+        // tap-to-target (drag retired — D1, see above)
         selectSlot,
         pickRecipe,
         clearFocusedTarget,
-        onRecipePointerDown,
-        onDragStart,
-        onDragEnd,
-        onDropOnSlot,
         // hover
         hoverIngredient,
         clearHover,

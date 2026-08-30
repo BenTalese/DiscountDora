@@ -43,7 +43,7 @@
                     <img v-if="photoUrl" :src="photoUrl" alt="" class="rn__photoimg" />
                     <div v-else class="rn__photoplaceholder">
                         <q-icon :name="ICONS.photo_camera" size="28px" />
-                        <span>{{ hasPhoto ? 'Photo hidden' : 'Add a photo' }}</span>
+                        <span>Add a photo</span>
                     </div>
                 </ImageEditTile>
 
@@ -333,7 +333,6 @@
                                 {{ missingOnListCount }} already on a list
                             </span>
                         </template>
-                        <span v-else class="rn__cellsub">{{ cookableCaption }}</span>
                     </div>
                     <!-- The cell's action, at the cell's edge — a real button on
                          the right rather than a text link buried under the copy
@@ -815,27 +814,32 @@
                         </q-item-section>
                     </template>
                     <div class="rn__disc">
-                        <BaseSelect
-                            v-model="form.dietary_tag_ids"
-                            label="Dietary tags"
-                            :options="dietaryTagOptions"
-                            emit-value map-options multiple use-chips clearable
-                            class="q-mb-sm"
-                            @update:model-value="markDirty"
-                        />
-                        <q-input
-                            v-model="form.source"
-                            dense outlined clearable
-                            class="q-mb-sm"
-                            label="Source URL"
-                            @update:model-value="markDirty"
-                        />
-                        <q-input
-                            v-model="form.notes"
-                            dense outlined type="textarea" autogrow
-                            label="Notes"
-                            @update:model-value="markDirty"
-                        />
+                        <!-- Owner feedback 2026-08-29 — the nutrition drawer's
+                             card treatment, shared via `RecipeInfoCard`, so
+                             the three details panels read as one family. -->
+                        <RecipeInfoCard :icon="ICONS.notes">
+                            <BaseSelect
+                                v-model="form.dietary_tag_ids"
+                                label="Dietary tags"
+                                :options="dietaryTagOptions"
+                                emit-value map-options multiple use-chips clearable
+                                class="q-mb-sm"
+                                @update:model-value="markDirty"
+                            />
+                            <q-input
+                                v-model="form.source"
+                                dense outlined clearable
+                                class="q-mb-sm"
+                                label="Source URL"
+                                @update:model-value="markDirty"
+                            />
+                            <q-input
+                                v-model="form.notes"
+                                dense outlined type="textarea" autogrow
+                                label="Notes"
+                                @update:model-value="markDirty"
+                            />
+                        </RecipeInfoCard>
                     </div>
                 </q-expansion-item>
 
@@ -892,74 +896,76 @@
                         </q-item-section>
                     </template>
                     <div class="rn__disc">
-                        <div class="rn__vfacts">
-                            <div class="rn__vfact">
-                                <span class="rn__cellk">Created</span>
-                                <span>{{ recipe.created_at ? formatDate(recipe.created_at) : 'Unknown' }}</span>
+                        <RecipeInfoCard :icon="ICONS.history">
+                            <div class="rn__vfacts">
+                                <div class="rn__vfact">
+                                    <span class="rn__cellk">Created</span>
+                                    <span>{{ recipe.created_at ? formatDate(recipe.created_at) : 'Unknown' }}</span>
+                                </div>
+                                <div class="rn__vfact">
+                                    <span class="rn__cellk">Last updated</span>
+                                    <span>
+                                        {{ recipe.updated_at
+                                            ? formatDate(recipe.updated_at)
+                                            : 'Not edited since it was added' }}
+                                    </span>
+                                </div>
                             </div>
-                            <div class="rn__vfact">
-                                <span class="rn__cellk">Last updated</span>
-                                <span>
-                                    {{ recipe.updated_at
-                                        ? formatDate(recipe.updated_at)
-                                        : 'Not edited since it was added' }}
-                                </span>
+
+                            <!-- The count is a pill on the sub-heading rather than
+                                 a caption on the panel above, and the explanation
+                                 of what "New version" does is gone: the button is
+                                 right here now, which is a better explanation than
+                                 the sentence was (owner feedback 2026-08-27). -->
+                            <div class="rn__vhead">
+                                <span class="rn__discsub">Versions of this recipe</span>
+                                <q-badge rounded class="rn__vcount" :label="versionSiblings.length + 1" />
+                                <BaseButton
+                                    variant="ghost"
+                                    dense
+                                    class="rn__vnew"
+                                    :icon="ICONS.content_copy"
+                                    label="New version"
+                                    aria-label="Make a new version of this recipe"
+                                    :loading="newVersionLoading"
+                                    @click="onNewVersion"
+                                >
+                                    <q-tooltip>
+                                        Makes a copy you can change without losing this one.
+                                    </q-tooltip>
+                                </BaseButton>
                             </div>
-                        </div>
 
-                        <!-- The count is a pill on the sub-heading rather than
-                             a caption on the panel above, and the explanation
-                             of what "New version" does is gone: the button is
-                             right here now, which is a better explanation than
-                             the sentence was (owner feedback 2026-08-27). -->
-                        <div class="rn__vhead">
-                            <span class="rn__discsub">Versions of this recipe</span>
-                            <q-badge rounded class="rn__vcount" :label="versionSiblings.length + 1" />
-                            <BaseButton
-                                variant="ghost"
-                                dense
-                                class="rn__vnew"
-                                :icon="ICONS.content_copy"
-                                label="New version"
-                                aria-label="Make a new version of this recipe"
-                                :loading="newVersionLoading"
-                                @click="onNewVersion"
-                            >
-                                <q-tooltip>
-                                    Makes a copy you can change without losing this one.
-                                </q-tooltip>
-                            </BaseButton>
-                        </div>
-
-                        <q-list v-if="versionSiblings.length > 0" dense separator>
-                            <q-item class="rn__vthis">
-                                <q-item-section>
-                                    <q-item-label>{{ recipe.name }}</q-item-label>
-                                    <q-item-label caption>
-                                        {{ recipe.created_at ? `Created ${formatDate(recipe.created_at)}` : 'Created — unknown' }}
-                                    </q-item-label>
-                                </q-item-section>
-                                <q-item-section side>
-                                    <q-badge outline color="primary" label="You're here" />
-                                </q-item-section>
-                            </q-item>
-                            <q-item
-                                v-for="sib in versionSiblings"
-                                :key="sib.recipe_id"
-                                clickable
-                                @click="goToSibling(sib.recipe_id)"
-                            >
-                                <q-item-section>
-                                    <q-item-label>{{ sib.name }}</q-item-label>
-                                    <q-item-label caption>
-                                        {{ sib.created_at ? `Created ${formatDate(sib.created_at)}` : 'Created — unknown' }}
-                                    </q-item-label>
-                                </q-item-section>
-                                <q-item-section side>
-                                    <q-icon :name="ICONS.chevron_right" />
-                                </q-item-section>
-                            </q-item>
-                        </q-list>
+                            <q-list v-if="versionSiblings.length > 0" dense separator>
+                                <q-item class="rn__vthis">
+                                    <q-item-section>
+                                        <q-item-label>{{ recipe.name }}</q-item-label>
+                                        <q-item-label caption>
+                                            {{ recipe.created_at ? `Created ${formatDate(recipe.created_at)}` : 'Created — unknown' }}
+                                        </q-item-label>
+                                    </q-item-section>
+                                    <q-item-section side>
+                                        <q-badge outline color="primary" label="You're here" />
+                                    </q-item-section>
+                                </q-item>
+                                <q-item
+                                    v-for="sib in versionSiblings"
+                                    :key="sib.recipe_id"
+                                    clickable
+                                    @click="goToSibling(sib.recipe_id)"
+                                >
+                                    <q-item-section>
+                                        <q-item-label>{{ sib.name }}</q-item-label>
+                                        <q-item-label caption>
+                                            {{ sib.created_at ? `Created ${formatDate(sib.created_at)}` : 'Created — unknown' }}
+                                        </q-item-label>
+                                    </q-item-section>
+                                    <q-item-section side>
+                                        <q-icon :name="ICONS.chevron_right" />
+                                    </q-item-section>
+                                </q-item>
+                            </q-list>
+                        </RecipeInfoCard>
                     </div>
                 </q-expansion-item>
 
@@ -1109,6 +1115,7 @@
     import BaseSelect from 'src/components/BaseSelect.vue';
     import ImageEditTile from 'src/components/ImageEditTile.vue';
     import MealStepper from 'src/components/recipes/MealStepper.vue';
+    import RecipeInfoCard from 'src/components/recipes/RecipeInfoCard.vue';
     import RecipeNutritionCard from 'src/components/recipes/RecipeNutritionCard.vue';
     import RecipeStepImagesViewer from 'src/components/recipes/RecipeStepImagesViewer.vue';
     import RecipeStepImagesEditor from 'src/components/recipes/RecipeStepImagesEditor.vue';
@@ -1129,7 +1136,6 @@
     import { needsCookGuard } from 'src/helpers/cookModeGuard';
     import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';
     import { useBatchEnabled } from 'src/composables/useBatchEnabled';
-    import { useImagePrefs } from 'src/composables/useImagePrefs';
     import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
     import { useNutritionMode } from 'src/composables/useNutritionMode';
     import { useRecipeExport } from 'src/composables/useRecipeExport';
@@ -1189,7 +1195,6 @@
     const { moneyEnabled } = useMoneyEnabled();
     const { nutritionEnabled, isComplex } = useNutritionMode();
     const { batchEnabled } = useBatchEnabled();
-    const { showRecipeImages } = useImagePrefs();
     const { addStockItemsToList } = useShoppingListActions();
     const recipeExport = useRecipeExport();
 
@@ -1428,14 +1433,16 @@
 
     const photoUrl = computed(() => {
         if (imageDirty.value) return form.image;
-        if (showRecipeImages.value && recipe.value?.has_image) {
+        if (recipe.value?.has_image) {
             return recipeImageUrl(recipe.value.recipe_id, imageVersion.value);
         }
         return null;
     });
-    // Whether a photo *exists* — independent of whether photos are displayed,
-    // which is a viewing preference (the bug fixed on the old page 2026-08-19).
-    const hasPhoto = computed(() => (imageDirty.value ? !!form.image : !!recipe.value?.has_image));
+    // Owner call 2026-08-29 — `hasPhoto` used to mean "a photo exists even
+    // though you've asked not to see photos", which was the only reason it
+    // differed from `photoUrl`. With the `show_recipe_images` preference cut,
+    // a photo that exists is a photo that renders, so the two collapse.
+    const hasPhoto = computed(() => photoUrl.value !== null);
 
     function ingredientLabel(row: IngredientForm): string {
         if (row.stock_item_id) {
@@ -1633,8 +1640,9 @@
         if (missingIngredients.value.length === 0) return 'Everything in stock';
         return `${missingIngredients.value.length} ingredient${missingIngredients.value.length === 1 ? '' : 's'} missing`;
     });
-    const cookableCaption = computed(() =>
-        cookableNow.value === null ? 'Link them to know for sure' : 'You can cook this now');
+    // Owner feedback 2026-08-29 — no "You can cook this now" sub-line: the
+    // cell's own headline ("Everything in stock") plus its green edge already
+    // say it, and it was the one caption that had to repeat itself.
 
     const showCostCell = computed(() => {
         const r = recipe.value;

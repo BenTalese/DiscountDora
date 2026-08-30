@@ -29,10 +29,11 @@ import logging
 import random
 from collections import Counter
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 from typing import List, Optional
 from uuid import UUID
 
+from flask import request as flask_request
 from pydantic import BaseModel, ConfigDict, Field
 
 from dora_api.domain.entities.app_setting import AppSetting
@@ -456,18 +457,15 @@ def _batch_cook_span(repository: SqlAlchemyRepository) -> int:
     return 1
 
 
-def compute_auto_build(
-    repository: SqlAlchemyRepository,
-    request: AutoBuildRequest,
-    rng: Optional[random.Random] = None,
-) -> AutoBuildResponse:
-    today = household_today(repository)
-    days = _buildable_days(request.days, today)
+def build_candidates(repository: SqlAlchemyRepository) -> List[RecipeCandidate]:
+    """Every recipe, shaped for the pure ranker.
 
-    slot_dtos = GetMealSlotsHandler(repository).handle()
-    household_slots = [s.name for s in slot_dtos]
-    allowed_slots = _resolve_allowed_slots(request.slot_names, household_slots)
-
+    Extracted from `compute_auto_build` on 2026-08-30 so the meal planner's
+    rail suggestions can reuse it (BRIEF_MEAL_PLANNER_RAIL_AND_SHELL §4.4).
+    Both callers must build candidates the SAME way or the rail would recommend
+    on different evidence than the week builder — which is the drift R-003
+    exists to prevent. This is the one place that assembles them.
+    """
     recipes = _all_recipe_dtos(repository)
     # The soonest-expiry map is the cookbook's urgency ranking input; the
     # week builder only needs "how much would this rescue", so it ignores it.
@@ -476,7 +474,7 @@ def compute_auto_build(
     )
     cost_est = estimate_costs_for(repository, recipes)
 
-    candidates = [
+    return [
         RecipeCandidate(
             recipe_id=r.recipe_id,
             name=r.name,
@@ -494,6 +492,21 @@ def compute_auto_build(
         )
         for r in recipes
     ]
+
+
+def compute_auto_build(
+    repository: SqlAlchemyRepository,
+    request: AutoBuildRequest,
+    rng: Optional[random.Random] = None,
+) -> AutoBuildResponse:
+    today = household_today(repository)
+    days = _buildable_days(request.days, today)
+
+    slot_dtos = GetMealSlotsHandler(repository).handle()
+    household_slots = [s.name for s in slot_dtos]
+    allowed_slots = _resolve_allowed_slots(request.slot_names, household_slots)
+
+    candidates = build_candidates(repository)
 
     excluded = _planned_recipe_ids_in_range(repository, days)
     emphasis = request.emphasis if request.emphasis in _EMPHASES else EMPHASIS_USE_UP_STOCK
@@ -587,6 +600,65 @@ def _response_payload(r: AutoBuildResponse) -> dict:
         "budget_amount": r.budget_amount,
         "projected_over": r.projected_over,
     }
+
+
+#: How many recipes the rail's "Dora suggests" chip offers. Small on purpose —
+#: this is a shortlist you scan, not a second cookbook. Callers may ask for
+#: fewer; they may not ask for more, or the chip stops being a shortlist.
+SUGGESTIONS_DEFAULT_COUNT = 8
+SUGGESTIONS_MAX_COUNT = 20
+
+
+@MEAL_PLAN_ROUTER.route("/suggestions", methods=["GET"])
+def week_suggestions():
+    """Ranked recipe suggestions for the meal planner's rail
+    (BRIEF_MEAL_PLANNER_RAIL_AND_SHELL §4.4).
+
+    Read-only, and deliberately **no new domain logic**: it reuses
+    `build_candidates` + `select_recipes` + `reason_chip`, calls the default
+    emphasis, and returns the server's own frozen chip tokens rather than
+    prose. The client maps token → copy; the vocabulary stays server-side
+    (R-003), which is why this endpoint ships tokens and not sentences.
+
+    `rng` is deliberately omitted, so the ranking is deterministic: a rail that
+    reshuffled itself on every render would be unusable to scan.
+
+    Recipes already planned in the focused week are excluded — suggesting
+    something you have already scheduled that week is noise, and it is the same
+    exclusion the week builder applies.
+    """
+    week_start_raw = flask_request.args.get("week_start")
+    if not week_start_raw:
+        return bad_request("A week_start date (YYYY-MM-DD) is required.")
+    try:
+        week_start = date.fromisoformat(week_start_raw)
+    except ValueError:
+        return bad_request("week_start must be an ISO date (YYYY-MM-DD).")
+
+    try:
+        count = int(flask_request.args.get("count", SUGGESTIONS_DEFAULT_COUNT))
+    except ValueError:
+        return bad_request("count must be a whole number.")
+    count = max(1, min(count, SUGGESTIONS_MAX_COUNT))
+
+    repo = SqlAlchemyRepository()
+    days = [week_start + timedelta(days=offset) for offset in range(7)]
+
+    candidates = build_candidates(repo)
+    excluded = _planned_recipe_ids_in_range(repo, days)
+    picked = select_recipes(
+        candidates, EMPHASIS_USE_UP_STOCK, count, excluded,
+    )
+
+    return ok({
+        "suggestions": [
+            {
+                "recipe_id": str(c.recipe_id),
+                "reason_chip": reason_chip(c, EMPHASIS_USE_UP_STOCK, budget_swapped=False),
+            }
+            for c in picked
+        ],
+    })
 
 
 @MEAL_PLAN_ROUTER.route("/auto-build", methods=["POST"])

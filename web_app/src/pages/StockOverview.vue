@@ -1123,6 +1123,10 @@
             // stale until refetched — one refresh for the batch.
             await stockItemStore.getStockItemsAsync();
             ids.forEach((id) => invalidateBuyVerdict(id));
+            // Bypasses `stockItemStore`'s own mutations, so the recipe list's
+            // stock-derived facts (cookable, missing counts) have to be marked
+            // stale here too — a batch restock changes what's cookable.
+            recipeStore.invalidateRecipes();
             $q.notify({
                 type: 'positive',
                 position: 'bottom-right',

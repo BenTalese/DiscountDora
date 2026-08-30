@@ -88,10 +88,16 @@ class GetShoppingListsHandler:
                 line_count = total,
                 ticked_count = ticked,
             ))
-        # One time-ordered continuum (UX-v2): past at the top, future at the
-        # bottom, done and active interleaved by their effective date. The
-        # rail and the mobile dropdown render this order verbatim.
-        out.sort(key=lambda s: (s.effective_date, s.created_at))
+        # One time-ordered continuum (UX-v2), **newest first** (2026-08-28
+        # owner call): your drafts and the shop you're on are at the top, and
+        # finished lists trail off below them. It ran oldest-first until then,
+        # which put a wall of history above the only lists you can still act on
+        # — and got worse the longer the household used Dora. Done and active
+        # are still interleaved by effective date rather than grouped by status,
+        # so the rail stays one timeline. The rail and the mobile dropdown
+        # render this order verbatim; `_next_up_list_id` picks with min/max and
+        # is unaffected by the sort direction.
+        out.sort(key=lambda s: (s.effective_date, s.created_at), reverse=True)
         return out
 
 

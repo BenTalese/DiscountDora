@@ -167,6 +167,28 @@ describe('useBuyVerdict cache', () => {
         expect(a.verdict.value).toEqual(verdictNamed('first'));
     });
 
+    it('hides an already-fetched verdict when the flag goes off', async () => {
+        // The cache outlives a flag flip, so gating only `fetchIfNeeded` left
+        // verdicts painted after an admin turned money off (or the user hid
+        // the surface) until the consumer remounted. The read is gated too.
+        const mod = await freshModule();
+        h.getAsync.mockResolvedValue(verdictNamed('first'));
+        const a = mod.useBuyVerdict('id1');
+        await flush();
+        expect(a.verdict.value).toEqual(verdictNamed('first'));
+
+        enabled.value = false;
+        await nextTick();
+        expect(a.verdict.value).toBeNull();
+
+        // …and comes straight back from cache, without a refetch.
+        enabled.value = true;
+        await nextTick();
+        await flush();
+        expect(a.verdict.value).toEqual(verdictNamed('first'));
+        expect(h.getAsync).toHaveBeenCalledTimes(1);
+    });
+
     it('clearBuyVerdictCache drops everything — the next consumer refetches', async () => {
         const mod = await freshModule();
         h.getAsync.mockResolvedValue(verdictNamed('first'));

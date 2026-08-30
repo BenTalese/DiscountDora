@@ -256,6 +256,41 @@ export type RecipeHealthStarRating = {
     total_grams: number | null;
 };
 
+/** The Nutri-Score for a recipe (owner ask 2026-08-27) — the European sibling
+ *  of `RecipeHealthStarRating`, and subject to the same rule: server-owned,
+ *  read it, never re-derive it (R-003; the published tables live in
+ *  `dora_api/domain/nutri_score.py`).
+ *
+ *  The shapes are similar but **not interchangeable**, and unifying them would
+ *  be a trap: the components are different quantities with different ceilings
+ *  (`v_points` maxes at 8 over fruit/veg/nuts/legumes, `fvl_points` at 5 over
+ *  fruit/veg/legumes only), and the two schemes disagree about whether nuts
+ *  count at all. */
+export type RecipeNutriScore = {
+    /** 'A' (best) to 'E'. */
+    grade: string;
+    /** Negative points minus the positive ones. Lower is better. */
+    score: number;
+    negative_points: number;
+    energy_points: number;
+    saturated_fat_points: number;
+    total_sugars_points: number;
+    salt_points: number;
+    positive_points: number;
+    protein_points: number;
+    fibre_points: number;
+    fvl_points: number;
+    /** False when the N ≥ 11 rule dropped the protein credit. Surfaced because
+     *  a silently-zeroed protein score reads as a bug unless the UI says why. */
+    protein_counted: boolean;
+    /** % of the dish's counted weight that is fruit, vegetable or legume.
+     *  **Nuts excluded** — not the same figure as `fvnl_percent`. */
+    fvl_percent: number | null;
+    /** Raw summed ingredient weight in grams — the per-100g denominator, and
+     *  the reason the grade is labelled an estimate. */
+    total_grams: number | null;
+};
+
 /** FU-635 — the recipe rollup. Nutrient fields are null when no counted
  *  ingredient carried that nutrient; a 0 would claim the recipe has none.
  *  `counted_count` / `total_count` / `uncounted` always travel with the
@@ -292,9 +327,12 @@ export type RecipeNutrition = {
      *  penalty nutrient makes a recipe rate *better*, so the panel must be
      *  able to say which figures were thin. */
     nutrient_coverage: Partial<Record<string, number>>;
-    /** Null when the install has the rating off, or nothing could be
-     *  weighed. */
+    /** Null unless the install picked the `health_star` scheme *and* something
+     *  could be weighed. Never non-null at the same time as `nutri_score` —
+     *  the install chooses one scheme. */
     health_star_rating: RecipeHealthStarRating | null;
+    /** The Nutri-Score twin, on the same terms. */
+    nutri_score: RecipeNutriScore | null;
 };
 
 /** FU-635 — closed set of reasons an ingredient contributed nothing (R-010).

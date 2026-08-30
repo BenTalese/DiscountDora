@@ -92,9 +92,6 @@ class AuthenticatedUserDto:
     inference_meal_plan_enabled: bool
     # `nutrition_mode` removed — nutrition is install-wide (2026-08-14);
     # clients read it from /api/health `features.nutrition_mode`.
-    # C-cross Chunk 5 — per-user recipe-image opt-in (proposal §2.8).
-    # Default True. FU-508 dropped the stock-image companion.
-    show_recipe_images: bool
     # FU-615 — `household_headcount` moved to AppSetting (install-wide);
     # clients read it via /api/health.cooking_policy.
     # Settings rebuild Phase 4 (§2.9) — whether the user has a profile
@@ -154,7 +151,6 @@ class AuthenticatedUserDto:
             inference_recipes_enabled=bool(user.inference_recipes_enabled),
             inference_shopping_enabled=bool(user.inference_shopping_enabled),
             inference_meal_plan_enabled=bool(user.inference_meal_plan_enabled),
-            show_recipe_images=bool(user.show_recipe_images),
             has_image=user.image is not None,
             dashboard_layout=user.dashboard_layout,
             llm_enabled=bool(user.llm_enabled),

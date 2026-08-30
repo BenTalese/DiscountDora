@@ -9,15 +9,26 @@
         </div>
 
         <template v-else>
-            <!-- Cook-mode header. Owner feedback 2026-08-27: on a phone this
-                 was the desktop row squeezed sideways — the recipe name wrapped
-                 under the Exit button and the headcount control crushed the
-                 voice buttons. It is now two explicit bands: an identity band
-                 (exit + name + voice controls) that always stays on ONE line,
-                 and a controls band (headcount) that sits inline on desktop and
-                 drops to its own full-width row below the phone breakpoint.
-                 The name is `min-width: 0` + ellipsis so a long title truncates
-                 instead of pushing the row taller. -->
+            <!-- Cook-mode header. Owner feedback 2026-08-28: *"Everything is
+                 squished badly on desktop too for the header (sous chef, info
+                 button, cooking for #)"* / *"Cooking for input looks god awful.
+                 All squished together."* / *"In mobile mode, the layout at the
+                 top looks a bit odd."*
+
+                 The squish had a mechanical cause on top of the layout one:
+                 every gap in here was `var(--space-sm)` / `var(--space-xs)`,
+                 and **neither token exists** in `css/tokens.scss` (the scale is
+                 `--space-1..--space-12`). An undefined custom property with no
+                 fallback makes the whole declaration invalid, so `gap` fell
+                 back to its initial value — zero. The controls were literally
+                 touching. Fixed to real tokens throughout; the app-wide sweep
+                 for the same class of silent failure is FU-764.
+
+                 Layout is now three bands, and the controls never share a line
+                 with the title at any width — which is what "squished on
+                 desktop" was: a title, three round buttons and a labelled
+                 number input competing for one row. Identity (exit + name) on
+                 top, voice cluster and headcount below it. -->
             <div class="cook-header q-mb-md">
                 <div class="cook-header__identity">
                     <!-- Icon-only, matching the stocktake runner and the stock
@@ -33,102 +44,145 @@
                         <q-tooltip>Exit cook mode</q-tooltip>
                     </BaseButton>
                     <div class="text-h6 ellipsis cook-header__name">{{ recipe.name }}</div>
-                    <!-- Sous Chef. On/off is carried by the button's own
-                         styling — `filled-icon` when live, plain `icon` when
-                         not — rather than by appending "on" to a label
-                         (owner feedback 2026-08-27). `aria-pressed` carries the
-                         same state for screen readers, which a purely visual
-                         treatment otherwise drops. -->
-                    <BaseButton
-                        :variant="speechEnabled ? 'filled-icon' : 'icon'"
-                        :icon="ICONS.record_voice_over"
-                        :class="{ 'dora-text-muted': !speechEnabled }"
-                        :aria-pressed="speechEnabled ? 'true' : 'false'"
-                        aria-label="Sous Chef voice"
-                        @click="toggleSpeech"
-                    >
-                        <!-- tooltip folds the toggle micro-label with a fuller
-                             explanation of what Sous Chef does, per IMPL_PLAN_HELP_CHIPS. -->
-                        <q-tooltip>
-                            {{ speechEnabled ? 'Sous Chef is on — tap to turn it off.' : 'Sous Chef is off — tap to turn it on.' }}
-                            Reads each step aloud as you go, hands-free.
-                            Off = silent cook mode; you tap through the steps yourself.
-                        </q-tooltip>
-                    </BaseButton>
-                    <BaseButton
-                        v-if="speechRecognitionAvailable"
-                        :variant="listening ? 'filled-icon' : 'icon'"
-                        :icon="listening ? ICONS.mic : ICONS.mic_off"
-                        :class="{ 'dora-text-muted': !listening }"
-                        :aria-pressed="listening ? 'true' : 'false'"
-                        aria-label="Listen for hands-free commands"
-                        @click="toggleListening"
-                    >
-                        <!-- extended tooltip explains the mic is independent
-                             of Sous Chef narration. -->
-                        <q-tooltip>
-                            {{ listening ? 'Stop listening.' : 'Listen for hands-free commands.' }}
-                            Turns on the mic so next / previous / repeat / pause navigate
-                            cook mode without touching the screen. Independent of Sous
-                            Chef — you can listen without narration or narrate without
-                            listening.
-                        </q-tooltip>
-                    </BaseButton>
-                    <BaseButton
-                        variant="icon"
-                        :icon="ICONS.help_outline"
-                        aria-label="Sous Chef commands"
-                    >
-                        <q-tooltip>What can I say?</q-tooltip>
-                        <q-menu>
-                            <q-card class="sous-chef-help" flat>
-                                <q-card-section>
-                                    <div class="text-subtitle1 q-mb-sm">Sous Chef commands</div>
-                                    <div class="text-caption dora-text-muted q-mb-sm">
-                                        With listening on, say any of these. Sous Chef stays quiet for anything else — chat with someone in the kitchen freely.
-                                    </div>
-                                    <q-list dense>
-                                        <q-item v-for="cmd in sousChefCommands" :key="cmd.label">
-                                            <q-item-section>
-                                                <div class="row items-baseline q-gutter-xs">
-                                                    <span class="text-weight-medium">{{ cmd.label }}</span>
-                                                    <span class="text-caption dora-text-muted">— {{ cmd.does }}</span>
-                                                </div>
-                                            </q-item-section>
-                                        </q-item>
-                                    </q-list>
-                                    <!-- FU-722 — which engine actually spoke. The
-                                         Piper→browser fallback is otherwise
-                                         invisible, and the two clip for different
-                                         reasons, so debugging "it cut the start
-                                         off" needs to start here. -->
-                                    <div v-if="spokenWith" class="text-caption dora-text-muted q-mt-sm">
-                                        Voice: {{ spokenWith }}
-                                    </div>
-                                </q-card-section>
-                            </q-card>
-                        </q-menu>
-                    </BaseButton>
                 </div>
-                <!-- headcount control. Session-only; the
-                     saved recipe stays at `recipe.servings`. -->
-                <div class="cook-header__cooking-for">
-                    <q-icon :name="ICONS.group" size="20px" class="dora-text-muted" />
-                    <span class="text-caption dora-text-muted">Cooking for</span>
-                    <q-input
-                        v-model.number="cookingFor"
-                        type="number"
-                        min="1"
-                        dense
-                        outlined
-                        hide-bottom-space
-                        class="cook-header__cooking-for-input"
-                        @blur="onCookingForBlur"
-                    >
+
+                <div class="cook-header__controls">
+                    <div class="cook-header__voice">
+                        <!-- Sous Chef. Owner feedback 2026-08-28: *"I prefer the
+                             sous chef big button for desktop, the icon only version
+                             can stay for mobile only"* and *"could be a bit bigger
+                             in mobile view for fingers"*. So: a labelled button
+                             above the phone breakpoint, an icon-only one below it,
+                             and a 44px floor on the icon form (D-004) rather than
+                             BaseButton's 36px desktop-chrome default.
+
+                             On/off is still carried by the button's own styling —
+                             filled when live, outlined when not — rather than by
+                             appending "on" to the label (owner feedback
+                             2026-08-27). `aria-pressed` carries the same state for
+                             screen readers, which a purely visual treatment
+                             otherwise drops. -->
+                        <BaseButton
+                            :variant="sousChefVariant"
+                            :icon="ICONS.record_voice_over"
+                            :label="compactVoiceControls ? undefined : 'Sous Chef'"
+                            :aria-pressed="speechEnabled ? 'true' : 'false'"
+                            aria-label="Sous Chef voice"
+                            @click="toggleSpeech"
+                        >
+                            <!-- tooltip folds the toggle micro-label with a fuller
+                                 explanation of what Sous Chef does, per IMPL_PLAN_HELP_CHIPS. -->
+                            <q-tooltip>
+                                {{ speechEnabled ? 'Sous Chef is on — tap to turn it off.' : 'Sous Chef is off — tap to turn it on.' }}
+                                Reads each step aloud as you go, hands-free.
+                                Off = silent cook mode; you tap through the steps yourself.
+                            </q-tooltip>
+                        </BaseButton>
+                        <BaseButton
+                            v-if="speechRecognitionAvailable"
+                            :variant="listening ? 'filled-icon' : 'icon'"
+                            :icon="listening ? ICONS.mic : ICONS.mic_off"
+                            :class="{ 'dora-text-muted': !listening }"
+                            :aria-pressed="listening ? 'true' : 'false'"
+                            aria-label="Listen for hands-free commands"
+                            @click="toggleListening"
+                        >
+                            <!-- extended tooltip explains the mic is independent
+                                 of Sous Chef narration. -->
+                            <q-tooltip>
+                                {{ listening ? 'Stop listening.' : 'Listen for hands-free commands.' }}
+                                Turns on the mic so next / previous / repeat / pause navigate
+                                cook mode without touching the screen. Independent of Sous
+                                Chef — you can listen without narration or narrate without
+                                listening.
+                            </q-tooltip>
+                        </BaseButton>
+                        <!-- Owner feedback 2026-08-28: *"Would it be better to only
+                             show the info button for sous chef if sous chef is
+                             active?"* Yes — the popover lists spoken commands and
+                             names the engine that spoke, both of which are answers
+                             to questions you only have once something is listening
+                             or talking. Silent cook mode gets one less control. -->
+                        <BaseButton
+                            v-if="speechEnabled || listening"
+                            variant="icon"
+                            :icon="ICONS.help_outline"
+                            aria-label="Sous Chef commands"
+                        >
+                            <q-tooltip>What can I say?</q-tooltip>
+                            <q-menu>
+                                <q-card class="sous-chef-help" flat>
+                                    <q-card-section>
+                                        <div class="text-subtitle1 q-mb-sm">Sous Chef commands</div>
+                                        <div class="text-caption dora-text-muted q-mb-sm">
+                                            With listening on, say any of these. Sous Chef stays quiet for anything else — chat with someone in the kitchen freely.
+                                        </div>
+                                        <q-list dense>
+                                            <q-item v-for="cmd in sousChefCommands" :key="cmd.label">
+                                                <q-item-section>
+                                                    <div class="row items-baseline q-gutter-xs">
+                                                        <span class="text-weight-medium">{{ cmd.label }}</span>
+                                                        <span class="text-caption dora-text-muted">— {{ cmd.does }}</span>
+                                                    </div>
+                                                </q-item-section>
+                                            </q-item>
+                                        </q-list>
+                                        <!-- FU-722 — which engine actually spoke. The
+                                             Piper→browser fallback is otherwise
+                                             invisible, and the two clip for different
+                                             reasons, so debugging "it cut the start
+                                             off" needs to start here. -->
+                                        <div v-if="spokenWith" class="text-caption dora-text-muted q-mt-sm">
+                                            Voice: {{ spokenWith }}
+                                        </div>
+                                    </q-card-section>
+                                </q-card>
+                            </q-menu>
+                        </BaseButton>
+                    </div>
+
+                    <!-- Headcount. Session-only; the saved recipe stays at
+                         `recipe.servings`.
+
+                         Owner feedback 2026-08-28: *"Cooking for input looks
+                         god awful. All squished together. Looks like a 5 year
+                         old did it."* It was a bare label + a 72px-wide
+                         `q-input[type=number]` at zero gap, so the words, the
+                         box and its native spinner arrows all ran together and
+                         the only touch target was a ~10px browser arrow.
+
+                         It is a stepper in a bordered pill now: one object with
+                         a label, and two 44px buttons either side of the number
+                         (D-004). Typing is deliberately gone — the value is
+                         seeded from the install-wide household headcount and
+                         nudged by one or two from there, which is exactly what
+                         ± is for, and a keyboard opening over the hob is the
+                         thing a cook least wants. -->
+                    <div class="cook-headcount">
+                        <q-icon :name="ICONS.group" size="20px" class="dora-text-muted" />
+                        <span class="cook-headcount__label">Cooking for</span>
+                        <BaseButton
+                            variant="icon"
+                            :icon="ICONS.remove"
+                            :disable="cookingFor <= 1"
+                            aria-label="Cook for one fewer"
+                            @click="adjustHeadcount(-1)"
+                        >
+                            <q-tooltip>Cook for one fewer</q-tooltip>
+                        </BaseButton>
+                        <span class="cook-headcount__value" aria-live="polite">{{ cookingFor }}</span>
+                        <BaseButton
+                            variant="icon"
+                            :icon="ICONS.add"
+                            aria-label="Cook for one more"
+                            @click="adjustHeadcount(1)"
+                        >
+                            <q-tooltip>Cook for one more</q-tooltip>
+                        </BaseButton>
                         <q-tooltip>
                             Rescales quantities for this cook only — the saved recipe stays at {{ recipe.servings ?? '?' }} serving{{ recipe.servings === 1 ? '' : 's' }}.
                         </q-tooltip>
-                    </q-input>
+                    </div>
                 </div>
             </div>
 
@@ -140,20 +194,19 @@
                 v-if="isImageMode"
                 :recipe-id="recipe.recipe_id"
                 :images="recipe.step_images ?? []"
+                @finish="openFinish"
             />
 
-            <q-linear-progress
+            <!-- The bar and the count are one component now (owner feedback
+                 2026-08-28 — the count was tiny caption text floating above an
+                 unrelated bar). Shared with the image face so both read the
+                 same. -->
+            <CookStepProgress
                 v-if="!isImageMode"
-                :value="(currentStepIndex + 1) / steps.length"
+                :current="currentStepIndex"
+                :total="steps.length"
                 class="q-mb-md"
-                size="10px"
-                color="primary"
-                rounded
             />
-
-            <div v-if="!isImageMode" class="text-caption q-mb-sm">
-                Step {{ currentStepIndex + 1 }} of {{ steps.length }}
-            </div>
 
             <q-card v-if="!isImageMode" flat bordered class="step-card q-mb-md">
                 <q-card-section>
@@ -254,10 +307,13 @@
                     @click="speakCurrent"
                     :disable="!speechEnabled"
                 />
+                <!-- Raw Material names (`check` / `arrow_forward`) render
+                     nothing on an MDI icon set; these have to come from the
+                     ICONS registry like every other glyph (A7 / D-005). -->
                 <BaseButton
                     size="lg"
                     variant="primary"
-                    :icon-right="currentStepIndex === steps.length - 1 ? 'check' : 'arrow_forward'"
+                    :icon-right="currentStepIndex === steps.length - 1 ? ICONS.check : ICONS.arrow_forward"
                     :label="currentStepIndex === steps.length - 1 ? 'Finish' : 'Next'"
                     @click="nextStep"
                 />
@@ -599,6 +655,7 @@
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseSegmented from 'src/components/BaseSegmented.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
+    import CookStepProgress from 'src/components/recipes/CookStepProgress.vue';
     import RecipeCookModeImageView from 'src/components/recipes/RecipeCookModeImageView.vue';
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';
@@ -726,14 +783,14 @@
         return formatQuantity(scaled, unit);
     }
 
-    /** Re-clamp the headcount input on blur. `q-input.number` lets the user
-     *  type "0" or clear the field (giving NaN); coerce back to a sane
-     *  minimum of 1 so quantities never collapse to zero mid-cook. */
-    function onCookingForBlur() {
-        const value = cookingFor.value;
-        if (!Number.isFinite(value) || value < 1) cookingFor.value = 1;
-        else cookingFor.value = Math.floor(value);
+    /** Nudge the session headcount. Clamps at 1 — a zero would collapse every
+     *  scaled quantity mid-cook — and floors, because `householdHeadcount` is
+     *  a stored setting this page doesn't get to assume is integral. */
+    function adjustHeadcount(delta: number) {
+        const current = Number.isFinite(cookingFor.value) ? Math.floor(cookingFor.value) : 1;
+        cookingFor.value = Math.max(1, current + delta);
     }
+
 
     // ── P2-13 voice (extracted into composables) ────────────────────────
     // The user's persisted preference seeds the local toggle; subsequent
@@ -749,6 +806,17 @@
         if (engine === 'piper') return 'Piper (server)';
         if (engine === 'browser') return 'Browser fallback';
         return null;
+    });
+
+    /** Below the phone breakpoint the voice controls go icon-only; above it
+     *  Sous Chef gets its label back (owner feedback 2026-08-28: *"I prefer the
+     *  sous chef big button for desktop, the icon only version can stay for
+     *  mobile only"*). Reactive via Quasar's Screen plugin, activated in
+     *  `boot/quasarScreen.ts`. */
+    const compactVoiceControls = computed(() => $q.screen.lt.sm);
+    const sousChefVariant = computed(() => {
+        if (compactVoiceControls.value) return speechEnabled.value ? 'filled-icon' : 'icon';
+        return speechEnabled.value ? 'primary' : 'secondary';
     });
 
     const voiceInput = useVoiceInput({
@@ -1512,7 +1580,10 @@
     // calm location-grouped ingredient cards. No mid-cook
     // stock-level colour noise; just legible names + quantities.
     .ingredient-group {
-        background: var(--surface-card);
+        // `--surface-card` does not exist (FU-764); the card surface token is
+        // `--surface-component`. Until now this declaration was invalid and the
+        // group cards inherited q-card's own background.
+        background: var(--surface-component);
     }
     .ingredient-quantity {
         min-width: 64px;
@@ -1568,53 +1639,107 @@
         white-space: pre-wrap;
         line-height: 1.5;
     }
-    // Cook-mode header (owner feedback 2026-08-27 — "the page might not have
-    // been assessed on mobile view; it just squishes in the desktop UI").
+    // Cook-mode header (owner feedback 2026-08-27 + 2026-08-28 — "everything is
+    // squished badly on desktop too for the header").
     //
-    // Two bands rather than one wrapping flex row. The identity band is
+    // Three bands stacked, not one wrapping row: identity (exit + name), then a
+    // controls band holding the voice cluster and the headcount pill. The
+    // controls never share a line with the title at any width — that sharing
+    // *was* the squish, on desktop as much as on a phone. The identity band is
     // `nowrap` so the recipe name can never fall below the exit button; it
     // truncates instead, which is the right trade when the name is already the
-    // page you navigated to. The headcount band sits beside it on desktop and
-    // becomes its own full-width row below the phone breakpoint, where three
-    // icon buttons plus a labelled number input do not fit on one line at any
-    // sane font size.
+    // page you navigated to.
+    //
+    // Every gap here used `--space-sm` / `--space-xs`, which do not exist (the
+    // scale is `--space-1..--space-12`). An undefined custom property with no
+    // fallback invalidates the declaration, so all of these were 0 — the
+    // mechanical half of "no margin from other elements". See FU-764.
     .cook-header {
         display: flex;
-        align-items: center;
-        gap: var(--space-sm);
-        flex-wrap: wrap;
+        flex-direction: column;
+        gap: var(--space-3);
     }
     .cook-header__identity {
         display: flex;
         align-items: center;
-        gap: var(--space-xs);
+        gap: var(--space-2);
         // `min-width: 0` is what actually lets the ellipsis engage — without
         // it the flex item refuses to shrink below its content width and the
         // row grows instead of the name truncating.
         min-width: 0;
-        flex: 1 1 auto;
         flex-wrap: nowrap;
     }
     .cook-header__name {
         min-width: 0;
         flex: 1 1 auto;
     }
-    .cook-header__cooking-for {
+    .cook-header__controls {
         display: flex;
         align-items: center;
-        gap: var(--space-xs);
-        white-space: nowrap;
-        flex: 0 0 auto;
+        justify-content: space-between;
+        gap: var(--space-4);
+        flex-wrap: wrap;
     }
-    .cook-header__cooking-for-input {
-        width: 72px;
+    .cook-header__voice {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+        flex: 0 1 auto;
+        min-width: 0;
+    }
+    // D-004 — the voice cluster is the one thing in cook mode you reach for
+    // with a wet or floury finger, so its buttons clear the 44px floor rather
+    // than sitting at BaseButton's 36px desktop-chrome default.
+    .cook-header__voice :deep(.dora-btn) {
+        min-height: 44px;
+    }
+    .cook-header__voice :deep(.dora-btn--icon),
+    .cook-header__voice :deep(.dora-btn--filled-icon) {
+        min-width: 44px;
+    }
+    // Headcount stepper as one bordered object, so the label, the buttons and
+    // the number read as a single control instead of three loose things.
+    .cook-headcount {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+        flex: 0 0 auto;
+        padding: var(--space-1) var(--space-3);
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-pill);
+        background: var(--surface-elevated);
+        white-space: nowrap;
+    }
+    .cook-headcount__label {
+        font-size: 0.875rem;
+        color: var(--text-secondary);
+    }
+    .cook-headcount__value {
+        min-width: 1.75rem;
+        text-align: center;
+        font-size: 1.25rem;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+        color: var(--text-primary);
+    }
+    .cook-headcount :deep(.dora-btn--icon) {
+        min-height: 44px;
+        min-width: 44px;
     }
     @media (max-width: 599px) {
-        .cook-header__cooking-for {
-            // Own row, pushed to the right so it reads as a control rather
-            // than a second title.
-            flex: 1 0 100%;
-            justify-content: flex-end;
+        .cook-header__controls {
+            // The voice cluster and the headcount each take a full row on a
+            // phone; side by side they are back to competing for width, which
+            // is the "layout at the top looks a bit odd" report.
+            flex-direction: column;
+            align-items: stretch;
+            gap: var(--space-3);
+        }
+        .cook-header__voice {
+            justify-content: flex-start;
+        }
+        .cook-headcount {
+            justify-content: space-between;
         }
     }
 </style>

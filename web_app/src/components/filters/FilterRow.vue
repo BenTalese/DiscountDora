@@ -20,7 +20,7 @@
     -->
     <div
         class="filter-row row items-center no-wrap"
-        :class="`filter-row--${variant}`"
+        :class="[`filter-row--${variant}`, { 'filter-row--wide-wraps': wideWraps }]"
     >
         <slot />
     </div>
@@ -31,8 +31,18 @@
         defineProps<{
             /** `chips` = content-width toggles; `fields` = uniform control scale. */
             variant?: 'chips' | 'fields';
+            /** Let the band wrap onto further lines once there's desktop width
+             *  to wrap into, instead of scrolling sideways (owner ask
+             *  2026-08-28, for the cookbook's long field row).
+             *
+             *  Opt-in rather than the default because the two shapes suit
+             *  different row lengths: sideways scroll keeps a short row on one
+             *  line, and only a row with more controls than fit is better off
+             *  stacked. Below the breakpoint every row scrolls regardless —
+             *  wrapping fourteen controls on a phone builds a wall. */
+            wideWraps?: boolean;
         }>(),
-        { variant: 'chips' },
+        { variant: 'chips', wideWraps: false },
     );
 </script>
 
@@ -49,6 +59,32 @@
     .filter-row::-webkit-scrollbar {
         display: none;
     }
+    /* Owner feedback 2026-08-28: "1 or 2 px extra space between filter rows…
+       commonly applied across pages with filters". Lives here rather than on
+       each page for exactly that reason — every stacked filter band in the app
+       (Stock overview, Cookbook) comes through this component, so one rule
+       covers them and a new page gets it for free. Sibling rule, so a lone row
+       still sits flush against the panel's own padding. */
+    .filter-row + .filter-row {
+        margin-top: 2px;
+    }
+    /* 600px is Quasar's `sm` floor — the same line `$q.screen.lt.sm` draws, so
+       "desktop" means the same thing here as it does in the components that
+       branch in script. Overflow goes back to visible on *both* axes: a
+       wrapping row can never overflow horizontally, and leaving `auto` on it
+       clips the focus rings at the row's edge. Both axes deliberately — CSS
+       promotes a `visible` axis to `auto` whenever its partner is `hidden`, so
+       setting `overflow-x` alone silently computed straight back to `auto`
+       (measured in the browser; it did).
+       `.no-wrap` is a Quasar utility class on the element, so this needs the
+       specificity of two classes to beat it. */
+    @media (min-width: 600px) {
+        .filter-row--wide-wraps.filter-row--wide-wraps {
+            flex-wrap: wrap;
+            overflow: visible;
+            row-gap: var(--space-2);
+        }
+    }
     /* `:deep()` throughout, not plain child selectors: every control in here
        arrives through the slot, so it carries the *parent page's* scope id and
        a scoped `.filter-row > *` would compile to a selector that can never
@@ -62,10 +98,17 @@
 
     /* ── The uniform control scale ─────────────────────────────────────
        Owner feedback 2026-08-18 ("dislike the sizing difference between types
-       of filters") and 2026-08-19 ("can we not achieve uniformity via base
-       components?"). One height for everything, and two width tracks: the
-       text-ish controls share one, numeric bounds get a slightly wider one
-       because their labels ("Missing ingredients ≤") outrun their content. */
+       of filters"), 2026-08-19 ("can we not achieve uniformity via base
+       components?") and 2026-08-29 ("some filters seem bigger than others for
+       no reason (kcal, ingredient count) — consistency").
+
+       One height and **one** width for everything. There used to be a second,
+       20px-wider track for the numeric bounds, justified by a label
+       ("Missing ingredients ≤") that was deleted on 2026-08-20 — so the only
+       thing left holding the two tracks apart was the fact they existed. The
+       sort control keeps its own, wider track: it packs a direction chip
+       *inside* the field, which is a real difference in what the control
+       holds rather than a difference in species. */
     .filter-row--fields {
         /* 44px, not the 40px this row used to run at: these are inputs on a
            surface a finger uses (the row scrolls sideways *because* it's used
@@ -80,7 +123,6 @@
            (D-005), a clear button and a chevron, which between them spend
            ~90px before a single character of the value is drawn. */
         --filter-control-w: 210px;
-        --filter-control-w-num: 230px;
         /* The sort control spends another ~46px on the direction chip inside
            the same field, so it gets its own track rather than making every
            neighbour as wide as its widest member. */
@@ -91,17 +133,12 @@
     .filter-row--fields :deep(.q-field--dense .q-field__control) {
         height: var(--filter-control-h);
     }
-    /* Default track for anything in a fields row, so a control added later
-       lands at the right width without the page restating it. Callers opt out
-       per control with `.filter-row__wide` (numeric bounds) or
-       `.filter-row__auto` (content-sized). */
+    /* The track for anything in a fields row, so a control added later lands
+       at the right width without the page restating it. The one opt-out left
+       is `.filter-row__auto` (content-sized). */
     .filter-row--fields > :deep(:not(.filter-row__auto)) {
         min-width: var(--filter-control-w);
         max-width: var(--filter-control-w);
-    }
-    .filter-row--fields > :deep(.filter-row__wide) {
-        min-width: var(--filter-control-w-num);
-        max-width: var(--filter-control-w-num);
     }
     .filter-row--fields > :deep(.sort-control) {
         min-width: var(--filter-control-w-sort);

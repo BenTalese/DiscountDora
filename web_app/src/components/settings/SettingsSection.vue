@@ -1,6 +1,10 @@
 <template>
     <section class="settings-section">
-        <header v-if="$slots.title || $slots.description || $slots.actions" class="settings-section__header">
+        <header
+            v-if="$slots.title || $slots.description || $slots.actions"
+            class="settings-section__header"
+            :class="{ 'settings-section__header--inline': !$slots.description }"
+        >
             <div class="settings-section__heading">
                 <h2 v-if="$slots.title" class="settings-section__title">
                     <slot name="title" />
@@ -37,6 +41,14 @@
         align-items: flex-start;
         justify-content: space-between;
         gap: 16px;
+    }
+    /* Same fix as SettingsRow's: a title-plus-toggle header top-aligns a ~40px
+       control against a ~21px heading. With no description there is only one
+       line to align to, so centre. Kept off the description case on purpose —
+       there a control should stay level with the heading, not float to the
+       middle of a four-line paragraph (Admin → Data pages). */
+    .settings-section__header--inline {
+        align-items: center;
     }
     .settings-section__heading {
         display: flex;

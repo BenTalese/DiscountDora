@@ -98,7 +98,7 @@ def bootstrap(is_test_env: bool = False):
     # OPTIONAL_SAAS_AND_MANAGED_DEPLOYMENT.md.
     if not is_test_env and not is_test():
         # Nightly audit-log retention sweep. Hour 3 local time keeps it
-        # well clear of any deals-email schedule. Tests skip the
+        # well clear of the 07:00 deals-email send. Tests skip the
         # scheduler entirely — they don't run long enough to trip it,
         # and we don't want a background thread surviving the test
         # session.
@@ -152,6 +152,20 @@ def bootstrap(is_test_env: bool = False):
             send_daily_brief,
             CronTrigger(minute=45),
             id="daily_brief",
+            replace_existing=True,
+        )
+        # Weekly deals email (FU-789). Hourly for the same reason the brief is:
+        # the send hour is household-local (R-021) and each subscriber picks
+        # their own weekday, both of which are runtime settings the startup-time
+        # cron can't see. The job gates on all of it internally and self-gates
+        # when SMTP or the install-wide flag is off, so an install that never
+        # configured email spends one cheap check an hour. Minute 15 staggers it
+        # off the :30 alerts push and the :45 brief.
+        from dora_api.features.deals.send_deals_email import send_deals_email
+        scheduler.add_job(
+            send_deals_email,
+            CronTrigger(minute=15),
+            id="deals_email",
             replace_existing=True,
         )
         # Demo / sellable-showcase auto-reset (FU-392). When the install is

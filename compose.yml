@@ -13,6 +13,18 @@
 #   - widen exposed ports
 #   - bump healthcheck intervals
 
+# Project name. Without this Compose derives it from the checkout directory,
+# which is still `DiscountDora/` (the GitHub repo + local clone were never
+# renamed with the product — see CLAUDE.md → Naming). That leaked the retired
+# name into every generated resource: `discountdora_dora_logs`,
+# `discountdora_dora_data`, and so on. Pinning it here decouples the deployment
+# from the directory name entirely, so a future repo rename is a no-op.
+#
+# NOTE for existing deployments: this renames the four named volumes below.
+# The old `discountdora_*` volumes are not deleted, just no longer referenced —
+# the stack comes up with empty ones. Copy the data across first if you need it.
+name: dashy-dora
+
 services:
   dashy_dora:
     container_name: dashy_dora

@@ -1,5 +1,7 @@
 import { acceptHMRUpdate, defineStore } from 'pinia';
-import type { MealPlan, MealPlanIngredients, Shortfall } from 'src/models/mealPlan';
+import type {
+    MealPlan, MealPlanIngredients, MealPlanSuggestion, Shortfall,
+} from 'src/models/mealPlan';
 import MealPlanApiService, {
     type CreateMealPlanCommand,
     type UpdateMealPlanCommand,
@@ -38,6 +40,16 @@ export const useMealPlanStore = defineStore('mealPlan', () => {
     const getIngredientsForPlanAsync = async (id: string): Promise<MealPlanIngredients> =>
         await api.getIngredientsAsync(id);
 
+    /** BRIEF_MEAL_PLANNER_RAIL_AND_SHELL §4.4 — the rail's ranked suggestions
+     *  for one week. Deliberately NOT cached in the store: the ranking is only
+     *  valid for the week it was asked about (it excludes what's already
+     *  planned there), so the caller owns the week-scoped cache and the store
+     *  stays a pass-through. */
+    const getWeekSuggestionsAsync = async (
+        weekStart: string,
+    ): Promise<MealPlanSuggestion[]> =>
+        (await api.getWeekSuggestionsAsync(weekStart)).suggestions;
+
     const getShortfallAsync = async () => {
         shortfall.value = await api.getShortfallAsync();
     };
@@ -55,6 +67,7 @@ export const useMealPlanStore = defineStore('mealPlan', () => {
         updateMealPlanAsync,
         deleteMealPlanAsync,
         getIngredientsForPlanAsync,
+        getWeekSuggestionsAsync,
         getShortfallAsync,
         getTodayAsync,
     };

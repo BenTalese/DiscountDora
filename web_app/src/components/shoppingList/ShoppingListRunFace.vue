@@ -2,25 +2,11 @@
     <div class="sl-run">
         <!-- Ordering stays available mid-shop — it is the single most useful
              control in a store (walk by aisle, or by the shop you're standing
-             in) and it is a view preference, so it costs nothing to keep. -->
-        <div class="row items-center q-gutter-xs q-mb-sm">
-            <span class="text-caption dora-text-muted q-mr-xs">Order by</span>
-            <BaseButton
-                v-for="m in SECTION_MODES"
-                :key="m"
-                :variant="effectiveMode === m ? 'secondary' : 'ghost'"
-                dense
-                size="sm"
-                :label="SECTION_MODE_LABELS[m]"
-                :disable="!availableModes[m]"
-                @click="emit('update:mode', m)"
-            >
-                <q-tooltip v-if="!availableModes[m]">
-                    Nothing on this list has a {{ SECTION_MODE_LABELS[m].toLowerCase() }} set
-                </q-tooltip>
-            </BaseButton>
-        </div>
-
+             in) — but the control itself moved to the overview card at the top
+             of the page. This face was rendering its own copy of the plan
+             face's bar, identical but for the mode list, which is two places to
+             change one view preference. This face still *reads* the mode; it no
+             longer offers a second way to set it. -->
         <div
             v-for="section in runSections"
             :key="section.key"
@@ -121,6 +107,49 @@
             </div>
         </div>
 
+        <!-- Picked items land here rather than leaving the page. Rows used to
+             be filtered out of their section and shown nowhere else, so a
+             mis-tap removed an item with no way to see what had gone. Collapsed
+             by default — it is a record, not the job — and it borrows the
+             expansion shape the deferred-by-budget section already uses. -->
+        <q-expansion-item
+            v-if="pickedLines.length > 0"
+            :label="`Picked (${pickedLines.length})`"
+            :caption="moneyEnabled ? `${formatMoney(pickedTotal)} in the trolley` : undefined"
+            :icon="ICONS.check_circle"
+            class="q-mt-md dora-bg-sunken rounded-borders sl-run-picked"
+        >
+            <q-list separator>
+                <q-item
+                    v-for="line in pickedLines"
+                    :key="line.line_id"
+                    clickable
+                    class="sl-run-picked-row dora-press"
+                    @click="emit('untick', line)"
+                >
+                    <q-item-section side>
+                        <q-icon
+                            :name="ICONS.check_box"
+                            size="24px"
+                            color="positive"
+                        />
+                    </q-item-section>
+                    <q-item-section>
+                        <q-item-label class="sl-run-picked-name">
+                            <span v-if="(line.quantity ?? 0) > 1" class="sl-run-qty">
+                                {{ line.quantity }}×
+                            </span>
+                            {{ line.stock_item_name }}
+                        </q-item-label>
+                    </q-item-section>
+                    <q-item-section v-if="moneyEnabled" side class="sl-run-price">
+                        {{ priceLabel(line) }}
+                    </q-item-section>
+                    <q-tooltip>Tap to put it back on the list</q-tooltip>
+                </q-item>
+            </q-list>
+        </q-expansion-item>
+
         <!-- Everything picked. The finish CTA lives in the sticky footer, so
              this is reassurance, not a second call to action. -->
         <div v-if="allPicked" class="text-center q-py-xl dora-text-muted">
@@ -157,8 +186,11 @@
      * gesture, and an optional price.
      *
      * Picked rows leave the list, so it shrinks as the trip progresses — but
-     * the *section* stays, collapsed to a one-line "all N picked". A section
-     * that vanished outright read as work being lost rather than done.
+     * they are not gone: the *section* stays, collapsed to a one-line "all N
+     * picked", and every picked row collects in one ungrouped, collapsed
+     * "Picked" section at the bottom. A section that vanished outright read as
+     * work being lost rather than done, and a row that vanished outright left a
+     * mis-tap with nothing to undo from.
      */
     import { computed, toRef } from 'vue';
     import { ICONS } from 'src/style/icons';
@@ -166,35 +198,39 @@
     import { formatMoney } from 'src/composables/useMoney';
     import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
     import {
-        SECTION_MODES, SECTION_MODE_LABELS, isNestedChild, sectionIconFor,
-        sectionProgress, useLineSections, type SectionMode,
+        isNestedChild, sectionIconFor, sectionProgress, useLineSections,
+        type SectionMode,
     } from 'src/composables/useLineSections';
     import type { ShoppingListLine } from 'src/models/shoppingList';
 
     const props = defineProps<{
         lines: ShoppingListLine[];
         mode: SectionMode;
+        /** Server-owned `totals.picked_price` — what's in the trolley. Passed
+         *  in rather than summed here: re-deriving it from the lines would put
+         *  a second copy of the money ladder in the browser (R-003). */
+        pickedTotal: number;
     }>();
 
     const emit = defineEmits<{
-        'update:mode': [mode: SectionMode];
         /** Mark this line picked. The page owns the mutation and the undo. */
         tick: [line: ShoppingListLine];
+        /** Put a picked line back on the list, from the Picked section. */
+        untick: [line: ShoppingListLine];
         'capture-price': [line: ShoppingListLine];
     }>();
 
     const { moneyEnabled } = useMoneyEnabled();
 
     const allLines = toRef(props, 'lines');
-    const modeRef = computed({
-        get: () => props.mode,
-        set: (m: SectionMode) => emit('update:mode', m),
-    });
+    // Read-only: the overview card owns the control that sets the mode, so this
+    // face only ever receives one.
+    const modeRef = computed(() => props.mode);
     // Sectioning runs over *every* line, ticked included. The run face still
     // hides picked rows — but it does so per-section, so a section that has
     // emptied survives as its own "all 4 picked" line instead of silently
     // disappearing along with the evidence that you did that aisle.
-    const { sections, availableModes, effectiveMode } = useLineSections(allLines, modeRef);
+    const { sections, effectiveMode } = useLineSections(allLines, modeRef);
 
     /** One pass per render: what's left to pick in each section, plus the
      *  progress the header and the collapsed line both read. Derived once
@@ -211,6 +247,14 @@
     const allPicked = computed(() =>
         props.lines.length > 0 && props.lines.every((l) => l.is_ticked)
     );
+
+    /** Every picked line, ungrouped — the trolley doesn't have aisles. Order is
+     *  the list's own, not pick order: the server doesn't record when a line was
+     *  ticked, and inventing an order from render position would reshuffle on
+     *  every refetch. */
+    const pickedLines = computed(() => props.lines.filter((l) => l.is_ticked));
+
+
 
     /** What the shopper can act on, in aisle terms. Location is dropped when
      *  the sectioning already groups by it — repeating the heading on every
@@ -263,6 +307,16 @@
     }
     .sl-run-price--estimate {
         color: var(--text-secondary);
+    }
+    /* Quieter than a live row on purpose — done work shouldn't compete with
+       what's left to pick — but still a full tap target, because putting an
+       item back is the recovery path for a mis-tap. */
+    .sl-run-picked-row {
+        min-height: 48px;
+    }
+    .sl-run-picked-name {
+        color: var(--text-secondary);
+        text-decoration: line-through;
     }
     .sl-run-cleared {
         padding: 10px 16px;

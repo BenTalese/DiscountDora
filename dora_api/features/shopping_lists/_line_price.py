@@ -11,8 +11,14 @@ all share one definition (R-003 — no domain rule lives in two places):
   this line" into the folded ``(total_price, total_measure, unit)`` observation
   shape (A1). A sized product in a measurable dimension yields a *measure*
   observation; everything else falls back to a *count* observation in ``ea``.
+* :func:`resolve_store_id` — the **store ladder** (2026-08-28), the money
+  ladder's twin. Added when a fifth rung (`planned_store_id`) landed and the
+  ordering was still an if/elif chain inline in the detail handler, where
+  nothing could test it.
 """
 from __future__ import annotations
+
+from uuid import UUID
 
 from dora_api.domain import units
 from dora_api.domain.entities.shopping_list import ShoppingListLine
@@ -77,3 +83,46 @@ def harvest_observation_fields(
         if udef is not None and udef.dimension in units.PRICE_DIMENSIONS:
             return total_price, float(size_value) * qty, udef.canonical, pack_count
     return total_price, float(qty), "ea", pack_count
+
+
+def resolve_store_id(
+    *,
+    purchased_store_id: UUID | None,
+    planned_store_id: UUID | None,
+    usual_store_id: UUID | None,
+    last_purchase_store_id: UUID | None,
+    chosen_offer_store_id: UUID | None,
+) -> UUID | None:
+    """The **store ladder**: which store a shopping line is associated with.
+
+    Five rungs, first non-null wins::
+
+        purchased  → where you actually bought it (a record; only after the fact)
+        planned    → where you mean to buy it, *on this list*
+        usual      → ``StockItem.usual_store_id``, a standing preference
+        last       → the store of the most recent actual purchase
+        offer      → the chosen product offer's store
+
+    Two orderings matter and both are deliberate:
+
+    * **Intent beats history**, which is the reverse of
+      :func:`line_paid_unit_price`. That ladder answers "what did this cost",
+      where what you really paid outranks an advertised price; this one answers
+      "where do I *plan* to buy it", where a stated intention outranks where you
+      happened to shop last time.
+    * **The more specific intent wins.** ``planned`` is a choice made for this
+      list; ``usual`` is a habit that applies to every list. A shop where you're
+      making an exception must not be overruled by the rule.
+
+    R-003 chokepoint, and pure so the ordering is testable without a repository
+    — the ladder decides which section a line lands in under Order-by → Store,
+    so getting a rung wrong silently re-groups the list. ``None`` ⇒ the
+    "No store set" bucket.
+    """
+    return (
+        purchased_store_id
+        or planned_store_id
+        or usual_store_id
+        or last_purchase_store_id
+        or chosen_offer_store_id
+    )

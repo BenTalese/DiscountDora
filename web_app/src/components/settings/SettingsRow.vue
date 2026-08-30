@@ -28,7 +28,17 @@
 <style scoped lang="scss">
     .settings-row {
         display: flex;
-        align-items: flex-start;
+        /* Owner feedback 2026-08-29 — *"the toggles don't seem to be inline
+           with the option text. Seems to be a broader issue across the board
+           in the settings area."* They weren't: a q-toggle's box is ~40px tall
+           against an ~18px label line, so top-aligning the two put the toggle's
+           track a full 11px below the label it belongs to — on every row of
+           every settings page. Centre against the info block instead, which is
+           exact for the one-line rows (the common case) and reads correctly
+           when a `help` line is present too. D-018 — alignment is consistent
+           within a surface, and this is the surface's own primitive, so the
+           fix belongs here rather than on any one page. */
+        align-items: center;
         justify-content: space-between;
         gap: 24px;
         padding: 6px 0;

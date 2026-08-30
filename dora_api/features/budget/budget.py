@@ -112,7 +112,15 @@ def period_spent(
     half-open window `[period_start, period_end)`. Uses the `_line_price`
     ladder — actual > picked-offer > drop. Household-wide by construction
     (the schema is single-household): every completed shop in the period
-    counts, no matter which list or user it was on."""
+    counts, no matter which list or user it was on.
+
+    Only **ticked** lines count. A price on a line is not evidence it was
+    bought: `picked_offer_price` is snapshotted when the line is *added*, so
+    an unticked line with a linked offer carries a price it never cost. Left
+    unfiltered, finishing a list with leftovers billed the whole list to the
+    budget and inflated `period_headroom` by the same amount. This mirrors
+    `compute_list_totals`' `spent_only` rule, which a done list's own receipt
+    has always applied."""
     start_dt = _as_utc_datetime(period_start)
     end_dt = _as_utc_datetime(period_end)
     archived = repository.get(ShoppingList).all(
@@ -126,6 +134,8 @@ def period_spent(
     lines = repository.get(ShoppingListLine).all(
         EntityField(ShoppingListLine, ShoppingListLine.Fields.SHOPPING_LIST_ID)
         .in_(archived_ids)
+        & EntityField(ShoppingListLine, ShoppingListLine.Fields.IS_TICKED).eq(True)
+        & EntityField(ShoppingListLine, ShoppingListLine.Fields.DEFERRED_BY_BUDGET).eq(False)
     )
     total = 0.0
     for line in lines:
@@ -353,9 +363,13 @@ class GetBudgetHistoryHandler:
         archived_lookup: dict[UUID, ShoppingList] = {l.id: l for l in archived}
         lines: list[ShoppingListLine] = []
         if archived_lookup:
+            # Ticked-only, for the same reason as `period_spent` — history and
+            # the current period must agree on what "spent" means.
             lines = self.repository.get(ShoppingListLine).all(
                 EntityField(ShoppingListLine, ShoppingListLine.Fields.SHOPPING_LIST_ID)
                 .in_(list(archived_lookup.keys()))
+                & EntityField(ShoppingListLine, ShoppingListLine.Fields.IS_TICKED).eq(True)
+                & EntityField(ShoppingListLine, ShoppingListLine.Fields.DEFERRED_BY_BUDGET).eq(False)
             )
 
         rows: list[BudgetHistoryRowDto] = []

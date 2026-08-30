@@ -18,16 +18,16 @@
             <q-card-section class="col q-pa-sm picker-sheet__body">
                 <MealPlanRecipePicker
                     :recipe-search="recipeSearch"
-                    :trays="trays"
+                    :suggestions="suggestions"
                     :recipes="recipes"
                     :focused-target="focusedTarget"
-                    :drag-allowed="false"
                     :format-date="formatDate"
                     :log-cook="logCook"
                     @update:recipe-search="(v: string) => emit('update:recipeSearch', v)"
                     @cancel-target="emit('cancelTarget')"
                     @recipe-pick="onRecipePicked"
                     @palette-meal-adjust="(id: string, d: number) => emit('paletteMealAdjust', id, d)"
+                    @suggestions-requested="emit('suggestionsRequested')"
                 />
             </q-card-section>
         </q-card>
@@ -39,12 +39,12 @@
     import MealPlanRecipePicker from 'src/components/MealPlanRecipePicker.vue';
     import { ICONS } from 'src/style/icons';
     import type { Recipe } from 'src/models/recipe';
-    import type { RecipeTray } from 'src/composables/useMealPlanner';
+    import type { MealPlanSuggestion } from 'src/models/mealPlan';
 
     defineProps<{
         modelValue: boolean;
         recipeSearch: string;
-        trays: RecipeTray[];
+        suggestions: MealPlanSuggestion[];
         recipes: Recipe[];
         focusedTarget: { dayIso: string; slot: string } | null;
         formatDate: (iso: string) => string;
@@ -57,6 +57,11 @@
         (e: 'cancelTarget'): void;
         (e: 'recipePick', recipeId: string): void;
         (e: 'paletteMealAdjust', recipeId: string, delta: number): void;
+        /** §4.8 — the sheet gets the same chips and the same "Dora suggests" as
+         *  the desktop rail, so both breakpoints teach one model. It is a thin
+         *  wrapper, so this comes almost free: forward the request and the
+         *  host's existing lazy loader serves both. */
+        (e: 'suggestionsRequested'): void;
     }>();
 
     function onRecipePicked(recipeId: string) {

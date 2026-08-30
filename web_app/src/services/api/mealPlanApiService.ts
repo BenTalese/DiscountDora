@@ -1,5 +1,6 @@
 import type {
-    AutoBuildRequest, AutoBuildResponse, MealPlan, MealPlanIngredients, Shortfall,
+    AutoBuildRequest, AutoBuildResponse, MealPlan, MealPlanIngredients,
+    MealPlanSuggestions, Shortfall,
 } from 'src/models/mealPlan';
 import type { CreatedResponse } from './axiosHttpClient';
 import AxiosHttpClient from './axiosHttpClient';
@@ -80,6 +81,19 @@ export default class MealPlanApiService {
     autoBuildAsync = async (command: AutoBuildRequest): Promise<AutoBuildResponse> =>
         await this.httpClient.post<AutoBuildResponse, AutoBuildRequest>(
             '/meal-plans/auto-build', command,
+        );
+
+    /** BRIEF_MEAL_PLANNER_RAIL_AND_SHELL §4.4 — the rail's "Dora suggests"
+     *  ranking. Read-only and deterministic; returns recipe ids paired with the
+     *  server's own frozen reason tokens (`uses_expiring`, `cookable_now`, …),
+     *  never prose — the copy map lives on the client, the vocabulary does not
+     *  (R-003). Recipes already planned in `weekStart`'s week are excluded. */
+    getWeekSuggestionsAsync = async (
+        weekStart: string, count?: number,
+    ): Promise<MealPlanSuggestions> =>
+        await this.httpClient.get<MealPlanSuggestions>(
+            `/meal-plans/suggestions?week_start=${weekStart}`
+            + (count === undefined ? '' : `&count=${count}`),
         );
 
     // ── FU-451 — budget-defense recipe swaps ──────────────────────────

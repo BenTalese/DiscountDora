@@ -659,3 +659,37 @@ def test__unknown_recorded_band_plus_confident_belief__is_no_longer_thin():
         belief=_belief("low", "medium"),
     ))
     assert any(r.axis == "need" and r.signal == "low_stock" for r in verdict.reasons)
+
+
+def test__price_reasons__carry_amounts_not_a_formatted_string():
+    """D-006 — the server never formats currency. The price axis used to bake
+    `f"${x:.2f}"` into `detail`, which rendered a dollar sign to a household
+    on EUR; it now emits the two raw amounts and the SPA formats them."""
+    verdict = compose_verdict(_rich_history_inputs(stock_level_band="low"))
+    price = next(r for r in verdict.reasons if r.axis == "price")
+    assert price.detail is None
+    assert price.amount_last == 3.85
+    # Trimmed mean of the 8 samples, rounded — the same figure `data_used`
+    # publishes, so the sub-line and the transparency payload can't disagree.
+    assert price.amount_usual == verdict.data_used.price_average
+
+
+def test__no_reason_string_anywhere__contains_a_currency_symbol():
+    """Guards the whole reason set, not just the price axis: any future prose
+    that hardcodes a symbol should fail here rather than in a EUR household."""
+    for band in ("out", "low", "stocked"):
+        verdict = compose_verdict(_rich_history_inputs(stock_level_band=band))
+        for reason in verdict.reasons:
+            assert "$" not in reason.label
+            assert "$" not in (reason.detail or "")
+
+
+def test__non_price_reasons__carry_no_amounts():
+    verdict = compose_verdict(_rich_history_inputs(
+        stock_level_band="stocked", waste_events_12mo=4,
+    ))
+    for reason in verdict.reasons:
+        if reason.axis == "price":
+            continue
+        assert reason.amount_last is None
+        assert reason.amount_usual is None

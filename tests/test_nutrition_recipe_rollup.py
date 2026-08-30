@@ -533,3 +533,103 @@ def test__optional_ingredients__stay_out_of_the_rating_too():
     assert result.fvnl_percent == pytest.approx(0.0)
 
 #endregion
+
+
+#region nutri-score (2026-08-27)
+# Same division of labour as the HSR region above: the arithmetic is pinned in
+# `test_nutri_score.py` against the official worked examples, and what's
+# pinned here is the plumbing. The one thing that genuinely differs between the
+# two schemes at *this* layer is the fruit-and-veg numerator, so that is what
+# these lean on.
+
+NUTS = "Nut and Seed Products"
+
+
+def test__both_schemes_are_computed_so_the_caller_can_choose():
+    """The rollup does not know which scheme the install picked — it returns
+    both and `get_recipes` emits one. A None here would mean a household that
+    switches scheme sees nothing until something invalidates a cache."""
+    carrot = _Food("Carrot", kcal=41.0, food_category=VEGETABLES)
+    recipe = _Recipe([_Ingredient(_StockItem("Carrot", carrot), 200, "g")], servings=1)
+
+    result = rollup_recipe_nutrition(_repo_for(recipe, [carrot]), recipe)
+
+    assert result.rating is not None
+    assert result.nutri_score is not None
+
+
+def test__fvl_percent__excludes_nuts_where_fvnl_includes_them():
+    """The divergence that makes these two separate numerators rather than one.
+
+    HSR counts nuts toward fvnl; the Nutri-Score 2023 update moved nuts and
+    seeds out of the positive component, while leaving them in the denominator.
+    A dish of half carrot, half almonds is therefore 100% fvnl and 50% fvl —
+    and feeding the wrong one to either module silently misgrades the food.
+    """
+    carrot = _Food("Carrot", kcal=41.0, food_category=VEGETABLES)
+    almond = _Food("Almond", kcal=579.0, food_category=NUTS)
+    recipe = _Recipe([
+        _Ingredient(_StockItem("Carrot", carrot), 100, "g"),
+        _Ingredient(_StockItem("Almond", almond), 100, "g"),
+    ], servings=1)
+
+    result = rollup_recipe_nutrition(_repo_for(recipe, [carrot, almond]), recipe)
+
+    assert result.total_grams == pytest.approx(200)
+    assert result.fvnl_percent == pytest.approx(100.0)
+    assert result.fvl_percent == pytest.approx(50.0)
+    # And the points follow: full marks on the HSR side, the middle band on the
+    # Nutri-Score side.
+    assert result.rating.v_points == 8
+    assert result.nutri_score.fvl_points == 1
+
+
+def test__fvl_percent__counts_legumes_and_fruit_alike():
+    apple = _Food("Apple", kcal=52.0, food_category=FRUIT)
+    lentil = _Food("Lentil", kcal=116.0, food_category="Legumes and Legume Products")
+    recipe = _Recipe([
+        _Ingredient(_StockItem("Apple", apple), 100, "g"),
+        _Ingredient(_StockItem("Lentil", lentil), 100, "g"),
+    ], servings=1)
+
+    result = rollup_recipe_nutrition(_repo_for(recipe, [apple, lentil]), recipe)
+
+    assert result.fvl_percent == pytest.approx(100.0)
+    assert result.nutri_score.fvl_points == 5
+
+
+def test__nutri_score__is_scored_per_100g_of_the_dish_not_per_serving():
+    """The same trap the HSR twin guards, for the same reason."""
+    food = _Food("Rice", kcal=130.0, food_category="Cereal Grains and Pasta")
+    one = _Recipe([_Ingredient(_StockItem("Rice", food), 500, "g")], servings=1)
+    eight = _Recipe([_Ingredient(_StockItem("Rice", food), 500, "g")], servings=8)
+
+    rated_one = rollup_recipe_nutrition(_repo_for(one, [food]), one)
+    rated_eight = rollup_recipe_nutrition(_repo_for(eight, [food]), eight)
+
+    assert rated_one.nutri_score.grade == rated_eight.nutri_score.grade
+    assert rated_one.nutri_score.score == rated_eight.nutri_score.score
+
+
+def test__nutri_score__salt_points_come_from_sodium_via_the_published_factor():
+    """Dora stores sodium; Table 5 is in salt. 1000 mg sodium per 100 g is
+    2.5 g salt, which is band 12 — a rollup that forgot the ×2.5 would report
+    band 4 (treating 1.0 g), and a rollup that passed mg straight through
+    would saturate at 20."""
+    salty = _Food("Salty thing", kcal=100.0, sodium=1000.0, food_category=DAIRY)
+    recipe = _Recipe([_Ingredient(_StockItem("Salty thing", salty), 100, "g")], servings=1)
+
+    result = rollup_recipe_nutrition(_repo_for(recipe, [salty]), recipe)
+
+    assert result.nutri_score.salt_points == 12
+
+
+def test__nutri_score__is_none_when_nothing_could_be_weighed():
+    recipe = _Recipe([_Ingredient(None, None, None)], servings=1)
+
+    result = rollup_recipe_nutrition(_repo_for(recipe), recipe)
+
+    assert result.fvl_percent is None
+    assert result.nutri_score is None
+
+#endregion

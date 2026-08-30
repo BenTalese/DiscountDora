@@ -56,9 +56,11 @@
             </div>
         </div>
 
+        <!-- Owner 2026-08-29: the "Natural-sounding, run on your server" hint
+             was dropped — each card already describes its own voice, and the
+             page's lede covers the engine. -->
         <div class="voice-picker__group-label voice-picker__group-label--neural">
             Neural voices
-            <span class="voice-picker__group-hint">Natural-sounding, run on your server</span>
         </div>
         <div class="voice-picker">
         <div
@@ -120,10 +122,24 @@
                 </button>
             </div>
 
-            <!-- Downloading: spinner -->
-            <div v-else-if="voice.status === 'downloading'" class="voice-card__actions voice-card__actions--muted">
-                <AppSpinner size="16px" />
-                <span>Downloading… ({{ sizeMb(voice.size_bytes) }})</span>
+            <!-- Downloading: real bytes where the server can report them.
+                 A voice is 60–110MB, and the old spinner-plus-catalogue-size
+                 said the same thing at second 1 and minute 3 (B10). The bar
+                 falls back to indeterminate when the origin sent no
+                 Content-Length rather than inventing a denominator. -->
+            <div v-else-if="voice.status === 'downloading'" class="voice-card__download">
+                <div class="voice-card__actions voice-card__actions--muted">
+                    <AppSpinner v-if="downloadFraction(voice) === null" size="16px" />
+                    <span>{{ downloadLabel(voice) }}</span>
+                </div>
+                <q-linear-progress
+                    class="voice-card__bar"
+                    rounded
+                    size="4px"
+                    color="primary"
+                    :indeterminate="downloadFraction(voice) === null"
+                    :value="downloadFraction(voice) ?? 0"
+                />
             </div>
 
             <!-- Error: retry -->
@@ -232,6 +248,26 @@
         return `${Math.round(bytes / (1024 * 1024))} MB`;
     }
 
+    /** Fraction 0–1 of the model downloaded, or null when the server can't
+     *  say and the bar should run indeterminate. `downloaded_bytes_total` is
+     *  0 both before the first chunk lands and when the origin declared no
+     *  size, so it is checked rather than divided by. */
+    function downloadFraction(voice: TtsVoice): number | null {
+        const total = voice.downloaded_bytes_total ?? 0;
+        if (total <= 0) return null;
+        return Math.min(1, (voice.downloaded_bytes ?? 0) / total);
+    }
+
+    function downloadLabel(voice: TtsVoice): string {
+        const done = voice.downloaded_bytes ?? 0;
+        const total = voice.downloaded_bytes_total ?? 0;
+        if (total > 0) return `Downloading — ${sizeMb(done)} of ${sizeMb(total)}`;
+        // No total to quote, so fall back to the catalogue's advertised size,
+        // which is what this card showed before the counters existed.
+        if (done > 0) return `Downloading — ${sizeMb(done)} of ~${sizeMb(voice.size_bytes)}`;
+        return `Downloading… (${sizeMb(voice.size_bytes)})`;
+    }
+
     function onCardClick(voice: TtsVoice) {
         if (props.disabled || voice.status !== 'ready') return;
         // Bail only when this card is *actually* the live selection. Selecting
@@ -324,13 +360,6 @@
         margin-bottom: 6px;
     }
     .voice-picker__group-label--neural { margin-top: 18px; }
-    .voice-picker__group-hint {
-        font-size: 0.75rem;
-        font-weight: 400;
-        letter-spacing: 0;
-        text-transform: none;
-        color: var(--text-muted);
-    }
     // The built-in voice is a different kind of thing from the neural ones, so
     // it reads as a full-width sunken row rather than a peer tile in their grid.
     .voice-card--basic {
@@ -411,6 +440,15 @@
     .voice-card__actions--muted {
         font-size: 0.8125rem;
         color: var(--text-secondary);
+    }
+    .voice-card__download {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-1);
+    }
+    .voice-card__bar {
+        // Tracks the label above it rather than the full card width.
+        max-width: 260px;
     }
     .voice-card__btn {
         // Native <button> — reset UA chrome (border, font, etc.) so the chip

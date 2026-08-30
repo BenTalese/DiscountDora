@@ -59,6 +59,10 @@ export const ICONS = {
     check_circle: 'mdi-check-circle',
     checklist: 'mdi-format-list-checks',
     chevron_left: 'mdi-chevron-left',
+    // Neutral "nothing here yet" state marker — the empty counterpart to
+    // check_circle. Says no more than that on purpose: a (?) in this slot
+    // reads as a control that will explain something when clicked.
+    circle_outline: 'mdi-circle-outline',
     clear: 'mdi-close',
     close: 'mdi-close',
     compare: 'mdi-compare-horizontal',
@@ -231,6 +235,9 @@ export const ICONS = {
     // read". `visibility` already means "show/hide" across the app, so a
     // second meaning needed its own glyph.
     zoom_in: 'mdi-magnify-plus-outline',
+    // Its partner: the cook-mode photo zoom is a toggle, so "back to
+    // fit-to-screen" needs a glyph of its own (owner feedback 2026-08-28).
+    zoom_out: 'mdi-magnify-minus-outline',
     inbox: 'mdi-inbox',
     info_outline: 'mdi-information-outline',
     ios_share: 'mdi-export-variant',

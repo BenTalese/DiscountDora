@@ -114,12 +114,19 @@ export function useFeatureFlags() {
         // (a dataset is imported / a key is set / OFF is permitted). Derived
         // server-side from installed reality — see features/nutrition/sources.py.
         nutritionComplexUsable: computed(() => readFlag('nutrition_complex_usable')),
-        // Owner ask 2026-08-27 — the recipe Health Star Rating. Off
-        // everywhere by default: HSR is an Australian/NZ government scheme,
-        // and an install elsewhere shouldn't be shown a national rating as
-        // though it were universal. Settings → Region's "Match this device"
-        // is what offers it when it detects an AU/NZ locale.
-        healthStarRating: computed(() => readFlag('health_star_rating')),
+        // Owner ask 2026-08-27 — which front-of-pack rating recipes carry:
+        // 'none' | 'health_star' | 'nutri_score'. 'none' everywhere by
+        // default. Neither scheme is a universal fact about food, so Dora
+        // doesn't pick a nutritional authority for a household at install
+        // time; Settings → Region's "Match this device" offers the locally
+        // recognised one, and the picker takes any of them anywhere.
+        //
+        // The scheme string, not a bool: the client renders a different badge
+        // per scheme, and which-scheme is the server's answer (R-003).
+        nutritionRatingScheme: computed(() => {
+            const raw = flagsRaw.value['nutrition_rating_scheme'];
+            return raw === 'health_star' || raw === 'nutri_score' ? raw : 'none';
+        }),
         refresh,
     };
 }

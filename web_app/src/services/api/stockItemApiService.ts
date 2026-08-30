@@ -228,6 +228,12 @@ export type CreateStockItemCommand = {
     expiry_date?: string | null;
     is_essential?: boolean;
     is_open?: boolean;
+    /** Per-item stocktake mute. Omit to take the install-wide
+     *  `stocktake_new_items_opt_in` default (what callers that don't render
+     *  the toggle — imports, scan flows — should do). */
+    stocktake_alerts_are_enabled?: boolean;
+    /** Usual store hint. No clear flag: a create has nothing to clear. */
+    usual_store_id?: string | null;
 };
 
 /** Server-populated payload on a level-transition PATCH that fires the

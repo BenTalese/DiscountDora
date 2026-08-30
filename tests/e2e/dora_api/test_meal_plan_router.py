@@ -488,3 +488,87 @@ def test__delete_meal_plan__PlanDoesNotExist__MealPlanNotFound(api):
     assert _Body["detail"] == f"MealPlan with the ID '{_FakeID}' was not found."
 
 #endregion delete
+
+#region ---------------- rail suggestions ----------------
+# BRIEF_MEAL_PLANNER_RAIL_AND_SHELL §4.4. The ranking itself is unit-tested in
+# tests/test_build_week.py against fixture candidates; these cover the contract
+# the SPA's rail depends on — shape, the week exclusion, the count clamp, and
+# the argument validation.
+
+
+def _suggestions(week_start: date, **params) -> requests.Response:
+    query = {"week_start": week_start.isoformat(), **params}
+    return requests.get(f"{MEAL_PLANS}/suggestions", params=query)
+
+
+def test__suggestions__ValidWeek__ReturnsRecipeIdAndFrozenChipToken(api):
+    _Monday = _household_today()
+
+    _Response = _suggestions(_Monday)
+
+    assert _Response.status_code == 200, _Response.text
+    _Items = _Response.json()["suggestions"]
+    assert _Items, "a seeded install should have something to suggest"
+    for _Item in _Items:
+        assert is_valid_uuid(_Item["recipe_id"])
+        # The server ships its own frozen vocabulary, not prose — the client
+        # owns the wording (R-003).
+        assert _Item["reason_chip"] in {
+            "uses_expiring", "cookable_now", "favourite",
+            "not_made_recently", "variety", "budget_friendly", "picked",
+        }
+
+
+def test__suggestions__RecipeAlreadyPlannedThatWeek__IsExcluded(api):
+    _Monday = _household_today()
+    _Slot = _slot_names()[0]
+
+    _Before = {s["recipe_id"] for s in _suggestions(_Monday).json()["suggestions"]}
+    assert _Before, "need at least one suggestion to plan away"
+    _Planned = next(iter(_Before))
+
+    _make_plan(entries=[{
+        "recipe_id": _Planned,
+        "scheduled_for": _Monday.isoformat(),
+        "servings": 2,
+        "slot": _Slot,
+    }])
+
+    _After = {s["recipe_id"] for s in _suggestions(_Monday).json()["suggestions"]}
+    assert _Planned not in _After
+
+
+def test__suggestions__SameWeekTwice__IsDeterministic(api):
+    # A rail that reshuffled on every render would be unscannable, so the
+    # endpoint deliberately passes no rng.
+    _Monday = _household_today()
+
+    _First = _suggestions(_Monday).json()["suggestions"]
+    _Second = _suggestions(_Monday).json()["suggestions"]
+
+    assert _First == _Second
+
+
+def test__suggestions__CountAboveMaximum__IsClampedNotRejected(api):
+    _Monday = _household_today()
+
+    _Response = _suggestions(_Monday, count=500)
+
+    assert _Response.status_code == 200, _Response.text
+    assert len(_Response.json()["suggestions"]) <= 20
+
+
+def test__suggestions__MissingWeekStart__IsBadRequest(api):
+    _Response = requests.get(f"{MEAL_PLANS}/suggestions")
+
+    assert _Response.status_code == 400, _Response.text
+
+
+def test__suggestions__UnparseableWeekStart__IsBadRequest(api):
+    _Response = requests.get(
+        f"{MEAL_PLANS}/suggestions", params={"week_start": "next-tuesday"}
+    )
+
+    assert _Response.status_code == 400, _Response.text
+
+#endregion rail suggestions

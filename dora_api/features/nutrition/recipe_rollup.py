@@ -35,10 +35,14 @@ from typing import Iterable, List
 
 from dora_api.domain import units
 from dora_api.domain import health_star_rating as hsr
+from dora_api.domain import nutri_score as ns
 from dora_api.domain.entities.nutrition_food import NutritionFood
 from dora_api.domain.entities.nutrition_portion import NutritionPortion
 from dora_api.domain.entities.stock_item import StockItem
-from dora_api.features.nutrition.food_categories import is_fvnl_category
+from dora_api.features.nutrition.food_categories import (
+    is_fvl_category,
+    is_fvnl_category,
+)
 from dora_api.features.nutrition.text_matching import singular
 from dora_api.infrastructure.ports import Repository
 from dora_api.persistence.field import EntityField as Field
@@ -189,6 +193,13 @@ class RecipeNutrition:
     # None when nothing was counted at all — distinct from 0.0, which means
     # "counted, and none of it was fvnl".
     fvnl_percent: float | None = None
+    # The Nutri-Score twin of `fvnl_percent`: fruit, vegetable or legume, with
+    # nuts and seeds excluded from the numerator but still in the denominator.
+    # Kept as its own figure rather than derived from the one above, because
+    # the two published methods define the component differently — see
+    # `food_categories.FVL_CATEGORIES`. Feeding either one to the other
+    # scheme's module misgrades food.
+    fvl_percent: float | None = None
     # Per nutrient, the fraction (0..1) of counted grams whose food actually
     # carried a figure. Keyed by the rollup names in `_SUMMED_NUTRIENTS`.
     # Weighted by mass rather than by ingredient count: 200 g of an
@@ -197,6 +208,14 @@ class RecipeNutrition:
     nutrient_coverage: dict[str, float] = field(default_factory=dict)
     # The rating itself, or None when nothing could be weighed.
     rating: hsr.HealthStarRating | None = None
+    # The Nutri-Score, on the same terms. Both schemes are computed here rather
+    # than the caller passing in which one it wants: they are pure table
+    # lookups over figures this function has already done the expensive work to
+    # assemble, so computing the unused one costs a few comparisons, while
+    # taking a setting as an argument would give this module a dependency on
+    # install configuration it otherwise has no reason to know about. The
+    # caller decides which to *emit* (see `get_recipes`).
+    nutri_score: ns.NutriScore | None = None
 
 
 def _measure_words(measure: str) -> set[str]:
@@ -323,6 +342,7 @@ def _rollup_one(recipe: 'RecipeNutritionInput', food_ids_by_item: dict, foods: d
     counted = 0
     total_grams = 0.0
     fvnl_grams = 0.0
+    fvl_grams = 0.0
 
     required = [ing for ing in recipe.ingredients if not ing.is_optional]
     for ingredient in required:
@@ -358,8 +378,13 @@ def _rollup_one(recipe: 'RecipeNutritionInput', food_ids_by_item: dict, foods: d
         # The HSR fvnl numerator. Keyed off USDA's own food-group description
         # (see `food_categories.py`) — never off the user's StockGroup, which
         # is their filing system and none of this feature's business.
-        if is_fvnl_category(getattr(food, "food_category", None)):
+        category = getattr(food, "food_category", None)
+        if is_fvnl_category(category):
             fvnl_grams += grams
+        # Narrower than fvnl on purpose: nuts and seeds are excluded from the
+        # Nutri-Score numerator but stay in `total_grams` below.
+        if is_fvl_category(category):
+            fvl_grams += grams
         hundreds = grams / 100.0
         for key, attr in _SUMMED_NUTRIENTS:
             per_100g = getattr(food, attr, None)
@@ -383,10 +408,13 @@ def _rollup_one(recipe: 'RecipeNutritionInput', food_ids_by_item: dict, foods: d
     # other figure here (those are per serving). `total_grams` is the raw
     # summed weight — see the field's note for why that is an estimate.
     rating = None
+    nutri_score = None
     fvnl_percent = None
+    fvl_percent = None
     coverage: dict[str, float] = {}
     if total_grams > 0:
         fvnl_percent = round(100.0 * fvnl_grams / total_grams, 1)
+        fvl_percent = round(100.0 * fvl_grams / total_grams, 1)
         coverage = {
             key: round(known_grams[key] / total_grams, 3)
             for key, _ in _SUMMED_NUTRIENTS
@@ -407,6 +435,19 @@ def _rollup_one(recipe: 'RecipeNutritionInput', food_ids_by_item: dict, foods: d
             protein_g = per_100g("protein_g"),
             fibre_g = per_100g("fibre_g"),
             fvnl_percent = fvnl_percent,
+        ))
+        # Same per-100g figures, a different published method. Note the two
+        # take their fruit-and-veg share from different numerators, and that
+        # `nutri_score` wants sodium in mg exactly as HSR does — it converts to
+        # salt internally.
+        nutri_score = ns.rate(ns.NutrientProfile(
+            energy_kj = hsr.kcal_to_kj(per_100g("kcal")),
+            saturated_fat_g = per_100g("saturated_fat_g"),
+            total_sugars_g = per_100g("sugars_g"),
+            sodium_mg = per_100g("sodium_mg"),
+            protein_g = per_100g("protein_g"),
+            fibre_g = per_100g("fibre_g"),
+            fvl_percent = fvl_percent,
         ))
 
     return RecipeNutrition(
@@ -429,8 +470,10 @@ def _rollup_one(recipe: 'RecipeNutritionInput', food_ids_by_item: dict, foods: d
         sodium_mg = per_basis("sodium_mg", _NUTRIENT_DECIMALS["sodium_mg"]),
         total_grams = round(total_grams, 1) if total_grams > 0 else None,
         fvnl_percent = fvnl_percent,
+        fvl_percent = fvl_percent,
         nutrient_coverage = coverage,
         rating = rating,
+        nutri_score = nutri_score,
     )
 
 

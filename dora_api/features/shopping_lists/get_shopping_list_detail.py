@@ -20,7 +20,8 @@ from dora_api.domain.entities.preferred_buy import PreferredBuy
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.entities.stock_location import StockLocation
 from dora_api.features.routers import SHOPPING_LIST_ROUTER
-from dora_api.features.shopping_lists._line_price import line_paid_unit_price
+from dora_api.features.shopping_lists._line_price import (line_paid_unit_price,
+                                                        resolve_store_id)
 from dora_api.features.stock_items.inference_overlay import (
     SURFACE_SHOPPING, resolve_divergence,
 )
@@ -122,11 +123,18 @@ class ShoppingListLineDto:
     last_paid_unit_price: float | None = None
     last_paid_store_id: UUID | None = None
     last_paid_store_name: str | None = None
-    # **Store ladder**: bought-this-trip → the item's `usual_store_id`
-    # ("I buy this here" — explicit intent) → the store of the last actual
-    # purchase (where you happened to buy it) → the chosen offer's store.
+    # Where the user *plans* to buy this line (`planned_store_id`), surfaced so
+    # the plan face can edit it. Distinct from `purchased_store_id` above, which
+    # is where they actually did.
+    planned_store_id: UUID | None = None
+    planned_store_name: str | None = None
+    # **Store ladder**: bought-this-trip → **this list's planned store** → the
+    # item's `usual_store_id` ("I always buy this here") → the store of the last
+    # actual purchase (where you happened to buy it) → the chosen offer's store.
     # Intent beats history here, which is the reverse of the money ladder,
-    # because this answers "where do I *plan* to buy it".
+    # because this answers "where do I *plan* to buy it" — and the more specific
+    # intent wins: a choice made for *this* list outranks a standing preference
+    # for the item.
     # None ⇒ the "No store set" bucket in the breakdown + Store sectioning.
     resolved_store_id: UUID | None = None
     resolved_store_name: str | None = None
@@ -168,6 +176,11 @@ class ShoppingListTotalsDto:
     """
     total_price: float        # full price of every line
     remaining_price: float    # price of un-ticked lines only ("still to grab")
+    # Price of the ticked lines only — "what's in the trolley". Server-owned
+    # for the same R-003 reason as the rest: the run face's Picked section
+    # needs it, and summing it across the fetched lines client-side would put
+    # a second definition of the money ladder in the browser.
+    picked_price: float
     total_savings: float      # savings vs RRP across all lines
     unticked_count: int
     ticked_count: int
@@ -240,6 +253,7 @@ def compute_list_totals(
     the receipt still needs to know how many lines it skipped."""
     total_price = 0.0
     remaining_price = 0.0
+    picked_price = 0.0
     total_savings = 0.0
     unticked = 0
     active_line_count = 0
@@ -253,6 +267,8 @@ def compute_list_totals(
         if not line.is_ticked:
             remaining_price += price
             unticked += 1
+        else:
+            picked_price += price
         # On a finished list an unticked line is money that was never spent, so
         # it drops out of the total, the savings and the store split alike.
         if spent_only and not line.is_ticked:
@@ -294,6 +310,7 @@ def compute_list_totals(
     return ShoppingListTotalsDto(
         total_price = total_price,
         remaining_price = remaining_price,
+        picked_price = picked_price,
         total_savings = total_savings,
         unticked_count = unticked,
         ticked_count = active_line_count - unticked,
@@ -434,9 +451,10 @@ class GetShoppingListDetailHandler:
             }
 
         # Resolve store names for every store any ladder can land on:
-        # `purchased_store_id` overrides, the items' `usual_store_id`
-        # ("I buy this here"), and the stores of prior actual purchases.
-        # One lookup covers all three so neither ladder round-trips per line.
+        # `purchased_store_id` overrides, this list's `planned_store_id`, the
+        # items' `usual_store_id` ("I always buy this here"), and the stores of
+        # prior actual purchases. One lookup covers all four so neither ladder
+        # round-trips per line.
         _StoreNameLookup: dict[UUID, str] = {}
         # Same lookup, second column: the store card paints its buckets in
         # each store's own brand colour (2026-08-26 feedback), so the colour
@@ -444,6 +462,9 @@ class GetShoppingListDetailHandler:
         _StoreColourLookup: dict[UUID, str | None] = {}
         _WantedStoreIds: set[UUID] = {
             l.purchased_store_id for l in _Lines if l.purchased_store_id
+        }
+        _WantedStoreIds |= {
+            l.planned_store_id for l in _Lines if l.planned_store_id
         }
         _WantedStoreIds |= {
             s.usual_store_id for s in _StockItems.values() if s.usual_store_id
@@ -584,18 +605,16 @@ class GetShoppingListDetailHandler:
                 _estimate_source = "offer"
 
             # ── Store ladder ─────────────────────────────────────────────
-            # bought-this-trip → usual store (intent) → last purchase's store
-            # (history) → the chosen offer's store. Intent outranks history
-            # here; on the money ladder above it is the other way round.
-            _store_id: UUID | None = None
-            if line.purchased_store_id is not None:
-                _store_id = line.purchased_store_id
-            elif item is not None and item.usual_store_id is not None:
-                _store_id = item.usual_store_id
-            elif _prior is not None and _prior[2] is not None:
-                _store_id = _prior[2]
-            elif _chosen is not None:
-                _store_id = _chosen.store_id
+            # Ordering + rationale live in `_line_price.resolve_store_id`, the
+            # R-003 chokepoint (the money ladder's twin). Inline here it was an
+            # if/elif chain whose ordering nothing could test.
+            _store_id = resolve_store_id(
+                purchased_store_id = line.purchased_store_id,
+                planned_store_id = line.planned_store_id,
+                usual_store_id = item.usual_store_id if item is not None else None,
+                last_purchase_store_id = _prior[2] if _prior is not None else None,
+                chosen_offer_store_id = _chosen.store_id if _chosen is not None else None,
+            )
             _store_name = _StoreNameLookup.get(_store_id) if _store_id else None
             # The offers list carries names the store lookup never saw (it is
             # seeded from lines and items, not products), so fall back to the
@@ -629,6 +648,11 @@ class GetShoppingListDetailHandler:
                 purchased_store_name = (
                     _StoreNameLookup.get(line.purchased_store_id)
                     if line.purchased_store_id else None
+                ),
+                planned_store_id = line.planned_store_id,
+                planned_store_name = (
+                    _StoreNameLookup.get(line.planned_store_id)
+                    if line.planned_store_id else None
                 ),
                 prefill_unit_price = _prefill_price,
                 prefill_source_label = _prefill_label,

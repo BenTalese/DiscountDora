@@ -59,6 +59,10 @@ export type UpdateLineCommand = {
     /** P2-02 — store the shopper actually bought from. */
     purchased_store_id?: string | null;
     clear_purchased_store?: boolean;
+    /** Where the user plans to buy it, set from the plan face. Never feeds a
+     *  price observation — it isn't a purchase record. */
+    planned_store_id?: string | null;
+    clear_planned_store?: boolean;
     /** FU-215 — optional PreferredBuy hint on the line. */
     preferred_buy_id?: string | null;
     clear_preferred_buy?: boolean;
@@ -97,11 +101,6 @@ export type TrimToBudgetResult = {
     /** `>0` when the safe-cut tiers exhausted before hitting the target. */
     still_over: number;
     applied: boolean;
-};
-
-export type CopyShoppingListCommand = {
-    include?: 'all' | 'unticked';
-    name?: string | null;
 };
 
 export type FinishResult = {
@@ -243,11 +242,10 @@ export default class ShoppingListApiService {
             command,
         );
 
-    copyAsync = async (id: string, command: CopyShoppingListCommand): Promise<{ shopping_list_id: string }> =>
-        await this.httpClient.post<{ shopping_list_id: string }, CopyShoppingListCommand>(
-            `/shopping-lists/${id}/copy`,
-            command,
-        );
+    // `copyAsync` went with copy-to-new-list: the picker's kebab and the Export
+    // menu were its only callers, and **Save as template** is the same idea
+    // under a name that says what it's for. Server endpoint still exists —
+    // FU-766.
 
     addLineAsync = async (listId: string, command: AddLineCommand): Promise<{ line_id: string; already_on_list: boolean }> =>
         await this.httpClient.post<{ line_id: string; already_on_list: boolean }, AddLineCommand>(
@@ -339,6 +337,16 @@ export default class ShoppingListApiService {
             {},
         );
 
+    /** The finish dialog's "discard" disposition — deletes the unticked
+     *  lines so they don't strand on the archived receipt. */
+    discardUntickedAsync = async (
+        listId: string,
+    ): Promise<{ removed_count: number }> =>
+        await this.httpClient.post<{ removed_count: number }, Record<string, never>>(
+            `/shopping-lists/${listId}/discard-unticked`,
+            {},
+        );
+
     /** Bulk-select's "Move to list" — one request for the whole selection.
      *  Same server rules as `moveUntickedToAsync` (duplicates on the target
      *  are skipped, archived targets rejected), just over explicit ids. */
@@ -366,18 +374,9 @@ export default class ShoppingListApiService {
             {},
         );
 
-    bulkTickAsync = async (
-        id: string,
-        lineIds: string[],
-        isTicked: boolean,
-    ): Promise<{ updated_count: number }> =>
-        await this.httpClient.post<
-            { updated_count: number },
-            { line_ids: string[]; is_ticked: boolean }
-        >(`/shopping-lists/${id}/lines/bulk-tick`, {
-            line_ids: lineIds,
-            is_ticked: isTicked,
-        });
+    // `bulkTickAsync` went with the bulk-select bar: its only caller was the
+    // bar's Tick/Untick pair, and ticking is now a shop-mode-only gesture on
+    // one row at a time. The server endpoint still exists — FU-766.
 
     reorderLinesAsync = async (id: string, lineIdsInOrder: string[]): Promise<void> =>
         await this.httpClient.post<void, { line_ids: string[] }>(

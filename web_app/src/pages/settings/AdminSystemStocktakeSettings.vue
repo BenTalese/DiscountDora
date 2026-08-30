@@ -101,6 +101,7 @@
     import { onMounted, ref } from 'vue';
     import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';
     import { useFeatureFlags } from 'src/composables/useFeatureFlags';
+    import { refreshStocktakePolicy } from 'src/composables/useStocktakePolicy';
     import SettingsSection from 'src/components/settings/SettingsSection.vue';
     import SettingsRow from 'src/components/settings/SettingsRow.vue';
     import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
@@ -173,6 +174,10 @@
             });
             savedOptIn = result.stocktake_new_items_opt_in;
             optInDraft.value = savedOptIn;
+            // The create-item dialog seeds its Stocktake toggle from the same
+            // value via /api/health, which is cached per session — re-probe or
+            // the dialog keeps offering the old default until a full reload.
+            await refreshStocktakePolicy();
             $q.notify({
                 type: 'positive', position: 'bottom-right',
                 message: savedOptIn

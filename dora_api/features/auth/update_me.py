@@ -65,9 +65,6 @@ class UpdateMeRequest(BaseModel):
     inference_meal_plan_enabled: bool | None = None
     # `nutrition_mode` removed — nutrition is install-wide (2026-08-14);
     # edited via PATCH /app-settings, not here.
-    # C-cross Chunk 5 — per-user recipe-image opt-in (proposal §2.8).
-    # FU-508 dropped the stock-image companion.
-    show_recipe_images: bool | None = None
     # FU-615 — `household_headcount` moved to AppSetting (install-wide);
     # edited via PATCH /app-settings, not here.
     # alerts email digest prefs (PROPOSAL_ALERTS §3.5 / §4.4).
@@ -216,12 +213,6 @@ class UpdateMeHandler:
             _Value = getattr(request, _Field)
             if _Field in _SetFields and _Value is not None:
                 setattr(_User, _Field, _Value)
-
-        # C-cross Chunk 5 — recipe-image opt-in. Plain bool; null is
-        # ignored. Saved image bytes survive a toggle (only the render
-        # is suppressed). FU-508 dropped the stock-image companion.
-        if "show_recipe_images" in _SetFields and request.show_recipe_images is not None:
-            _User.show_recipe_images = request.show_recipe_images
 
         # FU-615 — household headcount moved to AppSetting (install-wide);
         # edited via PATCH /app-settings.

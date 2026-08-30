@@ -1,5 +1,19 @@
 # DORA_VERIFY triage & campaign tracker
 
+> **2026-08-28 — the Browser pane cannot verify any routed page.** It never
+> advances a CSS transition: every route freezes at `dora-fade-enter-from` /
+> `dora-fade-leave-from` and the page's content never enters the DOM (measured
+> still at frame zero 1.5s later, surviving reload, resize and re-fronting the
+> tab). Sticky chrome *outside* the transition — the counts footer — renders
+> fine, which is how you tell this apart from a real bug. Adds to the two limits
+> already known (no screenshots; can't drive `$q.screen` breakpoints). **Use a
+> throwaway Playwright script from `web_app/` instead** — not a committed spec,
+> per the stance below. Two traps found doing it: a cache-invalidation check must
+> stay inside one page session (a `page.goto` between visits refetches regardless
+> and proves nothing), and on desktop a stock row click opens the peek panel,
+> whose dialog backdrop then swallows every later click — write through the row's
+> level menu instead.
+
 > ## ⚠️ STANCE CHANGE (owner, 2026-07-20) — LEAN testing, manual-first verification
 >
 > The original campaign aimed to **codify every regression-worthy check as an
@@ -128,6 +142,250 @@ device packs for hardware items.
 
 **Status key:** ⚪ not started · 🟡 in progress · ✅ verified + reported ·
 ➗ done with carve-outs · 🗑 stale — recommend delete (owner call).
+
+---
+
+## Verified live — meal planner Unit 1, the app-shell conversion (2026-08-30)
+
+Driven with a throwaway Playwright script against the scratch pairing (backend
+:5171 on `data/scratch-verify.db`, SPA :5174; the owner's :5170 was up
+throughout and untouched). Measured, not eyeballed — the whole unit is layout,
+so the checks are geometry.
+
+| Check | Evidence |
+|---|---|
+| Document no longer scrolls (the point of the shell) | `documentScrollsVertically: false` at 1024/1280/1440 |
+| No horizontal page scroll (D-011) | `documentScrollsHorizontally: false` at all three, and at 375 |
+| **The sticky-rail overhang is gone** | all three pane bottoms at **884px in a 900px viewport**; previously `calc(100vh - 32px)` ignored the 64px header |
+| Week pane owns its scroll | `weekScroller {clientH: 714, scrollH: 752, scrolls: true}` |
+| Toolbar acceptance (≤96px, no third line) | **90px, no wrap** at 1024, 1280 and 1440 — after the compact fix; it was **129px and wrapping at 1024** before |
+| The five removals actually left | `.planner-sticky` 0, body toggle-row 0, right-pane templates card 0, `[draggable=true]` recipe rows 0 |
+| The ⋮ menu carries what the toolbar shed | six items read back: duplicate, print, save template, browse templates, show all slots, Clear week |
+| Mobile untouched (§3.4) | at 375: shell absent, `MealPlanMobileFocus` renders, `.meal-plans` back to natural height (520px) after the `height: auto !important` hatch |
+
+Console was clean apart from the pre-boot `/me` 401, which is the authStore
+bootstrap probe on an unauthenticated context and fires on every page.
+
+**Not covered, and now in `DORA_VERIFY.md`:** running the ⋮ verbs for real
+(only the menu's contents were confirmed), the layout with `OfflineBanner`
+showing (the second offset the old formula ignored), the rail under a large
+cookbook (the seed has eight recipes), and whether icon-only "Build my week"
+still reads as primary at 1024.
+
+## Verified live — recipe + cookbook batch, and the `show_recipe_images` cut (2026-08-29)
+
+Scratch backend :5172 through the SPA on :5175, throwaway Playwright script from
+`web_app/` (the Browser pane still can't render a routed page — see the banner).
+1280×900, light theme. Everything below passed, so per the delete-on-pass
+delegation the evidence lives here rather than in `DORA_VERIFY.md`. Only two
+things were pushed to that file, both genuinely out of a light-theme desktop
+run's reach: the two new cards in a dark theme, and the 18px star + the filter
+row at 375px.
+
+**The six-item feedback batch.**
+- ✅ Cook-now sub-line gone — status strip reads exactly
+  `RIGHT NOW / 2 ingredients to link / LAST COOKED / Never`.
+- ✅ Details drawers: three cards, all `1px solid` + 4px radius + no shadow, one
+  glyph each (`note-text-outline` / `heart-pulse` / `history`).
+- ✅ Filters: all **13** controls measure 210px, zero clipped labels. Rows still
+  wrap to three lines at 1280px → **FU-773 unchanged** (re-measured, noted there).
+- ✅ Star glyph computes 18px in both densities; pill stays 67×26.
+- ✅ Step ingredient links: PATCH **204**, links persist against the re-keyed
+  ingredient rows (asserted by label, not id). Backend-covered by
+  `test_recipe_step_ingredient_links.py` — the one automated test this batch
+  earned, per the stance.
+- ✅ Unit picker: dropdown offers 14 units incl. `g` with the input empty on open;
+  picking one leaves the dialog standing and the row reads `1g`. The pre-fix
+  failure was captured first (`kept.trim is not a function`, error boundary
+  tearing the dialog down) so the fix is pinned to a real observation.
+
+**The `show_recipe_images` cut.**
+- ✅ Appearance: four sections (Theme mode / Theme / Font family / Text size),
+  **0** toggles, no occurrence of "photo" in the page text.
+- ✅ Surviving controls still save — flipped text size to Large, toast fired,
+  `/auth/me` returned `font_size: "lg"`. Checked deliberately: the cut removed a
+  sibling section, which is exactly when a page quietly loses a handler.
+- ✅ Flag absent from `/auth/me`; `PATCH /auth/me {show_recipe_images:false}` →
+  **400 `extra_forbidden`** rather than a silent no-op.
+- ✅ Recipe hero renders unconditionally (`naturalWidth 400` on a JPEG uploaded
+  via the API — no seeded recipe has a photo, cf. FU-754); a photo-less recipe
+  still offers "Add a photo" with `aria-label="Add a recipe photo"`.
+- ✅ Stock item → Recipes (3): all three cards render the 110px media strip, the
+  one with a photo showing it and the other two their initial tiles — identical
+  to the cookbook, which is the point of dropping the `showImage` prop.
+
+---
+
+## Verified live — shopping-list feedback batch 3 (2026-08-28)
+
+Same isolated scratch backend (:5171) driven through the SPA on :5174 via the
+`localStorage['dora.backendBaseUrl']` override. **1280px and 375px**, money on.
+
+- **Draft prices are read-only.** `.sld-price-btn` count **0**; three rows render
+  `~$8.00 / ~$6.00 / ~$4.40` with their source captions.
+- **Target-store picker.** 5 selects (one per row), offering **all four**
+  household stores (Aldi / Coles / IGA / Woolworths) rather than only stores
+  already touching the line. Inherited defaults read correctly per row:
+  `Coles (default)`, `Woolworths (default)`, `Any store`.
+- **Log price.** Present and visible in the toolbar on the **shopping** face,
+  **absent (0)** on a draft. (Note for future drivers: its accessible name is
+  *"Log a price"* — the `aria-label` — not the visible label "Log price".)
+- **Shop-mode line editor.** Sheet renders *Price per unit · Quantity · Bought
+  from*, with **Bought from pre-filled from the resolved ladder** (Aldi). The
+  quantity stepper round-trips: 1→2 saved and the row re-rendered `2× Olive Oil`;
+  repeated at 375px (4→5, row `5× Olive Oil`) and survived a reload.
+- **No horizontal overflow at 375px** with the new select on every row
+  (`scrollWidth` 375 = viewport 375).
+- **No 5xx** across the walk.
+
+**Not verified — blocked, not skipped:** the `planned_store_id` **round trip**.
+The scratch backend had been up since before the batch and Dora hard-codes
+`is_reloader_enabled() → False`, so it was still serving pre-batch-3 code and
+silently ignoring the new field; `preview_stop` and `kill` were both denied,
+`preview_start` reuses the live process, and both scratch pairings were occupied
+by parallel sessions. Checklist in `DORA_VERIFY.md`. The migration itself is
+covered by three passing tests (single-head, upgrade-from-empty,
+schema-matches-ORM), and the ladder ordering by a mutation-checked
+`tests/test_store_ladder.py`.
+
+**Picker shape + ordering (second follow-up, same session).** Verified in two
+halves, because the scratch backend still could not be restarted:
+
+- **Server sort, in-process against the real scratch DB** via
+  `GetShoppingListsHandler` (not the stale running process): 29 lists, dates
+  **strictly non-increasing**, drafts (28/08) on top, oldest done (24/05) at the
+  bottom, `is_next_up` still on Saturday shop.
+- **Client half**, driven with a Playwright route intercept that reverses the
+  stale server's payload — faithful because that server sorts by exactly the same
+  `(effective_date, created_at)` key. Rail renders 8 rows newest-first; the 5
+  inline done lists are now the most *recent* five (25/08 → 14/08) rather than
+  the oldest five; See-older still holds 21 and scrolls, newest-of-the-old first.
+- **Layout:** "See older" sits **8px** under the last list row (was at the floor
+  of a full-height column); rail box **505px** instead of `calc(100vh - 110px)`;
+  no "Manage templates…" link; **0px** horizontal page overflow at 1280px and
+  375px; mobile dropdown shows 8 lists + "See older (21)".
+
+**Caught by looking, not by the counters:** removing the width-pinned
+`q-virtual-scroll` broke name truncation — the rail's `overflow-x` *hard-clipped*
+the names instead of ellipsising them, which every count and every "no overflow"
+assertion still reported as fine. Measured chain at 1280px inside the 300px rail:
+`q-item` root **433px**, name span **341px**, both `min-width: auto`. Fixed at
+every link (root/section/label/span) and re-measured at 300px/208px. A
+`min-width: 0` applied to only the middle of a flex chain does nothing.
+
+**Spend bar — "No store set" slice (follow-up, same session).** Walked in
+**Pesto, Pesto Dark and Cherry Cola Dark**, money on and off, with computed
+styles and contrast ratios measured rather than eyeballed:
+
+- **Width.** Money on: `70.76% / 22.24% / 7%` — the catch-all was `0%` before and
+  absent from the bar. The two priced segments keep their true ratio (70.76/22.24
+  = 3.18, matching $14.00/$4.40 = 3.18), so the floor costs proportionality
+  nothing. Money off: `40% / 20% / 40%`, straight item-count share.
+- **Colour, and why a colour alone wasn't enough.** `--border-strong` measures
+  **3.55:1** against its neighbouring segment in Pesto light but **1.19:1** in
+  Pesto Dark and **1.02:1** in Cherry Cola Dark — the same lightness as the
+  segment beside it. Unfixable by choosing a different grey, since the competing
+  fills include logo-derived brand colours. Resolved with a themed diagonal
+  hatch; confirmed rendering in all three themes by screenshot (the contrast
+  probe reads `background-color` only and cannot see a `background-image`, which
+  is worth remembering — the numbers looked unchanged while the fix was working).
+- A first attempt dimmed the segment to `opacity: .6` so store colours would
+  still win the eye. That made it near-invisible in light themes against the
+  bar's own `--surface-sunken` track — reintroducing the reported bug in a
+  subtler form. Removed; noted in the stylesheet so it isn't retried.
+
+**Gotcha worth keeping:** after mutating a module to prove a test is sensitive,
+clear `__pycache__` before trusting the restored run. A stale `.pyc` kept the
+mutated behaviour alive while `inspect.getsource` printed the corrected file,
+which reads exactly like "my fix didn't work".
+
+---
+
+## Verified live — shopping-list feedback batch 2 (2026-08-28)
+
+Same isolated scratch backend (:5171, `data/scratch-verify.db`), walked at
+**1280px and 375px** with money on.
+
+**Driving note worth keeping.** Another chat held 4 of the 5 dev-server slots, so
+`dora-spa-5171` wouldn't start and the running SPA on :5174 targets the **:5170
+dev backend**. Instead of taking a slot or going near the real DB, the driver sets
+`localStorage['dora.backendBaseUrl'] = 'http://localhost:5171/api'` — the runtime
+override `backendUrl.ts` reads per request — so one Playwright context talks to the
+scratch backend while the other chat's SPA keeps its own target. Fresh context per
+run; nothing persists. Reusable any time the box is busy.
+
+- **Picker length.** 29 rows → **8** (2 drafts + 1 shopping + 5 most-recent done),
+  with **See older (21)**. Verified on all three faces.
+- **See older modal.** 21 rows; typing "Tuna" narrows to 4; `scrollHeight` 844 vs
+  `clientHeight` 540 (desktop) / 487 (mobile) and scrolling reaches row 21 at both
+  widths. Opening one navigates to it **and it stays in the picker** (1 active row)
+  rather than the picker pointing at a list it won't show.
+- **Mobile path to the modal.** Dropdown opens → 9 items (8 lists + "See older
+  (21)") → tap opens the dialog. Verified separately because at 375px "See older"
+  is a menu item, not a button.
+- **Always visible.** `.sld-rail` present on the run face; **0** "Switch list"
+  buttons anywhere; the dialog is deleted.
+- **No kebabs.** 0 in the rail on all three faces. **0** occurrences of "Copy to
+  new list" / "Copy unticked" anywhere on the page, including the Export menu.
+- **Name once on mobile.** At 375px: `.sld-title` **hidden**, `.sld-rail`
+  **hidden**, dropdown **visible**, and exactly **1** visible occurrence of the
+  list name (inside the dropdown button). At 1280px the title and rail are both
+  visible. Rename pencil resolves to exactly one visible button at each width.
+- **Header, all three faces.** Draft → `5 items · Set shop day · Created
+  28/08/2026`; Shopping → `3 items · Shop day: 26/08/2026 (overdue) · Created
+  27/08/2026`; Done → `2 items · Completed 25/08/2026 · Created 24/08/2026`. The
+  run-face branch needed a planned date forced onto the seeded list — the seed
+  leaves it null, so that path would otherwise never have rendered.
+- **TripCard.** Money-only card on the draft face (`Estimated cost | $18.40 |
+  saving $0.80 | 2 from what you last paid`); **not rendered** on the shopping or
+  receipt faces.
+- **No 5xx** across the walk.
+
+---
+
+## Verified live — shopping-list feedback batch 1 (2026-08-28)
+
+Driven with Playwright (the Browser pane reports a 0×0 viewport on this box and
+can't read the tree) against the **isolated scratch instance** — `dora-verify-
+backend-5171-linux` on :5171 with `data/scratch-verify.db`, SPA on :5174. The
+:5170 dev backend was never touched. Walked at **1280px and 375px**, with money
+both **off and on**. None of these reached `DORA_VERIFY.md` as open items:
+
+- **Money gate on the draft price button.** Money off → `.sld-price-btn` count
+  **0** across a 5-line draft; money on → **5**. Every other price surface was
+  already gated; this one never was.
+- **No ticking on a draft.** 0 row checkboxes on the plan face. `space`/`u`
+  now no-op outside shop mode (they previously guarded only on `'done'`).
+- **Ring → count.** Trip card reads `5 | items`, 0 `q-circular-progress` on the
+  plan face.
+- **Deletions.** 0 `swap_horiz` icons, 0 `place` pins, 0 Bulk-select button; row
+  actions down to 1 per row (delete only).
+- **Draft ordering.** "Order by" offers exactly `Store / Manual`; the run face
+  still offers all four.
+- **Picked section.** `Picked (2) · $33.50 in the trolley`, collapsed by default,
+  expands to 2 struck-through rows. Tapping one **unticks it**: live rows 1 → 2,
+  footer `2/3 → 1/3`, `Remaining $7.99 → $13.49`. Re-ticking restores it.
+- **Shop-mode ring.** 52px with `2/3` inside it; the line beside it stopped
+  repeating the count and reads "1 left to pick".
+- **Finish dialog.** With 1 unticked line: no option pre-selected, CTA
+  **disabled**, banner reads "…a finished list is a receipt, so it can't stay on
+  it — or cancel and tick it off after all", options are move-existing /
+  move-new / discard, and the cancel button reads **Go back**. Picking *Discard*
+  enables the CTA and relabels it **Discard & finish**.
+- **Discard round trip.** Clicked through: the unticked line is **gone from the
+  DB**, the two ticked lines remain, list flipped to `done`, receipt reads
+  "2 items bought".
+- **Store colours (the reported "white").** All four seeded stores have
+  `brand_colour = NULL` — the owner's exact scenario. Bar segments and chip dots
+  now compute `rgb(66,121,143)` and `rgb(82,93,122)`; the old pale values were
+  `#dde6e9`/`#dfe1e8`, i.e. white on a light page. The "No store set" segment
+  stays `--surface-sunken` deliberately.
+- **Money off, store card.** Title flips to "Where you'll shop" and the bar sizes
+  by item count — clears the 2026-08-26 line, now deleted from `DORA_VERIFY.md`.
+- **No 5xx** across dashboard / reports / preferences after the budget change.
+
+Backed by `tests/test_budget_spend_excludes_unticked.py` — mutation-checked
+(reverting the filter reports $95 against an expected $30).
 
 ---
 

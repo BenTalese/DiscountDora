@@ -29,8 +29,9 @@ export type ShoppingListSummary = {
      *  banner. `null` = unscheduled. */
     planned_shop_date: string | null;
     /** UX-v2, server-owned: finalised shop date > planned shop date >
-     *  created. The summaries response arrives sorted ascending by this —
-     *  render the rail/dropdown in payload order. */
+     *  created. The summaries response arrives sorted **descending** by this
+     *  (newest first, 2026-08-28) — render the rail/dropdown in payload
+     *  order. */
     effective_date: string;
     /** UX-v2, server-owned: exactly one summary is flagged as the list the
      *  UI should land on / mark "next up" (§3.3 rule lives server-side). */
@@ -88,6 +89,12 @@ export type ShoppingListLine = {
     /** Resolved name for `purchased_store_id`, populated by the detail
      *  endpoint. */
     purchased_store_name: string | null;
+    /** Where the user *plans* to buy this line, chosen on the plan face.
+     *  Distinct from `purchased_store_id`, which records where they did.
+     *  Rung 2 of the store ladder, below bought-from and above the item's
+     *  standing `usual_store_id`. */
+    planned_store_id: string | null;
+    planned_store_name: string | null;
     /** FU-227 chunk 5 (D3) — server-resolved per-item price suggestion for
      *  the till editor + its human source label ("from your last receipt" /
      *  "from Coles"). `null` when there's nothing to suggest. Display-only;
@@ -130,10 +137,12 @@ export type ShoppingListLine = {
     last_paid_unit_price: number | null;
     last_paid_store_id: string | null;
     last_paid_store_name: string | null;
-    /** Server-resolved store ladder: bought-this-trip → the item's usual store
-     *  (explicit intent) → the store of the last actual purchase → the chosen
-     *  offer's store. Intent beats history here — the reverse of the money
-     *  ladder — because this answers "where do I *plan* to buy it".
+    /** Server-resolved store ladder: bought-this-trip → **this list's planned
+     *  store** → the item's standing usual store → the store of the last actual
+     *  purchase → the chosen offer's store. Intent beats history here — the
+     *  reverse of the money ladder — because this answers "where do I *plan* to
+     *  buy it", and the two intent rungs are ordered by specificity: a choice
+     *  made for *this* list outranks a preference for the item.
      *  `null` ⇒ the "No store set" bucket. */
     resolved_store_id: string | null;
     resolved_store_name: string | null;
@@ -161,6 +170,8 @@ export type StoreSpend = {
 export type ShoppingListTotals = {
     total_price: number;
     remaining_price: number;
+    /** Price of the ticked lines only — what's in the trolley. */
+    picked_price: number;
     total_savings: number;
     unticked_count: number;
     ticked_count: number;

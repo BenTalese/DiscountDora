@@ -90,6 +90,17 @@ class ShoppingListLine(BaseEntity):
     # for totals and for the assistant's price-history queries.
     actual_unit_price: float | None = None
     purchased_store_id: UUID | None = None
+    # **Where you intend to buy this, for this list.** Distinct from
+    # `purchased_store_id`, which records where you *actually* bought it and is
+    # only meaningful once the shop has happened. Before this existed the plan
+    # face had no way to say "get this one at Aldi" — the only writable store on
+    # a line was the bought-from stamp, so planning and recording shared one
+    # field and the intent could only be expressed by pre-filling the record.
+    # The other candidate, `StockItem.usual_store_id`, is a *standing*
+    # preference: setting it from a list would change every future list too.
+    # Prefill chain (each is the default for the next, never a write-back):
+    #   usual_store_id → planned_store_id → purchased_store_id
+    planned_store_id: UUID | None = None
     # optional shopping hint: one of the stock item's PreferredBuy
     # labels (PROPOSAL_PRODUCTS_AS_OVERLAY §3.1). Reference-only — no DB FK
     # constraint (see the table mapping / migration re: FU-178); a deleted
@@ -122,6 +133,7 @@ class ShoppingListLine(BaseEntity):
         LIST_PRICE_AT_PICK = "list_price_at_pick"
         ACTUAL_UNIT_PRICE = "actual_unit_price"
         PURCHASED_STORE_ID = "purchased_store_id"
+        PLANNED_STORE_ID = "planned_store_id"
         PREFERRED_BUY_ID = "preferred_buy_id"
         DEFERRED_BY_BUDGET = "deferred_by_budget"
         DEFERRED_REASON = "deferred_reason"

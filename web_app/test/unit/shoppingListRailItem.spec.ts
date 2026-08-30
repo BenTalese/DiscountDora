@@ -3,11 +3,13 @@
  * FU-520 component layer — ShoppingListRailItem.
  *
  * One row of the shopping-lists rail (UX-v2 §3.1): status icon, the
- * server-resolved display name, the "next up" marker, the effective-date
- * caption, and the copy/delete kebab. Quasar chrome mounts for real
- * (pattern from stockLevelDot / addToListButton specs); `BaseButton` and
- * `QMenu` are stubbed to render their slots inline so the kebab actions
- * are in the DOM without driving a real popover open.
+ * server-resolved display name, the "next up" marker and the effective-date
+ * caption. Quasar chrome mounts for real (pattern from stockLevelDot /
+ * addToListButton specs).
+ *
+ * The four copy/delete kebab cases were deleted on 2026-08-28 along with the
+ * kebab itself — both actions were already reachable from the list you're
+ * looking at, and copy went entirely in favour of Save as template.
  */
 import { mount } from '@vue/test-utils';
 import {
@@ -16,17 +18,7 @@ import {
 import type { ShoppingListSummary } from 'src/models/shoppingList';
 import { describe, expect, it } from 'vitest';
 
-import type { VueWrapper } from '@vue/test-utils';
 import ShoppingListRailItem from 'src/components/shoppingList/ShoppingListRailItem.vue';
-
-const SlotStub = { template: '<div class="slot-stub"><slot /></div>' };
-
-/** The root row is itself a `.q-item` that wraps the kebab menu, so its
- *  text contains every menu label — scope lookups to the menu `.q-list`. */
-function menuItem(wrapper: VueWrapper, label: string) {
-    return wrapper.find('.q-list').findAll('.q-item')
-        .find((i) => i.text().includes(label));
-}
 
 function summaryOf(overrides: Partial<ShoppingListSummary> = {}): ShoppingListSummary {
     return {
@@ -51,7 +43,6 @@ function mountRow(summary: ShoppingListSummary, active = false) {
         global: {
             plugins: [Quasar],
             components: { QItem, QItemSection, QItemLabel, QIcon, QBadge, QList },
-            stubs: { BaseButton: SlotStub, QMenu: SlotStub },
         },
     });
 }
@@ -62,6 +53,22 @@ describe('ShoppingListRailItem', () => {
 
         expect(wrapper.text()).toContain('Weekly shop');
         expect(wrapper.text()).toContain('2/5 ticked');
+    });
+
+    it('shows a plain item count on a draft, not a ticked ratio', () => {
+        // A draft can no longer hold ticks (2026-08-28), so "0/5 ticked" there
+        // was a progress reading that could only ever say zero.
+        const wrapper = mountRow(summaryOf({ status: 'draft', line_count: 5, ticked_count: 0 }));
+
+        expect(wrapper.text()).toContain('5 items');
+        expect(wrapper.text()).not.toContain('ticked');
+    });
+
+    it('singularises the draft item count', () => {
+        const wrapper = mountRow(summaryOf({ status: 'draft', line_count: 1, ticked_count: 0 }));
+
+        expect(wrapper.text()).toContain('1 item');
+        expect(wrapper.text()).not.toContain('1 items');
     });
 
     it('shows the "next up" badge only when flagged', () => {
@@ -87,38 +94,5 @@ describe('ShoppingListRailItem', () => {
         await wrapper.find('.q-item').trigger('click');
 
         expect(wrapper.emitted('select')).toHaveLength(1);
-    });
-
-    it('offers "copy unticked" on an active list and emits with "unticked"', async () => {
-        const wrapper = mountRow(summaryOf({ status: 'shopping', line_count: 5, ticked_count: 2 }));
-
-        const copyItem = menuItem(wrapper, 'Copy unticked');
-        expect(copyItem).toBeTruthy();
-
-        await copyItem!.trigger('click');
-        expect(wrapper.emitted('copy')?.[0]).toEqual(['unticked']);
-    });
-
-    it('disables "copy unticked" when everything is ticked', () => {
-        const wrapper = mountRow(summaryOf({ status: 'shopping', line_count: 5, ticked_count: 5 }));
-
-        expect(menuItem(wrapper, 'Copy unticked')!.classes()).toContain('disabled');
-    });
-
-    it('offers "copy all" on a done list and emits with "all"', async () => {
-        const wrapper = mountRow(summaryOf({ status: 'done' }));
-
-        const copyItem = menuItem(wrapper, 'Copy to new list');
-        expect(copyItem).toBeTruthy();
-
-        await copyItem!.trigger('click');
-        expect(wrapper.emitted('copy')?.[0]).toEqual(['all']);
-    });
-
-    it('emits delete from the kebab', async () => {
-        const wrapper = mountRow(summaryOf());
-
-        await menuItem(wrapper, 'Delete list')!.trigger('click');
-        expect(wrapper.emitted('delete')).toHaveLength(1);
     });
 });

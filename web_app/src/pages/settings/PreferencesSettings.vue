@@ -82,27 +82,15 @@
             </div>
         </SettingsSection>
 
-        <hr class="settings-divider" />
-
-        <!-- Owner call 2026-08-18 — this used to be a "Hide photos" button in
-             the cookbook toolbar. The cookbook's cards/compact switch now owns
-             photos *there* (cards have them, compact doesn't), so the only
-             thing left for the preference to govern is the recipe page itself
-             — which is an appearance choice, and belongs here. -->
-        <SettingsSection>
-            <template #title>Recipe photos</template>
-
-            <SettingsRow
-                label="Show photos on recipe pages"
-                help="The cookbook decides its own — cards show photos, compact rows don't."
-            >
-                <q-toggle
-                    :model-value="showRecipeImages"
-                    @update:model-value="onRecipeImagesChange"
-                />
-            </SettingsRow>
-        </SettingsSection>
-
+        <!-- Owner call 2026-08-29 — the "Recipe photos" toggle was cut from
+             here. It began as a per-user low-bandwidth preference governing
+             every recipe photo in the app; by the time it reached this page
+             the cookbook had taken photos over via its cards/compact switch
+             and cook mode, print and the planner rail had never honoured it,
+             so it governed one hero image — and turning it off left a
+             same-sized "Photo hidden" box, so it didn't even buy the density
+             it claimed. Density on the cookbook is the cards/compact switch;
+             there is no second control. -->
     </div>
 </template>
 
@@ -126,9 +114,7 @@
     } from 'src/services/themeService';
     import { useAuthStore } from 'src/stores/authStore';
     import { ref, watch } from 'vue';
-    import { useImagePrefs } from 'src/composables/useImagePrefs';
     import { useSettingsSave } from 'src/composables/useSettingsSave';
-    import SettingsRow from 'src/components/settings/SettingsRow.vue';
     import SettingsSection from 'src/components/settings/SettingsSection.vue';
     import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
     import DoraSegmented, { type DoraSegmentedOption } from 'src/components/settings/DoraSegmented.vue';
@@ -197,18 +183,6 @@
 
     // R-003 / FU-601 — shared save-toast helper (see useSettingsSave).
     const { update } = useSettingsSave();
-
-    // Relocated from the cookbook toolbar (2026-08-18). Reads through the same
-    // composable every consuming surface uses, so there's still one owner of
-    // the flag (R-003) — this page just gained the control for it.
-    const { showRecipeImages, setRecipeImages } = useImagePrefs();
-
-    async function onRecipeImagesChange(value: boolean) {
-        await update(
-            value ? 'Recipe photos shown.' : 'Recipe photos hidden.',
-            () => setRecipeImages(value),
-        );
-    }
 
     watch(currentUser, (u) => {
         if (!u) return;

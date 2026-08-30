@@ -75,7 +75,7 @@ describe('RecipeRow — compact layout', () => {
         expect(mountRow(recipeOf()).find('.recipe-row__name').text()).toBe('Lasagne');
     });
 
-    it('puts time and ingredient count under the name, and only those two', () => {
+    it('puts time and ingredient count under the name', () => {
         // jsdom reports a desktop viewport, so `compact` is false — the branch
         // the owner's note is about.
         const wrapper = mountRow(recipeOf({
@@ -83,7 +83,30 @@ describe('RecipeRow — compact layout', () => {
         } as Partial<Recipe>));
 
         const facts = wrapper.findAll('.recipe-row__meta .recipe-row__fact');
-        expect(facts.map((f) => f.text())).toEqual(['45m', '2']);
+        // The count says "ingredients" in words (owner 2026-08-28) — the
+        // counter icon it used to carry read as clutter and still needed
+        // explaining. No kcal here: this fixture carries no figure.
+        expect(facts.map((f) => f.text())).toEqual(['45m', '2 ingredients']);
+    });
+
+    it('puts kcal on the same line when the recipe has a figure', () => {
+        const wrapper = mountRow(recipeOf({
+            ingredients: [{ stock_item_id: 's1' }],
+            kcal_per_serving: 412.4,
+            kcal_is_reliable: true,
+        } as Partial<Recipe>));
+
+        const facts = wrapper.findAll('.recipe-row__meta .recipe-row__fact');
+        expect(facts.map((f) => f.text())).toEqual(['45m', '1 ingredient', '412 kcal']);
+    });
+
+    it('marks a partial kcal figure with an asterisk rather than hiding it', () => {
+        const wrapper = mountRow(recipeOf({
+            kcal_per_serving: 412.4,
+            kcal_is_reliable: false,
+        } as Partial<Recipe>));
+
+        expect(wrapper.find('.recipe-row__meta').text()).toContain('412 kcal*');
     });
 
     it('drops the whole line when neither fact has a value', () => {

@@ -7,6 +7,12 @@ export interface BuyVerdictReason {
     signal: string;
     label: string;
     detail?: string | null;
+    /** Price-axis reasons carry their two amounts as raw numbers instead of a
+     *  `detail` string — the server never formats currency (D-006), so the
+     *  detail line is composed here through `formatMoney` and honours the
+     *  install's currency + locale. Null on every non-price reason. */
+    amount_last?: number | null;
+    amount_usual?: number | null;
 }
 
 /** The verdict's suggested next tap. The mutation itself uses existing

@@ -313,3 +313,55 @@ def clear_list(shopping_list_id: UUID):
         return not_found("ShoppingList", shopping_list_id)
     _Logger.info(f"Cleared {_Response.removed_count} lines from list {shopping_list_id}")
     return ok({"removed_count": _Response.removed_count})
+
+
+# ───── Discard the unticked lines ─────────────────────────────────────────
+
+@dataclass(slots=True)
+class DiscardUntickedResponse:
+    not_found: bool = False
+    removed_count: int = 0
+
+
+class DiscardUntickedHandler:
+    """Deletes every unticked line on a list.
+
+    The finish flow's third disposition, alongside move-to-existing and
+    move-to-new. A finished list is a receipt, and a receipt doesn't record
+    what you didn't buy — leaving the leftovers in place stranded them on an
+    archived list forever and kept them counted in the dashboard's "queued"
+    card. So the finish dialog now makes the user choose, and this is the
+    "I didn't want them after all" branch.
+
+    One request rather than a delete-per-line loop: the same reason the bulk
+    endpoints exist.
+    """
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
+
+    def handle(self, shopping_list_id: UUID) -> DiscardUntickedResponse:
+        lst = self.repository.get(ShoppingList).by_id(shopping_list_id)
+        if lst is None:
+            return DiscardUntickedResponse(not_found=True)
+        lines: List[ShoppingListLine] = self.repository.get(ShoppingListLine).all(
+            EntityField(ShoppingListLine, "shopping_list_id").eq(shopping_list_id)
+            & EntityField(ShoppingListLine, ShoppingListLine.Fields.IS_TICKED).eq(False)
+        )
+        for line in lines:
+            self.repository.remove(line)
+        self.repository.save_changes()
+        return DiscardUntickedResponse(removed_count=len(lines))
+
+
+@SHOPPING_LIST_ROUTER.route(
+    "/<uuid:shopping_list_id>/discard-unticked", methods=["POST"]
+)
+def discard_unticked(shopping_list_id: UUID):
+    _Logger = logging.getLogger(__name__)
+    _Response = DiscardUntickedHandler(SqlAlchemyRepository()).handle(shopping_list_id)
+    if _Response.not_found:
+        return not_found("ShoppingList", shopping_list_id)
+    _Logger.info(
+        f"Discarded {_Response.removed_count} unticked line(s) from list {shopping_list_id}"
+    )
+    return ok({"removed_count": _Response.removed_count})

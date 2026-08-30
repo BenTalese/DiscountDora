@@ -13,39 +13,27 @@
         point. So this card always renders when a belief exists, collapsed to
         the same pill the row shows, and opens to the full reasoning.
     -->
-    <div v-if="belief" :class="['belief-card', `is-${tone}`]">
-        <!-- Feedback 2026-08-24: this card's chevron didn't line up in a column
-             with the buy-verdict card's directly below it. Both were centred in
-             their own row; the difference was structural — this one was an 18px
-             glyph flush to the card's padding, that one is centred inside a
-             44px tap target. Same header shape now (summary button + a separate
-             caret button), so the two chevrons share an x. -->
-        <div class="belief-card__header">
-            <button
-                type="button"
-                class="belief-card__summary"
-                :aria-expanded="expanded"
-                @click="expanded = !expanded"
-            >
+    <!-- Feedback 2026-08-24: this card's chevron didn't line up in a column
+         with the buy-verdict card's directly below it. Both were centred in
+         their own row; the difference was structural — this one was an 18px
+         glyph flush to the card's padding, that one is centred inside a 44px
+         tap target. `CollapsibleCard` now owns that shape for every disclosure
+         in the app, so the two chevrons share an x by construction rather than
+         by two components happening to agree. -->
+    <CollapsibleCard
+        v-if="belief"
+        :class="['belief-card', `is-${tone}`]"
+        header-toggles
+        reveals="details"
+    >
+        <template #header>
+            <div class="belief-card__summary">
                 <q-icon :name="ICONS.inferred_hunch" size="18px" class="belief-card__icon" />
                 <span class="belief-card__headline">{{ headline }}</span>
-            </button>
-            <button
-                type="button"
-                class="belief-card__caret"
-                :aria-expanded="expanded"
-                :aria-label="expanded ? 'Hide details' : 'Show details'"
-                @click="expanded = !expanded"
-            >
-                <q-icon
-                    :name="expanded ? ICONS.collapse : ICONS.expand"
-                    size="18px"
-                    class="dora-text-muted"
-                />
-            </button>
-        </div>
+            </div>
+        </template>
 
-        <div v-if="expanded" class="belief-card__body">
+        <div class="belief-card__body">
             <div>{{ belief.reason }}</div>
             <div class="belief-card__meta dora-text-muted">
                 Confidence: {{ belief.confidence_band }}
@@ -59,19 +47,18 @@
                 </template>
             </div>
         </div>
-    </div>
+    </CollapsibleCard>
 </template>
 
 <script setup lang="ts">
-    import { computed, ref } from 'vue';
+    import { computed } from 'vue';
     import { ICONS } from 'src/style/icons';
+    import CollapsibleCard from 'src/components/CollapsibleCard.vue';
     import type { PantryBelief } from 'src/models/pantryBelief';
 
     const props = defineProps<{
         belief: PantryBelief | null;
     }>();
-
-    const expanded = ref(false);
 
     // Amber only when Dora disagrees — that's the case worth pulling the eye.
     // Agreement is information, not an alert, so it sits on a neutral surface.
@@ -106,45 +93,14 @@
         background: var(--semantic-warning-soft);
         border-color: var(--semantic-warning);
     }
-    .belief-card__header {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-    }
+    /* The header row, the 44px caret and the focus ring all come from
+       `CollapsibleCard` now. What's left here is this card's own content. */
     .belief-card__summary {
         display: flex;
         align-items: center;
         gap: 6px;
-        flex: 1 1 auto;
         min-width: 0;
         min-height: 44px;
-        padding: 0;
-        border: none;
-        background: none;
-        font: inherit;
-        color: inherit;
-        text-align: left;
-        cursor: pointer;
-    }
-    /* 44px tap target (D-004) for a control that's only an 18px glyph. */
-    .belief-card__caret {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        flex: 0 0 auto;
-        min-width: 44px;
-        min-height: 44px;
-        padding: 0;
-        border: none;
-        background: none;
-        color: inherit;
-        cursor: pointer;
-    }
-    .belief-card__summary:focus-visible,
-    .belief-card__caret:focus-visible {
-        outline: 2px solid var(--focus-ring);
-        outline-offset: 2px;
-        border-radius: 4px;
     }
     .belief-card__headline {
         font-weight: 600;

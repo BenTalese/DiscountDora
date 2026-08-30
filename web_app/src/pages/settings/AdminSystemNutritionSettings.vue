@@ -95,6 +95,21 @@
                         <div class="dataset-row__status dora-text-muted">
                             {{ statusLine(source) }}
                         </div>
+                        <!-- B10 — an SR Legacy import runs for minutes, and a
+                             bare spinner over that span reads as "wedged". The
+                             bar is determinate only while the server can name
+                             a denominator; the parsing phase has none, so it
+                             stays indeterminate under a live row count rather
+                             than faking a percentage. -->
+                        <q-linear-progress
+                            v-if="isBusy(source)"
+                            class="dataset-row__bar"
+                            rounded
+                            size="4px"
+                            color="primary"
+                            :indeterminate="progressOf(source) === null"
+                            :value="progressOf(source) ?? 0"
+                        />
                     </div>
                     <BaseButton
                         :variant="source.available ? 'ghost' : 'secondary'"
@@ -109,34 +124,55 @@
             <hr class="settings-divider" />
 
             <SettingsSection>
-                <template #title>Health Star Rating</template>
+                <template #title>Recipe rating</template>
                 <template #description>
-                    The Australian and New Zealand government's front-of-pack
-                    rating, applied to your recipes. Needs complex nutrition —
-                    it's worked out from the foods your ingredients are linked
-                    to, so there's nothing to score without them.
+                    An at-a-glance verdict on a recipe, using one of the
+                    front-of-pack schemes you'd see on a package. Pick whichever
+                    you actually recognise — both work anywhere, and neither is
+                    on unless you choose it. Needs complex nutrition: a rating is
+                    worked out from the foods your ingredients are linked to, so
+                    there's nothing to score without them.
                 </template>
 
                 <SettingsRow
-                    label="Show a Health Star Rating on recipes"
-                    help="Off by default outside Australia and New Zealand — it's a national scheme, so we don't show it as though it applied everywhere. Ratings are estimates: they're scored from the raw weight of the ingredients, not the finished dish."
+                    label="Rating scheme"
+                    help="Ratings are estimates. Both schemes were written for packaged products and score per 100 g of the finished food; Dora works from the raw weight of your ingredients, so a dish that reduces down or is made with water you haven't listed will read differently."
                 >
-                    <q-toggle
-                        :model-value="healthStarRatingEnabled"
-                        :disable="saving || mode !== 'complex'"
-                        @update:model-value="onHealthStarRatingChange"
+                    <!-- No `mode !== 'complex'` guard: this whole section is
+                         already inside that condition. The old toggle carried
+                         one, plus a "switch to complex" banner that could
+                         never render — dropped rather than carried forward. -->
+                    <DoraSegmented
+                        :model-value="ratingScheme"
+                        :options="ratingSchemeOptions"
+                        :disabled="saving"
+                        @update:model-value="onRatingSchemeChange"
                     />
                 </SettingsRow>
 
-                <q-banner
-                    v-if="healthStarRatingEnabled && mode !== 'complex'"
-                    dense
-                    rounded
-                    class="dora-bg-warning-soft q-mt-sm"
+                <!-- Provenance per scheme. Whose rating this is matters: these
+                     are national programmes with real authorities behind them,
+                     and a reader deciding whether to trust a letter on their
+                     dinner deserves to know who wrote the rules. -->
+                <div
+                    v-if="ratingScheme !== 'none'"
+                    class="settings-page__note dora-text-muted"
                 >
-                    Nutrition is in {{ mode }} mode, so no ratings can be worked
-                    out yet. Switch to complex above and import a dataset.
-                </q-banner>
+                    <template v-if="ratingScheme === 'health_star'">
+                        The <strong>Health Star Rating</strong> is the Australian
+                        and New Zealand scheme, published by FSANZ. Half a star
+                        to five; more stars is better.
+                    </template>
+                    <template v-else>
+                        <strong>Nutri-Score</strong> is the European scheme,
+                        published by Santé publique France and used in France,
+                        Germany, Belgium, the Netherlands, Spain, Luxembourg and
+                        Switzerland. A to E; A is best. Dora uses the updated
+                        2023 algorithm and draws its own badge rather than the
+                        official logo.
+                    </template>
+                </div>
+
             </SettingsSection>
 
             <hr class="settings-divider" />
@@ -197,6 +233,7 @@
     import BaseButton from 'src/components/BaseButton.vue';
     import SettingsSection from 'src/components/settings/SettingsSection.vue';
     import SettingsRow from 'src/components/settings/SettingsRow.vue';
+    import type { RatingScheme } from 'src/composables/useNutritionRating';
     import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
     import DoraSegmented, { type DoraSegmentedOption } from 'src/components/settings/DoraSegmented.vue';
 
@@ -207,6 +244,13 @@
     const { update, notifyError } = useSettingsSave();
     const { refresh: refreshFlags } = useFeatureFlags();
 
+    // Short enough for a segmented control; the provenance line under it
+    // carries the detail that would not fit here.
+    const ratingSchemeOptions: DoraSegmentedOption<RatingScheme>[] = [
+        { label: 'None', value: 'none' },
+        { label: 'Health stars', value: 'health_star' },
+        { label: 'Nutri-Score', value: 'nutri_score' },
+    ];
     const modeOptions: DoraSegmentedOption<NutritionMode>[] = [
         { label: 'Off', value: 'off' },
         { label: 'Simple', value: 'simple' },
@@ -219,7 +263,7 @@
     const offLookupEnabled = ref(true);
     // Owner ask 2026-08-27. Off by default everywhere; Settings →
     // Region's "Match this device" is what offers it on an AU/NZ locale.
-    const healthStarRatingEnabled = ref(false);
+    const ratingScheme = ref<RatingScheme>('none');
     const usdaKeyDraft = ref('');
     const savedUsdaKey = ref('');
     const loading = ref(true);
@@ -239,11 +283,48 @@
         return ['downloading', 'parsing', 'saving'].includes(source.phase ?? '');
     }
 
+    /** Fraction 0–1 for the progress bar, or null when nothing honest can be
+     *  computed and the bar should run indeterminate.
+     *
+     *  Only `downloading` has a real denominator (`Content-Length`), and even
+     *  then the server sends `bytes_total: 0` when the origin declined to give
+     *  one — so the zero check is load-bearing, not defensive noise. */
+    function progressOf(source: NutritionSourceStatus): number | null {
+        if (source.phase !== 'downloading') return null;
+        const total = source.bytes_total ?? 0;
+        if (total <= 0) return null;
+        return Math.min(1, (source.bytes_done ?? 0) / total);
+    }
+
+    function formatMb(bytes: number): string {
+        return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    }
+
     function statusLine(source: NutritionSourceStatus): string {
         switch (source.phase) {
-            case 'downloading': return 'Downloading…';
-            case 'parsing': return 'Reading the data…';
-            case 'saving': return 'Saving foods…';
+            case 'downloading': {
+                const done = source.bytes_done ?? 0;
+                const total = source.bytes_total ?? 0;
+                // Before the first chunk lands there is nothing to report, and
+                // "0.0 MB of 3.7 MB" reads worse than the plain verb.
+                if (done <= 0) return 'Downloading…';
+                return total > 0
+                    ? `Downloading — ${formatMb(done)} of ${formatMb(total)}`
+                    : `Downloading — ${formatMb(done)} so far`;
+            }
+            case 'parsing': {
+                const rows = source.rows_done ?? 0;
+                // No total to offer; the count alone is what proves it's moving.
+                return rows > 0
+                    ? `Reading the data — ${rows.toLocaleString()} rows`
+                    : 'Reading the data…';
+            }
+            case 'saving': {
+                const foods = source.foods ?? 0;
+                return foods > 0
+                    ? `Saving ${foods.toLocaleString()} foods…`
+                    : 'Saving foods…';
+            }
             case 'error': return source.error ?? 'That download failed.';
             default:
                 return source.available
@@ -284,7 +365,7 @@
         try {
             const settings = await appSettingsApi.getAsync();
             offLookupEnabled.value = settings.nutrition_off_lookup_enabled;
-            healthStarRatingEnabled.value = settings.health_star_rating_enabled ?? false;
+            ratingScheme.value = (settings.nutrition_rating_scheme ?? 'none') as RatingScheme;
             savedUsdaKey.value = settings.nutrition_usda_api_key ?? '';
             usdaKeyDraft.value = savedUsdaKey.value;
         } catch (err) {
@@ -317,16 +398,22 @@
         }
     }
 
-    async function onHealthStarRatingChange(value: boolean) {
-        const previous = healthStarRatingEnabled.value;
-        healthStarRatingEnabled.value = value;
+    const RATING_SCHEME_NAMES: Record<RatingScheme, string> = {
+        none: 'No recipe rating.',
+        health_star: 'Health Star Rating on.',
+        nutri_score: 'Nutri-Score on.',
+    };
+
+    async function onRatingSchemeChange(value: RatingScheme) {
+        const previous = ratingScheme.value;
+        ratingScheme.value = value;
         try {
             await patch(
-                value ? 'Health Star Rating on.' : 'Health Star Rating off.',
-                { health_star_rating_enabled: value },
+                RATING_SCHEME_NAMES[value],
+                { nutrition_rating_scheme: value },
             );
         } catch {
-            healthStarRatingEnabled.value = previous;
+            ratingScheme.value = previous;
         }
     }
 
@@ -412,5 +499,12 @@
         font-size: 0.8125rem;
         line-height: 1.4;
         margin-top: 2px;
+    }
+
+    .dataset-row__bar {
+        margin-top: var(--space-2);
+        // Capped so the bar tracks the status text it belongs to rather than
+        // stretching the width of a wide settings pane.
+        max-width: 320px;
     }
 </style>

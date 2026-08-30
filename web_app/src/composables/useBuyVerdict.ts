@@ -187,7 +187,14 @@ export function useBuyVerdict(
     });
 
     // Computed refs so consumers stay reactive when `idRef` changes.
+    //
+    // The disabled check is on the *read*, not just on `fetchIfNeeded`: the
+    // module cache outlives a flag flip, so an admin turning money off (or the
+    // user flipping their own opt-out) mid-session would otherwise leave
+    // already-fetched verdicts painted until remount. Gating here means every
+    // consumer — card and both badges — goes quiet on the same tick.
     const verdict: ComputedRef<BuyVerdict | null> = computed(() => {
+        if (!buyVerdictEnabled.value) return null;
         const id = idRef.value;
         return id ? ensureEntry(id).value.value : null;
     });

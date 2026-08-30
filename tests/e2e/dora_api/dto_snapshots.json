@@ -24,7 +24,6 @@
       "deals_email_enabled",
       "email_enabled",
       "expiring_soon_window_days",
-      "health_star_rating_enabled",
       "household_headcount",
       "image_max_dimension",
       "image_quality",
@@ -34,6 +33,7 @@
       "money_enabled",
       "nutrition_mode",
       "nutrition_off_lookup_enabled",
+      "nutrition_rating_scheme",
       "nutrition_usda_api_key",
       "piper_bin",
       "piper_bundled_voice_dir",
@@ -79,7 +79,6 @@
       "onboarding_completed_at",
       "send_deals_on_day",
       "show_assistant",
-      "show_recipe_images",
       "theme",
       "user_id",
       "username",
@@ -145,6 +144,7 @@
       "reconcile_policy",
       "schema_version",
       "schema_version_db",
+      "stocktake_policy",
       "support",
       "version"
     ]

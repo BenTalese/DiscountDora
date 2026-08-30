@@ -35,10 +35,11 @@ export type AppSettings = {
      *  tell the UK from the US). Read by every session via /api/health;
      *  editable here by admins. */
     measurement_system: 'metric' | 'imperial' | 'us';
-    /** Owner ask 2026-08-27 — the recipe Health Star Rating. Off everywhere
-     *  by default; HSR is an AU/NZ government scheme and an install elsewhere
-     *  shouldn't be shown a national rating as if it were universal. */
-    health_star_rating_enabled: boolean;
+    /** Owner ask 2026-08-27 — which front-of-pack rating recipes carry:
+     *  'none' (the default everywhere) | 'health_star' | 'nutri_score'.
+     *  Both schemes work anywhere; Dora just doesn't pick a nutritional
+     *  authority for a household without being asked. */
+    nutrition_rating_scheme: string;
     // Alerts C-9.2 — household-wide alert thresholds (PROPOSAL_ALERTS §3.3).
     expiring_soon_window_days: number;
     // Phase D / FU-186 — admin-set URL the Product Search nav opens.

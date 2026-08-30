@@ -244,6 +244,17 @@ to it.
 
 ### 2.8 Image-display opt-in — recipe + stock-item photos
 
+> **📦 SUPERSEDED 2026-08-29 — this whole section is history; nothing in it is
+> live.** `show_stock_images` was dropped by FU-508 (pantry items don't carry
+> photos; a linked Product supplies the visual), and `show_recipe_images` was
+> **cut entirely** — flag, column and all — once the cookbook's cards/compact
+> switch had taken photo density over and cook mode, print and the planner rail
+> had turned out never to honour it, leaving it governing one hero image behind a
+> toggle that reclaimed none of its space. Recipe photos now render
+> unconditionally; density on the cookbook is the view switch. See **ADR-062 /
+> R-065** and migration `e3b1d7f5a904`. Read the rest of this section only for
+> the original intent.
+
 Recipes (C-4 Chunk 5) and stock items (FU-033, deferred) can both carry
 **images** uploaded by the user. The *upload + storage* path is owned by
 those surfaces; **whether the app actually renders the images** is a

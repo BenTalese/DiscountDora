@@ -945,7 +945,6 @@
                                  on this surface. -->
                             <RecipeCard
                                 :recipe="r"
-                                :show-image="showRecipeImages"
                                 :show-filter-by-ingredients="true"
                                 @open="goToRecipe"
                                 @cook="goToCook"
@@ -1352,7 +1351,6 @@
     import { ICONS } from 'src/style/icons';
     import { formatDateTime as formatLocaleDateTime } from 'src/composables/useDateFormat';
     import SearchInput from 'src/components/SearchInput.vue';
-    import { useImagePrefs } from 'src/composables/useImagePrefs';
     import AppSkeleton from 'src/components/AppSkeleton.vue';
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
@@ -1433,7 +1431,6 @@
     // Recipe photos on the "Recipes using this" cards follow the user's own
     // preference — this isn't the cookbook, so the cookbook's cards/compact
     // switch has no say here.
-    const { showRecipeImages } = useImagePrefs();
     // Phones drop the header buttons to icon-only so the name, QR and Delete
     // fit on one line (feedback 2026-08-16).
     const compactHeader = computed(() => $q.screen.lt.sm);

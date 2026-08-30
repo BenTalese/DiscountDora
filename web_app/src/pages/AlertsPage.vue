@@ -324,7 +324,10 @@
             message: alert.stock_item_name
                 ? `Snoozed "${alert.stock_item_name}" for 7 days.`
                 : 'Snoozed for 7 days.',
-            actions: [{ label: 'Undo', color: 'white', handler: () => void alertStore.unsnoozeAlert(alert.alert_id) }],
+            // No `color` on the action: info toasts are a light elevated
+            // surface, where white is invisible. Quasar defaults notification
+            // actions to `var(--q-primary)`, which tracks the theme.
+            actions: [{ label: 'Undo', handler: () => void alertStore.unsnoozeAlert(alert.alert_id) }],
         });
     }
 
@@ -336,7 +339,9 @@
                 ? `Dismissed "${alert.stock_item_name}".`
                 : 'Dismissed.',
             caption: 'It returns only if the condition clears and re-fires.',
-            actions: [{ label: 'Undo', color: 'white', handler: () => void alertStore.unsnoozeAlert(alert.alert_id) }],
+            // See the snooze toast above — no `color`, so the action follows
+            // the theme rather than sitting white on a light surface.
+            actions: [{ label: 'Undo', handler: () => void alertStore.unsnoozeAlert(alert.alert_id) }],
         });
     }
 

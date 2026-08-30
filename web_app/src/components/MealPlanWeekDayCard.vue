@@ -1,5 +1,9 @@
 <template>
-    <q-card bordered class="day-card q-mb-sm" :class="{ 'day-card--past': isPast }">
+    <q-card
+        bordered
+        class="day-card q-mb-sm"
+        :class="{ 'day-card--past': isPast, 'day-card--has-target': hasTargetedSlot }"
+    >
         <q-card-section class="dora-bg-sunken q-py-xs row items-center">
             <div class="text-weight-bold">{{ day.label }}</div>
             <div class="text-caption q-ml-sm dora-text-muted">{{ formatDate(day.iso) }}</div>
@@ -39,8 +43,6 @@
                     'slot-row--clickable': !isPast,
                 }"
                 @click="!isPast && emit('selectSlot', slot)"
-                @dragover.prevent
-                @drop.stop="emit('dropOnSlot', slot)"
             >
                 <div class="slot-row__label">{{ slot }}</div>
                 <div class="slot-row__entries">
@@ -64,7 +66,7 @@
                         v-if="!slotEntries(slot).length && !isPast"
                         class="slot-row__hint"
                     >
-                        {{ isTargetedSlot(slot) ? 'pick a recipe →' : 'tap to add' }}
+                        {{ isTargetedSlot(slot) ? '← pick a recipe' : 'tap to add' }}
                     </span>
                 </div>
             </component>
@@ -103,13 +105,32 @@
             >
                 <q-icon :name="ICONS.add" size="14px" class="q-mr-xs" />
                 <span>{{ addButtonLabel }}</span>
-                <q-menu anchor="top right" self="bottom right" auto-close>
+                <!-- Arming a slot from this menu is a focus HAND-OFF, not a
+                     round trip: §4.6 requires focus to land in the rail's
+                     search so the armed slot can be answered from the keyboard.
+                     QMenu fights that twice on close, and both were measured in
+                     the browser:
+                       1. it returns focus to whatever opened it — hence
+                          `no-refocus`; without it focus snapped back to this
+                          button and stayed there 1500ms after arming;
+                       2. its teardown blurs the active element, so emitting on
+                          click focused the rail and then lost it to BODY a beat
+                          later.
+                     So the selection is emitted on `@hide`, once the menu is
+                     fully gone and nothing further will touch focus. -->
+                <q-menu
+                    anchor="top right"
+                    self="bottom right"
+                    auto-close
+                    no-refocus
+                    @hide="flushPendingSlot"
+                >
                     <q-list dense style="min-width: 140px">
                         <q-item
                             v-for="slot in unusedSlots"
                             :key="slot"
                             clickable
-                            @click="emit('selectSlot', slot)"
+                            @click="pendingSlot = slot"
                         >
                             <q-item-section>{{ slot }}</q-item-section>
                         </q-item>
@@ -125,7 +146,7 @@
     import { ICONS } from 'src/style/icons';
     import type { MealPlanDayNutrition, MealPlanEntry } from 'src/models/mealPlan';
     import type { WeekDay } from 'src/composables/useMealPlanner';
-    import { computed } from 'vue';
+    import { computed, ref } from 'vue';
 
     const props = defineProps<{
         day: WeekDay;
@@ -144,9 +165,26 @@
         nutrition?: MealPlanDayNutrition | null;
     }>();
 
+    /* The slot picked from the add-meal menu, held until the menu has finished
+       hiding. See the `@hide` comment in the template: emitting on click races
+       QMenu's own focus teardown, which would undo the rail's focus hand-off. */
+    const pendingSlot = ref<string | null>(null);
+    function flushPendingSlot() {
+        const slot = pendingSlot.value;
+        pendingSlot.value = null;
+        if (slot) emit('selectSlot', slot);
+    }
+
+    /* §4.6 — when one of this day's slots is armed, the whole card takes an
+       accent border. Without it the only marker is a single slot row inside one
+       of seven stacked cards, so finding your own target means scanning slot by
+       slot. */
+    const hasTargetedSlot = computed(
+        () => props.slotNames.some((slot) => props.isTargetedSlot(slot)),
+    );
+
     const emit = defineEmits<{
         (e: 'selectSlot', slot: string): void;
-        (e: 'dropOnSlot', slot: string): void;
         (e: 'entryView', recipeId: string): void;
         (e: 'entryCook', recipeId: string): void;
         (e: 'entryRemove', entry: MealPlanEntry): void;
@@ -160,9 +198,20 @@
     // renders (legacy behaviour, "tap to add" hint per slot). When off, only
     // slots with entries render; an explicit "+ add a meal" button opens a
     // slot-picker menu for the unused ones.
-    const visibleSlots = computed(() =>
-        props.showAllSlots ? props.slotNames : props.slotNames.filter((s) => props.slotEntries(s).length > 0),
-    );
+    /* An armed slot is ALWAYS visible, even when empty and even with
+       "show all slots" off. §4.6 requires the destination to be named at both
+       ends — the rail banner and the slot itself — because at 1280px+ they are
+       far apart and naming both is the reliable version of drawing a connector.
+       Without this the week's only marker was the card's accent border, so
+       arming "Breakfast" from the add-meal menu highlighted the day but never
+       said which slot; the target row simply didn't exist to be highlighted
+       (measured in the browser — the `← pick a recipe` hint rendered nowhere). */
+    const visibleSlots = computed(() => {
+        if (props.showAllSlots) return props.slotNames;
+        return props.slotNames.filter(
+            (s) => props.slotEntries(s).length > 0 || props.isTargetedSlot(s),
+        );
+    });
     const unusedSlots = computed(() => props.slotNames.filter((s) => !props.slotEntries(s).length));
 
     const addButtonLabel = computed(() => {
@@ -204,10 +253,17 @@
         outline: 2px solid var(--q-primary);
         outline-offset: 2px;
     }
+    /* §4.6 — the armed slot is a FILLED accent surface with an inset accent
+       bar. It used to be `outline: 2px dashed` over a sunken fill, which reads
+       as an empty DROP ZONE — and with drag-and-drop retired (D1) a drop-zone
+       idiom is not merely dated, it is actively misleading: there is nothing to
+       drop any more. This says "this is the destination", not "drop here". */
     .slot-row--target {
-        outline: 2px dashed var(--q-primary);
-        outline-offset: -2px;
-        background: var(--surface-sunken);
+        background: color-mix(in srgb, var(--q-primary) 14%, var(--surface-component));
+        box-shadow: inset 2px 0 0 0 var(--q-primary);
+    }
+    .day-card--has-target {
+        border-color: var(--q-primary);
     }
     .slot-row__label {
         flex: 0 0 5.5rem;

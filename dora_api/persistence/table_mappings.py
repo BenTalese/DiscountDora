@@ -97,7 +97,7 @@ def configure_mappings(db: SQLAlchemy):
         # AI mode is per-user only — no install-wide master kill-switch.
         # Per-user URL / model / provider / API key live on the User table.
         Column("scanning_enabled", Boolean, nullable=False, server_default=false()),
-        Column("health_star_rating_enabled", Boolean, nullable=False, server_default=false()),
+        Column("nutrition_rating_scheme", String(32), nullable=False, server_default="none"),
         # buy-verdict oracle. Defaults on because it's pure-personal;
         # admin can turn off from Settings → System.
         # C-cross Chunk 1 — install-wide feature flags (proposal §2.6).
@@ -457,6 +457,15 @@ def configure_mappings(db: SQLAlchemy):
         Column("actual_unit_price", Float, nullable=True),
         Column(
             "purchased_store_id", UUIDType,
+            ForeignKey("Store.id", ondelete="SET NULL"),
+            nullable=True,
+        ),
+        # where the user *plans* to buy this line, as opposed to
+        # `purchased_store_id` above, which is where they did. SET NULL on
+        # store delete for the same reason: losing a store must not take the
+        # line with it.
+        Column(
+            "planned_store_id", UUIDType,
             ForeignKey("Store.id", ondelete="SET NULL"),
             nullable=True,
         ),
@@ -1135,9 +1144,9 @@ def configure_mappings(db: SQLAlchemy):
         Column("inference_meal_plan_enabled", Boolean, nullable=False, server_default=false()),
         # `nutrition_mode` moved to AppSetting (2026-08-14) — install-wide,
         # see the nutrition block in the AppSetting table above.
-        # C-cross Chunk 5 — per-user recipe-image opt-in (proposal §2.8).
-        # Default True. FU-508 dropped the stock-image companion column.
-        Column("show_recipe_images", Boolean, nullable=False, server_default=true()),
+        # `show_recipe_images` dropped 2026-08-29 (migration
+        # `e3b1d7f5a904`) — see the entity for why. FU-508 had already
+        # dropped its stock-image companion column.
         # FU-615 — `household_headcount` moved off User to AppSetting
         # (install-wide; a household has one headcount).
         # alerts email digest channel (PROPOSAL_ALERTS §3.5 / §4.4).

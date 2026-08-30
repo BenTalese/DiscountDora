@@ -137,6 +137,29 @@ export type ProposedEntry = {
     cook_key: string | null;
 };
 
+/**
+ * The server's frozen reason vocabulary (`build_week.py:88-94`, annotated
+ * "frozen server-side, R-003"). The rail maps these tokens to copy; it must not
+ * invent a token, and a new one must be added on the server first.
+ */
+export type SuggestionReasonChip =
+    | 'uses_expiring'
+    | 'cookable_now'
+    | 'favourite'
+    | 'not_made_recently'
+    | 'variety'
+    | 'budget_friendly'
+    | 'picked';
+
+export type MealPlanSuggestion = {
+    recipe_id: string;
+    reason_chip: SuggestionReasonChip;
+};
+
+export type MealPlanSuggestions = {
+    suggestions: MealPlanSuggestion[];
+};
+
 export type AutoBuildResponse = {
     entries: ProposedEntry[];
     /** The requested days the server actually built into (past days dropped). */

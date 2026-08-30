@@ -233,6 +233,7 @@
         type UnmatchedStockItem,
     } from 'src/services/api/nutritionApiService';
     import { useAuthStore } from 'src/stores/authStore';
+    import { useRecipeStore } from 'src/stores/recipeStore';
     import { useStockItemStore } from 'src/stores/stockItemStore';
 
     const $q = useQuasar();
@@ -240,6 +241,7 @@
     // Via the store, not the API service directly — it carries the offline
     // queue and keeps the cached stock-item list in step, exactly as the
     // stock-item detail page's edits do.
+    const recipeStore = useRecipeStore();
     const stockItemStore = useStockItemStore();
 
     const items = ref<UnmatchedStockItem[]>([]);
@@ -334,6 +336,11 @@
                     ? 'Linked 1 item to its suggested food.'
                     : `Linked ${result.linked_count} items to their suggested foods.`,
             });
+            // Server-side bulk link, so it never touches `stockItemStore` and
+            // never trips its invalidation. Every recipe using one of those
+            // items now has a different rollup — kcal, and the front-of-pack
+            // rating — so the cookbook's cached list is out of date.
+            recipeStore.invalidateRecipes();
             await refresh();
         } catch (err) {
             notifyError('Could not accept the suggestions.', err);

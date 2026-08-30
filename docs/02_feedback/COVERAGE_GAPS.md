@@ -205,6 +205,31 @@ next reviewer can fast-skip them.
   maps L317-338). Tools/structured-steps → C-4; headcount → C-5; finish add-to-
   list → C-7.
 - MEAL PLANS — `04_proposals/PROPOSAL_MEAL_PLANS.md` (F1..F49 table).
+  > **Update 2026-08-28:** the flat "covered" pointer above was stale.
+  > `IMPL_PLAN_MEAL_PLANS_REBUILD.md` §13 (2026-06-25) re-graded **13 bullets 🟡
+  > regressed/new-concern** once all 49 shipped ideas were live together, and its
+  > §15 instructed a flip here that never happened. The 🟡 set is
+  > **F9, F16, F20, F22, F41, F42, F44, F46** (+ the layout/scroll group) — i.e.
+  > the recipe rail, the page's scroll model and the calendar. All of them now
+  > have a *second* home in
+  > `04_proposals/BRIEF_MEAL_PLANNER_RAIL_AND_SHELL.md` §11, which re-covers
+  > them and marks the rest of F1–F49 out-of-scope-with-a-reason.
+  > **Four are [OPEN] again rather than covered**, because the brief revises the
+  > owner's own earlier feedback and the revisions are unconfirmed (FU-782 §9):
+  > **F13** (the calendar widget the owner specified is the one he now dislikes),
+  > **F17** (the requested down-arrow-below moves into the toolbar), **F9**
+  > (offer both drag and tap — the brief recommends retiring drag), and **F43**
+  > (cookable-now doesn't belong on the planner — the brief proposes a
+  > `cookable_now` suggestion reason). **F41** (conflicting colour/iconography)
+  > is [OPEN] as a standing risk: the brief *adds* accent surfaces and owes a
+  > count against it before its unit can close.
+- MEAL PLANS — rail / scroll model / calendar — `04_proposals/BRIEF_MEAL_PLANNER_RAIL_AND_SHELL.md`
+  (2026-08-28; narrows `IMPL_PLAN_MEAL_PLANS_REBUILD.md`, supersedes its sticky-
+  column and calendar-popover moves, does not reopen its Q1 — already closed by
+  FU-304). Also gives **L271** ("planned in" recipe filter) its first home, as a
+  logged candidate rail chip rather than a recommendation, and records that
+  **L93/L212/L231**'s app-wide sticky-footer-counts directive is *diverged from*
+  by its toolbar status strip (FU-782 D8). Designed, not built.
 - SHOPPING LISTS / DETAILS / MODE — `04_proposals/SHOPPING_LIST_REDESIGN_PROPOSAL.md`
   + `04_proposals/IMPL_PLAN_SHOPPING_LISTS.md` (C-impl phased plan, written
   2026-06-06; maps L401-422), B9.1. **UX layer superseded 2026-06-12 by
@@ -237,3 +262,4 @@ next reviewer can fast-skip them.
 | 2026-06-17 | Products-as-overlay pivot | Wrote `04_proposals/PROPOSAL_PRODUCTS_AS_OVERLAY.md` (Products gated on data-presence not a flag; new `PreferredBuy` everyday construct; onboarding personas removed; Product Search → companion behind a configured URL). Superseded the spine of `PROPOSAL_SIMPLE_MODE.md`; reshaped `PROPOSAL_INGESTION_API.md` + onboarding docs + RECONCILED §7. Re-homed L42/L45/L46/L84/L131/L191/L192/L226/L254. |
 | 2026-06-22 | FU-227 "Your prices" landed | `04_proposals/IMPL_PLAN_YOUR_PRICES.md` shipped all 8 chunks (unit-conversion helper → observation model reshape → shared `PriceEntry` + row button + widget → baseline math → shopping-line prefill + harvest + Receipt relabel → bottom-sheet history + per-product observation overlay → ingest-obs path removal → close-gate + R-017). Flipped L226 (bottom-sheet for Price History — ADDRESSED, `PriceHistoryBottomSheet.vue`); L419 (shopping line price entry as receipt — ADDRESSED, prefill-and-persist + I1 Receipt relabel); L420 (close the loop / list-becomes-receipt — ADDRESSED, harvest-on-/finish + LC-1 idempotent + E3 dead-branch removal). Also addressed implicit "what does this usually cost me" + "warn me when something jumped" (the C5 widget + above-1.15× chip, observations-only baseline per LC-2). L225 (Price-History box-fit bug) stays OUT OF SCOPE → FU-214. |
 | 2026-07-07 | Budget-defense swaps brief written | `04_proposals/PROPOSAL_BUDGET_DEFENSE_SWAPS.md` — Wave-C design brief for FU-451 (P6-09 negotiator) + FU-450 (P6-03 deal-quality surviving pieces). Provides a *solution* home (not just re-homing) for the recipe-cost-→-meal-plan-→-budget integration facet of **L254** — swap ranker on the meal-plan week + summary bullet on the Dashboard budget card, `cost_per_week` computed server-side on-the-fly, both surfaces gated on the same money-features opt-in the bullet demanded. Partial for **L341** (sequential meal-plan builder → shopping-list flow — the swap surface sits inside the meal-plan week context L341 wanted more usefulness around; the full sequential builder is separate work). L342 (templates + auto-add) stays untouched — deliberately orthogonal so a template can still be swap-negotiated per-week without contaminating the template row itself. |
+| 2026-08-28 | Meal-planner rail/shell/calendar brief written | `04_proposals/BRIEF_MEAL_PLANNER_RAIL_AND_SHELL.md` — owner feedback that the recipe-picker rail and the week calendar both look and feel wrong, after a round of nine drawn options. Cleared the **stale MEAL PLANS pointer in Bucket D**: `IMPL_PLAN_MEAL_PLANS_REBUILD.md` §13 re-graded 13 bullets 🟡 in June and its §15's instruction to flip them here was never carried out, so this file has read "covered" for two months over a set the predecessor doc itself marked regressed. Re-covered F9/F16/F20/F22/F41/F42/F44/F46 in the brief's §11; **re-opened F13, F17, F9 and F43** because the brief revises the owner's own earlier feedback on each and the revisions are unconfirmed (FU-782 §9 D1/D6/D7/D8); left **F41** open as a standing risk the brief must measure itself against, since it adds accent surfaces to a page already reported as visually conflicting. Gave **L271** its first home. Recorded that the toolbar status strip **diverges** from L93/L212/L231's app-wide componentised-sticky-footer directive rather than claiming consistency. Designed, not built — build gated on FU-782. |

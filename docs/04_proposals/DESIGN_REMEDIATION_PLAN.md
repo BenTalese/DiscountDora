@@ -307,10 +307,30 @@ ingredient/tool associations aren't surfaced in read mode (the ingredient list c
 them). Full visual walk queued in DORA_VERIFY (recipe data won't load in the verify pane
 — the app's XHRs don't carry the cross-origin session cookie).
 
-### DR-12 · Alerts page order + calendar diet (D-012) — P2
+### DR-12 · Alerts page order + calendar diet (D-012) — P2 — ➗ PARTLY OVERRULED 2026-08-30
 Actionable list first; calendar becomes a labelled 14-day strip (counts on
 cells) or moves below; same treatment for the meal-plans mini-month.
 **Refs:** FU-578 #28/50.
+
+**The meal-plans half of this is overruled and is now DONE differently.** This
+item was recorded as *"rides the redesign"*, and the redesign arrived:
+`BRIEF_MEAL_PLANNER_RAIL_AND_SHELL.md` §5, decided as **D7** by the owner on
+2026-08-29 and built 2026-08-30. The planner's calendar became a **full month
+grid** with focusable days and per-meal pips — **not** a 14-day strip.
+
+The reasoning, recorded so this doesn't get "corrected" back: DR-12's rationale
+is a calendar *competing with an actionable list*, which is the Alerts page's
+problem and not the planner's — on the planner the calendar **is** the
+navigation, and the actual fault was the opposite of bloat. The old widget was a
+week picker wearing a calendar costume: only the week row was clickable while the
+day squares carried the status colour, so days invited a click that did something
+else. Shrinking it further would have kept that. Making the days real is what
+fixed it, and it bought a payoff a strip could not: clicking a day now scrolls
+the week pane to that day's card.
+
+**Still open under DR-12:** the Alerts page ordering (actionable list first) and
+its own calendar, plus the reports charts noted in the mapping table. Only the
+meal-plans mini-month is settled.
 
 ### DR-13 · History timeline grouping (D-012, D-006) — P3
 Collapse repeated kinds ("Pushed expiry ×50 over 3 months"), per-kind filter
@@ -429,7 +449,7 @@ along. **Refs:** FU-578 #37/39.
 | 7b, 9, 48, 51 (theme split + locale) | DR-14 | |
 | 11 (cook-count contradiction) | DR-11 | |
 | 15, 23, 26, 52 (loading/splash) | DR-8 | |
-| 16 (meal-plans stat confusion) | DR-12 | rides the redesign |
+| 16 (meal-plans stat confusion) | DR-12 | redesign landed 2026-08-30 — month grid, **not** the 14-day strip (D7) |
 | 17 (bell advice/action mismatch) | DR-4 | copy-level fix |
 | 18 (rows not real links) | DR-9 | stretch: `href` on rows |
 | 20 (kitchen-health scores unused feature) | DR-16 | skip-component like Budget |

@@ -1,6 +1,6 @@
 ﻿# Dashy Dora — Project State
 
-**Last reviewed: 2026-08-30.** Milestone-progress front door — phase board,
+**Last reviewed: 2026-08-31.** Milestone-progress front door — phase board,
 workstreams, and what needs your attention. This is *not* a changelog;
 shipped-work history lives in `CHANGELOG.md` + `DORA_WORKLOG.md`.
 
@@ -47,7 +47,12 @@ eight owner decisions: all eight are now answered and **all three of its units a
 built and driven live** — the app-shell conversion, the rail rebuild and the
 month-grid calendar. What the brief still owes is its own §11 ledger debt: the
 `COVERAGE_GAPS.md` flip for the 13 bullets `IMPL_PLAN_MEAL_PLANS_REBUILD.md`
-§13 re-graded 🟡.
+§13 re-graded 🟡. **2026-08-31 added a second dev dataset**, `dense` (now the
+default for interactive boots; `bulk` stays for load testing and is what the e2e
+suite uses). It is aimed squarely at the browser-verify debt above: no generated
+filler, every row placed to put some surface into a state worth walking —
+including the structured and image cook-mode faces, which had no fixture in
+either seed until now (FU-754, resolved).
 
 ---
 

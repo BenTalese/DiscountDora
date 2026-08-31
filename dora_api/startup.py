@@ -24,6 +24,7 @@ from dora_api.infrastructure.middleware import MIDDLEWARE
 from dora_api.infrastructure.profile import is_test
 from dora_api.infrastructure.utils import get_attributes_ending_with
 from dora_api.persistence.seed import seed_dev_data
+from dora_api.persistence.seed_dense import seed_dense_data
 from dora_api.persistence.seed_showcase import reset_showcase
 
 
@@ -220,16 +221,35 @@ def init_db(is_test_env: bool):
         if is_test_env or (DORA_CONFIG.is_debug_mode_enabled() and DORA_CONFIG.is_seed_allowed()):
             db.drop_all()
             db.create_all()
-            # FU-388 — interactive dev always seeds under load (default 500
-            # extra items); the e2e suite passes 0 so its boot stays fast.
+            _qa_fixtures = (
+                not is_test_env and DORA_CONFIG.is_qa_fixture_seed_enabled()
+            )
+            # Two dev datasets (owner call, 2026-08-31) — see
+            # DoraConfig.get_seed_dataset() for which answers what. `dense` is
+            # the default for an interactive boot: hand-placed depth, no filler.
+            #
+            # The e2e suite is pinned to `bulk` regardless of the env var: it
+            # asserts against that dataset's specific fixtures, so letting a
+            # shell variable swap its data out would break ~2200 tests for a
+            # reason unrelated to the code under test.
+            if not is_test_env and DORA_CONFIG.get_seed_dataset() == "dense":
+                # `money_on=True` is stated here rather than left to the
+                # parameter default: the dense dataset deliberately does NOT
+                # consult DORA_SEED_MONEY_ON (which defaults to false), and a
+                # silent default would make that env var look like it applies
+                # when it doesn't. Dense boots every optional install surface on
+                # — a gated-off feature renders nothing, and this dataset exists
+                # to show every path. See seed_dense_data's docstring.
+                seed_dense_data(qa_fixtures=_qa_fixtures, money_on=True)
+                return
+            # FU-388 — the bulk dataset seeds under load (default 500 extra
+            # items); the e2e suite passes 0 so its boot stays fast.
             seed_dev_data(
                 bulk_stock_items=(
                     0 if is_test_env
                     else DORA_CONFIG.get_seed_bulk_stock_item_count()
                 ),
-                qa_fixtures=(
-                    not is_test_env and DORA_CONFIG.is_qa_fixture_seed_enabled()
-                ),
+                qa_fixtures=_qa_fixtures,
                 money_on=(
                     not is_test_env and DORA_CONFIG.is_seed_money_on()
                 ),

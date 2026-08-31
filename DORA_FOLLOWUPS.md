@@ -725,24 +725,24 @@ long session summary. Distinct from the other logs:
 - **Recommended resolution:** opportunistic — fix the one error and add `test` to
   the lint script's paths in the same small change.
 
-## [OPEN] FU-754 — No image-mode or structured-mode recipe in either seed
-- **Raised:** 2026-08-27 (owner feedback batch — cook mode)
+## [OPEN] FU-792 — `seed_showcase.py` has no structured- or image-mode recipe
+- **Raised:** 2026-08-31 (dense-seed unit; the surviving half of the now-resolved FU-754)
 - **Type:** finding
-- **What:** Every seeded recipe is `steps_mode: 'freeform'` with no structured steps
-  and no step images, in both `seed.py` and `seed_showcase.py`. So cook mode's
-  structured and image faces — and the recipe page's editors for them — have no
-  fixture at all, and verifying either means hand-building a recipe through the UI
-  or PATCHing one through the API (which is how FU-755 had to be tested; it is now
-  resolved, in `DORA_FOLLOWUPS_RESOLVED.md`).
-- **Why deferred:** out of scope for the stocktake seed work in the unit that
-  raised it, and it wants a considered fixture (a recipe whose *photos* are
-  meaningful) rather than two placeholder pixels.
-- **Still open after the 2026-08-28 cook-mode rebuild:** verifying the rewritten
-  image face again meant generating five photos and POSTing a recipe through the
-  API against a scratch DB — the third time in two sessions that a seed gap has
-  cost a fixture build. The cost is now demonstrated, not hypothetical.
-- **Recommended resolution:** opportunistic — next time either mode is touched.
-  A showcase recipe with real step photos would also be worth having for the demo.
+- **What:** The dense dev seed now carries both faces — a ten-step structured
+  recipe with sub-steps, sections and per-step links, and a five-photo image
+  recipe — so the *dev* half of FU-754 is closed. `seed_showcase.py` (the demo
+  dataset) is still 100% `steps_mode: 'freeform'`, so the public demo shows only
+  one of cook mode's three faces.
+- **Why deferred:** R-007 — the ask was a dev dataset. The showcase is a
+  different audience with a different bar: its photos are the ones strangers
+  see, so it wants real food photography rather than the drawn step cards the
+  dev seed uses (`scripts/generate_seed_dense_images.py`), which is a content
+  decision, not a code one.
+- **Recommended resolution:** opportunistic — next time the showcase dataset or
+  the demo instance is touched. The mechanism is already proven: build the
+  recipe, then call `replace_sections_for_recipe` / `replace_steps_for_recipe` /
+  `replace_step_images_for_recipe` after a `save_changes()` (R-064), exactly as
+  `seed_dense.py` does.
 
 ## [OPEN] FU-753 — `PRICE_PICKER_CANONICAL_UNITS` is not narrowed by measurement system
 - **Raised:** 2026-08-27 (owner feedback batch — units config)

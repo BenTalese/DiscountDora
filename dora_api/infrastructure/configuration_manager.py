@@ -259,6 +259,32 @@ class DoraConfig:
         Only consulted when is_demo_mode_enabled()."""
         return _env_int("DORA_DEMO_RESET_MINUTES", 60)
 
+    def get_seed_dataset(self) -> str:
+        """Which dev dataset an interactive boot seeds: `dense` (default) or
+        `bulk`.
+
+        Two datasets answer two different questions and neither replaces the
+        other (owner call, 2026-08-31):
+
+        * **dense** (`seed_dense.py`) — no generated filler. Every row is
+          hand-placed to put some surface into a state worth walking: a recipe
+          with ten structured steps and sub-steps, a stock item with nothing
+          on it at all next to one with everything, all three step modes, a
+          three-week meal plan, a believable three months of shopping history.
+          This is what you want when you're *looking at* the app.
+        * **bulk** (`seed.py`) — the curated set plus `DORA_SEED_BULK_ITEMS`
+          generated items, so N+1s and slow queries surface at volume. This is
+          what you want when you're *load-testing* the app.
+
+        Only consulted for interactive dev boots. The backend e2e suite always
+        seeds `bulk` regardless of this setting: ~2200 tests assert against
+        that dataset's specific fixtures, so making the suite's data depend on
+        an env var would make it fail for a reason that has nothing to do with
+        the code under test. See `startup.init_db`.
+        """
+        value = _env("DORA_SEED_DATASET", "dense").strip().lower()
+        return value if value in {"dense", "bulk"} else "dense"
+
     def get_seed_bulk_stock_item_count(self) -> int:
         """FU-388 — how many extra 'load' stock items the dev seed generates
         on top of the curated fixture set, so an interactive dev session
@@ -285,7 +311,11 @@ class DoraConfig:
         user's per-user opt-ins), so the flag-gated UI (cost/kcal cards,
         buy-verdict, budget) is verifiable in a cold-mount browser pane where
         mid-session flips don't re-render. Off by default; the
-        dora-verify-backend-money launch profile sets DORA_SEED_MONEY_ON=true."""
+        dora-verify-backend-money launch profile sets DORA_SEED_MONEY_ON=true.
+
+        **Applies to the `bulk` dataset only.** The `dense` dataset boots money
+        on unconditionally (see `seed_dense_data`), so this flag is not read on
+        that path — don't reach for it expecting to turn money off there."""
         return _env("DORA_SEED_MONEY_ON", "false").lower() in {"1", "true", "yes", "on"}
 
     def get_web_app_host(self) -> str:

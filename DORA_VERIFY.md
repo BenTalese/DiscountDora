@@ -22,6 +22,28 @@ top-to-bottom.
 
 ---
 
+## The dense dev dataset (2026-08-31)
+Boot `dora-verify-backend` (now seeds `dense` by default) and log in as
+`dora`/`dora`. The data and the DTOs are confirmed — every claim below was
+checked over the API — so what's left is purely *does it render*:
+- [ ] **Cook mode on "Sunday Ragu"** — the structured face with 10 steps, 6
+      sub-steps under 3 of them, two section headers, hints, and per-step
+      ingredient/tool chips. This face has never had a fixture before.
+- [ ] **Cook mode on "Weekend Focaccia"** — the image face, 5 photos in order.
+      They're drawn step cards, so a wrong order or a wrong photo is obvious.
+- [ ] **The two poles side by side on the stock page** — open `Bicarb Soda`
+      (every optional block should collapse) then `Extra Virgin Olive Oil`
+      (every block populated, including the above-usual price chip).
+- [ ] **`Sriracha`'s History tab** shows the "16 older events not shown" footer.
+- [ ] **The stocktake runner** has members in Review (Weet-Bix), Walk (5) and
+      Sweep (Rice Wine Vinegar) in one session, and Water Crackers stays silent.
+- [ ] **The cookbook** shows cookable, not-cookable and unknown cards together,
+      a photo card next to no-photo cards, and the version pair.
+- [ ] **The meal planner** across three weeks: last week all eaten, this week
+      with the three-night cook batch, next week showing template provenance.
+- [ ] **The shopping list archive** reads like a real household's (8 date-named
+      shops), and the draft's budget-deferred line renders as deferred.
+
 ## Weekly deals email (2026-08-29) — origin FU-789
 Built and driven end to end with a captured sender: the gate chain, the send, the
 dedup, both rendered formats and the scheduler registration are all confirmed.

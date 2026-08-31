@@ -211,6 +211,10 @@ Data is persisted in named Docker volumes (`dora_data`, `dora_cache`, `dora_logs
 
 - Copy `.env.example` → `.env` and `web_app/.env.example` → `web_app/.env`. Adjust as needed.
 - Set `DORA_ALLOW_DESTRUCTIVE=true` only when you intentionally want to drop & re-seed the database on startup. Debug mode no longer auto-wipes data.
+- Two dev datasets, picked with `DORA_SEED_DATASET`:
+  - **`dense`** (default) — a small hand-built household with no generated filler, where every row exists to put some surface into a state worth looking at: a recipe with ten structured steps and sub-steps, one with photo steps, a stock item with nothing on it beside one with everything, three weeks of meal plans and three months of shopping history. Use this when you're *looking at* the app.
+  - **`bulk`** — the older curated set plus `DORA_SEED_BULK_ITEMS` (default 500) generated stock items, so N+1s and slow queries surface at volume. Use this when you're *load-testing* the app. The backend e2e suite always uses this one.
+  - Seed user for both: `dora` / `dora`.
 - Apply schema changes: `flask db migrate -m "<description>"` (review the generated file — see [dora_api/persistence/migrations/README](dora_api/persistence/migrations/README)) then `flask db upgrade`.
 - List endpoints accept standard query params: `?filter=name:ct:pasta&filter=is_favourite:eq:true&sort=name:asc&page=1&limit=50`. Responses are `{ items, total, page, limit }`.
 

@@ -78,6 +78,10 @@ INTENTIONALLY_OMITTED: dict[str, str] = {
     "DORA_SEED_BULK_ITEMS": "dev seed only; production refuses to seed.",
     "DORA_SEED_QA_FIXTURES": "dev/e2e seed only.",
     "DORA_SEED_MONEY_ON": "dev seed only (dora-verify-backend-money profile).",
+    "DORA_SEED_DATASET":
+        "dev seed only — picks the dense or bulk dev dataset. Production "
+        "refuses to seed at all, so forwarding it would advertise a knob "
+        "that can never do anything there.",
 
     # ── Container-internal; the Dockerfile owns these ────────────────
     "DORA_API_HOST": "bind address inside the container; fixed by the image.",

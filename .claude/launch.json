@@ -30,8 +30,8 @@
             "env": {
                 "DORA_DEBUG": "true",
                 "DORA_ALLOW_DESTRUCTIVE": "true",
-                "DORA_SEED_BULK_ITEMS": "40",
-                "DORA_LOG_LEVEL": "WARNING"
+                "DORA_LOG_LEVEL": "WARNING",
+                "DORA_SEED_DATASET": "dense"
             }
         },
         {
@@ -45,9 +45,25 @@
             "env": {
                 "DORA_DEBUG": "true",
                 "DORA_ALLOW_DESTRUCTIVE": "true",
-                "DORA_SEED_BULK_ITEMS": "40",
                 "DORA_LOG_LEVEL": "WARNING",
-                "DORA_SEED_MONEY_ON": "true"
+                "DORA_SEED_MONEY_ON": "true",
+                "DORA_SEED_DATASET": "dense"
+            }
+        },
+        {
+            "name": "dora-verify-backend-bulk",
+            "runtimeExecutable": ".venv\\Scripts\\python.exe",
+            "runtimeArgs": [
+                "-m",
+                "dora_api.startup"
+            ],
+            "port": 5170,
+            "env": {
+                "DORA_DEBUG": "true",
+                "DORA_ALLOW_DESTRUCTIVE": "true",
+                "DORA_SEED_BULK_ITEMS": "500",
+                "DORA_LOG_LEVEL": "WARNING",
+                "DORA_SEED_DATASET": "bulk"
             }
         },
         {
@@ -61,8 +77,8 @@
             "env": {
                 "DORA_DEBUG": "true",
                 "DORA_ALLOW_DESTRUCTIVE": "true",
-                "DORA_SEED_BULK_ITEMS": "40",
-                "DORA_LOG_LEVEL": "WARNING"
+                "DORA_LOG_LEVEL": "WARNING",
+                "DORA_SEED_DATASET": "dense"
             }
         },
         {
@@ -76,9 +92,9 @@
             "env": {
                 "DORA_DEBUG": "true",
                 "DORA_ALLOW_DESTRUCTIVE": "true",
-                "DORA_SEED_BULK_ITEMS": "40",
                 "DORA_LOG_LEVEL": "WARNING",
-                "DORA_SEED_MONEY_ON": "true"
+                "DORA_SEED_MONEY_ON": "true",
+                "DORA_SEED_DATASET": "dense"
             }
         },
         {
@@ -94,8 +110,8 @@
                 "DORA_DB_PATH": "data/scratch-verify.db",
                 "DORA_DEBUG": "true",
                 "DORA_ALLOW_DESTRUCTIVE": "true",
-                "DORA_SEED_BULK_ITEMS": "40",
-                "DORA_LOG_LEVEL": "WARNING"
+                "DORA_LOG_LEVEL": "WARNING",
+                "DORA_SEED_DATASET": "dense"
             }
         },
         {
@@ -111,9 +127,9 @@
                 "DORA_DB_PATH": "data/scratch-verify.db",
                 "DORA_DEBUG": "true",
                 "DORA_ALLOW_DESTRUCTIVE": "true",
-                "DORA_SEED_BULK_ITEMS": "40",
                 "DORA_LOG_LEVEL": "WARNING",
-                "DORA_SEED_MONEY_ON": "true"
+                "DORA_SEED_MONEY_ON": "true",
+                "DORA_SEED_DATASET": "dense"
             }
         },
         {
@@ -130,8 +146,8 @@
                 "DORA_CORS_ORIGINS": "http://localhost:5175,http://127.0.0.1:5175",
                 "DORA_DEBUG": "true",
                 "DORA_ALLOW_DESTRUCTIVE": "true",
-                "DORA_SEED_BULK_ITEMS": "40",
-                "DORA_LOG_LEVEL": "WARNING"
+                "DORA_LOG_LEVEL": "WARNING",
+                "DORA_SEED_DATASET": "dense"
             }
         },
         {

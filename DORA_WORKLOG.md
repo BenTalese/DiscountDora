@@ -28,7 +28,174 @@ next.
 
 ---
 
-## 2026-08-30 (last, latest) — **Meal planner Unit 3: the month grid — the brief is finished**
+## 2026-08-31 (last, latest) — **A second dev dataset: "dense", and it's the new default**
+
+**Status:** complete. Backend **2202 passed** / 4 failed / 1 skipped / 1 xfailed —
+the four are the pre-existing buy-verdict e2e failures (FU-762), unchanged. No
+migration, no product code touched. **FU-754 resolved**; **FU-792 opened** for the
+half of it that isn't (the showcase).
+
+### The ask
+
+Owner: *"make a new set of dev data… the current one we can keep as an alternative
+one for load/bulk testing. i need a new one that is dense/deep but not bulk…
+something that can exercise all paths of the app efficiently. e.g. a recipe with 10
+steps and some having sub steps, a stock item with nothing, a stock item with lots
+on it using all features. i need realism but compacted."*
+
+### What the old dataset was actually optimising for
+
+`seed.py` is a **volume** dataset: ~22 curated fixtures plus 500 generated
+`Load item 0413 · Dairy` rows (FU-388), which is exactly right for making N+1s
+surface and exactly wrong for looking at the app. The gap wasn't size, it was
+*coverage*: whole surfaces had no fixture at all. Both seeds were 100% freeform
+recipes (FU-754), so cook mode's structured and image faces were unreachable
+without hand-building a recipe — a cost that had been paid three times in two
+sessions. Nothing exercised sections, sub-steps, optional ingredients, recipe
+versions, cook batches, meal-plan templates, barcodes, preferred buys, nutrition
+links, alert interactions, suggestion suppressions, receipt attachments, or a
+stock item with *nothing* on it.
+
+### The new one — `dora_api/persistence/seed_dense.py`
+
+No generated filler. The rule that decided every row: **does the app render
+something different because of this?** A second stocked pantry item renders the
+same card as the first, so it isn't there. A stock item with no group, location,
+expiry, note, product or history is a completely different render — every optional
+block collapses — so `Bicarb Soda` is there, deliberately, as the empty pole.
+`Extra Virgin Olive Oil` is the other pole and now fills *every* block on the
+detail page: group, deepest location, notes, expiry, essential, opened, alerts,
+last-checked, usual store, a linked product, a substitute, a preferred buy, a
+barcode, 5 price observations, level history, and one each of the cook / waste /
+expiry / purchase event kinds.
+
+Headline fixtures, all verified live over the API:
+
+- **Sunday Ragu** — `steps_mode: 'structured'`, **10 top-level steps, 6 sub-steps
+  under 3 parents**, 2 named sections, 5 hints, 10 steps carrying ingredient links
+  and 5 carrying tool links, one optional ingredient. Written through
+  `replace_sections_for_recipe` / `replace_steps_for_recipe` rather than raw
+  inserts (R-017), so the seed can't drift from the write path and the depth-1 +
+  link-target validation runs over it. Made **cookable** on purpose — it's the
+  recipe you most want to actually walk in cook mode, and one Out ingredient makes
+  it unenterable.
+- **Weekend Focaccia** — `steps_mode: 'image'`, 5 step photos + a hero photo, all
+  serving as real `image/png` (~1.8–2.0 KB) from the bytes endpoint.
+- **Mum's lemon slice** — a recipe that is a *name* and nothing else. No
+  ingredients, instructions, times, difficulty or collection.
+- Plus: a version pair sharing a `version_group_id`, two recipes with unlinked
+  importer rows sharing a "coconut milk" group, an empty collection, and a
+  cookability spread that comes out **9 cookable / 3 not / 2 unknown**, with the
+  `at_risk` and `maybe_cookable` inference hints both firing.
+
+### Two things worth keeping in mind
+
+**The belief fixtures are arithmetic, not vibes.** Each one's cadence/progress/
+confidence sum is spelled out in a comment beside it against
+`pantry_belief.py`'s own constants, because the numbers are meaningless without it
+and the next person to move a date needs to know which band they just left.
+Verified: Weet-Bix `low/high` (the Review phase), Tuna `out/medium`, Coconut Milk
+`low/medium` **drawn down by cooking rather than the calendar**, Stir-fry Veg
+`out/low`, Orange Juice `stocked` (the reassuring disagreement), Water Crackers
+agreeing and therefore **silent** (the control), Rice Wine Vinegar in Sweep. The
+live session returns Review 1 / Walk 5 / Sweep 1 — all three phases populated,
+which is the thing the 2026-08-27 owner complaint was about.
+
+**The purchase history is a shared shop schedule, not one list per item.** The load
+seed gives each belief fixture its own single-line `"Weet-Bix shop 3"` list, which
+works and leaves ~20 junk lists in the archive. Here, **eight finished shops on a
+fortnightly-with-top-ups rhythm** carry all of it and each reads like a shop
+someone did. Same signal, a tenth of the clutter, and the reports/budget surfaces
+get three believable months for free — `spend-by-store`, `meals-cooked` (34 meals
+across 10 cooks), `keeps-running-out` and `most-bought-items` all return real rows
+now, and the dora-score has something to score.
+
+### Wiring
+
+`DORA_SEED_DATASET=dense|bulk`, default **dense**, consulted only for interactive
+dev boots. **The e2e suite is pinned to `bulk` regardless** — ~2200 tests assert
+against that dataset's specific fixtures, and letting a shell variable swap their
+data out would break them for a reason unrelated to the code under test. The four
+`dora-verify-*` launch profiles set `DORA_SEED_BULK_ITEMS: 40`, which dense
+ignores, so that key was replaced with an explicit `DORA_SEED_DATASET: dense`
+rather than left as dead config, and a new `dora-verify-backend-bulk` profile keeps
+the load path reachable by name.
+
+### Standards
+
+- **R-003 / R-017** — the shared `SeedBuilders` was *extended* (`make_line` gained
+  the newer line columns, `make_item` the newer nullable ones) rather than
+  copied; both seeds still share one builder.
+- **R-064** — cited in place. The step/section helpers are Core-level selects and
+  the seed runs with autoflush off, so the `save_changes()` before them is
+  load-bearing: without it `_validate_link_targets` finds none of the recipe's
+  ingredients and rejects every step link. Same seam as the recipe-save bug that
+  established the rule.
+- **R-042 family** — cost me a real failure: the `entry()` helper built
+  `MealPlanEntry` rows without `repo.add()`, so all 17 shared `EMPTY_UUID` and the
+  insert hit a UNIQUE violation. `repo.add()` is what assigns the id.
+- **R-030 (explained, not violated)** — `DORA_SEED_DATASET` is env rather than
+  `AppSetting` because it's a boot-time developer tool, not operator config; it
+  sits beside the three existing `DORA_SEED_*` vars and is listed in
+  `INTENTIONALLY_OMITTED` with that reason (production refuses to seed at all,
+  so forwarding it would advertise a knob that can never do anything).
+- No UI change, so R-035 / the D-rules don't apply.
+
+### Review pass (same session, after the first cut)
+
+A second pass found **two fixtures that were silently wrong** — both of the kind
+that a seed exists to prevent, because they look fine and simply do nothing:
+
+1. **The alert-interaction keys were hand-formatted and matched nothing.** I wrote
+   `f"expiring_soon:{milk.id}"`; the real key is `<scope>:<id>:<discriminator>`
+   built by `alert_key.stock_alert_key()`, and the discriminator is the per-item
+   *variant*, not the kind (an essential item that's Out has discriminator
+   `essential_out` but kind `essential_low`). All three rows were inert. Now built
+   with the app's own helper (R-003), and one fixture deliberately pins the
+   discriminator ≠ kind case. Verified live: the read one shows against the milk
+   alert, and the snoozed + dismissed ones are correctly *absent* from
+   `GET /alerts` — which is the fixture working, not failing.
+2. **Last week's meals were consumed before they were scheduled.** The `entry()`
+   helper took a fixed `consumed_days_ago`, but `monday` moves with the real
+   weekday, so on a Monday last week's Monday dinner was stamped as eaten four
+   days *before* its own date. Not a state the app can produce, and anything
+   reading the pair would have been reasoning about impossible data. `consumed_at`
+   is now derived from `scheduled_for` (19:00 on the day itself).
+
+Smaller: `updated_at` was NULL on every recipe, so the version panel's
+"last edited" had nothing to show against `created_at` / `last_made_on` — two
+recipes now carry one; `DORA_SEED_MONEY_ON` defaults false but dense ignores it,
+so the call site now states `money_on=True` explicitly and the config docstring
+says the flag is bulk-only; a stray second uuid import and a mid-function import
+folded into the module header; `done_older`'s lines reordered to match their own
+sequence numbers.
+
+Backed by a **10-check review script** run against a fresh seed — consumed-before-
+scheduled, live-alert key matching, the disabled kind actually filtering, the
+suppressions actually suppressing, edit/added/cooked dates all distinguishable, a
+**foreign-key orphan sweep across 15 relations**, sub-step depth ≤ 1, and no
+cross-recipe step→ingredient link. All pass. Suite re-run after the edits:
+**2202 passed**, same 4 pre-existing failures.
+
+### The owner's dev environment
+
+Asked for on the same day. `dora.data.db` was inspected first (pure bulk-seed
+output — "Load item 0000", one user, nothing hand-made), **backed up** to
+`data/dora.data.bulk-backup-20260831.db` (gitignored), then re-seeded with dense.
+`DORA_SEED_DATASET=dense` is now written into `.env` and `.env.example` rather
+than left to the code default, so the choice is visible in the file the owner
+actually reads. `DORA_ALLOW_DESTRUCTIVE` was deliberately **left at `false`** —
+arming a wipe on every boot is not what "make it the default" asked for.
+
+### Next up
+
+Nothing blocking. The dataset has not been walked in a **browser** — every claim
+above is from direct queries and the real API via the Flask test client, which
+proves the data and the DTOs but not the rendering. Items are in `DORA_VERIFY.md`.
+
+---
+
+## 2026-08-30 — **Meal planner Unit 3: the month grid — the brief is finished**
 **Status:** complete and **driven live** at 1280 against the scratch pairing
 (`data/scratch-verify.db`, backend :5171 / SPA :5174; the owner's :5170
 untouched). Backend **2201 passed** / 1 skipped / 1 xfailed (four pre-existing

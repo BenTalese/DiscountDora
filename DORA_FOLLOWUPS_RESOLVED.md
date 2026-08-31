@@ -10,6 +10,32 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-754 — No image-mode or structured-mode recipe in either seed
+- **Raised:** 2026-08-27 (owner feedback batch — cook mode)
+- **Type:** finding
+- **What:** Every seeded recipe was `steps_mode: 'freeform'` with no structured steps
+  and no step images, in both `seed.py` and `seed_showcase.py`. So cook mode's
+  structured and image faces — and the recipe page's editors for them — had no
+  fixture at all, and verifying either meant hand-building a recipe through the UI
+  or PATCHing one through the API (which is how FU-755 had to be tested).
+- **Why it stayed open:** it wanted a considered fixture (a recipe whose *photos*
+  are meaningful) rather than two placeholder pixels. Verifying the rewritten
+  image face after the 2026-08-28 cook-mode rebuild meant generating five photos
+  and POSTing a recipe through the API against a scratch DB — the third time in
+  two sessions that the gap cost a fixture build.
+- **RESOLVED 2026-08-31** by the dense dev dataset (`seed_dense.py`). It carries
+  **Sunday Ragu** — `steps_mode: 'structured'`, 10 top-level steps, 6 sub-steps
+  under 3 parents, 2 named sections, 5 hints, 10 steps with ingredient links and
+  5 with tool links — and **Weekend Focaccia** — `steps_mode: 'image'` with 5
+  step photos plus a hero photo. The photos are drawn step cards, generated once
+  by `scripts/generate_seed_dense_images.py` and checked in as base64 constants
+  (`seed_dense_images.py`), which answers the "not two placeholder pixels" bar:
+  each card is individually recognisable at thumbnail size, so you can tell a
+  working image face from a broken one. Verified live over the API: the detail
+  DTO returns the full step tree, and all five images serve as `image/png`
+  (~1.8–2.0 KB each) from the bytes endpoint. **The showcase half is NOT done** —
+  tracked separately as FU-792.
+
 ## [RESOLVED] FU-782 — ⚠️ Meal-planner rail/shell/calendar redesign is designed and **blocked on eight owner decisions**
 - **Raised:** 2026-08-28 (owner feedback: *"I really hate the look and feel of
   the left side where you pick and search for recipes… the calendar also looks

@@ -27,7 +27,8 @@ from dora_api.domain.entities.product_historic_offer import ProductHistoricOffer
 from dora_api.domain.entities.product_offer import ProductOffer
 from dora_api.domain.entities.recipe import Recipe
 from dora_api.domain.entities.recipe_ingredient import RecipeIngredient
-from dora_api.domain.entities.shopping_list import ShoppingListLine
+from dora_api.domain.entities.shopping_list import (ADDED_VIA_MANUAL,
+                                                    ShoppingListLine)
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.entities.stock_item_price_observation import \
     StockItemPriceObservation
@@ -140,6 +141,17 @@ class SeedBuilders:
             is_open=kw.get("is_open", False),
             opened_on=kw.get("opened_on"),
             products=kw.get("products", []),
+            # The remaining nullable columns, defaulted so both seeds' existing
+            # calls are unchanged. Only the dense seed sets them today: the
+            # stocktake watermark pair (`last_checked_at` / `snoozed_until`),
+            # the "where I usually buy this" hint, and the nutrition link +
+            # its explicit opt-out (an item the user has said not to ask about
+            # again, which is a different state from "not linked yet").
+            last_checked_at=kw.get("last_checked_at"),
+            snoozed_until=kw.get("snoozed_until"),
+            usual_store_id=kw.get("usual_store_id"),
+            nutrition_food_id=kw.get("nutrition_food_id"),
+            nutrition_ignored=kw.get("nutrition_ignored", False),
         )
         self.repo.add(item)
         return item
@@ -219,7 +231,15 @@ class SeedBuilders:
 
     # ── Shopping-list lines ─────────────────────────────────────────────
     def make_line(self, list_id, item, seq, qty=1, ticked=False,
-                  selected_product=None, actual_unit_price=None, purchased_store=None):
+                  selected_product=None, actual_unit_price=None, purchased_store=None,
+                  **kw):
+        """`kw` carries the line columns only the dense seed exercises —
+        provenance (`added_via` / `added_at`), the planning-vs-recording store
+        split (`planned_store`, R-063), the preferred-buy hint, and the
+        budget-defer pair. Defaulted rather than positional so the existing
+        call sites in both seeds stay unchanged (R-003 — one builder, not a
+        second near-copy for the newer columns)."""
+        _planned_store = kw.get("planned_store")
         sl_line = ShoppingListLine(
             shopping_list_id=list_id,
             stock_item_id=item.id,
@@ -229,6 +249,12 @@ class SeedBuilders:
             selected_product_id=selected_product.id if selected_product else None,
             actual_unit_price=actual_unit_price,
             purchased_store_id=purchased_store.id if purchased_store else None,
+            added_via=kw.get("added_via", ADDED_VIA_MANUAL),
+            added_at=kw.get("added_at"),
+            planned_store_id=_planned_store.id if _planned_store else None,
+            preferred_buy_id=kw.get("preferred_buy_id"),
+            deferred_by_budget=kw.get("deferred_by_budget", False),
+            deferred_reason=kw.get("deferred_reason"),
         )
         self.repo.add(sl_line)
         if ticked and actual_unit_price is not None:

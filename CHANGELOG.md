@@ -6,6 +6,20 @@ semver — major bumps signal schema or breaking-config changes.
 ## [Unreleased]
 
 ### Added
+- **A second dev dataset — "dense" — and it's the new default (2026-08-31).**
+  Developer-facing only; nothing changes for anyone running the app. The
+  existing dataset was built around volume (500 generated "Load item 0413"
+  stock items) which is right for finding slow queries and wrong for looking at
+  the app: whole surfaces had no fixture at all. The new one has no generated
+  filler — every row is hand-placed to put something into a state worth seeing,
+  including things neither seed had before: a recipe with **ten structured
+  steps, sub-steps, two named sections, per-step ingredient and tool links**;
+  a recipe whose steps are **five real photos**; a stock item with **nothing**
+  on it next to one with **everything**; a three-week meal plan (last week
+  eaten, this week part-cooked with a shared cook batch, next week forked from
+  a template); and three months of believable shopping history rather than
+  twenty single-line lists. Pick with `DORA_SEED_DATASET=dense|bulk`; the
+  bulk dataset is unchanged and still what the backend test suite uses.
 - **Dora can suggest what to cook, right where you pick it (2026-08-30).** The
   meal planner's recipe list has a new "Dora suggests" chip. It ranks your
   cookbook for the week you're looking at and tells you *why* each one is

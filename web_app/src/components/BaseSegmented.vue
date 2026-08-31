@@ -1,6 +1,8 @@
 <template>
     <q-btn-toggle
         class="dora-segmented-btn"
+        :class="{ 'dora-segmented-btn--pill': pill }"
+        :rounded="pill"
         :model-value="modelValue"
         :options="options"
         no-caps
@@ -16,15 +18,30 @@
      * dense / flat / unelevated / spread / size etc. through as normal
      * attrs — Vue's default inheritAttrs forwards them onto the root.
      */
-    defineProps<{
-        modelValue: T;
-        options: {
-            label?: string;
-            icon?: string;
-            value: T;
-            [k: string]: unknown;
-        }[];
-    }>();
+    withDefaults(
+        defineProps<{
+            modelValue: T;
+            options: {
+                label?: string;
+                icon?: string;
+                value: T;
+                [k: string]: unknown;
+            }[];
+            /**
+             * Pill shape: the group is a rounded track and the active segment
+             * is a rounded fill inside it, instead of the default squared-off
+             * block. Opt-in per call site rather than the app-wide default —
+             * the owner asked for it on the recipe method's step-style switch
+             * (2026-08-31: *"I prefer rounded pill style buttons here. The
+             * hard squarish look it currently has is not so nice looking"*),
+             * and the eight other segmented controls weren't part of that
+             * call. It stays one component so the two shapes can't drift
+             * (D-015).
+             */
+            pill?: boolean;
+        }>(),
+        { pill: false },
+    );
     const emit = defineEmits<{ (e: 'update:modelValue', value: T): void }>();
 </script>
 
@@ -46,5 +63,32 @@
      */
     .dora-segmented-btn :deep(.q-btn[aria-pressed='true']) {
         color: var(--text-on-primary) !important;
+    }
+
+    /*
+     * Pill variant. `rounded` on QBtnToggle rounds the *group's* outer ends;
+     * the segments inside stay square, so the selected one reads as a block
+     * clipped by a curve. Rounding each segment to the pill radius makes the
+     * active fill a pill sitting in a pill-shaped track, which is the shape
+     * the owner asked for.
+     *
+     * The track needs its own outline for the unselected segments to sit
+     * *in* something — without it a pill-shaped fill floats on the page with
+     * nothing to be a segment of.
+     */
+    .dora-segmented-btn--pill {
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-pill);
+        background: var(--surface-sunken);
+        padding: 2px;
+    }
+    .dora-segmented-btn--pill :deep(.q-btn) {
+        border-radius: var(--radius-pill);
+    }
+    /* Quasar draws the inter-segment divider as a right border on every button
+       but the last. Between two pills it reads as a stray tick. */
+    .dora-segmented-btn--pill :deep(.q-btn::before),
+    .dora-segmented-btn--pill :deep(.q-btn-group > .q-btn:not(:last-child)) {
+        border-right: 0;
     }
 </style>

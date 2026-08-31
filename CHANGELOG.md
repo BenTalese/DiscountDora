@@ -5,6 +5,84 @@ semver — major bumps signal schema or breaking-config changes.
 
 ## [Unreleased]
 
+### Changed
+- **The shopping list's overview card looks like something (2026-08-31).** It
+  was a flat box with a hairline border and the squarest corner the app has, the
+  same as every other box on the page — so nothing stood out. It's a proper
+  card now: rounded, lifted off the page, with a soft colour wash across the
+  top. A finished list doesn't get the wash: it stays flat and papery, so a
+  receipt *looks* like a receipt rather than just saying it is. The big number
+  got bigger.
+- **The list total admits when it's incomplete (2026-08-31).** If some items
+  don't have a price yet, the estimate at the top of the list was quietly
+  short and never said so — the warning existed but was buried behind the
+  card's "show details" arrow. The figure now carries a `~` and the card says
+  how many items it couldn't count.
+- **With money turned off, the card leads with something useful (2026-08-31).**
+  It used to print the same "N items on this list" whether you were planning,
+  mid-shop or finished. Now it says what you'd actually want at that moment:
+  items to buy, items left to pick, or items bought.
+- **"Order by" is one control instead of four buttons (2026-08-31).** Same
+  rounded pill style as the recipe method's switch. When a sort option isn't
+  available for a list, it's greyed out and the control says why.
+- **The banners and panels down the page match (2026-08-31).** The budget
+  warning, its preview, Dora's suggestions, the deferred-items section, the
+  empty state and the error banner were each a slightly different flat box.
+  They're one shape now, so the page has two levels — the card at the top, and
+  everything else.
+- **The shopping list's rows line up (2026-08-31).** Every row on a draft list
+  laid itself out independently, so the quantity, the price and the store
+  landed at slightly different places on each line depending on how long the
+  item's name was. They share one set of columns now and the whole list reads
+  as a column down the page. The item's name — the thing you actually read —
+  is bigger than the price beside it, which is the other way round from how it
+  was. The three little labelled tags that used to sit under each name (where
+  it came from, what you last paid, which shop) are one quiet line of text
+  instead, and the shop picker is part of it rather than a boxed dropdown.
+- **The quantity is a single tile you tap (2026-08-31).** The −/+ buttons only
+  appear when you move onto the row (or tap the tile on a phone), so a list of
+  twenty things isn't also forty buttons. Nothing moves when they appear, and
+  tapping the number still lets you type one in.
+- **Tidying and deleting a line stay out of the way (2026-08-31).** The
+  move-up/move-down arrows were a stack of three controls on the left of every
+  single row, even when the list wasn't sorted manually. They sit with the
+  delete button now and fade in when you reach for the row — except on a
+  phone, where there's nothing to hover with, so they stay put.
+- **A missing ingredient now says the whole thing in one chip (2026-08-31).**
+  A recipe's ingredient list used to put "Missing" and "2 swaps" beside each
+  other as two separate chips saying two halves of one sentence. They're one
+  answer to one question now — *can I cook this tonight?* — and the answer has
+  three shapes: **Missing** in red when nothing is recorded to use instead;
+  **Missing · 2 swaps** in amber when there are alternatives but you'd have to
+  buy them; **Swap ready** in green when you already have one in the pantry.
+  The swaps menu opens off that same chip. None of it renders while you're
+  editing the ingredient list — what's in the pantry isn't what you came there
+  to change.
+- **The recipe method's step-style switch is a pill (2026-08-31).**
+  Structured / Free text / Photos now sit in a rounded track with the active
+  one filled, instead of the squared-off block.
+- **The "Right now" card says one line (2026-08-31).** The swap count and the
+  already-on-a-list counts came off it; both are visible on the ingredient rows
+  a few centimetres below. The Add button still names how many it will add.
+
+### Fixed
+- **Piling tools onto a free-text recipe no longer scrolls the page sideways
+  (2026-08-31).** Every tool added to the method's Tools field pushed the page
+  wider on a phone. The chips stack inside the field now and it grows
+  downwards. This was a rule in the app's shared select control — "selections
+  never wrap", written for single-value fields — leaking onto the chip ones, so
+  the same fix reaches every chip field in the app (dietary tags, a step's
+  ingredient and tool links).
+- **The add-to-list cart on an ingredient row sits with its ingredient
+  (2026-08-31).** On a row whose name wrapped to two lines, the cart stayed
+  pinned to the top of the row and read as sitting on its own line under the
+  text. It's centred on the row now, and stops shifting up and down as its icon
+  changes.
+- **Attempted fix, needs a phone to confirm:** the thin grey line that flickers
+  beside the mascot on the login screen in Firefox on Android (Chrome is
+  unaffected). It's the edge of the mascot's own GPU layer while the page
+  settles; the layer is now declared up front so the browser allocates it once.
+
 ### Added
 - **A second dev dataset — "dense" — and it's the new default (2026-08-31).**
   Developer-facing only; nothing changes for anyone running the app. The

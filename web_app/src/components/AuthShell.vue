@@ -182,6 +182,29 @@
         z-index: 1;
         animation: dora-auth-shell-bob 6s ease-in-out infinite;
         filter: drop-shadow(0 18px 22px rgba(20, 12, 50, 0.45));
+        /* Owner report 2026-08-31, Firefox on Android only (Chrome clean): a
+           thin grey vertical line about the mascot's own height, immediately
+           to its left, flickering for a few seconds after the login screen
+           appears and then settling.
+
+           It can't be a DOM element — nothing is drawn there, and anything
+           that was would render in Chrome too. It is the **left edge of the
+           mascot's own composite layer**: `drop-shadow` makes this a filtered
+           element, the bob animates `transform` on top of that, and Firefox
+           promotes the pair to a GPU layer *while the page is still settling*
+           (the blobs behind it are blurred and `mix-blend-mode: screen`, so
+           they are a blending group being rasterised at the same time). A
+           seam at a tile boundary during that window is the classic shape of
+           this, and "stops after a few seconds" is the layer tree stabilising.
+
+           Declaring the promotion up front is the cheap fix: Firefox
+           allocates the layer once, before the animation starts, instead of
+           re-promoting mid-flight. Same treatment the blobs already carry.
+           `backface-visibility` pins it to a single rasterisation pass.
+
+           NOT confirmed on the reporting device — see DORA_VERIFY. */
+        will-change: transform;
+        backface-visibility: hidden;
     }
     .dora-auth-shell__mascot--top-right {
         right: 7%;
@@ -275,6 +298,8 @@
         .dora-auth-shell__blob,
         .dora-auth-shell__mascot,
         .dora-auth-shell__card { animation: none !important; }
+        /* Nothing left to promote a layer for. */
+        .dora-auth-shell__mascot { will-change: auto; }
         .dora-auth-shell__blob { opacity: 0.6; }
         .dora-auth-shell--backdrop-quiet .dora-auth-shell__blob { opacity: 0.3; }
     }

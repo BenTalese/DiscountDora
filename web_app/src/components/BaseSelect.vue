@@ -1,6 +1,7 @@
 <template>
     <q-select
         v-bind="forwardedAttrs"
+        :class="{ 'base-select--chips': rendersChips }"
         :model-value="modelValue"
         :options="options"
         :behavior="resolvedBehavior"
@@ -184,6 +185,22 @@
         return out;
     });
 
+    /**
+     * True when QSelect will render its selection as chips rather than text.
+     *
+     * Read off `$attrs` because both flags belong to QSelect, not to us — the
+     * call site writes `multiple use-chips` and Vue hands them straight
+     * through. Either spelling of the boolean may arrive, and an attribute
+     * written with no value comes through as `''`, so anything but an explicit
+     * `false` counts as set.
+     */
+    const rendersChips = computed(() => {
+        const on = (...keys: string[]) => keys.some(
+            (k) => k in attrs && attrs[k] !== false && attrs[k] !== undefined,
+        );
+        return on('multiple') && on('use-chips', 'useChips');
+    });
+
     /** Nothing picked — `null`, `undefined`, `''`, or an empty multi-select. */
     const isEmpty = computed(() => {
         const v = props.modelValue;
@@ -254,6 +271,27 @@
         overflow: hidden;
         white-space: nowrap;
         text-overflow: ellipsis;
+    }
+
+    /* …except when the selection IS chips, where "never wraps" is the wrong
+       rule and was quietly costing the page its width. A chip select's
+       selections are `.q-chip`s, not the bare spans the rule above is written
+       for: they can't ellipsis, so `nowrap` just ran them off the side of the
+       field. Nothing clipped them, so the row kept growing, and the page
+       scrolled sideways — reported on the recipe method's Tools field
+       (2026-08-31: *"adding lots of tools … infinitely pushes the horizontal
+       space of the page"*), but true of every chip select in the app: dietary
+       tags, the step-links dialog, the reports and audit-log filters.
+
+       Chips stack instead, and the control gives up its fixed dense height so
+       the field grows downwards to hold them. `min-height` keeps an empty or
+       one-row field exactly as tall as every other dense field beside it. */
+    .base-select--chips :deep(.q-field__native) {
+        flex-wrap: wrap;
+    }
+    .base-select--chips :deep(.q-field__control) {
+        height: auto;
+        min-height: 40px;
     }
 
     .base-select__dialog-bar {

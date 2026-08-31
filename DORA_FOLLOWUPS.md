@@ -39,6 +39,86 @@ long session summary. Distinct from the other logs:
 
 ---
 
+## [OPEN] FU-797 — the Firefox-mobile login line is mitigated, not confirmed fixed
+- **Raised:** 2026-08-31 (recipe-view feedback batch)
+- **Type:** finding
+- **What:** owner reported a thin grey vertical line, roughly the mascot's
+  height, immediately left of it on the login screen, flickering for a few
+  seconds then settling — **Firefox on Android only, Chrome clean**. It can't
+  be a DOM element (nothing is drawn there, and anything that was would render
+  in Chrome too), so it's read as the left edge of the mascot's own composite
+  layer: `drop-shadow` + an animated `transform`, promoted to a GPU layer while
+  the blurred `mix-blend-mode: screen` blobs behind it are still rasterising.
+  `will-change: transform` + `backface-visibility: hidden` now declare that
+  promotion up front (`AuthShell.vue`, commented in place).
+- **Why deferred:** **not reproduced.** Playwright's Firefox isn't installed on
+  this box and the system Firefox can't be driven (no Juggler); a mobile-GPU
+  compositing artifact wouldn't reproduce on desktop Firefox regardless. The
+  fix is reasoned, not observed.
+- **Recommended resolution:** confirm in browser — on the reporting device
+  (Firefox, Android). See `DORA_VERIFY.md`. If it survives, the next lever is
+  dropping the mascot's `drop-shadow` filter, which is what creates the layer.
+
+## [OPEN] FU-796 — `.page-counts-footer` overflows a 375px viewport by 8px on /my-products
+- **Raised:** 2026-08-31 (recipe-view feedback batch — the "where else?" sweep)
+- **Type:** finding
+- **What:** swept all 13 main routes at 375px for horizontal page overflow while
+  answering the owner's *"where else might this be an issue?"*. Twelve are clean;
+  `/my-products` overflows by **8px**, and the offender is
+  `PageCountsFooter.vue`'s `margin: 16px -16px -16px` outdent — it assumes the
+  page wrapper's padding is 16px per side, and on this page it isn't, so the
+  bar comes out 391px wide in a 375px viewport. D-011 (no page h-scroll).
+- **Why deferred:** unrelated to the recipe surface this batch was scoped to,
+  and the footer is shared — the fix wants checking on every page that mounts
+  it, not just this one.
+- **Recommended resolution:** opportunistic — next time anything touches
+  `PageCountsFooter` or the My Products page.
+
+## [OPEN] FU-795 — two chip selects bypass `BaseSelect` and so miss every rule it owns
+- **Raised:** 2026-08-31 (recipe-view feedback batch)
+- **Type:** finding
+- **What:** `ReportsPage.vue` (the price-picker) and
+  `settings/AuditLogSettings.vue` (the severity filter) use a raw `q-select`
+  with `multiple use-chips` rather than `BaseSelect`. They therefore miss
+  everything BaseSelect exists to decide — the menu-vs-dialog rule on mobile,
+  the dialog close bar, the empty-text handling — and they're outside the
+  chip-wrap fix landed this round, so they may still run chips off the side of
+  their field. (Not confirmed either way: the audit-log route 404'd from
+  `/settings/audit-log`, so it wasn't reachable to measure.)
+- **Why deferred:** out of scope for a recipe-page batch, and it's a
+  conversion, not a patch.
+- **Recommended resolution:** opportunistic — when either page is next touched.
+
+## [OPEN] FU-794 — candidate rule: a component-wide style rule must be scoped to the variant it was written for
+- **Raised:** 2026-08-31 (recipe-view feedback batch)
+- **Type:** follow-up (ADR evaluation, per the engineering-standards close-gate)
+- **What:** the page-h-scroll bug fixed this round came from `BaseSelect`'s
+  `:deep(.q-field__native) { flex-wrap: nowrap }` — added 2026-08-21 to make a
+  *single-value* select's text truncate, applied to *every* select in the app,
+  and silently wrong for the chip ones (chips can't ellipsis, so they just ran
+  off the side). A shared component's global rule should be conditioned on the
+  variant that motivated it. Possible new `R-0NN` + ADR; the fix pattern is the
+  `base-select--chips` class now in that file.
+- **Why deferred:** promoting a standing rule is a governance call, not a
+  side-effect of a UI batch.
+- **Recommended resolution:** now — owner decides whether this earns an R-rule.
+
+## [OPEN] FU-793 — the dense seed has no missing ingredient that also carries substitutes
+- **Raised:** 2026-08-31 (recipe-view feedback batch)
+- **Type:** finding
+- **What:** the recipe row's missing chip has three states, and **two of them
+  have no fixture in either seed**: every missing ingredient in `seed_dense.py`
+  (Pecorino Romano, Sourdough Loaf, Tasty Cheese, Orange Juice) has zero
+  recorded substitutes, so `Missing · N swaps` and `Swap ready` can only be seen
+  by faking the API response. Same class of gap as FU-754 (no structured/image
+  cook-mode fixture): a surface that can't be reached from the seed is a surface
+  nobody looks at. `Extra Virgin Olive Oil` has a substitute but is stocked.
+- **Why deferred:** a seed change is its own unit, and this batch was verified
+  by intercepting the `/stock-items/:id/detail` response instead.
+- **Recommended resolution:** later — next time `seed_dense.py` is touched.
+  Cheapest fix: give one already-missing item a substitute that's in stock and
+  another a substitute that isn't.
+
 ## [OPEN] FU-791 — the list-row chrome is now a third private copy (bordered card + accent hover)
 - **Raised:** 2026-08-30 (meal-planner rail, Unit 2)
 - **Type:** finding

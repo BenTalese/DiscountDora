@@ -218,7 +218,7 @@
                     </BaseButton>
                 </div>
 
-                <q-banner v-if="loadError" class="dora-bg-negative-soft text-negative q-mb-md" dense rounded>
+                <q-banner v-if="loadError" class="text-negative q-mb-4 sl-panel sl-panel--error" dense>
                     <strong>Couldn't load this list.</strong>
                     {{ loadError }}
                     <template #action>
@@ -276,8 +276,7 @@
                          tap. -->
                     <q-banner
                         v-if="planFace && trimBanner.visible"
-                        class="q-mb-sm dora-bg-warning-soft"
-                        rounded
+                        class="q-mb-4 sl-panel sl-panel--warn"
                         dense
                     >
                         <template #avatar>
@@ -339,8 +338,7 @@
                     <q-card
                         v-if="planFace && trimBanner.state === 'previewed' && trimBanner.previewLines.length > 0"
                         flat
-                        bordered
-                        class="q-mb-sm"
+                        class="q-mb-4 sl-panel"
                     >
                         <q-card-section class="q-py-sm">
                             <div class="text-caption dora-text-muted q-mb-xs">
@@ -384,8 +382,7 @@
                     <q-card
                         v-if="planFace && visibleSuggestions.length > 0"
                         flat
-                        bordered
-                        class="q-mb-md inferred-suggestions"
+                        class="q-mb-5 inferred-suggestions sl-panel"
                     >
                         <q-card-section class="q-pb-xs row items-center no-wrap q-gutter-xs">
                             <q-icon :name="ICONS.inferred_hunch" size="18px" />
@@ -435,7 +432,7 @@
                          thing this composition is for, so every affordance on
                          a row (drag, delete, steppers, buy hints, offers,
                          provenance) belongs to it and to no other face. -->
-                    <q-card v-if="planFace && detail.lines.length === 0" flat bordered>
+                    <q-card v-if="planFace && detail.lines.length === 0" flat class="sl-panel">
                         <q-card-section class="text-center dora-text-muted">
                             No items yet. Use <strong>Quick add</strong> in the toolbar, or
                             <router-link to="/stock" class="text-primary">
@@ -455,391 +452,50 @@
                             :key="section.key"
                             class="q-mb-md"
                         >
-                            <div
-                                v-if="section.label"
-                                class="text-subtitle2 dora-text-muted q-mb-xs row items-center q-gutter-xs"
-                            >
+                            <!-- Section headers read as headers now: the old
+                                 muted `text-subtitle2` floated above a bordered
+                                 box and looked like an afterthought rather than
+                                 the thing structuring the page. -->
+                            <div v-if="section.label" class="sl-section__head">
                                 <q-icon :name="sectionIcon" size="16px" />
-                                {{ section.label }}
-                                <span class="text-caption">
-                                    ({{ section.lines.length }} item{{ section.lines.length === 1 ? '' : 's' }})
-                                </span>
+                                <span class="sl-section__title">{{ section.label }}</span>
+                                <span class="sl-section__count">{{ section.lines.length }}</span>
                             </div>
-                            <q-list bordered separator>
-                                <q-item
+                            <!-- One soft slab, not `q-list bordered separator`
+                                 inside a bordered page. The rows own their own
+                                 dividers, inset to the content column. -->
+                            <div class="sl-list">
+                                <ShoppingListPlanRow
                                     v-for="line in section.lines"
                                     :key="line.line_id"
-                                    class="shopping-line"
-                                    :class="{
-                                        'shopping-line-ticked': line.is_ticked,
-                                        'shopping-line-focused': focusedLineId === line.line_id,
-                                        'shopping-line-nested': isNestedChild(line),
-                                        'shopping-line-product-only': isProductOnly(line),
-                                        ...lineDnd.bind(line).rowClass,
-                                    }"
+                                    :line="line"
+                                    :line-done="detail.status === 'done'"
+                                    :can-reorder="canReorder"
+                                    :is-first="isFirstLine(line)"
+                                    :is-last="isLastLine(line)"
+                                    :focused="focusedLineId === line.line_id"
+                                    :nested="isNestedChild(line)"
+                                    :product-only="isProductOnly(line)"
+                                    :price="priceForLine(line)"
+                                    :store-options="allStoreOptions"
+                                    :store-empty-text="plannedStoreEmptyText(line)"
+                                    :added-via-label="addedViaCaption(line)"
+                                    :chosen-product-id="chosenOfferFor(line)?.product_id ?? null"
+                                    :class="lineDnd.bind(line).rowClass"
                                     v-bind="{
                                         ...lineDnd.bind(line).handleProps,
                                         ...lineDnd.bind(line).rowProps,
                                     }"
-                                >
-                                    <!-- Decorative grip — whole-row mode, the
-                                         row itself is the draggable element;
-                                         this icon section just signals "you
-                                         can grab here" via the shared handle
-                                         class (grab cursor + sunken hover). -->
-                                    <!-- Reorder affordances. Drag is the fast
-                                         path on a pointer device; the arrows are
-                                         the only one that works with a thumb or
-                                         a keyboard, so both write the same
-                                         `sequence`. The grip stays decorative
-                                         (whole-row drag). -->
-                                    <q-item-section
-                                        v-if="canReorder"
-                                        side
-                                        top
-                                        class="dora-dnd-handle shopping-line__reorder"
-                                    >
-                                        <div class="column items-center">
-                                            <BaseButton
-                                                variant="icon"
-                                                size="xs"
-                                                :icon="ICONS.collapse"
-                                                aria-label="Move up"
-                                                :disable="isFirstLine(line)"
-                                                @click="moveLine(line, -1)"
-                                            >
-                                                <q-tooltip>Move up</q-tooltip>
-                                            </BaseButton>
-                                            <q-icon
-                                                :name="ICONS.drag_indicator"
-                                                class="dora-text-muted"
-                                                size="16px"
-                                            >
-                                                <q-tooltip>Drag to reorder</q-tooltip>
-                                            </q-icon>
-                                            <BaseButton
-                                                variant="icon"
-                                                size="xs"
-                                                :icon="ICONS.expand"
-                                                aria-label="Move down"
-                                                :disable="isLastLine(line)"
-                                                @click="moveLine(line, 1)"
-                                            >
-                                                <q-tooltip>Move down</q-tooltip>
-                                            </BaseButton>
-                                        </div>
-                                    </q-item-section>
-                                    <!-- No tick control on the plan face. Draft
-                                         is for adding and removing items; a
-                                         tick means "I picked this up", which
-                                         can only be true once you're shopping.
-                                         Ticking here also drove a progress ring
-                                         that measured nothing. -->
-
-                                    <q-item-section>
-                                        <!-- UX-v2 §6: plain name-link + level
-                                             dot — StockItemChip is retired. -->
-                                        <div
-                                            class="row items-center q-gutter-x-sm no-wrap shopping-line__name-row"
-                                            :class="{
-                                                'shopping-line-ticked-content': line.is_ticked,
-                                            }"
-                                        >
-                                            <template v-if="!isNestedChild(line) && line.stock_item_id">
-                                                <router-link
-                                                    :to="`/stock/${line.stock_item_id}`"
-                                                    class="shopping-line-name text-primary"
-                                                    :class="{ 'text-strike': line.is_ticked }"
-                                                >
-                                                    {{ line.stock_item_name }}
-                                                </router-link>
-                                                <!-- in-shop "should I buy?" nudge.
-                                                     Silent on low-confidence items so the
-                                                     line list stays legible; when the pantry
-                                                     says the item is stocked and the
-                                                     user has a history of wasting it, the
-                                                     'skip' verdict gives them a second chance
-                                                     to remove it before checkout. Emits the
-                                                     action up so the existing cart/level
-                                                     controls own the mutation. -->
-                                                <BuyVerdictBadgeInline
-                                                    :stock-item-id="line.stock_item_id"
-                                                    @action="onLineVerdictAction(line, $event)"
-                                                />
-                                            </template>
-                                            <q-chip
-                                                v-else-if="isNestedChild(line)"
-                                                dense
-                                                size="sm"
-                                                :icon="ICONS.shopping_bag"
-                                                class="dora-bg-sunken"
-                                            >
-                                                {{ line.stock_item_name }}
-                                                <q-tooltip>Nested product</q-tooltip>
-                                            </q-chip>
-                                            <q-chip
-                                                v-else
-                                                dense
-                                                :icon="isProductOnly(line) ? ICONS.shopping_bag : undefined"
-                                                :class="isProductOnly(line) ? 'dora-bg-sunken' : 'dora-text-muted'"
-                                            >
-                                                {{ line.stock_item_name }}
-                                                <q-tooltip v-if="isProductOnly(line)">
-                                                    Product only — no linked stock item on this list
-                                                </q-tooltip>
-                                            </q-chip>
-                                        </div>
-                                        <q-item-label caption class="q-mt-xs">
-                                            <q-chip
-                                                v-if="line.added_via && line.added_via !== 'manual'"
-                                                dense
-                                                size="sm"
-                                                class="dora-bg-elevated q-mr-sm"
-                                                text-color="grey"
-                                                :icon="ICONS.auto_awesome"
-                                            >
-                                                {{ addedViaLabel(line.added_via) }}
-                                            </q-chip>
-                                            <!-- The pantry location is deliberately
-                                                 not on the row: it says where the
-                                                 item lives at home, which tells you
-                                                 nothing while you're deciding what
-                                                 to buy. It survives as a *grouping*
-                                                 mode, where it earns its place by
-                                                 organising the whole list. -->
-                                            <!-- Where the money on this row came
-                                                 from. An estimate off past
-                                                 purchases is marked as such so a
-                                                 rough number is never mistaken
-                                                 for one the user typed. -->
-                                            <span
-                                                v-if="line.estimate_source === 'historic' && line.last_paid_store_name"
-                                                class="dora-text-muted"
-                                            >
-                                                last paid at {{ line.last_paid_store_name }}
-                                            </span>
-                                            <span
-                                                v-else-if="line.estimate_source === 'historic'"
-                                                class="dora-text-muted"
-                                            >
-                                                from what you last paid
-                                            </span>
-                                        </q-item-label>
-                                        <!-- Online offers, kept deliberately
-                                             apart from the row's own price.
-                                             They answer a different question
-                                             ("there's a deal on this") and feed
-                                             no total — the line price, the store
-                                             card and the budget all run on what
-                                             the user has actually paid. Showing
-                                             both in one grammar was the original
-                                             sin: two near-identical prices,
-                                             200px apart, meaning different
-                                             things. -->
-                                        <div
-                                            v-if="line.offers.length > 0"
-                                            class="row q-gutter-xs q-mt-xs items-center"
-                                        >
-                                            <q-chip
-                                                v-for="offer in line.offers"
-                                                :key="offer.product_id"
-                                                dense
-                                                square
-                                                size="sm"
-                                                :outline="!isChosen(line, offer.product_id)"
-                                                class="sld-offer-chip"
-                                                :class="{ 'sld-offer-chip--chosen': isChosen(line, offer.product_id) }"
-                                                :icon="ICONS.local_offer"
-                                                clickable
-                                                :disable="detail.status === 'done'"
-                                                @click="onPickOffer(line.line_id, offer.product_id)"
-                                            >
-                                                Online offer:
-                                                {{ offer.price_now != null ? formatMoney(offer.price_now) : '—' }}
-                                                at {{ offer.store_name }}
-                                                <span
-                                                    v-if="offerSavings(offer) > 0"
-                                                    class="q-ml-xs offer-savings text-positive"
-                                                >
-                                                    save {{ formatMoney(offerSavings(offer)) }}
-                                                </span>
-                                                <q-tooltip>
-                                                    {{ offer.brand ? `${offer.brand} — ` : '' }}{{ offer.name }}
-                                                    <span v-if="offer.size"> ({{ offer.size }})</span>
-                                                    <span v-if="offer.price_was != null && offer.price_now != null">
-                                                        · RRP {{ formatMoney(offer.price_was) }}
-                                                    </span>
-                                                    · Tap to buy this one — it becomes the line's store
-                                                </q-tooltip>
-                                            </q-chip>
-                                        </div>
-                                        <!-- PreferredBuy hint: pick one of
-                                             the item's "what I buy" labels as a
-                                             reminder for this line. -->
-                                        <div
-                                            v-if="line.preferred_buys && line.preferred_buys.length"
-                                            class="row items-center q-mt-xs"
-                                        >
-                                            <BaseDropdown
-                                                flat
-                                                dense
-                                                size="sm"
-                                                :icon="ICONS.lightbulb"
-                                                :label="buyHintLabel(line) || 'Add a buy hint'"
-                                                :disable="detail.status === 'done'"
-                                            >
-                                                <q-list dense>
-                                                    <q-item
-                                                        v-for="pb in line.preferred_buys"
-                                                        :key="pb.preferred_buy_id"
-                                                        v-close-popup
-                                                        clickable
-                                                        :active="line.preferred_buy_id === pb.preferred_buy_id"
-                                                        @click="onPickHint(line.line_id, pb.preferred_buy_id)"
-                                                    >
-                                                        <q-item-section>{{ pb.label }}</q-item-section>
-                                                    </q-item>
-                                                    <template v-if="line.preferred_buy_id">
-                                                        <q-separator />
-                                                        <q-item
-                                                            v-close-popup
-                                                            clickable
-                                                            @click="onPickHint(line.line_id, null)"
-                                                        >
-                                                            <q-item-section class="dora-text-muted">
-                                                                Clear hint
-                                                            </q-item-section>
-                                                        </q-item>
-                                                    </template>
-                                                </q-list>
-                                            </BaseDropdown>
-                                        </div>
-                                    </q-item-section>
-
-                                    <!-- Forces the controls onto their own line
-                                         on a phone (see `.shopping-line`
-                                         below). A zero-height flex break is
-                                         the least invasive way to do it: the
-                                         row keeps one DOM shape at every
-                                         width, and `order` decides what lands
-                                         above and below it. -->
-                                    <div class="shopping-line__break lt-sm" />
-                                    <q-item-section side class="shopping-line__qty">
-                                        <div class="row items-center q-gutter-xs no-wrap">
-                                            <BaseButton
-                                                variant="icon"
-                                                size="sm"
-                                                :icon="ICONS.remove"
-                                                :disable="detail.status === 'done' || (line.quantity ?? 0) <= 0"
-                                                @click="onAdjustQuantity(line, -1)"
-                                            />
-                                            <q-input
-                                                :model-value="line.quantity ?? ''"
-                                                dense
-                                                borderless
-                                                type="number"
-                                                :min="0"
-                                                input-class="text-center shopping-line-qty-input"
-                                                style="width: 48px"
-                                                :disable="detail.status === 'done'"
-                                                placeholder="—"
-                                                @blur="onQuantityBlur(line, $event)"
-                                                @keydown.enter.prevent="
-                                                    ($event.target as HTMLInputElement).blur()
-                                                "
-                                            />
-                                            <BaseButton
-                                                variant="icon"
-                                                size="sm"
-                                                :icon="ICONS.add"
-                                                :disable="detail.status === 'done'"
-                                                @click="onAdjustQuantity(line, 1)"
-                                            />
-                                        </div>
-                                        <!-- Draft rows show the price, they don't
-                                             edit it. The money on a draft is an
-                                             *estimate* the server resolved (last
-                                             paid → chosen offer), and the old
-                                             control here was a "Set price"
-                                             popover writing `actual_unit_price`
-                                             — i.e. what you paid, on a list
-                                             nothing has been bought from yet.
-                                             That is the shop face's job; this
-                                             face was, in the owner's words,
-                                             "trying too hard to be shop mode". -->
-                                        <div
-                                            v-if="moneyEnabled && priceForLine(line) > 0"
-                                            class="text-right sld-plan-price"
-                                        >
-                                            <div class="sld-plan-price__value">
-                                                ~{{ formatMoney(priceForLine(line)) }}
-                                            </div>
-                                            <div
-                                                v-if="line.prefill_source_label"
-                                                class="text-caption dora-text-muted"
-                                            >
-                                                {{ line.prefill_source_label }}
-                                            </div>
-                                        </div>
-
-                                        <!-- Where you plan to buy it. Writes the
-                                             line's own `planned_store_id`, not
-                                             the bought-from stamp and not the
-                                             item's standing `usual_store_id` —
-                                             so "get this one at Aldi" applies to
-                                             this list without rewriting a habit.
-                                             Blank falls through the ladder to
-                                             the usual store, which is why the
-                                             placeholder names it rather than
-                                             saying "none". -->
-                                        <BaseSelect
-                                            v-if="allStoreOptions.length > 0"
-                                            :model-value="line.planned_store_id"
-                                            :options="allStoreOptions"
-                                            dense
-                                            outlined
-                                            emit-value
-                                            map-options
-                                            clearable
-                                            hide-bottom-space
-                                            class="sld-plan-store q-mt-xs"
-                                            label="Store"
-                                            :empty-text="plannedStoreEmptyText(line)"
-                                            @update:model-value="(v) => onPlannedStoreChange(line, v)"
-                                        >
-                                            <q-tooltip>
-                                                Where you plan to buy this. Leave it blank to
-                                                follow the item's usual store.
-                                            </q-tooltip>
-                                        </BaseSelect>
-                                    </q-item-section>
-
-                                    <!-- S12: direct row actions, no kebab.
-                                         "Move to another list" was axed
-                                         (§12 Q2) — remove + re-add covers it.
-
-                                         Substitutes are gone from this surface
-                                         (INV-8 closed): the substitutes Dora
-                                         records are *cook*-oriented — what you
-                                         can use instead in a recipe — not
-                                         "which product on the shelf will do".
-                                         Product alternatives are what offers
-                                         answer, when that feature is on. -->
-                                    <q-item-section side class="shopping-line__actions">
-                                        <div class="column items-center q-gutter-xs shopping-line__action-stack">
-                                            <BaseButton
-                                                variant="danger-icon"
-                                                size="sm"
-                                                :icon="ICONS.delete_outline"
-                                                :disable="detail.status === 'done'"
-                                                @click="onRemoveLine(line.line_id)"
-                                            >
-                                                <q-tooltip>Remove from list</q-tooltip>
-                                            </BaseButton>
-                                        </div>
-                                    </q-item-section>
-                                </q-item>
-                            </q-list>
+                                    @move="moveLine(line, $event)"
+                                    @remove="onRemoveLine(line.line_id)"
+                                    @adjust-quantity="onAdjustQuantity(line, $event)"
+                                    @set-quantity="setLineQuantity(line, $event)"
+                                    @planned-store="onPlannedStoreChange(line, $event)"
+                                    @pick-offer="onPickOffer(line.line_id, $event)"
+                                    @pick-hint="onPickHint(line.line_id, $event)"
+                                    @verdict-action="onLineVerdictAction(line, $event)"
+                                />
+                            </div>
                         </div>
                     </template>
 
@@ -875,7 +531,7 @@
                         :label="`Deferred to fit budget (${deferredLines.length})`"
                         :caption="`${fmtMoney(deferredTotal)} saved`"
                         default-opened
-                        class="q-mt-md dora-bg-sunken rounded-borders"
+                        class="q-mt-md sl-panel sl-panel--sunken"
                     >
                         <q-list dense>
                             <q-item
@@ -1459,6 +1115,7 @@
     import BaseSelect from 'src/components/BaseSelect.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
     import ShoppingListOverviewCard from 'src/components/shoppingList/ShoppingListOverviewCard.vue';
+    import ShoppingListPlanRow from 'src/components/shoppingList/ShoppingListPlanRow.vue';
     import ShoppingListRunFace from 'src/components/shoppingList/ShoppingListRunFace.vue';
     import ShoppingListReceiptFace from 'src/components/shoppingList/ShoppingListReceiptFace.vue';
     import {
@@ -1469,7 +1126,6 @@
     import NewListDialog from 'src/components/dialogs/NewListDialog.vue';
     import PutAwayDialog from 'src/components/dialogs/PutAwayDialog.vue';
     import ShoppingListRailItem from 'src/components/shoppingList/ShoppingListRailItem.vue';
-    import BuyVerdictBadgeInline from 'src/components/stock/BuyVerdictBadgeInline.vue';
     import BuyVerdictApiService from 'src/services/api/buyVerdictApiService';
     import {
         invalidateBuyVerdict, primeBuyVerdicts,
@@ -1490,7 +1146,6 @@
         chosenOfferFor,
         priceOfLine,
         type InferredSuggestion,
-        type LineProductOffer,
         type ShoppingListDetail,
         type ShoppingListLine,
         type ShoppingListSummary
@@ -2098,19 +1753,8 @@
     // *finish* flow needs, which is a different question from what the header
     // shows.
 
-    function isChosen(line: ShoppingListLine, productId: string): boolean {
-        const chosen = chosenOfferFor(line);
-        return chosen?.product_id === productId;
-    }
-
     function priceForLine(line: ShoppingListLine): number {
         return priceOfLine(line);
-    }
-
-    function offerSavings(offer: LineProductOffer): number {
-        if (offer.price_now == null || offer.price_was == null) return 0;
-        const diff = offer.price_was - offer.price_now;
-        return diff > 0 ? diff : 0;
     }
 
     /** The receipt's dateline. Null on a list that somehow finished without a
@@ -2837,39 +2481,6 @@
         if (receiptFace.value) await refreshDetailQuietly();
     }
 
-    function onQuantityBlur(line: ShoppingListLine, event: Event) {
-        // Free-form quantity: blank input maps to `null` (spec: "I can set
-        // the quantity of a stock item on a shopping list to nothing"). Any
-        // valid integer >= 0 is persisted as-is. Garbage input is ignored
-        // and the displayed value reverts to the prior persisted value.
-        const target = event.target as HTMLInputElement;
-        const raw = target.value.trim();
-        if (raw === '') {
-            void setLineQuantity(line, null);
-            return;
-        }
-        const parsed = Number.parseInt(raw, 10);
-        if (Number.isFinite(parsed) && parsed >= 0) {
-            void setLineQuantity(line, parsed);
-        } else {
-            // Reset the visible value — bind is one-way for `model-value`
-            // so we have to mutate the line ref explicitly.
-            const current = line.quantity;
-            line.quantity = null;
-            // Next tick — assign back so the input re-renders the canonical value.
-            void Promise.resolve().then(() => {
-                line.quantity = current;
-            });
-        }
-    }
-
-    // the chosen preferred-buy label for a line's hint chip.
-    function buyHintLabel(line: ShoppingListLine): string | null {
-        if (!line.preferred_buy_id) return null;
-        return (line.preferred_buys ?? []).find(
-            (pb) => pb.preferred_buy_id === line.preferred_buy_id,
-        )?.label ?? null;
-    }
     async function onPickHint(lineId: string, preferredBuyId: string | null) {
         const line = detail.value?.lines.find((l) => l.line_id === lineId);
         if (!line) return;
@@ -3029,6 +2640,14 @@
             (s) => s.status !== 'done' && s.shopping_list_id !== listId.value
         )
     );
+
+    /** The row's provenance caption, or null when the line was added by hand.
+     *  Folds the "is it worth saying?" test in with the wording so the row
+     *  template carries neither. */
+    function addedViaCaption(line: ShoppingListLine): string | null {
+        const via = line.added_via;
+        return via && via !== 'manual' ? addedViaLabel(via) : null;
+    }
 
     function addedViaLabel(via: string): string {
         switch (via) {
@@ -3310,6 +2929,89 @@
     .sld-toolbar__actions > * {
         flex: 0 0 auto;
     }
+    /* ── The list, v4 chunk 1 ─────────────────────────────────────────
+       The rows moved to `ShoppingListPlanRow.vue` and took their layout with
+       them. What stays here is the *container* rhythm: a section is a header
+       plus one soft slab, rather than a muted caption floating above a
+       `q-list bordered separator` nested inside an already-bordered page.
+       Every container on this surface used the same 1px border and the same
+       6px radius, so nothing receded — the slab is the first step out of that
+       (the page canvas itself is chunk 2). */
+    /* One surface for every panel between the card and the list — the trim
+       banner, its preview, Dora's suggestions, the deferred section and the
+       empty state. Chunk 0 found all five (plus the receipts strip) had no
+       home in any of the v4 sketches, and every one of them was a `flat
+       bordered` q-card or a `rounded` q-banner: the same 1px border and 6px
+       radius as everything else, which is the whole reason the page read as a
+       stack of equal boxes. They share the list slab's treatment now, so the
+       page has exactly two weights — the overview card, and everything else. */
+    .sl-panel {
+        background: var(--surface-component);
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-lg);
+        box-shadow: var(--elevation-1);
+    }
+    .sl-panel--warn {
+        background: var(--semantic-warning-soft);
+        border-color: transparent;
+    }
+    .sl-panel--error {
+        background: var(--semantic-negative-soft);
+        border-color: transparent;
+    }
+    .sl-panel--sunken {
+        background: var(--surface-sunken);
+        box-shadow: none;
+    }
+    /* q-banner's own padding is tuned for a full-bleed strip; inside a panel
+       it needs the panel's rhythm instead. */
+    .sl-panel.q-banner {
+        padding: var(--space-3) var(--space-4);
+    }
+    .q-mb-4 {
+        margin-bottom: var(--space-4);
+    }
+    .q-mb-5 {
+        margin-bottom: var(--space-5);
+    }
+
+    .sl-section {
+        margin-bottom: var(--space-5);
+    }
+    .sl-section__head {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+        margin-bottom: var(--space-2);
+        padding-left: 2px;
+        color: var(--text-secondary);
+    }
+    .sl-section__title {
+        font-size: calc(var(--font-size-sm) * 1rem);
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+    }
+    /* The count was `(3 items)` in parentheses at caption size — a pill reads
+       as a count rather than as trailing prose, and stops the header ending in
+       a weaker voice than it started. */
+    .sl-section__count {
+        font-size: calc(var(--font-size-xs) * 1rem);
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+        background: var(--surface-component);
+        border-radius: var(--radius-pill);
+        padding: 2px var(--space-2);
+        min-width: 22px;
+        text-align: center;
+    }
+    .sl-list {
+        background: var(--surface-component);
+        border-radius: var(--radius-lg);
+        box-shadow: var(--elevation-1);
+        overflow: hidden;
+    }
+
     .sld-rail {
         width: 300px;
         min-width: 0;

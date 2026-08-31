@@ -22,6 +22,20 @@ top-to-bottom.
 
 ---
 
+## Login — the Firefox-Android mascot line (2026-08-31) — origin FU-797
+
+- [ ] On the reporting phone (Firefox, Android), open the login screen a few
+      times cold: the thin grey line beside the mascot should be gone. It was
+      **not reproduced** on this box, so this is the only proof there is.
+
+## Recipe view — missing/swap chip, swap states (2026-08-31) — origin FU-793
+
+- [ ] With a missing ingredient that has a substitute **you have**: the chip
+      reads green `Swap ready` and its menu lists the substitute. Verified only
+      against a faked API response — no seed fixture reaches it.
+- [ ] Same with substitutes you'd have to buy: amber `Missing · N swaps`, and
+      each menu row still offers its own add-to-list.
+
 ## The dense dev dataset (2026-08-31)
 Boot `dora-verify-backend` (now seeds `dense` by default) and log in as
 `dora`/`dora`. The data and the DTOs are confirmed — every claim below was

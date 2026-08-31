@@ -40,8 +40,22 @@
                      headline. -->
                 <div class="sl-overview__figures">
                     <div class="sl-overview__figure">
-                        <div class="sl-overview__amount">{{ headlineValue }}</div>
+                        <div class="sl-overview__amount">
+                            <!-- The tilde is the same honesty marker
+                                 `StoreSpendCard` already uses on a short
+                                 bucket, raised to the figure it qualifies. -->
+                            <span v-if="headlineIsPartial" class="sl-overview__approx">~</span>{{ headlineValue }}
+                        </div>
                         <div class="text-caption dora-text-muted">{{ headlineLabel }}</div>
+                        <div v-if="headlineIsPartial" class="sl-overview__partial">
+                            <q-icon :name="ICONS.info" size="13px" />
+                            {{ unpricedCount }} item{{ unpricedCount === 1 ? '' : 's' }}
+                            with no price yet
+                            <q-tooltip>
+                                This total only counts what Dora has a price
+                                for, so the real figure is higher.
+                            </q-tooltip>
+                        </div>
                     </div>
 
                     <!-- Mid-shop the ring is the progress, so it sits with the
@@ -84,22 +98,33 @@
                 <div class="sl-overview__controls">
                     <div v-if="sortModes.length > 1" class="sl-overview__sort">
                         <span class="text-caption dora-text-muted">Order by</span>
-                        <BaseButton
-                            v-for="m in sortModes"
-                            :key="m"
-                            :variant="effectiveMode === m ? 'secondary' : 'ghost'"
-                            dense
-                            size="sm"
-                            :label="SECTION_MODE_LABELS[m]"
-                            :disable="!availableModes[m]"
-                            :aria-pressed="effectiveMode === m"
-                            @click="emit('update:mode', m)"
+                        <!-- Four loose ghost buttons became one control. It is
+                             a single choice from a fixed set, which is what a
+                             segmented control is for, and `pill` is the shape
+                             the owner picked for exactly this on 2026-08-31 —
+                             so this doesn't invent a second one (D-015). -->
+                        <!-- No `dense`/`size="sm"`: at that size the pill
+                             collapsed into a single dark blob with the labels
+                             touching, and it is the card's only view control —
+                             it should read as a control, not as a smudge. Also
+                             keeps every segment past D-004's tap floor. -->
+                        <BaseSegmented
+                            pill
+                            unelevated
+                            class="sl-overview__seg"
+                            :model-value="effectiveMode"
+                            :options="sortOptions"
+                            @update:model-value="emit('update:mode', $event)"
                         >
-                            <q-tooltip v-if="!availableModes[m]">
-                                Nothing on this list has a
-                                {{ SECTION_MODE_LABELS[m].toLowerCase() }} set
+                            <!-- One tooltip for the group rather than one per
+                                 segment: `q-btn-toggle` has no per-option slot
+                                 that isn't a dynamic name per value, and the
+                                 information being preserved is *why* a mode is
+                                 greyed out, which reads fine said once. -->
+                            <q-tooltip v-if="unavailableLabel">
+                                {{ unavailableLabel }}
                             </q-tooltip>
-                        </BaseButton>
+                        </BaseSegmented>
                     </div>
 
                     <q-space />
@@ -221,6 +246,7 @@
     import { computed } from 'vue';
     import { ICONS } from 'src/style/icons';
     import BaseButton from 'src/components/BaseButton.vue';
+    import BaseSegmented from 'src/components/BaseSegmented.vue';
     import CollapsibleCard from 'src/components/CollapsibleCard.vue';
     import StoreSpendCard from 'src/components/shoppingList/StoreSpendCard.vue';
     import { formatMoney } from 'src/composables/useMoney';
@@ -288,8 +314,23 @@
 
     // ── The headline figure ───────────────────────────────────────────
     // Server-owned totals, read not derived (R-003).
+    //
+    // Tier-aware (v4 §3, closing §7.3). Both `money` and `products` default to
+    // **false** in `health_check.py`, so the no-money install is not an edge
+    // case — it is what a fresh install looks like, and the card has to lead
+    // with something real there rather than a consolation. It used to print
+    // the raw line count under "items on this list" on every face, which says
+    // the same flat thing whether you are planning, mid-aisle or done. Each
+    // face has a number it is actually about, and money only changes *which*
+    // number, never whether there is one.
     const headlineValue = computed(() => {
-        if (!moneyEnabled.value) return String(props.detail.lines.length);
+        if (!moneyEnabled.value) {
+            switch (face.value) {
+                case 'run': return String(untickedCount.value);
+                case 'receipt': return String(tickedCount.value);
+                default: return String(props.detail.lines.length);
+            }
+        }
         switch (face.value) {
             case 'run': return formatMoney(props.detail.totals.remaining_price);
             default: return formatMoney(props.detail.totals.total_price);
@@ -298,7 +339,13 @@
 
     const headlineLabel = computed(() => {
         if (!moneyEnabled.value) {
-            return props.detail.lines.length === 1 ? 'item on this list' : 'items on this list';
+            switch (face.value) {
+                case 'run': return 'Left to pick';
+                case 'receipt':
+                    return tickedCount.value === 1 ? 'Item bought' : 'Items bought';
+                default:
+                    return props.detail.lines.length === 1 ? 'Item to buy' : 'Items to buy';
+            }
         }
         switch (face.value) {
             case 'run': return 'Left to spend';
@@ -306,6 +353,19 @@
             default: return 'Estimated cost';
         }
     });
+
+    /** How many lines carry no price at all. The server already publishes this
+     *  per store bucket precisely so the UI can admit a total is short — but it
+     *  was only ever read inside `StoreSpendCard`, which lives *inside* this
+     *  card's disclosure. So the headline could be quietly incomplete while the
+     *  top level said nothing (baseline §1.5 / S7). It says something now. */
+    const unpricedCount = computed(() => props.detail.totals.by_store.reduce(
+        (sum, b) => sum + (b.line_count - b.priced_line_count), 0,
+    ));
+
+    const headlineIsPartial = computed(
+        () => moneyEnabled.value && unpricedCount.value > 0,
+    );
 
     const tickedCount = computed(() => props.detail.lines.filter((l) => l.is_ticked).length);
     const untickedCount = computed(() => props.detail.lines.filter((l) => !l.is_ticked).length);
@@ -390,6 +450,24 @@
         allowedModes: sortModes,
     });
 
+    const sortOptions = computed(() => sortModes.value.map((m) => ({
+        label: SECTION_MODE_LABELS[m],
+        value: m,
+        disable: !availableModes.value[m],
+    })));
+
+    /** Names the modes this list can't offer, so a greyed-out segment still
+     *  says why — the per-button tooltips it replaces carried that. */
+    const unavailableLabel = computed(() => {
+        const missing = sortModes.value.filter((m) => !availableModes.value[m]);
+        if (missing.length === 0) return null;
+        const names = missing.map((m) => SECTION_MODE_LABELS[m].toLowerCase());
+        const list = names.length === 1
+            ? names[0]
+            : `${names.slice(0, -1).join(', ')} or ${names.at(-1)}`;
+        return `Nothing on this list has ${list === names[0] ? 'a ' : ''}${list} set`;
+    });
+
     // ── The review half ───────────────────────────────────────────────
     const estimatedCount = computed(() =>
         props.lines.filter((l) => l.estimate_source === 'historic').length
@@ -437,17 +515,50 @@
 </script>
 
 <style scoped>
+    /* The surface pass (v4 §4.2). This card used `--radius-md` (6px, the
+       squarest non-trivial rung) and a flat 1px border with no elevation at
+       all — the same treatment as the line list, the empty state and
+       `StoreSpendCard`, so nothing on the page receded and the whole thing
+       read as a stack of equal grey boxes. `--radius-xl`, `--elevation-card`
+       and `--hero-gradient` were all already in `tokens.scss`, unused here.
+
+       The hairline carries the dark themes. `--elevation-card` is a shadow,
+       and a shadow does nothing on `pesto-dark`'s near-black page (5%
+       lightness) — but there `--surface-component` is *lighter* than the page,
+       so the card separates by luminance and the border draws its edge. In
+       the light themes it is the other way round: the shadow does the work and
+       the hairline is barely visible. One declaration, correct in both, and no
+       `prefers-color-scheme` query — which would have been wrong anyway, since
+       Dora's themes are `data-theme` attributes, not a media state. */
     .sl-overview {
-        padding: var(--space-3);
         border: 1px solid var(--border-default);
-        border-radius: var(--radius-md);
-        background: var(--surface-elevated);
-        margin-bottom: var(--space-4);
+        border-radius: var(--radius-xl);
+        background: var(--surface-component);
+        box-shadow: var(--elevation-card), var(--elevation-2);
+        margin-bottom: var(--space-5);
+        overflow: hidden;
+    }
+    /* The band. Gradient on the faces where the list is still happening, flat
+       on the receipt (owner call 2026-08-31) — so the surface itself carries
+       state: a live list is a coloured band, a finished one is paper. The
+       three faces end up differently *material*, not merely differently
+       arranged, which is a stronger signal than the status pill alone. */
+    .sl-overview :deep(.collapsible-card__header) {
+        padding: var(--space-4) var(--space-4) var(--space-3) var(--space-5);
+    }
+    .sl-overview--plan :deep(.collapsible-card__header),
+    .sl-overview--run :deep(.collapsible-card__header) {
+        background: var(--hero-gradient);
+    }
+    .sl-overview :deep(.collapsible-card__body) {
+        padding: var(--space-4) var(--space-5) var(--space-5);
+        background: var(--surface-component);
+        border-top: 1px solid var(--divider);
     }
     .sl-overview__head {
         display: flex;
         flex-direction: column;
-        gap: var(--space-2);
+        gap: var(--space-3);
         min-width: 0;
     }
     .sl-overview__identity {
@@ -470,11 +581,28 @@
         gap: var(--space-3);
         min-width: 0;
     }
+    /* Was a magic `1.9rem` off the scale. The figure is the card's headline,
+       so it takes the scale's top rung — and the name beside it stays `text-h5`,
+       which is the hierarchy the owner asked for ("text feels small where it
+       should be big"). */
     .sl-overview__amount {
-        font-size: 1.9rem;
-        font-weight: 600;
-        line-height: 1.1;
+        font-size: calc(var(--font-size-3xl) * 1rem);
+        font-weight: 700;
+        line-height: 1.05;
+        letter-spacing: -0.025em;
         font-variant-numeric: tabular-nums;
+    }
+    .sl-overview__approx {
+        font-weight: 500;
+        opacity: 0.65;
+    }
+    .sl-overview__partial {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        margin-top: 2px;
+        font-size: calc(var(--font-size-xs) * 1rem);
+        color: var(--text-secondary);
     }
     .sl-overview__progress {
         display: flex;
@@ -487,19 +615,40 @@
         font-size: calc(var(--font-size-xs) * 1rem);
         line-height: 1.5;
     }
+    /* Sits on the band, so the rule that separates it has to be a veil rather
+       than `--divider` — a fixed hairline colour reads as a scratch across a
+       gradient in some themes and vanishes in others. */
     .sl-overview__controls {
         display: flex;
         align-items: center;
         flex-wrap: wrap;
         gap: var(--space-2);
-        padding-top: var(--space-2);
-        border-top: 1px solid var(--divider);
+        padding-top: var(--space-3);
+        border-top: 1px solid var(--overlay-dim);
+    }
+    .sl-overview--receipt .sl-overview__controls {
+        border-top-color: var(--divider);
     }
     .sl-overview__sort {
         display: flex;
         align-items: center;
         flex-wrap: wrap;
-        gap: var(--space-1);
+        gap: var(--space-2);
+    }
+    /* The track sits on the gradient band, so `--surface-sunken` (the pill's
+       default) reads as a grey patch stuck on the colour. A white veil belongs
+       to the band instead of fighting it, and the receipt's flat face puts the
+       normal sunken track back. */
+    .sl-overview__seg {
+        background: hsla(0, 0%, 100%, 0.5);
+    }
+    .sl-overview--receipt .sl-overview__seg {
+        background: var(--surface-sunken);
+    }
+    .sl-overview__seg :deep(.q-btn) {
+        min-height: 32px;
+        padding: 0 var(--space-3);
+        font-size: calc(var(--font-size-sm) * 1rem);
     }
     .sl-overview__detail {
         display: flex;

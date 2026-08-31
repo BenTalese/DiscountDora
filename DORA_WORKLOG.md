@@ -28,7 +28,414 @@ next.
 
 ---
 
-## 2026-08-31 (last, latest) — **A second dev dataset: "dense", and it's the new default**
+## 2026-08-31 (last, latest) — **Shopping list v4: the surface pass (proposal only, no code)**
+
+**Status:** complete as a design unit. **No code was written and no suite was
+run** — this unit produced one document,
+`docs/04_proposals/PROPOSAL_SHOPPING_LIST_UX_V4.md`, plus its register row in
+`PROJECT_STATE.md`. Nothing is built; chunk 0 is blocking and has not started.
+
+**What happened.** The owner reported the shopping UI still looks wrong two days
+after v3 shipped — *"looks like a toddler designed it"*, then more precisely:
+bland/flat/uninspired, default cards with default borders, *"all square and
+boring"*, text small where it should be big, and — the stated biggest gripe —
+*"the rows themselves are horrible with the UI elements all over the place
+misaligned and weirdly offset"*. Four directions were mocked up as a static HTML
+comparison built from the real Pesto-light tokens (current / A document / B
+two-tier / C diverged faces), reviewed, and the outcome is **B for plan+run, A for
+the receipt face, C deferred**. The mockup is a scratchpad artifact, deliberately
+not committed.
+
+**Three findings that changed the design, all verified in code, not assumed:**
+
+1. **W1/W2 is token selection, not taste.** `tokens.scss` defines `--radius-lg`,
+   `--radius-xl`, `--radius-2xl`, `--elevation-1/2/3`, `--elevation-card` and
+   `--hero-gradient`. The shopping surface uses `--radius-md` (6px, the squarest
+   rung) plus a flat 1px border on *every* container and **zero** elevation
+   tokens. It looks like a default card because it is painting with the dullest
+   available subset of a palette that already contains the answer.
+
+2. **The row has no grid, and that is the whole of the misalignment report.**
+   The `q-item` lays out with flex and four competing floors — name `flex: 1 1 0`,
+   qty `min-width: 150px`, store select `132px`, price *button* `96px` — so every
+   row measures itself and the columns drift by name length. Not a spacing-value
+   mistake; structural. Compounded by nine affordances at equal weight, which the
+   2026-08-26 mobile fix (`:3410`) **preserved in full** while wrapping to two
+   lines, so the phone row is twice as tall and equally noisy.
+
+3. **Savings is offer-only, and the owner caught it from a mockup label.** He
+   flagged *"saving X.XX … smells like product offers"* — correct.
+   `_line_savings()` (`get_shopping_list_detail.py:220`) returns `0.0` unless a
+   chosen offer carries `price_was`; there is no other path. Meanwhile
+   `_line_price()` resolves **actual → historic → offer**, so prices work off
+   purchase history alone. Prices and savings have *different audiences* and the
+   design must stop treating them as one "money" concept. Digging further:
+   **both `money` and `products` default to `False`** (`health_check.py:128,135`),
+   so the default install shows no dollar figures at all — which makes the
+   mockup's dollar-headline card **designed for a tier most installs never
+   reach**. That is the single largest correction v4 carries over the mockup, and
+   it produced the §3 tier matrix (T0 no-money is the baseline, T1
+   money-no-offers is the centre of gravity, T2 offers are additive polish that
+   must never be load-bearing for the composition).
+
+**One pre-existing concealment found in passing:** `priced_line_count` exists so
+the UI can admit a total is short when lines carry no price, but it is consumed
+**only** inside `StoreSpendCard`, which sits inside the overview card's collapsed
+disclosure. The headline figure can be quietly incomplete while the top level says
+nothing. Logged into the proposal (§1.5) rather than fixed here.
+
+**One risk raised proactively that the owner had not asked about:** direction B's
+core device is a sunken canvas under an elevated card, and in `pesto-dark`
+`--surface-page` is `hsl(165 60% 5%)` against `--surface-sunken` at `hsl(165 60%
+3%)` — a two-point delta near black, invisible, with drop shadows that do not read
+on near-black at all. B must **invert** in dark themes (elevation as lightness +
+border, card lighter than page). Designed up front in §1.6; this is the most
+likely way B would have looked worse in the app than in the demo.
+
+**The owner's process asks, both now binding:**
+
+- *"no loss of functionality unless we make a conscious decision to cut it"* and
+  *"i am concerned the UI will accidentally hide something we previously had
+  shown"* → **§2, chunk 0, blocking.** A behavioural baseline written to
+  `docs/05_investigations/SHOPPING_LIST_BASELINE.md` cataloguing every toolbar
+  button, row affordance, dialog, flag combination, list state, empty/edge state,
+  bulk action, section mode, keyboard affordance, DnD rule and breakpoint —
+  one row each, with a `Decision` column of kept/moved/**consciously cut**, a cut
+  requiring a written reason and owner sign-off. Chunk 4 is a blocking cutover
+  audit against it. Stated rule inside it: **hover-only is a loss on touch**, so
+  every hover-revealed control needs a named touch path. The mockup itself failed
+  that test (its 375px panel showed no swap/reorder/delete), which is the
+  argument for making the chunk blocking.
+- *"some of your designs look nicer in the demos than the actual end result"* →
+  **§5**, with the mechanical cause named: the mockup rows are bare divs on a
+  grid, the real row is `q-item` + `q-item-section` bringing its own padding,
+  min-heights and `--side` rules — which the current stylesheet is *already*
+  losing a fight with (the mobile block is largely overrides that exist only to
+  undo Quasar). Mitigations, all mandatory: **drop `q-item` for the row and own
+  the grid**, verify in the running app **after chunk 1, not at the end**, check
+  every theme, and no magic numbers (§1.3 catalogues the current off-scale
+  values: `1.9rem`, `0.92em`, `0.95em`, `1.1rem`, a stray `6px` radius, `132px`,
+  `2.25rem`).
+
+**Open decisions — 4, none left dangling** (FU-364 rule): 7.1 quantity tile vs
+stepper and 7.2 hero gradient both need an **owner call before their chunk**; 7.3
+what leads the card when money is off and 7.4 touch paths for hover-revealed
+controls are **resolved by chunk 0's findings**. No FUs were spawned — every item
+has a named resolution point inside the proposal.
+
+**Conventions honoured:** §10 is the flat feedback-coverage table (W1–W12 → a
+section each, per the mandatory cross-check rule); §8 is the original-spec skim
+(`Feature Boards/Shopping Lists.md`, tagged keep/consider/superseded — the
+"my own defined order" item is a *consider*, because v4 moves reorder to
+hover/overflow and the original spec treats manual order as first-class); §11 is
+the standing-rules check (R-001 flagged not resolved — **FU-780** stays open, the
+page is still 3,571 lines; R-002/R-035, R-003, D-004 addressed). `COVERAGE_GAPS.md`
+needed no edit — no open gap bullet maps to this surface pass.
+
+**Both owner calls came back in the same session and are CLOSED in §7.1/§7.2:**
+quantity is a **tile at rest that becomes a stepper on hover/focus** (density at
+rest, one-tap increment on approach — which spawns three chunk-1 constraints:
+touch has no hover, the swap must not reflow the row or it reintroduces W3 as a
+motion bug, and the revealed buttons need D-004 tap targets); and the
+`--hero-gradient` band runs on **plan + run but not receipt**. The owner proposed
+the flat receipt himself and the reasoning is worth keeping: it promotes the band
+from decoration to a **state channel** — gradient means the list is still
+happening, flat paper means it is a finished record — so the three faces become
+differently-*material*, not merely differently-arranged. "Flat" was settled as a
+white sheet on the sunken canvas, not borderless, or the receipt loses the canvas
+relationship the other two faces establish.
+
+**Chunk 0 then ran and is complete** —
+`docs/05_investigations/SHOPPING_LIST_BASELINE.md`, 79 affordances catalogued from
+source across the toolbar, both list-picker renderings, page furniture, the
+overview card, three row variants, eight dialogs, keyboard/DnD/responsive
+behaviour and thirteen edge states, plus the T0/T1/T2 tier matrix. Its
+`Destination`/`Visibility`/`Decision` columns are deliberately empty and get
+filled by chunks 1–3; **chunk 4 is blocked until no cell reads `TBD`**, and every
+`CUT` needs a written reason plus owner sign-off.
+
+**Six findings, two of which amended the proposal:**
+
+1. **The mockup omitted an entire tier of the page.** The budget trim banner (four
+   states) and its per-line preview card with Keep opt-outs, Dora's suggestions
+   strip, the deferred-to-fit-budget section, the receipts photo strip and the
+   destructive footer are all live surfaces with real conditions — and **none of
+   them appeared in any of the four sketched directions.** Folded into §4.2: a
+   design that only composes the card and the rows has not finished the page.
+2. **"Nine always-visible affordances" was an overstatement**, and the correction
+   went back into §1.2. The reorder stack is already gated on `canReorder`, which
+   requires `effectiveMode === 'manual'`; the verdict badge, chips, provenance
+   caption, offer chips and buy-hint dropdown are all data-conditional. The truly
+   always-on set is name + quantity stepper + price + store select + delete. The
+   density problem is real but is driven as much by optional elements stacking on
+   a busy row as by a fixed nine — so chunk 1 must not over-cut.
+3. S7/S8 confirm the §1.5 concealment and extend it: when no line has a store,
+   `by_store` is emptied **server-side** and the disclosure renders nothing at all.
+4. **Unresolved by static read:** `space` (tick/untick focused line) is registered
+   page-wide, but the plan face has no tick control — v3 removed draft ticking
+   deliberately. Whether the shortcut is inert or still mutates on a draft needs a
+   live check. Logged as an open item rather than assumed either way.
+5. F6's suggestion dismissal is **in-memory by design** (`:2497` explains why —
+   persisting it would need a per-item ledger and an expiry policy). The rebuild
+   must not "improve" this without re-reading that reasoning.
+6. C1 changes *copy* on a money flag (`Receipt` vs `Done`), not just visibility —
+   the kind of thing a rebuild loses silently.
+
+**Chunk 1 (the row) then shipped in the same session.** New
+`components/shoppingList/ShoppingListPlanRow.vue`; the plan face's inline
+`q-item` block (385 lines of `ShoppingListDetail.vue`) became a 44-line component
+call. Suites green: **564 vitest / 49 files**, `vue-tsc` clean, `eslint src/`
+clean. Driven live at 1280 and 375 against the isolated scratch stack
+(`dora-verify-backend-5171-money-linux` on :5171 with `data/scratch-verify.db`,
+SPA on :5174, dense seed, money **on**). The owner's :5170 dev backend was never
+touched — and note `playwright.config.ts` would have: `E2E_PORT` is 5171 but
+`reuseExistingServer` probes it, so the standard suite was deliberately not used
+and a standalone script drove the scratch pair instead.
+
+**What changed.** `q-item` is gone (v4 §5): the row is a CSS grid that owns its
+own structure, because `q-item`'s padding/min-height/`--side` rules were what the
+old stylesheet spent a whole media block undoing. Always-on set cut to **name,
+quantity, money**; the store select became a menu button on a single caption
+line beside the provenance and `added_via` text (three chip variants and an
+outlined select, gone as *shapes*, kept as *capabilities*); reorder arrows left
+their stacked column to sit with delete. Name up to `--font-size-lg`/500 so it
+outweighs the price instead of losing to it.
+
+**The alignment claim was verified numerically rather than by eye** — across six
+rows, one distinct x per column (`qtyLeft` 48, `moneyRight` 816, `actsRight`
+932). And the §7.1 no-reflow constraint likewise: money x 698→698 and row height
+102.06→102.06 across a hover, because the stepper buttons are always in the
+layout and only their opacity changes.
+
+**Three defects the running-app gate caught that the static suites did not** —
+which is the entire argument for W11's "verify after chunk 1, not at the end":
+
+1. **A wrong import path that `vue-tsc` and `eslint` both passed.**
+   `BuyVerdictBadgeInline` was imported from `src/components/` rather than
+   `src/components/stock/`. Both static checks reported zero errors; the page
+   died on a chunk-load failure and routed to `/#/errors/server`. A typecheck
+   that resolves a path the bundler won't is exactly the gap the gate exists for.
+2. **The quantity tile overlapped the caption at 375px.** The grip was a fifth
+   grid column hidden by `@media (hover: none)` while the column count changed
+   on `max-width: 599px` — *two different conditions for one layout*, so a
+   375px hover-capable viewport rendered five children into four columns. Fixed
+   structurally: the grip is absolutely positioned in the row's left padding and
+   no longer participates in the grid, so that class of mismatch can't recur.
+3. **483px rows on a phone.** `.sl-row__money` is `auto`-sized and its prefill
+   caption ("from your last receipt") is longer than the figure above it, so the
+   money column claimed ~130px and starved the name to ~60px. Caption hidden
+   <600px (it lives in the price editor), column capped, and the armed stepper
+   made absolute on mobile so the tile reserves 44px rather than 104px. **149px**
+   after, name on one line, no horizontal scroll (`scrollWidth === clientWidth`
+   at 375).
+
+**Baseline §5.1 is now filled in: all sixteen row affordances are `kept` or
+`moved`, none `CUT`** — so no owner sign-off is outstanding for that table. The
+two 401s and the ResizeObserver toast seen while driving are both pre-existing
+and not mine: the 401s are the pre-login probe (zero after authenticating,
+re-checked), and the toast is **FU-785**.
+
+**Chunk 2 (the overview card + the page furniture) shipped in the same session.**
+Suites green again: **564 vitest / 49 files**, `vue-tsc` clean, `eslint src/`
+clean. Driven live on **all three faces**, in **pesto-dark**, and at 375px.
+
+**The card.** `--radius-xl` + `--elevation-card` + `--surface-component`,
+replacing `--radius-md` and a flat 1px border with no elevation — every one of
+those tokens was already in `tokens.scss` and simply unused here. The headline
+figure moved off a magic `1.9rem` onto `--font-size-3xl`. The band carries
+`--hero-gradient` on plan and run and is **flat on the receipt** (owner call), so
+the surface itself encodes state: a live list is coloured, a finished one is
+paper. Verified per face — `bandIsGradient` true/true/**false**.
+
+**The dark-theme inversion (§1.6) turned out to need no inversion.** The worry
+was that B's two-tier device dies on `pesto-dark`, where a shadow does nothing
+against a 5%-lightness page. But `--surface-component` is *already* lighter than
+`--surface-page` in the dark themes and darker-than-white in the light ones, so
+one declaration is correct in both directions; the hairline just swaps which job
+it does (edge-definer in dark, near-invisible in light). No
+`prefers-color-scheme` query — which would have been wrong anyway, since Dora's
+themes are `data-theme` attributes, not a media state. Measured: card luminance
+35 vs page 0 in dark.
+
+**§7.3 is closed: the money-off headline is tier-aware per face.** It used to
+print "N items on this list" on all three faces whether you were planning,
+mid-aisle or finished. Now: items-to-buy / left-to-pick / items-bought. This
+matters more than it sounds — **both `money` and `products` default to `false`**,
+so that was the *default install's* headline.
+
+**C19 is new and closes the §1.5 concealment.** `priced_line_count` existed so
+the UI could admit a total was short, but was read only inside `StoreSpendCard`
+— which lives inside this card's own disclosure, so the headline could be
+quietly incomplete while the top level said nothing. The figure now carries the
+same `~` marker `StoreSpendCard` uses, plus "n items with no price yet". It
+found real data immediately on the seeded draft: `~$50.30` / 2 items.
+
+**Order-by is `BaseSegmented` `pill`** — reusing the shape the owner picked
+yesterday for the recipe method switch rather than inventing a second one
+(D-015). The per-button "why is this greyed out" tooltips became one group
+tooltip naming every unavailable mode, because `q-btn-toggle` has no per-option
+slot that isn't a dynamic per-value name. Logged as `moved`, not lost.
+
+**The page furniture (baseline §3) is done: all ten kept.** F1 error banner, F4
+trim banner, F5 trim preview, F6 suggestions strip, F7 deferred section and the
+empty state were each a `flat bordered` q-card or a `rounded` q-banner — the same
+1px/6px as everything else, which *is* the "stack of equal boxes" complaint. One
+shared `.sl-panel` now, so the page carries exactly two weights. F8 receipts
+strip, F9 danger footer and F10 fallback were left alone deliberately: F9 is a
+rule rather than a card by design (its own comment records why) and boxing it
+would give two destructive actions more presence than they should have.
+
+**Two things the running-app pass caught, both harness rather than product:**
+
+1. **The scratch backend reseeds on restart**, so the list ids from the chunk-1
+   run 404'd. Worth remembering for any future ad-hoc drive — fetch ids fresh,
+   don't hardcode them across sessions.
+2. **A false contrast failure that looked exactly like a real one.** Forcing
+   `data-theme="pesto-dark"` from JS rendered every heading dark-on-dark. Cause:
+   `themeService.ts:330,333` does *two* things — sets the attribute **and** calls
+   Quasar's `Dark.set()`, which toggles `body--dark`. Setting only the attribute
+   leaves Quasar's light typography utilities in place. With both set, dark reads
+   correctly. Nearly filed as a product bug; the check was the harness's.
+
+**Baseline §3 and §4 are now filled** (ten furniture rows, nineteen card rows) —
+everything `kept` or `moved`, plus C19 `added`. **Still nothing `CUT` anywhere in
+the rebuild**, so no owner sign-off is outstanding.
+
+**Next up:** **chunk 3 — the receipt face** gets direction A's document
+treatment as a `face="receipt"` variant of the chunk-1 row primitive (not a
+bespoke style island). Then **chunk 4**, the blocking cutover audit: baseline §1
+(toolbar), §2 (picker), §5.2/5.3 (run + receipt rows), §6 (dialogs), §8
+(keyboard/DnD/responsive) and §9 (edge states) still read `TBD` and must all be
+filled before it can pass — including the one open question chunk 0 could not
+resolve statically: whether `space` still mutates on a draft face that has no
+tick control.
+
+---
+
+## 2026-08-31 (recipe batch) — **Recipe view: a six-item owner batch, plus the login mascot line**
+
+**Status:** complete. Frontend **564 vitest** passed / 49 files, `vue-tsc` clean,
+`eslint src/` clean. Backend **2202 passed** / 4 failed / 1 skipped / 1 xfailed —
+the four are the pre-existing buy-verdict e2e failures (FU-762), unchanged and
+untouched by this unit (no backend code changed). Driven live at 375px, 1280px
+and in dark, against the isolated scratch stack (`dora-verify-backend-5171-linux`
+on :5171 with `data/scratch-verify.db`, SPA on :5174, dense seed). The owner's
+:5170 dev backend was never touched.
+
+### The asks, and what each one actually was
+
+Six recipe-page items plus a login report. Two of the six had a real defect
+underneath them, which is now the third batch running where that's true.
+
+**"Adding lots of tools … infinitely pushes the horizontal space of the page."**
+Reproduced exactly: at 375px each tool chip added ~100–135px to
+`document.scrollWidth` (375 → 821 at six tools). Two causes stacked. The outer
+one was `min-width: auto` on `.rn__body`'s grid children — a grid item sized by
+its widest content instead of by its track. The inner one is the interesting
+one: **`BaseSelect`'s own `:deep(.q-field__native) { flex-wrap: nowrap }`**,
+added 2026-08-21 so a long *single* value would truncate with an ellipsis, and
+applied to every select in the app. Chips can't ellipsis, so on a chip select
+that rule just ran them off the side of the field. Now scoped to the shape it
+was written for: a `base-select--chips` class (set when `multiple` +
+`use-chips` are both in `$attrs`) flips the native back to `wrap` and lets the
+control give up its fixed dense height. That reaches **every chip select in the
+app**, which is the honest answer to *"where else might this be an issue?"* —
+dietary tags and the step-links dialog were verified picking it up.
+
+**"The add to shopping list button looks like it's on its own row."** Also real,
+and the screenshot is unambiguous once a name wraps. `.rn__ing li` was
+`align-items: baseline`, and a 36px round icon button has no text baseline worth
+aligning to — it got pinned to the *first* line of the name column, leaving an
+empty gutter beneath it on any row whose name ran to two lines. It also made the
+cart jump vertically between its two icon glyphs (`add_shopping_cart` vs
+`shopping_cart`) on adjacent rows. `center` fixes both; measured name-centre and
+button-centre now agree to the pixel on every row.
+
+**"Can missing and swappable be combined into one ui element?"** Yes, because
+they were never two facts. `RecipeIngredientSubstitutes` became
+`RecipeMissingIngredientChip` and now owns the whole statement as one three-state
+chip — `Missing` (negative, nothing recorded to use instead) · `Missing · N
+swaps` (warning, alternatives exist but you'd have to buy them) · `Swap ready`
+(positive, you already have one). Owner picked the three-state option over a
+red/amber-only version and over a split pill. The count means whatever the word
+beside it means, and is suppressed at 1 in the ready state. The swaps menu opens
+off that same chip; the `out` state renders as a `<span>`, not a dead button.
+
+**The colour nearly shipped failing D-002.** First pass followed the style
+guide's soft-token rule literally — soft background, full-strength semantic ink
+— and measured **2.1:1** (warning), **2.5:1** (positive), **3.3:1** (negative)
+on pesto-light, all under the 4.5 floor. The tone is carried by the tint, the
+border and the icon now; the words are `--text-primary`. That's the same shape
+`MealReconcileLog`'s status pills already use, with the same D-002 note.
+
+**The remaining three were straight directives.** Missing/swap info doesn't
+render in ingredient edit mode (D-023 sanctions *removing* a control that
+doesn't apply in a mode — the thing it forbids is re-homing it). The method's
+step-style switch is a pill, via a new opt-in `pill` prop on `BaseSegmented`
+rather than a one-off at the call site or a change the other eight segmented
+controls didn't ask for. The "Right now" cell is headline-only — the swap count
+and the on-list counts came off; both are visible per-row below, the on-list one
+as the cart button's own filled/coloured state.
+
+### The login line — reasoned, not reproduced
+
+Thin grey vertical line ~the mascot's height, immediately left of it, flickering
+for a few seconds then settling. **Firefox on Android only; Chrome clean.** That
+last fact is what makes it diagnosable without the device: a DOM element would
+render in Chrome too, so this is a compositing artifact, and its shape and
+position are the **left edge of the mascot's own GPU layer** (`drop-shadow` +
+an animated `transform`, promoted mid-flight while the blurred
+`mix-blend-mode: screen` blobs behind it are still rasterising). "Stops after a
+few seconds" is the layer tree stabilising. `will-change: transform` +
+`backface-visibility: hidden` declare the promotion up front — the same
+treatment the blobs already carry — and are dropped under
+`prefers-reduced-motion`.
+
+**This is not verified.** Playwright's Firefox isn't installed on this box and
+the system Firefox can't be driven (no Juggler), and desktop Firefox wouldn't
+reproduce a mobile-GPU artifact anyway. Logged as **FU-797** with resolution
+"confirm in browser", plus a `DORA_VERIFY` line, per the mandatory
+reported-defect rule. If it survives, the next lever is dropping the mascot's
+`drop-shadow`, which is what creates the layer in the first place.
+
+### Standards close-gate
+
+Checked against `ENGINEERING_STANDARDS.md` + `DESIGN_STYLE_GUIDE.md`. Net
+positive on R-002: the old missing chip used Quasar's named `color="warning"
+text-color="dark"`; the new one is tokens only. R-003 unchanged — the page still
+resolves `inStock` against the stock-item store and hands the chip a verdict.
+D-013 satisfied per state (three states, three tooltips). D-004's 28px chip
+height is a carve-out carried forward from the component it replaced, with the
+same in-place comment: the chip sits inline in a wrapping text line, so the
+row's own height governs the target.
+
+**ADR evaluation:** one candidate, logged as **FU-794** rather than promoted
+unilaterally — *a shared component's global style rule must be scoped to the
+variant it was written for*. The h-scroll bug is exactly that failure, and the
+`base-select--chips` class is the fix pattern. Owner's call whether it earns an
+`R-0NN`.
+
+### Follow-ups opened
+
+**FU-797** (login line unconfirmed) · **FU-796** (`.page-counts-footer`
+overflows 375px by 8px on `/my-products` — found by sweeping all 13 main routes
+for h-scroll; the other 12 are clean) · **FU-795** (`ReportsPage` and
+`AuditLogSettings` use raw `q-select` instead of `BaseSelect`, so they miss the
+chip-wrap fix and everything else that component decides) · **FU-794** (the ADR
+candidate) · **FU-793** (the dense seed has **no** missing ingredient carrying
+substitutes, so two of the chip's three states have no fixture — same class of
+gap as FU-754; verified this round by intercepting `/stock-items/:id/detail`).
+
+### Next up
+
+Nothing queued from this batch. The meal-plan brief still owes its §11 ledger
+debt (the `COVERAGE_GAPS.md` flip for the 13 bullets
+`IMPL_PLAN_MEAL_PLANS_REBUILD.md` §13 re-graded), which is where the last
+substantive stream stopped.
+
+---
+
+## 2026-08-31 (earlier) — **A second dev dataset: "dense", and it's the new default**
 
 **Status:** complete. Backend **2202 passed** / 4 failed / 1 skipped / 1 xfailed —
 the four are the pre-existing buy-verdict e2e failures (FU-762), unchanged. No

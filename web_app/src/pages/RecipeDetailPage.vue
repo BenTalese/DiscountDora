@@ -309,30 +309,14 @@
                     <div class="rn__cellbody">
                         <span class="rn__cellk">Right now</span>
                         <span class="rn__cellv">{{ cookableHeadline }}</span>
-                        <!-- "You're missing two things, but you have a substitute
-                             for one" is a different answer to "you're missing two
-                             things", so it belongs in the cell that answers it. -->
-                        <span v-if="coverableCount > 0" class="rn__cellswap">
-                            <q-icon :name="ICONS.swap_horiz" size="14px" />
-                            <!-- Owner feedback 2026-08-27 — the long form ate a
-                                 mobile line and was wordy on desktop; the count
-                                 plus the swap icon already says it. -->
-                            {{ coverableCount }} can be swapped
-                        </span>
-                        <!-- Owner feedback 2026-08-24 — the action said nothing
-                             about what was already on a list, so it offered to
-                             add things the user had added ten minutes earlier.
-                             The copy now counts only what's actually left; the
-                             action itself is the cell's button, on the right. -->
-                        <template v-if="missingIngredients.length > 0">
-                            <span v-if="missingNotOnListCount === 0" class="rn__cellsub">
-                                <q-icon :name="ICONS.check" size="14px" />
-                                Already on a shopping list
-                            </span>
-                            <span v-else-if="missingOnListCount > 0" class="rn__cellsub">
-                                {{ missingOnListCount }} already on a list
-                            </span>
-                        </template>
+                        <!-- One line, and only one. The swap count and the
+                             already-on-a-list state both used to be spelled out
+                             here as well, and both are visible per-row a few
+                             centimetres below — on the chip and on the cart
+                             button's own state (owner, 2026-08-31: *"it may be
+                             enough to just say the main line"*). The count the
+                             button still needs is in the button's label, where
+                             it's about what pressing it will do. -->
                     </div>
                     <!-- The cell's action, at the cell's edge — a real button on
                          the right rather than a text link buried under the copy
@@ -556,26 +540,26 @@
                                             <!-- "Missing" and "missing, but you have
                                                  something you could use instead" are
                                                  different answers to tonight's
-                                                 question, so the chip says which one
-                                                 this is (feedback 2026-08-24). Missing
-                                                 means **out of stock**, never low - the
-                                                 server's `is_missing`, whose whole point
-                                                 is that a low ingredient is one you can
-                                                 usually still cook with (owner asked
-                                                 which it was, 2026-08-27). -->
-                                            <q-chip
-                                                v-else-if="isMissingItem(row.stock_item_id)"
-                                                dense square size="sm"
-                                                color="warning"
-                                                text-color="dark"
-                                                class="rn__chip rn__chip--missing"
+                                                 question, and since 2026-08-31 they are
+                                                 one chip rather than two sitting side
+                                                 by side (owner: *"can missing and
+                                                 swappable be combined into one ui
+                                                 element somehow?"*). The chip owns the
+                                                 swaps menu too. Editing the list, none
+                                                 of this is relevant - what's in the
+                                                 pantry is not what you came to change
+                                                 (owner, same round) - so it doesn't
+                                                 render at all in edit mode. -->
+                                            <span
+                                                v-else-if="!ingredientsEditing && isMissingItem(row.stock_item_id)"
+                                                class="rn__chipwrap"
+                                                @click.stop
                                             >
-                                                Missing
-                                                <q-tooltip>
-                                                    Out of stock. A low ingredient still
-                                                    counts as one you have.
-                                                </q-tooltip>
-                                            </q-chip>
+                                                <RecipeMissingIngredientChip
+                                                    :entries="substitutesForRow(row)"
+                                                    :ingredient-name="ingredientLabel(row)"
+                                                />
+                                            </span>
                                             <q-chip
                                                 v-if="expiringChipFor(row.stock_item_id)"
                                                 dense square size="sm"
@@ -587,12 +571,6 @@
                                                 {{ expiringChipFor(row.stock_item_id)!.label }}
                                                 <q-tooltip>{{ expiringChipFor(row.stock_item_id)!.tooltip }}</q-tooltip>
                                             </q-chip>
-                                            <span @click.stop>
-                                                <RecipeIngredientSubstitutes
-                                                    :entries="substitutesForRow(row)"
-                                                    :ingredient-name="ingredientLabel(row)"
-                                                />
-                                            </span>
                                             <span v-if="row.notes" class="rn__ingnote">{{ row.notes }}</span>
                                         </span>
                                         <!-- Per-row actions, split by mode. Reading a
@@ -687,6 +665,7 @@
                             v-model="form.steps_mode"
                             dense
                             unelevated
+                            pill
                             class="rn__modes"
                             aria-label="Step style"
                             :options="[
@@ -1126,7 +1105,7 @@
     import type { AddToListConfirm } from 'src/components/shoppingList/addToListTypes';
     import { rowsFromRecipe, unlinkedFromRecipe } from 'src/helpers/addToListRows';
     import RecipeIngredientRowEditor from 'src/components/recipes/RecipeIngredientRowEditor.vue';
-    import RecipeIngredientSubstitutes from 'src/components/recipes/RecipeIngredientSubstitutes.vue';
+    import RecipeMissingIngredientChip from 'src/components/recipes/RecipeMissingIngredientChip.vue';
     import AddToListButton from 'src/components/AddToListButton.vue';
 
     import { ICONS } from 'src/style/icons';
@@ -1559,7 +1538,6 @@
         missingIngredients.value.filter(
             (i) => (substitutesFor.value.get(i.stock_item_id) ?? []).some((e) => e.inStock),
         ));
-    const coverableCount = computed(() => coverableIngredients.value.length);
     const substitutableNames = computed(() =>
         coverableIngredients.value.map(
             (i) => stockItems.value.find((s) => s.stock_item_id === i.stock_item_id)?.name
@@ -2263,15 +2241,6 @@
     .rn__link:hover { text-decoration: underline; }
     .rn__link:focus-visible { outline: 2px solid var(--brand-primary); outline-offset: 2px; }
     .rn__cellbtn { align-self: flex-start; margin-top: var(--space-1, 4px); }
-    /* The swap line is good news on a cell that is otherwise bad news, so it
-       carries the positive ink rather than the muted grey the other sub-lines
-       use (D-013 — colour means something here). */
-    .rn__cellswap {
-        display: flex; align-items: center; gap: var(--space-1, 4px);
-        font-size: 0.8125rem;
-        color: var(--semantic-positive);
-    }
-
     /* ── Body ─────────────────────────────────────────────────────────── */
     .rn__body {
         display: grid;
@@ -2280,6 +2249,13 @@
         margin-top: var(--space-6, 24px);
         align-items: start;
     }
+    /* D-011 — a grid item's default `min-width: auto` lets it be sized by its
+       widest indivisible content instead of by its track, and a wrapping chip
+       field is exactly that content: every tool added to the free-text
+       method's Tools select pushed the column, the column pushed the page, and
+       the page scrolled sideways (owner, 2026-08-31). The track owns the width;
+       what's inside it wraps or scrolls in its own box. */
+    .rn__body > * { min-width: 0; }
     /* The rail follows the method down a long recipe, and each pane scrolls
        inside itself rather than the page (owner ask). */
     .rn__rail { position: sticky; top: var(--space-4, 16px); }
@@ -2347,7 +2323,13 @@
         display: grid;
         grid-template-columns: auto 1fr auto;
         gap: var(--space-3, 12px);
-        align-items: baseline;
+        /* Centred, not baseline-aligned. A 36px round icon button has no text
+           baseline worth aligning to, so `baseline` pinned it to the *first*
+           line of the name column: on a row whose name wrapped, the cart ended
+           up stranded at the top-right with empty space under it and read as a
+           second row rather than part of this one (owner, 2026-08-31). It also
+           made the button jump vertically between its two icon glyphs. */
+        align-items: center;
         padding: var(--space-2, 8px);
         border-bottom: 1px solid var(--divider);
         border-radius: var(--radius-sm, 4px);
@@ -2371,14 +2353,10 @@
     .rn__ingname { min-width: 0; }
     .rn__ingnote { display: block; font-size: 0.8125rem; color: var(--text-muted); }
     .rn__chip { margin-left: var(--space-1, 4px); }
-    /* The row's one severity signal, so it carries a touch more weight than
-       the chips beside it (owner feedback 2026-08-27). */
-    .rn__chip--missing {
-        min-height: 24px;
-        padding: 0 var(--space-2, 8px);
-        font-size: var(--font-size-xs, 0.75rem);
-        font-weight: 600;
-    }
+    /* The row's one severity signal is `RecipeMissingIngredientChip`, which
+       owns its own weight; the wrapper here only spaces it off the name and
+       stops the row's click handler from reaching it. */
+    .rn__chipwrap { margin-left: var(--space-1, 4px); }
     .rn__chip--unlinked { background: var(--surface-sunken); color: var(--text-muted); }
     /* No hover-reveal any more. In read mode the only thing in here is the
        cart button, which the owner asked to be permanently visible; in edit

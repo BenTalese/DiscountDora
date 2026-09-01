@@ -1,6 +1,6 @@
 # Shopping List UX v4 — the surface pass
 
-**Status:** PROPOSED — not built.
+**Status:** **BUILT 2026-09-01** — chunks 0-5 complete; chunk 4 (the blocking cutover audit) passed. See §9.
 **Date:** 2026-08-31.
 **Extends:** `PROPOSAL_SHOPPING_LIST_UX_V3.md` (BUILT 2026-08-29). v3 replaced the
 top section of the detail page with `ShoppingListOverviewCard` and settled the
@@ -291,6 +291,22 @@ is.
 the same tokens, not a bespoke style island — or it becomes the next thing that
 drifts (the failure mode `CollapsibleCard`'s header comment already documents).
 
+**How that landed (2026-09-01).** The constraint's *intent* is shared structure;
+its literal reading — a `face` prop on `ShoppingListPlanRow` — would have bought
+that at the price of one component holding two mutually-exclusive control sets
+behind `v-if`, which is the componentisation R-001 exists to prevent. The two
+faces genuinely share a skeleton (grid shell, name/caption/money type scale,
+inset divider) and genuinely differ in grammar (a quantity tile and
+reveal-on-approach controls vs a multiplier and a dotted leader). So the
+skeleton was extracted to **`src/css/shoppingRow.scss`** and both faces consume
+it, on the precedent `dnd.scss` and `subbar.scss` already set for shared visual
+language (R-022 / ADR-018). Drift is prevented by the thing they share being
+*one file*, which is what the constraint was actually protecting.
+
+**One carve-out found in the running app.** The leader is suppressed when money
+is off: a dotted rule running to the sheet edge and stopping reads as a number
+that failed to load, and T0 is the majority install. Detail in baseline §5.3.
+
 ---
 
 ## 5. W11 — why mockups flatter, and the mitigation
@@ -420,8 +436,9 @@ items are worth carrying as surface considerations:
 | 0 | Behavioural baseline (`SHOPPING_LIST_BASELINE.md`) | **Blocking.** Nothing starts before it. Resolves 7.3, 7.4. |
 | 1 | The row — grid, `q-item` removal, control diet, type scale, quantity tile→stepper (7.1) | **Running-app verification before chunk 2** (§5). |
 | 2 | The overview card — surface, tiers, dark-theme inversion, gradient on plan+run (7.2) | — |
-| 3 | The receipt face — direction A as a `face` variant | — |
-| 4 | Cutover audit: every baseline row has a filled destination + decision | **Blocking close-gate** for W8/W9. |
+| 3 | The receipt face — direction A as a `face` variant | ✅ **Done 2026-09-01.** Shipped as a shared *skeleton* (`src/css/shoppingRow.scss`) consumed by both faces rather than a `face` **prop** on one component — see the note under §4.3. Baseline §5.3 filled, nothing cut. |
+| 4 | Cutover audit: every baseline row has a filled destination + decision | ✅ **PASSED 2026-09-01.** No cell reads `TBD`; nothing was `CUT` across the whole rebuild. Caught three things nothing else would have — P8 never existed, chunk 1 orphaned 165 lines of dead CSS, and the run face had been left behind. |
+| 5 | The run face — same containers, same row skeleton (FU-807) | ✅ **Done 2026-09-01**, owner call: *"consistency matters"*. This completes §4's "direction B for plan/run"; the three faces now share one stylesheet. |
 
 ---
 

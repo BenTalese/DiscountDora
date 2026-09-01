@@ -2937,79 +2937,16 @@
        Every container on this surface used the same 1px border and the same
        6px radius, so nothing receded — the slab is the first step out of that
        (the page canvas itself is chunk 2). */
-    /* One surface for every panel between the card and the list — the trim
-       banner, its preview, Dora's suggestions, the deferred section and the
-       empty state. Chunk 0 found all five (plus the receipts strip) had no
-       home in any of the v4 sketches, and every one of them was a `flat
-       bordered` q-card or a `rounded` q-banner: the same 1px border and 6px
-       radius as everything else, which is the whole reason the page read as a
-       stack of equal boxes. They share the list slab's treatment now, so the
-       page has exactly two weights — the overview card, and everything else. */
-    .sl-panel {
-        background: var(--surface-component);
-        border: 1px solid var(--border-default);
-        border-radius: var(--radius-lg);
-        box-shadow: var(--elevation-1);
-    }
-    .sl-panel--warn {
-        background: var(--semantic-warning-soft);
-        border-color: transparent;
-    }
-    .sl-panel--error {
-        background: var(--semantic-negative-soft);
-        border-color: transparent;
-    }
-    .sl-panel--sunken {
-        background: var(--surface-sunken);
-        box-shadow: none;
-    }
-    /* q-banner's own padding is tuned for a full-bleed strip; inside a panel
-       it needs the panel's rhythm instead. */
-    .sl-panel.q-banner {
-        padding: var(--space-3) var(--space-4);
-    }
+    /* The panel slab, the section header and the list slab moved to
+       `src/css/shoppingList.scss` in chunk 5, so the run face's own containers
+       could use them — a child component can't reach a page's scoped rule,
+       which is the whole reason the shop face was still wearing bordered
+       q-lists after chunks 1-3. */
     .q-mb-4 {
         margin-bottom: var(--space-4);
     }
     .q-mb-5 {
         margin-bottom: var(--space-5);
-    }
-
-    .sl-section {
-        margin-bottom: var(--space-5);
-    }
-    .sl-section__head {
-        display: flex;
-        align-items: center;
-        gap: var(--space-2);
-        margin-bottom: var(--space-2);
-        padding-left: 2px;
-        color: var(--text-secondary);
-    }
-    .sl-section__title {
-        font-size: calc(var(--font-size-sm) * 1rem);
-        font-weight: 700;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-    }
-    /* The count was `(3 items)` in parentheses at caption size — a pill reads
-       as a count rather than as trailing prose, and stops the header ending in
-       a weaker voice than it started. */
-    .sl-section__count {
-        font-size: calc(var(--font-size-xs) * 1rem);
-        font-weight: 600;
-        font-variant-numeric: tabular-nums;
-        background: var(--surface-component);
-        border-radius: var(--radius-pill);
-        padding: 2px var(--space-2);
-        min-width: 22px;
-        text-align: center;
-    }
-    .sl-list {
-        background: var(--surface-component);
-        border-radius: var(--radius-lg);
-        box-shadow: var(--elevation-1);
-        overflow: hidden;
     }
 
     .sld-rail {
@@ -3091,125 +3028,6 @@
         display: block;
         margin: 0 auto;
     }
-    .sld-price-btn {
-        min-width: 96px;
-    }
-    /* ── The line row on a phone (2026-08-26 feedback) ────────────────
-       *"Mobile view is god awful with majority of UI elements overlapping
-       each other by a lot and whole thing is just squished."* Reproduced at
-       375px and it is not an overflow bug — the page doesn't scroll
-       sideways at all. It's that the row was laying out **eight** columns
-       side by side (reorder, tick, name, buy verdict, quantity stepper,
-       price button, swap, delete), so the item's *name* — the only thing on
-       the row you actually read — was compressed to about 60px and wrapped
-       over four lines while the controls jammed into each other.
-
-       The fix is to stop pretending a phone has desktop width: the name
-       gets the full row, and every control drops to a second line under it
-       as one strip. Nothing is hidden and nothing moves into a menu — the
-       row just admits it needs two lines. Desktop is untouched. */
-    @media (max-width: 599px) {
-        .shopping-line {
-            flex-wrap: wrap;
-        }
-        /* Line 1: tick · name · swap+delete. Line 2: reorder · quantity ·
-           price. Measured at 375px, that is exactly what fits — putting the
-           two row actions up on the name line is what stops a third line
-           appearing, and they belong to "this item" more than to "how many
-           and how much" anyway.
-
-           `flex: 1 1 0` (basis zero, not auto) on the name is load-bearing:
-           with `auto` the name's intrinsic width plus the tick exceeded the
-           row and the name wrapped onto a line of its own. */
-        .shopping-line > .q-item__section--side:not(.shopping-line__reorder):not(.shopping-line__qty):not(.shopping-line__actions) {
-            order: 0;
-        }
-        .shopping-line > .q-item__section--main {
-            order: 1;
-            min-width: 0;
-            flex: 1 1 0;
-        }
-        .shopping-line__actions { order: 2; }
-        /* The break sits between the two groups; everything ordered after it
-           lands on the second line. */
-        .shopping-line__break {
-            order: 3;
-            flex: 1 0 100%;
-            height: 0;
-        }
-        .shopping-line__reorder { order: 4; }
-        .shopping-line__qty     { order: 5; }
-        /* On the second line the sections are peers in one strip, so their
-           desktop sizing (a 150px floor on the quantity block, `top`
-           alignment, per-section padding) has to go. */
-        .shopping-line > .q-item__section--side.shopping-line__reorder,
-        .shopping-line > .q-item__section--side.shopping-line__qty {
-            min-width: 0;
-            padding-left: 0;
-            padding-top: var(--space-2);
-            align-items: center;
-        }
-        .shopping-line > .q-item__section--side.shopping-line__actions {
-            min-width: 0;
-            align-items: center;
-        }
-        /* The quantity section stacks its stepper, the price button and the
-           price-provenance caption vertically — three rows deep, which is
-           what made the phone strip fall onto three lines of its own. Side
-           by side they fit in one. */
-        .shopping-line__qty {
-            flex: 1 1 auto;
-            flex-direction: row;
-            align-items: center;
-            gap: var(--space-2);
-            flex-wrap: wrap;
-        }
-        .shopping-line__qty > * {
-            margin: 0;
-        }
-        /* The provenance caption ("last paid at Coles") is the least urgent
-           thing on the row and the first to cost a line — it stays available
-           inside the price editor, which is where you'd act on it. */
-        .shopping-line__qty > .text-caption {
-            display: none;
-        }
-        /* Reorder and row actions stack vertically on desktop, where they sit
-           in their own narrow columns. In the phone strip they're side by
-           side like everything else. */
-        .shopping-line__reorder .column,
-        .shopping-line__action-stack {
-            flex-direction: row;
-            align-items: center;
-        }
-        /* The name and the buy-verdict badge share a `no-wrap` row, which on a
-           phone meant the badge kept its ~70px and the *name* wrapped to
-           three lines inside the ~100px left over. Letting the row wrap puts
-           the badge underneath and gives the name the full width — it is the
-           thing being read, so it gets the space. */
-        .shopping-line__name-row {
-            flex-wrap: wrap;
-        }
-        /* Drag-to-reorder is a pointer gesture; the arrows are the thumb path
-           (and the keyboard one). Dropping the decorative grip here buys back
-           the width without removing a way to reorder. */
-        .shopping-line__reorder .q-icon {
-            display: none;
-        }
-    }
-    .shopping-line-name {
-        font-weight: 500;
-        text-decoration: none;
-    }
-    .shopping-line-name:hover {
-        text-decoration: underline;
-    }
-    .shopping-line-ticked {
-        background-color: var(--overlay-hover);
-    }
-    .shopping-line-focused {
-        outline: 2px dashed var(--accent-ink);
-        outline-offset: -2px;
-    }
     /* R-022 — DnD affordances live in src/css/dnd.scss
        (.dora-dnd-row / --dragging / --drop-over). The decorative
        handle icon-section is non-interactive (whole-row mode), so
@@ -3223,51 +3041,5 @@
        difference between the two pages' bars. */
     .bulk-bar {
         min-height: 0;
-    }
-    .shopping-line-ticked-content {
-        opacity: 0.6;
-    }
-    /* DR-15 / D-010: ticking a line used to snap straight to the dimmed state.
-       The fade is what makes a tick feel like the line was *put away* rather
-       than redrawn, and it reads both directions (untick fades back up). Only
-       opacity is transitioned — `text-strike` is a text-decoration, which is
-       not usefully animatable, and transitioning layout on a list this long
-       would cost more than the polish is worth. */
-    .shopping-line-ticked-content,
-    .shopping-line-name {
-        transition: opacity var(--motion-fast) var(--motion-ease);
-    }
-    /* C-7 Chunk 3 — nested product line sits indented under its
-     * stock-item parent, with a left rail so the relationship reads at
-     * a glance. */
-    .shopping-line-nested {
-        padding-left: 2.25rem;
-        border-left: 3px solid var(--surface-component);
-    }
-    /* Product-only line (no linked stock item on this list) — softly
-     * tinted background so it reads as a "to be linked later" signal,
-     * not as a normal stock-anchored line. */
-    .shopping-line-product-only {
-        background-color: var(--overlay-pressed, var(--surface-component));
-    }
-    .offer-savings {
-        font-weight: 600;
-        font-size: 0.92em;
-    }
-    .shopping-line-qty-input {
-        font-weight: 500;
-        font-size: 0.95em;
-        /* Hide the spinner controls from number inputs — they fight with our
-           own +/- buttons and look noisy. */
-        appearance: textfield;
-        -moz-appearance: textfield;
-    }
-    .shopping-line-qty-input::-webkit-outer-spin-button,
-    .shopping-line-qty-input::-webkit-inner-spin-button {
-        -webkit-appearance: none;
-        margin: 0;
-    }
-    .text-strike {
-        text-decoration: line-through;
     }
 </style>

@@ -49,6 +49,12 @@ export default defineConfig((ctx): any => {
             // 2026-08-26 — the bulk-select sub-bar, shared by Stock overview
             // and the shopping list so the two can't drift apart again.
             'subbar.scss',
+            // v4 chunk 3/5 — the shopping-list surface's shared visual
+            // language: the row skeleton (grid shell, name and money type
+            // scale, inset divider), the panel slab and the section header,
+            // used by all three faces so they can't drift apart. Same
+            // precedent as dnd.scss / subbar.scss.
+            'shoppingList.scss',
         ],
 
         // https://github.com/quasarframework/quasar/tree/dev/extras

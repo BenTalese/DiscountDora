@@ -22,6 +22,24 @@ top-to-bottom.
 
 ---
 
+## Reports — price trends 500 (2026-09-02) — origin FU-813
+
+Static read says this crashes on SQLite for every range but "All time"; needs
+eyes on the running app to confirm before it's fixed blind.
+
+- [ ] `/reports`, pick a product in Price trends on the default 30-day range —
+      confirm whether the request 500s (and that "All time" succeeds).
+- [ ] Click the picker's clear (x) with a product selected — confirm whether the
+      page throws.
+
+## Shopping list — receipt lightbox (2026-09-01)
+
+Only affordance in the v4 cutover audit with no live evidence — the seed ships
+no attachments.
+
+- [ ] On a finished list, add a receipt photo, tap the thumb, confirm the
+      lightbox opens and closes on Esc and on a backdrop click.
+
 ## Meal planner — the 2026-09-01 owner batch
 
 Most of this batch was driven live in the pane and deleted: the meal-slot

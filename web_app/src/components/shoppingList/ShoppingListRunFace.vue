@@ -10,87 +10,35 @@
         <div
             v-for="section in runSections"
             :key="section.key"
-            class="q-mb-md"
+            class="sl-section"
         >
-            <div
-                v-if="section.label && !section.cleared"
-                class="row items-center q-gutter-xs q-mb-xs text-subtitle2 dora-text-muted"
-            >
+            <!-- The same section header the plan face uses — uppercase title
+                 and a count pill, rather than a muted `text-subtitle2` floating
+                 above a bordered box. The progress reads `2/5` in the pill's
+                 place because mid-shop the count that matters is how far
+                 through the aisle you are. -->
+            <div v-if="section.label && !section.cleared" class="sl-section__head">
                 <q-icon :name="sectionIconFor(effectiveMode)" size="16px" />
-                {{ section.label }}
-                <span class="text-caption">
+                <span class="sl-section__title">{{ section.label }}</span>
+                <span class="sl-section__count">
                     {{ section.picked }}/{{ section.total }}
                 </span>
             </div>
-            <q-list
-                v-if="section.remaining.length > 0"
-                bordered
-                separator
-                class="rounded-borders"
-            >
-                <!-- The whole row is the tap target: mid-shop the hand is
-                     holding a trolley and the gesture repeats forty times.
-                     There is exactly one thing a row does here — mark it
-                     picked — so nothing competes with it for the tap. -->
-                <q-item
+            <!-- One soft slab, not `q-list bordered separator` inside an
+                 already-bordered page (v4 chunk 5). The rows own their own
+                 dividers, inset to the content column. -->
+            <div v-if="section.remaining.length > 0" class="sl-list">
+                <ShoppingListRunRow
                     v-for="line in section.remaining"
                     :key="line.line_id"
-                    clickable
-                    class="sl-run-row dora-press"
-                    :class="{ 'sl-run-row--nested': isNestedChild(line) }"
-                    @click="emit('tick', line)"
-                >
-                    <!-- Decorative on purpose: the row is the control, and a
-                         real checkbox here would swallow the tap, emit its own
-                         change *and* bubble the row's click — two mutations for
-                         one gesture. The q-item is `clickable`, so keyboard
-                         activation still works. -->
-                    <q-item-section side>
-                        <q-icon
-                            :name="ICONS.check_box_outline_blank"
-                            size="28px"
-                            class="dora-text-secondary"
-                        />
-                    </q-item-section>
-                    <q-item-section>
-                        <q-item-label class="sl-run-name">
-                            <span v-if="(line.quantity ?? 0) > 1" class="sl-run-qty">
-                                {{ line.quantity }}×
-                            </span>
-                            {{ line.stock_item_name }}
-                        </q-item-label>
-                        <!-- One caption line, and only what a shopper standing
-                             in the aisle can act on: the buy hint (which one to
-                             grab) and, when sectioning isn't already saying it,
-                             where. Provenance, groups and offers are planning
-                             information and stay on the plan face. -->
-                        <q-item-label v-if="captionFor(line)" caption class="ellipsis">
-                            {{ captionFor(line) }}
-                        </q-item-label>
-                    </q-item-section>
-                    <q-item-section v-if="moneyEnabled" side>
-                        <!-- Price capture is a deliberate second tap, opening a
-                             thumb-height sheet — never an inline field that a
-                             mis-aimed tap on a moving trolley can edit. -->
-                        <BaseButton
-                            variant="ghost"
-                            dense
-                            :label="priceLabel(line)"
-                            class="sl-run-price"
-                            :class="{ 'sl-run-price--estimate': line.estimate_source !== 'actual' }"
-                            @click.stop="emit('capture-price', line)"
-                        >
-                            <q-tooltip>
-                                {{
-                                    line.estimate_source === 'actual'
-                                        ? 'The price you entered — tap to change'
-                                        : 'Tap to record what you actually paid'
-                                }}
-                            </q-tooltip>
-                        </BaseButton>
-                    </q-item-section>
-                </q-item>
-            </q-list>
+                    :line="line"
+                    :picked="false"
+                    :nested="isNestedChild(line)"
+                    :caption="captionFor(line)"
+                    @toggle="emit('tick', line)"
+                    @capture-price="emit('capture-price', line)"
+                />
+            </div>
 
             <!-- A cleared section collapses to one line rather than
                  disappearing: vanishing sections make the list feel like it is
@@ -117,37 +65,18 @@
             :label="`Picked (${pickedLines.length})`"
             :caption="moneyEnabled ? `${formatMoney(pickedTotal)} in the trolley` : undefined"
             :icon="ICONS.check_circle"
-            class="q-mt-md dora-bg-sunken rounded-borders sl-run-picked"
+            class="q-mt-md sl-panel sl-panel--sunken"
         >
-            <q-list separator>
-                <q-item
-                    v-for="line in pickedLines"
-                    :key="line.line_id"
-                    clickable
-                    class="sl-run-picked-row dora-press"
-                    @click="emit('untick', line)"
-                >
-                    <q-item-section side>
-                        <q-icon
-                            :name="ICONS.check_box"
-                            size="24px"
-                            color="positive"
-                        />
-                    </q-item-section>
-                    <q-item-section>
-                        <q-item-label class="sl-run-picked-name">
-                            <span v-if="(line.quantity ?? 0) > 1" class="sl-run-qty">
-                                {{ line.quantity }}×
-                            </span>
-                            {{ line.stock_item_name }}
-                        </q-item-label>
-                    </q-item-section>
-                    <q-item-section v-if="moneyEnabled" side class="sl-run-price">
-                        {{ priceLabel(line) }}
-                    </q-item-section>
-                    <q-tooltip>Tap to put it back on the list</q-tooltip>
-                </q-item>
-            </q-list>
+            <ShoppingListRunRow
+                v-for="line in pickedLines"
+                :key="line.line_id"
+                :line="line"
+                :picked="true"
+                :nested="false"
+                caption=""
+                @toggle="emit('untick', line)"
+                @capture-price="emit('capture-price', line)"
+            />
         </q-expansion-item>
 
         <!-- Everything picked. The finish CTA lives in the sticky footer, so
@@ -194,7 +123,7 @@
      */
     import { computed, toRef } from 'vue';
     import { ICONS } from 'src/style/icons';
-    import BaseButton from 'src/components/BaseButton.vue';
+    import ShoppingListRunRow from 'src/components/shoppingList/ShoppingListRunRow.vue';
     import { formatMoney } from 'src/composables/useMoney';
     import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
     import {
@@ -274,54 +203,15 @@
         return parts.join(' · ');
     }
 
-    /** Never re-derive the money ladder client-side (R-003) — the server has
-     *  already resolved it and named the rung it used. */
-    function priceLabel(line: ShoppingListLine): string {
-        if (line.estimated_unit_price == null) return 'Price';
-        const money = formatMoney(line.estimated_unit_price);
-        return line.estimate_source === 'actual' ? money : `~${money}`;
-    }
 </script>
 
 <style scoped>
-    /* D-016 tap targets: the row is the target, so it is sized for a thumb
-       rather than a cursor. */
-    .sl-run-row {
-        min-height: 60px;
-    }
-    .sl-run-row--nested {
-        padding-left: 32px;
-    }
-    .sl-run-name {
-        font-size: 1.05rem;
-        font-weight: 500;
-    }
-    .sl-run-qty {
-        font-variant-numeric: tabular-nums;
-        color: var(--text-secondary);
-        margin-right: 2px;
-    }
-    .sl-run-price {
-        font-variant-numeric: tabular-nums;
-        min-width: 72px;
-    }
-    .sl-run-price--estimate {
-        color: var(--text-secondary);
-    }
-    /* Quieter than a live row on purpose — done work shouldn't compete with
-       what's left to pick — but still a full tap target, because putting an
-       item back is the recovery path for a mis-tap. */
-    .sl-run-picked-row {
-        min-height: 48px;
-    }
-    .sl-run-picked-name {
-        color: var(--text-secondary);
-        text-decoration: line-through;
-    }
+    /* The row's own layout, type scale and tap sizing moved to
+       `ShoppingListRunRow.vue` and `src/css/shoppingList.scss` (chunk 5). What
+       stays here is the one thing that isn't a row. */
     .sl-run-cleared {
-        padding: 10px 16px;
-        border: 1px solid var(--border-default);
-        border-radius: var(--radius-md);
+        padding: var(--space-3) var(--space-4);
+        border-radius: var(--radius-lg);
         background: var(--surface-sunken);
         color: var(--text-secondary);
     }

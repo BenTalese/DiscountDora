@@ -26,6 +26,33 @@ semver — major bumps signal schema or breaking-config changes.
   from, so a guess never looks like something you set.
 
 ### Changed
+- **The shopping list looks like one surface on all three faces (2026-09-01).**
+  The shop face was still drawing its items inside hard-bordered boxes while the
+  draft and receipt faces had moved to soft panels — so the page changed shape
+  under you when you started shopping. It doesn't any more: same panels, same
+  aisle headings, same item sizing throughout. Ticking an item off still works
+  by tapping the row or pressing Enter, and tapping the price still opens the
+  price sheet without ticking anything.
+- **Item names are the same size on all three shopping-list faces
+  (2026-09-01).** The shop face was rendering names a step smaller than the draft
+  and receipt faces — the name is the thing you read while holding a trolley, so
+  it now matches.
+- **A finished shopping list now looks like a receipt (2026-09-01).** The done
+  list used to be the same slab of rows as the draft, just with the buttons
+  switched off. It's a document now: each line is its name, a dotted leader, and
+  what it cost, with a `TOTAL` under the itemisation above a dashed rule — and,
+  unlike the draft and shop faces, no colour band across the top. A finished
+  list is flat paper on the desk, so you can tell at a glance that it's a record
+  rather than something you're meant to act on.
+- **The receipt stopped repeating its own header (2026-09-01).** The list card
+  at the top of the page already says how many items you bought and when you
+  shopped; the receipt underneath was saying it again forty pixels lower. That
+  second header is gone and the total moved down to where a total goes on a
+  docket. Nothing was lost — the count and the date are still on the card above,
+  the "n not priced" note travelled with the total.
+- **Amending a receipt no longer shuffles the page (2026-09-01).** The quantity
+  stepper takes over the cell the "3x" multiplier already occupied, so turning
+  Amend on changes what the controls are without moving the item names.
 - **The meal planner's "This week's shopping" is one line and a tidy list
   (2026-09-01).** The big number over a caption is now a single sentence that
   counts the whole week's shopping and says how much of it you've already

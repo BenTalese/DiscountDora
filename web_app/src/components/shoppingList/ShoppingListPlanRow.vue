@@ -1,6 +1,6 @@
 <template>
     <div
-        class="sl-row"
+        class="sl-row sl-row--hoverable"
         :class="{
             'sl-row--reorderable': canReorder,
             'sl-row--ticked': line.is_ticked,
@@ -405,22 +405,17 @@
 </script>
 
 <style scoped>
-    /* One grid, shared by every row in the list — this is the fix for the
-       misalignment report. The columns are fixed or `auto`, never
-       content-measured per row, so quantity, money and actions land on the
-       same x down the whole page regardless of how long a name is.
+    /* The grid shell, the divider and the name/money type scale live in
+       `src/css/shoppingRow.scss` — the receipt face is built on the same
+       skeleton (v4 chunk 3). What this block owns is the plan face's own
+       track list and its controls.
 
        The quantity and action cells are sized for their *revealed* state, so
        a hover reveals opacity and nothing else. Reserving that space is
        deliberate: a reveal that reflowed the row would put the misalignment
        back as a motion bug. */
     .sl-row {
-        display: grid;
-        grid-template-columns: var(--sl-qty-w) minmax(0, 1fr) auto var(--sl-act-w);
-        align-items: center;
-        column-gap: var(--space-3);
-        padding: var(--space-3) var(--space-4);
-        position: relative;
+        --sl-cols: var(--sl-qty-w) minmax(0, 1fr) auto var(--sl-act-w);
         --sl-qty-w: 104px;
         --sl-act-w: 36px;
     }
@@ -434,23 +429,6 @@
     .sl-row--reorderable {
         padding-left: calc(var(--space-4) + 16px);
         --sl-act-w: 104px;
-    }
-    /* Divider inset to the content column rather than a border on a bordered
-       list — the list is one soft slab now, not a box of boxes. */
-    .sl-row + .sl-row::before {
-        content: "";
-        position: absolute;
-        inset-inline: var(--space-4);
-        top: 0;
-        height: 1px;
-        background: var(--divider);
-    }
-    .sl-row:hover {
-        background: var(--overlay-hover);
-    }
-    .sl-row--focused {
-        outline: 2px solid var(--focus-ring);
-        outline-offset: -2px;
     }
     .sl-row--ticked .sl-row__main {
         opacity: 0.6;
@@ -542,42 +520,6 @@
         flex-wrap: wrap;
         min-width: 0;
     }
-    /* The name is what you read, so it gets the size the money figure used to
-       take. D-003 floor comfortably cleared. */
-    .sl-row__name {
-        font-size: calc(var(--font-size-lg) * 1rem);
-        font-weight: 500;
-        letter-spacing: -0.005em;
-        color: var(--text-primary);
-        text-decoration: none;
-        min-width: 0;
-        overflow-wrap: anywhere;
-    }
-    a.sl-row__name:hover {
-        text-decoration: underline;
-        text-underline-offset: 2px;
-    }
-    .sl-row__name--struck {
-        text-decoration: line-through;
-    }
-    .sl-row__name--plain {
-        color: var(--text-secondary);
-    }
-    .sl-row__meta {
-        display: flex;
-        align-items: center;
-        flex-wrap: wrap;
-        gap: var(--space-1) var(--space-2);
-        margin-top: 2px;
-        min-width: 0;
-    }
-    .sl-row__note {
-        display: inline-flex;
-        align-items: center;
-        gap: 3px;
-        font-size: calc(var(--font-size-xs) * 1rem);
-        color: var(--text-muted);
-    }
     /* The two menu buttons on the caption line read as caption text that
        happens to be pressable — they were an outlined select and a bordered
        dropdown, i.e. two more boxes on a row that had too many.
@@ -632,22 +574,6 @@
         margin-left: var(--space-1);
         font-weight: 600;
         color: var(--savings-accent);
-    }
-
-    /* ── Money ──────────────────────────────────────────────────────── */
-    .sl-row__money {
-        text-align: right;
-        min-width: 6rem;
-    }
-    .sl-row__amount {
-        font-size: calc(var(--font-size-lg) * 1rem);
-        font-weight: 600;
-        font-variant-numeric: tabular-nums;
-        line-height: 1.2;
-    }
-    .sl-row__amountnote {
-        font-size: calc(var(--font-size-xs) * 1rem);
-        color: var(--text-muted);
     }
 
     /* ── Actions ────────────────────────────────────────────────────── */
@@ -713,8 +639,6 @@
            zero reflow, because absolute positioning is out of the flow
            entirely. */
         .sl-row {
-            column-gap: var(--space-2);
-            padding: var(--space-3);
             --sl-qty-w: 44px;
             --sl-act-w: 32px;
         }
@@ -747,29 +671,8 @@
         .sl-row__qty--armed .sl-row__step {
             pointer-events: auto;
         }
-        /* `auto` sizes to content, and the prefill caption ("from your last
-           receipt") is longer than the figure above it — so the money column
-           was claiming ~130px and starving the name. The caption goes (it is
-           in the price editor, which is where you'd act on it) and the column
-           is capped to the figure. */
-        .sl-row__money {
-            min-width: 0;
-            max-width: 5.5rem;
-        }
-        .sl-row__amountnote {
-            display: none;
-        }
-        .sl-row + .sl-row::before {
-            inset-inline: var(--space-3);
-        }
         .sl-row--nested {
             padding-left: var(--space-6);
-        }
-        .sl-row__name {
-            font-size: calc(var(--font-size-md) * 1rem);
-        }
-        .sl-row__amount {
-            font-size: calc(var(--font-size-md) * 1rem);
         }
         /* The provenance caption is the least urgent thing on the row and the
            first to cost a line; it stays available in the price editor. */

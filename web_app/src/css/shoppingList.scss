@@ -1,0 +1,228 @@
+/* The shopping list's shared visual language — one grid, one type scale, one
+ * slab, three faces.
+ *
+ * Extracted from `ShoppingListPlanRow.vue` (v4 chunk 3) when the receipt face
+ * was asked for direction A's document treatment, and widened in chunk 5 when
+ * the shop face was brought onto the same containers. The proposal's constraint
+ * on that work was explicit: each new face must be *"a variant of the same row
+ * primitive and the same tokens, not a bespoke style island — or it becomes the
+ * next thing that drifts"*. Copying the grid, the name scale and the slab into
+ * each component would have guaranteed exactly that drift, so they live once,
+ * next to `dnd.scss` and `subbar.scss`, on the same shared-affordance precedent
+ * (R-022 / ADR-018).
+ *
+ * What lives here is only what the faces genuinely share: the grid shell, the
+ * inset divider, the name/caption/money type scale, the panel slab, the section
+ * header, and the phone rules for those. Everything face-specific — the plan
+ * row's quantity tile and reveal-on-approach controls, the receipt row's dotted
+ * leaders, the run row's thumb-sized target — stays in that component's own
+ * scoped block, where it belongs.
+ *
+ * Usage: the consuming component sets `--sl-cols` (the grid track list) and
+ * fills the cells. A row that responds to the pointer opts in to the hover wash
+ * with `.sl-row--hoverable`; a receipt row deliberately does not, because a
+ * finished record is not something you can act on by pointing at it.
+ */
+
+/* The columns are fixed or `auto`, never content-measured per row, so quantity,
+   money and actions land on the same x down the whole page regardless of how
+   long a name is. That is the fix for the original "elements all over the
+   place, misaligned and weirdly offset" report — a row must not measure
+   itself. */
+.sl-row {
+    display: grid;
+    grid-template-columns: var(--sl-cols);
+    align-items: center;
+    column-gap: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+    position: relative;
+}
+
+/* Divider inset to the content column rather than a border on a bordered list
+   — the list is one soft slab now, not a box of boxes. */
+.sl-row + .sl-row::before {
+    content: "";
+    position: absolute;
+    inset-inline: var(--space-4);
+    top: 0;
+    height: 1px;
+    background: var(--divider);
+}
+
+.sl-row--hoverable:hover {
+    background: var(--overlay-hover);
+}
+
+.sl-row--focused {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: -2px;
+}
+
+/* ── Name ─────────────────────────────────────────────────────────────
+   The name is what you read, so it gets the size the money figure used to
+   take. D-003 floor comfortably cleared. */
+.sl-row__name {
+    font-size: calc(var(--font-size-lg) * 1rem);
+    font-weight: 500;
+    letter-spacing: -0.005em;
+    color: var(--text-primary);
+    text-decoration: none;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+a.sl-row__name:hover {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+.sl-row__name--struck {
+    text-decoration: line-through;
+}
+.sl-row__name--plain {
+    color: var(--text-secondary);
+}
+
+/* ── Caption ──────────────────────────────────────────────────────────
+   One subordinate line carrying what used to be several chip shapes: these
+   are all *about* the line rather than actions on it. */
+.sl-row__meta {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--space-1) var(--space-2);
+    margin-top: 2px;
+    min-width: 0;
+}
+.sl-row__note {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: calc(var(--font-size-xs) * 1rem);
+    color: var(--text-muted);
+}
+
+/* ── Money ────────────────────────────────────────────────────────────
+   Money reads as type, not as a control. Tabular so the column scans down
+   the list. */
+.sl-row__money {
+    text-align: right;
+    min-width: 6rem;
+}
+.sl-row__amount {
+    font-size: calc(var(--font-size-lg) * 1rem);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.2;
+}
+.sl-row__amountnote {
+    font-size: calc(var(--font-size-xs) * 1rem);
+    color: var(--text-muted);
+}
+
+
+/* ── Containers ───────────────────────────────────────────────────────
+   One surface for every panel on the page — the trim banner, its preview,
+   Dora's suggestions, the deferred section, the empty state, and the run
+   face's picked drawer. Chunk 0 found every one of them was a `flat bordered`
+   q-card or a `rounded` q-banner: the same 1px border and the same 6px radius
+   as everything else, which is the whole reason the page read as a stack of
+   equal boxes. They share one treatment now, so the surface carries exactly
+   two weights — the overview card, and everything else.
+
+   Page-scoped until chunk 5, which is why the run face still had its own
+   `bordered` q-lists: a child component could not reach the page's scoped
+   rule. */
+.sl-panel {
+    background: var(--surface-component);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--elevation-1);
+}
+.sl-panel--warn {
+    background: var(--semantic-warning-soft);
+    border-color: transparent;
+}
+.sl-panel--error {
+    background: var(--semantic-negative-soft);
+    border-color: transparent;
+}
+.sl-panel--sunken {
+    background: var(--surface-sunken);
+    box-shadow: none;
+}
+/* q-banner's own padding is tuned for a full-bleed strip; inside a panel it
+   needs the panel's rhythm instead. */
+.sl-panel.q-banner {
+    padding: var(--space-3) var(--space-4);
+}
+
+/* The slab the rows sit on. Borderless where `.sl-panel` is bordered: the
+   rows own their inset dividers, and an outer border on top of those put a
+   box around a box. */
+.sl-list {
+    background: var(--surface-component);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--elevation-1);
+    overflow: hidden;
+}
+
+/* ── Section header ───────────────────────────────────────────────────
+   A section is a header plus one slab. The header is deliberately quiet and
+   typographic rather than a bar: it labels the slab below it without becoming
+   another container. */
+.sl-section {
+    margin-bottom: var(--space-5);
+}
+.sl-section__head {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-bottom: var(--space-2);
+    padding-left: 2px;
+    color: var(--text-secondary);
+}
+.sl-section__title {
+    font-size: calc(var(--font-size-sm) * 1rem);
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+/* The count was `(3 items)` in parentheses at caption size — a pill reads as a
+   count rather than as trailing prose, and stops the header ending in a weaker
+   voice than it started. */
+.sl-section__count {
+    font-size: calc(var(--font-size-xs) * 1rem);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    background: var(--surface-component);
+    border-radius: var(--radius-pill);
+    padding: 2px var(--space-2);
+    min-width: 22px;
+    text-align: center;
+}
+
+/* ── Phone ────────────────────────────────────────────────────────────
+   `auto` sizes to content, and the prefill caption ("from your last receipt")
+   is longer than the figure above it — so the money column was claiming
+   ~130px and starving the name into a 483px row. The caption goes (it is in
+   the price editor, which is where you'd act on it) and the column is capped
+   to the figure. */
+@media (max-width: 599px) {
+    .sl-row {
+        column-gap: var(--space-2);
+        padding: var(--space-3);
+    }
+    .sl-row + .sl-row::before {
+        inset-inline: var(--space-3);
+    }
+    .sl-row__name,
+    .sl-row__amount {
+        font-size: calc(var(--font-size-md) * 1rem);
+    }
+    .sl-row__money {
+        min-width: 0;
+        max-width: 5.5rem;
+    }
+    .sl-row__amountnote {
+        display: none;
+    }
+}

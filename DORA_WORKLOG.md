@@ -28,7 +28,425 @@ next.
 
 ---
 
-## 2026-09-01 (latest) — **Meal planner: 21 owner items, and two real bugs under the "design" ones**
+## 2026-09-02 (latest) — **Reports page: PO + engineering review (read-only), the surface's first**
+
+**Status:** complete. Assessment only — **no code changed**. Output is
+`docs/05_investigations/REPORTS_PAGE_REVIEW.md`. Nothing was driven live; every
+finding is line-cited from source, and the one that needs a running app is
+carried as FU-813 + a DORA_VERIFY item rather than claimed as confirmed.
+
+**Trigger:** owner asked for a PO-weighted (80/20) review of `/reports` — what's
+good, bad, too much, missing, inconsistent; how each widget works and how it
+could work better; what end users would find most useful; and all setup
+permutations, since settings can toggle money. Eleven specific questions were
+supplied. A follow-up turn asked for a design/UI/UX pass and the whole thing
+written up as a doc.
+
+**The framing that explains the page, and the most useful thing found.**
+`/reports` is a faithful, near-line-by-line implementation of the 2025 `N6 —
+Reports / Analytics page` prompt in `docs/00_original_spec/PROMPT_PLAN.md:649` —
+six cards in that order, "donut + legend with $ amounts", "big number +
+sparkline", a "Make essential" bulk button, ECharts, a 2-col-desktop grid, and an
+instruction to *"match `DashboardPage.vue`'s card style"* (which is why
+`.report-card` is a byte-identical copy of what later became
+`DashboardCard.vue`). All of it predates the charter, the D-rules, the money
+opt-in and the dashboard rebuild. Five more widgets were then bolted onto the
+six-card frame without revisiting it. On the owner's side, the REPORTS section of
+`Feedback _ Fixes - as of [06-Jun-2026].md:423` contains one character — `?` —
+and `FEEDBACK_TRIAGE_AND_PLAN.md` §6 records the surface as deferred, never
+reviewed. **The page is not badly designed; it is undesigned, and this document
+is the missing feedback pass.** Worth remembering as a shape: when a surface
+looks arbitrary, check whether it was built to a spec that predates every rule
+you're judging it against — the answer changes what you recommend.
+
+**Headline findings.** (1) The page imports **no feature flag at all** and its
+nav entry is unconditional, so a money-off install gets the full set of dollar
+surfaces — a live contradiction with feedback L254, the bullet ADR-005 was built
+from. It is the only significant surface still doing this. (2) Spend-by-store
+attributes stores by product-store only (`reports.py:407`) where the shopping
+list uses the five-rung `resolve_store_id` chokepoint, so the same finished list
+breaks down differently on two screens, and a `usual_store_id`-only household
+sees an empty card. (3) Price trends almost certainly 500s on SQLite for every
+bounded range — `offered_on < since` with no `_as_utc()` at `reports.py:709`
+while every sibling handler coerces first; the only seeded test passes
+`range=all`, the one branch that skips the comparison. (4) Three surfaces render
+"spend by store" three ways with three colour systems (brand-first bar / plain
+text list / hash-into-chart-ramp donut). (5) `themeTick` is dead state — declared,
+read, never incremented — so charts never repaint on a theme switch despite a
+comment claiming they do.
+
+**Design pass.** Split deliberately: the card *shell* is fine and should be
+shared rather than re-declared; the information design inside the cards is not,
+and tokens won't fix it. Quantified: 17 raw font-size literals and zero tokens,
+two of them below the 12px hard floor while carrying values; card titles at
+16.8px/600 where A2 wants 20px bold; nested rows on `--surface-elevated` where
+the ladder calls for `--surface-sunken`; `--brand-primary` spent on eleven
+decorative icons so there's no green left to mean "action"; semantic red/green
+for spend direction, which moralises about grocery spend with no budget target to
+measure against; six chart languages for four kinds of question; ten spinners
+where B10 wants skeletons; empty and error states indistinguishable, so a failed
+fetch congratulates you ("Nothing wasted in this range — nicely played"). Ten
+concrete design moves are in §4.10, led by opening with an answer instead of a
+caveat and reusing the shopping list's proportional store bar in place of the
+donuts.
+
+**Also recommended:** collapse spend-by-store + spend-by-category + YoY into one
+card with an axis toggle (same query, same range, same shape — the axis is a
+control, not three cards); cut stock-value-over-time (level *rank* × price is an
+ordinal times a dollar figure, so it is dimensionally meaningless and
+structurally undercounts, exactly as the owner suspected); cap the wastage list,
+which can reach 25 rows against a `.report-list` with no `max-height` and drags
+its grid partner into ~900px of dead air; rename "category" → "stock group" (the
+backend already groups by `stock_group`); and add the everyday-user price trend
+over their own `StockItemPriceObservation` data, which FU-703's decision D3
+already placed on this page and which is the largest missing widget.
+
+**Standing-rules close-gate.** No code touched, so nothing introduced. Findings
+logged against the rules they breach rather than silently noted: R-001 (the
+`DashboardCard` fork), R-002 (17 type literals, hex fallbacks on tokens that
+exist), R-003 (two store ladders, hard-coded `'${value}'` past `formatMoney`),
+R-011/A6 (href-less `<a>`, no focus styling, canvas charts with no text
+alternative), R-029 (240px empty cards where hide-when-empty applies), §7.5
+(SQLite-only tz crash), D-001/D-003/D-006/D-007/D-008/D-011, A1/A2/A8, B4/B9/B10.
+**ADR evaluation:** one candidate, not promoted — *"a page built to a
+pre-charter spec is not drift; check the spec's date before grading it"* is a
+review heuristic, not a code rule, and it has one instance. Left here for a
+second sighting. The `DashboardCard` fork is a third instance of the
+componentisation-not-finished pattern already flagged for promotion on 2026-09-01
+(chunk 5's close-gate); it now has a fourth data point and should be written up
+next time someone is in the standards doc with room to do it properly.
+
+**Ledgers.** Seven FUs opened: **FU-809** (owner call — share the dashboard's
+card registry?), **FU-810** (owner call — does "Savings captured" survive, and
+against what baseline? the vs-RRP metric rewards buying things you don't need),
+**FU-811** (owner call — correcting the shared off-scale 18px card radius/padding
+changes the dashboard's look), **FU-812** (owner call — ECharts is a 562KB chunk
+for the app's only chart consumer; contingent on the surviving card count),
+**FU-813** (price-trends crash — *not* confirmed live, per the reported-defect
+rule), **FU-814** (the three duplications), **FU-815** (store-attribution
+divergence), **FU-816** (the missing money/products gate). Two tight DORA_VERIFY
+items under a new Reports heading. `COVERAGE_GAPS.md:238` updated to point at the
+review instead of reading "feedback empty; deferred".
+
+**Next up:** owner reads the review and answers FU-809 and FU-810 — they gate the
+restructure and change the scope of FU-814. Independently shippable without
+waiting on either: chunk 1 (the gate, FU-816) and chunk 2 (the functional
+defects, FU-813/814/815), both of which the review sequences deliberately ahead
+of any design work so the token sweep isn't spent on cards that are about to be
+deleted.
+
+---
+
+## 2026-09-01 — **Shopping list v4, chunk 5: the shop face joins the other two, FU-807 resolved**
+
+**Status:** complete, driven live against the `dense` scratch stack on :5171 /
+:5174 (:5170 and the dev DB untouched). 585 Vitest / 50 files, `vue-tsc` clean,
+`eslint src/` clean. **v4 is now built end to end** — the proposal's header and
+§9 are updated to match.
+
+**Trigger:** the chunk-4 audit's finding 9, raised as FU-807 for an owner call
+because it was a visual redesign of a surface the chunk sequence had not
+scheduled. Owner answered: *"okay resolve 807 now. consistency matters."*
+
+**The root cause was structural, not cosmetic.** The shop face was not "skipped"
+so much as **unable to participate**: `.sl-panel`, `.sl-list` and `.sl-section*`
+were declared in `ShoppingListDetail.vue`'s **scoped** style block, and a child
+component cannot reach a page's scoped rule. So `ShoppingListRunFace.vue` kept
+its own `q-list bordered separator rounded-borders` because that was the only
+thing available to it. Worth remembering as a shape: *a shared visual language
+living in a page's scoped block will silently exclude every child component that
+needs it.*
+
+**What changed**
+
+1. **`shoppingRow.scss` → `shoppingList.scss`.** The file now carries the
+   surface's whole shared visual language — row skeleton, panel slab, list slab,
+   section header — not just the row, so the name was wrong. `.sl-panel*`,
+   `.sl-list` and `.sl-section*` moved out of the page's scoped block into it.
+2. **New `ShoppingListRunRow.vue`**, on the same skeleton as the plan and receipt
+   rows. `q-item` dropped for the reason chunk 1 dropped it: it ships padding,
+   min-heights and `--side` alignment that the row then fights.
+3. **Containers and chrome aligned** — `q-list bordered separator
+   rounded-borders` → `.sl-list`; the picked drawer's `dora-bg-sunken
+   rounded-borders` → `.sl-panel--sunken` (the same shape the deferred-by-budget
+   section uses); the muted `text-subtitle2` section caption → the plan face's
+   uppercase title + count pill, carrying `2/3` progress where the plan face
+   carries a line count; `.sl-run-cleared`'s `--radius-md` + border → the
+   panel's radius.
+4. **One accessibility detail worth naming.** The row is a `role="button"` div,
+   not a `<button>`, because it contains the price button and a button inside a
+   button is invalid HTML. That means Enter and Space had to be wired
+   explicitly — `q-item clickable` had been providing them for free. Both were
+   **re-verified live** rather than assumed, which is the whole reason to
+   mention it: this is the kind of thing a component swap loses silently.
+
+**Evidence (live).** All three faces now report slab radius 10px,
+`--elevation-1`, white component background and an **18.5625px** name. Run rows
+72px tall (the face targets a thumb on a moving trolley, well over D-004's 44px);
+a single name-left x (72px) and a single money-right x (932px) across a section;
+headers render `FRIDGE 2/3` / `PANTRY 0/1`; the cleared-section one-liner still
+reads "Freezer — all 1 picked". Ticking verified by **click** (3→4 ticked) and by
+**Enter** (4→5). The price button opens the sheet and leaves the tick count
+**unchanged** (`@click.stop` intact). Picked drawer renders 5 struck rows. No page
+errors on any face; no horizontal scroll at 375px.
+
+**Dead classes swept as part of the move:** `.sl-run-row`, `--nested`,
+`.sl-run-name`, `.sl-run-qty`, `.sl-run-price(+--estimate)`,
+`.sl-run-picked-row`, `.sl-run-picked-name` and the now-unused `sl-run-picked`
+class on the expansion item. `ShoppingListRunFace.vue`'s style block is down to
+the single rule that is not a row.
+
+**Standing-rules close-gate.** R-001 (the run row is now its own component),
+R-002 (the `1.05rem` literal fixed in chunk 4 carries through), R-003 (the row
+still derives no money — `priceLabel` formats a server figure and names its
+rung), R-022/ADR-018 (the shared-stylesheet precedent, now on its fourth
+application). D-004/D-016 (72px rows), D-015 (one shape across three faces —
+which is the point of the chunk). **ADR evaluation:** the "componentisation is
+not finished until the old element's styles are deleted" candidate flagged in
+chunk 4 now has a **third** instance (this one, plus chunk 1's orphaned block and
+the earlier `q-item` extraction). That is enough of a pattern to promote — but it
+is a standards-doc edit, and writing a rule at the tail of a five-chunk build is
+how rules get written badly. Recorded here for the next session to pick up
+deliberately.
+
+**One flake, reported not hidden:** one `npx vitest run` printed `Errors 1 error`
+alongside 585 passing tests, from `globalErrorHandler.spec.ts` — a spec that
+deliberately throws. Three subsequent runs were clean. Nothing in this chunk goes
+near that code; noting it in case it recurs rather than pretending the run was
+uniformly green.
+
+**Next up:** v4 is complete. `DORA_VERIFY.md` holds one owed item — **D8, the
+receipt lightbox**, the only affordance in the baseline with no live evidence
+(it needs an uploaded attachment and the seed ships none). Two open follow-ups
+from the audit remain: **FU-808** (`space`/`u` advertised in the cheatsheet on
+faces where they are inert) and **FU-805** (a receipt line reading "estimated, no
+price entered" while showing a price).
+
+---
+
+## 2026-09-01 — **Shopping list v4, chunk 4: the cutover audit passes, and catches three things**
+
+**Status:** complete. **Chunk 4 PASSED** — `SHOPPING_LIST_BASELINE.md` §11 carries
+the verdict and its one caveat. 585 Vitest / 50 files, `vue-tsc` clean,
+`eslint src/` clean. Driven live against the `dense` scratch stack on :5171 /
+:5174; :5170 and the dev DB untouched.
+
+**Trigger:** the blocking close-gate of `PROPOSAL_SHOPPING_LIST_UX_V4.md` §9 —
+every `Destination` / `Visibility` / `Decision` cell filled, every hover-reveal
+control given a named touch path, every tier checked, every edge state rendered
+in the running app.
+
+**The verdict.** All 79 catalogued affordances now carry a decision. **Across
+chunks 1-4, nothing was `CUT`** — every row is `kept` or `moved`, plus one
+`added` (C19). So the "every CUT needs owner sign-off" clause is vacuous and no
+sign-off is outstanding. §1 (toolbar), §2 (picker), §6 (dialogs) and §5.2 (run
+face) were all untouched by the rebuild and are recorded `kept`, each confirmed
+rendering live rather than assumed from a diff.
+
+**Three things the audit caught that nothing else would have.**
+
+1. **P8 never existed.** Chunk 0 catalogued a per-row kebab (copy-to-new +
+   Delete) on the list picker. It had been removed on **2026-08-28 — three days
+   before the census was written**, and `ShoppingListRailItem.vue` documents the
+   removal in its own header. The census was supposed to be read-from-source and
+   got this one wrong. Struck through in §2 rather than deleted: a baseline that
+   quietly edits its own errors is not a baseline.
+2. **Chunk 1 left 165 lines of dead CSS behind.** Replacing the inline `q-item`
+   row with `ShoppingListPlanRow.vue` orphaned the entire `.shopping-line*`
+   stylesheet — the two-line-wrap `@media` block (B1), the name/ticked/focused/
+   nested/product-only rules, the quantity-input rules, plus `.offer-savings`,
+   `.text-strike` and `.sld-price-btn`. Every class verified to have zero
+   remaining references (the only surviving greps are an unrelated comment and
+   the DnD mime string). `ShoppingListDetail.vue` 3,273 → **3,108 lines**.
+   **Neither `vue-tsc` nor `eslint` can see an unused CSS class**, so the standing
+   gate would never have caught this — worth remembering as a class of defect
+   that only a deliberate audit finds.
+3. **The run face is now the odd one out.** Chunks 1-3 moved the plan face to a
+   soft slab and the receipt to a document sheet; the shop face still renders
+   `q-list bordered separator rounded-borders` + `q-item` — hard 1px border,
+   `--radius-md`, no elevation, edge-to-edge separators. Driven live the gap is
+   real but moderate. **This is unfinished proposal scope, not new scope**: §4
+   says direction B covers "plan/run". Logged as **FU-807** with an owner
+   recommendation rather than fixed, because expanding scope inside an audit is
+   precisely what the audit exists to prevent. First step if it goes ahead:
+   `.sl-panel` is currently scoped to `ShoppingListDetail.vue`, so a child
+   component cannot reuse it — it wants to move into `shoppingRow.scss`.
+
+**K2 is resolved.** Chunk 0 left it open as unanswerable from the template, and
+it is — but it is answerable from the script: `tickFocusedLine` guards
+`detail.value?.status !== 'shopping'` and returns, as does `untickLastTicked`.
+Confirmed live on a 7-line draft: `ArrowDown` focused a row, `Space` and `u` were
+pressed, and the server's `is_ticked` array was byte-identical before and after.
+The plan face cannot be ticked by keyboard, which matches v3's deliberate removal
+of draft ticking. **But the shortcut is advertised where it does nothing** — all
+five are registered unconditionally, so the `?` cheatsheet promises "space — tick
+/ untick the focused line" on the plan and receipt faces. An honesty defect, not
+a functional one; **FU-808**, deferred because the fix touches how `useShortcut`
+scopes registrations.
+
+**How the thirteen edge states were rendered.** Five (S1, S3, S4, S11, S13) came
+from data the seeded backend actually produces. The other eight (S2, S5-S10, S12)
+were reached by **rewriting the API payload in flight** — real component tree,
+real store, real stylesheet, mutated response — because the dense seed cannot
+produce them and hand-building each would have meant mutating a scratch database
+into eight one-off shapes. Stated as such in §9 so the evidence is not
+overstated: it proves the UI renders the state, not that the server can produce
+it. Two corrections came out of it: **S1** renders the error banner *and* the
+fallback (the census recorded the fallback alone), and **S2** only ever appears
+on a *cold* load — a failed refresh on a list already in the store keeps showing
+the loaded detail rather than surfacing `loadError`. Defensible, but worth knowing
+before someone "fixes" it.
+
+**One code change, and only because it is a rule violation.** The run face's row
+name was a literal `1.05rem` — **R-002**, tokens-only — which also left the shop
+face reading a step smaller than the other two after they moved to
+`--font-size-lg`. Now the same token on all three; verified live at 18.5625px.
+Everything else here is documentation and deletion.
+
+**Standing-rules close-gate.** R-002 (the `1.05rem` fix), R-007 / scope
+discipline (FU-807 logged rather than built), R-001 (the dead CSS was the
+residue of chunk 1's componentisation — removing it completes that move).
+**ADR evaluation: no new rule, but one is worth considering later** — "a
+componentisation is not finished until the old element's styles are deleted" is
+a real recurring failure, and this is the second time a `q-item` → custom-row
+extraction has left a stylesheet orphaned. Not promoted now: one repeat is a
+coincidence, and the standards doc warns against minting rules from thin
+evidence. Flagged here so a third occurrence can cite it.
+
+**Verify pile:** one item added — **D8, the receipt lightbox**, the single
+affordance in the whole document with no live evidence (it needs an uploaded
+attachment and the seed ships none).
+
+**Next up:** **FU-807 is the open question and it is the owner's call** — whether
+the shop face gets the same container pass the other two faces had. It is the
+last thing stopping the three faces from reading as one surface, which was the
+original complaint that started v4. If it goes ahead it is a small chunk 5; if it
+doesn't, v4 is complete and the proposal should be marked done-with-carve-outs.
+
+---
+
+## 2026-09-01 — **Shopping list v4, chunk 3: the receipt face becomes a document**
+
+**Status:** complete, driven live against the `dense` scratch stack on :5171 /
+:5174 (evidence below; :5170 and the dev DB untouched). **585 Vitest / 50
+files**, `vue-tsc` clean, `eslint src/` clean.
+
+**Trigger:** the owner-approved chunk sequence in
+`docs/04_proposals/PROPOSAL_SHOPPING_LIST_UX_V4.md` §9, following chunks 1 (the
+row) and 2 (the overview card). Owner's steer on this face: *"I feel A could
+possibly be used for receipts/done lists to visually indicate (with a bit of
+fun) that it is now a receipt"* and *"I believe receipt should be flat?"*.
+
+**Surrounding work merged in first.** Another agent's `ea95fba5` landed
+`--accent-ink` (accent at *text* strength — `--brand-accent` measures 1.25-2.0:1
+as text in every light family) and had already swapped the shopping list's focus
+outline onto it. Chunk 3 uses it rather than raw accent; no conflict with chunks
+1-2, which were committed as `1fadcbb3`.
+
+**What changed**
+
+1. **The constraint was honoured in spirit, not literally — and that is the one
+   decision worth reviewing.** §4.3 said the receipt must be *"a `face="receipt"`
+   variant of the same row primitive … not a bespoke style island"*. Read
+   literally that is a `face` prop on `ShoppingListPlanRow`, which would have put
+   two mutually-exclusive control sets behind `v-if` in one 780-line component —
+   the componentisation failure R-001 exists to prevent. The two faces genuinely
+   **share a skeleton** (grid shell, name/caption/money type scale, inset
+   divider) and genuinely **differ in grammar** (quantity tile +
+   reveal-on-approach controls vs a multiplier + a dotted leader). So the
+   skeleton was extracted to **`web_app/src/css/shoppingRow.scss`** and both
+   faces consume it — the precedent `dnd.scss` (R-022) and `subbar.scss` already
+   set, and `subbar.scss`'s own header makes the identical argument almost
+   verbatim ("copying the ~15 lines into the second page would have guaranteed
+   the two drift apart again"). Drift is prevented by the shared thing being one
+   file, which is what the constraint was protecting.
+2. **`ShoppingListReceiptRow.vue`** — four tracks: multiplier, name, dotted
+   leader, amount, with the caption and unit price on a second grid row. The
+   name track is `minmax(0, max-content)` so a short name lets the leader run
+   long (the document look) while a long one shrinks rather than pushing the
+   amount off the sheet. The leader is `align-self: end`, so a name that wraps
+   to two lines keeps its leader on the last one.
+3. **The sheet is flat** — `--surface-component`, `--radius-xl`,
+   `--elevation-card`, and **no** `--hero-gradient`. Verified
+   `bandIsGradient: false` against the plan and shop faces' `true`. That
+   contrast is the whole state signal.
+4. **Amend keeps the page still.** The stepper takes over the multiplier's own
+   cell, so entering the mode changes what the controls are without moving the
+   names (the lead track widens 2.25rem→104px; the name column shifts once, on a
+   deliberate mode change, not on hover).
+5. **The header duplication was removed** — found only by looking at the render.
+   The sheet's header read "n items bought · Shopped <date>", word-for-word the
+   overview card's C4/C5 forty pixels above it. The card is the document's header
+   now; the total moved to a footer `TOTAL … $X` above a dashed rule, which is
+   where a total belongs on a docket and kills a second stacked big-figure.
+   Recorded as baseline E2 `moved`, not cut: every piece of it is still on
+   screen.
+
+**The T0 carve-out — the one that mattered.** With money off (**the default
+install**: `money` and `products` are both `False` in `health_check.py`), the
+dotted leader ran to the sheet edge and stopped. It reads as a number that
+failed to load. The leader is now suppressed unless there is an amount or an
+amend button at the end of it. This is exactly the owner's W11-adjacent concern
+— *"the bulk of users will not see those UI elements, and so the design should
+facilitate that well"* — and it was invisible until the money flag was actually
+toggled off in the running app.
+
+**Evidence (live, not static).** Money on: sheet radius 16px, `--elevation-card`
+present, `bandIsGradient: false`, leader `dotted`, a **single** amount-right x
+(931px) and a single name-left x (82px) across six rows, `TOTAL $21.90` at
+24.75px, no horizontal scroll at 375px. Amend: rows 44/64px → 52/73px, name
+column moves once. Quantity bumped live 1→3 through the UI: total 21.90 → 33.90,
+`3x` + `$2.20 each` render, note hidden <600px. `pesto-dark`: sheet luminance 35
+vs page 0 (sheet lighter — the single `--surface-component` declaration is
+correct in both directions, same finding as chunk 2). Money off: `leaders: 0`,
+`hasTotal: false`, six rows still render with name + store caption.
+
+**Plan-face regression check** (it now shares the extracted stylesheet): name x
+single-valued 164, quantity tile x single 78, money **right** edge single 816,
+row heights **identical** before and after hover (no reflow), divider present,
+name 18.56px, no x-scroll at 375px. Unchanged from chunk 1.
+
+**One finding logged; one near-duplicate caught.**
+- **FU-805 (new)** — a receipt line reads "estimated, no price entered" while
+  showing `~$3.00`. Pre-existing copy, carried across verbatim; rewording vs
+  deleting is a decision, not a fix.
+- I hit the red "Oops, something went wrong..." toast on every viewport resize
+  and had written it up as a new finding before checking the ledger — it is
+  already **FU-785** (raised 2026-08-29), which additionally documents the worse
+  half I had not found: the same blanket `window.onerror` also calls
+  `executeRollbacks()`, so a layout hiccup can revert an in-flight optimistic
+  mutation. My entry was deleted and FU-785 was annotated with the 2026-09-01
+  re-confirmation and the surfaces it reproduces on. Worth remembering as a
+  process note: the toast looks like a defect in whatever page you happen to be
+  building.
+
+**Standing-rules close-gate.** R-001 (componentisation — see decision 1),
+R-002 (every value a token; no literals introduced), R-003 (the row derives
+nothing — `priceOfLine` formats a server figure), R-019/ADR-014 (explicit over
+clever — no `face` prop switchboard), R-035 → D-002 (dark verified by
+measurement, not assumption), D-003 (name at `--font-size-lg`, `md` on phone),
+D-015 (one shape — the sheet reuses the card's radius and the list's slab).
+**ADR evaluation:** no new rule. The pattern used here *is* ADR-018/R-022, and
+this is its third application (`dnd` → `subbar` → `shoppingRow`); promoting a
+fourth near-identical rule would be the drift the standards doc warns about.
+The reuse is instead recorded in the proposal's §4.3.
+
+**Running tally across the rebuild: still nothing `CUT` anywhere.** Every
+affordance in baseline §3, §4, §5.1 and now §5.3 is `kept`, `moved`, or (once,
+C19) `added`. No owner sign-off outstanding.
+
+**Next up:** **chunk 4 — the blocking cutover audit.** Baseline §1 (toolbar
+T1-T7), §2 (picker P1-P8), §5.2 (run face N1-N8), §6 (dialogs D1-D8), §8
+(keyboard/DnD/responsive K1-K5, G1-G2, B1-B4) and §9 (edge states S1-S13) all
+still read `TBD` and every one must be filled before it can pass — including the
+question chunk 0 could not settle statically: whether `space` (tick/untick the
+focused line) is inert or still mutates on a draft face that has no tick control.
+Note §5.2 is a *documentation* gap, not a build gap — the run face was not
+rebuilt in this pass and is not scheduled to be.
+
+---
+
+## 2026-09-01 — **Meal planner: 21 owner items, and two real bugs under the "design" ones**
 
 **Status:** complete, driven live in the browser pane against the `dense`
 scratch stack (evidence below). Backend **2206 passed** (the four pre-existing

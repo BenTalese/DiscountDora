@@ -10,6 +10,39 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-807 — the shop face is the one shopping-list surface still wearing the pre-v4 shape
+- **Raised:** 2026-09-01 (v4 chunk 4 — cutover audit)
+- **Type:** follow-up (unfinished proposal scope)
+- **What:** Chunks 1-3 moved the plan face to a soft slab with a shared row grid
+  and inset dividers, and the receipt face to a document sheet. The run face
+  (`ShoppingListRunFace.vue`) was not rebuilt, so it still renders
+  `q-list bordered separator rounded-borders` + `q-item`: a hard 1px border,
+  `--radius-md` (6px), no elevation, edge-to-edge separators. Driven live the gap
+  is real but moderate — see `audit-run.png`. Its rows would also need
+  `src/css/shoppingRow.scss` (the skeleton chunk 3 extracted), and the page's
+  `.sl-panel` treatment is currently **scoped to `ShoppingListDetail.vue`**, so a
+  child component cannot reuse it — moving `.sl-panel` into the shared stylesheet
+  is probably the first step.
+- **Why deferred:** it is a visual redesign of a surface the chunk sequence did
+  not schedule, and expanding scope inside an *audit* is exactly what the audit
+  exists to prevent. Note it is **unfinished proposal scope, not new scope**:
+  `PROPOSAL_SHOPPING_LIST_UX_V4.md` §4 says direction B covers "plan/run".
+- **Recommended resolution:** now — owner call. It is the last thing stopping the
+  three faces from reading as one surface, which was the original complaint.
+- **Resolved:** 2026-09-01 — v4 chunk 5. `.sl-panel`, `.sl-list` and
+  `.sl-section*` moved out of `ShoppingListDetail.vue`'s scoped block into the
+  shared stylesheet (renamed `shoppingRow.scss` → **`shoppingList.scss`**, since
+  it now holds the surface's whole shared visual language, not just the row).
+  New **`ShoppingListRunRow.vue`** on the same skeleton as the plan and receipt
+  rows — `q-item` dropped, `q-list bordered separator rounded-borders` replaced
+  by `.sl-list`, the muted `text-subtitle2` section caption replaced by the plan
+  face's uppercase title + count pill (carrying `2/3` progress). Verified live:
+  all three faces now report slab radius 10px, `--elevation-1`, and an 18.5625px
+  name; tick works by click **and** by Enter; the price button opens the sheet
+  without ticking the row; no page errors; no horizontal scroll at 375px.
+
+
+
 ## [RESOLVED] FU-754 — No image-mode or structured-mode recipe in either seed
 - **Raised:** 2026-08-27 (owner feedback batch — cook mode)
 - **Type:** finding

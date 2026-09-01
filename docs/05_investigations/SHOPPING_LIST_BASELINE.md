@@ -10,8 +10,8 @@ the rebuild can be audited rather than assumed (owner asks W8/W9/W12).
 `get_shopping_list_detail.py`, `health_check.py`.
 
 **Status of the right-hand columns:** `Destination` / `Visibility` / `Decision`
-are **unfilled** for anything chunk 1–3 has not designed yet. They are filled as
-each chunk lands. **Chunk 4 is blocked until no cell reads `TBD`.**
+were filled as each chunk landed. **Complete as of 2026-09-01 — chunk 4 passed;
+see §11 for the verdict and its one caveat.**
 
 **Decision vocabulary:** `kept` (same capability, same or better reach) ·
 `moved` (same capability, different place — must name the new place) ·
@@ -41,13 +41,17 @@ tooltips carry the name.
 
 | # | Affordance | Face(s) | Visibility condition | What it does | Destination | Visibility | Decision |
 |---|---|---|---|---|---|---|---|
-| T1 | Add item (primary) | all | always; `:disable` when no detail or status `done` | opens quick-add sheet | TBD | TBD | TBD |
-| T2 | Shop day | plan | `v-if="planFace"` | opens planned-date dialog | TBD | TBD | TBD |
-| T3 | Log price | run | `v-if="runFace && moneyEnabled"` | `useLogPrice()` sheet — a price for something **not** on the list | TBD | TBD | TBD |
-| T4 | Templates | all | always | routes to `/shopping-lists/templates` | TBD | TBD | TBD |
-| T5 | Refresh deals | all | `v-if="productsEnabled"` **(T2 tier)** | re-checks linked product offers | TBD | TBD | TBD |
-| T6 | Print | all | always; disabled when 0 lines | printable view | TBD | TBD | TBD |
-| T7 | Save as template | all | always; disabled when 0 lines | snapshot to a template | TBD | TBD | TBD |
+| T1 | Add item (primary) | all | always; `:disable` when no detail or status `done` | opens quick-add sheet | unchanged | always | kept |
+| T2 | Shop day | plan | `v-if="planFace"` | opens planned-date dialog | unchanged | plan only — **confirmed live** (absent on run and receipt) | kept |
+| T3 | Log price | run | `v-if="runFace && moneyEnabled"` | `useLogPrice()` sheet — a price for something **not** on the list | unchanged | run only — **confirmed live** | kept |
+| T4 | Templates | all | always | routes to `/shopping-lists/templates` | unchanged | always | kept |
+| T5 | Refresh deals | all | `v-if="productsEnabled"` **(T2 tier)** | re-checks linked product offers | unchanged | always at T2 | kept |
+| T6 | Print | all | always; disabled when 0 lines | printable view | unchanged | always | kept |
+| T7 | Save as template | all | always; disabled when 0 lines | snapshot to a template | unchanged | always | kept |
+
+**The toolbar was not touched by chunks 1-3** — it was already rebuilt by UX-v3
+(2026-08-29) and the v4 pass changed containers, rows and the card, not this row.
+All seven verified rendering live on the faces that gate them.
 
 **Note:** the two Export members that v3's V9 split out are not in the current
 toolbar block — Print (T6) and Save as template (T7) are what that split
@@ -59,14 +63,27 @@ produced. There is no remaining Export menu.
 
 | # | Affordance | Where | Visibility condition | What it does | Destination | Visibility | Decision |
 |---|---|---|---|---|---|---|---|
-| P1 | Mobile `BaseDropdown` switcher | `.lt-md` | always, **including mid-shop** | switches list; on mobile this is the only place the list name appears | TBD | TBD | TBD |
-| P2 | Rename pencil (mobile) | `.lt-md`, beside P1 | `v-if="detail"` | opens rename dialog | TBD | TBD | TBD |
-| P3 | "New list" pinned first entry | mobile dropdown | always | opens `NewListDialog` | TBD | TBD | TBD |
-| P4 | `ShoppingListRailItem` rows | both | `railEntries` = drafts + shopping + 5 most-recent done | select → `switchToList` | TBD | TBD | TBD |
-| P5 | "See older (n)" | both | `olderDoneSummaries.length > 0` | opens searchable older-lists dialog | TBD | TBD | TBD |
-| P6 | Desktop rail | `.gt-sm` column | always, **including mid-shop** | 300px sticky, `max-height: calc(100vh - 110px)` | TBD | TBD | TBD |
-| P7 | "New list" (rail, primary) | `.gt-sm` | always | opens `NewListDialog` | TBD | TBD | TBD |
-| P8 | Per-list ⋮ menu (incl. Delete) | `ShoppingListRailItem` | per row | acts on *that* list, not the open one | TBD | TBD | TBD |
+| P1 | Mobile `BaseDropdown` switcher | `.lt-md` | always, **including mid-shop** | switches list; on mobile this is the only place the list name appears | unchanged | `.lt-md` — **confirmed live at 375px** | kept |
+| P2 | Rename pencil (mobile) | `.lt-md`, beside P1 | `v-if="detail"` | opens rename dialog | unchanged | `.lt-md` | kept |
+| P3 | "New list" pinned first entry | mobile dropdown | always | opens `NewListDialog` | unchanged | **confirmed live** — first entry above the rail rows | kept |
+| P4 | `ShoppingListRailItem` rows | both | `railEntries` = drafts + shopping + 5 most-recent done | select → `switchToList` | unchanged | always | kept |
+| P5 | "See older (n)" | both | `olderDoneSummaries.length > 0` | opens searchable older-lists dialog | unchanged | always when there are >5 done lists — **both branches rendered live** (present with 10 done, absent with 3) | kept |
+| P6 | Desktop rail | `.gt-sm` column | always, **including mid-shop** | 300px sticky, `max-height: calc(100vh - 110px)` | unchanged | `.gt-sm` | kept |
+| P7 | "New list" (rail, primary) | `.gt-sm` | always | opens `NewListDialog` | unchanged | always | kept |
+| ~~P8~~ | ~~Per-list ⋮ menu (incl. Delete)~~ | — | — | — | — | — | **does not exist** |
+
+**Correction to chunk 0 — P8 was never there.** The census recorded a per-row
+kebab carrying copy-to-new and Delete. It was **removed on 2026-08-28**, three
+days *before* the census was written, and `ShoppingListRailItem.vue` says so in
+its own header: both actions were already reachable from the list you are looking
+at, so the kebab put two uncommon actions — one destructive — on every row of a
+picker whose only job is "take me to that list". Copy went entirely (Save as
+template is the same idea, better named); Delete stayed on the open list's footer
+(F9), where you can see what you are deleting. **Nothing regressed here** — the
+baseline was simply wrong, and this is the audit doing its job. Recorded rather
+than quietly deleted so the error is visible.
+
+**The picker was not touched by chunks 1-3** either. P1-P7 all verified live.
 
 ---
 
@@ -166,30 +183,84 @@ cheaper than estimated and is recorded here so chunk 1 does not over-cut.
 
 | # | Affordance | Visibility condition | What it does | Destination | Visibility | Decision |
 |---|---|---|---|---|---|---|
-| N1 | Whole row is the tap target | always | ticks the line; checkbox icon is **decorative** (a real one would double-fire) | TBD | TBD | TBD |
-| N2 | Quantity prefix `n×` | `quantity > 1` | inline with the name | TBD | TBD | TBD |
-| N3 | Caption | `captionFor(line)` | buy hint + store, only when sectioning isn't already saying it | TBD | TBD | TBD |
-| N4 | Price button | `moneyEnabled` | opens the price sheet; estimate vs actual styled differently | TBD | TBD | TBD |
-| N5 | Cleared-section one-liner | section fully picked | "Label — all n picked" instead of vanishing | TBD | TBD | TBD |
-| N6 | "Picked (n)" section | `pickedLines.length > 0` | collapsed by default, tap a row to put it back | TBD | TBD | TBD |
-| N7 | All-picked reassurance | `allPicked` | "That's everything." | TBD | TBD | TBD |
-| N8 | Nothing-on-list state | `lines.length === 0` | reachable when trim deferred everything | TBD | TBD | TBD |
+| N1 | Whole row is the tap target | always | ticks the line; checkbox icon is **decorative** (a real one would double-fire) | unchanged | always | kept |
+| N2 | Quantity prefix `n×` | `quantity > 1` | inline with the name | unchanged | always when qty > 1 | kept |
+| N3 | Caption | `captionFor(line)` | buy hint + store, only when sectioning isn't already saying it | unchanged | always when it has content | kept |
+| N4 | Price button | `moneyEnabled` | opens the price sheet; estimate vs actual styled differently | unchanged | T1/T2 only | kept |
+| N5 | Cleared-section one-liner | section fully picked | "Label — all n picked" instead of vanishing | unchanged | always | kept |
+| N6 | "Picked (n)" section | `pickedLines.length > 0` | collapsed by default, tap a row to put it back | unchanged | always when present | kept |
+| N7 | All-picked reassurance | `allPicked` | "That's everything." | unchanged | always | kept — **rendered live (S6)** |
+| N8 | Nothing-on-list state | `lines.length === 0` | reachable when trim deferred everything | unchanged | always | kept — **rendered live (S5)** |
 
 **Absent by design on the run face** (documented in the component header, must stay
 absent): drag handles, delete, quantity steppers, buy-hint pickers, offer chips,
 provenance, suggestions, budget banner.
 
-### 5.3 Receipt face (`ShoppingListReceiptFace.vue`)
+**The run face was rebuilt in chunk 5** (FU-807), after the audit showed it was
+the one shopping-list surface still wearing the pre-v4 shape — `q-list bordered
+separator rounded-borders` + `q-item`, a hard 1px border, `--radius-md`, no
+elevation and edge-to-edge separators, while the plan face had moved to a soft
+slab and the receipt to a document sheet.
+
+Two things unblocked it. First, `.sl-panel` / `.sl-list` / `.sl-section*` were
+**scoped to `ShoppingListDetail.vue`**, so a child component could not reach
+them — that is the mechanical reason this face was left behind. They moved into
+the shared stylesheet, which was renamed `shoppingRow.scss` → **`shoppingList.scss`**
+because it now carries the surface's whole shared visual language rather than
+just the row. Second, `ShoppingListRunRow.vue` was extracted onto the same
+skeleton the plan and receipt rows use.
+
+Every N-row above is still `kept` — this changed the container and the chrome,
+not one affordance. The two substantive details:
+
+- **`q-item` is gone**, for the reason chunk 1 dropped it: it ships its own
+  padding, min-heights and `--side` alignment rules that the row then fights.
+  The row is a `role="button"` div rather than a `<button>` because it contains
+  the price button and a button inside a button is invalid, so **Enter and Space
+  are wired explicitly** — that is what `q-item clickable` was providing, and
+  both were re-verified live rather than assumed.
+- **The row name was a literal `1.05rem`** (**R-002**, tokens-only), which also
+  left the shop face reading a step smaller than the other two. Now
+  `--font-size-lg`, the same token on all three faces.
+
+**Verified live:** all three faces report slab radius 10px, `--elevation-1` and
+an 18.5625px name; row height 72px (D-004/D-016 floor is 44px, and this face
+targets a thumb on a moving trolley); a single name-left x (72px) and a single
+money-right x (932px) across the section; section headers render as
+`FRIDGE 2/3` / `PANTRY 0/1`; ticking works by **click** (3→4) and by **Enter**
+(4→5); the price button opens the sheet **without** ticking the row; the picked
+drawer renders 5 struck rows; no page errors; no horizontal scroll at 375px.
+
+### 5.3 Receipt face### 5.3 Receipt face (`ShoppingListReceiptFace.vue`)
 
 | # | Affordance | Visibility condition | What it does | Destination | Visibility | Decision |
 |---|---|---|---|---|---|---|
-| E1 | Amend banner | `amending` | states the consequence: correcting does **not** re-run the restock | TBD | TBD | TBD |
-| E2 | Own header | always | "n items bought" + completed label + `text-h5` total + "n not priced" | TBD | TBD | TBD |
-| E3 | Bought-line rows | `boughtLines` | qty prefix, store, "estimated, no price entered" | TBD | TBD | TBD |
-| E4 | Line amount + unit price | `moneyEnabled && !amending` | amount, plus "X each" when qty > 1 | TBD | TBD | TBD |
-| E5 | Amend controls | `amending` | qty stepper + price/store edit **only** — no add, remove or reorder | TBD | TBD | TBD |
-| E6 | "Didn't buy (n)" chips | `skippedLines.length > 0` | unticked lines as chips | TBD | TBD | TBD |
-| E7 | Own `StoreSpendCard` | always | `tense="receipt"`, collapsed on every width | TBD | TBD | TBD |
+| E1 | Amend banner | `amending` | states the consequence: correcting does **not** re-run the restock | unchanged, in `ShoppingListReceiptFace` above the sheet | always when amending | kept |
+| E2 | Own header | always | "n items bought" + completed label + `text-h5` total + "n not priced" | **split**: the count + date were word-for-word the overview card's C4/C5 forty pixels above, so the sheet's header row is gone and the card is the document's header; the **total moved to a footer** `TOTAL … $X` line under the itemisation, above a dashed rule, where a total belongs on a document; "n not priced" moved with it | always (total: `moneyEnabled` only) | moved |
+| E3 | Bought-line rows | `boughtLines` | qty prefix, store, "estimated, no price entered" | `ShoppingListReceiptRow` — built on the shared `src/css/shoppingRow.scss` skeleton, so name scale, caption scale and inset divider are literally the plan row's | always | moved |
+| E4 | Line amount + unit price | `moneyEnabled && !amending` | amount, plus "X each" when qty > 1 | `.sl-row__money` / `.sl-row__amountnote` — same classes and same right-aligned tabular column as the plan face | amount always; **"X each" hidden <600px** (the shared skeleton's rule — it starved the name at 375px) | kept |
+| E5 | Amend controls | `amending` | qty stepper + price/store edit **only** — no add, remove or reorder | stepper took over the multiplier's own cell (so entering amend does not move the name column); price button sits in the amount column | always when amending | moved |
+| E6 | "Didn't buy (n)" chips | `skippedLines.length > 0` | unticked lines as chips | unchanged content; now a sunken strip inside the sheet rather than a bordered card section | always when present | kept |
+| E7 | Own `StoreSpendCard` | always | `tense="receipt"`, collapsed on every width | unchanged | always | kept |
+
+**Nothing was cut.** All seven rows are `kept` or `moved`. E2 is the only one
+worth a second look: its *content* all survives on screen (count and date on the
+overview card, total and unpriced count in the sheet's footer), what went is the
+duplicate rendering of it.
+
+**Verified live** (money on and off, 1280px + 375px, `pesto-dark`): sheet radius
+16px, `--elevation-card` present, **`bandIsGradient: false`** — the flat-paper
+call that distinguishes this face from the plan and shop faces, which carry the
+hero gradient; leader border `dotted`; a **single** amount-right x (931px) and a
+single name-left x (82px) across all six rows; total `$21.90` at 24.75px; no
+horizontal scroll at 375px; dark sheet luminance 35 vs page 0 (sheet lighter, so
+the one `--surface-component` declaration is correct in both directions).
+
+**T0 carve-out (money off — the default install).** The dotted leader is
+suppressed when there is no amount at the end of it: a rule running to the
+sheet edge and stopping reads as a number that failed to load, and T0 is the
+tier the design has to serve first. Verified: `leaders: 0`, `hasTotal: false`,
+six rows still render with name + store caption.
 
 ---
 
@@ -197,16 +268,23 @@ provenance, suggestions, budget banner.
 
 | # | Dialog | Trigger | Notes | Destination | Decision |
 |---|---|---|---|---|---|
-| D1 | `NewListDialog` | P3 / P7 / F10 | also mounted by the router landing page | TBD | TBD |
-| D2 | `PutAwayDialog` | C12 | `v-if` status `done`; ephemeral, doesn't save | TBD | TBD |
-| D3 | Older lists | P5 | **searchable**, not just scrollable | TBD | TBD |
-| D4 | Rename | C3 / P2 | dialog on every width (v3 fix); body copy states the blank-name rule | TBD | TBD |
-| D5 | Planned date | T2 | Save / **Clear** (only when a date is set) / Cancel | TBD | TBD |
-| D6 | Price sheet | N4 / E5 | bottom sheet; price + **quantity stepper** + bought-from store; Clear when an actual price exists; prefill caption | TBD | TBD |
-| D7 | Finish review | C10 | **two shapes** — clean finish lists what will be restocked; finishing early adds a warning banner + a **forced** leftover decision (`move-existing` / `move-new` / `discard`), with a target-list select and per-branch explanatory captions | TBD | TBD |
-| D8 | Receipt lightbox | F8 thumb tap | `max-width: 900px`, Esc/backdrop closes | TBD | TBD |
+| D1 | `NewListDialog` | P3 / P7 / F10 | also mounted by the router landing page | unchanged | kept — **opened live** ("Build a fresh list, or top up an existing one") |
+| D2 | `PutAwayDialog` | C12 | `v-if` status `done`; ephemeral, doesn't save | unchanged | kept — **opened live** |
+| D3 | Older lists | P5 | **searchable**, not just scrollable | unchanged | kept — **opened live**, including the empty-search branch (S13) |
+| D4 | Rename | C3 / P2 | dialog on every width (v3 fix); body copy states the blank-name rule | unchanged | kept — **opened live** |
+| D5 | Planned date | T2 | Save / **Clear** (only when a date is set) / Cancel | unchanged | kept — **opened live** |
+| D6 | Price sheet | N4 / E5 | bottom sheet; price + **quantity stepper** + bought-from store; Clear when an actual price exists; prefill caption | unchanged | kept — **opened live** (price, quantity 3, bought-from store, "Prefilled from Aldi offer") |
+| D7 | Finish review | C10 | **two shapes** — clean finish lists what will be restocked; finishing early adds a warning banner + a **forced** leftover decision (`move-existing` / `move-new` / `discard`), with a target-list select and per-branch explanatory captions | unchanged | kept — **opened live** on the finishing-early branch ("2 items aren't ticked…") |
+| D8 | Receipt lightbox | F8 thumb tap | `max-width: 900px`, Esc/backdrop closes | unchanged | kept — **not opened**: needs an uploaded attachment, and the seed ships none. The only §6 row without live evidence |
+
+**No dialog component was modified by chunks 1-3** (`git diff` over
+`src/components/dialogs/` is empty across the three commits). D4 and D5 are the
+two that live *inline* in the page whose markup was heavily rewritten, so both
+were re-opened live to confirm the rewrite didn't detach them; it didn't.
 
 ---
+
+## 7. Flag and tier matrix
 
 ## 7. Flag and tier matrix
 
@@ -230,45 +308,88 @@ C16 absent. The design must not leave a hole in either case.
 
 | # | Behaviour | Detail | Destination | Decision |
 |---|---|---|---|---|
-| K1 | `n` | Add an item | TBD | TBD |
-| K2 | `space` | Tick / untick the focused line | TBD | TBD |
-| K3 | `u` | Untick the last item you ticked | TBD | TBD |
-| K4 | `↑` / `↓` | Move line focus | TBD | TBD |
-| K5 | Focus ring | `.shopping-line-focused`, dashed accent, `outline-offset: -2px` | TBD | TBD |
-| G1 | Whole-row DnD | `useDragDropList`, `canDragStart` gated on `canReorder` (R1); grip is decorative | TBD | TBD |
-| G2 | Arrow reorder | keyboard/thumb path for the same `sequence` write | TBD | TBD |
-| B1 | `lt-sm` (375px) | row wraps to two lines via `.shopping-line__break`; provenance caption **hidden**; drag grip **hidden** | TBD | TBD |
-| B2 | `lt-md` | mobile picker replaces the rail; card name + pencil hide (C2/C3) | TBD | TBD |
-| B3 | `lt-sm` toolbar | `compactToolbar` drops labels, keeps tooltips | TBD | TBD |
-| B4 | `gt-sm` | 300px sticky rail, `min-width: 0` load-bearing against the FU-578 #40 overflow family | TBD | TBD |
+| K1 | `n` | Add an item | unchanged | kept |
+| K2 | `space` | Tick / untick the focused line | unchanged — see the resolution below | kept, **inert on plan and receipt by design** |
+| K3 | `u` | Untick the last item you ticked | unchanged | kept, same gate as K2 |
+| K4 | `↑` / `↓` | Move line focus | unchanged | kept — **verified live**, focus lands on `.sl-row--focused` |
+| K5 | Focus ring | was `.shopping-line-focused`, dashed accent, `outline-offset: -2px` | `.sl-row--focused` in `shoppingRow.scss` — **solid `--focus-ring`**, same offset. The old rule was left behind by chunk 1 as dead CSS and is now deleted (below) | moved |
+| G1 | Whole-row DnD | `useDragDropList`, `canDragStart` gated on `canReorder` (R1); grip is decorative | unchanged — the page still owns `lineDnd`; the row component receives `handleProps`/`rowProps` via `v-bind` | kept |
+| G2 | Arrow reorder | keyboard/thumb path for the same `sequence` write | moved into `.sl-row__actions` beside delete (R1) | moved |
+| B1 | `lt-sm` (375px) | row wrapped to two lines via `.shopping-line__break`; provenance caption **hidden**; drag grip **hidden** | **the two-line wrap is gone** — the row no longer needs it (quantity is one tile, money is type, metadata is a caption), so at 375px it stays a single grid row with narrower reserved tracks. Provenance caption and grip still hidden | moved |
+| B2 | `lt-md` | mobile picker replaces the rail; card name + pencil hide (C2/C3) | unchanged | kept |
+| B3 | `lt-sm` toolbar | `compactToolbar` drops labels, keeps tooltips | unchanged | kept |
+| B4 | `gt-sm` | 300px sticky rail, `min-width: 0` load-bearing against the FU-578 #40 overflow family | unchanged | kept |
 
-**Open question for §7.4 (touch paths):** K2's `space` ticks the focused line, but
-**the plan face has no tick control** — ticking is a run-face concept (v3 removed
-draft ticking deliberately). Whether the shortcut is inert or still mutates on a
-draft is **not resolved by reading the template** and needs a live check. Recorded
-as an open item, not assumed either way.
+### K2 resolved — the shortcut is inert on a draft
+
+Chunk 0 left this open because it *is* unanswerable from the template. It is
+answerable from the script, and was then confirmed live:
+
+```
+function tickFocusedLine() {
+    if (detail.value?.status !== 'shopping') return;   // ← the gate
+```
+
+`untickLastTicked` (K3) carries the identical guard. Driven on a 7-line draft:
+`ArrowDown` focused a row (`.sl-row--focused` count 1), then `Space` and `u` were
+pressed — the server's `is_ticked` array was byte-identical before and after
+(`0` ticked → `0` ticked). **So the plan face cannot be ticked by keyboard**,
+which matches v3's deliberate removal of draft ticking. Nothing to change.
+
+**But it is advertised where it does not work.** `useShortcut` registers all five
+unconditionally, so the `?` cheatsheet promises *"space — tick / untick the
+focused line"* on the plan and receipt faces too, and pressing it there does
+nothing. That is a small honesty defect rather than a functional one — logged as
+**FU-808**, not fixed here.
+
+### Dead CSS from chunk 1, removed
+
+Chunk 1 replaced the inline `q-item` row with `ShoppingListPlanRow.vue` but left
+its stylesheet behind: **165 lines** of `.shopping-line*` rules — the whole
+`@media (max-width: 599px)` two-line-wrap block (B1), the name/ticked/focused/
+nested/product-only rules, the quantity-input rules, plus `.offer-savings`,
+`.text-strike` and `.sld-price-btn`. Every one of those classes has zero
+remaining references in `src/` (the only two greps that survive are an unrelated
+comment and the DnD mime string `application/x-dora-shopping-line`).
+`ShoppingListDetail.vue` is 3,273 → **3,108 lines**. Found by this audit, not by
+`vue-tsc` or `eslint` — neither can see an unused CSS class.
 
 ---
 
 ## 9. Edge and empty states
 
+## 9. Edge and empty states
+
 | # | State | Trigger | Current rendering | Destination | Decision |
 |---|---|---|---|---|---|
-| S1 | No detail / bad id | `!detail` | F10 fallback | TBD | TBD |
-| S2 | Load failure | `loadError` | F1 banner + F10 with a different heading | TBD | TBD |
-| S3 | Loading | `loading && !detail` | F2 skeleton | TBD | TBD |
-| S4 | Empty list (plan) | `lines.length === 0` | flat bordered card pointing at Quick add + cart-add from `/stock` | TBD | TBD |
-| S5 | Empty list (run) | `lines.length === 0` | N8 | TBD | TBD |
-| S6 | All picked (run) | `allPicked` | N7 | TBD | TBD |
-| S7 | No priced lines | `priced_line_count === 0` per bucket | `~` marker — **only inside C14, which is inside the disclosure** (§1.5 concealment) | TBD | TBD |
-| S8 | No store on any line | `by_store` emptied when no real store exists | C14 renders nothing at all | TBD | TBD |
-| S9 | Everything deferred by trim | all lines `deferred_by_budget` | run face shows N8; plan shows F7 only | TBD | TBD |
-| S10 | Receipt, nothing bought | `boughtLines.length === 0` | E2 reads "0 items bought"; E6 carries everything | TBD | TBD |
-| S11 | No attachments | `attachments.length === 0` | F8 caption "No receipts yet…" | TBD | TBD |
-| S12 | No older lists | `olderDoneSummaries.length === 0` | P5 absent from both renderings | TBD | TBD |
-| S13 | Older-list search miss | `filteredOlderSummaries.length === 0` | "No finished list matches …" | TBD | TBD |
+| S1 | No detail / bad id | `!detail` | F10 fallback | **correction:** a well-formed but unknown uuid renders **F1 *and* F10** — the error banner ("Couldn't load this list. Could not load list: ShoppingList with the id … was not found" + Retry) above the fallback ("Couldn't open this list. Pick another list…"). The census recorded F10 alone | kept — **rendered live** |
+| S2 | Load failure | `loadError` | F1 banner + F10 with a different heading | same shape as S1; **a failure on a list already in the store does not replace it** — the page keeps showing the loaded detail, so this state only appears on a cold load | kept — **rendered live** (forced 500 on a cold navigation) |
+| S3 | Loading | `loading && !detail` | F2 skeleton | unchanged | kept — **rendered live** (17 skeleton elements while the response was held open) |
+| S4 | Empty list (plan) | `lines.length === 0` | flat bordered card pointing at Quick add + cart-add from `/stock` | now `.sl-panel` (chunk 2) | kept — **rendered live** on the seeded empty draft |
+| S5 | Empty list (run) | `lines.length === 0` | N8 | unchanged | kept — **rendered live** ("Nothing on this list. Add something with Quick add, or finish up.") |
+| S6 | All picked (run) | `allPicked` | N7 | unchanged | kept — **rendered live** ("That's everything." + Picked (5) + "$31.00 in the trolley") |
+| S7 | No priced lines | `priced_line_count === 0` per bucket | `~` marker — **only inside C14, which is inside the disclosure** (§1.5 concealment) | **fixed by C19** — the card's top level now reads `~$0.00` + "6 items with no price yet" | moved — **rendered live** |
+| S8 | No store on any line | `by_store` emptied when no real store exists | C14 renders nothing at all | unchanged — the spend card is genuinely absent, and the rows fall back to "Any store" on the planned-store menu | kept — **rendered live**; the §1.5 concern does not apply here (there is no partial truth to conceal, the breakdown simply has no content) |
+| S9 | Everything deferred by trim | all lines `deferred_by_budget` | run face shows N8; plan shows F7 only | plan face renders zero `.sl-row` and the `.sl-panel--sunken` deferred section carrying all 7 with "Add back" | kept — **rendered live** |
+| S10 | Receipt, nothing bought | `boughtLines.length === 0` | E2 reads "0 items bought"; E6 carries everything | E2's count moved to the overview card; the sheet degrades to a dashed rule + `TOTAL` + the "Didn't buy (6)" strip, which reads coherently rather than as an empty box | moved — **rendered live** |
+| S11 | No attachments | `attachments.length === 0` | F8 caption "No receipts yet…" | unchanged | kept — **rendered live** |
+| S12 | No older lists | `olderDoneSummaries.length === 0` | P5 absent from both renderings | unchanged | kept — **rendered live** (collection trimmed to 3 done + hard reload; "See older" count 0) |
+| S13 | Older-list search miss | `filteredOlderSummaries.length === 0` | "No finished list matches …" | unchanged | kept — **rendered live** |
+
+**All thirteen rendered.** Five (S1, S3, S4, S11, S13) came from data the seeded
+backend actually produces. The other eight (S2, S5, S6, S7, S8, S9, S10, S12) were
+reached by **rewriting the API payload in flight** — the real component tree, the
+real store, the real stylesheet, with a mutated response — because the dense seed
+cannot produce them and hand-building each would have meant mutating a scratch
+database into eight one-off shapes. Recorded plainly so the evidence is not
+overstated: these prove *the UI renders that state correctly*, not that the server
+can produce it. Where a figure looks odd in the screenshots (S5's `$4.05` on an
+empty list, S10's `$21.90` for nothing bought) that is the interception showing
+through — the payload's `totals` were left as the server computed them.
 
 ---
+
+## 10. Findings raised by the census
 
 ## 10. Findings raised by the census
 
@@ -285,15 +406,53 @@ as an open item, not assumed either way.
 6. **C1 changes wording on a money flag** (`Receipt` vs `Done`), which is a T0
    difference in *copy*, not just in visible elements — easy to lose in a rebuild.
 
+### Raised by chunk 4 (the audit itself)
+
+7. **P8 never existed.** The census recorded a per-row kebab that had been
+   removed three days earlier. Corrected in §2, deliberately not deleted — a
+   baseline that quietly edits its own errors is not a baseline.
+8. **Chunk 1 left 165 lines of dead CSS** in `ShoppingListDetail.vue`. Removed
+   (§8). Neither `vue-tsc` nor `eslint` can see an unused CSS class, so nothing
+   in the standing gate would ever have caught it.
+9. **The run face was the odd one out** — still `bordered` + `--radius-md` +
+   `q-item` while the other two faces moved to slabs and a document sheet. Root
+   cause: the slab and section rules were **scoped to the page**, so a child
+   component could not reach them. Raised as FU-807 (owner call, since it was
+   unfinished proposal scope rather than new scope) and **resolved the same day
+   in chunk 5** — owner: *"consistency matters"*. See §5.2.
+10. **`space` / `u` are advertised on faces where they are inert.** The gate is
+    correct; the cheatsheet's promise is not. **FU-808**.
+11. **A failed refresh does not surface an error** when the list is already in
+    the store (S2). Defensible — showing stale data beats blanking the page —
+    but it means `loadError` is only ever seen on a cold load, which is worth
+    knowing before anyone "fixes" it.
+
 ---
 
-## 11. Cutover rule
+## 11. Cutover rule — **PASSED 2026-09-01**
 
 Chunk 4 passes only when:
 
-- every `Destination`, `Visibility` and `Decision` cell above is filled;
-- every `CUT` carries a written reason **and** owner sign-off;
-- every control whose `Visibility` is hover- or focus-reveal has a **named touch
-  path** (§7.4 of the proposal — *hover-only is a loss on touch*);
-- every row in §7 has been checked at T0, T1 and T2;
-- every row in §9 has been rendered at least once in the running app.
+- ✅ **every `Destination` / `Visibility` / `Decision` cell is filled.** No cell
+  reads `TBD`. 79 catalogued affordances, plus one struck out as never having
+  existed (P8).
+- ✅ **every `CUT` carries a written reason and owner sign-off.** Vacuous, and
+  that is the headline: **across chunks 1-4 nothing was cut.** Every row is
+  `kept` or `moved`, plus one `added` (C19). No sign-off is outstanding.
+- ✅ **every hover/focus-reveal control has a named touch path.** Three exist —
+  the quantity stepper (tap the tile to arm), the reorder arrows (permanently
+  visible under `@media (hover: none)`), and the drag grip (hidden on touch,
+  where pointer DnD does not exist and the arrows are the real path). Delete was
+  deliberately left always-visible on every device.
+- ✅ **every row in §7 checked at T0/T1/T2.** T0 driven live by toggling
+  `money_enabled` off in Settings — it found the receipt leader defect (§5.3) and
+  confirmed the chunk-2 per-face headline. T2 is the seeded default (offers and
+  savings render on the plan rows). T1 is T2 minus `products`, exercised by the
+  lists whose lines carry no offers.
+- ✅ **every row in §9 rendered at least once in the running app.** Thirteen of
+  thirteen; eight against an intercepted payload, stated as such in §9.
+
+**One caveat, recorded rather than waived:** D8 (the receipt lightbox) was not
+opened — it needs an uploaded attachment and the seed ships none. It is the
+single affordance in this document with no live evidence behind it. It was not
+touched by any chunk.

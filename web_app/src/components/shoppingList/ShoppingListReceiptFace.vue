@@ -23,122 +23,59 @@
             </template>
         </q-banner>
 
-        <q-card flat bordered class="sl-receipt-card">
-            <q-card-section class="row items-center no-wrap q-gutter-x-sm q-pb-sm">
-                <q-icon :name="ICONS.receipt_long" size="20px" class="dora-text-secondary" />
-                <div class="column" style="min-width: 0">
-                    <div class="text-subtitle1 text-weight-medium">
-                        {{ boughtLines.length }} item{{ boughtLines.length === 1 ? '' : 's' }} bought
-                    </div>
-                    <div v-if="completedLabel" class="text-caption dora-text-muted">
-                        {{ completedLabel }}
-                    </div>
-                </div>
-                <q-space />
-                <div v-if="moneyEnabled" class="column items-end">
-                    <div class="text-h5 sl-receipt-total">{{ formatMoney(detail.totals.total_price) }}</div>
-                    <div v-if="unpricedCount > 0" class="text-caption dora-text-muted">
-                        {{ unpricedCount }} not priced
-                    </div>
-                </div>
-            </q-card-section>
-
-            <q-separator />
-
-            <q-list separator>
-                <q-item
+        <!-- Paper on a desk. Flat by owner call (v4 §7.2): the plan and shop
+             faces carry the hero gradient, and the receipt not carrying it is
+             what makes the state transition legible at a glance — the list
+             visibly stops being a thing you act on. -->
+        <div class="sl-receipt-sheet">
+            <!-- No header row. It read "n items bought · Shopped <date>", which
+                 is word-for-word what the overview card directly above already
+                 says (its count, its date stamp and its Receipt pill), and two
+                 headers stacked 40px apart is the duplication this rebuild is
+                 meant to remove. The card is this document's header; the sheet
+                 owns the itemisation and its total. -->
+            <div class="sl-receipt-lines">
+                <ShoppingListReceiptRow
                     v-for="line in boughtLines"
                     :key="line.line_id"
-                    class="sl-receipt-row"
-                >
-                    <q-item-section>
-                        <q-item-label class="ellipsis">
-                            <span v-if="(line.quantity ?? 0) > 1" class="sl-receipt-qty">
-                                {{ line.quantity }}×
-                            </span>
-                            {{ line.stock_item_name }}
-                        </q-item-label>
-                        <q-item-label caption>
-                            <span v-if="line.purchased_store_name">{{ line.purchased_store_name }}</span>
-                            <span v-else-if="line.resolved_store_name" class="dora-text-muted">
-                                {{ line.resolved_store_name }}
-                            </span>
-                            <span
-                                v-if="line.estimate_source !== 'actual' && line.estimated_unit_price != null"
-                                class="dora-text-muted"
-                            >
-                                <template v-if="line.purchased_store_name || line.resolved_store_name"> · </template>
-                                estimated, no price entered
-                            </span>
-                        </q-item-label>
-                    </q-item-section>
+                    :line="line"
+                    :amending="amending"
+                    @edit-price="emit('edit-price', line)"
+                    @adjust-quantity="emit('adjust-quantity', line, $event)"
+                />
+            </div>
 
-                    <q-item-section v-if="amending" side>
-                        <!-- Only the three fields the agreed design unlocks.
-                             Adding, removing and re-ordering lines stay closed:
-                             a receipt is a record of what happened, and the
-                             restock it drove has already been applied. -->
-                        <div class="row items-center q-gutter-xs no-wrap">
-                            <BaseButton
-                                variant="icon"
-                                size="sm"
-                                :icon="ICONS.remove"
-                                :disable="(line.quantity ?? 0) <= 0"
-                                aria-label="One fewer"
-                                @click="emit('adjust-quantity', line, -1)"
-                            />
-                            <span class="sl-receipt-qty-value">{{ line.quantity ?? '—' }}</span>
-                            <BaseButton
-                                variant="icon"
-                                size="sm"
-                                :icon="ICONS.add"
-                                aria-label="One more"
-                                @click="emit('adjust-quantity', line, 1)"
-                            />
-                            <BaseButton
-                                variant="ghost"
-                                dense
-                                :icon="ICONS.edit"
-                                :label="unitLabel(line)"
-                                class="sl-receipt-amount"
-                                @click="emit('edit-price', line)"
-                            >
-                                <q-tooltip>Correct the price and store for this line</q-tooltip>
-                            </BaseButton>
-                        </div>
-                    </q-item-section>
-                    <q-item-section v-else-if="moneyEnabled" side class="sl-receipt-money">
-                        <div class="sl-receipt-amount">{{ lineAmount(line) }}</div>
-                        <div
-                            v-if="(line.quantity ?? 1) > 1 && line.estimated_unit_price != null"
-                            class="text-caption dora-text-muted"
-                        >
-                            {{ formatMoney(line.estimated_unit_price) }} each
-                        </div>
-                    </q-item-section>
-                </q-item>
-            </q-list>
+            <!-- The total was in the header. On a document it belongs under
+                 the itemisation, above a rule, where the eye already is when
+                 it finishes reading the lines. -->
+            <div v-if="moneyEnabled" class="sl-receipt-total">
+                <span class="sl-receipt-total__label">Total</span>
+                <span class="sl-receipt-total__leader" aria-hidden="true"></span>
+                <span class="sl-receipt-total__value">
+                    {{ formatMoney(detail.totals.total_price) }}
+                </span>
+                <span v-if="unpricedCount > 0" class="sl-receipt-total__note">
+                    {{ unpricedCount }} not priced
+                </span>
+            </div>
 
-            <template v-if="skippedLines.length > 0">
-                <q-separator />
-                <q-card-section class="q-py-sm">
-                    <div class="text-caption dora-text-muted q-mb-xs">
-                        Didn't buy ({{ skippedLines.length }})
-                    </div>
-                    <div class="row q-gutter-xs">
-                        <q-chip
-                            v-for="line in skippedLines"
-                            :key="line.line_id"
-                            dense
-                            square
-                            class="dora-bg-sunken"
-                        >
-                            {{ line.stock_item_name }}
-                        </q-chip>
-                    </div>
-                </q-card-section>
-            </template>
-        </q-card>
+            <div v-if="skippedLines.length > 0" class="sl-receipt-skipped">
+                <div class="sl-receipt-skipped__label">
+                    Didn't buy ({{ skippedLines.length }})
+                </div>
+                <div class="row q-gutter-xs">
+                    <q-chip
+                        v-for="line in skippedLines"
+                        :key="line.line_id"
+                        dense
+                        square
+                        class="dora-bg-sunken"
+                    >
+                        {{ line.stock_item_name }}
+                    </q-chip>
+                </div>
+            </div>
+        </div>
 
         <!-- Where the money went. Same card as the plan face, past tense —
              the numbers are the same aggregate, only the trip has happened.
@@ -170,10 +107,11 @@
     import { computed } from 'vue';
     import { ICONS } from 'src/style/icons';
     import BaseButton from 'src/components/BaseButton.vue';
+    import ShoppingListReceiptRow from 'src/components/shoppingList/ShoppingListReceiptRow.vue';
     import StoreSpendCard from 'src/components/shoppingList/StoreSpendCard.vue';
     import { formatMoney } from 'src/composables/useMoney';
     import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
-    import { priceOfLine, type ShoppingListDetail, type ShoppingListLine } from 'src/models/shoppingList';
+    import type { ShoppingListDetail, ShoppingListLine } from 'src/models/shoppingList';
 
     const props = defineProps<{
         detail: ShoppingListDetail;
@@ -185,7 +123,7 @@
     const emit = defineEmits<{
         'stop-amend': [];
         'edit-price': [line: ShoppingListLine];
-        'adjust-quantity': [line: ShoppingListLine, delta: number];
+        'adjust-quantity': [line: ShoppingListLine, delta: -1 | 1];
     }>();
 
     const { moneyEnabled } = useMoneyEnabled();
@@ -203,41 +141,76 @@
         boughtLines.value.filter((l) => l.estimated_unit_price == null).length
     );
 
-    /** A "~" whenever the number is an estimate rather than one the user
-     *  typed — on a receipt, the difference between "what it cost" and "what
-     *  we think it cost" is the whole point of the document. */
-    function lineAmount(line: ShoppingListLine): string {
-        if (line.estimated_unit_price == null) return '—';
-        const prefix = line.estimate_source === 'actual' ? '' : '~';
-        return `${prefix}${formatMoney(priceOfLine(line))}`;
-    }
-
-    function unitLabel(line: ShoppingListLine): string {
-        return line.estimated_unit_price == null
-            ? 'Set price'
-            : formatMoney(line.estimated_unit_price);
-    }
 </script>
 
 <style scoped>
-    .sl-receipt-card {
-        background: var(--surface-elevated);
+    /* The same slab the plan face's list and panels use (chunk 1/2), one step
+       up in radius to match the overview card — a receipt is a sheet, so it
+       gets the sheet's corner. Flat: no gradient band, by owner call. */
+    .sl-receipt-sheet {
+        background: var(--surface-component);
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-xl);
+        box-shadow: var(--elevation-card);
+        overflow: hidden;
     }
-    .sl-receipt-total,
-    .sl-receipt-amount,
-    .sl-receipt-qty,
-    .sl-receipt-qty-value {
-        font-variant-numeric: tabular-nums;
+
+    .sl-receipt-lines {
+        padding-block: var(--space-2);
     }
-    .sl-receipt-qty {
+
+    /* Under the itemisation, above its own rule — where a total goes on a
+       document. Same four-track idea as the row, collapsed to three. */
+    .sl-receipt-total {
+        display: grid;
+        grid-template-columns: max-content minmax(var(--space-6), 1fr) auto;
+        align-items: end;
+        column-gap: var(--space-3);
+        padding: var(--space-3) var(--space-4);
+        border-top: 1px dashed var(--border-strong);
+    }
+    .sl-receipt-total__label {
+        font-size: calc(var(--font-size-sm) * 1rem);
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
         color: var(--text-secondary);
-        margin-right: 2px;
     }
-    .sl-receipt-qty-value {
-        min-width: 20px;
-        text-align: center;
+    .sl-receipt-total__leader {
+        align-self: end;
+        border-bottom: 1px dotted var(--border-strong);
+        margin-bottom: 0.42em;
+        opacity: 0.7;
     }
-    .sl-receipt-money {
-        align-items: flex-end;
+    .sl-receipt-total__value {
+        font-size: calc(var(--font-size-2xl) * 1rem);
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+        line-height: 1.1;
+    }
+    /* Sits under the figure it qualifies — the headline can be short and the
+       user has to be able to see that it is. */
+    .sl-receipt-total__note {
+        grid-column: 3;
+        justify-self: end;
+        font-size: calc(var(--font-size-xs) * 1rem);
+        color: var(--text-muted);
+    }
+
+    .sl-receipt-skipped {
+        padding: var(--space-3) var(--space-4);
+        background: var(--surface-sunken);
+    }
+    .sl-receipt-skipped__label {
+        font-size: calc(var(--font-size-xs) * 1rem);
+        color: var(--text-muted);
+        margin-bottom: var(--space-1);
+    }
+
+    @media (max-width: 599px) {
+        .sl-receipt-total,
+        .sl-receipt-skipped {
+            padding-inline: var(--space-3);
+        }
     }
 </style>

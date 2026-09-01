@@ -39,6 +39,172 @@ long session summary. Distinct from the other logs:
 
 ---
 
+## [OPEN] FU-816 — `/reports` renders every money surface with the money flag off
+- **Raised:** 2026-09-02 (reports page PO + engineering review)
+- **Type:** finding
+- **What:** `ReportsPage.vue` imports no feature flag at all, and the nav entry
+  (`MainLayout.vue:278`) is unconditional. With `money` off the page still shows
+  spend by store, savings captured, spend by category, year-over-year, price
+  trends and two dollar-formatted chart axes. Directly contradicts the owner
+  feedback bullet at `Feedback _ Fixes - as of [06-Jun-2026].md:254` that every
+  money/budget surface must be switchable off, which is the bullet ADR-005 was
+  built from. `products` is ungated too, so a products-free install gets four
+  permanently-dead cards. The dashboard's `cardAvailable` (`DashboardPage.vue:1537`)
+  is the pattern to copy.
+- **Why deferred:** the review was read-only by brief.
+- **Recommended resolution:** now — it is the smallest chunk in
+  `05_investigations/REPORTS_PAGE_REVIEW.md` §7 and closes a live contradiction
+  with the owner's own feedback.
+
+## [OPEN] FU-815 — Reports spend-by-store attributes stores by a different rule than the shopping list
+- **Raised:** 2026-09-02 (reports page PO + engineering review)
+- **Type:** finding
+- **What:** `SpendByStoreHandler` requires `selected_product_id IS NOT NULL`
+  (`reports.py:407`) and takes the store from that product, i.e. rung five of the
+  store ladder. The shopping list resolves store through the five-rung R-003
+  chokepoint `resolve_store_id` — purchased → planned → usual → last-purchase →
+  offer (`_line_price.py:88`). Same finished list, two different breakdowns: a
+  household that sets `usual_store_id` and never uses products sees a populated
+  card on the receipt face and an empty one in Reports. Also drops unpriced lines
+  from the total with no footnote, where `StoreSpendCard.vue:251` states the gap
+  explicitly.
+- **Why deferred:** read-only review.
+- **Recommended resolution:** with the Reports chunk 2 defect pass, or sooner if
+  the empty-card symptom is hit in real use.
+
+## [OPEN] FU-814 — Reports duplicates `DashboardCard`, `storeColour` and the money formatter
+- **Raised:** 2026-09-02 (reports page PO + engineering review)
+- **Type:** finding
+- **What:** three separate duplications on one page. (1) `.report-card*` is a
+  byte-identical copy of `components/dashboard/DashboardCard.vue`'s `.dora-card*`
+  that has since drifted — it lost the hover elevation, the reduced-motion guard,
+  the `#action` styling and the router-link variant (R-001). (2) `colourFor()`
+  (`ReportsPage.vue:612`) hashes store names into `--chart-1..6` instead of
+  calling `storeColour()`, whose own header comment documents this exact bug
+  being fixed for the other two consumers (R-002/D-001); `StoreSpendRow` needs
+  `brand_colour` adding server-side. (3) two chart y-axes hard-code
+  `formatter: '${value}'` (`:627`, `:730`) past `formatMoney`, so a non-AUD
+  install gets correct legends and lying axes (R-003/D-006).
+- **Why deferred:** read-only review.
+- **Recommended resolution:** (2) and (3) with the chunk 2 defect pass; (1) with
+  the chunk 3 restructure, since which cards survive decides how much shell is
+  needed.
+
+## [OPEN] FU-813 — Reports price trends: confirm the SQLite tz crash in the running app
+- **Raised:** 2026-09-02 (reports page PO + engineering review)
+- **Type:** finding
+- **What:** owner asked "is price trends broken?". Static read says yes, on
+  SQLite, for every range except "All time": `PriceTrendsHandler` compares
+  `offered_on < since` with no `_as_utc()` (`reports.py:709`) while every sibling
+  handler coerces first (`reports.py:319`), and SQLite drops tzinfo on
+  `DateTime(timezone=True)` — naive vs aware raises `TypeError`, so a 500. The
+  test suite misses it because the only seeded price-trends test passes
+  `range=all`, the one branch where `since is None`
+  (`tests/e2e/dora_api/test_reports_router.py:156`). Would not reproduce on
+  Postgres, so it is also a §7.5 portability break. **Not confirmed live** — per
+  the reported-defect rule this stays open until it is.
+  Two further defects in the same card, independent of the crash: `clearable` on
+  a `multiple` q-select emits `null` and `loadPriceTrends` reads `.length` off it
+  (`ReportsPage.vue:773`); and the product picker only ever sees 50 products
+  (bare `getAllAsync()` → `DEFAULT_LIMIT`), which is FU-668's unpaged-first-page
+  trap, third instance.
+- **Why deferred:** read-only review.
+- **Recommended resolution:** confirm in browser, then fix with chunk 2. The fix
+  is one `_as_utc()` call plus a regression test on a bounded range.
+
+## [OPEN] FU-812 — Owner call: does ECharts stay on `/reports`?
+- **Raised:** 2026-09-02 (reports page PO + engineering review)
+- **Type:** follow-up (owner decision)
+- **What:** `ReportsPage.vue` is the app's **only** `v-chart` consumer and its
+  built chunk is 562KB — the second-largest asset after the icon font, ahead of
+  the whole main CSS file. The review recommends replacing both donuts with the
+  shopping list's proportional bar and cutting stock-value-over-time, which would
+  leave one line chart and one sparkline. At that point the dependency is not
+  worth its weight; at five charts it is.
+- **Why deferred:** contingent on which cards survive the chunk-3 restructure.
+- **Recommended resolution:** when chunk 3 fixes the card set. Decided in
+  `05_investigations/REPORTS_PAGE_REVIEW.md` §8 D4.
+
+## [OPEN] FU-811 — Owner call: correcting the shared `18px` card radius/padding onto the token scale
+- **Raised:** 2026-09-02 (reports page PO + engineering review)
+- **Type:** follow-up (owner decision)
+- **What:** `DashboardCard.vue` and `ReportsPage.vue`'s forked copy both use
+  `border-radius: 18px` and `padding: 18px 20px 20px`, none of which is on the
+  token scale (`--radius-lg` 10 / `--radius-xl` 16 / `--radius-2xl` 22;
+  `--space-4` 16 / `--space-5` 20). Consolidating Reports onto the shared
+  component is safe and invisible; *also* moving the values onto the scale
+  changes how the dashboard looks. Two decisions that are easy to conflate.
+- **Why deferred:** it is a visual change to a shipped surface, not a refactor.
+- **Recommended resolution:** consolidate now, defer the scale correction to a
+  deliberate visual pass. Decided in `REPORTS_PAGE_REVIEW.md` §8 D3.
+
+## [OPEN] FU-810 — Owner call: does "Savings captured" survive, and against what baseline?
+- **Raised:** 2026-09-02 (reports page PO + engineering review)
+- **Type:** follow-up (owner decision)
+- **What:** savings is `list_price_at_pick − picked_offer_price`
+  (`reports.py:774`) — i.e. the discount the retailer advertised, not money the
+  household kept. Buying three discounted things you did not need "saves" money
+  by this metric, which sits badly against the Charter's Honesty principle and
+  Anti-creep. It is also products-only, so it is a permanent empty state on a
+  products-free install, which is the `B9` "don't send someone to a data-gated
+  surface" case. Review recommends keeping the card but inverting it — spend as
+  the headline, savings measured against **your own** historical unit price
+  rather than RRP. Cutting it outright is defensible.
+- **Why deferred:** it is a product-metric decision, not an implementation one.
+- **Recommended resolution:** before Reports chunk 3. Decided in
+  `REPORTS_PAGE_REVIEW.md` §8 D2.
+
+## [OPEN] FU-809 — Owner call: should Reports and the dashboard's Money zone share one card registry?
+- **Raised:** 2026-09-02 (reports page PO + engineering review)
+- **Type:** follow-up (owner decision)
+- **What:** `savings`, `spend_trend`, `pantry_value`, `price_drops` and `restock`
+  are already dashboard cards backed by the same `/reports` endpoints Reports
+  calls, and the dashboard already owns zones, per-card show/hide, reorder,
+  server-persisted layout and the `money`/`products` gates
+  (`DashboardPage.vue:1467-1545`). Reports is currently the ungated,
+  unconfigurable, larger-format twin of that Money zone. Sharing one registry
+  fixes the too-many-widgets problem, the gating problem (FU-816) and the
+  is-this-card-worth-keeping problem in one move, but it is a real architectural
+  commitment across two large pages.
+- **Why deferred:** owner's call; it sets the shape of the whole Reports rework.
+- **Recommended resolution:** now-ish — it gates chunk 3 of
+  `REPORTS_PAGE_REVIEW.md` §7 and changes the scope of FU-814.
+
+## [OPEN] FU-808 — `space` and `u` are advertised in the shortcut cheatsheet on faces where they do nothing
+- **Raised:** 2026-09-01 (v4 chunk 4 — cutover audit)
+- **Type:** finding
+- **What:** `useShortcut` registers all five shopping-list shortcuts
+  unconditionally (`ShoppingListDetail.vue:2112`), but `tickFocusedLine` and
+  `untickLastTicked` both guard on `detail.status !== 'shopping'` and return
+  immediately. The gate is **correct** — v3 deliberately removed draft ticking,
+  and it was verified live that a draft cannot be ticked by keyboard. The problem
+  is only that the `?` cheatsheet promises *"space — tick / untick the focused
+  line"* on the plan and receipt faces, where pressing it does nothing at all.
+- **Why deferred:** it is an honesty defect, not a functional one, and the fix
+  touches how `useShortcut` scopes registrations (register conditionally, or let
+  a shortcut declare an `enabled` predicate the cheatsheet reads) — a shared-
+  composable change that shouldn't be made inside a shopping-list audit.
+- **Recommended resolution:** opportunistic — next time `useShortcut` /
+  `ShortcutsCheatsheet` is open. Cheap alternative if that never happens: gate
+  the two registrations on the run face.
+
+## [OPEN] FU-805 — receipt line reads "estimated, no price entered" while showing a price
+- **Raised:** 2026-09-01 (v4 chunk 3 — shopping-list receipt face)
+- **Type:** finding
+- **What:** On the receipt face, a line whose `estimate_source` is `historic`
+  renders the caption "estimated, no price entered" *and* an amount (e.g.
+  "~$3.00"). Both halves are true from the code's point of view — the price is
+  an estimate carried over, and the user never typed one — but read together
+  they contradict each other. Pre-existing copy (baseline E3), carried across
+  chunk 3 verbatim rather than reworded, because rewording it is a copy decision
+  and not this chunk's call.
+- **Why deferred:** scope discipline; the "~" prefix already carries the
+  estimate signal, so the caption may want to be dropped rather than reworded,
+  and that's a decision, not a fix.
+- **Recommended resolution:** now-ish — it is one line of copy and the owner is
+  looking at this surface. Suggested: drop the clause entirely and let "~" do
+  the work, or say "estimated from what you last paid".
+
 ## [OPEN] FU-804 — reported "which day(s) the ingredient is needed" text was not found in the right rail
 - **Raised:** 2026-09-01 (meal-planner owner batch)
 - **Type:** finding
@@ -382,6 +548,11 @@ long session summary. Distinct from the other logs:
   wrong"* for a successful interaction, and — the worse half — **every
   registered rollback fires**, so an in-flight optimistic mutation can be
   reverted by a layout hiccup.
+- **Re-confirmed 2026-09-01** (v4 chunk 3): still live. Fires on `/#/`,
+  `/#/stock` and `/#/shopping-lists/<id>` (plan *and* receipt faces) on any
+  viewport resize; `/#/recipes` did not reproduce. Worth noting for whoever
+  picks this up — it is easy to mistake for a defect in whatever page you are
+  currently working on, which is what happened here before this entry was found.
 - **Reproduction (verified live, 2026-08-29):** resize the viewport across the
   `md` breakpoint on `/#/shopping-lists/<id>`, `/#/meal-plans` or the dashboard —
   2 errors, 1 toast, every time. The observer is

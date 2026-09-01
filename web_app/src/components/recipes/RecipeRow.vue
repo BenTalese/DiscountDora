@@ -77,31 +77,6 @@
                 </div>
             </div>
 
-            <!-- Figures. On phones only the two that change a decision
-                 survive (time, and the belief/expiring flags) — the rest
-                 would take width the row hasn't got, and they're all on the
-                 recipe's own page a tap away. -->
-            <!-- What's left in the cluster: Dora's belief, which is the one
-                 thing here that is an opinion rather than a fact. Time,
-                 ingredient count and kcal all moved under the name; the rating
-                 moved to the action cluster beside the favourite button. -->
-            <div class="row items-center no-wrap recipe-row__chips">
-                <!-- FU-653 — Dora's belief, as a remark. Outline, not filled:
-                     it's an opinion that hasn't changed any of the facts. -->
-                <q-chip
-                    v-if="recipe.inference_hint"
-                    dense
-                    outline
-                    :color="recipe.inference_hint === 'at_risk' ? 'warning' : 'positive'"
-                    :icon="ICONS.inferred_hunch"
-                >
-                    <span v-if="!compact">
-                        {{ recipe.inference_hint === 'at_risk' ? 'May be short' : 'May be cookable' }}
-                    </span>
-                    <q-tooltip max-width="300px">{{ inferenceTooltip }}</q-tooltip>
-                </q-chip>
-            </div>
-
             <q-space />
 
             <!-- Owner 2026-08-19: "put the expiring ingredients chip with the
@@ -124,6 +99,16 @@
                  the most compressible way to say the most, and it's the one
                  figure a browse is scanning down the list for. -->
             <RecipeRatingChip :recipe="recipe" class="q-mr-xs" />
+            <!-- Dora's belief. It used to lead the row in its own group on
+                 the left, with a `q-space` after it — so on a row with no
+                 rating and no expiring chip it sat marooned mid-row, and it
+                 landed at a different x on every recipe. Owner 2026-09-01:
+                 "looks really odd on its own in compact view … move it to be
+                 left of the favourite button", and nothing in compact should
+                 be evenly spaced. Anchored to the right cluster it is always
+                 in one spot. Label suppressed here (glyph + tooltip only) —
+                 the row has no width to spend on wording. -->
+            <RecipeBeliefChip :recipe="recipe" :labelled="false" class="q-mr-xs" />
             <BaseButton
                 variant="icon"
                 :icon="recipe.is_favourite ? ICONS.favorite : ICONS.favorite_border"
@@ -158,6 +143,7 @@
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
     import ExpiringChip from 'src/components/recipes/ExpiringChip.vue';
+    import RecipeBeliefChip from 'src/components/recipes/RecipeBeliefChip.vue';
     import RecipeRatingChip from 'src/components/recipes/RecipeRatingChip.vue';
     import { useQuasar } from 'quasar';
     import BaseButton from 'src/components/BaseButton.vue';
@@ -190,7 +176,7 @@
     // own two-or-three-fact second line rather than the card's prose one.
     const {
         totalTime, ingredientCount, kcal, missingIds, cookable,
-        cookButtonColor, cookButtonTooltip, addListTooltip, inferenceTooltip,
+        cookButtonColor, cookButtonTooltip, addListTooltip,
     } = useRecipeDisplay(() => props.recipe);
 
     /** Whether the line under the name has anything on it. Computed rather
@@ -276,10 +262,6 @@
         align-items: center;
         gap: 3px;
         white-space: nowrap;
-    }
-    .recipe-row__chips {
-        flex: 0 0 auto;
-        gap: 4px;
     }
     /* Phones: same squeeze StockItemRow applies — tighter gap and smaller
        icon buttons, so the trailing cluster doesn't eat half the row. */

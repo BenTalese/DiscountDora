@@ -72,6 +72,20 @@ export const ICONS = {
     delete: 'mdi-delete',
     delete_outline: 'mdi-delete-outline',
     done_all: 'mdi-check-all',
+    // Dora's own voice — every "Dora thinks…" / "Dora suggests…" surface, and
+    // nothing else. A literal burger, because the mascot is one (owner pick,
+    // 2026-09-01): it says "this line is Dora's read, not a fact you recorded"
+    // without borrowing a glyph that already means something else here.
+    //   It replaced two icons that were doing this job side by side — the
+    //   magic wand (`auto_awesome`) on "Dora suggests" and a
+    //   lightbulb-with-a-question (`inferred_hunch`) on "Dora thinks" — which
+    //   read as two different systems talking.
+    //   `auto_awesome` is NOT retired: it keeps the "Dora, do this for me"
+    //   generate actions (Build my week, Draft my shop, the AI-mode marker).
+    //   Wand = an action she performs; burger = an opinion she holds.
+    // Not to be confused with `menu` (mdi-menu) — MDI's hamburger is a drawn
+    // sesame-bun burger, not three bars, and the two never appear together.
+    dora_voice: 'mdi-hamburger',
     download: 'mdi-download',
     drive_file_move: 'mdi-folder-move',
     east: 'mdi-arrow-right',
@@ -89,10 +103,6 @@ export const ICONS = {
     home: 'mdi-home',
     info: 'mdi-information',
     install_desktop: 'mdi-monitor-arrow-down',
-    // Dora's inferred-stock hint (Zero-Input Pantry) — a "hunch that questions
-    // your recorded level". Deliberately NOT auto_awesome, which maps to the
-    // magic-wand glyph.
-    inferred_hunch: 'mdi-lightbulb-question-outline',
     kitchen: 'mdi-fridge',
     lightbulb: 'mdi-lightbulb',
     light_mode: 'mdi-weather-sunny',

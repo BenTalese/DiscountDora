@@ -1102,6 +1102,56 @@ def test__meal_plan_print_view__nameless_plan__titles_by_week_not_none(api):
     assert "Week of 2027-03-01" in response.text
 
 
+def test__meal_plan_print_view__slot_columns_follow_household_vocabulary(api):
+    # Owner report 2026-09-01: "Snack still showed up in the print page even
+    # though I had deleted that meal slot." The slot columns were a hardcoded
+    # ("Breakfast", "Lunch", "Dinner", "Snack") tuple in the exporter, so the
+    # sheet ignored the household vocabulary in both directions — it printed a
+    # deleted slot and would have omitted an added one. Columns now come from
+    # the MealSlot table (R-003).
+    recipes = requests.get("http://localhost:5170/api/recipes").json()
+    items = recipes.get("items") if isinstance(recipes, dict) else recipes
+    if not items:
+        return  # No seeded recipes on this install; nothing to schedule.
+
+    # A slot the hardcoded tuple never knew about. Deleting one of the four is
+    # the reported case, but adding a fifth exercises the same seam and does
+    # not depend on the seed's slot list.
+    slot_name = "Supper Club"
+    created_slot = requests.post(
+        "http://localhost:5170/api/meal-slots", json={"name": slot_name},
+    )
+    assert created_slot.status_code in (201, 409), created_slot.text
+
+    created = requests.post(
+        "http://localhost:5170/api/meal-plans",
+        json={
+            "start_date": "2027-03-08",
+            "entries": [{
+                "recipe_id": items[0]["recipe_id"],
+                "scheduled_for": "2027-03-08",
+                "servings": 1,
+                "slot": slot_name,
+            }],
+        },
+    )
+    assert created.status_code == 201, created.text
+    plan_id = created.json()["meal_plan_id"]
+
+    html = requests.get(
+        f"http://localhost:5170/api/meal-plans/{plan_id}/print-view",
+    ).text
+    vocabulary = {
+        s["name"] for s in requests.get("http://localhost:5170/api/meal-slots").json()
+    }
+    assert slot_name in vocabulary
+    assert f"<th>{slot_name}</th>" in html
+    # No column for a name the household does not have. "Snack" is the reported
+    # one; assert the general rule over the whole retired tuple.
+    for stale in {"Breakfast", "Lunch", "Dinner", "Snack"} - vocabulary:
+        assert f"<th>{stale}</th>" not in html, stale
+
+
 # the library now owns "when was
 # the last backup" via `MAX(Backup.created_at)`. The old test that
 # stamped this column on every download lived here; deleted.

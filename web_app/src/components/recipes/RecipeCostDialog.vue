@@ -45,14 +45,27 @@
 
         <q-card-section class="rcost__body">
             <template v-if="priced.length > 0">
+                <!-- Owner feedback 2026-09-01: *"What are the bars on the cost
+                     breakdown showing? Is it their % of the total cost?"* They
+                     weren't — they were each line's share of the *dearest*
+                     line, which is a fine way to rank bars and an impossible
+                     one to read without being told. Share of the total is what
+                     a breakdown is actually asking, so that's what the bar is
+                     now, and the number is printed beside it rather than left
+                     to be inferred from a bar's length. -->
+                <div class="rcost__listhead">Share of the estimate</div>
                 <ul class="rcost__list">
                     <li v-for="line in priced" :key="line.key">
                         <div class="rcost__row">
                             <span class="rcost__name">{{ line.name }}</span>
                             <span class="rcost__amount">{{ formatMoney(line.line_cost!) }}</span>
+                            <span class="rcost__pct">{{ sharePct(line) }}%</span>
                         </div>
                         <div class="rcost__share">
-                            <div class="rcost__sharefill" :style="{ width: sharePct(line) + '%' }"></div>
+                            <div
+                                class="rcost__sharefill"
+                                :style="{ width: sharePct(line) + '%' }"
+                            ></div>
                         </div>
                         <div class="rcost__meta">
                             <span v-if="formatQuantity(line.quantity, line.unit)">
@@ -67,9 +80,16 @@
                 Nothing here could be priced yet.
             </p>
 
+            <!-- Owner feedback 2026-09-01: *"'No price recorded yet' should be
+                 a vertical list, not text separated by dots in a row."* Dots
+                 read as one run-on sentence and wrapped mid-name; these are
+                 individually actionable rows (each is an item you'd go and put
+                 a price on), so they get a line each. -->
             <template v-for="group in unpricedGroups" :key="group.reason">
                 <div class="rcost__grouphead">{{ group.title }}</div>
-                <p class="rcost__groupnames">{{ group.names.join(' · ') }}</p>
+                <ul class="rcost__groupnames">
+                    <li v-for="name in group.names" :key="name">{{ name }}</li>
+                </ul>
             </template>
         </q-card-section>
 
@@ -120,10 +140,16 @@
             .map((l, i) => ({ ...l, key: `${l.name}-${i}` }))
             .sort((a, b) => (b.line_cost ?? 0) - (a.line_cost ?? 0)));
 
-    const dearest = computed(() => priced.value[0]?.line_cost ?? 0);
+    /** Each line as a percentage of the estimate — the question the bar was
+     *  always being read as (owner, 2026-09-01). The denominator is the sum of
+     *  the priced lines rather than `props.total`, so the shares add to 100%
+     *  even when the server's total carries rounding the lines don't. */
+    const pricedTotal = computed(() =>
+        priced.value.reduce((sum, l) => sum + (l.line_cost ?? 0), 0));
+
     function sharePct(line: PricedLine): number {
-        if (dearest.value <= 0) return 0;
-        return Math.max(2, Math.round(((line.line_cost ?? 0) / dearest.value) * 100));
+        if (pricedTotal.value <= 0) return 0;
+        return Math.round(((line.line_cost ?? 0) / pricedTotal.value) * 100);
     }
 
     /** "$0.00 / g" is what a per-gram price rounds to in cents, and it reads
@@ -213,6 +239,13 @@
     }
 
     .rcost__body { max-height: 52vh; overflow-y: auto; }
+    .rcost__listhead {
+        font-size: var(--font-size-xs, 0.6875rem);
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--text-muted);
+    }
     .rcost__list { list-style: none; margin: 0; padding: 0; }
     .rcost__list > li { padding: var(--space-2, 8px) 0; }
     .rcost__row {
@@ -222,6 +255,15 @@
     }
     .rcost__name { flex: 1; min-width: 0; }
     .rcost__amount { font-weight: 700; font-variant-numeric: tabular-nums; }
+    /* Fixed width so the column of percentages lines up under itself — the
+       bar is the shape of the share, this is the value of it. */
+    .rcost__pct {
+        min-width: 3.25rem;
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+        font-size: 0.8125rem;
+        color: var(--text-muted);
+    }
     .rcost__share {
         height: 4px;
         border-radius: var(--radius-pill, 999px);
@@ -229,7 +271,13 @@
         overflow: hidden;
         margin-top: var(--space-1, 4px);
     }
-    .rcost__sharefill { height: 100%; background: var(--brand-primary-soft); }
+    /* A line that rounds to 0% still gets a visible sliver rather than an
+       empty track — but the printed number stays honest about the rounding. */
+    .rcost__sharefill {
+        height: 100%;
+        min-width: 2px;
+        background: var(--brand-primary-soft);
+    }
     .rcost__meta {
         display: flex;
         gap: var(--space-3, 12px);
@@ -247,9 +295,19 @@
         color: var(--text-muted);
     }
     .rcost__groupnames {
-        margin: var(--space-1, 4px) 0 0;
-        font-size: 0.8125rem;
-        color: var(--text-secondary);
+        list-style: none;
+        margin: var(--space-2, 8px) 0 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+    .rcost__groupnames > li {
+        padding: var(--space-2, 8px) var(--space-3, 12px);
+        border-radius: var(--radius-sm, 4px);
+        background: var(--surface-sunken);
+        font-size: 0.875rem;
+        color: var(--text-primary);
     }
     .rcost__empty { color: var(--text-muted); font-size: 0.875rem; margin: 0; }
 </style>

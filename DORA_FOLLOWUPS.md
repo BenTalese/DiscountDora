@@ -39,6 +39,133 @@ long session summary. Distinct from the other logs:
 
 ---
 
+## [OPEN] FU-804 — reported "which day(s) the ingredient is needed" text was not found in the right rail
+- **Raised:** 2026-09-01 (meal-planner owner batch)
+- **Type:** finding
+- **What:** the owner asked, of "This week's shopping": *"We don't need the text
+  of which day(s) the ingredient is needed, this is bloat hiding the important
+  part — how much is needed."* No such text exists in a static read.
+  `MealPlanShoppingSummary`'s row caption was `needs <qty> · <listStatusLabel>`,
+  and `listStatusLabel` says "not on a list" / "on Weekly shop" — never a day.
+  `MealPlanIngredient` carries no day field at all (`stock_item_id`,
+  `stock_item_name`, `total_quantity`, `unit`, `used_in_recipe_ids`,
+  `is_optional`), and the add-to-list dialog's `sources` are **recipe** names,
+  not days.
+- **What was done anyway:** the batch acted on the most likely reading — that
+  this and the adjacent *"'Not on a list' text is redundant"* bullet are the same
+  caption — and reduced the row caption to the quantity alone. So if the owner
+  was describing `listStatusLabel`, it is fixed.
+- **Why open:** per the reported-defect rule, a static read is not proof. If the
+  owner was looking at a real day label, it is somewhere this batch did not
+  touch — most likely the mobile "Add to list" picker or a build-my-week preview.
+- **Recommended resolution:** confirm in browser — ask the owner to point at the
+  text if it is still there after this batch.
+
+## [OPEN] FU-803 — the build-my-week preview still wears the retired ingredient-row shape
+- **Raised:** 2026-09-01 (meal-planner owner batch)
+- **Type:** finding
+- **What:** `MealPlanIngredientRow.vue` was extracted so both right-rail lists
+  code an ingredient the same way — level as a left-hand dot, quantity-only
+  caption, cart button. `MealPlanBuilderDialog.vue:233-242` still renders the
+  shape that replaced: a `q-chip` on the right carrying `stockStatusLabel`, in
+  the same colours the two rail lists just stopped using. Same data, same
+  question, two answers again.
+- **Why deferred:** R-007. The owner's batch was the planner's rails and week;
+  the builder dialog is a separate surface with its own preview/cost layout, and
+  re-skinning it would have meant a visual change he did not ask for in a unit he
+  could not review it in. It is also the only remaining consumer of the
+  `stockStatusLabel` / `stockStatusColour` pair, which it gets from
+  `useStockStatus` directly (not from the planner), so nothing is broken.
+- **Fix shape:** swap the chip block for `<MealPlanIngredientRow>`; the dialog
+  already has `MealPlanIngredient` rows. Check the cart button is wanted there —
+  the preview is of a plan that does not exist yet.
+- **Recommended resolution:** opportunistic — next time the builder dialog is
+  open for other work.
+
+## [OPEN] FU-802 — the planner's rail row is still the third copy of the list-row chrome (see FU-791)
+- **Raised:** 2026-09-01 (meal-planner owner batch)
+- **Type:** finding
+- **What:** not a new problem — a note that this batch touched
+  `MealPlanRecipeRow.vue` (removed its meta line and the log-cook button,
+  restyled the pool controls) **without** taking the `.dora-list-row` extraction
+  [[FU-791]] asks for. The R-001 carve-out comment in that file is still accurate
+  and still the third copy.
+- **Why deferred:** same reason as FU-791 — the extraction re-skins `StockItemRow`
+  and `RecipeRow`, two surfaces the owner has signed off visually, and this unit's
+  scope was the planner.
+- **Recommended resolution:** opportunistic, with FU-791 — this entry exists only
+  so the next reader of FU-791 knows the file moved since it was written.
+
+## [OPEN] FU-801 — `--brand-primary` fails the same ink test as the accent did (R-069)
+- **Raised:** 2026-09-01 (accent-ink sweep)
+- **Type:** finding
+- **What:** measured while fixing the accent. As *ink* on its own theme's
+  component/page surfaces, `--brand-primary` lands at **1.63:1** (lemon-tart),
+  **2.34:1** (sourdough), **3.89:1** (pesto) and **4.01:1** (blueberry) — only
+  cherry-cola clears 4.5. Same class of bug as the accent, same fix shape
+  (`--primary-ink` + split call sites by ground, per R-069).
+- **Why deferred:** different size of job. The accent was consumed through CSS
+  vars at ~20 sites, so it was a contained sweep. Primary is consumed
+  overwhelmingly through Quasar's own `color="primary"` / `text-primary`
+  machinery (buttons, chips, icons, links) rather than through `var(--…)`, so
+  fixing it properly means deciding how the ink token reaches Quasar's classes —
+  not a change to bolt onto an owner-feedback batch.
+- **Impact check first:** many `color="primary"` sites are *fills* (a solid
+  button paints `--text-on-primary` over it) and are perfectly fine. The job
+  starts with an inventory of primary-as-ink sites, not with a blanket swap.
+- **Recommended resolution:** later, as its own unit — pair it with the next
+  theme/contrast pass.
+
+## [OPEN] FU-800 — the burger glyph wants an eyes-on pass at 12–14px
+- **Raised:** 2026-09-01 (Dora-voice icon unification)
+- **Type:** follow-up
+- **What:** every "Dora thinks…" / "Dora suggests…" surface now draws
+  `ICONS.dora_voice` (`mdi-hamburger`, the mascot). Verified rendering live at
+  22px in the attention-rules dialog. The small sizes (12px on the meal-plan
+  rail chip and the shopping-list note, 14px in chat and the plan row, 16px in
+  the stock row) were not seen at paint — the browser pane doesn't composite.
+- **Why deferred:** it's an aesthetic call only the owner can make, and it needs
+  a real browser. The risk to look for is a 12px burger reading as a hamburger
+  *menu*; `mdi-menu` is three bars and the two never appear together, so this is
+  a legibility question rather than a correctness one.
+- **Recommended resolution:** now-ish — walk the DORA_VERIFY "Dora's voice"
+  checklist. If the small sizes are mushy, the fallback is a size floor
+  (14px) on this glyph rather than a different icon.
+
+## [OPEN] FU-799 — sweep the other prose-parsed domain facts (R-068)
+- **Raised:** 2026-09-01 (cook-mode feedback batch)
+- **Type:** follow-up
+- **What:** cook mode's step timer was recovered by regex from the step's text;
+  it now reads a real `RecipeStep.timer_minutes` and labels the fallback as
+  inferred. Generalised as **R-068**. The same instinct is available anywhere
+  the schema is thinner than the feature — the nearest neighbour is the recipe
+  importer's serving/time/quantity parsing (`_parse_recipe_from_text.py`), which
+  is arguably *fine* under R-068's non-goal (it proposes, the user confirms),
+  but has never been checked against it. Grep for regexes over `.text` /
+  `.notes` / `.instructions` and confirm each one either only affects
+  presentation, or proposes-and-confirms, or is labelled.
+- **Why deferred:** out of scope for a cook-mode feedback batch, and each hit
+  needs its own read of whether it drives behaviour or just presentation.
+- **Recommended resolution:** opportunistic — next time the importer is open.
+
+---
+
+## [OPEN] FU-798 — sweep the other full-page surfaces for a pinned-palette shell (R-067)
+- **Raised:** 2026-09-01 (stocktake feedback batch)
+- **Type:** follow-up
+- **What:** the stocktake runner pinned its shell to `--palette-neutral-900`
+  under every theme; that's now fixed and generalised as **R-067**. The same
+  instinct is available to any other route-level "focus mode". Grep
+  `background: var(--palette-` across `web_app/src/pages` + `src/components`
+  and check each hit against R-067 — cook mode and the shopping-list run face
+  are the named candidates.
+- **Why deferred:** out of scope for a stocktake feedback batch, and each hit
+  needs its own look at whether the surface is genuinely inverted-by-design (a
+  scrim, a toast) or just hard-coded.
+- **Recommended resolution:** opportunistic — next time either surface is open.
+
+---
+
 ## [OPEN] FU-797 — the Firefox-mobile login line is mitigated, not confirmed fixed
 - **Raised:** 2026-08-31 (recipe-view feedback batch)
 - **Type:** finding
@@ -413,8 +540,16 @@ long session summary. Distinct from the other logs:
   `negative`/`warning` branches on `color=`/`text-color="white"`.
 - **Why deferred:** scope — the session that found it was fixing toasts, and this
   is a different component on a different surface. Pre-existing, not introduced.
-- **Recommended resolution:** **opportunistic** — next time anything touches the
-  recipe chip run or a theme-compliance sweep runs. One-line change.
+- **Recommended resolution:** **needs an owner call, then one-line.** Updated
+  2026-09-01: the recipe-view chip batch touched the adjacent run and did *not*
+  fix this, deliberately. There are now two shared chip classes in
+  `colours.scss` and this chip sits between them — `.dora-chip--neutral`
+  (yesterday's answer for the cookbook's dietary + belief chips, which this
+  chip sits beside) and `.dora-chip--tint` (today's answer for the recipe
+  row's missing / "Use soon" pair, which says the same *thing*). Picking one is
+  a design decision on a surface the owner signed off two days ago, not a
+  cleanup, so it wasn't taken unasked. Either target fixes the R-002 violation,
+  since both are token-driven. Ask which, then it's a one-line change.
 
 ## [OPEN] FU-776 — Should the buy verdict's plan axis discount items already on a shopping list?
 - **Raised:** 2026-08-28 (buy-verdict plan-axis brief)
@@ -622,6 +757,11 @@ long session summary. Distinct from the other logs:
   finish flow — under recipe B's URL. Reproduced live: hopping between two cook
   routes left the first recipe's step card on screen indefinitely; only a hard
   reload corrected it. There is no `watch` on `route.params.id`.
+  **Re-confirmed live 2026-09-01** during the cook-mode batch, and it has a
+  second face worth recording: after a *failed* load the page latches
+  "Recipe not found." for every subsequent id too, because `recipe.value = null`
+  is set in `onMounted`'s `catch` and nothing ever retries. Whatever the fix is,
+  it has to clear that state as well.
 - **Why deferred:** out of scope for a visual-feedback batch, and it needs a
   decision rather than a reflex `watch`: re-fetching mid-cook must not silently
   discard session state (headcount, session swaps, the timer, the step position),

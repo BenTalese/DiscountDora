@@ -1775,7 +1775,7 @@
         background: color-mix(in srgb, var(--text-primary) 18%, transparent);
     }
     .stock-splitter--peeking :deep(.dora-splitter__separator):hover {
-        background: var(--q-accent);
+        background: var(--accent-ink);
     }
     /* Peek pane. Its panel owns the scroll now, so pin the embedded
        detail header. Losing that header on scroll was the 2026-06-18

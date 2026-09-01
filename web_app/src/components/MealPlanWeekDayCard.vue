@@ -4,10 +4,35 @@
         class="day-card q-mb-sm"
         :class="{ 'day-card--past': isPast, 'day-card--has-target': hasTargetedSlot }"
     >
-        <q-card-section class="dora-bg-sunken q-py-xs row items-center">
+        <!-- The header is a real <button> only when there is something to
+             collapse, so a normal day card keeps a plain, non-interactive
+             header rather than announcing itself as a control that does
+             nothing (D-016 / A6). -->
+        <component
+            :is="collapsible ? 'button' : 'div'"
+            :type="collapsible ? 'button' : undefined"
+            class="dora-bg-sunken q-py-xs q-px-md row items-center day-card__head"
+            :class="{ 'day-card__head--toggle': collapsible }"
+            :aria-expanded="collapsible ? String(!collapsed) : undefined"
+            :aria-label="collapsible
+                ? `${collapsed ? 'Show' : 'Hide'} ${day.label} ${formatDate(day.iso)}`
+                : undefined"
+            @click="collapsible && (collapsed = !collapsed)"
+        >
+            <q-icon
+                v-if="collapsible"
+                :name="collapsed ? ICONS.chevron_right : ICONS.expand_more"
+                size="18px"
+                class="q-mr-xs dora-text-muted"
+            />
             <div class="text-weight-bold">{{ day.label }}</div>
             <div class="text-caption q-ml-sm dora-text-muted">{{ formatDate(day.iso) }}</div>
             <q-badge v-if="isToday" color="primary" class="q-ml-sm" label="Today" />
+            <!-- Collapsed, the header IS the card, so it has to say what the
+                 day held — otherwise a folded past week reads as an empty one. -->
+            <div v-if="collapsed" class="day-card__summary text-caption dora-text-muted">
+                {{ collapsedSummary }}
+            </div>
             <q-space />
             <!-- FU-637 — a serving of each meal planned for this day. Not an
                  intake figure: the plan schedules food, not plates for named
@@ -26,8 +51,8 @@
                     calorie figure yet</template>.
                 </q-tooltip>
             </div>
-        </q-card-section>
-        <q-card-section class="q-pa-sm column q-gutter-xs">
+        </component>
+        <q-card-section v-if="!collapsed" class="q-pa-sm column q-gutter-xs">
             <!-- R-Phase 6 §4.6 — slot row is a real <button> so it's
                 focusable, announced, and Enter/Space-activated. Past days
                 render a plain region (no action). -->
@@ -146,7 +171,7 @@
     import { ICONS } from 'src/style/icons';
     import type { MealPlanDayNutrition, MealPlanEntry } from 'src/models/mealPlan';
     import type { WeekDay } from 'src/composables/useMealPlanner';
-    import { computed, ref } from 'vue';
+    import { computed, ref, watch } from 'vue';
 
     const props = defineProps<{
         day: WeekDay;
@@ -160,10 +185,49 @@
         hoveredRecipeIds: Set<string>;
         formatDate: (iso: string) => string;
         showAllSlots: boolean;
+        /**
+         * Start folded (owner 2026-09-01: "past days should be collapsed by
+         * default *if today is within the displayed week*, because we want to
+         * see the whole past week in one go").
+         *
+         * The condition is the host's to compute — it is a fact about the WEEK
+         * (does it contain today), not about this day — and it is deliberately
+         * not just `isPast`: on a week you have navigated back to, every card
+         * is a past card, and folding all seven would leave a screen of headers
+         * saying nothing. Collapsing is only useful when past days are the
+         * minority sharing the view with days you can still act on.
+         */
+        collapsedByDefault?: boolean;
         /** FU-637 — this day's server-summed calories. Null when nutrition is
          *  off or nothing on the day could be counted. */
         nutrition?: MealPlanDayNutrition | null;
     }>();
+
+    /* User-owned once the user touches it; re-seeded whenever the host's
+       default changes — which is what a week change looks like from in here,
+       since `day.iso` and `collapsedByDefault` move together. Without the
+       watch, paging from this week to last week would keep Monday folded
+       because *this* Monday was in the past. */
+    const collapsed = ref(props.collapsedByDefault ?? false);
+    watch(
+        () => [props.day.iso, props.collapsedByDefault] as const,
+        () => { collapsed.value = props.collapsedByDefault ?? false; },
+    );
+    /** Only a card that starts folded offers the control: an upcoming day has
+     *  nothing worth hiding and gains a stray chevron if it does. */
+    const collapsible = computed(() => props.collapsedByDefault === true);
+
+    const collapsedSummary = computed(() => {
+        const all = [
+            ...props.slotNames.flatMap((slot) => props.slotEntries(slot)),
+            ...props.otherEntries,
+        ];
+        if (!all.length) return 'nothing planned';
+        // Names, not a bare count: "2 meals" is exactly as uninformative as the
+        // folded card it is standing in for. Clamped by CSS, not by slicing —
+        // a truncated list is still a list, whereas "+1 more" is another count.
+        return all.map((e) => e.recipe_name).join(', ');
+    });
 
     /* The slot picked from the add-meal menu, held until the menu has finished
        hiding. See the `@hide` comment in the template: emitting on click races
@@ -223,6 +287,29 @@
 <style scoped>
     .day-card--past {
         opacity: 0.6;
+    }
+    /* Reset the native button so a collapsible header still paints as the same
+       sunken strip as a plain one — the two sit side by side in one week. */
+    .day-card__head {
+        width: 100%;
+        border: 0;
+        font: inherit;
+        color: inherit;
+        text-align: left;
+    }
+    .day-card__head--toggle {
+        cursor: pointer;
+    }
+    .day-card__head--toggle:focus-visible {
+        outline: 2px solid var(--brand-primary);
+        outline-offset: -2px;
+    }
+    .day-card__summary {
+        margin-left: var(--space-2);
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
     }
     /* Reset native button affordances — slot rows are buttons for
         accessibility (R-Phase 6 §4.6) but render as plain rows. */

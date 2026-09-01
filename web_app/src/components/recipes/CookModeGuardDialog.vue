@@ -15,10 +15,39 @@
         closable
         card-style="min-width: 320px; max-width: 460px"
     >
-        <q-card-section>
-            <ul class="q-mt-sm q-mb-none dora-text-secondary">
-                <li v-for="reason in reasons" :key="reason">{{ reasonText(reason) }}</li>
-            </ul>
+        <!--
+            Owner feedback 2026-09-01: *"Weird dot point pushing out one line
+            of text and it doesn't tell you much. Update it to say 'you're
+            missing these ingredients' and list them out in a vertical list."*
+
+            The old body was a `<ul>` whose every branch produced exactly one
+            long sentence, so the bullet marker sat there indenting a
+            paragraph — a list of one — and the sentence it indented was a
+            count with no names in it. Each reason now owns a headed block:
+            a short line saying what the problem is, then the actual
+            ingredients underneath, one per line. "Unsaved changes" has no
+            list, so it stays a plain line.
+        -->
+        <q-card-section class="cmg__body">
+            <div v-if="dirty" class="cmg__note">You have unsaved changes.</div>
+
+            <div v-if="missingNames.length > 0" class="cmg__block">
+                <p class="cmg__lead">You're missing these ingredients:</p>
+                <ul class="cmg__names">
+                    <li v-for="name in missingNames" :key="name">{{ name }}</li>
+                </ul>
+            </div>
+
+            <div v-if="unlinkedNames.length > 0" class="cmg__block">
+                <p class="cmg__lead">
+                    These aren't linked to a pantry item, so Dora can't tell
+                    whether you have them:
+                </p>
+                <ul class="cmg__names">
+                    <li v-for="name in unlinkedNames" :key="name">{{ name }}</li>
+                </ul>
+            </div>
+
             <!-- Owner feedback 2026-08-24 — "missing" and "missing, but you
                  have something you could use instead" are different answers,
                  and this dialog is the last place the second one can change
@@ -66,9 +95,8 @@
     import { ICONS } from 'src/style/icons';
     import type { Recipe } from 'src/models/recipe';
     import {
-        cookGuardReasons,
-        missingStockItemIds,
-        type CookGuardReason,
+        missingIngredientNames,
+        unlinkedIngredientNames,
     } from 'src/helpers/cookModeGuard';
 
     const props = withDefaults(
@@ -103,36 +131,65 @@
         set: (value) => emit('update:modelValue', value),
     });
 
-    const reasons = computed(() => cookGuardReasons(props.recipe, props.dirty));
     const substitutableNames = computed(() => props.substitutable ?? []);
 
-    const missingCount = computed(() =>
-        props.recipe ? missingStockItemIds(props.recipe).length : 0,
-    );
-    const unlinkedCount = computed(() => props.recipe?.unlinked_ingredient_count ?? 0);
-
-    function plural(n: number): string {
-        return n === 1 ? '' : 's';
-    }
-
-    function reasonText(reason: CookGuardReason): string {
-        switch (reason) {
-            case 'unsaved':
-                return 'You have unsaved changes.';
-            case 'unknown-cookability':
-                return `Cookability is unknown — ${unlinkedCount.value} ingredient${plural(unlinkedCount.value)} still need linking.`;
-            case 'missing-ingredients':
-                return `This recipe isn't cookable now — ${missingCount.value} ingredient${plural(missingCount.value)} missing.`;
-        }
-    }
+    /* The two lists the dialog is really about. `cookGuardReasons` still owns
+     * the *decision* to open this at all (the callers check `needsCookGuard`);
+     * what's rendered here is the same two conditions expressed as names,
+     * which is what the owner asked to see. A recipe can be in both states at
+     * once — some rows out of stock, others never linked — so both blocks are
+     * independent `v-if`s rather than a switch. */
+    const missingNames = computed(() => missingIngredientNames(props.recipe));
+    const unlinkedNames = computed(() => unlinkedIngredientNames(props.recipe));
 </script>
 
 <style scoped lang="scss">
+    .cmg__body {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-4, 16px);
+    }
+
+    .cmg__note {
+        color: var(--text-secondary);
+        font-size: 0.875rem;
+    }
+
+    .cmg__lead {
+        margin: 0 0 var(--space-2, 8px);
+        color: var(--text-primary);
+        font-size: 0.9375rem;
+    }
+
+    /* A vertical list of names, not a bulleted paragraph: no markers, one
+       name per line, each on the sunken ground so the block reads as data
+       rather than prose. */
+    .cmg__names {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        max-height: 40vh;
+        overflow-y: auto;
+    }
+
+    .cmg__names > li {
+        padding: var(--space-2, 8px) var(--space-3, 12px);
+        border-radius: var(--radius-sm, 4px);
+        background: var(--surface-sunken);
+        color: var(--text-primary);
+        font-size: 0.875rem;
+        font-weight: 600;
+    }
+
     .cmg__subs {
         display: flex;
         align-items: flex-start;
         gap: var(--space-2, 8px);
-        margin-top: var(--space-3, 12px);
+        /* The body is a flex column with its own gap now — the old margin
+           would stack on top of it. */
         padding: var(--space-2, 8px) var(--space-3, 12px);
         border-radius: var(--radius-md, 6px);
         background: var(--semantic-positive-soft);

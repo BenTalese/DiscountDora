@@ -35,3 +35,23 @@ export function colourForSequence(sequence: number | null | undefined): string |
     if (sequence === null || sequence === undefined) return null;
     return COLOUR_BY_SEQUENCE[sequence] ?? null;
 }
+
+// The soft-tinted pill (`.dora-chip--tint*`, colours.scss) keyed to the same
+// sequence, so a level rendered as a chip carries the D-001 colour without
+// each caller re-deriving it. Unknown sequences fall to the neutral variant
+// rather than an invented colour — grey means "not set", never a real level.
+const TINT_BY_SEQUENCE: Record<number, string> = {
+    [STOCKED_SEQUENCE]: 'dora-chip--tint-positive',
+    [LOW_STOCK_SEQUENCE]: 'dora-chip--tint-warning',
+    [OUT_OF_STOCK_SEQUENCE]: 'dora-chip--tint-negative',
+};
+
+/** Tint-pill classes for a level sequence — spread onto a `<span>` alongside
+ *  whatever the caller's own layout class is. */
+export function tintClassForSequence(sequence: number | null | undefined): string[] {
+    const variant =
+        sequence === null || sequence === undefined
+            ? undefined
+            : TINT_BY_SEQUENCE[sequence];
+    return ['dora-chip--tint', variant ?? 'dora-chip--tint-neutral'];
+}

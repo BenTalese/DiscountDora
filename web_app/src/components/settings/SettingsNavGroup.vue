@@ -147,7 +147,7 @@
         bottom: 6px;
         width: 3px;
         border-radius: 2px;
-        background: var(--q-accent);
+        background: var(--accent-ink);
     }
     .settings-nav-group__icon { flex: 0 0 auto; }
     .settings-nav-group__label {

@@ -509,7 +509,7 @@
                 class="col-12 col-sm-6 col-lg-6"
                 :style="{ order: cardCssOrder('suggestions') }"
             >
-                <DashboardCard icon="auto_awesome" title="Dora suggests">
+                <DashboardCard :icon="ICONS.dora_voice" title="Dora suggests">
                     <template #action>
                         <span
                             v-if="suggestionStore.count > 2"
@@ -1293,7 +1293,7 @@
         // Suggestions. Reuses the /auto-generate engine with sensible
         // defaults (meal-plan-for-the-week + low/out + flagged).
         { id: 'draft_shop', label: 'Draft this week\'s shop', icon: ICONS.playlist_add_check, zone: 'act' },
-        { id: 'suggestions', label: 'Dora suggests', icon: 'auto_awesome', zone: 'act' },
+        { id: 'suggestions', label: 'Dora suggests', icon: ICONS.dora_voice, zone: 'act' },
         { id: 'cookable', label: 'Cookable tonight', icon: ICONS.restaurant_menu, zone: 'today' },
         { id: 'meal_plan', label: 'The week ahead', icon: ICONS.calendar_month, zone: 'today' },
         { id: 'primary_list', label: 'Primary shopping list', icon: ICONS.shopping_cart, zone: 'today' },

@@ -18,6 +18,7 @@ from uuid import UUID
 from sqlalchemy import select
 
 from dora_api.app import db
+from dora_api.domain.location_breadcrumb import build_breadcrumb
 from dora_api.domain.entities.recipe import Recipe
 from dora_api.domain.entities.recipe_ingredient import RecipeIngredient
 from dora_api.domain.entities.shopping_list import (
@@ -476,20 +477,14 @@ class GetStockItemDetailHandler:
 
         # Walk the location's parent chain so the detail page can show
         # "Pantry > Middle shelf > Left side" without a second request.
+        # R-003 — one breadcrumb implementation (`domain.location_breadcrumb`).
+        # This was a hand-rolled parent walk, as were three others.
         _Breadcrumb: List[str] = []
         if _StockItem.stock_location is not None:
-            _LocationLookup = {
-                loc.id: loc for loc in self.repository.get(StockLocation).all()
-            }
-            _Cursor: StockLocation | None = _StockItem.stock_location
-            _Safety = 16
-            while _Cursor is not None and _Safety > 0:
-                _Breadcrumb.append(_Cursor.name)
-                _Cursor = (
-                    _LocationLookup.get(_Cursor.parent_id) if _Cursor.parent_id else None
-                )
-                _Safety -= 1
-            _Breadcrumb.reverse()
+            _Breadcrumb = build_breadcrumb(
+                _StockItem.stock_location,
+                {loc.id: loc for loc in self.repository.get(StockLocation).all()},
+            )
 
         # Substitutes — read straight from the association table (the generic
         # repository can't self-join StockItem). Level names come from a small

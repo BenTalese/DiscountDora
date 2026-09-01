@@ -112,21 +112,44 @@ export function useRecipeDisplay(recipe: () => Recipe): RecipeDisplay {
         if (cookable.value === null) return 'grey';
         return cookable.value ? 'primary' : 'warning';
     });
+    // Owner 2026-09-01: "Tooltip for the cook button should be 'Enter cook
+    // mode' and 'Missing X ingredients'. That's it." The old copy explained
+    // the cookability *model* ("Cook anyway — …", "Link 3 ingredients to
+    // check cookability — this is a stock-item feature") in the one place
+    // that can't afford an explanation. The unknown (`null`) case folds into
+    // "Enter cook mode": the button does exactly that, and the grey colour
+    // already says the verdict is unknown.
     const cookButtonTooltip = computed(() => {
-        if (cookable.value === null) {
-            return `Link ${unlinkedCount.value} ingredient${unlinkedCount.value === 1 ? '' : 's'} to check cookability — this is a stock-item feature`;
+        if (cookable.value === false) {
+            const n = missingIds.value.length;
+            return `Missing ${n} ingredient${n === 1 ? '' : 's'}`;
         }
-        return cookable.value
-            ? 'Cook'
-            : `Cook anyway — missing ${missingIds.value.length} ingredient(s)`;
+        return 'Enter cook mode';
     });
+
+    /** Distinct linked stock items the recipe reads as low (not missing —
+     *  `is_low_stock` and `is_missing` are separate server verdicts). */
+    const lowIds = computed(() => [
+        ...new Set(
+            recipe().ingredients
+                .filter((i) => i.is_low_stock && !i.is_missing && i.stock_item_id !== null)
+                .map((i) => i.stock_item_id as string),
+        ),
+    ]);
+
+    // Owner 2026-09-01, three states: what the button will add, a warning
+    // that stock is thin even though nothing is missing, and the
+    // nothing-to-do case. The unlinked (`null`) case keeps its own wording:
+    // there, the button genuinely can't work out what to add, and saying
+    // "all in stock" would be a claim the app hasn't got.
     const addListTooltip = computed(() => {
         if (cookable.value === null) {
             return `${unlinkedCount.value} ingredient${unlinkedCount.value === 1 ? '' : 's'} need linking first`;
         }
-        return cookable.value
-            ? 'Add ingredients to a list'
-            : `Add ${missingIds.value.length} missing to a list`;
+        if (cookable.value === false) {
+            return `Add ${missingIds.value.length} missing to a list`;
+        }
+        return lowIds.value.length > 0 ? 'Some ingredients are low' : 'All ingredients in stock';
     });
 
     // FU-653 — names the items, because "may be short" without saying what

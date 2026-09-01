@@ -17,7 +17,7 @@ from dora_api.domain.entities.recipe_collection import RecipeCollection
 from dora_api.domain.entities.recipe_ingredient import RecipeIngredient
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.features.meal_slots.slot_validation import (
-    get_valid_slot_names, invalid_slot_message)
+    allowed_slot_names, get_valid_slot_names, invalid_slot_message)
 from dora_api.features.recipes.recipe_tag_access import set_tag_ids_for_recipe
 from dora_api.features.recipes.recipe_tool_access import (
     set_tool_ids_for_recipe, sync_recipe_tools_from_steps,
@@ -90,6 +90,10 @@ class UpdateRecipeStepRequest(BaseModel):
     ingredient_client_ids: List[str] = Field(default_factory = list)
     tool_ids: List[UUID] = Field(default_factory = list)
     section_client_id: str | None = Field(default = None, max_length = 64)
+    # Owner feedback 2026-09-01 — explicit per-step timer, in minutes. The
+    # ceiling is a day: past that it isn't a cook-mode countdown, it's a
+    # ferment, and nobody stands at the bench for it.
+    timer_minutes: int | None = Field(default = None, ge = 1, le = 1440)
 
 
 class UpdateRecipeSectionRequest(BaseModel):
@@ -206,11 +210,17 @@ class UpdateRecipeHandler:
                     f"Allowed: {', '.join(ALLOWED_DIFFICULTY_VALUES)}."
                 ),
             )
-        # `time_of_day` validated against the household MealSlot
-        # vocabulary (R-010); legacy stored values persist.
+        # `time_of_day` validated against the household MealSlot vocabulary
+        # (R-010) plus whatever this recipe already holds. Same seam as
+        # `update_meal_plan` and fixed the same way (2026-09-01): deleting a
+        # slot leaves stored labels intact by design, but the recipe editor
+        # resends `time_of_day` on every save, so a recipe tagged with a
+        # since-deleted slot could not be edited at all until you also changed
+        # its slot. A new off-vocab value is still refused.
         if "time_of_day" in _SetFields and request.time_of_day is not None:
             _ValidSlots = get_valid_slot_names(self.repository)
-            if request.time_of_day not in _ValidSlots:
+            _AllowedSlots = allowed_slot_names(_ValidSlots, [_Recipe.time_of_day or ""])
+            if request.time_of_day not in _AllowedSlots:
                 return UpdateRecipeResponse(
                     invalid_vocabulary_message=invalid_slot_message(
                         request.time_of_day, _ValidSlots
@@ -404,6 +414,7 @@ class UpdateRecipeHandler:
                         sequence=step.sequence,
                         text=step.text,
                         hint=step.hint,
+                        timer_minutes=step.timer_minutes,
                         ingredient_ids=[
                             resolved
                             for resolved in (_resolve_ing(c) for c in step.ingredient_client_ids)

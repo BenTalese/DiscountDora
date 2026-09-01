@@ -113,7 +113,9 @@
                 class="dora-suggestion-panel"
             >
                 <div class="text-caption dora-text-muted q-mb-xs">
-                    <q-icon name="auto_awesome" size="14px" class="q-mr-xs" />
+                    <!-- R-034: was a bare Material name, which the MDI icon
+                         set doesn't resolve. -->
+                    <q-icon :name="ICONS.dora_voice" size="14px" class="q-mr-xs" />
                     Suggestions
                 </div>
                 <div
@@ -1724,21 +1726,18 @@
         opacity: 1;
     }
     /* Bot name + accent-style buttons. The brand accent is gorgeous on
-       dark backdrops but vanishes against light cards; in light themes
-       we fall back to the standard text colour for legibility, in dark
-       themes the accent shines. */
+       dark backdrops but vanishes against light cards — that used to be
+       handled here with a `.body--dark` fork that dropped the accent
+       entirely in light themes. --accent-ink is that idea as a token
+       (tokens.scss): the accent hue, held to D-002's 4.5:1 floor on every
+       surface, so one declaration covers both modes and the light themes
+       keep the accent identity instead of falling back to plain ink. */
     .dora-bot-name {
         font-weight: 700;
-        color: var(--text-primary);
-    }
-    .body--dark .dora-bot-name {
-        color: var(--q-accent);
+        color: var(--accent-ink);
     }
     .dora-accent-btn {
-        color: var(--text-primary);
-    }
-    .body--dark .dora-accent-btn {
-        color: var(--q-accent);
+        color: var(--accent-ink);
     }
     /* Inline blinking caret shown only while a dora message is mid-reveal.
        Visual hint that more text is coming, paired with the talking face. */

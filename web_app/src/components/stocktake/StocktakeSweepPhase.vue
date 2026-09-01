@@ -41,8 +41,8 @@
                 <q-item-section>
                     <q-item-label class="stocktake-sweep__name">
                         {{ item.name }}
-                        <span v-if="item.stock_location_name" class="dora-text-muted-7">
-                            · {{ item.stock_location_name }}
+                        <span v-if="locationOf(item)" class="dora-text-muted-7">
+                            · {{ locationOf(item) }}
                         </span>
                     </q-item-label>
                     <!-- The evidence. "Dora's stopped tracking this" is only
@@ -59,7 +59,7 @@
                             variant="subtle"
                             dense
                             :icon="ICONS.check"
-                            label="I still keep this"
+                            label="I still keep this…"
                             :disable="busy"
                             @click="emit('keep', item)"
                         />
@@ -102,12 +102,22 @@
     import BaseButton from 'src/components/BaseButton.vue';
     import { ICONS } from 'src/style/icons';
     import { formatDate } from 'src/composables/useDateFormat';
+    import { formatLocation } from 'src/helpers/locationDisplay';
     import type { StocktakeSweptItem } from 'src/services/api/stocktakeApiService';
 
     defineProps<{
         items: StocktakeSweptItem[];
         busy?: boolean;
     }>();
+
+    /** Full breadcrumb, not the leaf. Owner, 2026-09-01: "Top shelf" on its own
+     *  names nothing — and deciding whether you still keep something is easier
+     *  when you can see where it was meant to live. Falls back to the leaf name
+     *  for rows that pre-date the breadcrumb field. */
+    function locationOf(item: StocktakeSweptItem): string {
+        return formatLocation(item.stock_location_breadcrumb, 'full')
+            || (item.stock_location_name ?? '');
+    }
 
     // The page performs every one of these — it owns the API service, the level
     // picker dialog and the summary counters. This component only reports the
@@ -131,9 +141,11 @@
         padding: 16px;
         gap: var(--space-3);
     }
+    /* Page ink — the runner shell follows the theme now (owner, 2026-09-01)
+       rather than being hard-coded dark under every theme. */
     .stocktake-sweep__head {
         text-align: center;
-        color: var(--text-inverse);
+        color: var(--text-primary);
     }
     .stocktake-sweep__list {
         flex: 1 1 auto;

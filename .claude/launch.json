@@ -98,6 +98,23 @@
             }
         },
         {
+            "name": "dora-verify-backend-5171",
+            "runtimeExecutable": ".venv\\Scripts\\python.exe",
+            "runtimeArgs": [
+                "-m",
+                "dora_api.startup"
+            ],
+            "port": 5171,
+            "env": {
+                "DORA_API_PORT": "5171",
+                "DORA_DB_PATH": "data/scratch-verify.db",
+                "DORA_DEBUG": "true",
+                "DORA_ALLOW_DESTRUCTIVE": "true",
+                "DORA_LOG_LEVEL": "WARNING",
+                "DORA_SEED_DATASET": "dense"
+            }
+        },
+        {
             "name": "dora-verify-backend-5171-linux",
             "runtimeExecutable": ".venv/bin/python",
             "runtimeArgs": [

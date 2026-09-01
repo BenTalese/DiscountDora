@@ -278,7 +278,9 @@
         font-size: 0.75rem;
         margin-top: 2px;
     }
-    .food-row__exact { color: var(--text-accent); }
+    // --text-accent was never defined — the declaration was invalid and the
+    // row simply inherited. Points at the accent ink token now (2026-09-01).
+    .food-row__exact { color: var(--accent-ink); }
     .food-row__source {
         flex: 0 0 auto;
         font-size: 0.6875rem;

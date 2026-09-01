@@ -16,7 +16,7 @@
  *   Sourdough Dark hand-designed: warm browns + amber on dark crust.
  *
  * Each theme owns:
- *   Brand: primary, secondary, accent (+ soft variants)
+ *   Brand: primary, secondary, accent (+ soft variants, + accent ink)
  *   Surfaces: page, component, elevated, sunken, toolbar, on-toolbar
  *   Hero gradient: 3 stops — Dashboard hero band reads --hero-gradient
  *   Text: primary, secondary, muted, on-primary, on-accent
@@ -43,6 +43,7 @@
     --brand-secondary-soft: hsl(189 35% 88%);
     --brand-accent: hsl(50 99% 56%);
     --brand-accent-soft: hsl(50 95% 92%);
+    --accent-ink: hsl(50 99% 24%);                   /* 5.7:1 on white, 4.7:1 on sunken */
     --nav-slide-flash: hsl(330 90% 65%);
 
     --surface-page: hsl(168 38% 94%);
@@ -95,6 +96,7 @@
     --brand-secondary-strong: hsl(170 32% 58%);   /* indicator fill — see tokens.scss */
     --brand-accent: hsl(150 48% 40%);
     --brand-accent-soft: hsla(150, 48%, 40%, 0.22);
+    --accent-ink: hsl(150 48% 45%);                  /* raw accent was 3.7:1 on elevated; lifted to 4.6:1 */
     --nav-slide-flash: hsl(95 85% 60%);
 
     --surface-page: hsl(165 60% 5%);              /* #00120B */
@@ -160,6 +162,7 @@
     --brand-secondary-soft: hsl(189 35% 88%);
     --brand-accent: hsl(48 99% 56%);
     --brand-accent-soft: hsl(48 95% 92%);
+    --accent-ink: hsl(48 99% 25%);                   /* 5.6:1 on white, 4.6:1 on sunken */
     --nav-slide-flash: hsl(8 90% 62%);
 
     --surface-page: hsl(40 33% 96%);
@@ -210,6 +213,7 @@
     --brand-secondary-strong: hsl(105 42% 58%);   /* indicator fill — see tokens.scss */
     --brand-accent: hsl(23 100% 57%);             /* #FF8427 */
     --brand-accent-soft: hsla(23, 100%, 57%, 0.18);
+    --accent-ink: hsl(23 100% 58%);                  /* raw accent was 4.49:1 on elevated; a hair lifted to 4.6:1 */
     --nav-slide-flash: hsl(320 95% 68%);
 
     --surface-page: hsl(225 16% 14%);             /* #1E212B */
@@ -275,6 +279,7 @@
     --brand-secondary-soft: hsl(220 30% 86%);
     --brand-accent: hsl(195 90% 60%);
     --brand-accent-soft: hsl(195 80% 92%);
+    --accent-ink: hsl(195 90% 29%);                  /* 5.7:1 on component, 4.7:1 on sunken */
     --nav-slide-flash: hsl(30 95% 62%);
 
     --surface-page: hsl(218 35% 95%);
@@ -324,6 +329,7 @@
     --brand-secondary-strong: hsl(184 22% 64%);   /* indicator fill — see tokens.scss */
     --brand-accent: hsl(232 41% 75%);             /* #A7ACD9 */
     --brand-accent-soft: hsla(232, 41%, 75%, 0.18);
+    --accent-ink: var(--brand-accent);               /* already 5.9:1 on elevated */
     --nav-slide-flash: hsl(340 80% 72%);
 
     --surface-page: hsl(220 18% 11%);
@@ -389,6 +395,7 @@
     --brand-secondary-soft: hsl(355 25% 86%);
     --brand-accent: hsl(36 85% 56%);
     --brand-accent-soft: hsl(36 80% 92%);
+    --accent-ink: hsl(36 85% 30%);                   /* 5.6:1 on component, 4.6:1 on sunken */
     --nav-slide-flash: hsl(80 80% 55%);
 
     --surface-page: hsl(20 35% 95%);
@@ -442,6 +449,7 @@
     --brand-secondary-strong: hsl(20 30% 62%);
     --brand-accent: hsl(74 36% 44%);              /* #809848 */
     --brand-accent-soft: hsla(74, 36%, 44%, 0.18);
+    --accent-ink: hsl(74 36% 46%);                   /* raw accent was 4.2:1 on elevated; lifted to 4.6:1 */
     --nav-slide-flash: hsl(95 75% 68%);
 
     --surface-page: hsl(335 100% 9%);             /* #2E0014 */
@@ -507,6 +515,7 @@
     --brand-secondary-soft: hsl(28 22% 86%);
     --brand-accent: hsl(45 88% 60%);
     --brand-accent-soft: hsl(45 80% 92%);
+    --accent-ink: hsl(45 88% 26%);                   /* 5.6:1 on component, 4.5:1 on sunken */
     --nav-slide-flash: hsl(195 85% 55%);
 
     --surface-page: hsl(36 36% 92%);
@@ -556,6 +565,7 @@
     --brand-secondary-strong: hsl(28 38% 62%);    /* indicator fill — see tokens.scss */
     --brand-accent: hsl(45 90% 65%);
     --brand-accent-soft: hsla(45, 90%, 65%, 0.18);
+    --accent-ink: var(--brand-accent);               /* already 9.1:1 on elevated */
     --nav-slide-flash: hsl(195 90% 68%);
 
     --surface-page: hsl(28 35% 8%);               /* dark crust */

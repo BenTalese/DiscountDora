@@ -27,6 +27,14 @@ class RecipeStep(BaseEntity):
     # steps may belong to a named section; sub-steps inherit their parent's
     # section visually. Stored on every row to keep the read path flat.
     section_id: UUID | None = None
+    # Owner feedback 2026-09-01 — cook mode used to *guess* a step's timer by
+    # regex over the step text ("simmer for 20 minutes"). A guess is a fair
+    # deal for a free-text method, where there is nowhere to record the fact;
+    # a structured step has a home for it, so it gets one. NULL = no timer on
+    # this step (cook mode then falls back to the text sniff, so nothing that
+    # worked before stops working). Minutes, not seconds: a recipe step is
+    # never timed to the second.
+    timer_minutes: int | None = None
 
     class Fields(BaseEntity.Fields):
         RECIPE_ID = "recipe_id"
@@ -35,3 +43,4 @@ class RecipeStep(BaseEntity):
         TEXT = "text"
         HINT = "hint"
         SECTION_ID = "section_id"
+        TIMER_MINUTES = "timer_minutes"

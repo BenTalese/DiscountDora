@@ -13,7 +13,7 @@
         in the tooltip (Charter 3/7: honest + explainable).
     -->
     <span v-if="belief && shouldShow" class="belief-hint">
-        <q-icon :name="ICONS.inferred_hunch" size="14px" class="belief-hint__icon" />
+        <q-icon :name="ICONS.dora_voice" size="14px" class="belief-hint__icon" />
         <span class="belief-hint__text">Dora thinks {{ bandWord }}</span>
         <q-tooltip max-width="260px" anchor="top middle" self="bottom middle">
             {{ belief.reason }}

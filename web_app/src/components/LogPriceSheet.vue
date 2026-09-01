@@ -36,15 +36,16 @@
                         clickable
                         @click="selectItem(item)"
                     >
-                        <q-item-section avatar>
-                            <q-avatar
-                                :color="levelColour(item.stock_level_id) ?? undefined"
-                                :class="{ 'dora-bg-sunken dora-text-secondary': !levelColour(item.stock_level_id) }"
-                                :text-color="levelColour(item.stock_level_id) ? 'white' : undefined"
-                                size="28px"
-                            >
-                                <q-icon name="inventory_2" size="16px" />
-                            </q-avatar>
+                        <!-- 2026-09-01 feedback: this was a 28px filled avatar
+                             with a box glyph inside it, which read as a different
+                             kind of thing to the level dot every other list in the
+                             app uses. R-001: it's the shared StockLevelDot now.
+                             Tooltip'd because a bare dot isn't decodable on its
+                             own (D-013). -->
+                        <q-item-section side>
+                            <StockLevelDot :sequence="levelSequence(item.stock_level_id)" size="12px">
+                                <q-tooltip>{{ levelLabel(item.stock_level_id) }}</q-tooltip>
+                            </StockLevelDot>
                         </q-item-section>
                         <q-item-section>{{ item.name }}</q-item-section>
                         <q-item-section side>
@@ -93,10 +94,10 @@
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
     import AppSpinner from 'src/components/AppSpinner.vue';
+    import StockLevelDot from 'src/components/stock/StockLevelDot.vue';
     import PriceEntry from 'src/components/dora/PriceEntry.vue';
     import { ICONS } from 'src/style/icons';
     import { storeToRefs } from 'pinia';
-    import { colourForSequence } from 'src/helpers/stockLevelLogic';
     import type { PriceEntryPrefill } from 'src/models/stockItemDetail';
     import type { StockItem } from 'src/models/stockItem';
     import StockItemApiService from 'src/services/api/stockItemApiService';
@@ -135,9 +136,8 @@
     function levelSequence(id: string | null): number {
         return stockLevels.value.find((l) => l.stock_level_id === id)?.sequence ?? -1;
     }
-    function levelColour(id: string | null): string | null {
-        const seq = stockLevels.value.find((l) => l.stock_level_id === id)?.sequence;
-        return typeof seq === 'number' ? colourForSequence(seq) : null;
+    function levelLabel(id: string | null): string {
+        return stockLevels.value.find((l) => l.stock_level_id === id)?.name ?? 'No level set';
     }
 
     const results = computed(() => {

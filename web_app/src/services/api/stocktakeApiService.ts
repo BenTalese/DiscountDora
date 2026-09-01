@@ -78,6 +78,12 @@ export interface StocktakeSessionItem {
     stock_level_id: string | null;
     stock_level_name: string | null;
     stock_location_name: string | null;
+    /** Root-first path — `["Pantry", "Middle shelf", "Top shelf"]`. Owner
+     *  feedback 2026-09-01: the walk is the moment you go and *find* the
+     *  thing, and "Top shelf" alone doesn't say which shelf of what. Render
+     *  through `formatLocation(…, 'full')`. Empty when the item has no
+     *  location. */
+    stock_location_breadcrumb: string[];
     cadence_band: CadenceBand;
     overdue_days: number;
     is_essential: boolean;
@@ -93,6 +99,7 @@ export interface StocktakeSweptItem {
     name: string;
     stock_level_name: string | null;
     stock_location_name: string | null;
+    stock_location_breadcrumb: string[];
     dropped_out_at: string;
     /** Shown to the user — "Dora's stopped tracking this" is only fair if you
      *  can see what it's based on. */

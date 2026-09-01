@@ -64,7 +64,8 @@ Never pick a colour by eye. Pick it by **role**, then use that role's token.
 | Primary | `--brand-primary` | the single primary CTA per view, active-nav indicator, brand marks |
 | Primary soft | `--brand-primary-soft` | tint background behind primary-toned chips/highlights |
 | Secondary | `--brand-secondary` | secondary emphasis, toolbar default, links where primary would over-shout |
-| Accent | `--brand-accent` | sparingly — highlights, the wordmark; **not** a second CTA colour |
+| Accent (fill) | `--brand-accent` | sparingly — highlights, the wordmark, the toolbar's own ground; **not** a second CTA colour, and **not** as ink on a light surface (R-069) |
+| Accent (ink) | `--accent-ink` | accent-coloured *text, icons, hairlines and active-state indicators* sitting on page/component surfaces — the accent hue held to this doc's 4.5:1 floor in every theme. Template-side helper: `.dora-text-accent` |
 
 ### Semantic (meaning, not decoration — constant across themes)
 | Meaning | Fill token | Soft-bg token | Use for |

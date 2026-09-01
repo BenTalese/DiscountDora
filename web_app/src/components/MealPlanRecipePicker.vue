@@ -45,6 +45,39 @@
                 :selected="activeFilter"
                 @update:selected="onFilterChange"
             />
+
+            <!-- Owner feedback 2026-09-01 — "some useful filters feel like
+                 they're missing from the left rail (time of day, difficulty)".
+                 A SECOND axis rather than two more chips: the chip row is one
+                 mutually-exclusive shortlist and these two are independent
+                 dimensions that narrow whatever it produced, exactly as the
+                 search box above does (L99). Both are always present and never
+                 change shape (D-023); "Any time" / "Any level" is the unset
+                 state, so there is no separate clear control to hunt for.
+
+                 Time-of-day options are the household `MealSlot` vocabulary,
+                 not a hardcoded list — the same source the week's slot rows
+                 use, so deleting a slot in settings removes it here too. -->
+            <div class="picker-axes q-mt-sm">
+                <BaseSelect
+                    v-model="axisTimeOfDay"
+                    class="picker-axes__field"
+                    :options="slotOptions"
+                    behavior="menu"
+                    clearable
+                    empty-text="Any time"
+                    aria-label="Filter by time of day"
+                />
+                <BaseSelect
+                    v-model="axisDifficulty"
+                    class="picker-axes__field"
+                    :options="difficultyOptions"
+                    behavior="menu"
+                    clearable
+                    empty-text="Any level"
+                    aria-label="Filter by difficulty"
+                />
+            </div>
         </q-card-section>
         <q-separator />
 
@@ -75,7 +108,6 @@
                             :batch-enabled="batchEnabled && !isMultiSelect"
                             @pick="onRowPick"
                             @pool-adjust="(id, delta) => emit('paletteMealAdjust', id, delta)"
-                            @log-cook="openPaletteLogCook"
                         />
                     </div>
                 </template>
@@ -100,7 +132,6 @@
                         :batch-enabled="batchEnabled && !isMultiSelect"
                         @pick="onRowPick"
                         @pool-adjust="(id, delta) => emit('paletteMealAdjust', id, delta)"
-                        @log-cook="openPaletteLogCook"
                     />
                 </div>
             </template>
@@ -116,50 +147,26 @@
             </div>
         </div>
 
-        <!-- Log cook from a recipe row ─────────────────────────────── -->
-        <BaseDialog v-model="logCookOpen" title="Log a cook" closable card-style="min-width: 320px">
-            <q-card-section class="q-pt-none">
-                <q-input
-                    v-model.number="logCookCount"
-                    type="number"
-                    min="1"
-                    max="999"
-                    outlined
-                    dense
-                    autofocus
-                    label="Meals cooked"
-                    hint="Adds to the recipe's pool."
-                />
-            </q-card-section>
-            <template #actions>
-                <BaseButton variant="ghost" label="Cancel" v-close-popup />
-                <BaseButton
-                    variant="primary"
-                    label="Log"
-                    :loading="logging"
-                    :disable="!(logCookCount > 0)"
-                    @click="confirmLogCook"
-                />
-            </template>
-        </BaseDialog>
     </q-card>
 </template>
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
     import BaseButton from 'src/components/BaseButton.vue';
-    import BaseDialog from 'src/components/BaseDialog.vue';
+    import BaseSelect from 'src/components/BaseSelect.vue';
     import MealPlanRailFilterChips from 'src/components/MealPlanRailFilterChips.vue';
     import MealPlanRecipeRow from 'src/components/MealPlanRecipeRow.vue';
-    import { useQuasar } from 'quasar';
+    import { storeToRefs } from 'pinia';
     import type { Recipe } from 'src/models/recipe';
     import type { MealPlanSuggestion } from 'src/models/mealPlan';
     import { useBatchEnabled } from 'src/composables/useBatchEnabled';
+    import { DEFAULT_MEAL_SLOTS, DIFFICULTY_VALUES } from 'src/helpers/recipeVocabulary';
     import {
-        buildFilterChips, filterRecipes, type RecipeFilterKey,
+        buildFilterChips, filterRecipes, matchesAxes,
+        type RecipeAxisFilters, type RecipeFilterKey,
     } from 'src/helpers/recipeRailFilters';
     import { suggestionReasonText } from 'src/helpers/mealPlanSuggestionCopy';
-    import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';
+    import { useMealSlotStore } from 'src/stores/mealSlotStore';
     import { computed, onMounted, ref, watch } from 'vue';
 
     const { batchEnabled } = useBatchEnabled();
@@ -177,7 +184,6 @@
             recipes: Recipe[];
             focusedTarget: { dayIso: string; slot: string } | null;
             formatDate: (iso: string) => string;
-            logCook: (recipeId: string, count: number) => Promise<number>;
             /** Server-ranked suggestions for the focused week (§4.4). Empty
              *  until loaded; the "Dora suggests" chip shows the plain list
              *  meanwhile rather than an empty rail. */
@@ -204,9 +210,29 @@
         (e: 'suggestionsRequested'): void;
     }>();
 
-    // ── Filter chips ───────────────────────────────────────────────────────
+    // ── Filter chips + the two narrowing axes ──────────────────────────────
     const activeFilter = ref<RecipeFilterKey>('all');
-    const chips = computed(() => buildFilterChips(props.recipes));
+
+    // `null` is "don't narrow on this axis". BaseSelect's `clearable` writes
+    // `null` on clear, which is the same value, so no normalisation is needed.
+    const axisTimeOfDay = ref<string | null>(null);
+    const axisDifficulty = ref<string | null>(null);
+    const axes = computed<RecipeAxisFilters>(() => ({
+        timeOfDay: axisTimeOfDay.value,
+        difficulty: axisDifficulty.value,
+    }));
+
+    // R-003 — the household slot vocabulary, from the one store that owns it.
+    // `DEFAULT_MEAL_SLOTS` is the pre-first-load fallback only, exactly as the
+    // recipe `time_of_day` pickers use it.
+    const mealSlotStore = useMealSlotStore();
+    const { mealSlotNames } = storeToRefs(mealSlotStore);
+    const slotOptions = computed<string[]>(() => (
+        mealSlotNames.value.length ? mealSlotNames.value : [...DEFAULT_MEAL_SLOTS]
+    ));
+    const difficultyOptions = [...DIFFICULTY_VALUES];
+
+    const chips = computed(() => buildFilterChips(props.recipes, axes.value));
 
     function onFilterChange(key: RecipeFilterKey) {
         activeFilter.value = key;
@@ -225,16 +251,19 @@
      */
     const visibleRecipes = computed<Recipe[]>(() => {
         if (activeFilter.value !== 'suggests') {
-            return filterRecipes(props.recipes, activeFilter.value, props.recipeSearch);
+            return filterRecipes(
+                props.recipes, activeFilter.value, props.recipeSearch, axes.value,
+            );
         }
         if (!props.suggestions.length) {
-            return filterRecipes(props.recipes, 'all', props.recipeSearch);
+            return filterRecipes(props.recipes, 'all', props.recipeSearch, axes.value);
         }
         const byId = new Map(props.recipes.map((r) => [r.recipe_id, r]));
         const query = props.recipeSearch.trim().toLowerCase();
         return props.suggestions
             .map((s) => byId.get(s.recipe_id))
             .filter((r): r is Recipe => !!r)
+            .filter((r) => matchesAxes(r, axes.value))
             .filter((r) => !query || r.name.toLowerCase().includes(query));
     });
 
@@ -255,6 +284,12 @@
 
     const emptyMessage = computed(() => {
         if (props.recipeSearch.trim()) return 'No matches.';
+        // Naming the axis matters more than naming the chip: the chip row is
+        // on screen and visibly selected, whereas an "Any time" field that now
+        // reads "Breakfast" is easy to forget you set.
+        if (axisTimeOfDay.value || axisDifficulty.value) {
+            return 'No recipes match those filters.';
+        }
         if (activeFilter.value === 'suggests') return 'Nothing to suggest for this week.';
         return 'Nothing here yet.';
     });
@@ -306,39 +341,11 @@
         if (target) focusSearch();
     });
 
-    const $q = useQuasar();
-    const logCookOpen = ref(false);
-    const logCookCount = ref<number>(1);
-    const logCookRecipeId = ref<string | null>(null);
-    const logging = ref(false);
-
-    function openPaletteLogCook(recipeId: string) {
-        logCookRecipeId.value = recipeId;
-        logCookCount.value = 1;
-        logCookOpen.value = true;
-    }
-    async function confirmLogCook() {
-        if (!logCookRecipeId.value) return;
-        logging.value = true;
-        try {
-            const n = await props.logCook(logCookRecipeId.value, logCookCount.value);
-            logCookOpen.value = false;
-            $q.notify({
-                type: 'positive',
-                position: 'bottom-right',
-                message: `Logged ${n} cooked meal${n === 1 ? '' : 's'}.`,
-            });
-        } catch (err) {
-            $q.notify({
-                type: 'negative',
-                position: 'bottom-right',
-                message: 'Could not log cook.',
-                caption: toastCaption(err),
-            });
-        } finally {
-            logging.value = false;
-        }
-    }
+    // The rail's "Log a cook…" button and the count dialog it opened were
+    // deleted 2026-09-01 (owner: "log a cook on the left rail feels
+    // unnecessary — remove the button to get back horizontal space and delete
+    // the modal"). The row's `+` still logs one cooked meal through
+    // `paletteMealAdjust`, and a real cook belongs to the recipe page.
 </script>
 
 <style scoped>
@@ -376,6 +383,18 @@
     }
     .recipe-list__slot > :last-child {
         flex: 1 1 auto;
+        min-width: 0;
+    }
+
+    /* Two dense fields on one line. They wrap to two lines below ~260px of
+       usable width rather than scrolling sideways (D-011). */
+    .picker-axes {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--space-1);
+    }
+    .picker-axes__field {
+        flex: 1 1 120px;
         min-width: 0;
     }
 

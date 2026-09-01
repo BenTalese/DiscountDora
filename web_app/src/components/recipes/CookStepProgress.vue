@@ -12,9 +12,19 @@
         identically.
 
         The track is segmented when the count is small enough for segments to
-        be legible, and falls back to a single fill bar past that. Purely an
-        indicator: jumping between steps is the "All steps" list's job, so
-        there is no sub-44px tap target here to answer for (D-004).
+        be legible, and falls back to a single fill bar past that.
+
+        Owner feedback 2026-09-01: *"Can we make the progress bar clickable now
+        that we are visually showing gaps and not one continuous line? Also
+        with a nice hover effect? Allows people to quickly jump instead of
+        going one by one."* So the segments are buttons when — and only when —
+        the parent asks for it and the track is segmented: a
+        continuous fill has no discrete target to aim at, and offering to
+        scrub it would be a lie about the precision on offer. Each segment is
+        44px tall in its hit area even though it paints at 10–16px (D-004), via
+        a transparent pad rather than a taller bar, so the control stays the
+        thin line the owner asked for and is still reachable with a floury
+        finger.
     -->
     <div class="cook-progress">
         <div class="cook-progress__badge">
@@ -32,15 +42,25 @@
             :aria-valuemax="total"
         >
             <template v-if="segmented">
-                <span
+                <component
+                    :is="interactive ? 'button' : 'span'"
                     v-for="position in total"
                     :key="position"
                     class="cook-progress__segment"
                     :class="{
                         'cook-progress__segment--done': position < current + 1,
                         'cook-progress__segment--current': position === current + 1,
+                        'cook-progress__segment--clickable': interactive,
                     }"
-                />
+                    v-bind="interactive ? {
+                        type: 'button',
+                        'aria-label': `Go to ${nounLower} ${position}`,
+                        'aria-current': position === current + 1 ? 'step' : undefined,
+                    } : {}"
+                    @click="interactive ? emit('select', position - 1) : undefined"
+                >
+                    <span class="cook-progress__bar" />
+                </component>
             </template>
             <span v-else class="cook-progress__fill" :style="{ width: fillWidth }" />
         </div>
@@ -57,9 +77,27 @@
             total: number;
             /** Displayed word for one unit of progress ("Step", "Photo"). */
             noun?: string;
+            /** Whether the segments are jump targets. Off by default: the
+             *  image face's gallery scrolls, so there is nothing to jump *to*,
+             *  and it should not grow a row of dead buttons because it shares
+             *  this component. Ignored on the continuous track — a fill bar
+             *  has no discrete target to aim at. */
+            jumpable?: boolean;
         }>(),
-        { noun: 'Step' },
+        { noun: 'Step', jumpable: false },
     );
+
+    const emit = defineEmits<{
+        /** Zero-based index of the segment the reader tapped. Only fired when
+         *  a parent is listening — see `interactive`. */
+        (e: 'select', index: number): void;
+    }>();
+
+    /** `withDefaults` guarantees a value, but the optional prop still types as
+     *  `string | undefined` in the template. */
+    const nounLower = computed(() => props.noun.toLowerCase());
+
+    const interactive = computed(() => segmented.value && props.jumpable);
 
     /** Past this many, individual segments are thinner than the gaps between
      *  them and read as noise; one continuous fill is honest at any length. */
@@ -118,27 +156,71 @@
         flex: 1 1 auto;
         min-width: 0;
     }
+    /* The continuous face keeps its own height; only the segmented face grows
+       hit targets around its bars. */
+    .cook-progress__track--continuous {
+        min-height: 10px;
+    }
+    /* The segment is a transparent 44px-tall hit target (D-004); the visible
+       10–16px track is `__bar` inside it. Painting the bar itself at 44px was
+       the alternative and it is not the control the owner asked for. */
     .cook-progress__segment {
         flex: 1 1 0;
+        display: flex;
+        align-items: center;
+        min-height: 44px;
+        padding: 0;
+        border: 0;
+        background: none;
+        appearance: none;
+        color: inherit;
+        font: inherit;
+    }
+    .cook-progress__bar {
+        display: block;
+        width: 100%;
         height: 10px;
         border-radius: var(--radius-sm);
         background: var(--surface-sunken);
         border: 1px solid var(--border-default);
         transition:
             background-color var(--motion-normal, 200ms) ease,
-            transform var(--motion-normal, 200ms) ease;
+            height var(--motion-normal, 200ms) ease,
+            box-shadow var(--motion-normal, 200ms) ease;
     }
-    .cook-progress__segment--done {
+    .cook-progress__segment--done .cook-progress__bar {
         background: color-mix(in srgb, var(--brand-primary) 45%, transparent);
         border-color: transparent;
     }
     /* The one segment the cook is standing on: full-strength, taller than its
        neighbours, and ringed — findable at arm's length across a kitchen. */
-    .cook-progress__segment--current {
+    .cook-progress__segment--current .cook-progress__bar {
         background: var(--brand-primary);
         border-color: var(--brand-primary);
         height: 16px;
         box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-primary) 20%, transparent);
+    }
+    .cook-progress__segment--clickable {
+        cursor: pointer;
+    }
+    /* Hover/focus grows the bar toward the current segment's height and warms
+       it — the target reads as reachable before you commit to the tap. Focus
+       gets the ring as well, so keyboard and pointer land on the same
+       affordance. */
+    .cook-progress__segment--clickable:hover .cook-progress__bar {
+        height: 16px;
+        background: color-mix(in srgb, var(--brand-primary) 65%, transparent);
+        border-color: transparent;
+    }
+    .cook-progress__segment--clickable:focus-visible {
+        outline: none;
+    }
+    .cook-progress__segment--clickable:focus-visible .cook-progress__bar {
+        height: 16px;
+        box-shadow: 0 0 0 3px var(--focus-ring, color-mix(in srgb, var(--brand-primary) 45%, transparent));
+    }
+    @media (prefers-reduced-motion: reduce) {
+        .cook-progress__bar { transition: none; }
     }
     .cook-progress__track--continuous {
         position: relative;

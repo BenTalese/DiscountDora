@@ -162,6 +162,33 @@ def test_recipe_time_of_day_write_accepts_a_vocab_slot():
     assert resp.status_code == 204, resp.text
 
 
+def test_recipe_keeps_editable_after_its_slot_is_deleted():
+    # The other half of "deleting a slot preserves the label" (2026-09-01):
+    # preservation is worthless if the record can no longer be SAVED. The
+    # recipe editor resends `time_of_day` on every save, so validating it
+    # against the live vocabulary alone made a recipe tagged with a
+    # since-deleted slot permanently unsaveable — you could not even fix the
+    # slot without the request being refused for carrying it.
+    recipe_id = _a_recipe_id()
+    slot_id = _create("Elevenses Proper")
+    assert requests.patch(
+        f"{RECIPES}/{recipe_id}", json={"time_of_day": "Elevenses Proper"},
+    ).status_code == 204
+    _delete(slot_id)
+
+    # An unrelated edit that resends the now-off-vocab label.
+    resp = requests.patch(
+        f"{RECIPES}/{recipe_id}",
+        json={"time_of_day": "Elevenses Proper", "servings": 3},
+    )
+    assert resp.status_code == 204, resp.text
+
+    # …but a slot this recipe has never held is still refused.
+    assert requests.patch(
+        f"{RECIPES}/{recipe_id}", json={"time_of_day": "Brunchtime"},
+    ).status_code == 400
+
+
 # ───── Delete preserves the label (no FK, no cascade) ──────────────────────
 
 def test_deleting_a_slot_leaves_an_entry_label_intact():

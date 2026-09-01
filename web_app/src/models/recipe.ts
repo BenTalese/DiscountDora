@@ -404,6 +404,11 @@ export type RecipeStep = {
     /** C-4 Chunk 10 — section grouping for top-level steps. Sub-steps
      *  carry the same id as their parent so the read path stays flat. */
     section_id: string | null;
+    /** Owner feedback 2026-09-01 — a countdown the cook *declared* on this
+     *  step, in minutes. Null means none was declared; cook mode then sniffs
+     *  the step text for a duration, which is all a free-text method can
+     *  ever offer. */
+    timer_minutes: number | null;
 };
 
 export type RecipeTagDefinition = {

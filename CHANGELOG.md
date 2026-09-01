@@ -5,7 +5,210 @@ semver — major bumps signal schema or breaking-config changes.
 
 ## [Unreleased]
 
+### Added
+- **The meal planner's recipe rail filters by time of day and difficulty
+  (2026-09-01).** Two dropdowns under the filter chips — "Any time" / "Any
+  level" until you pick something. They narrow whatever the chips are showing
+  rather than replacing it, so "Favourites" + "Easy" + "Dinner" is one list. The
+  time-of-day options are your own meal slots, so they follow whatever you have
+  set up in Settings.
+- **Past days fold up in the meal planner (2026-09-01)** when you're looking at
+  a week that contains today, so the days you can still act on aren't pushed
+  down the page. A folded day still names what you had; click its header to open
+  it. A week entirely in the past stays open — there, the past is the point.
+- **Recipe steps can carry their own timer (2026-09-01).** Cook mode used to
+  work out a step's timer by reading the step's wording — which is fine until it
+  reads "48 hours in the fridge" off a cold-prove note and offers you a
+  48-hour countdown. A structured step now has a timer button of its own: turn
+  it on, type the minutes, and cook mode uses that. Free-text and photo recipes
+  have nowhere to record it, so they keep the old reading-the-wording behaviour
+  — but the timer now says "from this step's wording" when that's where it came
+  from, so a guess never looks like something you set.
+
 ### Changed
+- **The meal planner's "This week's shopping" is one line and a tidy list
+  (2026-09-01).** The big number over a caption is now a single sentence that
+  counts the whole week's shopping and says how much of it you've already
+  listed — "3 of 8 still to buy this week" — instead of a lone figure that only
+  ever counted the unlisted part. The separate "N already on a list" line and
+  the duplicated "N to cook" (it's in the week's status strip a few centimetres
+  away) are gone, the heading has an icon, and the ingredient list starts folded
+  with "Add N to a list" always visible above it.
+- **Both meal-planner ingredient lists are the same list (2026-09-01).** "This
+  week's shopping" and "Full ingredient demand" now share one row: the stock
+  level reads as a coloured dot on the left, the way it does everywhere else in
+  the app, instead of a chip on the right; the only caption is how much is
+  needed; and the cart button says whether it's on a list, so the row no longer
+  says "not on a list" in words beside an icon that says the same thing. "Full
+  ingredient demand" also gained the cart buttons and the hover-to-highlight
+  behaviour it was missing. The two cards line up with the calendar above them.
+- **The meal planner's recipe rail is wider and quieter (2026-09-01).** 340px
+  instead of 280, because recipe names were wrapping to two lines almost every
+  time. The second line of cook time and calories is gone — those are cookbook
+  facts, and this is where you pick a meal for a slot. The cooked-meals counter
+  now wears the shopping list's +/- quantity control in miniature, and the
+  "Log a cook…" button and its dialog are gone: `+` logs one, and a real cook
+  belongs on the recipe page.
+- **"Show all meal slots" is a switch on the planner toolbar (2026-09-01)**,
+  next to the week's status, instead of being buried in the overflow menu with
+  the week actions. It changes what you're looking at, not what happens to the
+  week.
+- **The phone's meal-planner day picker shows what the calendar shows
+  (2026-09-01).** Each day chip carried one dot meaning "something is planned";
+  it now carries a dot per meal, coloured the same way the desktop month
+  calendar colours them — planned, short, or already cooked.
+- **Clicking a recipe in the meal planner with no slot chosen does nothing
+  (2026-09-01)**, instead of raising a toast telling you to pick a slot first.
+  Every empty slot already says "tap to add".
+- **Accent-coloured text is readable in the light themes (2026-09-01).** The
+  brand yellow is tuned to sit *behind* dark text — used *as* text it was
+  measuring about 1.4:1 against a white card, which is why the tabs on a stock
+  item's page were so hard to read. Accent-coloured words, icons, underlines and
+  active-state bars now use a deeper version of the same colour that stays
+  legible on every surface, in all ten themes. Affected: the tab strips on stock
+  item detail and Help, the settings sidebar and its mobile tab strip, settings
+  page-header icons, the Appearance theme cards, the voice picker, Dora's name
+  and buttons in chat, the two Help header buttons, and the keyboard-focus
+  outlines on stock and shopping-list rows. Nothing on the toolbar changed — the
+  bright yellow is legible there and stays.
+- **"Dora thinks" and "Dora suggests" share one icon (2026-09-01)** — a burger,
+  because Dora is one. The two phrases were marked with two different glyphs (a
+  magic wand on the suggestions, a lightbulb-with-a-question-mark on the
+  hunches), which read as two different features talking. The magic wand keeps
+  the jobs where Dora *does* something for you: Build my week, Draft my shop,
+  and the AI-mode marker.
+- **About sits at the bottom of Settings again (2026-09-01)**, where it was
+  before it was moved up next to Account.
+- **Cook mode's progress bar is clickable (2026-09-01).** Tap any segment to
+  jump straight to that step instead of pressing Next until you get there. The
+  segment you're hovering grows to show it's a target. (Recipes with more than
+  fourteen steps still show one continuous bar, which has nothing discrete to
+  aim at.)
+- **Cook mode's three panels look like each other (2026-09-01).** Ingredients,
+  tools and steps were three different-looking things — grouped cards, a loose
+  wrap of chips, and a plain list. They're now one shape: same header, same
+  card, same rows. Ingredients and tools also use the same icons they use
+  everywhere else in the app, and none of the three headers counts its
+  contents at you any more.
+- **Cook mode highlights the tools the current step needs (2026-09-01)** with
+  the same treatment it already used for ingredients, instead of a differently
+  styled chip. (Only structured recipes can do this — a free-text method doesn't
+  record which step uses what, so nothing dims there.)
+- **The substitute button only appears where you'd want one (2026-09-01).** Cook
+  mode offered "use a substitute" against every ingredient including the full
+  jars. It now shows up only for ingredients that are low or out.
+- **A substitute's conversion and note stay on screen after you pick it
+  (2026-09-01).** "1 tbsp → 1 tbsp · Fine for frying, not for dressing" used to
+  be visible only in the picker and vanish the moment you chose — which is the
+  moment you're holding the other jar. It now sits under the swapped
+  ingredient.
+- **The finished-cooking screen is rebuilt (2026-09-01).** Each ingredient was a
+  block of four stacked controls — a level chip, a down-one/out/unchanged
+  switch, a full-width "override to a specific level" dropdown and a labelled
+  cart button — with two of them saying the same thing in different words. Each
+  ingredient is now one line: its name, its stock levels as a row of buttons
+  with the current one already selected, and a cart button. Leaving a row alone
+  means "unchanged", which is what usually happens — the old screen defaulted to
+  dropping every ingredient a level. The "how many meals" box only appears if
+  you're set to batch cooking, is now a plain + / − counter, and asks for
+  "extra servings for later" instead of talking about a pool.
+
+### Removed
+- **Two tooltips over one control in cook mode (2026-09-01).** Hovering the
+  cooking-for + / − buttons put a tooltip on top of the tooltip the control
+  already had. The buttons keep their screen-reader labels.
+- **The "Off = silent cook mode" line from the Sous Chef tooltip
+  (2026-09-01).**
+
+### Changed
+- **Stocktake follows your theme again (2026-09-01).** The whole stocktake
+  runner painted itself black under every theme, so driving the app in a light
+  theme and starting a stocktake looked like a different product. It now uses
+  the same page colours as everywhere else; the full-bleed single-card layout is
+  still what makes it a focus mode.
+- **Stocktake shows the whole location, not the last word of it (2026-09-01).**
+  The item you're being asked to go and count said "Top shelf", which doesn't
+  say whose top shelf. It now reads "Pantry › Middle shelf › Spice rack". The
+  tidy-up list at the end shows the full path too.
+- **The "Dora's fairly sure about these" screen is easier to scan
+  (2026-09-01).** The believed and recorded levels used to be one amber sentence
+  ("Dora thinks it's low · recorded as stocked"); they're now neutral words with
+  the two levels as coloured pills, so a column of them can be glanced down. The
+  location is gone from that screen — you're at a desk, not looking for
+  anything — and the screen no longer talks about a "walk".
+- **"Dora's not sure about this one" is readable (2026-09-01).** It was amber
+  text on an amber wash. The words are now normal page ink on the same amber
+  tint, with an amber outline and icon carrying the tone.
+- **Long tooltips wrap (2026-09-01).** Explanatory tooltips — the stocktake
+  cadence hint, "Push 3 days" — ran as a single line the width of the screen.
+  They now wrap to a readable column, everywhere in the app.
+- **Adding what ran low to a list uses the normal picker (2026-09-01).** The end
+  of a stocktake offered a blind "add all N" button and a list of lists. It now
+  opens the same add-to-a-list dialog as recipes and meal plans: you can see the
+  items, untick any of them, and start a new list from inside the dialog.
+
+### Removed
+- **The tiny "Reviewing" / "Tidying up" caption in the stocktake top bar
+  (2026-09-01).** Each of those screens already opens with a full-size heading
+  saying the same thing.
+- **The buy-verdict card's cart button knows if the item is already on a list
+  (2026-09-01).** On a stock item's detail page the "worth buying" card offered
+  a plain add-to-list button that looked the same whether or not the item was
+  already on a shopping list. It is now the same cart button the stock overview
+  row uses: the glyph and colour say not-on-list / on this list / on another /
+  on several, and tapping it toggles the item off again.
+- **"QR Label" on the stock item's Scanning tab (2026-09-01).** Was "QR label".
+- **The item history timeline has more room on its left (2026-09-01).** The
+  event icons sat close to the panel's left edge; they now get a wider inset.
+
+- **The stock-level dot is the same dot everywhere (2026-09-01).** The item
+  pickers in "Log a price" and Quick-add drew the level as a big filled circle
+  with a box icon inside it — a different shape and weight to the small level dot
+  every other list in the app uses. Both now use the shared dot.
+- **Less chatter on the stock overview (2026-09-01).** The pack-count tooltip in
+  the price form is gone (the field's label says what it is), the no-expiry hover
+  just reads "No expiry set" instead of also instructing you to click, and the
+  stocktake hint on the level picker stops at "It's been a while since this was
+  counted" rather than telling you where else you could have done it.
+- **The cook-mode confirm names the ingredients (2026-09-01).** Starting cook
+  mode on a recipe you're short on used to show a single bulleted line saying
+  how *many* things were missing, which meant going back to the list to find out
+  which. It now says "You're missing these ingredients" and lists them, one per
+  line. Same for a recipe with ingredients that aren't linked to your pantry.
+  This is the same dialog the cookbook uses, so it changed in both places.
+- **The batch-cooking pool explains itself (2026-09-01).** "0 free of 1" gave no
+  hint that your meal plan had already claimed the meal — so adding one to the
+  pool and watching the number not move looked broken. It now reads "1 free · 2
+  planned", or "0 free — your meal plan needs 2 more" when the plan wants more
+  than you've cooked. With nothing planned it just says "3 in the pool".
+- **The cost breakdown's bars show share of the total (2026-09-01).** They were
+  each line's share of the *dearest* line, which no label ever said, so a full-
+  width bar meant "this is the most expensive one" and read as "this is all of
+  it". They're now the share of the estimate, the percentage is printed beside
+  the amount, and the list is headed "Share of the estimate".
+- **Unpriced ingredients are a list, not a run-on line (2026-09-01).** The names
+  under "No price recorded yet" were joined with dots into one paragraph that
+  wrapped mid-name. One name per line now.
+- **"Use soon" and "Missing" look like the same kind of thing (2026-09-01).**
+  They sit next to each other on an ingredient row and were drawn as two
+  different styles of chip — a solid dark-text badge beside a soft tinted pill.
+  Both are the tinted pill now, differing only in colour. A two-word label no
+  longer wraps inside its own chip and makes it taller than its neighbour.
+- **The cookbook's chips are filled instead of hollow (2026-09-01).** The
+  dietary tags and Dora's "may be short / may be cookable" remark were drawn as
+  outlines — thin coloured text on the card with nothing behind it, which was
+  hard to read in both light and dark. They're solid chips now with ordinary
+  text; where the chip carries a state, the little icon keeps the colour.
+- **In compact rows, Dora's remark sits next to the favourite button
+  (2026-09-01).** It used to sit on its own in the middle of the row, at a
+  different spot on every recipe depending on what else the row had. It's now
+  anchored with the other buttons on the right, so it's always in the same
+  place.
+- **The cook and cart button tooltips say what they do (2026-09-01).** The cook
+  button now reads "Enter cook mode", or "Missing 2 ingredients" when something
+  is short — instead of explaining how cookability is worked out. The cart
+  button reads "Add 2 missing to a list", "Some ingredients are low", or "All
+  ingredients in stock".
 - **The shopping list's overview card looks like something (2026-08-31).** It
   was a flat box with a hairline border and the squarest corner the app has, the
   same as every other box on the page — so nothing stood out. It's a proper
@@ -66,6 +269,23 @@ semver — major bumps signal schema or breaking-config changes.
   a few centimetres below. The Add button still names how many it will add.
 
 ### Fixed
+- **Editing your meal slots takes effect immediately (2026-09-01).** Adding,
+  renaming, deleting or reordering a meal slot in Settings left the rest of the
+  app showing the old list until you reloaded the page — so the meal planner
+  kept offering a slot you'd just deleted, and picking it produced "Could not
+  update the plan."
+- **A meal plan or recipe still saves after you delete one of its meal slots
+  (2026-09-01).** Deleting a meal slot is meant to leave existing meals and
+  recipes holding their label, and it does — but the *next* edit to anything on
+  that week was then refused for carrying it, so a week with one "Snack" meal on
+  it could not be changed at all. Same for a recipe tagged with a slot you later
+  deleted. The label now travels with the record; only a brand-new meal on a
+  slot that doesn't exist is refused.
+- **The meal plan print-out shows your meal slots (2026-09-01).** The printed
+  week always had Breakfast / Lunch / Dinner / Snack columns regardless of the
+  slots you actually use — it printed a Snack column after you'd deleted Snack,
+  and left out any slot you'd added. It reads the real list now, with any
+  leftover label from a deleted slot getting its own column at the end.
 - **Piling tools onto a free-text recipe no longer scrolls the page sideways
   (2026-08-31).** Every tool added to the method's Tools field pushed the page
   wider on a phone. The chips stack inside the field now and it grows

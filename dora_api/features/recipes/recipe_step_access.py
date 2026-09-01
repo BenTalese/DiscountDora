@@ -41,6 +41,9 @@ class StepWrite:
     # from the matching section's client_id before this write). NULL
     # keeps the step in the implicit "main" group.
     section_id: UUID | None = None
+    # Owner feedback 2026-09-01 — explicit per-step timer in minutes. None
+    # leaves cook mode to sniff the step text as it always did.
+    timer_minutes: int | None = None
 
 
 def _step_table():
@@ -90,7 +93,7 @@ def get_steps_for_recipe(recipe_id: UUID) -> list[dict]:
     `tool_ids` populated from the link tables in two batch queries.
 
     Shape matches the DTO: id, parent_step_id, sequence, text, hint,
-    ingredient_ids, tool_ids. The frontend rebuilds the tree.
+    timer_minutes, ingredient_ids, tool_ids. The frontend rebuilds the tree.
     """
     steps_tbl = _step_table()
     rows = db.session.execute(
@@ -101,6 +104,7 @@ def get_steps_for_recipe(recipe_id: UUID) -> list[dict]:
             steps_tbl.c.text,
             steps_tbl.c.hint,
             steps_tbl.c.section_id,
+            steps_tbl.c.timer_minutes,
         )
         .where(steps_tbl.c.recipe_id == recipe_id)
         # ORDER BY parent IS NULL DESC puts NULLs first portably (SQLite +
@@ -140,6 +144,7 @@ def get_steps_for_recipe(recipe_id: UUID) -> list[dict]:
             "text": row[3],
             "hint": row[4],
             "section_id": row[5],
+            "timer_minutes": row[6],
             "ingredient_ids": ing_map.get(row[0], []),
             "tool_ids": tool_map.get(row[0], []),
         }
@@ -252,6 +257,7 @@ def replace_steps_for_recipe(
             "text": s.text.strip(),
             "hint": (s.hint or "").strip() or None,
             "section_id": s.section_id,
+            "timer_minutes": s.timer_minutes,
         }
         if s.parent_client_id is None:
             parent_rows.append(row)

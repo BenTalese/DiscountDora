@@ -33,6 +33,35 @@ import type { Recipe } from 'src/models/recipe';
  */
 export type RecipeFilterKey = 'suggests' | 'all' | 'favourites' | 'not_lately' | 'regulars';
 
+/**
+ * The rail's SECOND filter axis (owner, 2026-09-01: "some useful filters feel
+ * like they're missing from the left rail — time of day, difficulty").
+ *
+ * Deliberately not more chips. The chip row is one mutually-exclusive
+ * *shortlist* — "which slice of my cookbook am I browsing" — and folding two
+ * more independent dimensions into it would break both its radio semantics and
+ * B2a's 2-4 option guidance. These narrow whatever the chip produced, the same
+ * way the search box does (L99), so they compose with it rather than compete.
+ *
+ * `null` on either axis means "don't narrow on this". A recipe with no
+ * `time_of_day` / `difficulty` recorded is EXCLUDED once that axis is set: the
+ * user asked for breakfasts, and "we don't know what this is" is not a
+ * breakfast. Both fields are stored server-side against closed vocabularies —
+ * `time_of_day` against the household `MealSlot` table, `difficulty` against
+ * `ALLOWED_DIFFICULTY_VALUES` — so the client is matching stored strings, not
+ * deciding anything (R-003).
+ */
+export type RecipeAxisFilters = {
+    timeOfDay: string | null;
+    difficulty: string | null;
+};
+
+export const NO_AXIS_FILTERS: RecipeAxisFilters = { timeOfDay: null, difficulty: null };
+
+export function axisFiltersActive(axes: RecipeAxisFilters): boolean {
+    return axes.timeOfDay !== null || axes.difficulty !== null;
+}
+
 export type RecipeFilterChip = {
     key: RecipeFilterKey;
     label: string;
@@ -87,6 +116,14 @@ function matchesSearch(recipe: Recipe, query: string): boolean {
     return recipe.name.toLowerCase().includes(query);
 }
 
+/** Both axes are AND-ed with each other and with everything else. An unset
+ *  axis matches everything; a set one requires the stored value to equal it. */
+export function matchesAxes(recipe: Recipe, axes: RecipeAxisFilters): boolean {
+    if (axes.timeOfDay !== null && recipe.time_of_day !== axes.timeOfDay) return false;
+    if (axes.difficulty !== null && recipe.difficulty !== axes.difficulty) return false;
+    return true;
+}
+
 function byName(a: Recipe, b: Recipe): number {
     return a.name.localeCompare(b.name);
 }
@@ -102,12 +139,13 @@ export function filterRecipes(
     recipes: Recipe[],
     key: RecipeFilterKey,
     searchTerm = '',
+    axes: RecipeAxisFilters = NO_AXIS_FILTERS,
 ): Recipe[] {
     const query = searchTerm.trim().toLowerCase();
     const predicate = key === 'suggests' ? PREDICATES.all : PREDICATES[key];
 
     const matched = recipes.filter(
-        (r) => predicate(r) && (!query || matchesSearch(r, query)),
+        (r) => predicate(r) && matchesAxes(r, axes) && (!query || matchesSearch(r, query)),
     );
 
     // Regulars is the one chip with an inherent order: you asked for what you
@@ -125,9 +163,18 @@ export function filterRecipes(
  * the row twitch on every keystroke (D-010 forbids motion on per-keystroke
  * churn; the same reasoning applies to numbers).
  */
-export function buildFilterChips(recipes: Recipe[]): RecipeFilterChip[] {
+export function buildFilterChips(
+    recipes: Recipe[],
+    axes: RecipeAxisFilters = NO_AXIS_FILTERS,
+): RecipeFilterChip[] {
+    // The axis filters DO move the counts, unlike the search box. The reason
+    // is the same in both directions: a chip reads "how much is behind this
+    // filter", and with "Breakfast" selected the honest answer to "Favourites"
+    // is how many favourite breakfasts there are. Search churns per keystroke
+    // and would make the row twitch; picking an axis is one deliberate act.
+    const inScope = recipes.filter((r) => matchesAxes(r, axes));
     const countFor = (key: Exclude<RecipeFilterKey, 'suggests'>) =>
-        recipes.filter(PREDICATES[key]).length;
+        inScope.filter(PREDICATES[key]).length;
 
     const chips: RecipeFilterChip[] = [
         // Suggests carries the whole-cookbook count only so the row doesn't
@@ -135,9 +182,9 @@ export function buildFilterChips(recipes: Recipe[]): RecipeFilterChip[] {
         {
             key: 'suggests',
             label: LABELS.suggests,
-            count: recipes.length,
-            disabled: recipes.length === 0,
-            ...(recipes.length === 0
+            count: inScope.length,
+            disabled: inScope.length === 0,
+            ...(inScope.length === 0
                 ? { disabledReason: 'Add a recipe and Dora can suggest from it.' }
                 : {}),
         },

@@ -385,7 +385,7 @@
                         class="q-mb-5 inferred-suggestions sl-panel"
                     >
                         <q-card-section class="q-pb-xs row items-center no-wrap q-gutter-xs">
-                            <q-icon :name="ICONS.inferred_hunch" size="18px" />
+                            <q-icon :name="ICONS.dora_voice" size="18px" />
                             <span class="text-subtitle2">Dora thinks you may be out of…</span>
                             <q-space />
                             <BaseButton
@@ -3207,7 +3207,7 @@
         background-color: var(--overlay-hover);
     }
     .shopping-line-focused {
-        outline: 2px dashed var(--q-accent);
+        outline: 2px dashed var(--accent-ink);
         outline-offset: -2px;
     }
     /* R-022 — DnD affordances live in src/css/dnd.scss

@@ -21,6 +21,7 @@ from flask import request
 # `warnings.filterwarnings` dance is retired with the import).
 from rapidfuzz import fuzz
 
+from dora_api.domain.location_breadcrumb import build_breadcrumb
 from dora_api.domain.entities.meal_plan import MealPlan
 from dora_api.domain.entities.product import Product
 from dora_api.domain.entities.recipe import Recipe
@@ -97,15 +98,9 @@ def _spans(query: str, title: str) -> List[List[int]]:
 
 
 def _breadcrumb(location: StockLocation, loc_by_id: dict[UUID, StockLocation]) -> List[str]:
-    path: List[str] = []
-    cursor: StockLocation | None = location
-    safety = 16
-    while cursor is not None and safety > 0:
-        path.append(cursor.name)
-        cursor = loc_by_id.get(cursor.parent_id) if cursor.parent_id else None
-        safety -= 1
-    path.reverse()
-    return path
+    # R-003 — thin alias so the call sites below read as before; the walk
+    # itself is shared (`domain.location_breadcrumb`).
+    return build_breadcrumb(location, loc_by_id)
 
 
 class GlobalSearchHandler:

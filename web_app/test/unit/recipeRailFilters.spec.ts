@@ -11,7 +11,10 @@
 // recipe exactly one home (FU-578 #47), filters deliberately do not.
 import { describe, expect, it } from 'vitest';
 
-import { buildFilterChips, filterRecipes } from 'src/helpers/recipeRailFilters';
+import {
+    NO_AXIS_FILTERS, axisFiltersActive, buildFilterChips, filterRecipes,
+    matchesAxes,
+} from 'src/helpers/recipeRailFilters';
 import type { Recipe } from 'src/models/recipe';
 
 function recipe(over: Partial<Recipe> & { recipe_id: string; name: string }): Recipe {
@@ -107,5 +110,90 @@ describe('buildFilterChips', () => {
         expect(counts.favourites).toBe(1);
         expect(counts.not_lately).toBe(1);
         expect(counts.regulars).toBe(1);
+    });
+});
+
+// ── The second axis: time of day + difficulty (owner, 2026-09-01) ─────────
+//
+// These narrow whatever the chip row produced, the way the search box does —
+// so the interesting cases are all about COMPOSITION, plus one deliberate
+// asymmetry: the chip counts follow the axes but deliberately do not follow
+// the search box.
+
+const BREAKFAST_EASY = recipe({
+    recipe_id: 'p', name: 'Porridge', time_of_day: 'Breakfast', difficulty: 'Easy',
+});
+const DINNER_HARD_FAV = recipe({
+    recipe_id: 'l', name: 'Lasagne', time_of_day: 'Dinner', difficulty: 'Hard', is_favourite: true,
+});
+const LUNCH_EASY_FAV = recipe({
+    recipe_id: 's', name: 'Soup', time_of_day: 'Lunch', difficulty: 'Easy', is_favourite: true,
+});
+const UNCLASSIFIED_FAV = recipe({ recipe_id: 'm', name: 'Mystery', is_favourite: true });
+const AXIS_ALL = [BREAKFAST_EASY, DINNER_HARD_FAV, LUNCH_EASY_FAV, UNCLASSIFIED_FAV];
+
+describe('matchesAxes', () => {
+    it('an unset axis matches everything, including a recipe with no value', () => {
+        expect(AXIS_ALL.every((r) => matchesAxes(r, NO_AXIS_FILTERS))).toBe(true);
+    });
+
+    it('excludes a recipe with no value once that axis is set', () => {
+        // "We don't know what this is" is not a breakfast. Including unknowns
+        // would make the filter useless the moment a cookbook has any.
+        expect(matchesAxes(UNCLASSIFIED_FAV, { timeOfDay: 'Dinner', difficulty: null })).toBe(false);
+        expect(matchesAxes(UNCLASSIFIED_FAV, { timeOfDay: null, difficulty: 'Easy' })).toBe(false);
+    });
+
+    it('ANDs the two axes together', () => {
+        expect(matchesAxes(LUNCH_EASY_FAV, { timeOfDay: 'Lunch', difficulty: 'Easy' })).toBe(true);
+        expect(matchesAxes(LUNCH_EASY_FAV, { timeOfDay: 'Lunch', difficulty: 'Hard' })).toBe(false);
+    });
+});
+
+describe('axisFiltersActive', () => {
+    it('is false only when neither axis is set', () => {
+        expect(axisFiltersActive(NO_AXIS_FILTERS)).toBe(false);
+        expect(axisFiltersActive({ timeOfDay: 'Lunch', difficulty: null })).toBe(true);
+        expect(axisFiltersActive({ timeOfDay: null, difficulty: 'Easy' })).toBe(true);
+    });
+});
+
+describe('filterRecipes with the axes', () => {
+    it("narrows the chip's result rather than replacing it", () => {
+        const favouriteEasies = filterRecipes(
+            AXIS_ALL, 'favourites', '', { timeOfDay: null, difficulty: 'Easy' },
+        );
+        // Lasagne is a favourite but Hard; Porridge is Easy but not a favourite.
+        expect(favouriteEasies.map((r) => r.recipe_id)).toEqual(['s']);
+    });
+
+    it('composes with the search box as well as the chip', () => {
+        expect(
+            filterRecipes(AXIS_ALL, 'all', 'so', { timeOfDay: null, difficulty: 'Easy' })
+                .map((r) => r.recipe_id),
+        ).toEqual(['s']);
+        expect(
+            filterRecipes(AXIS_ALL, 'all', 'so', { timeOfDay: 'Dinner', difficulty: null }),
+        ).toEqual([]);
+    });
+
+    it('defaults to no axis narrowing when the argument is omitted', () => {
+        expect(filterRecipes(AXIS_ALL, 'all')).toHaveLength(AXIS_ALL.length);
+    });
+});
+
+describe('buildFilterChips under the axes', () => {
+    it('counts within the active axes', () => {
+        // A chip reads "how much is behind this filter", so with Easy selected
+        // the honest answer to Favourites is how many easy favourites exist.
+        const chips = buildFilterChips(AXIS_ALL, { timeOfDay: null, difficulty: 'Easy' });
+        expect(chips.find((c) => c.key === 'favourites')?.count).toBe(1);
+        expect(chips.find((c) => c.key === 'all')?.count).toBe(2);
+    });
+
+    it('disables a chip the axes have emptied, and still never disables All', () => {
+        const chips = buildFilterChips(AXIS_ALL, { timeOfDay: 'Breakfast', difficulty: null });
+        expect(chips.find((c) => c.key === 'favourites')?.disabled).toBe(true);
+        expect(chips.find((c) => c.key === 'all')?.disabled).toBe(false);
     });
 });

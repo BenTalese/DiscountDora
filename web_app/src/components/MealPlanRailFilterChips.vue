@@ -26,7 +26,7 @@
             :key="chip.key"
             :model-value="chip.key === selected"
             :disabled="chip.disabled"
-            :icon="chip.key === 'suggests' ? ICONS.auto_awesome : undefined"
+            :icon="chip.key === 'suggests' ? ICONS.dora_voice : undefined"
             :active-color="chip.key === 'suggests' ? 'primary' : 'secondary'"
             :class="{ 'rail-chips__suggests': chip.key === 'suggests' }"
             @update:model-value="onChipClick(chip)"

@@ -22,7 +22,6 @@
                     :recipes="recipes"
                     :focused-target="focusedTarget"
                     :format-date="formatDate"
-                    :log-cook="logCook"
                     @update:recipe-search="(v: string) => emit('update:recipeSearch', v)"
                     @cancel-target="emit('cancelTarget')"
                     @recipe-pick="onRecipePicked"
@@ -48,7 +47,6 @@
         recipes: Recipe[];
         focusedTarget: { dayIso: string; slot: string } | null;
         formatDate: (iso: string) => string;
-        logCook: (recipeId: string, count: number) => Promise<number>;
     }>();
 
     const emit = defineEmits<{

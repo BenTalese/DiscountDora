@@ -182,12 +182,17 @@
         transition: color 0.42s cubic-bezier(0.65, 0, 0.2, 1);
     }
 
+    /* --accent-ink, not the raw accent: the brand accent is a *fill*
+       tone, and in every light family it lands at 1.3–2.0:1 as text — the
+       stock-item detail tabs were the site the owner called out
+       (2026-09-01). The ink token keeps the accent hue and clears D-002's
+       4.5:1 floor on the whole light-surface ladder. */
     .dora-tabs__tab:not(.dora-tabs__tab--active):hover {
-        color: var(--q-accent);
+        color: var(--accent-ink);
     }
 
     .dora-tabs__tab--active {
-        color: var(--q-accent);
+        color: var(--accent-ink);
     }
 
     .dora-tabs__icon {
@@ -216,7 +221,10 @@
         left: 0;
         height: 2px;
         border-radius: 2px;
-        background: var(--q-accent);
+        /* The bar is a graphic on the same light ground as the label, so
+           it takes the ink tone too; the glow stays on the raw accent —
+           it's a bloom, not the mark itself. */
+        background: var(--accent-ink);
         box-shadow: 0 0 6px color-mix(in srgb, var(--brand-accent) 50%, transparent);
         opacity: 0;
         transition:

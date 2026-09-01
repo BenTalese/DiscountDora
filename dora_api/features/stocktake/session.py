@@ -39,6 +39,8 @@ from typing import List
 from uuid import UUID
 
 from dora_api.domain.entities.stock_item import StockItem
+from dora_api.domain.entities.stock_location import StockLocation
+from dora_api.domain.location_breadcrumb import build_breadcrumb
 from dora_api.features.routers import STOCKTAKE_ROUTER
 from dora_api.features.stock_items.inference_overlay import (SURFACE_STOCK,
                                                              current_user,
@@ -66,6 +68,10 @@ class SessionItemDto:
     stock_level_id: UUID | None
     stock_level_name: str | None
     stock_location_name: str | None
+    # Owner feedback 2026-09-01: *"Top shelf"* on its own is useless when the
+    # job is to go and find the thing. The walk shows the whole path, so the
+    # full breadcrumb travels with the row rather than the leaf name alone.
+    stock_location_breadcrumb: List[str]
     cadence_band: str
     overdue_days: int
     is_essential: bool
@@ -85,6 +91,7 @@ class SweptItemDto:
     name: str
     stock_level_name: str | None
     stock_location_name: str | None
+    stock_location_breadcrumb: List[str]
     # ISO instants. `last_activity_at` is shown because "Dora's stopped
     # tracking this" is only fair if the user can see what it's based on.
     dropped_out_at: str
@@ -98,6 +105,7 @@ def _item_dto(
     band_value: str,
     overdue_days: int,
     belief: PantryBelief | None,
+    locations_by_id: dict[UUID, StockLocation],
 ) -> SessionItemDto:
     return SessionItemDto(
         stock_item_id=item.id,
@@ -106,6 +114,9 @@ def _item_dto(
         stock_level_name=item.stock_level.name if item.stock_level else None,
         stock_location_name=(
             item.stock_location.name if item.stock_location else None
+        ),
+        stock_location_breadcrumb=build_breadcrumb(
+            item.stock_location, locations_by_id,
         ),
         cadence_band=band_value,
         overdue_days=overdue_days,
@@ -131,6 +142,11 @@ def get_stocktake_session():
         .all()
     )
     now = datetime.now(UTC)
+    # One read of the location tree feeds every breadcrumb below — the parent
+    # chain can't be walked from an eagerly-loaded child alone.
+    locations_by_id: dict[UUID, StockLocation] = {
+        loc.id: loc for loc in repo.get(StockLocation).all()
+    }
 
     # ── Review + Walk: the overdue set, ranked ──────────────────────────
     overdue_map = resolve_overdue_map(items, now)
@@ -157,6 +173,7 @@ def get_stocktake_session():
             band_value=band_by_item[item.id].value,
             overdue_days=days_by_item[item.id],
             belief=verdict.belief,
+            locations_by_id=locations_by_id,
         )
         # The split is the rank, not a second judgement. Chunk 5 already
         # decided what "Dora is confident about this" means; re-deciding it
@@ -179,6 +196,9 @@ def get_stocktake_session():
             ),
             stock_location_name=(
                 s.item.stock_location.name if s.item.stock_location else None
+            ),
+            stock_location_breadcrumb=build_breadcrumb(
+                s.item.stock_location, locations_by_id,
             ),
             dropped_out_at=s.dropped_out_at.isoformat(),
             last_activity_at=s.last_activity_at.isoformat(),

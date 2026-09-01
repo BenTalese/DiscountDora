@@ -311,6 +311,83 @@ def test__update_meal_plan__ReplacingEntries__FutureEntriesReplaced(api):
     assert _After["entries"][0]["scheduled_for"] == (_Today + timedelta(days=3)).isoformat()
 
 
+def test__update_meal_plan__ResendingASinceDeletedSlot__IsAccepted(api):
+    # Owner report 2026-09-01: "getting errors 'could not update the plan'
+    # after fiddling with the meal slot settings."
+    #
+    # Deleting a meal slot is deliberately NON-cascading — entries keep their
+    # label — but the update endpoint validated the whole payload against the
+    # live vocabulary, and the planner resends every forward entry on each
+    # edit. So one preserved entry made the entire week unsaveable, and the
+    # non-destructive delete was only non-destructive until the next edit.
+    _Today = _household_today()
+    _RecipeId = _make_recipe("MealPlan Doomed Slot")
+    _SlotName = f"Doomed Slot {uuid4().hex[:8]}"
+    _Created = requests.post(f"{BASE}/meal-slots", json={"name": _SlotName})
+    assert _Created.status_code == 201, _Created.text
+    _SlotId = _Created.json()["meal_slot_id"]
+
+    _Plan = _make_plan(entries=[{
+        "recipe_id": _RecipeId,
+        "scheduled_for": _Today.isoformat(),
+        "slot": _SlotName,
+    }])
+
+    assert requests.delete(f"{BASE}/meal-slots/{_SlotId}").status_code == 200
+    assert _SlotName not in _slot_names()
+
+    # The planner's next edit: resend the existing entry, plus a new one on a
+    # slot that IS in the vocabulary.
+    _PatchResponse = requests.patch(
+        f"{MEAL_PLANS}/{_Plan['meal_plan_id']}",
+        json={"entries": [
+            {
+                "recipe_id": _RecipeId,
+                "scheduled_for": _Today.isoformat(),
+                "slot": _SlotName,
+            },
+            {
+                "recipe_id": _RecipeId,
+                "scheduled_for": (_Today + timedelta(days=1)).isoformat(),
+                "slot": _slot_names()[0],
+            },
+        ]},
+    )
+    _After = _by_id(_Plan["meal_plan_id"])
+
+    assert _PatchResponse.status_code == 204, _PatchResponse.text
+    assert len(_After["entries"]) == 2
+    assert _SlotName in {e["slot"] for e in _After["entries"]}
+
+
+def test__update_meal_plan__NewOffVocabularySlot__IsStillBadRequest(api):
+    # The allowance above is scoped to labels the plan ALREADY holds. A slot
+    # name nothing on this plan has ever used is still refused, so the
+    # vocabulary keeps meaning something.
+    _Today = _household_today()
+    _RecipeId = _make_recipe()
+    _Plan = _make_plan(entries=[{
+        "recipe_id": _RecipeId,
+        "scheduled_for": _Today.isoformat(),
+        "slot": _slot_names()[0],
+    }])
+
+    _PatchResponse = requests.patch(
+        f"{MEAL_PLANS}/{_Plan['meal_plan_id']}",
+        json={"entries": [{
+            "recipe_id": _RecipeId,
+            "scheduled_for": _Today.isoformat(),
+            "slot": "second-breakfast",
+        }]},
+    )
+
+    _Body = assert_problem(_PatchResponse, 400)
+    assert "second-breakfast" in _Body["title"]
+    # The refusal names the live vocabulary, never the per-plan allowance —
+    # listing a deleted slot as "Allowed" would read as an invitation.
+    assert "second-breakfast" not in _Body["title"].split("Allowed:")[1]
+
+
 def test__update_meal_plan__EmptyEntriesWithoutConfirmFlag__IsBadRequest(api):
     # Destructive-clear guard: `entries: []` alone must not nuke the plan.
     _Today = _household_today()

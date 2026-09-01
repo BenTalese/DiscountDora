@@ -15,14 +15,18 @@ import { describe, expect, it } from 'vitest';
 
 import {
     cookGuardReasons,
+    missingIngredientNames,
     missingStockItemIds,
     needsCookGuard,
+    unlinkedIngredientNames,
 } from 'src/helpers/cookModeGuard';
 import type { Recipe } from 'src/models/recipe';
 
 type IngredientPart = {
     stock_item_id: string | null;
     is_missing: boolean;
+    stock_item_name?: string | null;
+    raw_text?: string | null;
 };
 
 function recipeWith(
@@ -101,5 +105,65 @@ describe('missingStockItemIds', () => {
             { stock_item_id: 's1', is_missing: false },
         ]);
         expect(missingStockItemIds(recipe)).toEqual([]);
+    });
+});
+
+/**
+ * Owner feedback 2026-09-01: the guard dialog said "2 ingredients missing" and
+ * left you to work out which two. The dialog now lists names, so the naming
+ * belongs to the same helper the predicate does — otherwise the count and the
+ * list can disagree, which is exactly the drift this file exists to stop.
+ */
+describe('missingIngredientNames', () => {
+    it('names the missing linked ingredients, deduped on the stock item', () => {
+        const recipe = recipeWith(false, [
+            { stock_item_id: 's1', is_missing: true, stock_item_name: 'Pecorino' },
+            { stock_item_id: 's1', is_missing: true, stock_item_name: 'Pecorino' },
+            { stock_item_id: 's2', is_missing: true, stock_item_name: 'Guanciale' },
+        ]);
+        expect(missingIngredientNames(recipe)).toEqual(['Pecorino', 'Guanciale']);
+    });
+
+    it('agrees with the count the ids give — one list, one number', () => {
+        const recipe = recipeWith(false, [
+            { stock_item_id: 's1', is_missing: true, stock_item_name: 'Pecorino' },
+            { stock_item_id: 's2', is_missing: false, stock_item_name: 'Eggs' },
+            { stock_item_id: null, is_missing: true, raw_text: 'a pinch of luck' },
+        ], 1);
+        expect(missingIngredientNames(recipe))
+            .toHaveLength(missingStockItemIds(recipe).length);
+    });
+
+    it('falls back to the raw text when the link has no name', () => {
+        const recipe = recipeWith(false, [
+            { stock_item_id: 's1', is_missing: true, stock_item_name: null, raw_text: '200g spaghetti' },
+        ]);
+        expect(missingIngredientNames(recipe)).toEqual(['200g spaghetti']);
+    });
+
+    it('treats a null recipe as nothing to name', () => {
+        expect(missingIngredientNames(null)).toEqual([]);
+    });
+});
+
+describe('unlinkedIngredientNames', () => {
+    it('names only the unlinked rows — the unknown-cookability case', () => {
+        const recipe = recipeWith(null, [
+            { stock_item_id: null, is_missing: false, raw_text: '1 tsp sea salt' },
+            { stock_item_id: 's1', is_missing: true, stock_item_name: 'Pecorino' },
+        ], 1);
+        expect(unlinkedIngredientNames(recipe)).toEqual(['1 tsp sea salt']);
+    });
+
+    it('dedupes by label — unlinked rows have no id to dedupe on', () => {
+        const recipe = recipeWith(null, [
+            { stock_item_id: null, is_missing: false, raw_text: 'olive oil' },
+            { stock_item_id: null, is_missing: false, raw_text: 'olive oil' },
+        ], 2);
+        expect(unlinkedIngredientNames(recipe)).toEqual(['olive oil']);
+    });
+
+    it('treats a null recipe as nothing to name', () => {
+        expect(unlinkedIngredientNames(null)).toEqual([]);
     });
 });

@@ -22,6 +22,141 @@ top-to-bottom.
 
 ---
 
+## Meal planner — the 2026-09-01 owner batch
+
+Most of this batch was driven live in the pane and deleted: the meal-slot
+settings→planner sync (add + delete, no reload), the print-view slot columns,
+the right rail's one-line headline / folded lists / left-hand level dots /
+full-demand hover, the three right-rail panes sharing one right edge, the 340px
+rail, rows with no meta line, past-day fold on a week containing today (and no
+fold on a fully-past week), the axis filters narrowing 16→2→0, clicking a
+recipe with no slot armed doing nothing, and the phone day-strip pips. What's
+left needs paint, a real pointer, or a real phone.
+
+- [ ] Open the rail's two new dropdowns ("Any time" / "Any level") with the
+      mouse and pick a value — QMenu never opens in the pane, so only the
+      underlying state was exercised. Check they clear back to the placeholder.
+- [ ] Hover a rail row and confirm the ± buttons fade in either side of the
+      count without the row shifting; then on a phone, tap the count tile and
+      confirm they appear (there is no hover on touch).
+- [ ] Scroll the right pane with "Full ingredient demand" expanded — the
+      calendar is now `position: sticky` inside that scroller rather than a
+      sibling above it. Nothing should show through it as rows slide under.
+- [ ] The folded past-day header: chevron, day, date, then the meals it held on
+      one clamped line. Confirm a long list of meal names truncates rather than
+      pushing the kcal figure off the card.
+- [ ] The phone day-strip pips at real size (4px, up to 3 + "+N"). Confirm they
+      read as distinct dots and that the white-on-primary override on the
+      *selected* chip is legible.
+- [ ] Drag the window between 1024px and 1200px. The rail took 60px from the
+      week pane, so the toolbar's compact threshold moved 1120 → 1180: check
+      "Build my week" drops its label before the toolbar wraps to a third line,
+      and that nothing in the status row (now carrying the "All slots" toggle)
+      overflows.
+
+## Accent ink + Dora's voice (2026-09-01)
+
+Token wiring, contrast ratios and nav order were verified live in the pane
+(all ten themes resolve `--accent-ink`; active tab measured 5.09:1, was 1.25:1)
+and deleted. What's left needs actual paint, which the pane never does.
+
+- [ ] Walk the light themes (Pesto, Lemon Tart, Blueberry, Cherry Cola,
+      Sourdough) and confirm the deep-gold/deep-hue accent still reads as *the
+      accent* and not as brown mud — tabs on a stock item, the settings sidebar
+      bar, an Appearance theme card.
+- [ ] Same walk in the five dark themes: nothing should have visibly changed
+      except a slight lift in Pesto Dark, Lemon Tart Dark and Cherry Cola Dark.
+- [ ] Toolbar and main-menu buttons still carry the *bright* accent — that was
+      deliberately left alone. Confirm it didn't get dragged darker.
+- [ ] The burger glyph at its small sizes — 12px on the meal-plan rail chip and
+      the shopping-list note, 14px in Dora chat and the plan row, 16px in a
+      stock row. Does it read as a burger, or as a hamburger menu? (FU-800.)
+- [ ] Sanity: the "Dora suggests" dashboard card and a "Dora thinks" stock row
+      side by side now carry the same glyph.
+
+## Cook mode — the 2026-09-01 eleven-item batch
+
+Driven live in the pane and deleted: declared vs sniffed timers, the three
+section headers/icons, substitute gating, the swap hint, the whole finish modal
+(preselection, stepper, a real Done), and the batch gate. What's left is what
+the pane can't produce — it never paints a frame, so nothing below was *seen*.
+
+- [ ] Hover a progress-bar segment on a recipe with ≤14 steps: it should grow
+      toward the current segment's height and warm up. Tab to it too — the focus
+      ring should land on the bar, not around it.
+- [ ] Eyeball the three panels side by side (Ingredients / Tools / All steps) —
+      they were three different-looking things and are meant to read as one now.
+- [ ] Finish modal on a **phone width**: the level buttons drop to their own
+      full-width line under the name, cart stays with the name.
+- [ ] Finish modal on a recipe with **many** ingredients — the list scrolls at
+      50vh; check it doesn't fight the dialog's own scroll.
+- [ ] A household with **more than three** stock levels: the finish row renders
+      all of them as segments (it reads the table, it doesn't assume three).
+
+## Stocktake — theme, copy, locations, add-to-list (2026-09-01)
+
+Most of this batch was driven live in the pane on the pesto **light** theme and
+deleted. What's left needs a surface the pane can't produce.
+
+- [ ] Run a stocktake under a **dark** theme family: the shell is still dark
+      (it now inherits `--surface-page` rather than pinning black), and the
+      review/sweep headings and the "Dora's not sure about this one" line are
+      still legible against it.
+- [ ] Hover the (?) glyph beside "Checked every fortnight · N days overdue",
+      then the "Push 3 days" button: each tooltip wraps to a narrow column
+      instead of one screen-wide line. (The 280px cap + `white-space: normal`
+      were confirmed computed; the rendered hover wasn't — the verify pane
+      can't fire Quasar's hover.)
+
+---
+
+## Stock detail — verdict cart, QR Label, timeline (2026-09-01)
+
+- [ ] On a stock item whose "worth buying" card offers add-to-list: the action
+      is a round cart button. Tap it — it adds to a list and the glyph flips to
+      the on-list cart, same as the stock overview row. Tap again: it comes off.
+- [ ] Open an item already on a list: the card's cart already shows the on-list
+      glyph on first render (not "add"). On two+ lists it shows the multi glyph
+      and tapping opens the list popover.
+- [ ] Scanning tab heading reads "QR Label".
+- [ ] History tab: the timeline's event icons have clear space from the panel's
+      left edge.
+
+---
+
+## Stock overview — the 2026-09-01 copy + level-dot batch
+
+- [ ] Open "Log a price" (dashboard quick action) and Quick-add: the level in
+      each result row is the small shared dot, sized and coloured like the one
+      on the shopping-list add rows — no filled circle with a box icon. Hover it:
+      the tooltip names the level (or "No level set").
+- [ ] In the price form, the "Pack count (optional)" field no longer shows a
+      tooltip on hover.
+- [ ] On a stock row with no expiry, hover the calendar glyph: it reads exactly
+      "No expiry set".
+- [ ] On a stock row that's due a stocktake check (and has no "Dora thinks"),
+      open the level picker: the header reason ends at "It's been a while since
+      this was counted."
+
+---
+
+## Cookbook — cook-mode confirm lists names (2026-09-01)
+
+- [ ] Press the cook button on a cookbook card/row for a recipe you're short
+      on: the confirm reads "You're missing these ingredients:" over a vertical
+      list of names, not a bulleted count. (Same shared component walked on the
+      recipe page; only this entry point is unwalked — the cookbook list won't
+      render in the verify pane.)
+
+## Cookbook — cook/cart tooltips render (2026-09-01)
+
+- [ ] Hover the cook button on a cookbook card and a compact row: reads "Enter
+      cook mode", or "Missing 2 ingredients" on a short recipe.
+- [ ] Hover the cart button across three recipes: "Add N missing to a list",
+      "Some ingredients are low", "All ingredients in stock".
+      (Strings were confirmed on the live components; only the hovered popup
+      itself is unchecked — the verify pane can't hover reliably.)
+
 ## Login — the Firefox-Android mascot line (2026-08-31) — origin FU-797
 
 - [ ] On the reporting phone (Firefox, Android), open the login screen a few

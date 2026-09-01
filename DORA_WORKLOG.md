@@ -28,7 +28,719 @@ next.
 
 ---
 
-## 2026-08-31 (last, latest) — **Shopping list v4: the surface pass (proposal only, no code)**
+## 2026-09-01 (latest) — **Meal planner: 21 owner items, and two real bugs under the "design" ones**
+
+**Status:** complete, driven live in the browser pane against the `dense`
+scratch stack (evidence below). Backend **2206 passed** (the four pre-existing
+buy-verdict e2e failures, FU-762, are the only reds), frontend **585 Vitest**
+(571 + 14 new), `vue-tsc` and `npm run lint` clean.
+
+**Trigger:** owner walked the meal planner and filed 21 items.
+
+**What changed**
+
+The now-familiar pattern held twice, and the second one was worse than reported.
+
+1. **Meal-slot edits were invisible to the rest of the session — and then broke
+   the plan.** `mealSlotStore` caches the household vocabulary behind an
+   `ensureLoadedAsync` short-circuit; `RecipeMealSlotsSettings.vue` did its CRUD
+   straight against `MealSlotApiService`, commented as a deliberate choice ("the
+   settings page talks to the api service directly; this store is read-mostly").
+   So the planner kept offering a deleted slot until a hard reload — the owner's
+   *"'which slot?' doesn't honour the slots setup in settings immediately"* —
+   and arming that slot produced the *"could not update the plan"* errors he
+   filed as a separate item. **The store now owns every write**
+   (`createAsync` / `renameAsync` / `removeAsync` / `reorderAsync`, each
+   re-fetching), and the settings page calls those. This extends **R-062**
+   rather than minting a rule: its violation signal already reads "an
+   `ensureLoadedAsync` whose store has no `invalidate*`" — the new case is the
+   simplest one, a page writing the store's *own* entity behind its back.
+2. **…and that was only half of "could not update the plan".** Fixing the sync
+   and re-driving it live, the PATCH still 400'd:
+   `Invalid meal slot 'Snack'`. Deleting a meal slot is deliberately
+   non-cascading — entries keep their label, there is a test, the delete dialog
+   promises it — but `update_meal_plan` validated its **whole payload** against
+   the live vocabulary, and the planner resends every forward entry on each
+   edit. One preserved "Snack" entry therefore made the entire week unsaveable,
+   in the cruellest way: the request that would have *fixed* the slot was
+   refused for carrying it. `update_recipe` had the identical seam
+   (`time_of_day`), so a recipe tagged with a deleted slot could not be edited
+   at all. Both now validate against the vocabulary **plus what that record
+   already holds** (`allowed_slot_names`, shared in `slot_validation.py`); a
+   genuinely new off-vocab value is still refused, and the error message still
+   lists only the live vocabulary. **Promoted to R-070 + ADR-067.**
+3. **The print-out's slot columns were a hardcoded tuple.**
+   `export_meal_plan.py` shipped `_KNOWN_SLOTS = ("Breakfast", "Lunch",
+   "Dinner", "Snack")`, so the sheet ignored the household vocabulary in both
+   directions — the reported Snack column after deleting Snack, and no column
+   for a slot you added. Columns now come from the `MealSlot` table in the
+   household's own order (R-003), with any off-vocab label an entry still holds
+   appended alphabetically.
+4. **The right rail's two ingredient lists became one list.** They had diverged:
+   "This week's shopping" carried a quantity caption, a list-status caption and
+   a cart button; "Full ingredient demand" carried a name and a chip and was
+   inert. New `MealPlanIngredientRow.vue` serves both (R-001) — level as the
+   app-standard **left-hand dot** (`StockLevelDot` + `useStockStatus`, not the
+   right-hand chip), quantity-only caption, cart button, hover-to-highlight. So
+   full demand gained the highlight it was missing and the cart buttons, and
+   `listStatusLabel` is deleted: it said "not on a list" in words beside an icon
+   saying it on the same row.
+5. **The summary card said less and meant more.** The `text-h5` figure over a
+   caption is one line — and no longer the outstanding half on its own, which as
+   a bare number read as "what this week needs" while measuring "what you
+   haven't listed yet" (the owner's *"feels wrong… it's only looking at what's
+   not on a list yet"*). It now reads **"3 of 8 still to buy this week"**, which
+   also absorbs the separate "N already on a list" line he asked to delete. The
+   duplicated `cookByLabel` is gone (it is in the toolbar status strip a few
+   centimetres away), the heading took an icon, and the row list starts folded
+   with the CTA pinned above it.
+6. **The three right-rail panes now share one right edge.** They were not the
+   same width and it was not a style choice: the calendar sat *outside*
+   `.planner-pane__scroll` at full pane width while the two cards sat inside it,
+   behind its `padding-right` and its reserved scrollbar gutter — a gap whose
+   width is the OS's, not ours, so it could not be matched by hand. The calendar
+   moved **inside** the same scroller and stays put with `position: sticky`.
+7. **Left rail.** 280 → **340px** (names were clamping to two lines on nearly
+   every recipe; the compact-toolbar threshold moved 1120 → 1180 by the same
+   60px, since the week pane pays for it). The browsing meta line (`35m ·
+   620 kcal`) is deleted — cookbook facts on a surface whose job is "which meal
+   goes in this slot". The pool counter wears the shopping list's quantity
+   control in miniature (30px tile, steppers that hold their place in the layout
+   and only fade, `armed` for touch). **"Log a cook…" and its dialog are gone**
+   — `+` logs one, and a real cook belongs to the recipe page; that removed a
+   prop, an emit, a `$q.notify` pair, `logPaletteCook` from the composable and a
+   `noopLogCook` placeholder from the builder dialog.
+8. **Two new rail filters — a second axis, not more chips.** Time of day and
+   difficulty, as two dense selects under the chip row. The chip row is one
+   mutually-exclusive *shortlist*; these are independent dimensions that narrow
+   whatever it produced, the way the search box does (L99). Time-of-day options
+   are the household `MealSlot` vocabulary, so they follow settings. The chip
+   **counts** follow the axes but deliberately not the search box — picking an
+   axis is one deliberate act, searching churns per keystroke.
+9. **"Show all meal slots" left the overflow menu** for the toolbar's status
+   row. It changes what you are looking at; everything else in that menu
+   (duplicate, print, save-as-template, clear week) does something *to* the
+   week — a category error as much as a discoverability one.
+10. **Past days fold** when the displayed week contains today. The condition is
+    a fact about the *week*, computed once in the page: on a week you navigated
+    back to, every card is past and folding all seven would leave a screen of
+    headers. A folded card names the meals it held.
+11. **The phone's day strip stopped disagreeing with the calendar.** It drew one
+    dot meaning "has meals"; the month grid drew a pip per meal coded planned /
+    short / cooked. Extracted to `mealPlanDayPips.ts` + `MealPlanDayPips.vue`,
+    now used by both, with an `aria-label` naming the day's state in words.
+12. **Clicking a recipe with no slot armed does nothing.** It raised an info
+    toast telling you to tap a slot first — fired on the very first thing a new
+    arrival does, scolding the user for the app's own default (the rail opens
+    browsable with nothing armed), and the instruction was already on screen
+    permanently as "tap to add" on every empty slot.
+
+**Evidence (browser pane, seeded `dense` stack on 5171)**
+- Settings → add "Supper Club", delete "Snack": the shared store went
+  `[…, Snack, Dessert]` → `[…, Dessert, Supper Club]` **without a reload**, and
+  the planner's slot sheet followed immediately (Snack gone, Supper Club there,
+  existing Snack entries fell to the "Other" row).
+- With Snack deleted, arming Breakfast and picking a recipe now toasts
+  **"Added to plan."** — it was `400 Invalid meal slot 'Snack'` before the R-070
+  fix, captured from the live PATCH.
+- Print-view columns after the delete: `Date · Breakfast · Lunch · Dinner ·
+  Dessert · Supper Club`. No Snack.
+- Right rail at 1440px: calendar / shopping card / demand expansion all
+  `left: 1124 → right: 1393`; calendar computes `position: sticky`.
+- Rail 340px, every visible recipe name a single 21px line; rows report
+  `meta: null`, a `0` tile and **2** stepper buttons (was 3).
+- Axis filters: 16 rows → 2 (Breakfast) → 0 (Breakfast + Hard) with
+  "No recipes match those filters." and chip counts following; clearing → 16.
+- Right rail: heading icon `mdi-cart`, headline "3 of 8 still to buy this week",
+  both disclosures `display: none` at rest, **zero** `q-chip` left in the card;
+  both lists' rows report the dot 8px from the row's left edge and a
+  quantity-only caption. Hovering a *full-demand* row lit 5 `entry-chip`s and
+  clearing removed them.
+- Week: Mon 31/08 renders a `BUTTON` header, `aria-expanded="false"`, no body,
+  summary "Spaghetti Aglio e Olio"; the other six are plain `DIV`s. Paged to
+  24–30 Aug (fully past): all seven `DIV`, none folded.
+- Phone day strip: per-meal pips, `consumed` grey on Mon 31, `short` amber
+  elsewhere, none on the empty Sunday; labels read "Tue 1 — 2 meals, 2 short".
+- Clicking a rail row with nothing armed: 0 notifications, entry-chip count
+  unchanged.
+
+**Close-gate**
+- **R-070 + ADR-067** added (validate new *values*, not whole payloads).
+  **R-062 extended** with the "page writes the store's own entity behind its
+  back" case. R-001 applied twice (`MealPlanIngredientRow`, `MealPlanDayPips`);
+  R-003 applied to the print-view slot columns and the rail's slot options.
+- New tests: `test__update_meal_plan__ResendingASinceDeletedSlot__IsAccepted`,
+  `test__update_meal_plan__NewOffVocabularySlot__IsStillBadRequest`,
+  `test_recipe_keeps_editable_after_its_slot_is_deleted`,
+  `test__meal_plan_print_view__slot_columns_follow_household_vocabulary`,
+  plus `mealPlanDayPips.spec.ts` (5) and 9 axis cases appended to
+  `recipeRailFilters.spec.ts`.
+- FU-802 (the rail row is still FU-791's third copy — this unit touched the file
+  without doing the extraction), FU-803 (the build-my-week preview still wears
+  the retired chip-on-the-right ingredient shape), FU-804 (**reported-defect
+  rule** — the "which day(s) the ingredient is needed" text does not exist in a
+  static read; the batch acted on the most likely reading and it needs the
+  owner's eyes).
+- `.claude/launch.json` gained `dora-verify-backend-5171` (Windows) — only the
+  `-linux` variant existed, and `dora-spa-5171` points at that port.
+- `DORA_VERIFY.md`: new "Meal planner — the 2026-09-01 owner batch" section for
+  the six checks needing paint, a real pointer, or a real phone.
+
+**Worth knowing for the next session:** `$q.screen.width` is **no longer**
+permanently 0 in the browser pane. Assigning `q.screen.width/name/lt/gt` on the
+live `$q` now sticks, and combined with `resize_window` the meal planner's
+**desktop three-pane shell mounts and is fully drivable** — the memory note
+saying the planner rail is unreachable is stale. Two pane limits still bite:
+`QMenu` never opens (drive the component's `setupState` instead), and a week
+transition leaves the outgoing week's DOM in place, so page the week by
+reloading on `#/meal-plans?monday=YYYY-MM-DD` rather than clicking the arrow.
+
+**Next up:** owner walks the new `DORA_VERIFY.md` section, and answers FU-804.
+
+---
+
+## 2026-09-01 — **Accent ink token, one glyph for Dora's voice, About moved back**
+
+**Status:** complete. Wiring + contrast driven live in the browser pane; the
+paint-dependent checks went to `DORA_VERIFY.md`. `vue-tsc` clean, 571 Vitest
+tests pass.
+
+**Trigger:** owner filed three items.
+
+**What changed**
+
+1. **`--accent-ink` — the accent at ink strength.** The owner's report was "the
+   yellow in pesto is too bright for where it is used… this is an issue across
+   the board with the light themes… the tabs in the stock item details page".
+   Measured: `--brand-accent` is **1.25–2.04:1** as text in all five light
+   families (1.39:1 on a white card in pesto). It was never wrong as a *fill* —
+   it is the pesto toolbar, and `--text-on-accent` is designed to sit on it —
+   but one token was serving both jobs, so `color: var(--q-accent)` shipped fine
+   in the dark themes and invisible in the light ones. New sibling token
+   (`tokens.scss` + all ten `[data-theme]` blocks): light families keep hue and
+   saturation, drop lightness to 24–30% (4.5–5.7:1 across the whole surface
+   ladder); the three dark families that were marginal on `--surface-elevated`
+   lift a few points; the two that already clear it point at
+   `var(--brand-accent)`. Call sites split by **ground** — ink on
+   page/component, raw accent kept on the toolbar, in glows, and inside
+   `color-mix()` tints. **Promoted to R-069 + ADR-066.**
+   Swapped: `DoraTabs` (label + indicator — the reported site), `DoraSegmented`,
+   `SettingsNavGroup`, `SettingsMobileNav`, `SettingsPageHeader`, the Appearance
+   theme cards, `VoicePicker`, `StockOverview`'s splitter, the focus outlines on
+   `StockItemRow` + `ShoppingListDetail`, and both Help header buttons (which
+   were `q-btn flat color="accent"` — Quasar paints the fill tone as the label).
+   Two tidies fell out: `DoraChat`'s `.body--dark` fork existed only to drop the
+   accent in light mode and is now one declaration, and
+   `NutritionFoodPicker`'s `--text-accent` was a token that never existed (the
+   declaration was invalid and the row silently inherited).
+2. **One glyph for "Dora thinks" / "Dora suggests" — a burger.** They were two:
+   the magic wand (`auto_awesome`) on suggestions, a lightbulb-with-a-question
+   (`inferred_hunch`) on hunches. Owner picked the burger from four options
+   offered, because the mascot is one. `ICONS.inferred_hunch` → `ICONS.dora_voice`
+   (`mdi-hamburger`), applied at all eight belief sites plus the four
+   "Dora suggests" sites. **The wand is deliberately not retired** — it keeps the
+   "Dora, do this for me" generate actions (Build my week, Draft my shop, the
+   AI-mode marker). Wand = an action she performs; burger = an opinion she holds.
+   Two R-034 violations fixed on the way (`DashboardPage` and `DoraChat` were
+   passing bare Material names that the MDI set doesn't resolve).
+3. **About is back at the foot of the settings sidebar**, reverting the
+   2026-08-29 move that paired it with Account ("I take it back").
+
+**Evidence (browser pane, seeded dense stack)**
+- All ten themes resolve `--accent-ink` to the intended value.
+- `#/help` active tab: `rgb(122,102,1)` on `rgb(234,246,243)` = **5.09:1**
+  (was 1.25:1). Both Help header buttons carry `.dora-text-accent` at the same
+  ratio.
+- `#/settings/preferences`: page-header icon, nav bar, mobile-nav underline,
+  active theme card and its badge all `rgb(122,102,1)`. Sidebar **and** mobile
+  nav both read `Account · Preferences · Kitchen setup · About`.
+- `mdi-hamburger` resolves to a real glyph (`f0685`), distinct from `mdi-menu`
+  (`f035c`); rendered live at 22px in the attention-rules dialog. Zero
+  `mdi-lightbulb-question-outline` left in the DOM.
+
+**Close-gate**
+- R-069 + ADR-066 added; `DESIGN_STYLE_GUIDE.md` brand table now carries the
+  accent fill/ink split.
+- FU-801 (`--brand-primary` fails the same ink test — 1.63:1 in lemon-tart —
+  but is consumed through Quasar's `color="primary"`, so it's its own job),
+  FU-800 (eyes-on the burger at 12–14px).
+- `DORA_VERIFY.md`: new "Accent ink + Dora's voice" section for the
+  paint-dependent checks.
+
+**Next up:** owner walks the DORA_VERIFY section — chiefly whether the deepened
+accent still reads as the accent in each light theme, and whether the small
+burger holds up.
+
+---
+
+## 2026-09-01 — **Cook mode: declared step timers, three consistent panels, rebuilt finish modal**
+
+**Status:** complete, driven live in the browser pane against a fresh `dense`
+stack (evidence below). All eleven owner items landed.
+
+**Trigger:** owner walked cook mode and filed eleven items.
+
+**What changed**
+
+1. **A structured step can declare its own timer** — new
+   `RecipeStep.timer_minutes` (nullable Integer, migration `a7c3f1e9b482`,
+   validated `1..1440` at the create/update request boundary). Cook mode's timer
+   was a regex over the step's *text* for all three faces; the owner asked
+   whether it was guessing (it was) and asked for a tick-box on structured steps
+   specifically, which is the right cut — a free-text blob has nowhere to record
+   the fact and a step row does. The editor toggle uses the same `null`-vs-value
+   two-state `hint` already uses, so there is no second `showTimer` flag to
+   disagree with the data. The sniff survives as a fallback and now **captions
+   itself** ("from this step's wording"). **Promoted to R-068 + ADR-065.**
+   Plumbed end to end: entity → table/mapper → migration → `StepWrite` → DTO →
+   create/update/`new_recipe_version` → TS model/command → `useRecipeEditor` →
+   `RecipeStructuredMethod` → cook mode.
+2. **The ± tooltips on the headcount pill are gone.** The pill already carried
+   one, and Quasar teleports both to `<body>`, so hovering a button rendered a
+   tooltip over a tooltip. `aria-label`s stay — they were never the duplicated
+   layer.
+3. **The Sous Chef tooltip drops its "Off = silent cook mode…" sentence.**
+4. **Ingredients / Tools / All steps are one shape.** They were three different
+   objects (location-grouped cards, a bare wrap of `q-chip`s, an undecorated
+   list). Now one header treatment (`.cook-section__head`) and one body
+   treatment (`.cook-card` + rows), with the tool rows wearing the same
+   highlight/dim the ingredient rows already had — which works because
+   structured steps register tools the same way they register ingredients, and
+   is inert (no dimming) on a free-text method, which is the honest answer.
+5. **Correct icons.** Both headers used `ICONS.kitchen` (a fridge). Ingredients
+   → `ICONS.ingredients`, Tools → `ICONS.blender`, matching the rest of the app.
+6. **The "N total" counts are gone from all three headers.**
+7. **The substitute button only renders for a low/out ingredient**
+   (`stockItem.needs_restock`, the DTO-level boolean the `stockStatus` helper
+   docs say to prefer over re-deriving from a sequence).
+8. **A picked substitute keeps its ratio + note on screen.** `sessionSwaps` now
+   carries a precomposed hint ("1 tbsp → 1 tbsp · Fine for frying, not for
+   dressing") built from the shared `formatSubstituteRatio` (R-003). The dense
+   seed had **no substitute ratios at all**, so this half of the feature had no
+   fixture anywhere — three of the five pairs now carry one, written through a
+   direction flip because the row is stored in canonical id order while the
+   ratio is directional.
+9. **The finish modal is rebuilt.** Each row stacked a level chip, a
+   down-one/out/unchanged segmented control, a full-width "Override to a
+   specific level" select and a labelled cart button — an *action* vocabulary
+   and a *destination* vocabulary saying the same thing, plus a chip saying it a
+   third time. A row is now the destination and nothing else: the household's
+   stock levels as one segmented control with the item's **current** level
+   preselected, so leaving it alone is "unchanged" (the old default wrote a
+   level drop onto every ingredient of every recipe you finished). Name,
+   levels and cart on one line. Intro copy is the owner's wording. The meals
+   field is gated on `batchEnabled` (FU-615), reworded off "pool" to "Extra
+   servings for later", and is a ± stepper rather than a bare number input.
+10. **The progress bar's segments are jump targets** (`jumpable` prop +
+    `@select`), with a hover/focus grow and a 44px transparent hit pad around
+    the 10–16px bar (D-004) so the control stays the thin line it was. Only in
+    segmented mode — a continuous fill has no discrete target — and only where
+    the parent asks, so the image face doesn't grow a row of dead buttons.
+
+**Note on the first attempt at (10):** `interactive` was derived from
+`useAttrs().onSelect`, which is always undefined once the event is declared in
+`defineEmits` — Vue strips declared listeners out of `$attrs`. Caught live (the
+segments rendered as `<span>`); replaced with an explicit `jumpable` prop, which
+is more legible anyway.
+
+**Evidence (live, `dense` seed, browser pane)**
+- Declared timer: step 3 → `15:00` with no caption; step 1 after an editor
+  round-trip → `08:00`. Sniff: the 70%-hydration pizza dough → `2880:00` **with**
+  "from this step's wording" — the exact failure mode that motivated the item.
+- Editor round-trip: toggled a timer onto step 1, typed 8, saved through the real
+  PATCH, server returned `timer_minutes: 8`, read face rendered "8 min".
+- Substitute gating: buttons on exactly the five low/out ingredients of the ragù,
+  none on the seven stocked ones. Swap hint rendered as expected.
+- Finish modal: three level segments per row with the real current level
+  preselected (Celery/Milk/Parmesan/Chilli all showed "Low Stock"); stepper
+  +3/−1 → 2; **Done** moved Beef Mince Stocked→Low, left every untouched row
+  alone, and bumped the pool 4→6.
+- Batch gate: flipped the install to "Fresh" in Settings → System → Cooking, the
+  meals section disappeared; flipped back.
+
+**Gates:** `vue-tsc` clean, `eslint src/` clean, vitest **571 passed**, backend
+**2202 passed** / 1 skipped / 1 xfailed. The only failures are the four
+pre-existing buy-verdict e2e ones (FU-762). `test_migrations.py` passes, so the
+new migration applies from empty.
+
+**Standards close-gate:** checked against `ENGINEERING_STANDARDS.md`. No
+violations introduced. R-001 (reused `BaseSegmented`/`BaseButton`/
+`CookStepProgress` rather than new one-offs), R-002 (every new declaration is a
+token or a `color-mix` over one), R-003 (`formatSubstituteRatio` reused;
+`tool-chip--*` styles collapsed into the shared `cook-row--*`), state-ownership
+(the timer is a stored server fact, the client only renders it), D-004 (44px on
+the new progress segments and the meals stepper), D-002 (the segmented control
+inherits the existing `--text-on-primary` fix). **New rule R-068 + ADR-065**
+promoted from item 1.
+
+**Next up:** nothing blocking. The R-068 sweep is worth doing opportunistically
+— the recipe importer's serving/time parsing is the nearest neighbour.
+
+---
+
+## 2026-09-01 — **Stocktake: theme-aware shell, readable belief copy, full locations, shared add-to-list**
+
+**Status:** complete, driven live in the browser pane (evidence below). One
+item was a walkthrough question, answered in chat rather than in code.
+
+**Trigger:** owner ran a stocktake in a light theme and filed eight items.
+
+**What changed**
+
+1. **The runner shell follows the theme** (`pages/StocktakeRunner.vue`). It was
+   pinned to `--palette-neutral-900` under every theme — a token, so R-002 read
+   as satisfied, but the page was black in light mode and each phase component
+   had to paint its heading `--text-inverse` to survive it. Shell + topbar now
+   take `--surface-page` / `--text-primary`; the two phase heads take
+   `--text-primary`; the close/help icons drop `color="white"`. Focus mode is
+   still the full-bleed page, one card, no nav. **Promoted to R-067 + ADR-064.**
+2. **The "Reviewing" / "Tidying up" topbar caption is gone.** Both screens open
+   with a full-size heading saying the same thing. `PHASE_LABELS`/`phaseLabel`
+   deleted.
+3. **No user-facing copy says "walk" any more** — "…and it'll be waiting in the
+   walk" and "N will join the walk" are both gone. The *internal* phase id is
+   still `'walk'` and the server still returns a `walk` array; renaming those
+   would touch the API contract + e2e keys for no user-visible gain, and a
+   comment in `StocktakeReviewPhase.vue` now records that split explicitly.
+4. **Review rows lost the location, gained level pills.** The desk screen shows
+   the name alone (you aren't going to find anything from a desk). "Dora thinks
+   it's low · recorded as stocked" — previously one amber sentence — is now
+   neutral ink with the two levels as `.dora-chip--tint` pills in their D-001
+   colour. Needed a `.dora-chip--tint-neutral` variant in `colours.scss` for
+   unknown/unset (R-066: the class lives there, not in the component) and a
+   `tintClassForSequence()` beside `colourForSequence()` in `stockLevelLogic.ts`
+   so the sequence→tone map isn't written twice (R-003).
+5. **Full location on the walk card and the sweep list.** The session DTOs now
+   carry `stock_location_breadcrumb`; the client renders it through the existing
+   `formatLocation(…, 'full')`, falling back to the leaf name. Server side this
+   was the *fifth* place a parent-chain walk was about to be written, so the
+   walk was extracted to `dora_api/domain/location_breadcrumb.py` and the three
+   existing copies (stock-item detail, shopping-list detail, global search) were
+   converted to it (R-003).
+6. **"Dora's not sure about this one" is readable.** It was
+   `--semantic-warning` text on a 10% wash of the same colour (~2.1:1, under
+   D-002's 4.5 floor). Same fix the B2 tint chips took: `--semantic-warning-soft`
+   ground + a `--semantic-warning` hairline and icon, words in `--text-primary`.
+7. **Long tooltips wrap.** Quasar puts no ceiling on `.q-tooltip` width, so the
+   cadence hint and the "Push 3 days" hint each rendered as one screen-wide
+   line. Capped globally at 280px with `white-space: normal` in `app.scss` —
+   global because tooltips teleport to `<body>` and because every wordy tooltip
+   wants it (a per-call class would be the same rule copied at each site).
+8. **The end-of-session restock prompt now opens `AddToListDialog`** — the same
+   picker recipes and meal plans use (R-001/R-003). The old flow was a blind
+   "add all N" button over a radio dialog of active lists, with no way to see or
+   drop an item and a dead-end when no list existed. `onBatchAddToList` and the
+   local `pickActiveListId` are deleted; `onRestockConfirm` routes through
+   `addStockItemsToList`, which owns the create-a-new-list branch. Rows are all
+   `isMissing: true` (they're here *because* the user just marked them down), so
+   they arrive pre-ticked minus anything already on a list.
+
+**Not changed, by design:** the three Sweep affordances. The owner asked to be
+walked through them, not to have them altered — answered in chat. For the
+record: *I still keep this…* opens the level picker (deliberately **not** a
+check — the engagement gate keys off in-stock / opened / level-adjusted /
+on-a-list, and `POST /check` writes only `last_checked_at`, so a check would
+have looked like it worked and changed nothing); *Mute* sets
+`stocktake_alerts_are_enabled = false` behind a confirm, reversible from the
+item's detail page; *Delete* removes the item and its history, behind a confirm
+that points at Mute as the softer option. The label gained an ellipsis
+("I still keep this…") to signal that it opens a dialog.
+
+**Verified live** (backend `dora-verify-backend` + `dora-spa`, pesto light
+theme, seeded `dora`/`dora`):
+- shell computed `background: rgb(234,246,243)`, ink `rgb(22,39,36)` — theme,
+  not black.
+- review row: `Weet-Bix` with no location; pills measured
+  `bg rgb(254,241,215) / border rgb(249,151,31)` (Low) and
+  `bg rgb(224,245,231) / border rgb(57,172,96)` (Stocked), ink `rgb(22,39,36)`.
+- belief line: ink `rgb(22,39,36)` on `rgb(254,241,215)`, amber border + icon.
+- walk card rendered `Pantry › Middle shelf › Spice rack` (API confirmed
+  `stock_location_breadcrumb: ["Pantry","Middle shelf","Spice rack"]`).
+- `.q-tooltip` computed `max-width: 280px`, `white-space: normal`.
+- completion screen → "Add to a list…" opened the shared dialog (title, list
+  select, `Chilli Flakes` pre-ticked, Select all / Select missing), Add
+  round-tripped and the card showed "Added."
+- `vue-tsc --noEmit` clean; eslint clean on the touched files. Console showed
+  only the expected pre-login `/auth/me` 401.
+
+**Standards close-gate:** R-001/R-003 (shared picker, one breadcrumb, one
+sequence→tone map), R-002 + new **R-067** (theme tokens on a page root),
+R-066 (chip class in `colours.scss`), D-001 (level colour), D-002 (contrast
+floor — the belief line was the violation, now fixed). No unexplained
+violations. ADR evaluation → **ADR-064** added.
+
+**Next up:** nothing queued from this unit. R-067 names cook mode and the
+shopping-list run face as the other candidates for a pinned-palette shell —
+worth an opportunistic check, filed as a follow-up.
+
+---
+
+## 2026-09-01 — **Stock detail: verdict cart state, QR Label, timeline inset**
+
+**Status:** complete, not yet driven live (verify items filed).
+
+**What changed:** owner raised three items on the stock-item detail page.
+
+- **Buy-verdict card's one-tap `add_to_list` action is now `AddToListButton`**
+  (`components/stock/BuyVerdictCard.vue`). It was a plain `BaseButton
+  variant="primary"` with a fixed `add_shopping_cart` glyph, so a card on an
+  item already on a list still read "add me". The card now takes a
+  `stockItemId` prop and renders the shared `AddToListButton variant="row"` for
+  that one kind — the same component the stock overview row uses — so cart
+  state (none / on_target / on_other / on_multiple), the toggle-off and the
+  multi-list popover all behave identically in both places (R-001/R-003: one
+  component, no second copy of the state derivation). The other kinds
+  (`mark_stocked` / `remove_from_list` / `skip`) still use the primary button
+  and the `@action` emit. The page's `onBuyVerdictAction` lost its dead
+  `add_to_list` branch; `onAddToList` stays (the header button still calls it).
+  **Known trade-off:** the old branch called `buyVerdictInvalidate()` after the
+  add, which no longer happens — the cached verdict can still say "add" while
+  the cart glyph says "on your list". That's the state the button now shows
+  directly, and the stock row has always worked this way, so it was left rather
+  than plumbing an emit through `AddToListButton`.
+- **"QR label" → "QR Label"** (`pages/StockItemDetailPage.vue`, Scanning tab
+  heading). Owner's wording. Logged in place as a D-008 carve-out: it's a
+  section heading, not an interactive control. The `HelpHint topic="QR label"`
+  key is unchanged (it must match the `HelpPage` topic title), as are the
+  Settings → QR labels page and the admin feature toggle — out of scope here.
+- **History timeline left inset** (`pages/StockItemDetailPage.vue`) —
+  `q-tab-panel` class `q-pl-md` → `q-pl-lg`, so the `q-timeline`'s
+  left-positioned event icons aren't crowding the panel edge.
+
+**Checks:** `vue-tsc --noEmit` clean; `eslint` clean on both touched files.
+
+**Close-gate:** R-001/R-003 satisfied (shared component reused rather than
+re-implementing cart state); D-008 carve-out commented in place; no new rule
+or ADR warranted. No new follow-ups.
+
+**Next up:** owner walks the three `DORA_VERIFY.md` items on the Stock detail
+surface.
+
+---
+
+## 2026-09-01 — **Stock overview: the six-item copy + level-dot batch**
+
+**Status:** complete, not yet driven live (verify items filed).
+
+**What changed:** owner raised six items on the stock overview / log-a-price
+surface. Four were changes, two were questions.
+
+- **Pack-count tooltip removed** (`components/dora/PriceEntry.vue`). The field
+  label already says "Pack count (optional)"; the tooltip was a paragraph
+  explaining multipack maths that the live per-unit preview under the form
+  demonstrates anyway. `q-input` is self-closing again now the slot is empty.
+- **No-expiry hover** (`helpers/expiryIndicator.ts`) → "No expiry set". Dropped
+  "— click to push or set one": the glyph is a button and the menu it opens
+  says the same thing one tap later.
+- **Stocktake hint trimmed** (`components/stock/StockItemRow.vue`) → "It's been
+  a while since this was counted." The "set it here, or walk the stocktake"
+  tail pointed at the very picker the user already had open.
+- **Level indicator in the item pickers** (`components/LogPriceSheet.vue` +
+  `components/QuickAddSheet.vue`). Both drew a 28px filled `q-avatar` with an
+  `inventory_2` glyph inside; every other list uses the shared `StockLevelDot`
+  at 12px. Swapped both to `StockLevelDot` with a level-name tooltip (D-013).
+  The owner only reported the log-a-price one — QuickAddSheet was the same
+  copy-pasted block, and fixing one would have left the drift R-001 exists to
+  stop, so both went. `colourForSequence` import dropped from both; the local
+  `levelColour()` helpers became `levelLabel()` for the tooltip.
+
+**Questions answered (no code change):**
+- *"Dora thinks" + "stocktake" at the same time?* Belief wins outright —
+  `StockItemRow` renders the belief header `v-if="hasBelief"` and the stocktake
+  header only `v-else-if="needsCheck"`, and `uncertaintyTooltip` mirrors that.
+  Deliberate (D-5: one uncertainty marker, belief is the more specific claim),
+  but it means the stocktake fact is *silently dropped* rather than demoted.
+  Flagged to the owner; no change made pending his call.
+- *Does "Prefilled from your last receipt" respect provenance?* Yes.
+  `get_stock_item_detail.py` picks the label off the observation's
+  `shopping_list_line_id` FK: set → "from your last receipt", null → "from your
+  last log". A manually-logged price can never say "receipt". The line shows
+  whenever any prior observation exists, which is honest either way.
+
+**Files touched:** `web_app/src/components/dora/PriceEntry.vue`,
+`web_app/src/helpers/expiryIndicator.ts`,
+`web_app/src/components/stock/StockItemRow.vue`,
+`web_app/src/components/LogPriceSheet.vue`,
+`web_app/src/components/QuickAddSheet.vue`, `CHANGELOG.md`, `DORA_VERIFY.md`.
+
+**Verification:** `vue-tsc --noEmit` clean; `eslint` clean on the five changed
+files; `vitest run` 571 passed / 49 files. **Not** driven in a browser — four
+checks filed under `DORA_VERIFY.md → "Stock overview — the 2026-09-01 copy +
+level-dot batch"`.
+
+**Standards close-gate:** R-001 applied (the two pickers now share
+`StockLevelDot` rather than each owning a bespoke avatar); D-013 honoured (dot
+carries a tooltip naming the level); D-006 untouched (expiry date still routed
+through `formatDate`). No new violations introduced, none pre-existing found on
+the touched lines. **ADR evaluation:** nothing new — this is R-001 being
+applied, not a new decision.
+
+**Next up:** owner's call on the belief-vs-stocktake collision above; otherwise
+walk the four verify items.
+
+**Open questions for user:** when both "Dora thinks" and "due a stocktake"
+fire, do you want the stocktake fact surfaced as a second line under the belief
+reason, or is dropping it correct?
+
+---
+
+## 2026-09-01 — **Recipe view: the five-item clarity batch**
+
+**Status:** complete, driven live. Owner reported five items on the recipe
+detail surface; all five are built. Four were walked in the running app; the
+fifth (the cookbook's copy of the cook-mode confirm) is the *same shared
+component* verified on the recipe page — the cookbook list itself would not
+render in the browser pane (known first-paint wedge), so that one entry point
+is in `DORA_VERIFY.md`.
+
+**What changed.**
+
+1. **The batch pool says why the number didn't move.** `N free of M` was two
+   server numbers with the relationship between them left out, so the owner's
+   exact case — *"they add 1 to the pool and it still says '0 free of 1'"* —
+   looked like a bug. Three states now, because they are three facts: nothing
+   planned → `3 in the pool` (drop "free" from the sentence rather than say
+   "3 free of 3"); partly claimed → `1 free · 2 planned`; short → `0 free —
+   your meal plan needs 2 more`. A tooltip carries the mechanism ("adding to
+   the pool covers those first"). Walked all three live on Egg Fried Rice by
+   driving the real ± stepper, then restored the seed.
+2. **The cook-mode confirm lists names.** Every branch of the old `<ul>`
+   produced exactly one long sentence, so the bullet marker was indenting a
+   paragraph — a list of one — and the sentence it indented was a *count*.
+   Owner: *"Update it to say 'you're missing these ingredients' and list them
+   out in a vertical list."* Each reason is now a headed block: a lead line,
+   then the ingredients underneath, markerless, one per row on the sunken
+   ground. Both branches walked (Carbonara → missing; Weeknight Laksa →
+   unlinked).
+3. **Cost-breakdown bars are share of the *total*.** They were share of the
+   dearest line — a fine way to rank bars and an impossible one to read
+   unlabelled, which is exactly what the owner asked: *"What are the bars
+   showing? Is it their % of the total cost?"* They are now, the percentage is
+   printed beside the amount, and the list is headed. Denominator is the sum of
+   the priced lines, not the server total, so the shares add to 100% even where
+   the total carries rounding the lines don't.
+4. **Unpriced names are a vertical list**, not a `·`-joined paragraph.
+5. **"Use soon" and "Missing" are one visual system** — see the decision below.
+
+**Decisions taken inside the batch:**
+
+- **Chip styling moved to `colours.scss` as `.dora-chip--tint` — new R-066 /
+  ADR-063.** The missing chip's whole look lived in its own scoped block; the
+  expiring chip beside it was a `q-chip` with `text-color="dark"`. Copying the
+  tint into the page would have been the third private copy of a look whose
+  D-002 contrast carve-out is documented in only one of them. This is the
+  second extraction in two days (`.dora-chip--neutral` was yesterday's, for the
+  cookbook pair), which is what made it a rule rather than a tidy.
+- **The name helpers went into `cookModeGuard`, beside the id helper** (R-003),
+  not into the dialog. The dialog now shows names where it used to show a
+  count; if the naming lived in the component the count and the list could
+  disagree. A test pins that they agree.
+- **A real defect surfaced only from measuring the two chips together:** the
+  two-word label "Use soon" was wrapping *inside* its own tint, rendering that
+  chip at 37px beside a 28px neighbour. `white-space: nowrap` on the shared
+  class fixes it for every chip that wears it. This is the pattern again — a
+  reported "styling" complaint with something actually broken under it.
+
+**Verified live** (`dora-verify-backend` + `dora-spa`, dense seed, form login):
+pool three-state walk on Egg Fried Rice with the real stepper + seed restored;
+guard dialog missing-branch (Carbonara → "Pecorino Romano") and unlinked-branch
+(Weeknight Laksa → 3 names); cost dialog on Carbonara reproducing the owner's
+exact example (Free Range Eggs $16.50 → **96%**, Spaghetti $0.60 → **4%**,
+unpriced Pancetta / Pecorino Romano as separate rows); both chips on Juice and
+Yoghurt measured identical — 28px height, 999px radius, `0 8px` padding,
+14.44px/600 ink at `rgb(22,39,36)`, differing only in tint and hairline.
+
+**Suites:** frontend **571 vitest** (49 files, +7 new guard-helper tests),
+`vue-tsc` clean, `eslint src/` clean. (`eslint test/` has 3 pre-existing
+`consistent-type-imports` errors in `useBuyVerdict*` / `useNutritionRating`
+specs — untouched by this unit, not part of the standing gate.)
+
+**Next up:** nothing queued from this batch. The cookbook's cook-button confirm
+is the one unwalked entry point (`DORA_VERIFY.md` → Cookbook).
+
+---
+
+## 2026-09-01 — **Cookbook: the four-item chip + tooltip batch**
+
+**Status:** complete, driven live. Owner reported four items on the cookbook
+surface; all four are built, and each was confirmed in the running app rather
+than read off the source.
+
+**What changed.**
+
+1. **Dora's belief chip moved out of the middle of the compact row.** It sat in
+   a left-hand `__chips` group with a `q-space` after it, so on a row with no
+   rating and no expiring chip it floated mid-row, and it landed at a different
+   x on every recipe. Owner: *"looks really odd on its own in compact view … I
+   don't want anything spaced evenly in this compact mode … move it to be left
+   of the favourite button."* The group is gone, the `q-space` now follows the
+   name zone, and the chip is anchored in the right cluster immediately before
+   the favourite button — the same fix (and the same reasoning) as the
+   2026-08-19 expiring-chip move.
+2. **Hollow chips → filled.** Dietary tags (`outline color="primary"`) and the
+   belief chip (`outline` + semantic colour) are now the style guide's **B2
+   neutral chip**: `--surface-sunken` ground, `--text-primary` ink, one
+   `--border-default` hairline, added as `.dora-chip--neutral` in
+   `colours.scss` so the two components can't drift.
+3. **Cook-button tooltip** is `Enter cook mode` / `Missing N ingredient(s)`.
+4. **Cart-button tooltip** is `Add N missing to a list` / `Some ingredients are
+   low` / `All ingredients in stock`.
+
+**Decisions taken inside the batch (both worth knowing):**
+
+- **The belief chip is now a component**, `RecipeBeliefChip.vue` (R-003).
+  `RecipeCard` and `RecipeRow` were rendering the same chip with the same props
+  and the same tooltip; the restyle would have had to be made twice. Callers
+  decide only whether the label shows — the compact row suppresses it and leans
+  on the tooltip.
+- **The semantic colour survives on the icon only**, not the text. Owner asked
+  for "neutral text", and D-002 forbids semantic ink on a tinted ground; keeping
+  the glyph coloured is what stops the compact row's icon-only chip from losing
+  its at-risk/back-in-stock distinction (D-013 — the tooltip carries it too).
+  The raw `--semantic-*` tokens are tuned as *fills*: the glyph measured
+  **2.39:1** on the sunken ground, under D-002's 3:1 graphic floor. Mixing 62%
+  semantic into `--text-primary` keeps the hue and clears the floor in **all ten
+  theme families** (worst case sourdough-light warning **3.19:1**; darks are
+  10–13:1). Text on the chip measures **10.85–17.9:1** everywhere.
+- **Two states the owner's four bullets didn't name, resolved rather than
+  guessed:** the cook button's `cookable === null` (unlinked) case folds into
+  "Enter cook mode" — the button does exactly that, and the grey colour already
+  says the verdict is unknown. The **cart** button's `null` case keeps its own
+  wording ("N ingredients need linking first"): there it genuinely can't work
+  out what to add, and "all in stock" would be a claim the app hasn't got.
+
+**Verified live** (backend `dora-verify-backend` + `dora-spa`, dense seed, form
+login, `#/` → `#/cookbook` to unwedge the list):
+- Card view: 16 cards, 14 neutral chips; text/ground contrast probed across all
+  ten `[data-theme]` families, both halves — figures above.
+- Compact view (the pane's forced-mobile branch): 16 rows; the two recipes with
+  a hint (Juice and Yoghurt / Tuna Mornay) render the chip in child order
+  `name-zone · q-space · CHIP · fav · cook · cart` — i.e. anchored right,
+  icon-only at 31px.
+- All four tooltip strings read off the live component instances across 16
+  recipes: every branch hit (`Enter cook mode`, `Missing 1 ingredient`,
+  `Missing 2 ingredients`, `Add N missing to a list`, `Some ingredients are
+  low`, `All ingredients in stock`, and the two unlinked recipes' linking
+  message).
+
+**Suites:** frontend **564 vitest passed** / 49 files, `vue-tsc` clean, `eslint
+src/` clean. No backend change, so pytest not run.
+
+**Close-gate.** Checked against `ENGINEERING_STANDARDS.md`: R-003 satisfied by
+extracting the chip + the shared class rather than editing the same chip twice;
+tokens-only (the icon uses `color-mix` over existing tokens, no raw hex); no new
+domain logic on the client (`is_low_stock` is a server verdict already on the
+DTO, and the tooltip only reads it). One D-002 carve-out, commented in place in
+`colours.scss` with its measurements. No new rule/ADR warranted — this is
+R-003 + D-002 applied, not a new decision.
+
+**Next up:** nothing queued from this batch. One tooltip *rendering* check went
+to `DORA_VERIFY.md` (the tooltip strings were read from the component instances,
+not from a hovered popup — the pane can't hover reliably).
+
+---
+
+## 2026-08-31 — **Shopping list v4: the surface pass (proposal only, no code)**
 
 **Status:** complete as a design unit. **No code was written and no suite was
 run** — this unit produced one document,

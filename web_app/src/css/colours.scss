@@ -36,6 +36,12 @@
 .dora-text-secondary   { color: var(--text-secondary) !important; }
 .dora-text-on-toolbar  { color: var(--text-on-toolbar) !important; }
 .dora-text-on-primary  { color: var(--text-on-primary) !important; }
+// Accent-coloured ink on a page/component ground. Quasar's own
+// `text-accent` (and `color="accent"` on a flat q-btn) paints the raw
+// --brand-accent, which is a *fill* tone: 1.3–2.0:1 as text in every
+// light family. Use this wherever accent-coloured words or glyphs sit on
+// a light surface — see --accent-ink in tokens.scss (owner, 2026-09-01).
+.dora-text-accent      { color: var(--accent-ink) !important; }
 
 .dora-bg-page          { background-color: var(--surface-page) !important; }
 .dora-bg-sunken        { background-color: var(--surface-sunken) !important; }
@@ -89,3 +95,105 @@
 .text-lifecycle-expiry-changed { color: var(--lifecycle-expiry-changed) !important; }
 .text-lifecycle-cleared        { color: var(--lifecycle-cleared) !important; }
 .text-neutral-muted            { color: var(--neutral-muted) !important; }
+
+// ── B2 neutral chip (owner 2026-09-01) ───────────────────────────────
+// Outline chips (recipe dietary tags, Dora's belief) were reported as
+// hard to read in *both* light and dark: an outline puts thin semantic
+// ink on the card ground and nothing else, so the label sits at the
+// muted end of the ramp with no field behind it. B2's "neutral chip" is
+// the filled answer — `--surface-sunken` ground, neutral ink — and it is
+// what the owner asked for ("filled with neutral text").
+//
+// D-002 carve-out: where the chip still carries a state, only the *icon*
+// takes the semantic colour; the text stays neutral on the neutral
+// ground, so no semantic ink lands on a tinted field. The state stays
+// decodable per D-013 via its label (and its tooltip when the label is
+// suppressed for width, as in the compact cookbook row) — the icon
+// colour is reinforcement, not the sole signal.
+.dora-chip--neutral.q-chip {
+    background: var(--surface-sunken);
+    color: var(--text-primary);
+    border: 1px solid var(--border-default);
+}
+// Darkened toward the page ink: the raw semantic tokens are tuned as
+// *fills*, and at their own lightness the glyph measured 2.4:1 on the
+// sunken ground — under D-002's 3:1 floor for a graphic. The mix keeps
+// the hue (still readably amber / green) and clears the floor in every
+// theme family, light and dark.
+.dora-chip--neutral.dora-chip--warning .q-icon {
+    color: color-mix(in srgb, var(--semantic-warning) 62%, var(--text-primary));
+}
+.dora-chip--neutral.dora-chip--positive .q-icon {
+    color: color-mix(in srgb, var(--semantic-positive) 62%, var(--text-primary));
+}
+
+// ── B2 tinted state chip (owner 2026-09-01) ──────────────────────────────
+// The recipe row's missing/swap chip was reworked into a soft-tinted pill —
+// semantic tint, a semantic hairline, a coloured glyph and neutral ink —
+// and the owner asked the "Use soon" / "Expired" chip sitting on the same
+// line to match it ("ensure missing and use soon chips are styled the
+// same"). They were two different systems side by side: a solid `q-chip`
+// with dark ink beside a tinted pill. The shape lived privately inside
+// `RecipeMissingIngredientChip`; it's shared now so the two can't drift
+// again (R-003).
+//
+// D-002 carve-out on B2's "semantic chip" (`-soft` bg + full-strength
+// semantic text): measured on the pesto light theme, semantic ink on its
+// own soft ground lands at 2.1:1 (warning), 2.5:1 (positive) and 3.3:1
+// (negative) — all under the 4.5 floor. The tone is carried by the tint,
+// the hairline and the icon; the words stay `--text-primary`. Same shape
+// as `MealReconcileLog`'s status pills.
+.dora-chip--tint {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    // D-011 — a real tap target, not bare text. These sit inline in a
+    // wrapping ingredient name, so the row's own height governs; 28px is
+    // the shared chip height on the recipe page.
+    min-height: 28px;
+    padding: 0 var(--space-2);
+    border: 1px solid transparent;
+    border-radius: var(--radius-pill);
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    line-height: 1.2;
+    text-align: left;
+    // A pill breaks *around*, never *inside*: without this the two-word
+    // labels ("Use soon", "Swap ready") split onto two lines inside their
+    // own tint when the ingredient name beside them is long, and the chip
+    // grew to 37px next to a 28px one-word neighbour. The row already wraps
+    // between chips, so the chip just moves to the next line instead.
+    white-space: nowrap;
+    color: var(--text-primary);
+}
+
+.dora-chip--tint-negative {
+    background: var(--semantic-negative-soft);
+    border-color: var(--semantic-negative);
+
+    .q-icon { color: var(--semantic-negative); }
+}
+
+.dora-chip--tint-warning {
+    background: var(--semantic-warning-soft);
+    border-color: var(--semantic-warning);
+
+    .q-icon { color: var(--semantic-warning); }
+}
+
+.dora-chip--tint-positive {
+    background: var(--semantic-positive-soft);
+    border-color: var(--semantic-positive);
+
+    .q-icon { color: var(--semantic-positive); }
+}
+
+// "Not set / unknown" — the one case D-001 reserves grey for. A custom level
+// beyond the seeded three lands here too rather than borrowing a semantic
+// tone it hasn't earned.
+.dora-chip--tint-neutral {
+    background: var(--surface-sunken);
+    border-color: var(--border-default);
+
+    .q-icon { color: var(--text-muted); }
+}

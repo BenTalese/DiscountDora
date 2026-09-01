@@ -76,14 +76,7 @@
                 label="Pack count (optional)"
                 :rules="[(v) => isBlank(v) || v > 0 || 'Must be > 0']"
                 hide-bottom-space
-            >
-                <q-tooltip>
-                    For multipacks — e.g. 4 for a 4-pack of yoghurt. Dora then
-                    reads "Size each" per pack, works out the real per-unit
-                    price, and remembers the pack shape for next time. Leave it
-                    empty for a single pack or free weight.
-                </q-tooltip>
-            </q-input>
+            />
             <q-select
                 v-if="storeOptions.length > 0"
                 v-model="storeId"

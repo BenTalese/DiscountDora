@@ -386,14 +386,14 @@
     }
     .voice-card--selectable { cursor: pointer; }
     .voice-card--selectable:hover {
-        border-color: color-mix(in srgb, var(--q-accent) 45%, transparent);
+        border-color: color-mix(in srgb, var(--accent-ink) 45%, transparent);
     }
     .voice-card--selectable:focus-visible {
         outline: 2px solid var(--ring-focus);
         outline-offset: 2px;
     }
     .voice-card--active {
-        border-color: var(--q-accent);
+        border-color: var(--accent-ink);
         background: var(--brand-primary-soft, var(--surface-sunken));
     }
     .voice-card__head {
@@ -417,7 +417,7 @@
     }
     .voice-card__check {
         margin-left: auto;
-        color: var(--q-accent);
+        color: var(--accent-ink);
     }
     .voice-card__desc {
         font-size: 0.8125rem;
@@ -464,12 +464,14 @@
         border-radius: 999px;
         font-size: 0.75rem;
         font-weight: 600;
-        color: var(--q-accent);
-        background: color-mix(in srgb, var(--q-accent) 12%, transparent);
+        // Ink for the label, the raw accent for the tint behind it — a 12%
+        // wash of the fill tone is the pale-yellow ground this chip wants.
+        color: var(--accent-ink);
+        background: color-mix(in srgb, var(--brand-accent) 12%, transparent);
         cursor: pointer;
     }
     .voice-card__btn:hover:not(:disabled) {
-        background: color-mix(in srgb, var(--q-accent) 20%, transparent);
+        background: color-mix(in srgb, var(--brand-accent) 20%, transparent);
     }
     .voice-card__btn:focus-visible { outline: 2px solid var(--ring-focus); outline-offset: 2px; }
     .voice-card__btn:disabled {

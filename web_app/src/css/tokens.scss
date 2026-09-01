@@ -76,6 +76,21 @@
     --brand-secondary-strong: var(--brand-secondary);
     --brand-accent: hsl(50 99% 56%);              /* #fed224 */
     --brand-accent-soft: hsl(50 95% 92%);
+    /* Accent at *ink* strength — the accent hue darkened until it clears
+       D-002's 4.5:1 floor on the whole light-surface ladder (component /
+       page / elevated / sunken). --brand-accent is tuned as a **fill**: as
+       text it measures 1.25–2.0:1 in every light family, which is what made
+       the stock-item detail tabs (and every other accent-coloured label)
+       unreadable — owner, 2026-09-01. Same shape and rationale as
+       --brand-secondary-strong above.
+         Use --accent-ink for any accent-coloured text, icon, hairline or
+         active-state indicator sitting on a page/component ground.
+         Keep --brand-accent for fills, glows, tint mixes, and anything on
+         the toolbar's dark ground (the main-menu buttons, the wordmark) —
+         there the bright tone is both legible and the point.
+       Every theme overrides this; dark families whose accent already
+       clears the floor point it straight back at --brand-accent. */
+    --accent-ink: hsl(50 99% 24%);
 
     /* ────────────────────────────── Surface ladder ───────────────── */
     --surface-page: hsl(168 38% 94%);             /* #e8f6f3 */

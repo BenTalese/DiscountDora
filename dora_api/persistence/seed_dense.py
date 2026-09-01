@@ -564,25 +564,44 @@ def seed_dense_data(qa_fixtures: bool = False, money_on: bool = True):
 
     # ══ SUBSTITUTES ══════════════════════════════════════════════════════
     # Undirected pairs, written through the canonical ordering helper so the
-    # rows match what the API would have written (R-017). One pair carries a
-    # note and one doesn't — both render differently.
+    # rows match what the API would have written (R-017). Across the five:
+    # a note without a ratio, a ratio without a note, both together, and
+    # neither — every shape the substitute surfaces have to render.
+    #
+    # The **ratio is directional** (`_x` → `_y`) while the *row* is stored in
+    # canonical id order, so it has to be flipped whenever `canonical_pair`
+    # reverses the pair. The read side (`get_stock_item_detail`) flips it back
+    # for whichever item you asked about; writing it un-flipped here would seed
+    # every ratio backwards on roughly half the pairs, at random, depending on
+    # how the uuid4()s sorted.
     substitute_table = db.metadata.tables["StockItemSubstitute"]
     _raw_pairs = [
-        (olive_oil.id, butter.id, "Fine for frying, not for dressing"),
-        (pasta.id, rice.id, "Carb base"),
-        (parmesan.id, ricotta.id, None),
-        (mince.id, chicken.id, None),
-        (yoghurt.id, ricotta.id, "In the bake, not on the granola"),
+        # (from, to, notes, ratio as (qty_from, unit_from, qty_to, unit_to))
+        (olive_oil.id, butter.id, "Fine for frying, not for dressing",
+         (1, "tbsp", 1, "tbsp")),
+        (pasta.id, rice.id, "Carb base", (100, "g", 75, "g")),
+        (parmesan.id, ricotta.id, None, (20, "g", 40, "g")),
+        (mince.id, chicken.id, None, None),
+        (yoghurt.id, ricotta.id, "In the bake, not on the granola", None),
     ]
     _seen: set[tuple] = set()
     _rows: list[dict] = []
-    for _x, _y, _notes in _raw_pairs:
+    for _x, _y, _notes, _ratio in _raw_pairs:
         _a, _b = canonical_pair(_x, _y)
         if (_a, _b) in _seen:
             continue
         _seen.add((_a, _b))
-        _rows.append({"stock_item_a_id": _a, "stock_item_b_id": _b,
-                      "notes": _notes, "created_at": now})
+        _row = {"stock_item_a_id": _a, "stock_item_b_id": _b,
+                "notes": _notes, "created_at": now,
+                "ratio_quantity_in": None, "ratio_unit_in": None,
+                "ratio_quantity_out": None, "ratio_unit_out": None}
+        if _ratio is not None:
+            _qf, _uf, _qt, _ut = _ratio
+            if _a != _x:
+                _qf, _uf, _qt, _ut = _qt, _ut, _qf, _uf
+            _row.update(ratio_quantity_in = _qf, ratio_unit_in = _uf,
+                        ratio_quantity_out = _qt, ratio_unit_out = _ut)
+        _rows.append(_row)
     db.session.execute(substitute_table.insert(), _rows)
 
     # ══ LEVEL-CHANGE HISTORY ═════════════════════════════════════════════
@@ -938,13 +957,14 @@ def seed_dense_data(qa_fixtures: bool = False, money_on: bool = True):
     repo.save_changes()
 
     def _step(client_id, sequence, text, *, parent=None, hint=None,
-              ingredients=(), step_tools=(), section=None):
+              ingredients=(), step_tools=(), section=None, timer=None):
         return StepWrite(
             client_id=client_id, parent_client_id=parent, sequence=sequence,
             text=text, hint=hint,
             ingredient_ids=[ragu_ings[k].id for k in ingredients],
             tool_ids=[tools[t].id for t in step_tools],
             section_id=section,
+            timer_minutes=timer,
         )
 
     replace_steps_for_recipe(ragu.id, [
@@ -963,7 +983,8 @@ def seed_dense_data(qa_fixtures: bool = False, money_on: bool = True):
         _step("s3", 2, "Sweat the soffritto in the pancetta fat until it's soft "
                        "and sweet — fifteen minutes, no colour.",
               hint="If it's browning, the heat is too high.",
-              ingredients=("onion", "carrot", "celery"), section=_sauce),
+              ingredients=("onion", "carrot", "celery"), section=_sauce,
+              timer=15),
         _step("s4", 3, "Add the garlic and cook one minute more.",
               ingredients=("garlic", "chilli"), section=_sauce),
         _step("s4a", 0, "Add the chilli flakes here too if you want the heat.",
@@ -977,7 +998,8 @@ def seed_dense_data(qa_fixtures: bool = False, money_on: bool = True):
               ingredients=("passata",), section=_sauce),
         _step("s7", 6, "Simmer uncovered for three hours, stirring every half "
                        "hour or so.",
-              hint="Barely a bubble. If it's spitting, it's too hot.", section=_sauce),
+              hint="Barely a bubble. If it's spitting, it's too hot.",
+              section=_sauce, timer=180),
         _step("s7a", 0, "Top up with a splash of water any time it looks tight.",
               parent="s7"),
         _step("s7b", 1, "Around the two-hour mark, stir the warmed milk through — "

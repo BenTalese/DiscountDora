@@ -2270,9 +2270,26 @@ exceptions, which still must be commented) · **Source** (where it was establish
   "it fixes itself if I reload" in a bug report; per-feature ad-hoc caches each
   inventing their own invalidation (`invalidateBuyVerdict`,
   `usePantryBeliefs.invalidate`, `invalidateReconcileQueue` — three copies of
-  this idea before it was named).
+  this idea before it was named); **a page that calls an api service directly
+  for an entity some store also caches** (below).
+- **Extended 2026-09-01 — the simplest case is a page writing the store's OWN
+  entity behind its back.** `mealSlotStore` cached the household meal-slot
+  vocabulary with an `ensureLoadedAsync` short-circuit, and
+  `RecipeMealSlotsSettings.vue` did its CRUD straight against
+  `MealSlotApiService` — a deliberate choice, commented as "the settings page
+  talks to the api service directly (CRUD); this store is read-mostly". Nothing
+  derived, no foreign entity: the writer simply was not the store, so the cache
+  held the pre-edit vocabulary for the rest of the session. Two owner-reported
+  bugs came out of that one seam — the planner's "which slot?" list not honouring
+  settings until a refresh, and *"getting errors 'could not update the plan'
+  after fiddling with the meal slot settings"* (the planner armed a deleted slot
+  and the server's write-time slot check refused it). "Read-mostly" is not a
+  carve-out; it is the exact condition under which the staleness lasts longest.
+  **A store that caches an entity owns every write to that entity** — give it
+  `createAsync` / `renameAsync` / `removeAsync` / `reorderAsync` that call the
+  service and then refresh, and have the settings page call those.
 - **Established by:** the cookbook nutrition-filter batch, 2026-08-28. See
-  ADR-059.
+  ADR-059. Extended by the meal-planner batch, 2026-09-01.
 
 
 ### R-063 — A field that records what happened must not double as the field that states what is intended
@@ -2375,6 +2392,184 @@ exceptions, which still must be commented) · **Source** (where it was establish
   read by nothing.
 - **Established by:** the `show_recipe_images` cut, 2026-08-29 (owner: *"I'm
   thoroughly confused about the recipe photos toggle"*). See ADR-062.
+
+
+### R-066 — A chip's look is a shared class, not per-component CSS
+- **Rule:** the visual identity of a chip — ground, hairline, ink, radius, tap
+  height, and how its semantic tone is expressed — lives as a `.dora-chip--*`
+  class in `css/colours.scss`. A component picks a class and supplies the label,
+  the icon and the tone; it does not re-declare the look in its own scoped block,
+  and it does not reach for a bare Quasar `q-chip` `color=` / `text-color=` pair
+  to express a state.
+- **Why:** chips are the app's densest carrier of state and they appear side by
+  side, so a divergence is not subtle — it reads as two different systems on one
+  line. Two rounds in two days made that concrete. On 2026-09-01 the cookbook's
+  dietary tag and belief chip were the *same* outline chip declared twice, and
+  the restyle had to be applied in both files; later the same day the recipe
+  row's "Use soon" chip (a solid `q-chip` with `text-color="dark"`) sat directly
+  beside the tinted missing chip and the owner asked for them to *"be styled the
+  same"*. In both cases the look had been written privately inside a component,
+  so nothing made the second copy visible. There is a second-order cost: the
+  D-002 contrast carve-out these chips depend on was measured once, and a
+  privately-declared copy inherits the tint without inheriting the reasoning.
+- **Apply:** before styling a chip, grep `colours.scss` for `dora-chip`. If a
+  class fits, use it. If none does, add one there — with the contrast note
+  attached — rather than in the component. Where the chip is a *behavioural*
+  object too (a menu, a button), the shared class carries the look and the
+  component's scoped block carries only hover / focus / menu rules; that split is
+  what `RecipeMissingIngredientChip` now demonstrates. A chip label never wraps
+  inside its own tint: keep `white-space: nowrap` on the shared class so a chip
+  breaks *around* rather than growing taller than its neighbour.
+- **Violation signal:** `background: var(--semantic-*-soft)` or
+  `border-radius: var(--radius-pill)` inside a component's scoped styles; a
+  `q-chip` with `color`/`text-color` encoding a domain state; two chips on one
+  row with different heights, radii or font weights.
+- **Established by:** the missing / "Use soon" chip unification, 2026-09-01
+  (owner: *"ensure missing and use soon chips are styled the same"*). See ADR-063.
+
+### R-067 — A full-page surface follows the theme; "mood" is not a reason to pin a palette token
+- **Rule:** a route-level surface takes its ground and its ink from the semantic
+  surface tokens (`--surface-page` / `--surface-component` / `--text-primary`).
+  It does not pin itself to a raw `--palette-*` value to force an atmosphere,
+  and its children do not paint themselves `--text-inverse` to survive a parent
+  that did. Raw palette tokens stay where they belong: inside the theme
+  definitions, and in genuinely inverted *components* (a toast, a tooltip, a
+  scrim) that are inverted against the page in every theme by design.
+- **Why:** `--palette-neutral-900` is a token, so R-002 reads as satisfied — but
+  a page that is black under a light theme is not theme-aware, it is hard-coded
+  with extra steps. It reads to the user as a bug (*"why is stocktake suddenly
+  dark?"*), and the cost compounds downward: the stocktake runner's phase
+  components each had to hard-code `--text-inverse` on their headings to stay
+  legible against it, which is three more places that break the moment the shell
+  changes. The design intent was real — the contrast was meant to say "you're
+  concentrating" — but a focus mode is carried by *layout*: the full-bleed shell,
+  one card, no nav. Not by inverting the palette.
+- **Apply:** ground and ink on a `q-page` root come from surface tokens. If a
+  surface genuinely needs more separation than `--surface-page` gives it, reach
+  for `--surface-elevated` / `--surface-sunken`, or add a theme-resolved token to
+  `themes.scss` for every theme family — never a single palette literal that
+  every theme then shares.
+- **Violation signal:** `background: var(--palette-*)` in a component's scoped
+  block; `color: var(--text-inverse)` on anything that isn't sitting on a
+  semantic fill; a comment in the file explaining why this one screen ignores
+  the theme.
+- **Established by:** the stocktake runner, 2026-09-01 (owner: *"Why is the
+  initial screen … dark/black background all of a sudden when I'm driving in
+  light mode"*). See ADR-064.
+
+
+### R-068 — Record the fact; don't parse it back out of prose. If you must infer, say so in the UI
+- **Rule:** where a schema can hold a domain fact, hold it — do not recover it by
+  running a regex or a keyword match over free text the user typed for a human
+  reader. Where the payload genuinely has nowhere to put it (a prose blob, an
+  imported page, an image), inference is legitimate, but the surface must **label
+  the inferred value as inferred** rather than presenting it beside recorded facts
+  in the same voice.
+- **Why:** parsed prose is a guess wearing a fact's clothes. Cook mode read
+  `"Simmer for 20 minutes"` and offered a 20-minute countdown, which is useful
+  right up until it reads `"48 hours in the fridge"` off a cold-prove note and
+  offers a 2880-minute timer beside the Start button, indistinguishable from a
+  timer the cook set. The user can't tell which they're looking at, so they can't
+  tell whether to trust it, and there is no way to *correct* it — the only lever
+  is to rewrite the recipe text, which changes what the recipe says to make the
+  app behave. It also silently varies by wording: "fifteen minutes" gets nothing,
+  "15 minutes" gets a timer.
+- **Apply:** add the column. It is nearly always a nullable scalar and one editor
+  control, and NULL keeps the old inference as an honest fallback for the payloads
+  that can't carry it — so the change is additive rather than a migration of
+  behaviour. Then make the two visually distinguishable: a recorded value renders
+  plain, an inferred one carries a short attributive caption ("from this step's
+  wording").
+- **Violation signal:** a regex over user-authored prose feeding anything other
+  than search or highlight; a computed that derives a domain quantity from
+  `.text` / `.notes` / `.instructions`; a UI that shows a parsed value with no
+  indication it was parsed.
+- **Non-goal:** this is not a ban on text matching. Highlighting, searching and
+  the importer's first-pass parse are all fine — they either propose (and the
+  user confirms) or they only affect presentation. The rule is about a parsed
+  value that *drives behaviour* and reads as recorded.
+- **Established by:** cook-mode step timers, 2026-09-01 (owner: *"How does the
+  timer function get added? Is it guessing? … for structured I feel a tickable box
+  option should be added"*). See ADR-065.
+
+
+### R-069 — A palette colour tuned as a *fill* is not automatically usable as *ink*; give the ink strength its own token
+- **Rule:** before painting text, an icon, a hairline or an active-state indicator
+  in a brand token (`--brand-accent`, `--brand-primary`, a semantic fill), check
+  its contrast against the **whole surface ladder of every theme that inherits
+  it** — component, page, elevated, sunken. Where the fill tone fails D-002's
+  floor as ink, do not fork the rule per theme and do not fall back to neutral
+  ink: add a sibling **ink-strength token** (`--<role>-ink`), define it in
+  `tokens.scss` with the measured ratios in the comment, and override it in every
+  `[data-theme]` block — pointing it straight back at the fill token in the
+  families that already clear the floor.
+- **Why:** a brand colour is picked to look right *behind* dark text. The same
+  hue as *the text* is a different job with a different floor, and nothing warns
+  you: `--brand-accent` measured **1.25–2.0:1** as ink in all five light families
+  while looking perfectly healthy as a toolbar and a badge. Because one token
+  served both jobs, a single rule (`color: var(--q-accent)`) shipped legible in
+  the dark themes and unreadable in the light ones — which is how the stock-item
+  detail tabs, the settings page-header icons, the nav indicators and two Help
+  buttons all became invisible at once without any of them being individually
+  wrong. `--brand-secondary-strong` already existed for the mirror-image case
+  (a surface-grade tone that sinks when used as a mark); this is the same
+  decision, and it should not have to be rediscovered a third time.
+- **Apply:** keep hue and saturation, move lightness until the *worst* surface in
+  the ladder clears 4.5:1 (a graphic-only token may sit at D-002's 3:1, but pick
+  4.5 when the token is shared with text — one token, one floor). Record the
+  binding ratios in the token comment so the next person changing a surface knows
+  what they are about to break. Then split the call sites by ground, not by
+  component: ink token on page/component surfaces, raw fill token on the toolbar,
+  in glows, and inside `color-mix()` tints — a tint wants the bright tone.
+- **Violation signal:** `color:`, `border-color:` or a 2–3px indicator
+  `background:` reading `--brand-accent` / `--q-accent` / a semantic fill;
+  a `.body--dark` (or `[data-theme]`) fork that exists only to drop a brand
+  colour in light mode; `color="accent"` on a *flat* Quasar button.
+- **Non-goal:** not a ban on brand colour as ink — the point is to keep the hue
+  and make it legible, not to retreat to `--text-primary`. And not every fill
+  needs an ink sibling: add one when a real call site needs it.
+- **Established by:** the accent-ink sweep, 2026-09-01 (owner: *"The yellow in
+  pesto is too bright for where it is used… this is an issue across the board
+  with the light themes. It's hard to see some of the text such as the tabs in
+  the stock item details page"*). See ADR-066.
+
+
+### R-070 — Write-time vocabulary checks validate new *values*, not whole payloads
+- **Rule:** when an update endpoint validates a field against a closed vocabulary
+  that the user can edit, the allowed set is *the vocabulary plus whatever the
+  record being updated already holds*. A value the record is merely **carrying
+  forward** is not a new write and must pass; only a genuinely new off-vocabulary
+  value is refused. Create paths pass no allowance — a record that does not exist
+  yet has no history to preserve.
+- **Why:** the two halves of "deleting a vocabulary row is non-destructive" have
+  to agree. `MealPlanEntry.slot` and `Recipe.time_of_day` hold slot *names* as
+  free text with no FK precisely so that deleting a meal slot leaves existing
+  labels intact — there is a test asserting it, and the delete dialog promises it
+  ("2 entries use this meal slot; they'll keep the label"). But both update
+  endpoints then validated their **entire payload** against the live vocabulary,
+  and both of their clients resend the whole record on every edit: the planner
+  resends every forward entry, the recipe editor resends `time_of_day`. So a
+  preserved label survived exactly until the next save, at which point the record
+  became permanently unsaveable — and unsaveable in the cruellest way, because
+  the request that would have *fixed* the slot was refused for carrying it. The
+  owner saw only "Could not update the plan." on a week he had not touched.
+- **Apply:** `allowed_slot_names(valid, already_stored)` in
+  `slot_validation.py` is the shape — the caller loads the record first anyway,
+  so pass what it holds. Keep the *error message* naming the live vocabulary, not
+  the allowance: listing a deleted value under "Allowed:" reads as an invitation
+  to keep using it. Any new user-editable vocabulary guarding a free-text column
+  gets the same treatment.
+- **Violation signal:** a `get_valid_*` call in an update handler whose result
+  goes straight into the check with no reference to the loaded entity; a delete
+  endpoint documented as "preserves existing labels" with no test that the
+  bearing record can still be *saved* afterwards; a bug report of the shape "it
+  worked until I changed a setting, now this record won't save".
+- **Non-goal:** not a licence to accept anything. A new entry on a deleted slot
+  is still refused, and the record's own history is the only allowance — it does
+  not leak across records.
+- **Established by:** the meal-planner batch, 2026-09-01 (owner: *"getting errors
+  'could not update the plan' after fiddling with the meal slot settings"*). See
+  ADR-067.
 
 
 ## ADR process (evaluate every task)
@@ -4274,3 +4469,153 @@ A non-binding cookbook of solutions to recurring problems. Not rules — just a
 - **If that's not viable:** `box-sizing: border-box` + `padding` (no
   `margin`) on the transitioning element can also work, but the parent-padding
   approach is simpler and has been the reliable answer.
+### ADR-063 — Chip styling belongs to `colours.scss`, not to whichever component drew it first (promotes R-066)
+- **Context:** the recipe page's ingredient rows carry two state chips side by
+  side. "Missing / Swap ready" was reworked on 2026-08-31 into a soft-tinted
+  pill — semantic tint, semantic hairline, coloured glyph, neutral ink, 28px
+  tap target — with a measured D-002 carve-out explaining why the ink stays
+  neutral. That whole look was declared inside `RecipeMissingIngredientChip`'s
+  scoped block. The "Use soon" / "Expired" chip beside it was a Quasar `q-chip`
+  with `color="warning" text-color="dark"`: a solid square badge with dark ink.
+  The owner, reading one row: *"ensure missing and use soon chips are styled the
+  same (recently improved the missing one)"*. The day before, the same shape had
+  produced the same complaint on the cookbook, where the dietary tag and the
+  belief chip were one outline chip declared in two components.
+- **Options:** (a) copy the tint block into the page's scoped styles — the third
+  copy of a look whose contrast reasoning lives in a comment somewhere else;
+  (b) wrap the expiring chip in its own component so the two are siblings — but
+  they are not siblings, one owns a substitutes menu and the other is inert, so
+  the shared thing would be a styling base class in component clothing;
+  (c) promote the look to a shared class in `colours.scss` and let each component
+  keep only its own behaviour.
+- **Decision:** (c) — `.dora-chip--tint` plus `--tint-negative` / `--tint-warning`
+  / `--tint-positive` in `colours.scss` (R-066), carrying the D-002 carve-out note
+  with them. `RecipeMissingIngredientChip` composes the class and keeps its
+  hover / focus / menu rules; the page's expiring chip stops being a `q-chip`
+  and becomes a span wearing the same classes. This matches `.dora-chip--neutral`,
+  added the previous day for the cookbook pair, which is what turns it from a
+  tidy into a pattern.
+- **Consequences:** the two chips are now provably identical — measured live at
+  the same 28px height, radius, padding, font size and weight, differing only in
+  tone. A third state chip on any surface has a class to reach for. The cost is
+  one more global class in `colours.scss`, and the discipline of grepping it
+  before styling a chip. One real bug surfaced only because the two were finally
+  measured together: the two-word label "Use soon" was wrapping *inside* its own
+  tint, making that chip 37px next to a 28px neighbour — fixed with
+  `white-space: nowrap` on the shared class, which now protects every chip that
+  wears it.
+- **Promotes rule:** R-066.
+
+
+### ADR-064 — The stocktake runner follows the theme; focus mode is layout, not an inverted palette (promotes R-067)
+- **Context:** the runner shell was written to stay dark under every theme —
+  `background: var(--palette-neutral-900)`, with a comment saying the contrast
+  *is* the "you're concentrating" affordance, and with each phase component
+  painting its heading `--text-inverse` to survive it. Driving the app in a light
+  theme, the owner hit stocktake and read the black screen as a defect rather
+  than as an affordance.
+- **Decision:** the shell takes `--surface-page` / `--text-primary` like every
+  other route, and the phase headings drop `--text-inverse`. Focus mode keeps
+  everything that actually made it one: the full-bleed page, the single card, no
+  nav, the close X and the progress strip.
+- **Consequences:** stocktake now looks like the rest of the app under all theme
+  families instead of like a different product under the light ones. The
+  dark-theme experience is unchanged in kind — the shell was already dark there;
+  what's gone is the light-theme surprise. Generalised as R-067, because the same
+  "pin a palette token to set a mood" instinct is available to any full-page
+  surface — cook mode and the shopping-list run face are the nearest candidates
+  and should be checked against it opportunistically.
+- **Promotes rule:** R-067.
+
+
+### ADR-065 — A structured step records its own timer; the text sniff survives as a labelled fallback (promotes R-068)
+- **Context:** cook mode's timer card was driven entirely by a regex over the
+  current step's text — `/(\d+)\s*(minutes?|mins?)/` then hours — for all three
+  step faces. The owner asked whether it was guessing: *"I feel this might be
+  okay for free text but for structured I feel a tickable box option should be
+  added"*. The distinction is exactly right and it is a payload distinction, not
+  a preference: a free-text method is one prose blob with nowhere to record
+  "this step is timed", while a structured step is a row that can carry a column.
+- **Decision:** add `RecipeStep.timer_minutes` (nullable Integer, 1..1440
+  validated at the request boundary). The structured method editor toggles it per
+  step and sub-step with the same `null`-vs-value two-state the `hint` field
+  already uses — one flag, no second `showTimer` ref that can disagree with the
+  data. Cook mode prefers a declared timer and falls back to the sniff, which now
+  captions itself "from this step's wording" so a guess never reads as a
+  recorded fact. Free-text and photo recipes are unchanged in behaviour, and
+  gain the caption.
+- **Consequences:** the change is additive — NULL means "nothing declared", so
+  every existing recipe keeps exactly the behaviour it had. The dense seed now
+  carries two declared timers (15 min, 3 hr) so the surface has a fixture, and
+  the 70%-hydration pizza dough remains an unimproved sniff case (a 2880-minute
+  countdown off "48 hours in the fridge") — which is the honest demonstration of
+  why the caption exists. Generalised as R-068: the same "parse it back out of
+  the prose" instinct is available anywhere the schema is thinner than the
+  feature, and the importer's serving/time parsing is the nearest neighbour
+  worth checking against it.
+- **Promotes rule:** R-068.
+
+### ADR-066 — Accent gets an ink-strength sibling token rather than a per-theme fork (promotes R-069)
+- **Date / task:** 2026-09-01 (owner feedback: pesto yellow unreadable as text)
+- **Status:** accepted
+- **Context:** `--brand-accent` is the app's identity colour and doubles as the
+  active-state colour for tabs, segmented controls, settings nav indicators,
+  page-header icons, theme cards, the voice picker and two Help buttons. It is
+  tuned as a **fill** — it is the toolbar in pesto and the ground under
+  `--text-on-accent`. As ink it measures 1.39:1 on white in pesto and 1.25–2.04:1
+  across all five light families; every light theme was therefore shipping
+  invisible active-tab labels. `DoraChat` had already hit this and worked around
+  it locally with a `.body--dark` fork that dropped the accent entirely in light
+  mode — a fix that solves one component and loses the brand colour to do it.
+- **Decision:** add `--accent-ink` beside `--brand-accent`, defined in
+  `tokens.scss` and overridden in all ten `[data-theme]` blocks. Light families
+  keep hue + saturation and drop lightness to 24–30% (measured 4.5–5.7:1 across
+  component/page/elevated/sunken); `pesto-dark`, `lemon-tart-dark` and
+  `cherry-cola-dark` lift theirs a few points to clear the floor on `elevated`;
+  `blueberry-dark` and `sourdough-dark` point straight at `var(--brand-accent)`,
+  which already measures 5.9:1 and 9.1:1. Call sites split by **ground**: ink on
+  page/component surfaces, the raw accent kept on the toolbar (main-menu buttons,
+  the wordmark), in glows, and inside `color-mix()` tints. `.dora-text-accent`
+  in `colours.scss` covers template-side use where Quasar's `color="accent"` on a
+  flat button would paint the fill tone.
+- **Consequences:** one declaration now covers both modes, so the `.body--dark`
+  fork in `DoraChat` is gone and light themes keep the accent identity instead of
+  falling back to plain ink. The token is a standing contract: a theme that
+  changes its accent must re-measure its ink. Deliberately **not** done here — a
+  matching `--primary-ink`. `--brand-primary` fails the same test as ink in the
+  light families (lemon-tart 1.63:1, sourdough 2.34:1, pesto 3.89:1), but it is
+  consumed overwhelmingly through Quasar's `color="primary"` rather than through
+  CSS vars, so the sweep is a different (larger) job — logged as a follow-up
+  rather than half-done alongside this one.
+- **Promotes rule:** R-069.
+
+
+### ADR-067 — A preserved off-vocabulary label is allowed back in on update, per record (promotes R-070)
+- **Date / task:** 2026-09-01 (meal-planner owner batch)
+- **Status:** accepted
+- **Context:** meal slots are a household-editable vocabulary, and deleting one
+  is deliberately non-cascading: `MealPlanEntry.slot` and `Recipe.time_of_day`
+  keep their label string (there is a test, and the delete dialog says so). But
+  `update_meal_plan` and `update_recipe` validated their payloads against the
+  live vocabulary with no reference to what the record already held, while both
+  of their clients resend the whole record on every edit. Deleting "Snack" left
+  the week rendering fine and then rejecting every subsequent save with
+  `Invalid meal slot 'Snack'`. Measured live: 400 on a PATCH the user triggered
+  by adding an unrelated breakfast four days later.
+- **Decision:** the allowed set on an *update* is the vocabulary **plus the
+  labels that record currently carries** — `allowed_slot_names(valid,
+  already_stored)`, a single shared helper in `slot_validation.py` rather than
+  the same expression written twice. Create paths are untouched (no history to
+  preserve). Three alternatives were rejected: (a) cascade the delete — reverses
+  a settled decision and destroys history the user was promised would survive;
+  (b) have the client stop resending unchanged entries — it cannot know which
+  are unchanged without diffing server state, and it would leave the API still
+  refusing a legitimate payload; (c) drop the write-time check — the vocabulary
+  would stop meaning anything and free-text slots would creep back.
+- **Consequences:** a record can carry its own history forward indefinitely, and
+  the off-vocab label keeps surfacing in the planner's "Other" row, which is
+  where the user notices and fixes it. The allowance is per-record, so it cannot
+  spread: a *different* plan still cannot adopt "Snack". The error message
+  deliberately continues to list only the live vocabulary. `new_recipe_version`
+  copies `time_of_day` without validating, so it was already correct.
+- **Promotes rule:** R-070.

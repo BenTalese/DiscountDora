@@ -160,7 +160,6 @@
                             :focused-target="planner.focusedTarget.value"
                             :suggestions="planner.suggestions.value"
                             :format-date="planner.formatDate"
-                            :log-cook="planner.logPaletteCook"
                             @cancel-target="planner.clearFocusedTarget"
                             @recipe-pick="planner.pickRecipe"
                             @palette-meal-adjust="planner.adjustPaletteMeals"
@@ -296,22 +295,6 @@
 
                                         <q-separator />
 
-                                        <q-item>
-                                            <q-item-section>
-                                                <q-toggle
-                                                    v-model="showAllSlots"
-                                                    dense
-                                                    size="sm"
-                                                    label="Show all meal slots"
-                                                    :title="showAllSlots
-                                                        ? 'Showing every household meal slot per day'
-                                                        : 'Showing only slots with planned meals'"
-                                                />
-                                            </q-item-section>
-                                        </q-item>
-
-                                        <q-separator />
-
                                         <!-- U7 / F37 — the destructive action
                                              keeps its label and its colour. -->
                                         <q-item
@@ -342,14 +325,41 @@
                              R-Phase 2 (U2 + H1) promoted this block; it now
                              lives in pinned chrome, which is what its own
                              comment always said it was for. -->
-                        <MealPlanWeekStatus
-                            class="planner-toolbar__status"
-                            :planned-count="plannedCount"
-                            :shortfall-count="planner.shortfall.value.length"
-                            :outstanding-count="planner.needToBuyOutstanding.value.length"
-                            :on-list-count="planner.needToBuyOnList.value.length"
-                            :cook-by-label="planner.cookByLabel.value"
-                        />
+                        <div class="planner-toolbar__statusrow">
+                            <MealPlanWeekStatus
+                                class="planner-toolbar__status"
+                                :planned-count="plannedCount"
+                                :shortfall-count="planner.shortfall.value.length"
+                                :outstanding-count="planner.needToBuyOutstanding.value.length"
+                                :on-list-count="planner.needToBuyOnList.value.length"
+                                :cook-by-label="planner.cookByLabel.value"
+                            />
+                            <!-- Owner feedback 2026-09-01 — "show all meal
+                                 slots feels like it should be always visible
+                                 (not in an overflow menu)". It is a *view*
+                                 switch over the week you are looking at, not a
+                                 week action like duplicate/print/clear, so
+                                 burying it among those was a category error as
+                                 well as a discoverability one: nothing else in
+                                 that menu changes what the day cards render.
+                                 It sits on the status row rather than row 1
+                                 because row 1 is already at its width budget
+                                 (§3.2 — <= 96px, nothing wraps to a third
+                                 line), and this row has slack. -->
+                            <q-toggle
+                                v-model="showAllSlots"
+                                dense
+                                size="sm"
+                                label="All slots"
+                                class="planner-toolbar__allslots"
+                            >
+                                <q-tooltip>
+                                    {{ showAllSlots
+                                        ? 'Showing every household meal slot on each day'
+                                        : 'Showing only slots with a meal planned' }}
+                                </q-tooltip>
+                            </q-toggle>
+                        </div>
                     </div>
 
                     <!-- The week itself — the only scrolling part of this
@@ -402,6 +412,7 @@
                                     :day="day"
                                     :is-past="planner.isPastDay(day.iso)"
                                     :is-today="day.iso === planner.currentDayIso.value"
+                                    :collapsed-by-default="weekHasToday && planner.isPastDay(day.iso)"
                                     :slot-names="planner.slotNames.value"
                                     :slot-entries="(slot: string) => planner.slotEntries(day.iso, slot)"
                                     :other-entries="planner.otherSlotEntries(day.iso)"
@@ -440,25 +451,32 @@
                      buries it. F14 is honoured verbatim: the calendar widget
                      sits on the right, above the shopping info. -->
                 <div class="planner-pane planner-pane--context">
-                    <MealPlanCalendar
-                        v-model:focused-monday="planner.focusedMonday.value"
-                        class="q-mb-sm"
-                        @day-selected="scrollWeekToDay"
-                    />
-
+                    <!-- Owner feedback 2026-09-01 — "make the 'this week's
+                         shopping' and 'full ingredient demand' the same width
+                         as the calendar". They were narrower, and not by a
+                         style choice: the calendar sat OUTSIDE
+                         `.planner-pane__scroll` at full pane width while the
+                         two cards sat inside it, behind its `padding-right`
+                         and its reserved scrollbar gutter. Matching the two
+                         edges by hand is not possible — the gutter's width is
+                         the OS's, not ours — so the calendar moves inside the
+                         same scroller and stays pinned with `position: sticky`
+                         instead. One containing block, one right edge, and
+                         §3.3's "the calendar is navigation and must not scroll
+                         away" still holds. -->
                     <div class="planner-pane__scroll">
+                        <MealPlanCalendar
+                            v-model:focused-monday="planner.focusedMonday.value"
+                            class="planner-context__cal q-mb-sm"
+                            @day-selected="scrollWeekToDay"
+                        />
                         <MealPlanShoppingSummary
                             :focused-plan="planner.focusedPlan.value"
                             :ingredients-loading="planner.ingredientsLoading.value"
                             :ingredients="planner.ingredients.value"
                             :need-to-buy="planner.needToBuy.value"
                             :outstanding="planner.needToBuyOutstanding.value"
-                            :shortfall-count="planner.shortfall.value.length"
-                            :cook-by-label="planner.cookByLabel.value"
                             :generating="planner.generating.value"
-                            :list-status-label="planner.listStatusLabel"
-                            :stock-status-label="planner.stockStatusLabel"
-                            :stock-status-colour="planner.stockStatusColour"
                             @add-to-list="planner.openAddToList"
                             @hover-ingredient="planner.hoverIngredient"
                             @clear-hover="planner.clearHover"
@@ -478,7 +496,6 @@
             :recipes="planner.recipes.value"
             :focused-target="planner.focusedTarget.value"
             :format-date="planner.formatDate"
-            :log-cook="planner.logPaletteCook"
             @cancel-target="planner.clearFocusedTarget"
             @recipe-pick="planner.pickRecipe"
             @palette-meal-adjust="planner.adjustPaletteMeals"
@@ -767,12 +784,23 @@
     // fitting beside the week nav. Re-measure this if the side-pane widths
     // change — Unit 2's collapsible rail will hand the week ~234px back, at
     // which point this may be able to relax.
-    const WEEK_TOOLBAR_COMPACT_BELOW_PX = 1120;
+    // 1180, up from 1120 on 2026-09-01: the rail widened 280 -> 340, so the
+    // week pane loses 60px at every viewport width and the labelled button
+    // stops fitting 60px sooner.
+    const WEEK_TOOLBAR_COMPACT_BELOW_PX = 1180;
     const compactToolbar = computed(() => $q.screen.width < WEEK_TOOLBAR_COMPACT_BELOW_PX);
 
     // Shared by the toolbar's overflow menu and the templates drawer, which
     // both gate "save this week" on the same fact (R-003: one source, not two
     // copies of the same predicate).
+    // Owner feedback 2026-09-01 — past days fold "if today is within the
+    // displayed week, because we want to see the whole past week in one go".
+    // So the trigger is a fact about the WEEK, computed once here rather than
+    // seven times inside the cards.
+    const weekHasToday = computed(
+        () => planner.weekDays.value.some((d) => d.iso === planner.currentDayIso.value),
+    );
+
     const canSaveCurrentWeek = computed(
         () => !!planner.focusedPlan.value && planner.focusedPlan.value.entries.length > 0,
     );
@@ -975,9 +1003,17 @@
            blocks and so the reflow is horizontal only. A slot the user just
            clicked does not move vertically under the cursor while the rail
            opens. */
+        /* 340px, up from 280px (owner 2026-09-01: "make the left rail a little
+           wider — feels like the recipe names are getting way too wrapped").
+           The row's name clamps at two lines, so a narrow rail didn't truncate
+           visibly, it just spent both lines on nearly every recipe. 60px is
+           roughly five characters at the row's size — enough to put most names
+           on one line without taking the week pane below the width the
+           consolidated toolbar needs (see WEEK_TOOLBAR_COMPACT_BELOW_PX, moved
+           up by the same 60px). */
         .planner-pane--rail {
-            flex: 0 0 280px;
-            width: 280px;
+            flex: 0 0 340px;
+            width: 340px;
             transition: flex-basis var(--motion-normal) var(--motion-ease),
                 width var(--motion-normal) var(--motion-ease);
         }
@@ -992,6 +1028,16 @@
         .planner-pane--context {
             flex: 0 0 300px;
             width: 300px;
+        }
+        /* §3.3 — the calendar is navigation and must stay put; it now does so
+           from inside the scroller rather than beside it (see the template
+           comment). `--surface-page` is the ground the pane sits on, so the
+           shopping card cannot show through as it slides under. */
+        .planner-context__cal {
+            position: sticky;
+            top: 0;
+            z-index: 1;
+            background: var(--surface-page);
         }
         /* A pane child that fills the pane and scrolls internally itself
            (the recipe picker card owns its own scroller). */
@@ -1079,8 +1125,22 @@
         margin-right: var(--space-2);
         line-height: 1.2;
     }
-    .planner-toolbar__status {
+    .planner-toolbar__statusrow {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
         margin-top: var(--space-2);
+    }
+    .planner-toolbar__status {
+        flex: 1 1 auto;
+        min-width: 0;
+        /* The strip owns its own bottom margin; inside the row the two
+           siblings have to share one baseline. */
+        margin-bottom: 0;
+    }
+    .planner-toolbar__allslots {
+        flex: 0 0 auto;
+        white-space: nowrap;
     }
 
     .empty-week-banner {

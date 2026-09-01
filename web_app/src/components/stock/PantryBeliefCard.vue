@@ -28,7 +28,7 @@
     >
         <template #header>
             <div class="belief-card__summary">
-                <q-icon :name="ICONS.inferred_hunch" size="18px" class="belief-card__icon" />
+                <q-icon :name="ICONS.dora_voice" size="18px" class="belief-card__icon" />
                 <span class="belief-card__headline">{{ headline }}</span>
             </div>
         </template>

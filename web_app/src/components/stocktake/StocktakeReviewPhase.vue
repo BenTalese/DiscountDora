@@ -14,15 +14,18 @@
         believes, and her one-line reason, each on its own row. Everything is
         pre-ticked, so agreeing is still one tap. The value being delivered is
         not "confirm in bulk" — it's that **disagreeing is cheap**: untick a row
-        and it flows into the walk, where you'll look at it properly.
+        and it joins the items you check yourself.
+
+        Copy note (owner, 2026-09-01): nothing user-facing says "walk". The
+        internal phase is still called that — it names the posture, and the
+        server sends a `walk` array — but on screen this is all just stocktake.
     -->
     <div class="stocktake-review">
         <div class="stocktake-review__head">
             <div class="text-h6">Dora's fairly sure about these</div>
             <div class="text-caption dora-text-muted-7 q-mt-xs">
                 Worked out from your shopping and cooking — no need to go and look.
-                Untick anything you'd rather check yourself and it'll be waiting
-                in the walk.
+                Untick anything you'd rather check yourself.
             </div>
         </div>
 
@@ -45,17 +48,30 @@
                     />
                 </q-item-section>
                 <q-item-section>
+                    <!-- No location here (owner, 2026-09-01). This screen is
+                         read at a desk — you aren't going to go and find
+                         anything — so the name is the whole identity. The walk
+                         card, where you *do* go and look, shows the full
+                         breadcrumb. -->
                     <q-item-label class="stocktake-review__name">
                         {{ item.name }}
-                        <span v-if="item.stock_location_name" class="dora-text-muted-7">
-                            · {{ item.stock_location_name }}
-                        </span>
                     </q-item-label>
+                    <!-- Owner, 2026-09-01: the whole line used to be amber, so
+                         the two levels — the thing you actually scan for —
+                         didn't stand out from the sentence carrying them. The
+                         words are neutral ink now and the levels are tinted
+                         pills in their own D-001 colour, so a column of these
+                         can be glanced down instead of read. -->
                     <q-item-label caption class="stocktake-review__believed">
-                        Dora thinks
-                        <strong>{{ bandWord(item.belief_band) }}</strong>
+                        <span>Dora thinks</span>
+                        <span :class="tintClassForSequence(beliefSequence(item.belief_band))">
+                            {{ bandWord(item.belief_band) }}
+                        </span>
                         <template v-if="item.stock_level_name">
-                            · recorded as {{ item.stock_level_name }}
+                            <span>· recorded as</span>
+                            <span :class="tintClassForSequence(levelSequence(item.stock_level_id))">
+                                {{ item.stock_level_name }}
+                            </span>
                         </template>
                     </q-item-label>
                     <q-item-label v-if="item.belief_reason" caption class="stocktake-review__reason">
@@ -77,17 +93,22 @@
                 :loading="busy"
                 @click="confirm"
             />
-            <div v-if="untickedCount > 0" class="text-caption dora-text-muted-7 text-center q-mt-sm">
-                {{ untickedCount }} will join the walk.
-            </div>
         </div>
     </div>
 </template>
 
 <script setup lang="ts">
     import { computed, ref, watch } from 'vue';
+    import { storeToRefs } from 'pinia';
     import BaseButton from 'src/components/BaseButton.vue';
     import { ICONS } from 'src/style/icons';
+    import { tintClassForSequence } from 'src/helpers/stockLevelLogic';
+    import {
+        LOW_STOCK_SEQUENCE,
+        OUT_OF_STOCK_SEQUENCE,
+        STOCKED_SEQUENCE,
+    } from 'src/helpers/stockStatus';
+    import { useStockLevelStore } from 'src/stores/stockLevelStore';
     import type { StocktakeSessionItem } from 'src/services/api/stocktakeApiService';
 
     const props = defineProps<{
@@ -129,16 +150,38 @@
     }
 
     const tickedCount = computed(() => ticked.value.size);
-    const untickedCount = computed(() => props.items.length - tickedCount.value);
 
+    // The pill carries the tone, so the words inside it are just the level —
+    // "it's low" inside an amber pill is the same sentence said twice.
     const BAND_WORD: Record<string, string> = {
-        out: 'it\'s out',
-        low: 'it\'s low',
-        stocked: 'it\'s stocked',
+        out: 'Out',
+        low: 'Low',
+        stocked: 'Stocked',
     };
     function bandWord(band: string | null): string {
-        if (!band) return 'the level is right';
+        if (!band) return 'Unchanged';
         return BAND_WORD[band] ?? band;
+    }
+
+    // Belief speaks in bands; colour is keyed to level *sequence* (R-003 — one
+    // colour map, in `stockLevelLogic`). This is the only translation between
+    // the two, and it lives next to the copy it colours.
+    const BAND_SEQUENCE: Record<string, number> = {
+        out: OUT_OF_STOCK_SEQUENCE,
+        low: LOW_STOCK_SEQUENCE,
+        stocked: STOCKED_SEQUENCE,
+    };
+    function beliefSequence(band: string | null): number | null {
+        if (!band) return null;
+        return BAND_SEQUENCE[band] ?? null;
+    }
+
+    // The row carries the level's id, not its sequence, so the catalogue
+    // resolves it. Renaming a level must not change its colour (FU-050).
+    const { stockLevels } = storeToRefs(useStockLevelStore());
+    function levelSequence(levelId: string | null): number | null {
+        if (!levelId) return null;
+        return stockLevels.value.find((l) => l.stock_level_id === levelId)?.sequence ?? null;
     }
 
     const confirmLabel = computed(() => {
@@ -168,9 +211,12 @@
         padding: 16px;
         gap: var(--space-3);
     }
+    /* Owner, 2026-09-01: the runner shell follows the theme now, so the
+       heading takes page ink rather than the always-white inverse it used
+       when the shell was hard-coded dark. */
     .stocktake-review__head {
         text-align: center;
-        color: var(--text-inverse);
+        color: var(--text-primary);
     }
     .stocktake-review__list {
         flex: 1 1 auto;
@@ -182,11 +228,15 @@
     .stocktake-review__name {
         font-weight: 600;
     }
-    /* Belief wording rides the same warning tone it uses on the stock row's
-       level picker and the walk card, so "this is Dora talking" is one visual
-       idea across the app rather than three. */
+    /* Neutral ink; the tinted pills inside carry the level colour. Wraps as a
+       flex row so a long level name pushes the next pill onto its own line
+       rather than stretching the row. */
     .stocktake-review__believed {
-        color: var(--semantic-warning);
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: var(--space-1);
+        color: var(--text-secondary);
     }
     .stocktake-review__reason {
         color: var(--text-secondary);

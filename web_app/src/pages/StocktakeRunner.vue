@@ -10,7 +10,6 @@
             <BaseButton
                 variant="icon"
                 :icon="ICONS.close"
-                color="white"
                 :to="'/stock'"
                 aria-label="Close stocktake"
             />
@@ -26,11 +25,13 @@
                 color="warning"
                 class="col q-mx-md"
             />
-            <div v-else-if="phaseLabel" class="col text-center text-caption dora-text-muted-3">
-                {{ phaseLabel }}
-            </div>
+            <!-- Owner, 2026-09-01: the tiny "Reviewing" / "Tidying up" caption
+                 that sat here was removed. Review and Sweep each open with their
+                 own full-size heading saying the same thing, so this was a
+                 second, smaller, worse label for the screen you're already
+                 looking at. -->
             <div v-else class="col" />
-            <div v-if="phase === 'walk' && hasQueue" class="text-caption dora-text-muted-3 q-mr-sm">
+            <div v-if="phase === 'walk' && hasQueue" class="text-caption dora-text-muted q-mr-sm">
                 {{ reviewedCount }} / {{ session.length }}
             </div>
             <!-- Owner feedback 2026-08-27: *"Info button should take you to
@@ -42,7 +43,6 @@
             <BaseButton
                 variant="icon"
                 :icon="ICONS.help_outline"
-                color="white"
                 aria-label="How stocktake works"
                 :to="{ path: '/help', query: { q: 'How stocktake works' } }"
             />
@@ -121,10 +121,14 @@
             <q-card class="runner-card" flat>
                 <q-card-section class="text-center">
                     <div class="text-h5">{{ current.name }}</div>
+                    <!-- Full breadcrumb (owner, 2026-09-01). This is the one
+                         screen where you get up and go and find the thing, so
+                         the leaf name on its own ("Top shelf") is exactly the
+                         wrong half of the answer. -->
                     <div class="text-caption dora-text-muted-7 q-mt-xs">
-                        {{ current.stock_location_name ?? 'No location' }}
+                        {{ currentLocation }}
                     </div>
-                    <div class="text-caption dora-text-muted-5 q-mt-xs">
+                    <div class="text-caption dora-text-muted q-mt-xs">
                         Checked every {{ bandLabel(current.cadence_band) }}
                         · {{ current.overdue_days }} day{{ current.overdue_days === 1 ? '' : 's' }} overdue
                         <q-icon :name="ICONS.help_outline" size="14px" class="q-ml-xs">
@@ -150,7 +154,7 @@
                         v-if="current.check_rank === 'uncertain' && current.belief_reason"
                         class="runner-belief q-mt-sm"
                     >
-                        <q-icon :name="ICONS.inferred_hunch" size="14px" class="q-mr-xs" />
+                        <q-icon :name="ICONS.dora_voice" size="14px" class="q-mr-xs" />
                         Dora's not sure about this one — {{ current.belief_reason }}
                     </div>
                 </q-card-section>
@@ -266,22 +270,24 @@
                 <!-- SK-7: if anything went Low or Out this session, offer to
                      add them all to a shopping list in one action. Any active
                      list is a valid target. -->
+                <!-- SK-7. Owner, 2026-09-01: this used to be a blind "add all
+                     N" button over a radio dialog of lists — you couldn't see
+                     what was about to go on, or drop one of them. It now opens
+                     the same `AddToListDialog` recipes and meal plans use, so
+                     there is one add-to-a-list flow in the app (R-001/R-003)
+                     and it can't drift on this surface. -->
                 <q-card-section v-if="restockNeeded.length > 0" class="runner-restock-prompt">
                     <div class="text-subtitle2 q-mb-sm text-center">
                         {{ restockNeeded.length }} item{{ restockNeeded.length === 1 ? '' : 's' }}
                         went Low or Out.
                     </div>
-                    <div class="text-caption dora-text-muted-7 q-mb-sm text-center">
-                        Add {{ restockNeeded.length === 1 ? 'it' : 'them' }} to a shopping list?
-                    </div>
                     <BaseButton
                         variant="primary"
                         class="full-width"
                         :icon="ICONS.add_shopping_cart"
-                        :label="`Add to list…`"
-                        :loading="restockBusy"
+                        label="Add to a list…"
                         :disable="restockDone"
-                        @click="onBatchAddToList"
+                        @click="restockPickerOpen = true"
                     />
                     <div v-if="restockDone" class="text-caption dora-text-muted-7 text-center q-mt-sm">
                         Added.
@@ -316,7 +322,16 @@
             </q-card-section>
         </BaseDialog>
 
-        <!-- ── (?) help dialog — plain-English "how it works" -->
+        <!-- SK-7's picker — the shared component, so what you see here is
+             what recipes and meal plans show. -->
+        <AddToListDialog
+            ref="restockPickerRef"
+            v-model="restockPickerOpen"
+            title="Add what ran low to a list"
+            :rows="restockRows"
+            default-new-list-name="Stocktake restock"
+            @confirm="onRestockConfirm"
+        />
     </q-page>
 </template>
 
@@ -325,6 +340,7 @@
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
     import StockLevelDot from 'src/components/stock/StockLevelDot.vue';
+    import AddToListDialog from 'src/components/shoppingList/AddToListDialog.vue';
     import StocktakeReviewPhase from 'src/components/stocktake/StocktakeReviewPhase.vue';
     import StocktakeSweepPhase from 'src/components/stocktake/StocktakeSweepPhase.vue';
     import { useQuasar } from 'quasar';
@@ -338,6 +354,10 @@
     } from 'src/services/api/stocktakeApiService';
     import { useShoppingListActions } from 'src/composables/useShoppingListActions';
     import { useShoppingListStore } from 'src/stores/shoppingListStore';
+    import type {
+        AddToListConfirm, AddToListRow,
+    } from 'src/components/shoppingList/addToListTypes';
+    import { formatLocation } from 'src/helpers/locationDisplay';
     import { useStockLevelStore } from 'src/stores/stockLevelStore';
     import { colourForSequence } from 'src/helpers/stockLevelLogic';
     import {
@@ -365,7 +385,7 @@
     const stockLevelStore = useStockLevelStore();
     const { stockLevels } = storeToRefs(stockLevelStore);
     const shoppingListStore = useShoppingListStore();
-    const { addItems } = useShoppingListActions();
+    const { addStockItemsToList } = useShoppingListActions();
 
     const loading = ref(true);
     const session = ref<StocktakeSessionItem[]>([]);
@@ -386,14 +406,6 @@
     /** Set while the shared level picker is open on behalf of a Sweep row
      *  rather than the walk's current item. */
     const sweepKeepId = ref<string | null>(null);
-
-    const PHASE_LABELS: Record<Phase, string> = {
-        review: 'Reviewing',
-        walk: '',
-        sweep: 'Tidying up',
-        done: '',
-    };
-    const phaseLabel = computed(() => PHASE_LABELS[phase.value]);
 
     /** No review, no walk, no sweep — the "all caught up" card. Distinct from
      *  `done`, which is the summary of work actually performed. */
@@ -428,8 +440,29 @@
      * Stocked → drop; last write wins).
      */
     const restockNeeded = ref<Array<{ stock_item_id: string; name: string }>>([]);
-    const restockBusy = ref(false);
     const restockDone = ref(false);
+    const restockPickerOpen = ref(false);
+    const restockPickerRef = ref<InstanceType<typeof AddToListDialog> | null>(null);
+
+    /**
+     * The session's Low/Out flips in the shared picker's row shape.
+     *
+     * Every row is `isMissing`, which is what makes them all start ticked —
+     * they are here *because* the user just said they'd run down, so proposing
+     * the whole set is the honest default. The dialog still unticks anything
+     * already on a list and lets you drop the rest by hand.
+     */
+    const restockRows = computed<AddToListRow[]>(() =>
+        restockNeeded.value.map((r) => ({
+            stockItemId: r.stock_item_id,
+            name: r.name,
+            isMissing: true,
+            isLowStock: false,
+            isOptional: false,
+            quantityLabel: null,
+            sources: [],
+        })),
+    );
 
     const hasQueue = computed(() => session.value.length > 0 && index.value < session.value.length);
     const current = computed<StocktakeSessionItem | null>(() =>
@@ -439,6 +472,16 @@
     const progress = computed(() =>
         session.value.length === 0 ? 0 : index.value / session.value.length,
     );
+
+    /** Full breadcrumb for the walk card, leaf name as a fallback for any row
+     *  that arrives without one. */
+    const currentLocation = computed(() => {
+        const c = current.value;
+        if (!c) return 'No location';
+        return formatLocation(c.stock_location_breadcrumb, 'full')
+            || c.stock_location_name
+            || 'No location';
+    });
 
     const currentLevelColour = computed(() => {
         const c = current.value;
@@ -773,54 +816,26 @@
         void finish();
     }
 
-    async function onBatchAddToList() {
-        if (restockNeeded.value.length === 0 || restockBusy.value || restockDone.value) return;
-        const listId = await pickActiveListId();
-        if (!listId) return;
-        restockBusy.value = true;
-        try {
-            await addItems(
-                listId,
-                restockNeeded.value.map((r) => ({ stock_item_id: r.stock_item_id })),
-            );
-            restockDone.value = true;
-        } finally {
-            restockBusy.value = false;
-        }
-    }
-
     /**
-     * Prompt the user to pick an active list. Same shape as the Stock
-     * Overview bulk-add flow (radio dialog over `active_lists`). Returns
-     * the chosen list id or null on cancel / no lists.
+     * The picker reports which items and which list; `addStockItemsToList`
+     * owns the "or create the list first" branch, so the no-active-lists
+     * dead-end this surface used to hit ("No active lists. Create one first.")
+     * is gone — "+ New list" is an option inside the dialog.
      */
-    async function pickActiveListId(): Promise<string | null> {
-        const active =
-            (shoppingListStore.membership?.active_lists ?? [])
-                .filter((l) => l.status !== 'done');
-        if (active.length === 0) {
-            $q.notify({
-                type: 'info',
-                position: 'bottom-right',
-                message: 'No active lists. Create one first.',
-            });
-            return null;
+    async function onRestockConfirm(payload: AddToListConfirm) {
+        restockPickerRef.value?.setBusy(true);
+        try {
+            const listId = await addStockItemsToList(
+                payload.targetListId,
+                payload.stockItemIds,
+                restockPickerRef.value?.newListName ?? 'Stocktake restock',
+            );
+            if (listId === null) return;
+            restockDone.value = true;
+            restockPickerOpen.value = false;
+        } finally {
+            restockPickerRef.value?.setBusy(false);
         }
-        return await new Promise<string | null>((resolve) => {
-            $q.dialog({
-                title: 'Add to which list?',
-                options: {
-                    type: 'radio',
-                    model: active[0]!.shopping_list_id,
-                    items: active.map((l) => ({ label: l.name, value: l.shopping_list_id })),
-                },
-                cancel: { noCaps: true },
-                persistent: false,
-            })
-                .onOk((val: string) => resolve(val))
-                .onCancel(() => resolve(null))
-                .onDismiss(() => resolve(null));
-        });
     }
 
     onMounted(async () => {
@@ -845,19 +860,23 @@
 </script>
 
 <style scoped>
-    /* Fullscreen focus mode. Stays dark across every theme — the
-       contrast is part of the "you're concentrating" affordance — so
-       we use raw palette tokens rather than the semantic surface ones. */
+    /* Fullscreen focus mode.
+       Owner, 2026-09-01: this used to pin itself to `--palette-neutral-900`
+       under every theme — the reasoning was that the contrast *is* the
+       "you're concentrating" affordance. In practice it read as a bug: you
+       drive the app in a light theme and stocktake alone goes black, and the
+       phase screens had to paint themselves `--text-inverse` to survive it.
+       It follows the theme now, like every other full-page surface (R-002). */
     .runner-shell {
         /* FU-609 / R-036 — height comes from the <q-page :style-fn> (viewport −
            live layout offset); no hardcoded 100vh (which ignored the header). */
-        background: var(--palette-neutral-900);
-        color: var(--text-inverse);
+        background: var(--surface-page);
+        color: var(--text-primary);
         display: flex; flex-direction: column;
     }
     .runner-topbar {
         display: flex; align-items: center; padding: 12px;
-        background: var(--palette-neutral-900);
+        background: var(--surface-page);
     }
     .runner-card-wrap {
         flex: 1; display: flex; align-items: center; justify-content: center;
@@ -869,18 +888,24 @@
         border-radius: 12px;
     }
 
-    /* Why-this-item-first line (Chunk 5 / D-1). Warning-toned to match the
-       "Dora thinks" vocabulary everywhere else it appears (the level picker's
-       header, the dashed level box), and deliberately quiet: it explains the
-       order, it isn't an instruction. */
+    /* Why-this-item-first line (Chunk 5 / D-1). Still warning-toned — that's
+       the "Dora thinks" vocabulary the level picker and the dashed level box
+       use — but owner feedback 2026-09-01 was that amber text on an amber wash
+       is unreadable (it measured ~2.1:1, well under D-002's 4.5 floor). Same
+       fix the B2 tint chips took: the tint and the hairline carry the tone, the
+       glyph stays saturated, and the words are page ink. */
     .runner-belief {
         font-size: calc(var(--font-size-xs) * 1rem);
         line-height: 1.35;
-        color: var(--semantic-warning);
+        color: var(--text-primary);
         text-align: left;
-        background: color-mix(in srgb, var(--semantic-warning) 10%, transparent);
+        background: var(--semantic-warning-soft);
+        border: 1px solid var(--semantic-warning);
         border-radius: var(--radius-sm, 4px);
         padding: 6px 8px;
+    }
+    .runner-belief .q-icon {
+        color: var(--semantic-warning);
     }
 
     /* Two big primary buttons side-by-side. gap comes from `q-gutter-*`

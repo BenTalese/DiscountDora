@@ -83,21 +83,12 @@
                             @focus="rovingIso = cell.iso"
                         >
                             <span class="cal-day__dd">{{ cell.dd }}</span>
-                            <!-- One pip per meal, capped. B2 / D-013: a coloured
-                                 pip is never the only signal — the tooltip below
-                                 names the meals, and `aria-label` spells the
-                                 day's status out. -->
-                            <span class="cal-day__pips">
-                                <span
-                                    v-for="(pip, i) in cell.pips"
-                                    :key="i"
-                                    class="cal-day__pip"
-                                    :class="`cal-day__pip--${pip}`"
-                                />
-                                <span v-if="cell.overflow > 0" class="cal-day__more">
-                                    +{{ cell.overflow }}
-                                </span>
-                            </span>
+                            <!-- Shared with the phone's day strip since
+                                 2026-09-01 (see `MealPlanDayPips.vue`). B2 /
+                                 D-013: a coloured pip is never the only signal
+                                 — the tooltip below names the meals, and
+                                 `aria-label` spells the day's status out. -->
+                            <MealPlanDayPips :pips="cell.pips" :overflow="cell.overflow" />
                             <q-tooltip v-if="cell.tooltip" anchor="top middle" self="bottom middle">
                                 {{ cell.tooltip }}
                             </q-tooltip>
@@ -113,8 +104,10 @@
     import { ICONS } from 'src/style/icons';
     import { formatDate as formatLocaleDate } from 'src/composables/useDateFormat';
     import BaseButton from 'src/components/BaseButton.vue';
+    import MealPlanDayPips from 'src/components/MealPlanDayPips.vue';
     import { storeToRefs } from 'pinia';
     import { isoDate, localTodayIso, mondayOf, shiftDays } from 'src/helpers/weekDates';
+    import { dayPips, type DayPip } from 'src/helpers/mealPlanDayPips';
     import type { MealPlanEntry } from 'src/models/mealPlan';
     import { useMealPlanStore } from 'src/stores/mealPlanStore';
     import { computed, nextTick, ref, watch } from 'vue';
@@ -134,9 +127,7 @@
      *  calendar that grows a row in a fixed-height pane pushes the shopping
      *  summary around underneath it. */
     const GRID_WEEKS = 6;
-    /** Pips per day before collapsing to "+N". Three reads at a glance; four
-     *  starts to look like a progress bar. */
-    const MAX_PIPS = 3;
+
 
     const DOW_LETTERS = [
         { key: 'mon', letter: 'M' }, { key: 'tue', letter: 'T' },
@@ -176,13 +167,10 @@
         return 'planned';
     }
 
-    /** Per-MEAL pip, where `dayStatus` is per-day. Same inputs, same R-003
-     *  discipline — the shortfall set is the server's. */
-    type Pip = 'planned' | 'short' | 'consumed';
-    function pipFor(entry: MealPlanEntry): Pip {
-        if (entry.consumed_at) return 'consumed';
-        return shortfallRecipeIds.value.has(entry.recipe_id) ? 'short' : 'planned';
-    }
+    // The per-meal pip (`pipFor` / `MAX_PIPS`) moved to
+    // `src/helpers/mealPlanDayPips.ts` on 2026-09-01 so the phone's day strip
+    // could code a day the same way this grid does instead of drawing one
+    // undifferentiated dot.
 
     // ── The visible month ──────────────────────────────────────────────────
     // Anchored on the 1st of a month. Follows the focused week when that week
@@ -223,7 +211,7 @@
         inMonth: boolean;
         isToday: boolean;
         status: DayStatus;
-        pips: Pip[];
+        pips: DayPip[];
         overflow: number;
         tooltip: string;
     };
@@ -244,8 +232,7 @@
                     inMonth: iso.slice(0, 7) === month,
                     isToday: iso === todayIso.value,
                     status: dayStatus(iso),
-                    pips: entries.slice(0, MAX_PIPS).map(pipFor),
-                    overflow: Math.max(0, entries.length - MAX_PIPS),
+                    ...dayPips(entries, shortfallRecipeIds.value),
                     tooltip: dayTooltip(iso, entries),
                 });
             }
@@ -462,25 +449,6 @@
         font-weight: 700;
     }
 
-    .cal-day__pips {
-        display: flex;
-        align-items: center;
-        gap: 2px;
-        min-height: 5px;
-    }
-    .cal-day__pip {
-        width: 5px;
-        height: 5px;
-        border-radius: 50%;
-    }
-    .cal-day__pip--planned { background: var(--semantic-positive); }
-    .cal-day__pip--short { background: var(--semantic-warning); }
-    .cal-day__pip--consumed { background: var(--text-muted); }
-    .cal-day__more {
-        font-size: calc(var(--font-size-xs) * 1rem);
-        line-height: 1;
-        color: var(--text-secondary);
-    }
 
     /* Direction-aware month paging, mirroring the week carousel's transition
        and riding the same tokens (D-010 — no literal ms). */

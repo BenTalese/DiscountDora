@@ -71,6 +71,10 @@ export type RecipeStepCommand = {
     tool_ids: string[];
     /** C-4 Chunk 10 — optional section grouping for top-level steps. */
     section_client_id?: string | null;
+    /** Owner feedback 2026-09-01 — a declared countdown for this step, in
+     *  minutes. Null means none, and cook mode falls back to sniffing the
+     *  step text for a duration. */
+    timer_minutes?: number | null;
 };
 
 export type CreateRecipeCommand = {

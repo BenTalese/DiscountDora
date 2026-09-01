@@ -11,6 +11,7 @@ from datetime import date, datetime
 from typing import List
 from uuid import UUID
 
+from dora_api.domain.location_breadcrumb import build_breadcrumb
 from dora_api.domain.entities.store import Store
 from dora_api.domain.entities.product import Product
 from dora_api.domain.entities.shopping_list import (SHOPPING_LIST_STATUS_DONE,
@@ -526,19 +527,10 @@ class GetShoppingListDetailHandler:
             _StoreColourLookup = {s.id: s.brand_colour for s in _Stores}
 
         def _breadcrumb_for(item: StockItem | None) -> List[str]:
-            if item is None or item.stock_location is None:
+            # R-003 — the walk itself lives in `domain.location_breadcrumb`.
+            if item is None:
                 return []
-            crumbs: List[str] = []
-            cursor: StockLocation | None = item.stock_location
-            safety = 16
-            while cursor is not None and safety > 0:
-                crumbs.append(cursor.name)
-                cursor = (
-                    _LocationLookup.get(cursor.parent_id) if cursor.parent_id else None
-                )
-                safety -= 1
-            crumbs.reverse()
-            return crumbs
+            return build_breadcrumb(item.stock_location, _LocationLookup)
 
         _LineDtos: List[ShoppingListLineDto] = []
         for line in _Lines:

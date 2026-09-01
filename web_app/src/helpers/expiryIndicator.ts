@@ -82,7 +82,7 @@ export function expiryIndicatorFor(
                 icon: ICONS.event_blank,
                 colour: null,
                 cssClass: 'dora-text-muted',
-                tooltip: 'No expiry set — click to push or set one',
+                tooltip: 'No expiry set',
             };
     }
 }

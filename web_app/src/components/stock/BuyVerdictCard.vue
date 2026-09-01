@@ -28,11 +28,22 @@
                 />
                 <span class="dora-buy-verdict-card__headline">{{ headline }}</span>
             </button>
+            <!-- Feedback 2026-09-01: the cart action used to be a plain
+                 primary button that always read "add", so a card on an item
+                 already sitting on a list still offered to add it again. It
+                 now routes through the same `AddToListButton` the stock
+                 overview row uses, so on/off-list state (and the toggle-off +
+                 multi-list popover) reads identically in both places. -->
+            <AddToListButton
+                v-if="verdict.one_tap_action.kind === 'add_to_list'"
+                variant="row"
+                :stock-item-id="stockItemId"
+            />
             <!-- Icon-only, and outside the disclosure button so a tap on the
                  action can't toggle the card. The name survives as the tooltip
                  + aria-label (D-rule: icon-only controls are still named). -->
             <BaseButton
-                v-if="verdict.one_tap_action.kind !== 'none'"
+                v-else-if="verdict.one_tap_action.kind !== 'none'"
                 variant="primary"
                 dense
                 :icon="actionIcon"
@@ -133,6 +144,7 @@
 </template>
 
 <script setup lang="ts">
+    import AddToListButton from 'src/components/AddToListButton.vue';
     import BaseButton from 'src/components/BaseButton.vue';
     import { axisIcon, reasonDetail } from 'src/components/stock/buyVerdictDisplay';
     import { formatDate as formatLocaleDate } from 'src/composables/useDateFormat';
@@ -142,6 +154,10 @@
 
     const props = defineProps<{
         verdict: BuyVerdict | null;
+        /** The item this verdict is about. `AddToListButton` keys its
+         *  on/off-list state off it, so the cart action can only render
+         *  state-aware when the id is in hand. */
+        stockItemId: string;
     }>();
 
     const expanded = ref(false);
@@ -150,15 +166,11 @@
         (e: 'action', kind: BuyVerdict['one_tap_action']['kind']): void;
     }>();
 
-    const actionLabel = computed(() =>
-        props.verdict?.one_tap_action.kind === 'add_to_list'
-            ? 'Add to list'
-            : (props.verdict?.one_tap_action.label ?? ''),
-    );
+    const actionLabel = computed(() => props.verdict?.one_tap_action.label ?? '');
 
     // The action is icon-only now, so every kind needs a glyph. `add_to_list`
-    // keeps the cart the overview row uses, so the same action reads the same
-    // in both places.
+    // is rendered by `AddToListButton` (which picks its own cart glyph from
+    // list state); its entry stays so the map is total over the action union.
     const ACTION_ICONS: Record<BuyVerdict['one_tap_action']['kind'], string> = {
         add_to_list: ICONS.add_shopping_cart,
         mark_stocked: ICONS.inventory_2,

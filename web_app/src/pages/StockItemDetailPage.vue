@@ -92,6 +92,7 @@
                     <BuyVerdictCard
                         v-if="buyVerdict"
                         :verdict="buyVerdict"
+                        :stock-item-id="stockItemId"
                         class="q-mb-md"
                         @action="onBuyVerdictAction"
                     />
@@ -1076,7 +1077,12 @@
                          here. -->
                     <div class="q-mb-lg">
                         <div class="row items-center q-mb-sm">
-                            <div class="text-subtitle1">QR label</div>
+                            <!-- D-008 carve-out (owner, 2026-09-01): asked for
+                                 "QR Label" title-cased here. It's a section
+                                 heading, not an interactive control, so the
+                                 sentence-case rule for buttons/labels doesn't
+                                 bind it; the Help topic key stays lowercase. -->
+                            <div class="text-subtitle1">QR Label</div>
                             <HelpHint topic="QR label" />
                             <q-space />
                             <BaseButton
@@ -1255,9 +1261,11 @@
                      events, list-add provenance, and synthesises Opened /
                      Checked rows from current state. Date-sorted, newest
                      first; entries colour-keyed by event kind. -->
-                <!-- Round-17: q-pl-md so the q-timeline's left-positioned
-                     icons aren't flush against the inner panel edge. -->
-                <q-tab-panel name="history" class="q-pl-md">
+                <!-- Round-17: left padding so the q-timeline's left-positioned
+                     icons aren't flush against the inner panel edge.
+                     Feedback 2026-09-01: q-pl-md still read as cramped against
+                     the panel edge — q-pl-lg gives the icon column real air. -->
+                <q-tab-panel name="history" class="q-pl-lg">
                     <div v-if="lifecycleEvents.length === 0" class="dora-text-muted text-caption q-pa-md">
                         Nothing logged for this item yet — once you change
                         its stock level, add it to a list, mark it open or
@@ -1918,13 +1926,11 @@
     // remove_from_list). Delegates to the shared `useBuyVerdictActions`
     // composable so the same math runs from every card mount (row card,
     // detail-page card, shopping-list card).
+    // `add_to_list` never reaches here: the card renders that action as an
+    // `AddToListButton`, which owns the add/toggle-off itself (2026-09-01).
     async function onBuyVerdictAction(
         kind: 'add_to_list' | 'skip' | 'mark_stocked' | 'remove_from_list' | 'none',
     ) {
-        if (kind === 'add_to_list') {
-            await onAddToList();  // already invalidates
-            return;
-        }
         if (kind === 'mark_stocked') {
             const ok = await verdictActions.markStocked(stockItemId.value);
             if (ok) await loadDetail();  // reload so the level chip repaints

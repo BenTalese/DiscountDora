@@ -7,8 +7,8 @@
          inside it — same menu, one object on the row. -->
     <component
         :is="hasSwaps ? 'button' : 'span'"
-        class="rmic"
-        :class="`rmic--${state}`"
+        class="rmic dora-chip--tint"
+        :class="`dora-chip--tint-${tone}`"
         :type="hasSwaps ? 'button' : undefined"
         :aria-label="`${label} — ${ingredientName}`"
     >
@@ -115,6 +115,18 @@
         return hasSwaps.value ? 'swaps' : 'out';
     });
 
+    /** The shared `.dora-chip--tint` tone this state wears. Same vocabulary
+     *  the "Use soon" / "Expired" chip beside it uses, which is the point —
+     *  owner, 2026-09-01: the two chips must read as one system. */
+    const tone = computed(() => {
+        switch (state.value) {
+            case 'ready': return 'positive';
+            case 'swaps': return 'warning';
+            case 'out':
+            default: return 'negative';
+        }
+    });
+
     const label = computed(() => {
         if (state.value === 'out') return 'Missing';
         if (state.value === 'ready') {
@@ -144,46 +156,11 @@
 </script>
 
 <style scoped lang="scss">
-    .rmic {
-        display: inline-flex;
-        align-items: center;
-        gap: var(--space-1);
-        /* D-011 — a real tap target, not bare text. Chips sit inline in a
-           wrapping ingredient name, so the row's own height governs; 28px is
-           the shared chip height on this page. */
-        min-height: 28px;
-        padding: 0 var(--space-2);
-        border: 1px solid transparent;
-        border-radius: var(--radius-pill);
-        font-size: var(--font-size-xs);
-        font-weight: 600;
-        text-align: left;
-        /* D-002 — no coloured ink on a coloured tint. Measured on the pesto
-           light theme, full-strength semantic ink on its own soft background
-           lands at 2.1:1 (warning), 2.5:1 (positive) and 3.3:1 (negative),
-           all under the 4.5 floor. The tone is carried by the tint, the
-           border and the icon; the words stay primary ink. Same shape as
-           `MealReconcileLog`'s status pills. */
-        color: var(--text-primary);
-    }
-
-    .rmic--out {
-        background: var(--semantic-negative-soft);
-        border-color: var(--semantic-negative);
-    }
-    .rmic--out .q-icon { color: var(--semantic-negative); }
-
-    .rmic--swaps {
-        background: var(--semantic-warning-soft);
-        border-color: var(--semantic-warning);
-    }
-    .rmic--swaps .q-icon { color: var(--semantic-warning); }
-
-    .rmic--ready {
-        background: var(--semantic-positive-soft);
-        border-color: var(--semantic-positive);
-    }
-    .rmic--ready .q-icon { color: var(--semantic-positive); }
+    /* The chip's whole look — tint, hairline, coloured glyph, neutral ink,
+       28px tap target — is the shared `.dora-chip--tint` in `colours.scss`
+       (see its D-002 carve-out note). It moved out of here on 2026-09-01 so
+       the "Use soon" chip on the same row could wear it too; only this
+       component's own behaviour is left below. */
 
     /* Only the two states that own a menu are pressable. */
     button.rmic {

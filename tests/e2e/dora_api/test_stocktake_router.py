@@ -385,7 +385,8 @@ SESSION_COMPLETE = f"{SESSION}/complete"
 
 SESSION_ITEM_KEYS = {
     "stock_item_id", "name", "stock_level_id", "stock_level_name",
-    "stock_location_name", "cadence_band", "overdue_days", "is_essential",
+    "stock_location_name", "stock_location_breadcrumb",
+    "cadence_band", "overdue_days", "is_essential",
     "check_rank", "belief_band", "belief_confidence", "belief_reason",
 }
 

@@ -38,6 +38,46 @@ export function missingStockItemIds(recipe: Recipe): string[] {
     return [...new Set(ids)];
 }
 
+/** What to call an ingredient row on screen. `raw_text` is what the user
+ *  actually typed or pasted, so it wins where it exists (same order the
+ *  recipe page's `ingredientLabel` uses); the linked item's name is the
+ *  fallback. */
+function ingredientLabel(ing: Recipe['ingredients'][number]): string {
+    return ing.stock_item_name ?? ing.raw_text ?? 'Unnamed ingredient';
+}
+
+/**
+ * Names of the distinct stock items the recipe needs and doesn't have.
+ *
+ * Owner feedback 2026-09-01: the guard dialog counted them ("2 ingredients
+ * missing") and left you to work out *which*. A count is a fact about the
+ * recipe; the names are what decides whether you cook anyway or go shopping.
+ * Deduped on the stock item, on the same reasoning as `missingStockItemIds`.
+ */
+export function missingIngredientNames(recipe: Recipe | null): string[] {
+    if (!recipe) return [];
+    const seen = new Set<string>();
+    const names: string[] = [];
+    for (const ing of recipe.ingredients) {
+        if (!ing.is_missing || ing.stock_item_id === null) continue;
+        if (seen.has(ing.stock_item_id)) continue;
+        seen.add(ing.stock_item_id);
+        names.push(ingredientLabel(ing));
+    }
+    return names;
+}
+
+/** Names of the rows that aren't linked to a pantry item at all — the
+ *  `unknown-cookability` case. Deduped by label, since two unlinked rows
+ *  have no id to dedupe on and repeating a name says nothing extra. */
+export function unlinkedIngredientNames(recipe: Recipe | null): string[] {
+    if (!recipe) return [];
+    const names = recipe.ingredients
+        .filter((i) => i.stock_item_id === null)
+        .map(ingredientLabel);
+    return [...new Set(names)];
+}
+
 /**
  * Every reason this recipe should prompt before cook mode starts. Empty array
  * = clean entry, go straight in.

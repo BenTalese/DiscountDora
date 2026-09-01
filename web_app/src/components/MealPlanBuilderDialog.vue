@@ -330,7 +330,6 @@
                     :recipes="recipes"
                     :focused-target="null"
                     :format-date="formatDate"
-                    :log-cook="noopLogCook"
                     @recipe-pick="onPickRecipe"
                 />
             </div>
@@ -532,10 +531,6 @@
     function money(n: number): string {
         return `$${n.toFixed(2)}`;
     }
-    function noopLogCook(): Promise<number> {
-        return Promise.resolve(0);
-    }
-
     async function refreshPreview() {
         if (proposed.value.length === 0) {
             previewIngredients.value = [];

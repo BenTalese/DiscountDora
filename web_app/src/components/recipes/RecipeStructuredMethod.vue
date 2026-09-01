@@ -62,6 +62,9 @@
                             {{ step.text || 'Empty step' }}
                         </button>
                         <span v-if="step.hint" class="rsm__hint">{{ step.hint }}</span>
+                        <span v-if="step.timer_minutes !== null" class="rsm__timer">
+                            <q-icon :name="ICONS.timer" size="14px" />{{ timerLabel(step) }}
+                        </span>
                     </template>
 
                     <!-- ── Edit ─────────────────────────────────────────── -->
@@ -83,6 +86,18 @@
                             label="Hint (optional)"
                             class="rsm__hintfield"
                             @update:model-value="(v) => patch(step, { hint: String(v ?? '') })"
+                        />
+                        <q-input
+                            v-if="step.timer_minutes !== null"
+                            :model-value="step.timer_minutes"
+                            type="number"
+                            min="1"
+                            max="1440"
+                            outlined
+                            dense
+                            label="Timer (minutes)"
+                            class="rsm__timerfield"
+                            @update:model-value="(v) => patch(step, { timer_minutes: toMinutes(v) })"
                         />
                         <div class="rsm__acts">
                             <BaseButton
@@ -123,6 +138,18 @@
                                 @click="toggleHint(step)"
                             >
                                 <q-tooltip>{{ step.hint === null ? 'Add hint' : 'Remove hint' }}</q-tooltip>
+                            </BaseButton>
+                            <BaseButton
+                                :variant="step.timer_minutes === null ? 'icon' : 'secondary'"
+                                dense
+                                :icon="ICONS.timer"
+                                :aria-pressed="step.timer_minutes !== null"
+                                :aria-label="step.timer_minutes === null
+                                    ? `Put a timer on step ${stepIndex + 1}`
+                                    : `Remove the timer on step ${stepIndex + 1}`"
+                                @click="toggleTimer(step)"
+                            >
+                                <q-tooltip>{{ step.timer_minutes === null ? 'Add a timer' : 'Remove the timer' }}</q-tooltip>
                             </BaseButton>
                             <BaseButton
                                 variant="icon" dense
@@ -175,6 +202,9 @@
                                         {{ sub.text || 'Empty sub-step' }}
                                     </button>
                                     <span v-if="sub.hint" class="rsm__hint">{{ sub.hint }}</span>
+                                    <span v-if="sub.timer_minutes !== null" class="rsm__timer">
+                                        <q-icon :name="ICONS.timer" size="14px" />{{ timerLabel(sub) }}
+                                    </span>
                                 </template>
                                 <template v-else>
                                     <q-input
@@ -194,6 +224,18 @@
                                         label="Hint (optional)"
                                         class="rsm__hintfield"
                                         @update:model-value="(v) => patch(sub, { hint: String(v ?? '') })"
+                                    />
+                                    <q-input
+                                        v-if="sub.timer_minutes !== null"
+                                        :model-value="sub.timer_minutes"
+                                        type="number"
+                                        min="1"
+                                        max="1440"
+                                        outlined
+                                        dense
+                                        label="Timer (minutes)"
+                                        class="rsm__timerfield"
+                                        @update:model-value="(v) => patch(sub, { timer_minutes: toMinutes(v) })"
                                     />
                                     <div class="rsm__acts">
                                         <BaseButton
@@ -234,6 +276,18 @@
                                             @click="toggleHint(sub)"
                                         >
                                             <q-tooltip>{{ sub.hint === null ? 'Add hint' : 'Remove hint' }}</q-tooltip>
+                                        </BaseButton>
+                                        <BaseButton
+                                            :variant="sub.timer_minutes === null ? 'icon' : 'secondary'"
+                                            dense
+                                            :icon="ICONS.timer"
+                                            :aria-pressed="sub.timer_minutes !== null"
+                                            :aria-label="sub.timer_minutes === null
+                                                ? `Put a timer on sub-step ${subIndex + 1}`
+                                                : `Remove the timer on sub-step ${subIndex + 1}`"
+                                            @click="toggleTimer(sub)"
+                                        >
+                                            <q-tooltip>{{ sub.timer_minutes === null ? 'Add a timer' : 'Remove the timer' }}</q-tooltip>
                                         </BaseButton>
                                         <q-space />
                                         <BaseButton
@@ -373,6 +427,38 @@
         patch(step, { hint: step.hint === null ? '' : null });
     }
 
+    /** Owner feedback 2026-09-01: *"for structured I feel a tickable box option
+     *  should be added"* — cook mode used to guess a step's timer by running a
+     *  regex over its text. A structured step is a row, so the fact gets
+     *  recorded rather than inferred. Same `null` / value two-state the hint
+     *  uses; the default of 5 is a starting number to edit, not a claim. */
+    const DEFAULT_TIMER_MINUTES = 5;
+    function toggleTimer(step: EditableStep) {
+        patch(step, {
+            timer_minutes: step.timer_minutes === null ? DEFAULT_TIMER_MINUTES : null,
+        });
+    }
+
+    /** q-input hands back a string (or null when cleared). Clamp to the same
+     *  1..1440 window the server validates so the field can't submit a value
+     *  the API will reject. */
+    function toMinutes(raw: string | number | null): number | null {
+        const n = Math.floor(Number(raw));
+        if (!Number.isFinite(n) || n < 1) return 1;
+        return Math.min(n, 1440);
+    }
+
+    /** "20 min" / "3 hr" / "1 hr 30 min" — a three-hour ragù reads badly as
+     *  "180 min". */
+    function timerLabel(step: EditableStep): string {
+        const total = step.timer_minutes ?? 0;
+        const hours = Math.floor(total / 60);
+        const minutes = total % 60;
+        if (hours === 0) return `${minutes} min`;
+        if (minutes === 0) return `${hours} hr`;
+        return `${hours} hr ${minutes} min`;
+    }
+
     function linkCount(step: EditableStep): number {
         return step.ingredient_client_ids.length + step.tool_ids.length;
     }
@@ -387,6 +473,7 @@
             ingredient_client_ids: [],
             tool_ids: [],
             section_client_id: null,
+            timer_minutes: null,
         }]);
     }
 
@@ -403,6 +490,7 @@
             // Sub-steps inherit their parent's section; the server flattens
             // cook mode by the top-level row's `section_id`.
             section_client_id: null,
+            timer_minutes: null,
         }]);
     }
 
@@ -593,6 +681,27 @@
         margin-top: var(--space-1, 4px);
     }
     .rsm__hintfield { margin-top: var(--space-2, 8px); }
+
+    /* A declared timer, on the reading face. A tinted pill rather than more
+       muted caption text: it is a fact about the step you act on, not a note
+       about it, and the same glyph carries it in cook mode. */
+    .rsm__timer {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--space-1, 4px);
+        margin-top: var(--space-2, 8px);
+        padding: 2px var(--space-2, 8px);
+        border-radius: var(--radius-pill);
+        border: 1px solid color-mix(in srgb, var(--brand-primary) 35%, transparent);
+        background: color-mix(in srgb, var(--brand-primary) 12%, transparent);
+        color: var(--text-primary);
+        font-size: 0.8125rem;
+        font-variant-numeric: tabular-nums;
+    }
+    .rsm__timerfield {
+        margin-top: var(--space-2, 8px);
+        max-width: 12rem;
+    }
 
     .rsm__acts {
         display: flex; align-items: center; gap: var(--space-1, 4px);

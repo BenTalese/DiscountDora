@@ -284,14 +284,14 @@
         border-color: var(--border-strong);
     }
     .theme-card--active {
-        border-color: var(--q-accent);
+        border-color: var(--accent-ink);
         border-width: 2px;
     }
     .theme-card__badge {
         position: absolute;
         top: 6px;
         right: 6px;
-        color: var(--q-accent);
+        color: var(--accent-ink);
         background: var(--surface-component);
         border-radius: 50%;
     }

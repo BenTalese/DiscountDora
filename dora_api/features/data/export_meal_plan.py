@@ -12,6 +12,7 @@ from uuid import UUID
 
 from flask import Response, render_template_string
 
+from dora_api.domain.entities.meal_slot import MealSlot
 from dora_api.features.data.export_shared import PRINT_CSS, PRINT_TOOLBAR
 from dora_api.features.meal_plans.get_meal_plans import (
     GetMealPlansHandler, MealPlanDto,
@@ -21,9 +22,13 @@ from dora_api.infrastructure.api_response import not_found
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 
 
-# Conventional meal slots; entries with unrecognised slots fall into "Other"
-# and get rendered alphabetically.
-_KNOWN_SLOTS = ("Breakfast", "Lunch", "Dinner", "Snack")
+# Slot columns come from the household `MealSlot` vocabulary (R-003), in the
+# household's own display order. This used to be a hardcoded
+# ("Breakfast", "Lunch", "Dinner", "Snack") tuple, so the sheet printed a Snack
+# column for a household that had deleted that slot — and would have omitted a
+# slot the household added. Deleting a slot is not a cascade (see
+# manage_meal_slots.py), so entries can still hold an off-vocab label; those
+# keep their own column, appended alphabetically after the vocabulary.
 
 
 _PRINT_TEMPLATE = """<!doctype html>
@@ -97,18 +102,25 @@ _PRINT_TEMPLATE = """<!doctype html>
 """
 
 
-def _render_print_view(plan: MealPlanDto) -> str:
-    # Group entries by day, then by slot. Slot column order is the
-    # _KNOWN_SLOTS list followed by any unrecognised slot the plan uses
-    # (alphabetised, surfaced after the conventional ones).
+def _household_slot_names(repository: SqlAlchemyRepository) -> list[str]:
+    """The household meal-slot vocabulary in display order (sequence, name)."""
+    slots = repository.get(MealSlot).all()
+    return [s.name for s in sorted(slots, key=lambda s: (s.sequence, s.name))]
+
+
+def _render_print_view(plan: MealPlanDto, slot_names: list[str]) -> str:
+    # Group entries by day, then by slot. Slot column order is the household
+    # vocabulary followed by any off-vocab slot the plan still uses
+    # (alphabetised, surfaced after the current ones).
     days_map: dict[date, dict[str, list]] = defaultdict(lambda: defaultdict(list))
+    known = set(slot_names)
     unrecognised: set[str] = set()
     for entry in plan.entries:
         days_map[entry.scheduled_for][entry.slot].append(entry)
-        if entry.slot not in _KNOWN_SLOTS:
+        if entry.slot not in known:
             unrecognised.add(entry.slot)
 
-    slot_order = list(_KNOWN_SLOTS) + sorted(unrecognised)
+    slot_order = list(slot_names) + sorted(unrecognised)
     days = sorted(days_map.items(), key=lambda kv: kv[0])
 
     generated_at = datetime.now(timezone.utc).astimezone().strftime("%Y-%m-%d %H:%M")
@@ -131,8 +143,9 @@ def _render_print_view(plan: MealPlanDto) -> str:
 
 @MEAL_PLAN_ROUTER.route("/<uuid:meal_plan_id>/print-view", methods=["GET"])
 def print_view_meal_plan(meal_plan_id: UUID):
-    plan = GetMealPlansHandler(SqlAlchemyRepository()).handle_by_id(meal_plan_id)
+    repository = SqlAlchemyRepository()
+    plan = GetMealPlansHandler(repository).handle_by_id(meal_plan_id)
     if plan is None:
         return not_found("MealPlan", meal_plan_id)
-    html = _render_print_view(plan)
+    html = _render_print_view(plan, _household_slot_names(repository))
     return Response(html, mimetype="text/html; charset=utf-8")

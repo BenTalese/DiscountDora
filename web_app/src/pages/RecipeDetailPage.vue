@@ -376,8 +376,15 @@
                             size="sm"
                             @adjust="onAdjustMeals"
                         />
+                        <!-- Owner feedback 2026-09-01 — "N free of M" alone is
+                             a riddle: add one to the pool and it can still read
+                             "0 free of 1", because the meal plan already
+                             claimed it. The line now says *why* whenever
+                             something is spoken for, so the number moving (or
+                             not) is explainable without opening the planner. -->
                         <span class="rn__cellsub">
-                            {{ recipe.unallocated_meals }} free of {{ recipe.available_meals }}
+                            {{ poolLabel }}
+                            <q-tooltip v-if="poolTooltip">{{ poolTooltip }}</q-tooltip>
                         </span>
                     </span>
                 </div>
@@ -560,17 +567,25 @@
                                                     :ingredient-name="ingredientLabel(row)"
                                                 />
                                             </span>
-                                            <q-chip
+                                            <!-- Owner feedback 2026-09-01 — *"ensure
+                                                 missing and use soon chips are styled
+                                                 the same"*. This was a solid `q-chip`
+                                                 with dark ink sitting immediately beside
+                                                 the tinted missing-chip: two systems on
+                                                 one line. Both now wear the shared
+                                                 `.dora-chip--tint` from `colours.scss`. -->
+                                            <span
                                                 v-if="expiringChipFor(row.stock_item_id)"
-                                                dense square size="sm"
-                                                :color="expiringChipFor(row.stock_item_id)!.colour"
-                                                text-color="dark"
-                                                :icon="expiringChipFor(row.stock_item_id)!.icon"
-                                                class="rn__chip"
+                                                class="rn__chip dora-chip--tint"
+                                                :class="`dora-chip--tint-${expiringChipFor(row.stock_item_id)!.tone}`"
                                             >
-                                                {{ expiringChipFor(row.stock_item_id)!.label }}
+                                                <q-icon
+                                                    :name="expiringChipFor(row.stock_item_id)!.icon"
+                                                    size="14px"
+                                                />
+                                                <span>{{ expiringChipFor(row.stock_item_id)!.label }}</span>
                                                 <q-tooltip>{{ expiringChipFor(row.stock_item_id)!.tooltip }}</q-tooltip>
-                                            </q-chip>
+                                            </span>
                                             <span v-if="row.notes" class="rn__ingnote">{{ row.notes }}</span>
                                         </span>
                                         <!-- Per-row actions, split by mode. Reading a
@@ -1172,6 +1187,40 @@
     );
 
     const { moneyEnabled } = useMoneyEnabled();
+
+    /* The cooked-meals pool, in words.
+     *
+     * Owner feedback 2026-09-01: *"when there's a shortfall add text to
+     * explain this to the user so there's no confusion when they add 1 to the
+     * pool and it still says '0 free of 1'"*.
+     *
+     * "Free" is `unallocated_meals` — what's in the pool minus what future
+     * meal-plan entries have already claimed — so the two numbers move
+     * independently and the old phrasing never said what ate the difference.
+     * Three states, because they are three different facts:
+     *   nothing planned → the pool count is the whole story, drop "free" from
+     *     the sentence entirely rather than say "2 free of 2";
+     *   partly claimed  → name the claim, so 0-of-1 has a visible cause;
+     *   short           → the plan wants more than exists; say how many more,
+     *     which is the number you'd cook.
+     * Display phrasing only — every number here is server-derived (R-003). */
+    const poolLabel = computed(() => {
+        const r = recipe.value;
+        if (!r) return '';
+        const shortfall = r.committed_meals - r.available_meals;
+        if (shortfall > 0) return `0 free — your meal plan needs ${shortfall} more`;
+        if (r.committed_meals > 0) {
+            return `${r.unallocated_meals} free · ${r.committed_meals} planned`;
+        }
+        return `${r.available_meals} in the pool`;
+    });
+
+    const poolTooltip = computed(() => {
+        const r = recipe.value;
+        if (!r || r.committed_meals === 0) return null;
+        const meals = `${r.committed_meals} meal${r.committed_meals === 1 ? '' : 's'}`;
+        return `${meals} of this recipe ${r.committed_meals === 1 ? 'is' : 'are'} already on your meal plan, so ${r.committed_meals === 1 ? "it isn't" : "they aren't"} counted as free. Adding to the pool covers those first.`;
+    });
     const { nutritionEnabled, isComplex } = useNutritionMode();
     const { batchEnabled } = useBatchEnabled();
     const { addStockItemsToList } = useShoppingListActions();
@@ -1589,8 +1638,8 @@
         if (!hit) return null;
         const when = hit.date ? formatDate(hit.date) : null;
         return hit.expired
-            ? { label: 'Expired', colour: 'negative', icon: ICONS.error, tooltip: when ? `Expired ${when}` : 'Past its expiry date' }
-            : { label: 'Use soon', colour: 'warning', icon: ICONS.event_busy, tooltip: when ? `Expires ${when}` : 'Expiring soon' };
+            ? { label: 'Expired', tone: 'negative', icon: ICONS.error, tooltip: when ? `Expired ${when}` : 'Past its expiry date' }
+            : { label: 'Use soon', tone: 'warning', icon: ICONS.event_busy, tooltip: when ? `Expires ${when}` : 'Expiring soon' };
     }
     const atRiskCount = computed(() => expiringItems.value.size);
     const atRiskHeadline = computed(() => {

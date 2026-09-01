@@ -7,15 +7,18 @@
                     Guides by area, a peek at what's new, and a fun fact while you're here.
                 </div>
             </div>
-            <!-- ambiguous — flat with color="accent"; no BaseButton variant supports the accent palette. Left as raw q-btn for review. -->
+            <!-- ambiguous — flat, accent-coloured label; no BaseButton variant
+                 supports the accent palette. Left as raw q-btn for review.
+                 `color="accent"` painted the raw fill tone (1.4:1 on this
+                 page in pesto) — `dora-text-accent` is the same hue at ink
+                 strength. -->
             <q-btn
                 flat
                 no-caps
-                color="accent"
+                class="dora-text-accent q-mr-sm"
                 :icon="ICONS.smart_toy"
                 label="Meet D.O.R.A."
                 :to="{ path: '/help/dora' }"
-                class="q-mr-sm"
             />
             <!-- FU-370 — renders only when the operator has configured a
                  support channel (see support_channel.py). Dormant installs
@@ -26,7 +29,7 @@
                 v-if="hasChannel"
                 flat
                 no-caps
-                color="accent"
+                class="dora-text-accent"
                 :icon="ICONS.bug_report"
                 label="Report an issue"
                 type="a"

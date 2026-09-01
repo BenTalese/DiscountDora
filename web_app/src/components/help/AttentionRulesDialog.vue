@@ -122,7 +122,7 @@
             <q-list bordered separator class="rounded-borders">
                 <q-item>
                     <q-item-section avatar>
-                        <q-icon :name="ICONS.inferred_hunch" color="warning" size="22px" />
+                        <q-icon :name="ICONS.dora_voice" color="warning" size="22px" />
                     </q-item-section>
                     <q-item-section>
                         <q-item-label class="text-weight-medium">

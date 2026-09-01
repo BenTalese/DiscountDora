@@ -91,22 +91,14 @@
                      "Uses expiring ingredients" filter is active (the
                      parent passes `showExpiringBadge`). Off-filter, the
                      count is meaningless noise; we hide it. -->
-                <!-- FU-653 — Dora's belief, as a remark. Outline, not filled:
-                     the filled chips on this row state facts about the recipe,
-                     and this is an opinion that hasn't changed any of them
-                     (the cook button's colour and the cookable badge are
-                     deliberately untouched). Server sends it only when the
-                     user opted the recipes surface in. -->
-                <q-chip
-                    v-if="recipe.inference_hint"
-                    dense
-                    outline
-                    :color="recipe.inference_hint === 'at_risk' ? 'warning' : 'positive'"
-                    :icon="ICONS.inferred_hunch"
-                >
-                    {{ recipe.inference_hint === 'at_risk' ? 'May be short' : 'May be cookable' }}
-                    <q-tooltip max-width="300px">{{ inferenceTooltip }}</q-tooltip>
-                </q-chip>
+                <!-- FU-653 — Dora's belief, as a remark. Extracted to
+                     `RecipeBeliefChip` on 2026-09-01 so the card and the
+                     compact row can't drift (R-003); it was outline until
+                     then, and is now the B2 neutral chip — the owner found
+                     the outline hard to read in both themes. Server sends
+                     the hint only when the user opted the recipes surface
+                     in, and the chip renders nothing without it. -->
+                <RecipeBeliefChip :recipe="recipe" />
                 <ExpiringChip
                     v-if="showExpiringBadge && (recipe.expiring_ingredient_count ?? 0) > 0"
                     :count="recipe.expiring_ingredient_count ?? 0"
@@ -121,12 +113,14 @@
 
         <q-card-section v-if="tagNames.length > 0" class="q-pt-none q-pb-xs">
             <div class="row q-gutter-xs">
+                <!-- Neutral, not outline-primary (owner 2026-09-01: the
+                     hollow chips read as hard to make out in both light and
+                     dark). A dietary tag is a plain fact with no state to
+                     encode, so it takes the B2 neutral chip unmodified. -->
                 <q-chip
                     v-for="tag in tagNames"
                     :key="tag"
-                    outline
-                    color="primary"
-                    class="recipe-card-tag"
+                    class="recipe-card-tag dora-chip--neutral"
                 >
                     {{ tag }}
                 </q-chip>
@@ -187,6 +181,7 @@
 <script lang="ts" setup>
     import BaseButton from 'src/components/BaseButton.vue';
     import ExpiringChip from 'src/components/recipes/ExpiringChip.vue';
+    import RecipeBeliefChip from 'src/components/recipes/RecipeBeliefChip.vue';
     import RecipeRatingChip from 'src/components/recipes/RecipeRatingChip.vue';
     import { ICONS } from 'src/style/icons';
     import type { Recipe } from 'src/models/recipe';
@@ -231,7 +226,7 @@
     const {
         totalTime, ingredientCount, kcal, metaLine, tagNames, missingIds,
         cookable, cookButtonColor, cookButtonTooltip, addListTooltip,
-        inferenceTooltip, initial, mediaStyle, imageUrl,
+        initial, mediaStyle, imageUrl,
     } = useRecipeDisplay(() => props.recipe);
 
     function onAddToList() {

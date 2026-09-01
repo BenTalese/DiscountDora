@@ -32,15 +32,15 @@
                             clickable
                             @click="selectItem(item)"
                         >
-                            <q-item-section avatar>
-                                <q-avatar
-                                    :color="levelColour(item.stock_level_id) ?? undefined"
-                                    :class="{ 'dora-bg-sunken dora-text-secondary': !levelColour(item.stock_level_id) }"
-                                    :text-color="levelColour(item.stock_level_id) ? 'white' : undefined"
-                                    size="28px"
-                                >
-                                    <q-icon name="inventory_2" size="16px" />
-                                </q-avatar>
+                            <!-- 2026-09-01 feedback (raised on the twin picker
+                                 in LogPriceSheet): a filled 28px avatar with a
+                                 box glyph read as a different kind of thing to
+                                 the level dot every other list uses. R-001:
+                                 shared StockLevelDot, tooltip'd per D-013. -->
+                            <q-item-section side>
+                                <StockLevelDot :sequence="levelSequence(item.stock_level_id)" size="12px">
+                                    <q-tooltip>{{ levelLabel(item.stock_level_id) }}</q-tooltip>
+                                </StockLevelDot>
                             </q-item-section>
                             <q-item-section>
                                 <div class="row items-center q-gutter-xs">
@@ -123,13 +123,13 @@
 <script lang="ts" setup>
     import BaseButton from 'src/components/BaseButton.vue';
     import { ICONS } from 'src/style/icons';
+    import StockLevelDot from 'src/components/stock/StockLevelDot.vue';
     import AppSpinner from 'src/components/AppSpinner.vue';
     import { storeToRefs } from 'pinia';
     import BaseDialog from 'src/components/BaseDialog.vue';
     import { useQuickAdd } from 'src/composables/useQuickAdd';
     import { formatMoney } from 'src/composables/useMoney';
     import { useShoppingListActions } from 'src/composables/useShoppingListActions';
-    import { colourForSequence } from 'src/helpers/stockLevelLogic';
     import type { LinkedProduct } from 'src/models/stockItemDetail';
     import type { StockItem } from 'src/models/stockItem';
     import ShoppingListApiService, {
@@ -184,10 +184,8 @@
     function levelSequence(id: string | null) {
         return stockLevels.value.find((l) => l.stock_level_id === id)?.sequence ?? -1;
     }
-    function levelColour(id: string | null): string | null {
-        // key off sequence (R-003); names can drift.
-        const seq = stockLevels.value.find((l) => l.stock_level_id === id)?.sequence;
-        return typeof seq === 'number' ? colourForSequence(seq) : null;
+    function levelLabel(id: string | null): string {
+        return stockLevels.value.find((l) => l.stock_level_id === id)?.name ?? 'No level set';
     }
 
     // Cached on each sheet-open: stock items the user has historically added

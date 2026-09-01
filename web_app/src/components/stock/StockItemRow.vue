@@ -92,7 +92,7 @@
                              "Set level" when nothing is uncertain. -->
                         <q-item-label v-if="hasBelief" header class="stock-row__belief-header">
                             <div class="row items-center no-wrap">
-                                <q-icon :name="ICONS.inferred_hunch" size="16px" class="q-mr-xs" />
+                                <q-icon :name="ICONS.dora_voice" size="16px" class="q-mr-xs" />
                                 Dora thinks {{ beliefBandWord }}
                             </div>
                             <div class="stock-row__belief-reason">{{ belief?.reason }}</div>
@@ -103,8 +103,7 @@
                                 Due for a stocktake check
                             </div>
                             <div class="stock-row__belief-reason">
-                                It's been a while since this was counted — set it here, or
-                                walk the stocktake.
+                                It's been a while since this was counted.
                             </div>
                         </q-item-label>
                         <q-item-label v-else header>Set level</q-item-label>
@@ -942,7 +941,7 @@
         outline-offset: -2px;
     }
     .stock-row--focused {
-        outline: 2px dashed var(--q-accent);
+        outline: 2px dashed var(--accent-ink);
         outline-offset: -2px;
     }
     .stock-row--dim {

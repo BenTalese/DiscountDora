@@ -229,6 +229,7 @@ class NewRecipeVersionHandler:
                     sequence=row["sequence"],
                     text=row["text"],
                     hint=row["hint"],
+                    timer_minutes=row.get("timer_minutes"),
                     ingredient_ids=[
                         old_to_new_ing[oid]
                         for oid in row["ingredient_ids"]

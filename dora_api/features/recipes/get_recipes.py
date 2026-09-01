@@ -176,6 +176,10 @@ class RecipeStepDto:
     # top-level steps may belong to a section; NULL = main.
     # Sub-steps carry the same section_id as their parent for cheap reads.
     section_id: UUID | None = None
+    # Owner feedback 2026-09-01 — an explicit timer on this step, in minutes.
+    # NULL means none was declared, and cook mode falls back to sniffing the
+    # step text (the only option a free-text method ever had).
+    timer_minutes: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -1512,6 +1516,7 @@ class GetRecipesHandler:
                 ingredient_ids=row["ingredient_ids"],
                 tool_ids=row["tool_ids"],
                 section_id=row.get("section_id"),
+                timer_minutes=row.get("timer_minutes"),
             )
             for row in step_rows
         ]

@@ -39,8 +39,18 @@ body {
 // A6 — tooltips are teleported to <body>, so make sure they follow the
 // text-size preference too (rem is relative to the root font-size, which
 // themeService drives from the user's font_size pref).
+// Owner, 2026-09-01: an explanatory tooltip (the stocktake cadence hint, the
+// "Push 3 days" hint) rendered as one ruler-length line across the viewport —
+// Quasar puts no ceiling on tooltip width, so a two-sentence tooltip only wraps
+// when it runs out of screen. Cap it at a readable measure and let it wrap.
+// Global because tooltips are teleported to <body>, and because *every* tooltip
+// with more than a few words wants this — a per-call class would just be the
+// same rule copied at each site (R-003).
 .q-tooltip {
     font-size: calc(var(--font-size-sm) * 1rem);
+    max-width: 280px;
+    white-space: normal;
+    line-height: 1.35;
 }
 
 // DR-7 (FU-578 #41) — Quasar toasts default to the bottom-right corner, the

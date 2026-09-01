@@ -14,7 +14,8 @@ from dora_api.features.app_settings.clock import household_today
 from dora_api.features.meal_plans.cook_batch_grouping import (
     group_by_cook_key, validate_cook_groups)
 from dora_api.features.meal_slots.slot_validation import (
-    find_invalid_slot, get_valid_slot_names, invalid_slot_message)
+    allowed_slot_names, find_invalid_slot, get_valid_slot_names,
+    invalid_slot_message)
 from dora_api.features.routers import MEAL_PLAN_ROUTER
 from dora_api.infrastructure.api_response import (bad_request,
                                                   entity_existence_failures,
@@ -86,13 +87,25 @@ class UpdateMealPlanHandler:
             if len(request.entries) == 0 and not request.confirm_clear_entries:
                 return UpdateMealPlanResponse(needs_clear_confirmation = True)
 
-            # validate slot names against the household MealSlot
-            # vocabulary (R-010); off-vocab names rejected on new writes.
+            # Validate slot names against the household MealSlot vocabulary
+            # (R-010) PLUS the labels this plan already carries. Deleting a
+            # slot is deliberately non-cascading — existing entries keep their
+            # label — and the planner resends every forward entry on each edit,
+            # so validating the payload against the live vocabulary alone made
+            # the whole week unsaveable the moment one entry held a deleted
+            # slot (owner report 2026-09-01). A genuinely NEW off-vocab slot is
+            # still refused; see `allowed_slot_names`.
             _ValidSlots = get_valid_slot_names(self.repository)
+            _AllowedSlots = allowed_slot_names(
+                _ValidSlots, (_Entry.slot for _Entry in (_Plan.entries or []))
+            )
             _BadSlot = find_invalid_slot(
-                (_EntryRequest.slot for _EntryRequest in request.entries), _ValidSlots
+                (_EntryRequest.slot for _EntryRequest in request.entries), _AllowedSlots
             )
             if _BadSlot is not None:
+                # The message names the current vocabulary, not the allowance:
+                # "Allowed: …, Snack" would read as an invitation to keep using
+                # a slot the household has deleted.
                 return UpdateMealPlanResponse(
                     invalid_slot_message = invalid_slot_message(_BadSlot, _ValidSlots)
                 )

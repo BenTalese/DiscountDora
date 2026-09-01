@@ -102,6 +102,10 @@ class CreateRecipeStepRequest(BaseModel):
     # optional section grouping; resolved against the sibling
     # `sections[]` entry with the same client_id.
     section_client_id: str | None = Field(default = None, max_length = 64)
+    # Owner feedback 2026-09-01 — explicit per-step timer, in minutes. The
+    # ceiling is a day: past that it isn't a cook-mode countdown, it's a
+    # ferment, and nobody stands at the bench for it.
+    timer_minutes: int | None = Field(default = None, ge = 1, le = 1440)
 
 
 class CreateRecipeSectionRequest(BaseModel):
@@ -365,6 +369,7 @@ class CreateRecipeHandler:
                         sequence=step.sequence,
                         text=step.text,
                         hint=step.hint,
+                        timer_minutes=step.timer_minutes,
                         ingredient_ids=[
                             _IngredientClientToReal[c]
                             for c in step.ingredient_client_ids

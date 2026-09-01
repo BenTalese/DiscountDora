@@ -42,7 +42,7 @@
                      the meal-planner surface in, and never on a cooked meal. -->
                 <q-icon
                     v-if="entry.inference_hint"
-                    :name="ICONS.inferred_hunch"
+                    :name="ICONS.dora_voice"
                     size="14px"
                     class="entry-chip__status"
                     :class="entry.inference_hint === 'at_risk' ? 'text-warning' : 'text-positive'"

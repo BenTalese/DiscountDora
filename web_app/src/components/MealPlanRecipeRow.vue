@@ -35,35 +35,48 @@
         <div class="mp-row__body">
             <div class="mp-row__name">{{ recipe.name }}</div>
 
-            <!-- One meta line of at most two facts. Browsing shows the figures;
-                 targeting replaces them with the destination, because when you
-                 have armed a slot the only question left is "does this go
-                 there"; suggesting replaces them with Dora's reason. -->
+            <!-- The meta line is now reserved for what the rail is DOING.
+                 Browsing shows nothing: the "35m / 620 kcal" figures were
+                 deleted 2026-09-01 (owner: "remove the extra row of info from
+                 the recipe rows"). They are cookbook facts — you pick a meal
+                 for a slot here, and the recipe page and the cookbook both
+                 carry them properly. Targeting names the destination, because
+                 with a slot armed the only question left is "does this go
+                 there"; suggesting carries Dora's reason. -->
             <div v-if="mode === 'targeting'" class="mp-row__meta mp-row__meta--target">
                 <q-icon :name="ICONS.arrow_forward" size="14px" />
                 {{ targetSlot }}
             </div>
             <div v-else-if="mode === 'suggesting' && reasonText" class="mp-row__meta mp-row__meta--reason">
-                <q-icon :name="ICONS.auto_awesome" size="14px" />
+                <q-icon :name="ICONS.dora_voice" size="14px" />
                 {{ reasonText }}
             </div>
-            <div v-else-if="metaFacts" class="mp-row__meta">{{ metaFacts }}</div>
         </div>
 
-        <!-- F26 / F42 / FU-088 — the cooked-pool controls for batch households.
-             F42 is an open complaint that the on-hand count "is a bit hidden,
-             could be better displayed… make the number bigger maybe", so the
-             count is a real figure at display size rather than a caption, and
-             the ± controls sit beside it. Kept out of the flow above so a
-             non-batch install renders a plain two-line row. -->
+        <!-- F26 / F42 / FU-088 — the cooked-pool controls for batch households,
+             wearing the shopping-list row's quantity shape (owner 2026-09-01:
+             "I like the style of the +/- count for quantity on shopping lists.
+             Make a mini version of that here"). Same contract as
+             `ShoppingListPlanRow`'s: a tile at rest, steppers on approach, the
+             buttons always in the layout so revealing them cannot reflow the
+             row. Mini because a 44px tile in a rail row would out-weigh the
+             recipe name; the tile is 30px.
+
+             The third button — "Log a cook…", which opened a count dialog —
+             is gone with its dialog (owner: "log a cook on the left rail feels
+             unnecessary; remove the button to get back horizontal space and
+             delete the modal"). Nothing is lost: `+` logs one cooked meal,
+             which is the common case, and the recipe page owns a real cook. -->
         <div
             v-if="batchEnabled"
             class="mp-row__pool"
+            :class="{ 'mp-row__pool--armed': poolArmed }"
             @click.stop
         >
             <BaseButton
                 variant="icon"
                 size="sm"
+                class="mp-row__step"
                 :icon="ICONS.remove"
                 :disable="recipe.available_meals <= 0"
                 aria-label="One fewer cooked"
@@ -71,24 +84,24 @@
             >
                 <q-tooltip>One fewer cooked</q-tooltip>
             </BaseButton>
-            <span class="mp-row__pool-count">{{ recipe.available_meals }}</span>
+            <button
+                type="button"
+                class="mp-row__tile"
+                :aria-label="`${recipe.available_meals} cooked and ready`"
+                @click="poolArmed = true"
+            >
+                {{ recipe.available_meals }}
+                <q-tooltip>Cooked meals ready to eat</q-tooltip>
+            </button>
             <BaseButton
                 variant="icon"
                 size="sm"
+                class="mp-row__step"
                 :icon="ICONS.add"
                 aria-label="One more cooked"
                 @click="emit('poolAdjust', recipe.recipe_id, 1)"
             >
                 <q-tooltip>One more cooked</q-tooltip>
-            </BaseButton>
-            <BaseButton
-                variant="icon"
-                size="sm"
-                :icon="ICONS.restaurant"
-                aria-label="Log a cook"
-                @click="emit('logCook', recipe.recipe_id)"
-            >
-                <q-tooltip>Log a cook…</q-tooltip>
             </BaseButton>
         </div>
     </div>
@@ -96,10 +109,9 @@
 
 <script setup lang="ts">
     import BaseButton from 'src/components/BaseButton.vue';
-    import { useRecipeDisplay } from 'src/composables/useRecipeDisplay';
     import type { Recipe } from 'src/models/recipe';
     import { ICONS } from 'src/style/icons';
-    import { computed } from 'vue';
+    import { computed, ref } from 'vue';
 
     const props = withDefaults(
         defineProps<{
@@ -120,24 +132,14 @@
     const emit = defineEmits<{
         (e: 'pick', recipeId: string): void;
         (e: 'poolAdjust', recipeId: string, delta: number): void;
-        (e: 'logCook', recipeId: string): void;
     }>();
 
-    const display = useRecipeDisplay(() => props.recipe);
-
-    /** At most two facts — time and kcal, whichever exist. The rail is 280px;
-     *  the cookbook's four-part meta line does not fit and would wrap into the
-     *  next row's space. */
-    const metaFacts = computed(() => {
-        const facts: string[] = [];
-        const time = display.totalTime.value;
-        if (time !== null) facts.push(`${time}m`);
-        const { value, judgeable } = display.kcal.value;
-        if (value !== null) {
-            facts.push(`${Math.round(value)} kcal${judgeable ? '' : ' (part)'}`);
-        }
-        return facts.join(' · ');
-    });
+    /** The touch equivalent of hover for the pool stepper — CSS reveals the
+     *  ± buttons on `:hover`/`:focus-within`, which a phone has neither of, so
+     *  tapping the count arms them. Same escape hatch, same reason, as
+     *  `ShoppingListPlanRow`'s `armed`. Per-row and never reset: an armed row
+     *  that disarmed itself would move controls out from under a thumb. */
+    const poolArmed = ref(false);
 
     const ariaLabel = computed(() => {
         if (props.mode === 'targeting' && props.targetSlot) {
@@ -225,19 +227,79 @@
         color: var(--brand-primary);
     }
 
+    /* The mini quantity cluster. Mirrors `.sl-row__qty` on the shopping list:
+       steppers hold their place in the layout and only fade, so the row cannot
+       reflow when they appear. */
     .mp-row__pool {
         flex: 0 0 auto;
         display: flex;
         align-items: center;
         gap: 2px;
     }
+    .mp-row__step {
+        opacity: 0;
+        transition: opacity var(--motion-fast) var(--motion-ease);
+    }
+    @media (hover: hover) {
+        .mp-row:hover .mp-row__step,
+        .mp-row:focus-within .mp-row__step {
+            opacity: 1;
+        }
+    }
+    /* Touch has no hover, so the tile arms the row instead. */
+    .mp-row__pool--armed .mp-row__step {
+        opacity: 1;
+    }
+    @media (hover: none) {
+        .mp-row__step {
+            opacity: 1;
+        }
+    }
     /* F42 — "the number is a bit hidden, could be better displayed… make the
-       number bigger maybe". It was a caption line reading "N free"; it is now
-       the row's one numeric figure, at display weight. */
-    .mp-row__pool-count {
-        min-width: 1.5rem;
-        text-align: center;
-        font-weight: 600;
+       number bigger maybe". It was a caption line reading "N free"; it is the
+       row's one numeric figure, now wearing the shopping list's tile. */
+    .mp-row__tile {
+        width: 30px;
+        height: 30px;
+        flex: none;
+        border: 1px solid transparent;
+        border-radius: var(--radius-md);
+        background: var(--surface-sunken);
+        color: var(--text-primary);
+        font: inherit;
+        font-weight: 700;
         font-variant-numeric: tabular-nums;
+        cursor: pointer;
+        display: grid;
+        place-items: center;
+        padding: 0;
+    }
+    .mp-row__tile:hover {
+        border-color: var(--border-strong);
+    }
+    .mp-row__tile:focus-visible {
+        outline: 2px solid var(--brand-primary);
+        outline-offset: 2px;
+    }
+    /* D-004 — 30px is a "dense control in desktop-only chrome" size, and this
+       row is NOT desktop-only: `MealPlanPickerSheet` renders the same component
+       on a phone. So the whole cluster goes back to full targets wherever a
+       finger is doing the tapping. The shopping list's own tile is 44px for
+       exactly this reason. */
+    @media (hover: none) {
+        .mp-row__tile {
+            width: 44px;
+            height: 44px;
+        }
+        .mp-row__step :deep(.q-btn) {
+            min-width: 44px;
+            min-height: 44px;
+        }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .mp-row__step {
+            transition: none;
+        }
     }
 </style>

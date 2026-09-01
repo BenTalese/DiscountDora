@@ -158,6 +158,7 @@ export function hydrateRecipeForm(form: RecipeForm, source: Recipe): void {
         ingredient_client_ids: [...s.ingredient_ids],
         tool_ids: [...s.tool_ids],
         section_client_id: s.section_id,
+        timer_minutes: s.timer_minutes ?? null,
     }));
     Object.assign(form, {
         name: source.name,
@@ -232,6 +233,7 @@ export function buildUpdateCommand(
             // Sub-steps stay null (no picker on depth-1 rows); the server
             // flattens them by parent.
             section_client_id: s.parent_client_id === null ? s.section_client_id : null,
+            timer_minutes: s.timer_minutes,
         }));
         command.steps = stepsToSend;
     }

@@ -75,7 +75,7 @@
         transition: color 0.18s ease, background-color 0.18s ease, font-weight 0s;
     }
     .dora-segmented__opt:not(.dora-segmented__opt--active):hover {
-        color: var(--q-accent);
+        color: var(--accent-ink);
     }
     .dora-segmented__opt:focus-visible {
         outline: 2px solid var(--ring-focus);

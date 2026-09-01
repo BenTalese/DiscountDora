@@ -16,6 +16,11 @@ export type EditableStep = {
      *  group. Sub-steps inherit visually from their parent — the editor
      *  doesn't expose a picker on depth-1 rows. */
     section_client_id: string | null;
+    /** Owner feedback 2026-09-01 — a declared countdown for this step, in
+     *  minutes. `null` = no timer, which is also what renders the toggle in
+     *  its off state; the same two-state trick `hint` uses, so there is no
+     *  second `showTimer` flag that can disagree with the data. */
+    timer_minutes: number | null;
 };
 
 export type IngredientOption = {

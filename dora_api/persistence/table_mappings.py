@@ -938,6 +938,10 @@ def configure_mappings(db: SQLAlchemy):
         # belong to a section; sub-steps inherit visually but the FK is
         # stored per-row to keep reads flat.
         Column("section_id", UUIDType, ForeignKey("RecipeSection.id", ondelete="SET NULL"), nullable=True),
+        # Owner feedback 2026-09-01 — an explicit per-step timer, in minutes.
+        # NULL means "no timer declared"; cook mode then falls back to sniffing
+        # the step text, which is all a free-text method can ever offer.
+        Column("timer_minutes", Integer, nullable=True),
     )
 
     recipe_step_ingredient_table = Table(
@@ -1606,6 +1610,7 @@ def configure_mappings(db: SQLAlchemy):
         "hint": recipe_step_table.c.hint,
         # nullable section grouping for top-level steps.
         "section_id": recipe_step_table.c.section_id,
+        "timer_minutes": recipe_step_table.c.timer_minutes,
     })
 
     _mapper_registry.map_imperatively(Cuisine, cuisine_table, properties={

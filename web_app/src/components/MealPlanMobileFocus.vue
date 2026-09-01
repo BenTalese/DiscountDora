@@ -52,6 +52,7 @@
                 type="button"
                 role="tab"
                 :aria-selected="day.iso === focusedDayIso"
+                :aria-label="dayChipLabel(day)"
                 class="mobile-focus__day-chip"
                 :class="{
                     'mobile-focus__day-chip--today': day.iso === currentDayIso,
@@ -63,9 +64,19 @@
             >
                 <span class="mobile-focus__day-chip-label">{{ day.label.charAt(0) }}</span>
                 <span class="mobile-focus__day-chip-num">{{ dayOfMonth(day.iso) }}</span>
-                <span
-                    v-if="entriesFor(day.iso).length > 0"
-                    class="mobile-focus__day-chip-dot"
+                <!-- Owner feedback 2026-09-01 — "I expect the mobile view day
+                     picker to act the same as the full calendar in that it
+                     shows the same pip info at the bottom. Currently they feel
+                     diverged." They were: this drew ONE dot meaning "something
+                     is planned", while the desktop calendar drew a pip per meal
+                     coded planned / short / cooked. Same component now, at the
+                     small size (`MealPlanDayPips.vue`). D-013 — the pips are
+                     not the only signal; the chip's `aria-label` names the
+                     day's state in words. -->
+                <MealPlanDayPips
+                    class="mobile-focus__day-chip-pips"
+                    size="sm"
+                    v-bind="pipsFor(day.iso)"
                 />
             </button>
         </div>
@@ -187,11 +198,13 @@
 <script lang="ts" setup>
     import BaseButton from 'src/components/BaseButton.vue';
     import { formatDate as formatLocaleDate } from 'src/composables/useDateFormat';
+    import MealPlanDayPips from 'src/components/MealPlanDayPips.vue';
     import MealPlanRichCard from 'src/components/MealPlanRichCard.vue';
     import MealPlanWeekStatus from 'src/components/MealPlanWeekStatus.vue';
     import { ICONS } from 'src/style/icons';
     import type { MealPlanEntry } from 'src/models/mealPlan';
     import type { WeekDay } from 'src/composables/useMealPlanner';
+    import { dayPips } from 'src/helpers/mealPlanDayPips';
     import { localTodayIso } from 'src/helpers/weekDates';
     import { computed, ref, watch } from 'vue';
 
@@ -229,6 +242,26 @@
         (e: 'duplicateWeek'): void;
         (e: 'openBuilder'): void;
     }>();
+
+    /** Same coding as the desktop month grid, from the same helper: the
+     *  server's shortfall set plus each entry's own `consumed_at` (R-003). */
+    function pipsFor(dayIso: string) {
+        return dayPips(props.entriesFor(dayIso), props.shortfallRecipeIds);
+    }
+
+    /** The pips' text alternative. A chip reading "M 15" with three coloured
+     *  dots says nothing to a screen reader otherwise. */
+    function dayChipLabel(day: WeekDay): string {
+        const entries = props.entriesFor(day.iso);
+        if (!entries.length) return `${day.label} ${dayOfMonth(day.iso)} — no meals planned`;
+        const short = entries.filter(
+            (e) => !e.consumed_at && props.shortfallRecipeIds.has(e.recipe_id),
+        ).length;
+        const meals = `${entries.length} meal${entries.length === 1 ? '' : 's'}`;
+        return short
+            ? `${day.label} ${dayOfMonth(day.iso)} — ${meals}, ${short} short`
+            : `${day.label} ${dayOfMonth(day.iso)} — ${meals}`;
+    }
 
     // Focused day — defaults to today when today is inside the focused week,
     // else the first day of the week.
@@ -361,8 +394,14 @@
         color: white;
         border-color: var(--q-primary);
     }
-    .mobile-focus__day-chip--focused .mobile-focus__day-chip-dot {
+    /* On the focused chip the primary fill is the ground, so the status
+       colours have to sit on it rather than under it. Only `planned` collides
+       (it is the same green family); warning and muted stay legible. */
+    .mobile-focus__day-chip--focused :deep(.mp-pips__pip--planned) {
         background: white;
+    }
+    .mobile-focus__day-chip--focused :deep(.mp-pips__more) {
+        color: white;
     }
     .mobile-focus__day-chip-label {
         font-weight: 700;
@@ -371,15 +410,8 @@
         font-weight: 600;
         font-size: 0.85rem;
     }
-    .mobile-focus__day-chip-dot {
-        width: 6px;
-        height: 6px;
-        border-radius: 50%;
-        background: var(--q-primary);
+    .mobile-focus__day-chip-pips {
         margin-top: 2px;
-    }
-    .mobile-focus__day-chip--has-meals:not(.mobile-focus__day-chip--focused) .mobile-focus__day-chip-dot {
-        background: var(--q-primary);
     }
     .mobile-focus__day-header {
         display: flex;

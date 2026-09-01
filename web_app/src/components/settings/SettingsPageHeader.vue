@@ -42,7 +42,7 @@
         min-width: 0;
     }
     .settings-page-header__icon {
-        color: var(--q-accent);
+        color: var(--accent-ink);
         margin-top: 2px;
         flex: 0 0 auto;
     }

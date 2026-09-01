@@ -219,14 +219,17 @@ export function useMealPlanner() {
         focusedTarget.value = isTargeted(dayIso, slot) ? null : { dayIso, slot };
     }
     async function pickRecipe(recipeId: string) {
-        if (!focusedTarget.value) {
-            $q.notify({
-                type: 'info',
-                position: 'bottom-right',
-                message: "Tap a day's meal slot first, then a recipe.",
-            });
-            return;
-        }
+        // No armed slot, no action — and no toast. It used to raise an info
+        // toast reading "Tap a day's meal slot first, then a recipe", which
+        // fired on the very first thing a new arrival does (owner 2026-09-01:
+        // "I click a recipe straight away and get a blank blue info toast.
+        // Nothing should happen if no meal slot is selected"). It was also
+        // scolding the user for the app's own default: the rail opens showing
+        // a browsable list with nothing armed, so clicking a row there is a
+        // reasonable thing to try. The instruction it carried is already on
+        // screen permanently — every unfilled slot row says "tap to add" — so
+        // the toast added nothing but a modal-feeling interruption.
+        if (!focusedTarget.value) return;
         await addEntry(focusedTarget.value.dayIso, focusedTarget.value.slot, recipeId);
     }
     function clearFocusedTarget() {
@@ -475,8 +478,7 @@ export function useMealPlanner() {
     }
 
     // ── Stock status (shared composable, R-003) ────────────────────────────
-    const { stockStatusLabel, stockStatusColour, needsBuying, isMissing, isLowStock } =
-        useStockStatus();
+    const { needsBuying, isMissing, isLowStock } = useStockStatus();
     const needToBuy = computed(() =>
         ingredients.value.filter((ing) => needsBuying(ing.stock_item_id)),
     );
@@ -503,16 +505,16 @@ export function useMealPlanner() {
         () => needToBuy.value.filter((ing) => !isOnAList(ing.stock_item_id)),
     );
 
-    // ── Shopping-list status (F31) + hover-to-highlight (F30, C-2.H) ───────
-    function listStatusLabel(stockItemId: string): string {
-        const m = shoppingListStore.membership;
-        const entry = m?.items.find((i) => i.stock_item_id === stockItemId);
-        if (!entry || entry.unticked_list_ids.length === 0) return 'not on a list';
-        const byId = new Map(
-            (m?.active_lists ?? []).map((l): [string, string] => [l.shopping_list_id, l.name]),
-        );
-        return `on ${entry.unticked_list_ids.map((id) => byId.get(id) ?? 'a list').join(', ')}`;
-    }
+    // ── Hover-to-highlight (F30, C-2.H) ────────────────────────────────────
+    //
+    // `listStatusLabel` lived here (F31) and shipped "not on a list" / "on
+    // Weekly shop" as a caption under every right-rail ingredient. Deleted
+    // 2026-09-01: the row's own cart button already carries that state as an
+    // icon on the same line, so the caption restated it in words (owner:
+    // "redundant, we can see that from the icon on the same row"). The level
+    // chip it sat beside went the same way — `MealPlanIngredientRow` codes
+    // level as the app's standard left-hand dot via `useStockStatus`, so the
+    // planner no longer re-exports that composable's labels either.
 
     // Hovering a needed ingredient highlights the day cells whose recipes use
     // it (desktop only — mouse events don't fire on touch).
@@ -538,12 +540,10 @@ export function useMealPlanner() {
             });
         }
     }
-    async function logPaletteCook(recipeId: string, count: number) {
-        const n = Math.max(1, Math.floor(count || 0));
-        await recipeStore.cookAsync(recipeId, n);
-        await Promise.all([recipeStore.getRecipesAsync(), mealPlanStore.getShortfallAsync()]);
-        return n;
-    }
+    // `logPaletteCook` lived here and backed the rail row's "Log a cook…"
+    // dialog, deleted 2026-09-01 with the button (owner call). `cookAsync` is
+    // still reachable from the recipe page, which is where a cook belongs; the
+    // rail's `+` goes through `adjustPaletteMeals` above.
 
     function goToRecipe(recipeId: string) {
         void router.push(`/cookbook/${recipeId}`);
@@ -928,9 +928,6 @@ export function useMealPlanner() {
         isShortfallEntry,
         isPastDay,
         isTargeted,
-        listStatusLabel,
-        stockStatusLabel,
-        stockStatusColour,
         formatDate,
         // mutations
         addEntry,
@@ -947,7 +944,6 @@ export function useMealPlanner() {
         openAddToList,
         confirmAddToList,
         adjustPaletteMeals,
-        logPaletteCook,
         saveFocusedWeekAsTemplate,
         warnBeforeReplaceWeek,
         applyTemplate,

@@ -5,6 +5,33 @@
             line="I couldn't load your price changes."
             @retry="emit('retry')"
         />
+        <!-- B10 — headline plus two ranked lists, in outline. Without it the
+             card rendered its B9 empty state ("log what you paid for a couple
+             of items…") to a household that had done exactly that, for the
+             whole flight of the request. -->
+        <div v-else-if="loading" class="pm-skeleton">
+            <AppSkeleton type="line" width="60%" height="1.2em" />
+            <div class="pm-columns">
+                <div class="pm-skeleton__col">
+                    <AppSkeleton
+                        v-for="n in 3"
+                        :key="n"
+                        type="rect"
+                        height="44px"
+                        radius="var(--radius-md)"
+                    />
+                </div>
+                <div class="pm-skeleton__col">
+                    <AppSkeleton
+                        v-for="n in 3"
+                        :key="n"
+                        type="rect"
+                        height="44px"
+                        radius="var(--radius-md)"
+                    />
+                </div>
+            </div>
+        </div>
         <template v-else-if="hasRows">
             <p class="pm-headline">{{ headline }}</p>
 
@@ -88,9 +115,9 @@
              does not send you to a feature you may not have. Logging a shelf
              price and finishing a priced list both feed this; products don't
              come into it. -->
-        <div v-else class="dora-empty">
+        <CardEmpty v-else :icon="ICONS.price_check">
             {{ emptyLine }}
-        </div>
+        </CardEmpty>
     </DashboardCard>
 </template>
 
@@ -115,7 +142,9 @@
      */
     import { computed, onBeforeUnmount, ref, watch } from 'vue';
     import { ICONS } from 'src/style/icons';
+    import AppSkeleton from 'src/components/AppSkeleton.vue';
     import AppSpinner from 'src/components/AppSpinner.vue';
+    import CardEmpty from 'src/components/CardEmpty.vue';
     import CardLoadError from 'src/components/dashboard/CardLoadError.vue';
     import DashboardCard from 'src/components/dashboard/DashboardCard.vue';
     import PriceHistoryChart from 'src/components/PriceHistoryChart.vue';
@@ -133,7 +162,8 @@
         range: ReportRange;
         movers: ItemPriceMoversResponse | null;
         failed?: boolean;
-    }>(), { failed: false });
+        loading?: boolean;
+    }>(), { failed: false, loading: false });
 
     const emit = defineEmits<{ (e: 'retry'): void }>();
 
@@ -283,6 +313,16 @@
 </script>
 
 <style scoped lang="scss">
+    .pm-skeleton {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-3);
+    }
+    .pm-skeleton__col {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-2);
+    }
     .pm-headline {
         margin: 0;
         font-size: calc(var(--font-size-md) * 1rem);
@@ -373,6 +413,12 @@
         margin-top: var(--space-2);
         color: var(--brand-primary);
         font-size: calc(var(--font-size-sm) * 1rem);
+    }
+    /* A6 — the row buttons already carry a ring; this link did not. */
+    .pm-chart__link:focus-visible {
+        outline: 2px solid var(--focus-ring);
+        outline-offset: 2px;
+        border-radius: var(--radius-sm);
     }
     .pm-note {
         margin: var(--space-3) 0 0;

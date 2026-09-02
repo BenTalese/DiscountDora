@@ -18,6 +18,21 @@
             @retry="emit('retry')"
         />
 
+        <!-- B10 — a skeleton shaped like the content, never a blank pane and
+             never the empty state. Before this, the card rendered "No completed
+             shopping lists in this range" for the whole flight of the request,
+             so a household with five stores of spend was told it had none until
+             the response landed. Same failure-reads-as-absence the error states
+             exist to prevent (D-007), just on the other async edge. -->
+        <div v-else-if="loading" class="spend-skeleton">
+            <AppSkeleton type="rect" height="8px" radius="var(--radius-sm)" />
+            <div v-for="n in 5" :key="n" class="spend-skeleton__row">
+                <AppSkeleton type="circle" width="10px" height="10px" />
+                <AppSkeleton type="line" :width="`${45 - n * 4}%`" />
+                <AppSkeleton type="line" width="56px" />
+            </div>
+        </div>
+
         <template v-else-if="axis === 'store'">
             <div v-if="storeSegments.length > 0">
                 <ProportionBar :segments="storeSegments" />
@@ -36,10 +51,10 @@
                     </li>
                 </ul>
             </div>
-            <div v-else class="dora-empty">
+            <CardEmpty v-else :icon="ICONS.storefront">
                 No completed shopping lists in this range — finish a list to see
                 your spend break down by store.
-            </div>
+            </CardEmpty>
         </template>
 
         <template v-else-if="axis === 'group'">
@@ -57,17 +72,17 @@
                     </li>
                 </ul>
             </div>
-            <div v-else class="dora-empty">
+            <CardEmpty v-else :icon="ICONS.category">
                 No spend recorded in this range yet. Finish a shopping list with
                 prices to see where your money's going.
-            </div>
+            </CardEmpty>
         </template>
 
         <template v-else>
-            <div v-if="range === 'all'" class="dora-empty">
+            <CardEmpty v-if="range === 'all'" :icon="ICONS.compare_arrows">
                 Pick a bounded range (30d–5y) to compare it against the
                 same-length prior window.
-            </div>
+            </CardEmpty>
             <div
                 v-else-if="spendYoY && (spendYoY.current_total > 0 || spendYoY.previous_total > 0)"
             >
@@ -96,10 +111,10 @@
                     </li>
                 </ul>
             </div>
-            <div v-else class="dora-empty">
+            <CardEmpty v-else :icon="ICONS.compare_arrows">
                 Not enough history yet to compare periods. Finish lists over time
                 and this fills in.
-            </div>
+            </CardEmpty>
         </template>
 
         <!-- Savings, as a support line rather than a card of its own (§5).
@@ -113,7 +128,7 @@
              against the retailer's shelf price; FU-831 moves the retrospective
              figure to your own usual price and re-words it, which is exactly why
              the label can't be a bare "saved". -->
-        <template v-if="!failed">
+        <template v-if="!failed && !loading">
             <div v-if="savingsLine" class="spend-support">{{ savingsLine }}</div>
             <div v-if="coverageLine" class="spend-support">{{ coverageLine }}</div>
         </template>
@@ -138,7 +153,9 @@
      */
     import { computed, ref } from 'vue';
     import { ICONS } from 'src/style/icons';
+    import AppSkeleton from 'src/components/AppSkeleton.vue';
     import BaseSegmented from 'src/components/BaseSegmented.vue';
+    import CardEmpty from 'src/components/CardEmpty.vue';
     import CardLoadError from 'src/components/dashboard/CardLoadError.vue';
     import DashboardCard from 'src/components/dashboard/DashboardCard.vue';
     import ProportionBar from 'src/components/ProportionBar.vue';
@@ -164,7 +181,12 @@
          *  rather than re-implemented so the page keeps one hash (R-002). */
         colourFor: (key: string) => string;
         failed?: boolean;
-    }>(), { failed: false });
+        /** True while any of the three axes (or the savings support line) is in
+         *  flight. One flag for the whole card because it is one question: a
+         *  card that renders an axis toggle cannot say "two thirds of me have
+         *  arrived". */
+        loading?: boolean;
+    }>(), { failed: false, loading: false });
 
     const emit = defineEmits<{ (e: 'retry'): void }>();
 
@@ -263,6 +285,16 @@
         color: var(--text-secondary);
         font-size: calc(var(--font-size-sm) * 1rem);
         font-variant-numeric: tabular-nums;
+    }
+    .spend-skeleton {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-3);
+    }
+    .spend-skeleton__row {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
     }
     .spend-support {
         margin-top: var(--space-3);

@@ -11,6 +11,35 @@
                 line="I couldn't load your cook history."
                 @retry="emit('retry-cooks')"
             />
+            <!-- B10 — the headline, the note and the column track, in outline.
+                 This card was the worst offender: with no loading state it
+                 rendered "Nothing cooked in this range yet." to a household
+                 with ten cooks, for as long as the request took. -->
+            <div v-else-if="cooksLoading" class="km-skeleton">
+                <AppSkeleton type="line" width="70%" height="1.2em" />
+                <AppSkeleton type="line" width="45%" />
+                <AppSkeleton type="rect" height="72px" radius="var(--radius-sm)" />
+                <div class="km-lists">
+                    <div class="km-skeleton__col">
+                        <AppSkeleton
+                            v-for="n in 3"
+                            :key="n"
+                            type="rect"
+                            height="44px"
+                            radius="var(--radius-md)"
+                        />
+                    </div>
+                    <div class="km-skeleton__col">
+                        <AppSkeleton
+                            v-for="n in 3"
+                            :key="n"
+                            type="rect"
+                            height="44px"
+                            radius="var(--radius-md)"
+                        />
+                    </div>
+                </div>
+            </div>
             <template v-else>
                 <!-- The sellable number, at a sellable size. It used to be the
                      SMALLEST text on the card — "14 cooks · 31 meals-worth" in an
@@ -22,7 +51,19 @@
                      0, 1 or 2 for a normal household, and a smoothed curve through
                      integers implies 1.4 cooks happened on Tuesday (§3.8.1,
                      §4.10.5). No chart library involved. -->
-                <ul v-if="columns.length > 0" class="km-columns" role="presentation">
+                <!-- A6 / §4.9 — a chart needs a text alternative, and this one
+                     had none: `role="presentation"` with the per-bucket figures
+                     reachable only through a hover tooltip, which is neither
+                     keyboard- nor screen-reader-reachable. `role="img"` plus a
+                     generated label is the same treatment `PriceHistoryChart`
+                     got in chunk 4; the columns themselves stay decorative
+                     because the label already carries what they say. -->
+                <ul
+                    v-if="columns.length > 0"
+                    class="km-columns"
+                    role="img"
+                    :aria-label="timelineLabel"
+                >
                     <li v-for="col in columns" :key="col.date" class="km-column">
                         <span
                             class="km-column__bar"
@@ -37,7 +78,10 @@
                 </ul>
             </template>
 
-            <div v-if="!cooksFailed && (mealsCooked?.top_recipes.length ?? 0) > 0" class="km-lists">
+            <div
+                v-if="!cooksFailed && !cooksLoading && (mealsCooked?.top_recipes.length ?? 0) > 0"
+                class="km-lists"
+            >
                 <section>
                     <h4 class="km-heading">Cooked most</h4>
                     <ul class="km-list">
@@ -61,6 +105,15 @@
                         line="I couldn't load what you buy most."
                         @retry="emit('retry-bought')"
                     />
+                    <div v-else-if="boughtLoading" class="km-skeleton__col">
+                        <AppSkeleton
+                            v-for="n in 3"
+                            :key="n"
+                            type="rect"
+                            height="44px"
+                            radius="var(--radius-md)"
+                        />
+                    </div>
                     <ul v-else-if="(mostBought?.rows.length ?? 0) > 0" class="km-list">
                         <li v-for="row in mostBought!.rows.slice(0, 5)" :key="row.stock_item_id">
                             <a class="km-list__name" :href="`#/stock/${row.stock_item_id}`">
@@ -69,16 +122,19 @@
                             <span class="km-list__count">×{{ row.appearances }}</span>
                         </li>
                     </ul>
-                    <div v-else class="dora-empty">
+                    <CardEmpty v-else :icon="ICONS.shopping_cart">
                         No archived lists in this range yet.
-                    </div>
+                    </CardEmpty>
                 </section>
             </div>
 
-            <div v-else-if="!cooksFailed" class="dora-empty">
+            <CardEmpty
+                v-else-if="!cooksFailed && !cooksLoading"
+                :icon="ICONS.restaurant_menu"
+            >
                 No cooks logged in this range yet. Finish a recipe in cook mode to
                 start building your memory.
-            </div>
+            </CardEmpty>
         </template>
     </DashboardCard>
 </template>
@@ -100,6 +156,8 @@
      */
     import { computed } from 'vue';
     import { ICONS } from 'src/style/icons';
+    import AppSkeleton from 'src/components/AppSkeleton.vue';
+    import CardEmpty from 'src/components/CardEmpty.vue';
     import CardLoadError from 'src/components/dashboard/CardLoadError.vue';
     import DashboardCard from 'src/components/dashboard/DashboardCard.vue';
     import type {
@@ -114,7 +172,14 @@
         mostBought: MostBoughtResponse | null;
         cooksFailed?: boolean;
         boughtFailed?: boolean;
-    }>(), { cooksFailed: false, boughtFailed: false });
+        cooksLoading?: boolean;
+        boughtLoading?: boolean;
+    }>(), {
+        cooksFailed: false,
+        boughtFailed: false,
+        cooksLoading: false,
+        boughtLoading: false,
+    });
 
     const emit = defineEmits<{
         (e: 'retry-cooks'): void;
@@ -163,6 +228,19 @@
             + `${m.uncooked_recipes === 1 ? 'hasn\'t' : 'haven\'t'} been cooked in a year.`;
     });
 
+    /** The column track's text alternative. Summarises rather than enumerating:
+     *  a 30-day range is 31 buckets, and reading "0 cooks" twenty-two times is
+     *  not an alternative to a chart, it is a punishment. */
+    const timelineLabel = computed(() => {
+        const timeline = props.mealsCooked?.timeline ?? [];
+        if (timeline.length === 0) return 'Cooking activity over the range.';
+        const active = timeline.filter((p) => p.cook_count > 0);
+        const peak = Math.max(...timeline.map((p) => p.cook_count));
+        return `Cooking activity across ${timeline.length} periods: `
+            + `${active.length} with at least one cook, `
+            + `busiest had ${peak} cook${peak === 1 ? '' : 's'}.`;
+    });
+
     const columns = computed(() => {
         const timeline = props.mealsCooked?.timeline ?? [];
         const peak = Math.max(1, ...timeline.map((p) => p.cook_count));
@@ -193,6 +271,11 @@
         padding: 0;
         display: flex;
         align-items: flex-end;
+        /* A3 carve-out — this is chart geometry, not layout spacing. A 30-day
+           range draws 31 columns across the card, so the gap is the hairline
+           between bars; at `--space-1` (4px) the gaps would total more width
+           than the data. Same reasoning as the token carve-outs inside an SVG
+           viewBox: the number isn't spacing, it's part of the drawing. */
         gap: 2px;
         height: 72px;
     }
@@ -210,6 +293,16 @@
         background: var(--brand-primary);
         border-radius: var(--radius-sm) var(--radius-sm) 0 0;
     }
+    .km-skeleton {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-3);
+    }
+    .km-skeleton__col {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-2);
+    }
     .km-lists {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -217,7 +310,17 @@
         margin-top: var(--space-4);
     }
     @media (max-width: 599px) {
-        .km-lists { grid-template-columns: 1fr; }
+        .km-skeleton {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-3);
+    }
+    .km-skeleton__col {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-2);
+    }
+    .km-lists { grid-template-columns: 1fr; }
     }
     .km-heading {
         margin: 0 0 var(--space-2);
@@ -256,6 +359,12 @@
         white-space: nowrap;
     }
     a.km-list__name:hover { text-decoration: underline; }
+    /* A6 — see the sibling note in `WasteAndRunOutsCard`. */
+    .km-list__name:focus-visible {
+        outline: 2px solid var(--focus-ring);
+        outline-offset: 2px;
+        border-radius: var(--radius-sm);
+    }
     .km-list__count {
         color: var(--text-secondary);
         font-size: calc(var(--font-size-sm) * 1rem);

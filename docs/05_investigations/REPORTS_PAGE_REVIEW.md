@@ -734,8 +734,32 @@ design-rule or architecture debt.
 
 ## 7 · Recommended sequencing
 
-> **Build status (2026-09-02): Chunks 1, 2, 3 and 4 are done, green and driven
-> live — only chunk 5 (the design-rule sweep) remains.**
+> **Build status (2026-09-02): ALL FIVE CHUNKS ARE DONE, green and driven live.
+> This review is closed.** What remains on the surface is follow-ups, not
+> chunks: FU-845 #8, FU-843, FU-844, FU-846, FU-847.
+>
+> **Chunk 5 (the design-rule sweep)** landed last, and doing it last is what made
+> it small: the sweep's own measurement found **zero** raw font-sizes and **zero**
+> raw radii across the six card components, because chunks 3 and 4 had written
+> fresh CSS on the scale — §7's sequencing argument, confirmed. Two carve-outs
+> survive, both commented: `.km-columns` keeps a 2px gap because a 30-day range
+> draws 31 columns and `--space-1` would spend more width on gaps than on data,
+> which makes it part of the drawing rather than spacing. **The chunk's real find
+> was not a token.** Three of five cards took no `loading` prop, so while their
+> requests were in flight the page rendered their **empty** states — measured on
+> the dense seed: *"Nothing cooked in this range yet."* on a household with ten
+> cooks, *"Log what you paid for a couple of items…"* to one that had, *"No
+> completed shopping lists"* with five stores of spend. That is §4.7's
+> failure-reads-as-absence finding on the other async edge, introduced by the
+> restructure itself. Every card now carries an `AppSkeleton` composition shaped
+> like its content (B10). Also built: **B9's anatomy**, via a new shared
+> `CardEmpty` (the `.dora-empty` class could never supply the icon, so every
+> consumer app-wide shipped the well without the anatomy); **focus rings**, after
+> a measurement showed focused row links computing `outline-style: none`; a
+> **text alternative** for the cook-timeline chart, whose figures had been
+> reachable only by hover; and **FU-845 #2**, the range control naming its window
+> — which deleted the client's own copy of the server range table (R-003) rather
+> than adding a field to nine responses.
 > **Chunk 4 (the missing widget)** shipped with **FU-833** beside it, and the two
 > belong together: chunk 4 needed a chart, and the app was carrying ECharts at
 > 549 KB to draw one it already owned in 8 KB. So `PriceHistoryChart` was

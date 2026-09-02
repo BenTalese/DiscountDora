@@ -11,7 +11,7 @@ value against data seeded through the API:
 the 30d default window; the actual→picked price ladder for spend-by-store is
 already pinned by `test_spend_by_store.py` and not re-tested here.
 """
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from uuid import uuid4
 
 import pytest
@@ -843,3 +843,42 @@ def test__counting_reports__MoneyDisabled__StillAnswer(api, path):
 
 
 #endregion money gate
+
+#region ---------------- range window ----------------
+
+
+@pytest.mark.parametrize("token,days", [("30d", 30), ("90d", 90), ("1y", 365)])
+def test__range_window__BoundedToken__NamesItsDatesAndLength(api, token, days):
+    # FU-845 #2 — the picker said "30 days" and left the reader to guess which
+    # thirty. The dates come from here so the client never re-derives them.
+    body = requests.get(f"{REPORTS}/range-window", params={"range": token}).json()
+
+    assert set(body.keys()) == {"range", "start", "end", "days"}
+    assert body["range"] == token
+    assert body["days"] == days
+    start = date.fromisoformat(body["start"])
+    end = date.fromisoformat(body["end"])
+    assert (end - start).days == days
+
+
+def test__range_window__AllTime__HasNoStartDate(api):
+    body = requests.get(f"{REPORTS}/range-window", params={"range": "all"}).json()
+
+    # None rather than the epoch: "all time" has no start worth printing, and
+    # inventing one would be a worse answer than none.
+    assert body["start"] is None
+    assert body["days"] is None
+    assert body["end"]
+
+
+def test__range_window__MoneyDisabled__StillAnswers(api):
+    # Page chrome, not a money surface — the range control exists on a
+    # money-off install, so this must not be gated.
+    set_money_enabled(False)
+
+    resp = requests.get(f"{REPORTS}/range-window", params={"range": "30d"})
+
+    assert resp.status_code == 200, resp.text
+
+
+#endregion range window

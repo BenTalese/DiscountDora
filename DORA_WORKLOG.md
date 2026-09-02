@@ -28,7 +28,106 @@ next.
 
 ---
 
-## 2026-09-02 (latest) — **FU-833 + Reports chunk 4: the 549 KB chart library came out, and the report it made room for went in**
+## 2026-09-02 (latest) — **Reports chunk 5 closes the review: the page was telling you it had nothing while it was still looking**
+
+**Status:** complete + green + driven live. **`REPORTS_PAGE_REVIEW.md` §7 is
+closed — all five chunks.** FU-845 #2 done (#8 stays open). Gate: **pytest 2243
+passed** / 1 skipped / 1 xfailed with only the four pre-existing buy-verdict reds
+(FU-762), **vitest 685 / 61 files**, `vue-tsc` + `eslint` clean.
+
+**Two regressions were fixed first, and one of them was mine.** The owner
+reported the dashboard mascot had moved: the chunk-6 scale sweep put
+`.dora-hero-mascot` and `.dora-welcome-mascot` padding onto `--space-1`, which
+**doubled** the first (2px) and **quadrupled** the second (1px). Both had been
+hand-tuned in commit `12229346` ("Properly centre the dora mascot on dashboard")
+because the artwork is not centred inside its own bounding box — so that padding
+is **optical, not spatial**, and a token is wrong there for the same reason a
+token is wrong inside an SVG viewBox. Restored, both now carrying an R-002/A3
+carve-out note naming the commit so the next sweep doesn't redo it. Also
+restored: the 44px tap targets on the Reports list rows (D-004, measured at 38px
+on a phone), which were written and verified last session but lost when the
+parallel session's commit landed over the working tree.
+
+**⚠️ The chunk's headline is a loading-state defect the restructure introduced
+and no test could see.** Three of five cards took no `loading` prop, so while
+their requests were in flight the page rendered their **empty** states. Measured
+on the dense seed by throttling the reports calls: *"Nothing cooked in this range
+yet."* on a household with **ten cooks**; *"Log what you paid for a couple of
+items…"* to one that had; *"No completed shopping lists in this range"* with five
+stores of spend. This is precisely the failure-reads-as-absence bug chunk 2 fixed
+for **errors**, reappearing on the other async edge — and it shipped because
+chunks 3 and 4 moved the loading flags out of the page and only two cards asked
+for them back. Every card now renders an `AppSkeleton` composition shaped like
+its own content (B10), and the false empties are gone (re-measured: zero).
+
+**B9's anatomy is now built rather than two-thirds built.** `.dora-empty` gives
+an empty state its container but cannot give it the **icon**, because that is
+markup — so every consumer shipped the well and skipped the anatomy. New
+`components/CardEmpty.vue` carries icon + line + an optional action slot, and it
+deliberately has **no default copy**: B9 wants the specific sentence in Dora's
+voice, and a shared fallback would invite the bare "No data" the rule forbids.
+Ten Reports empty states migrated; the dashboard's nine can follow
+opportunistically.
+
+**The a11y pass found one thing by measuring and nearly missed it by measuring
+wrong.** Focused row links computed `outline-style: none` — no focus indicator at
+all, which A6 calls not optional. My first check called `.focus()` from script,
+which does **not** match `:focus-visible`, so the ring I then added still read as
+absent; the honest verification was a real `Tab` press, after which the active
+link measures `solid 2px rgb(37,147,92)`. Also fixed: the cook-timeline chart was
+`role="presentation"` with its per-bucket figures reachable **only** through a
+hover tooltip — neither keyboard nor screen-reader reachable — so it now carries
+`role="img"` and a generated summary ("Cooking activity across 31 periods: 10
+with at least one cook, busiest had 1 cook"), summarised rather than enumerated
+because reading "0 cooks" twenty-two times is not an alternative to a chart.
+
+**FU-845 #2 removed a duplication rather than adding a field.** The range control
+now names its window ("3 Aug – 2 Sept"), and the dates come from a new
+`GET /reports/range-window` rather than nine copies of one fact on nine report
+responses — the window is a property of the **range parameter**, not of any
+report. It is ungated, because the picker exists on a money-off install. The R-003
+win is concrete: the client had its own `RANGE_TO_DAYS` table, a second copy of
+the server's `_RANGE_DAYS` in a second language, kept only to feed the waste
+endpoint its day count; that table is deleted and `days` comes off the same
+response. **Driving it caught a defect in my own label:** the 1-year range
+rendered *"2 Sept – 2 Sept"* because the formatter dropped the year, so the
+control built to make the window concrete said the window was one day. The year
+now renders whenever the window crosses one — checked across all five bounded
+ranges plus "All time" (which renders nothing, having no start date worth
+printing).
+
+**Two carve-outs, both commented.** `.km-columns` keeps `gap: 2px` — a 30-day
+range draws 31 columns, so at `--space-1` the gaps would total more width than
+the data; that number is part of the drawing, not spacing. `.wr-reason` went the
+other way onto `--space-1`, because it had room. Everything else on the surface
+was already on-token: the sweep's own measurement found **zero** raw font-sizes
+and **zero** raw radii, because chunks 3 and 4 wrote fresh CSS on the scale —
+which is the argument for doing the design sweep *last*, exactly as §7 sequenced
+it.
+
+**Standing-rules close-gate.** **B9/B10/D-007** (the three states finally
+distinct on every card), **A6** (focus rings, chart text alternative),
+**D-004** (44px rows), **R-001** (`CardEmpty` shared rather than ten copies of an
+icon block), **R-003** (`RANGE_TO_DAYS` deleted; the window server-owned),
+**R-002/A3** (two commented carve-outs, one restored). **ADR evaluation: none
+promoted.** The candidate — *"a hand-tuned optical value is not a spacing token"*
+— is the mascot regression plus the two chart carve-outs, and it is really R-002's
+existing SVG-viewBox carve-out restated; recorded in place rather than promoted.
+Note `components/dashboard/CardLoadError.vue` and `dashboardCards.scss` now serve
+two surfaces, so the `dashboard/` namespace understates their scope; a rename is
+worth doing when a third surface adopts them, not before.
+
+**Next up:** the review is closed, so the surface's remaining work is
+follow-ups, not chunks: **FU-845 #8** (every number is a door — needs the
+destination pages to accept a filter, so it touches three other surfaces),
+**FU-843** (the categorical ramp collides at six entries), **FU-844** (the
+feature-flag race, now with two copies of the workaround), **FU-846**, **FU-847**.
+Off this surface: **FU-831** (savings own-price baseline, the only migration out
+of the two reviews) and **FU-832** (shared card catalogue + `useCardLayout()`).
+
+---
+
+## 2026-09-02 — **FU-833 + Reports chunk 4: the 549 KB chart library came out, and the report it made room for went in**
 
 **Status:** complete + green + driven live on all five surfaces. **FU-833
 resolved**; **Reports chunk 4 shipped**, which leaves only chunk 5 (the design

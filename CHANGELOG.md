@@ -5,6 +5,26 @@ semver — major bumps signal schema or breaking-config changes.
 
 ## [Unreleased]
 
+### Fixed
+- **Reports no longer tells you it has nothing while it's still looking
+  (2026-09-02).** Its cards had no loading state, so for the whole time a
+  request was in flight the page rendered its *empty* answers: "Nothing cooked
+  in this range yet" to a household with ten cooks, "log a few prices and I'll
+  show you what's drifting" to one that had, and "no completed shopping lists"
+  to one with five stores of spend. Each card now shows an outline of its own
+  content while it loads.
+- **Empty states on Reports look like empty states.** They were a line of grey
+  text in a box; they now carry the muted icon the rest of the app uses, so
+  "nothing here yet" reads as a state rather than as a failed render. The words
+  are unchanged.
+- **The range picker says which dates it means (2026-09-02)** — "3 Aug – 2 Sept"
+  beside it, so "30 days" is a window rather than a promise. It shows the year
+  when the window crosses one.
+- **Keyboard focus is visible on Reports.** The row links had no focus ring at
+  all, so anyone navigating by keyboard could not see where they were.
+- **The cooking chart can be read by a screen reader**, which it could not be
+  before — its figures were reachable only by hovering.
+
 ### Added
 - **Reports tells you which of *your own* items got dearer (2026-09-02).** A new
   **Price changes** card, and it is the first thing in the app that answers the

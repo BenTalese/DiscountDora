@@ -91,31 +91,31 @@ long session summary. Distinct from the other logs:
   categorical ramp's collision), which is the same "who owns a series' colour"
   question. Cross-ref: R-073, `useThemePalette.seriesColour`.
 
-## [OPEN] FU-845 — Two of §4.10's ten design moves survived the Reports restructure unbuilt
+## [OPEN] FU-845 — One of §4.10's ten design moves is still unbuilt (#8, "every number is a door")
 - **Raised:** 2026-09-02 (Reports chunk 3 close-gate)
 - **Type:** deferred job
+- **#2 DONE 2026-09-02 (chunk 5).** The range control names its window ("3 Aug –
+  2 Sept"), from a new ungated `GET /reports/range-window` — the window is a
+  property of the **range parameter**, not of any report, so it is one endpoint
+  rather than a field on nine responses. It **removed** an R-003 duplication
+  instead of adding one: the client's `RANGE_TO_DAYS` table was a second copy of
+  the server's `_RANGE_DAYS`, kept only to feed the waste endpoint its day count,
+  and is deleted. Driving it caught a defect in the label itself — the 1-year
+  range rendered *"2 Sept – 2 Sept"* because the formatter dropped the year, so
+  the control built to make the window concrete claimed a one-day window; the
+  year now renders whenever the window crosses one. Only **#8** remains.
 - **What:** `REPORTS_PAGE_REVIEW.md` §4.10 lists ten moves; chunk 3 built eight
-  of them. The two left:
-  1. **#2 — make the range control honest about its window.** Show the resolved
-     dates beside it ("2 Aug – 2 Sep") so "30 days" is concrete. Chunk 3 fixed
-     the half of #2 that was a lie (keeps-running-out now takes the range, waste
-     reports the window the server actually used); what's missing is the
-     *dates*. The API already computes `since` per range, so this is one server
-     field away from being honest rather than a client re-deriving the calendar
-     (R-003).
-  2. **#8 — every number is a door.** N6 asked for this and it has never been
+  of them; chunk 5 built #2 (above). The one left:
+  - **#8 — every number is a door.** N6 asked for this and it has never been
      built: a store row should filter shopping-list history to that store, a
      group row should open Stock filtered to that group, the wastage count
      should open the waste log. Chunk 3 landed the *cheap* half — recipe and
      stock-item rows in Kitchen memory are links now — so what remains is the
      aggregate rows, each of which needs a target route that accepts the filter.
-- **Why deferred:** neither is in chunk 3's brief (restructure) or chunk 5's
-  (design-rule sweep: tokens, skeletons, B9, a11y, breakpoints), and #8's real
-  cost is in the *destination* pages accepting a filter param, not in Reports.
-- **Recommended resolution:** later — #2 with chunk 5 (it is a one-line copy
-  change once the server ships the dates); #8 on its own, after chunk 4, since
-  it touches three other pages. Cross-ref: `REPORTS_PAGE_REVIEW.md` §4.10 #2 +
-  #8, [[FU-703]].
+- **Why deferred:** #8 is in neither chunk's brief, and its real cost is in the
+  *destination* pages accepting a filter param, not in Reports at all.
+- **Recommended resolution:** later — #8 on its own, since it touches three
+  other pages. Cross-ref: `REPORTS_PAGE_REVIEW.md` §4.10 #8, [[FU-703]].
 
 ## [OPEN] FU-844 — Two pages have now shipped the same feature-flag race; the guard should be the composable's job
 - **Raised:** 2026-09-02 (Reports chunk 1 — found by driving it live)

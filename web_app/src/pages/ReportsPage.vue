@@ -26,6 +26,7 @@
                     toggle-text-color="white"
                     @update:model-value="loadAll"
                 />
+                <span v-if="windowLabel" class="reports-window">{{ windowLabel }}</span>
                 <q-icon :name="ICONS.info" size="18px" class="reports-caveat">
                     <q-tooltip>
                         Built from your archived shopping lists, stock history and
@@ -48,6 +49,7 @@
                     :savings="savings"
                     :colour-for="colourFor"
                     :failed="spendFailed"
+                    :loading="spendLoading"
                     @retry="loadSpend"
                 />
             </div>
@@ -57,6 +59,8 @@
                 :keeps-out="keepsOut"
                 :waste-failed="slotFailed('waste')"
                 :run-outs-failed="slotFailed('keepsOut')"
+                :waste-loading="loading.waste"
+                :run-outs-loading="loading.keepsOut"
                 @retry-waste="loadWaste"
                 @retry-run-outs="loadKeepsOut"
             />
@@ -67,6 +71,8 @@
                 :most-bought="mostBought"
                 :cooks-failed="slotFailed('mealsCooked')"
                 :bought-failed="slotFailed('mostBought')"
+                :cooks-loading="loading.mealsCooked"
+                :bought-loading="loading.mostBought"
                 @retry-cooks="loadMealsCooked"
                 @retry-bought="loadMostBought"
             />
@@ -85,6 +91,7 @@
                     :range="range"
                     :movers="itemMovers"
                     :failed="slotFailed('itemMovers')"
+                    :loading="loading.itemMovers"
                     @retry="loadItemMovers"
                 />
             </div>
@@ -159,6 +166,7 @@
         type MostBoughtResponse,
         type PriceTrendsResponse,
         type ItemPriceMoversResponse,
+        type RangeWindow,
         type ReportRange,
         type SavingsCapturedResponse,
         type MealsCookedResponse,
@@ -214,6 +222,10 @@
         spendYoY: false,
         waste: false,
         itemMovers: false,
+        // Page chrome rather than a card, but it goes through the same slot
+        // machinery so a failure is recorded rather than swallowed — the label
+        // simply doesn't render, which is the honest degradation.
+        rangeWindow: false,
     });
 
     const storeSpend = ref<StoreSpendResponse | null>(null);
@@ -273,6 +285,15 @@
      *  that renders an axis toggle can't tell the reader "two thirds of me are
      *  trustworthy". Any of the three failing puts the whole card in the error
      *  state, and Try again re-fetches all three. */
+    /** One flag for the whole Spend card: it is one question with an axis
+     *  control, so it cannot say "two thirds of me have arrived". */
+    const spendLoading = computed(
+        () => loading.value.storeSpend
+            || loading.value.spendByCategory
+            || loading.value.spendYoY
+            || loading.value.savings,
+    );
+
     const spendFailed = computed(
         () => slotFailed('storeSpend')
             || slotFailed('spendByCategory')
@@ -382,12 +403,44 @@
         });
     }
 
-    const RANGE_TO_DAYS: Record<ReportRange, number> = {
-        '30d': 30, '90d': 90, '1y': 365, '2y': 730, '5y': 1825, 'all': 3650,
-    };
+    // FU-845 #2 — the resolved window, from the server. This also deleted a
+    // client-side `RANGE_TO_DAYS` table that was a second copy of the server's
+    // own range vocabulary, in a second language (R-003), kept only because the
+    // waste endpoint takes a day count rather than a range token.
+    const rangeWindow = ref<RangeWindow | null>(null);
+    async function loadRangeWindow() {
+        await loadSlot('rangeWindow', async () => {
+            rangeWindow.value = await reportsApi.getRangeWindowAsync(range.value);
+        });
+    }
+    /** "3 Aug – 2 Sep", so "30 days" names the thirty it means. Nothing for
+     *  "all time", which has no start date worth printing.
+     *
+     *  The year is included **only when the window crosses one**, which is not
+     *  a nicety: without it the 1-year range rendered "2 Sept – 2 Sept", so the
+     *  control meant to make the window concrete said the window was a single
+     *  day. Caught by switching ranges in the browser. */
+    const windowLabel = computed(() => {
+        const w = rangeWindow.value;
+        if (!w || !w.start) return null;
+        const start = new Date(`${w.start}T00:00:00`);
+        const end = new Date(`${w.end}T00:00:00`);
+        const spansYears = start.getFullYear() !== end.getFullYear();
+        const fmt = (d: Date) => d.toLocaleDateString(undefined, {
+            day: 'numeric',
+            month: 'short',
+            ...(spansYears ? { year: 'numeric' } : {}),
+        });
+        return `${fmt(start)} – ${fmt(end)}`;
+    });
+
     async function loadWaste() {
+        // `days` is null for "all time"; the waste report clamps to 365 itself
+        // and reports the window it actually used, so a wide number is safe and
+        // the card renders whatever came back.
+        const days = rangeWindow.value?.days ?? 3650;
         await loadSlot('waste', async () => {
-            waste.value = await wasteApi.getInsightsAsync(RANGE_TO_DAYS[range.value]);
+            waste.value = await wasteApi.getInsightsAsync(days);
         });
     }
 
@@ -426,6 +479,9 @@
     // whole grid said "something here is wrong" without saying what, while the
     // failed card underneath still read as empty.
     async function loadAll() {
+        // The window first: `loadWaste` needs its `days`, and it is the one
+        // fetch the rest depend on rather than merely sit beside.
+        await loadRangeWindow();
         await Promise.all([
             loadStoreSpend(),
             loadSpendByCategory(),
@@ -495,6 +551,12 @@
         gap: var(--space-2);
     }
     .reports-caveat { color: var(--text-secondary); }
+    .reports-window {
+        color: var(--text-secondary);
+        font-size: calc(var(--font-size-sm) * 1rem);
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+    }
     .reports-grid {
         display: grid;
         /* A8's vocabulary — phone <600, tablet 600–1023, desktop ≥1024. The old

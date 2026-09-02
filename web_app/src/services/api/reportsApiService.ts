@@ -219,11 +219,28 @@ export interface SpendYoYResponse {
     rows: SpendYoYCategoryRow[];
 }
 
+export interface RangeWindow {
+    range: ReportRange;
+    /** ISO date the window opens, or null for "all time" — there is no start
+     *  date to name and the epoch would be a worse answer than none. */
+    start: string | null;
+    /** ISO date the window closes (today). */
+    end: string;
+    /** Length in days; null for "all time". Replaces the client-side copy of
+     *  the server's range table (R-003) that used to exist purely to feed the
+     *  waste endpoint, which takes days rather than a range token. */
+    days: number | null;
+}
+
 export default class ReportsApiService {
     private httpClient = new AxiosHttpClient();
 
     getStockValueAsync = (range: ReportRange) =>
         this.httpClient.get<StockValueResponse>(`/reports/stock-value-over-time?range=${range}`);
+
+    /** The dates a range token resolves to. Page chrome, so it is ungated. */
+    getRangeWindowAsync = (range: ReportRange) =>
+        this.httpClient.get<RangeWindow>(`/reports/range-window?range=${range}`);
 
     getSpendByStoreAsync = (range: ReportRange) =>
         this.httpClient.get<StoreSpendResponse>(`/reports/spend-by-store?range=${range}`);

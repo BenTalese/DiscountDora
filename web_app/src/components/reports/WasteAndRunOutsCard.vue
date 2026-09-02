@@ -12,6 +12,28 @@
                 line="I couldn't load your wastage."
                 @retry="emit('retry-waste')"
             />
+            <!-- B10 — shaped like the content below it: a figure, the fixed
+                 five-up reason grid, three rows. Never the empty state, which
+                 is what this rendered for the whole flight of the request. -->
+            <div v-else-if="wasteLoading" class="wr-skeleton">
+                <AppSkeleton type="line" width="40%" height="1.6em" />
+                <div class="wr-reasons">
+                    <AppSkeleton
+                        v-for="n in 5"
+                        :key="n"
+                        type="rect"
+                        height="64px"
+                        radius="var(--radius-md)"
+                    />
+                </div>
+                <AppSkeleton
+                    v-for="n in 3"
+                    :key="`row-${n}`"
+                    type="rect"
+                    height="44px"
+                    radius="var(--radius-md)"
+                />
+            </div>
             <template v-else-if="waste">
                 <div class="wr-summary">
                     <span class="wr-summary__figure">{{ waste.total_events }}</span>
@@ -58,9 +80,9 @@
                 <div v-if="hiddenWastedCount > 0" class="wr-more">
                     + {{ hiddenWastedCount }} more, not shown
                 </div>
-                <div v-if="waste.most_wasted.length === 0" class="dora-empty">
+                <CardEmpty v-if="waste.most_wasted.length === 0" :icon="ICONS.wasted">
                     Nothing wasted in this range — nicely played.
-                </div>
+                </CardEmpty>
             </template>
 
             <!-- ── Ran out before you restocked ───────────────────────── -->
@@ -78,6 +100,15 @@
                 line="I couldn't load your run-outs."
                 @retry="emit('retry-run-outs')"
             />
+            <div v-else-if="runOutsLoading" class="wr-skeleton">
+                <AppSkeleton
+                    v-for="n in 3"
+                    :key="n"
+                    type="rect"
+                    height="44px"
+                    radius="var(--radius-md)"
+                />
+            </div>
             <ul v-else-if="runOutRows.length > 0" class="wr-list">
                 <li v-for="row in runOutRows" :key="row.stock_item_id">
                     <a class="wr-list__name" :href="`#/stock/${row.stock_item_id}`">
@@ -86,9 +117,9 @@
                     <span class="wr-list__count">{{ row.times_out_when_added }}×</span>
                 </li>
             </ul>
-            <div v-else class="dora-empty">
+            <CardEmpty v-else :icon="ICONS.warning_amber">
                 Nothing's been added to a list while out of stock — nicely played.
-            </div>
+            </CardEmpty>
         </template>
     </DashboardCard>
 </template>
@@ -114,6 +145,8 @@
      */
     import { computed } from 'vue';
     import { ICONS } from 'src/style/icons';
+    import AppSkeleton from 'src/components/AppSkeleton.vue';
+    import CardEmpty from 'src/components/CardEmpty.vue';
     import CardLoadError from 'src/components/dashboard/CardLoadError.vue';
     import DashboardCard from 'src/components/dashboard/DashboardCard.vue';
     import type { KeepsRunningOutResponse } from 'src/services/api/reportsApiService';
@@ -124,7 +157,14 @@
         keepsOut: KeepsRunningOutResponse | null;
         wasteFailed?: boolean;
         runOutsFailed?: boolean;
-    }>(), { wasteFailed: false, runOutsFailed: false });
+        wasteLoading?: boolean;
+        runOutsLoading?: boolean;
+    }>(), {
+        wasteFailed: false,
+        runOutsFailed: false,
+        wasteLoading: false,
+        runOutsLoading: false,
+    });
 
     const emit = defineEmits<{
         (e: 'retry-waste'): void;
@@ -169,6 +209,11 @@
 </script>
 
 <style scoped lang="scss">
+    .wr-skeleton {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-2);
+    }
     .wr-summary {
         display: flex;
         align-items: baseline;
@@ -198,7 +243,7 @@
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        gap: 2px;
+        gap: var(--space-1);
         padding: var(--space-2) var(--space-1);
         background: var(--surface-sunken);
         border-radius: var(--radius-md);
@@ -252,6 +297,15 @@
         white-space: nowrap;
     }
     a.wr-list__name:hover { text-decoration: underline; }
+    /* A6 — "focus is always visible… this is not optional". Measured on the
+       running page: a focused row link computed `outline-style: none`, so
+       keyboard users had no indicator at all on any row of this card. The ring
+       is the app's own idiom (`--focus-ring`, 2px, offset 2). */
+    .wr-list__name:focus-visible {
+        outline: 2px solid var(--focus-ring);
+        outline-offset: 2px;
+        border-radius: var(--radius-sm);
+    }
     .wr-list__count {
         color: var(--text-secondary);
         font-size: calc(var(--font-size-sm) * 1rem);

@@ -20,9 +20,16 @@
                 @update:model-value="onSelection"
             />
         </div>
-        <div v-if="loading" class="pt-loading">
-            <AppSpinner size="32px" />
-        </div>
+        <!-- B10 — a chart-shaped block, not a spinner. The rule is explicit
+             that an async surface over 150ms shows a skeleton shaped like its
+             content and "never a blank pane"; a centred spinner in a 280px box
+             is the blank pane with a moving dot in it. -->
+        <AppSkeleton
+            v-if="loading"
+            type="rect"
+            height="280px"
+            radius="var(--radius-md)"
+        />
         <CardLoadError
             v-else-if="failed"
             line="I couldn't load these price trends."
@@ -36,9 +43,9 @@
                 legend
             />
         </div>
-        <div v-else class="dora-empty">
+        <CardEmpty v-else :icon="ICONS.query_stats">
             Pick a product to chart its unit price over time.
-        </div>
+        </CardEmpty>
     </DashboardCard>
 </template>
 
@@ -63,7 +70,8 @@
      */
     import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
     import { ICONS } from 'src/style/icons';
-    import AppSpinner from 'src/components/AppSpinner.vue';
+    import AppSkeleton from 'src/components/AppSkeleton.vue';
+    import CardEmpty from 'src/components/CardEmpty.vue';
     import CardLoadError from 'src/components/dashboard/CardLoadError.vue';
     import DashboardCard from 'src/components/dashboard/DashboardCard.vue';
     import PriceHistoryChart from 'src/components/PriceHistoryChart.vue';
@@ -143,11 +151,5 @@
     .pt-chart {
         min-height: 220px;
         overflow-x: auto;
-    }
-    .pt-loading {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: var(--space-6);
     }
 </style>

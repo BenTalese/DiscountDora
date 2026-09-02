@@ -159,6 +159,21 @@ data the seed doesn't have, or an eye rather than an assertion:
       padding app-wide (FU-814 item 4) — confirm the dashboard *and* Reports
       both still look right to you, in a dark theme as well as a light one.
 
+## Reports — chunk 5, the design sweep (2026-09-02)
+
+Driven live at :5171: every card now shows a skeleton instead of a false empty
+state while loading (re-measured — zero false empties), the ten empty states
+carry B9's muted icon, a real Tab press lands a visible `2px` focus ring on the
+row links, the cook chart carries `role="img"` + a generated summary, and the
+range label reads correctly across all five bounded ranges plus "All time".
+Two things want your eye rather than an assertion:
+
+- [ ] **The mascot, back where you had it.** The hero and welcome-note mascots
+      are on 2px / 1px padding again (the chunk-6 sweep had doubled and
+      quadrupled them). Confirm both look centred to you.
+- [ ] **The skeletons.** Throttle or just watch a cold load — do the outlines
+      match what lands, or does anything visibly jump when the data arrives?
+
 ## Shopping list — receipt lightbox (2026-09-01)
 
 Only affordance in the v4 cutover audit with no live evidence — the seed ships

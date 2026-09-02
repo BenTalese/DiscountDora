@@ -141,6 +141,40 @@ def _range_days(raw: str | None) -> int | None:
     return _RANGE_DAYS.get(token, 30)
 
 
+@REPORTS_ROUTER.route("/range-window", methods=["GET"])
+def range_window():
+    """The dates a range token actually resolves to, plus its length in days.
+
+    FU-845 #2 / §4.10.2 — the picker said "30 days" and the page left the reader
+    to guess which thirty. It now shows "2 Aug – 2 Sep" beside the control, and
+    the dates come from here rather than being re-derived in the browser.
+
+    Not a field on the nine report responses: the window is a property of the
+    **range parameter**, not of any one report, and shipping it nine times per
+    page load would be nine copies of one fact. Ungated on purpose — the range
+    control is page chrome and exists on a money-off install.
+
+    It also removes a real R-003 duplication rather than adding one: the client
+    carried its own `RANGE_TO_DAYS` table — a second copy of `_RANGE_DAYS`, in a
+    second language — purely to convert the picked range into the day count the
+    waste endpoint takes. `days` here replaces it.
+    """
+    raw = request.args.get("range", "30d")
+    since = _parse_range(raw)
+    now = datetime.now(timezone.utc)
+    return ok({
+        "range": raw,
+        # None for "all time" — there is no start date to name, and inventing
+        # the epoch would be worse than saying nothing.
+        "start": since.date().isoformat() if since is not None else None,
+        "end": now.date().isoformat(),
+        # `_range_days` returns None for "all"; the waste report clamps to 365
+        # itself and reports the window it actually used, so the client hands it
+        # a wide number and renders whatever comes back.
+        "days": _range_days(raw),
+    })
+
+
 def _bucket_size_days(since: datetime | None) -> int:
     """Pick a day-bucket size that keeps the time series readable.
     30d → daily, 90d → daily, 1y → weekly. 2y/5y/all-time → monthly.

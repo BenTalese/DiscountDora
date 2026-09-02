@@ -300,7 +300,9 @@
         z-index: 1;
         padding: 4px 4px 4px 16px;
         background: var(--surface-elevated);
-        border-bottom: 1px solid var(--border-subtle);
+        /* R-060: `--border-subtle` is undeclared. A6: an in-panel separator is
+           `--divider`, not a border token. */
+        border-bottom: 1px solid var(--divider);
     }
     .base-select__dialog-title {
         font-size: 0.875rem;

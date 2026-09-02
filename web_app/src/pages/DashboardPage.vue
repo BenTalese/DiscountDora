@@ -121,8 +121,23 @@
             />
         </div>
 
+        <!-- FU-840 / §3.13 — the banner carries its own Retry. Its copy used to
+             say "Try refreshing", which pointed at the manual refresh button that
+             D3 deliberately removed; and when the summary fails the whole grid
+             renders nothing (every card reads off `summary`), so this banner was
+             the only thing on the page with no way forward. -->
         <q-banner v-if="loadError" class="dora-bg-negative-soft text-negative q-mb-md" dense rounded>
             {{ loadError }}
+            <template #action>
+                <BaseButton
+                    variant="ghost"
+                    dense
+                    :icon="ICONS.refresh"
+                    label="Try again"
+                    :loading="loading"
+                    @click="loadAll"
+                />
+            </template>
         </q-banner>
 
         <!-- D1: the 24h skip-reminder and the day's welcome share one warm
@@ -187,7 +202,8 @@
                     variant="icon"
                     size="sm"
                     :icon="ICONS.close"
-                    @click="welcomeDismissed = true"
+                    aria-label="Hide Dora's note for today"
+                    @click="dismissWelcome"
                 >
                     <q-tooltip>Hide for today</q-tooltip>
                 </BaseButton>
@@ -203,10 +219,14 @@
         <div
             v-if="loading && !summary"
             key="dash-loading"
-            class="row q-col-gutter-md dora-cards"
+            class="row q-col-gutter-lg dora-cards"
             aria-hidden="true"
         >
-            <div v-for="n in 4" :key="n" class="col-12 col-lg-6">
+            <!-- Skeleton placeholders take the same half-width shape the real
+                 cards do, so the loading grid settles into the loaded one
+                 rather than reflowing (D-007). Four is an even count, so it
+                 needs no parity fix of its own. -->
+            <div v-for="n in 4" :key="n" :class="CARD_COL_HALF">
                 <DashboardCard>
                     <template #title>
                         <AppSkeleton type="line" width="45%" />
@@ -218,7 +238,9 @@
             </div>
         </div>
 
-        <div v-else-if="summary" key="dash-content" class="row q-col-gutter-md dora-cards">
+        <!-- `q-col-gutter-lg` is 24px = `--space-6`, which is what B4 specifies
+             between sibling cards; this grid was on `-md` (16px). -->
+        <div v-else-if="summary" key="dash-content" class="row q-col-gutter-lg dora-cards">
             <!-- Zone band headers (Phase 2). Full-width flex items whose CSS
                  `order` places each just before its zone's cards, forcing a
                  line break so the cards below read as a labelled band. Shown
@@ -240,105 +262,16 @@
                  different pattern from R-029 (hide-when-off) — a happy zero
                  isn't an off-state, so the card stays. -->
             <div
-                v-if="isCardVisible('attention')"
-                class="col-12 col-lg-6"
+                v-if="cardRendered('attention')"
+                :class="cardCol('attention')"
                 :style="{ order: cardCssOrder('attention') }"
             >
-                <DashboardCard :icon="ICONS.notifications_active" title="Needs your attention">
-                    <template #action>
-                        <router-link
-                            v-if="alerts.length > 0"
-                            class="dora-card-action dora-card-link"
-                            to="/alerts"
-                        >
-                            All {{ alerts.length }} →
-                        </router-link>
-                    </template>
-                    <div v-if="topAlerts.length === 0" class="dora-empty dora-empty-ok">
-                        <q-icon :name="ICONS.check_circle" size="18px" class="q-mr-xs" />
-                        All clear — nothing needs your attention right now.
-                    </div>
-                    <template v-else>
-                        <!-- D6 top section: a by-kind summary so you see the
-                             *shape* of what's wrong at a glance ("5 expiring
-                             soon", "3 out of stock") before the detail rows.
-                             Each chip opens the alerts control page. -->
-                        <div class="dora-alert-summary">
-                            <router-link
-                                v-for="g in alertKindSummary"
-                                :key="g.kind"
-                                to="/alerts"
-                                class="dora-alert-chip"
-                            >
-                                <q-icon
-                                    :name="alertIconFor(g.kind)"
-                                    :color="alertColorFor(g.severity)"
-                                    size="16px"
-                                />
-                                <span class="dora-alert-chip-num">{{ g.count }}</span>
-                                <span class="dora-alert-chip-label">{{ kindTheme(g.kind) }}</span>
-                            </router-link>
-                        </div>
-
-                        <!-- D6 bottom section: a peek at the top few, most-urgent
-                             first, with the inline quick-actions. -->
-                        <ul class="dora-attn-list">
-                            <li
-                                v-for="p in peekAlerts"
-                                :key="p.alert.alert_id"
-                                class="dora-attn-row"
-                            >
-                                <span
-                                    class="dora-attn-dot"
-                                    :class="`dora-attn-dot-${p.alert.severity}`"
-                                />
-                                <q-icon
-                                    :name="alertIconFor(p.alert.kind)"
-                                    :color="alertColorFor(p.alert.severity)"
-                                    size="18px"
-                                />
-                                <!-- a11y: real <router-link> when the alert has a
-                                     deep-link target (replaces the old href="#"
-                                     handler). Stock alerts link the item name;
-                                     non-stock nudges link the message text. -->
-                                <router-link
-                                    v-if="p.alert.stock_item_name && p.link"
-                                    :to="p.link"
-                                    class="dora-attn-name"
-                                >
-                                    {{ p.alert.stock_item_name }}
-                                </router-link>
-                                <span v-else-if="p.alert.stock_item_name" class="dora-attn-name">
-                                    {{ p.alert.stock_item_name }}
-                                </span>
-                                <router-link
-                                    v-if="!p.alert.stock_item_name && p.link"
-                                    :to="p.link"
-                                    class="dora-attn-msg dora-attn-msg-link"
-                                >
-                                    {{ p.alert.message }}
-                                </router-link>
-                                <span v-else class="dora-attn-msg">{{ p.alert.message }}</span>
-                                <span class="dora-attn-actions">
-                                    <BaseButton
-                                        v-for="a in alertActionsFor(p.alert.kind)"
-                                        :key="a.action"
-                                        variant="ghost"
-                                        dense
-                                        size="sm"
-                                        :icon="a.icon"
-                                        :label="a.label"
-                                        @click="applyAlertAction(p.alert, a.action)"
-                                    />
-                                </span>
-                            </li>
-                        </ul>
-
-                        <router-link to="/alerts" class="dora-alert-seeall">
-                            See all alerts →
-                        </router-link>
-                    </template>
-                </DashboardCard>
+                <AttentionCard
+                    :alerts="alerts"
+                    :failed="slotFailed('alerts')"
+                    @retry="loadAlerts"
+                    @action="applyAlertAction"
+                />
             </div>
 
             <!-- ───── Draft my shop (FU-351 / P6-10) ──────────────────────── -->
@@ -348,8 +281,8 @@
                  ready to edit before they head out. Component owns its own
                  fetch + navigate + toast branches. -->
             <div
-                v-if="isCardVisible('draft_shop')"
-                class="col-12 col-sm-6 col-lg-6"
+                v-if="cardRendered('draft_shop')"
+                :class="cardCol('draft_shop')"
                 :style="{ order: cardCssOrder('draft_shop') }"
             >
                 <DraftShopCard />
@@ -357,204 +290,33 @@
 
             <!-- ───── Primary shopping list (P12) ─────────────────────────── -->
             <div
-                v-if="isCardVisible('primary_list') && quickAddTargetSummary"
-                class="col-12 col-sm-6 col-lg-6"
+                v-if="cardRendered('primary_list')"
+                :class="cardCol('primary_list')"
                 :style="{ order: cardCssOrder('primary_list') }"
             >
-                <DashboardCard :icon="ICONS.shopping_cart" title="Primary shopping list">
-                    <template #action>
-                        <router-link
-                            class="dora-card-action dora-card-link"
-                            :to="`/shopping-lists/${quickAddTargetSummary.shopping_list_id}`"
-                        >
-                            Open list →
-                        </router-link>
-                    </template>
-                    <div class="dora-primary-list-name">
-                        {{ quickAddTargetSummary.display_name }}
-                    </div>
-                    <div v-if="primaryListStats" class="dora-stat-grid q-mt-sm">
-                        <div class="dora-stat">
-                            <div class="dora-stat-num">
-                                <AnimatedNumber :value="primaryListStats.unticked" />
-                            </div>
-                            <div class="dora-stat-label">to grab</div>
-                        </div>
-                        <div class="dora-stat">
-                            <div class="dora-stat-num">
-                                <AnimatedNumber :value="primaryListStats.remaining" :prefix="dashCurrencySymbol" />
-                            </div>
-                            <div class="dora-stat-label">remaining</div>
-                        </div>
-                        <div
-                            v-if="primaryListStats.savings > 0"
-                            class="dora-stat dora-stat-ok"
-                        >
-                            <div class="dora-stat-num">
-                                <AnimatedNumber :value="primaryListStats.savings" :prefix="dashCurrencySymbol" />
-                            </div>
-                            <div class="dora-stat-label">saved vs RRP</div>
-                        </div>
-                    </div>
-                    <!-- D-007 (DR-8): skeleton mirrors the stat grid so the
-                         totals fade into reserved space instead of replacing a
-                         "Loading totals…" string and shoving the layout. -->
-                    <div v-else class="dora-stat-grid q-mt-sm" aria-hidden="true">
-                        <div v-for="n in 2" :key="n" class="dora-stat">
-                            <AppSkeleton type="line" width="34px" height="1.5em" class="dash-skel-line" />
-                            <AppSkeleton type="line" width="44px" />
-                        </div>
-                    </div>
-                    <router-link
-                        v-if="otherActiveListCount > 0"
-                        class="dora-card-footer-link"
-                        to="/shopping-lists"
-                    >
-                        +{{ otherActiveListCount }} other active
-                        {{ otherActiveListCount === 1 ? 'list' : 'lists' }} →
-                    </router-link>
-                </DashboardCard>
-            </div>
-            <div
-                v-else-if="isCardVisible('primary_list') && !quickAddTargetSummary"
-                class="col-12 col-sm-6 col-lg-6"
-                :style="{ order: cardCssOrder('primary_list') }"
-            >
-                <DashboardCard :icon="ICONS.shopping_cart" title="Primary shopping list" :to="'/shopping-lists'">
-                    <template #action>
-                        <span class="dora-card-action">Pick one →</span>
-                    </template>
-                    <div class="dora-empty">
-                        No primary set — the cart button needs one to one-tap items in.
-                    </div>
-                </DashboardCard>
-            </div>
-
-            <!-- ───── Grocery budget (P2-05) ──────────────────────────────── -->
-            <div
-                v-if="isCardVisible('budget') && budgetStatus"
-                class="col-12 col-sm-6 col-lg-6"
-                :style="{ order: cardCssOrder('budget') }"
-            >
-                <DashboardCard :icon="ICONS.savings" :to="'/settings/money'">
-                    <template #title>
-                        {{ budgetStatus.enabled ? 'Grocery budget' : 'Grocery spend this ' + budgetStatus.period.replace('ly', '') }}
-                    </template>
-                    <template #action>
-                        <span class="dora-card-action">
-                            {{ budgetStatus.enabled ? 'Settings →' : 'Set a budget →' }}
-                        </span>
-                    </template>
-                    <div v-if="budgetStatus.enabled" class="dora-budget-body">
-                        <div class="dora-budget-headline">
-                            <span
-                                class="dora-budget-spent"
-                                :class="{ 'text-negative': budgetStatus.over_budget }"
-                            >
-                                {{ formatMoney(budgetStatus.spent) }}
-                            </span>
-                            <span class="dora-budget-of">
-                                of {{ formatMoney(budgetStatus.amount!) }}
-                            </span>
-                            <span
-                                class="dora-budget-remaining"
-                                :class="budgetStatus.over_budget ? 'text-negative' : 'dora-text-muted'"
-                            >
-                                {{
-                                    budgetStatus.over_budget
-                                        ? `${formatMoney(Math.abs(budgetStatus.remaining ?? 0))} over`
-                                        : `${formatMoney(budgetStatus.remaining ?? 0)} left`
-                                }}
-                            </span>
-                        </div>
-                        <q-linear-progress
-                            :value="Math.min(1, budgetStatus.spent / (budgetStatus.amount || 1))"
-                            :color="budgetStatus.over_budget ? 'negative' : 'primary'"
-                            class="q-mt-sm"
-                            size="8px"
-                            rounded
-                        />
-                        <div
-                            v-if="budgetStatus.projected_active > 0"
-                            class="text-caption dora-text-muted q-mt-xs"
-                        >
-                            +{{ formatMoney(budgetStatus.projected_active) }} in active lists
-                        </div>
-                        <!-- FU-451 — budget-defense swaps signpost. Deep-links to
-                             the planner where the Suggestions panel lives. -->
-                        <div
-                            v-if="swapSummary"
-                            class="dora-swap-bullet q-mt-sm"
-                            @click.stop="router.push('/meal-plans')"
-                        >
-                            <q-icon :name="ICONS.savings" size="16px" class="q-mr-xs" />
-                            <strong>Save {{ formatMoney(swapSummary.saved) }} this week</strong>
-                            — {{ swapSummary.count }}
-                            {{ swapSummary.count === 1 ? 'swap' : 'swaps' }} ready ·
-                            <span class="dora-swap-bullet__cta">See suggestions →</span>
-                        </div>
-                    </div>
-                    <div v-else class="dora-empty">
-                        {{ formatMoney(budgetStatus.spent) }} spent so far. Set a target
-                        in Settings to see how you're tracking.
-                    </div>
-                </DashboardCard>
+                <PrimaryListCard
+                    :list="quickAddTargetSummary"
+                    :stats="primaryListStats"
+                    :other-active-count="otherActiveListCount"
+                    :failed="slotFailed('primary_list')"
+                    @retry="loadPrimaryListDetail"
+                />
             </div>
 
             <!-- ───── Dora suggests (P2-04) ───────────────────────────────── -->
             <!-- Calm empty state instead of vanishing when Dora has
                  nothing to suggest — separate pattern from R-029. -->
             <div
-                v-if="isCardVisible('suggestions')"
-                class="col-12 col-sm-6 col-lg-6"
+                v-if="cardRendered('suggestions')"
+                :class="cardCol('suggestions')"
                 :style="{ order: cardCssOrder('suggestions') }"
             >
-                <DashboardCard :icon="ICONS.dora_voice" title="Dora suggests">
-                    <template #action>
-                        <span
-                            v-if="suggestionStore.count > 2"
-                            class="dora-card-action"
-                        >
-                            +{{ suggestionStore.count - 2 }} more in chat
-                        </span>
-                    </template>
-                    <div v-if="suggestionStore.count === 0" class="dora-empty dora-empty-ok">
-                        <q-icon :name="ICONS.check_circle" size="18px" class="q-mr-xs" />
-                        Nothing to suggest right now — you're on top of things.
-                    </div>
-                    <div v-else class="dora-suggest-list">
-                        <div
-                            v-for="suggestion in suggestionStore.suggestions.slice(0, 2)"
-                            :key="`${suggestion.kind}:${suggestion.dedup_key}`"
-                            class="dora-suggest-row"
-                            :class="`dora-suggest-${suggestion.severity}`"
-                        >
-                            <div class="dora-suggest-title">
-                                {{ suggestion.title }}
-                            </div>
-                            <div class="dora-suggest-body">
-                                {{ suggestion.body }}
-                            </div>
-                            <div class="row q-gutter-xs q-mt-xs">
-                                <BaseButton
-                                    v-if="suggestion.primary_action"
-                                    variant="primary"
-                                    dense
-                                    size="sm"
-                                    :label="suggestion.primary_action.label"
-                                    @click="acceptSuggestion(suggestion)"
-                                />
-                                <BaseButton
-                                    variant="ghost"
-                                    dense
-                                    size="sm"
-                                    label="Dismiss"
-                                    @click="dismissSuggestion(suggestion)"
-                                />
-                            </div>
-                        </div>
-                    </div>
-                </DashboardCard>
+                <SuggestionsCard
+                    :suggestions="suggestionStore.suggestions"
+                    :count="suggestionStore.count"
+                    @accept="acceptSuggestion"
+                    @dismiss="dismissSuggestion"
+                />
             </div>
 
             <!-- C-waste W5 — the standalone "Use soon" card was removed
@@ -564,130 +326,20 @@
 
             <!-- ───── Next to cook (FU-298: meal-plan-driven, ready/missing) ─ -->
             <div
-                v-if="isCardVisible('cookable')"
-                class="col-12 col-sm-6 col-lg-6"
+                v-if="cardRendered('cookable')"
+                :class="cardCol('cookable')"
                 :style="{ order: cardCssOrder('cookable') }"
             >
-                <DashboardCard :icon="ICONS.restaurant_menu">
-                    <template #title>
-                        Next to cook
-                    </template>
-                    <template #action>
-                        <router-link
-                            class="dora-card-action dora-card-link"
-                            to="/meal-plans"
-                        >
-                            Meal plan →
-                        </router-link>
-                    </template>
-                    <ul v-if="nextToCook.length > 0" class="dora-cook-list">
-                        <li
-                            v-for="entry in nextToCook"
-                            :key="`${entry.recipe_id}-${entry.scheduled_for}-${entry.slot}`"
-                            class="dora-cook-row dora-cook-row--with-badge"
-                        >
-                            <router-link
-                                class="dora-cook-name"
-                                :to="`/cookbook/${entry.recipe_id}`"
-                            >
-                                {{ entry.recipe_name }}
-                            </router-link>
-                            <span class="dora-cook-meta">
-                                {{ formatEntryWhen(entry) }}
-                                <span v-if="entry.servings">
-                                    · serves {{ entry.servings }}
-                                </span>
-                            </span>
-                            <q-badge
-                                :color="nextToCookBadgeColor(entry)"
-                                :label="nextToCookBadgeLabel(entry)"
-                                class="dora-cook-badge"
-                            />
-                            <BaseButton
-                                variant="ghost"
-                                dense
-                                size="sm"
-                                :icon="ICONS.restaurant"
-                                label="Cook"
-                                @click="goTo(`/cookbook/${entry.recipe_id}/cook`)"
-                            />
-                        </li>
-                    </ul>
-                    <div v-else class="dora-empty">
-                        Nothing planned for the next week.
-                        <router-link class="dora-empty-cta" to="/meal-plans">Plan a meal →</router-link>
-                    </div>
-                </DashboardCard>
-            </div>
-
-            <!-- ───── Best deals on saved products (P12) ──────────────────── -->
-            <div
-                v-if="isCardVisible('best_deals')"
-                class="col-12 col-sm-6 col-lg-6"
-                :style="{ order: cardCssOrder('best_deals') }"
-            >
-                <DashboardCard :icon="ICONS.local_offer" title="Best deals on your saved products">
-                    <template #action>
-                        <router-link
-                            class="dora-card-action dora-card-link"
-                            to="/my-products"
-                        >
-                            My products →
-                        </router-link>
-                    </template>
-                    <ul v-if="bestDeals.length > 0" class="dora-deal-list">
-                        <li
-                            v-for="p in bestDeals"
-                            :key="p.product_id"
-                            class="dora-deal-row"
-                        >
-                            <q-avatar rounded size="36px" class="dora-bg-sunken dora-deal-img">
-                                <img
-                                    v-if="p.has_image"
-                                    :src="`/api/products/${p.product_id}/image`"
-                                    :alt="p.name"
-                                />
-                                <q-icon v-else :name="ICONS.shopping_bag" size="18px" />
-                            </q-avatar>
-                            <div class="dora-deal-text">
-                                <div class="dora-deal-name">{{ p.name }}</div>
-                                <div class="dora-deal-meta">
-                                    {{ p.store_name }}
-                                    <span v-if="p.linked_stock_item_id">
-                                        ·
-                                        <router-link
-                                            class="text-primary"
-                                            :to="`/stock/${p.linked_stock_item_id}`"
-                                        >
-                                            {{ p.linked_stock_item_name }}
-                                        </router-link>
-                                    </span>
-                                </div>
-                            </div>
-                            <div class="dora-deal-price">
-                                <span class="dora-deal-now">
-                                    {{ formatMoney(p.price_now) }}
-                                </span>
-                                <span class="dora-deal-was">
-                                    {{ formatMoney(p.price_was) }}
-                                </span>
-                            </div>
-                            <q-badge class="dora-deal-badge" color="negative" text-color="white">
-                                {{ discountPercent(p) }}% off
-                            </q-badge>
-                        </li>
-                    </ul>
-                    <div v-else class="dora-empty">
-                        Nothing on special among your saved products right now.
-                        <a class="dora-empty-cta" role="button" tabindex="0" @click="openProductSearch(router)" @keydown.enter="openProductSearch(router)">Hunt for deals →</a>
-                    </div>
-                </DashboardCard>
+                <NextToCookCard
+                    :entries="nextToCook"
+                    @cook="(id: string) => goTo(`/cookbook/${id}/cook`)"
+                />
             </div>
 
             <!-- ───── Kitchen health (P8-08 Dora Score) ─────────────────── -->
             <div
-                v-if="isCardVisible('dora_score')"
-                class="col-12 col-sm-6 col-lg-4"
+                v-if="cardRendered('dora_score')"
+                :class="cardCol('dora_score')"
                 :style="{ order: cardCssOrder('dora_score') }"
             >
                 <DoraScoreCard />
@@ -699,8 +351,8 @@
                  an empty div when isCardVisible is true, so we double-
                  guard on the composable's `total` for the wrapper too. -->
             <div
-                v-if="isCardVisible('reconcile_pending') && reconcileTotal > 0"
-                class="col-12 col-sm-6 col-lg-4"
+                v-if="cardRendered('reconcile_pending')"
+                :class="cardCol('reconcile_pending')"
                 :style="{ order: cardCssOrder('reconcile_pending') }"
             >
                 <ReconcilePastMealsChip />
@@ -708,423 +360,134 @@
 
             <!-- ───── Stock card (with donut) ────────────────────────────── -->
             <div
-                v-if="isCardVisible('stock_items')"
-                class="col-12 col-sm-6 col-lg-4"
+                v-if="cardRendered('stock_items')"
+                :class="cardCol('stock_items')"
                 :style="{ order: cardCssOrder('stock_items') }"
             >
-                <!-- the card is no longer a single link; low + out
-                     legend rows / donut segments deep-link to the filtered
-                     stock view (?level_id=…). The "View →" action keeps the
-                     unfiltered pantry link for the "show me everything" case. -->
-                <DashboardCard icon="inventory_2" title="Pantry">
-                    <template #action>
-                        <router-link class="dora-card-action dora-card-link" to="/stock">
-                            View →
-                        </router-link>
-                    </template>
-                    <div class="dora-stock-body">
-                        <svg
-                            viewBox="0 0 36 36"
-                            class="dora-donut"
-                            :aria-label="`${summary.stock_items.total} stock items: ${stockInStockCount} in stock, ${summary.stock_items.low_stock} low, ${summary.stock_items.out_of_stock} out`"
-                        >
-                            <circle class="dora-donut-track" cx="18" cy="18" r="15.915" />
-                            <circle
-                                v-for="(seg, i) in stockSegments"
-                                :key="seg.label"
-                                cx="18"
-                                cy="18"
-                                r="15.915"
-                                fill="none"
-                                stroke-width="4"
-                                :stroke="seg.colour"
-                                :stroke-dasharray="`${seg.percent} ${100 - seg.percent}`"
-                                :stroke-dashoffset="seg.offset"
-                                :style="{ transitionDelay: `${i * 60}ms`, cursor: seg.link ? 'pointer' : undefined }"
-                                :role="seg.link ? 'link' : undefined"
-                                :tabindex="seg.link ? 0 : undefined"
-                                :aria-label="seg.link ? `View ${seg.label} items` : undefined"
-                                class="dora-donut-seg"
-                                :class="{ 'dora-donut-seg--link': seg.link }"
-                                @click="seg.link && goTo(seg.link)"
-                                @keydown.enter="seg.link && goTo(seg.link)"
-                                @keydown.space.prevent="seg.link && goTo(seg.link)"
-                            />
-                            <text x="18" y="17" text-anchor="middle" class="dora-donut-big">
-                                {{ summary.stock_items.total }}
-                            </text>
-                            <text x="18" y="22.5" text-anchor="middle" class="dora-donut-sub">items</text>
-                        </svg>
-                        <ul class="dora-legend">
-                            <li>
-                                <span class="dora-dot dora-dot-ok"></span>
-                                <span class="dora-legend-num">{{ stockInStockCount }}</span>
-                                <span class="dora-legend-label">in stock</span>
-                            </li>
-                            <li>
-                                <router-link class="dora-legend-link" :to="stockLowLink">
-                                    <span class="dora-dot dora-dot-warn"></span>
-                                    <span class="dora-legend-num">{{ summary.stock_items.low_stock }}</span>
-                                    <span class="dora-legend-label">running low</span>
-                                </router-link>
-                            </li>
-                            <li>
-                                <router-link class="dora-legend-link" :to="stockOutLink">
-                                    <span class="dora-dot dora-dot-bad"></span>
-                                    <span class="dora-legend-num">{{ summary.stock_items.out_of_stock }}</span>
-                                    <span class="dora-legend-label">out</span>
-                                </router-link>
-                            </li>
-                        </ul>
-                    </div>
-                </DashboardCard>
+                <PantryDonutCard
+                    :total="summary.stock_items.total"
+                    :in-stock="stockInStockCount"
+                    :low="summary.stock_items.low_stock"
+                    :out="summary.stock_items.out_of_stock"
+                    :segments="stockSegments"
+                    :low-link="stockLowLink"
+                    :out-link="stockOutLink"
+                    @open="goTo"
+                />
             </div>
 
-            <!-- ───── Meal plan card (with 7-day strip) ──────────────────── -->
+            <!-- ───── What's coming (FU-818: the week strip + the fortnight
+                 calendar, merged) ────────────────────────────────────────────
+                 These were two cards rendering the same days from two DIFFERENT
+                 endpoints — the strip from `/dashboard/summary`'s 7-day
+                 `upcoming_entries`, the grid from `/alerts/upcoming`'s 14 — so
+                 the overlapping week could disagree on one screen with no way
+                 to tell which was right (R-003). Now one card, one source, with
+                 a 7/14-day range toggle; 7 is the default because a week is the
+                 planning unit.
+                 D-012 also applies: a 7-day pip strip and a 14-day dot grid are
+                 the same widget at two zoom levels, so they were never two
+                 cards' worth of information.
+                 The old "Next up" callout is gone with them — it restated the
+                 hero line verbatim (§3.2), which is where that sentence lives.
+                 Fed by `/alerts/upcoming`, the strip also gains expiry and
+                 shopping dots, which it never had. -->
             <div
-                v-if="isCardVisible('meal_plan')"
-                class="col-12 col-lg-8"
+                v-if="cardRendered('meal_plan')"
+                :class="cardCol('meal_plan')"
                 :style="{ order: cardCssOrder('meal_plan') }"
             >
-                <DashboardCard :icon="ICONS.calendar_month" title="The week ahead" :to="'/meal-plans'">
-                    <template #action>
-                        <span class="dora-card-action">Plan →</span>
-                    </template>
-                    <div v-if="nextEntry" class="dora-next-up">
-                        <div class="dora-next-up-label">Next up</div>
-                        <div class="dora-next-up-meal">{{ nextEntry.recipe_name }}</div>
-                        <div class="dora-next-up-meta">
-                            {{ formatRelativeDay(nextEntry.scheduled_for) }} ·
-                            {{ nextEntry.slot }} · ×{{ nextEntry.servings }}
-                        </div>
-                    </div>
-                    <div v-else class="dora-empty">
-                        Nothing planned. <span class="dora-empty-cta">Set up a week →</span>
-                    </div>
-
-                    <div class="dora-strip" role="list">
-                        <div
-                            v-for="day in weekStrip"
-                            :key="day.iso"
-                            class="dora-strip-day"
-                            :class="{ 'is-today': day.isToday, 'has-meals': day.entries.length > 0 }"
-                            role="listitem"
-                        >
-                            <div class="dora-strip-dow">{{ day.dow }}</div>
-                            <div class="dora-strip-num">{{ day.dayNum }}</div>
-                            <div class="dora-strip-meals">
-                                <span
-                                    v-for="entry in day.entries.slice(0, 2)"
-                                    :key="entry.recipe_name + entry.slot"
-                                    class="dora-strip-pip"
-                                    :title="`${entry.recipe_name} (${entry.slot})`"
-                                />
-                                <span
-                                    v-if="day.entries.length > 2"
-                                    class="dora-strip-more"
-                                >+{{ day.entries.length - 2 }}</span>
-                            </div>
-                        </div>
-                    </div>
-                </DashboardCard>
-            </div>
-
-            <!-- ───── This fortnight calendar (Phase 6 / D7) ──────────────── -->
-            <div
-                v-if="isCardVisible('calendar')"
-                class="col-12"
-                :style="{ order: cardCssOrder('calendar') }"
-            >
-                <DashboardCard :icon="ICONS.calendar_month" title="This fortnight">
-                    <template #action>
-                        <div class="dora-cal-legend">
-                            <span class="dora-cal-leg"><span class="dora-cal-dot dot-meal" /> meals</span>
-                            <span class="dora-cal-leg"><span class="dora-cal-dot dot-expiry" /> expiry</span>
-                            <span class="dora-cal-leg"><span class="dora-cal-dot dot-shopping" /> shopping</span>
-                        </div>
-                    </template>
-                    <template v-if="calendarCells.length > 0">
-                        <div class="dora-cal-grid" role="grid">
-                            <button
-                                v-for="cell in calendarCells"
-                                :key="cell.iso"
-                                type="button"
-                                class="dora-cal-cell"
-                                :class="{
-                                    'is-today': cell.isToday,
-                                    'is-selected': cell.iso === selectedCalDate,
-                                    'has-events': cell.hasMeal || cell.hasExpiry || cell.hasShopping,
-                                }"
-                                @click="selectCalDate(cell.iso)"
-                            >
-                                <span class="dora-cal-num">{{ cell.dayNum }}</span>
-                                <span class="dora-cal-dots">
-                                    <span v-if="cell.hasMeal" class="dora-cal-dot dot-meal" />
-                                    <span v-if="cell.hasExpiry" class="dora-cal-dot dot-expiry" />
-                                    <span v-if="cell.hasShopping" class="dora-cal-dot dot-shopping" />
-                                </span>
-                            </button>
-                        </div>
-                        <div v-if="selectedCalDay" class="dora-cal-detail">
-                            <div class="dora-cal-detail-date">
-                                {{ formatRelativeDay(selectedCalDay.date) }}
-                            </div>
-                            <div v-if="selectedCalDay.meals.length > 0" class="dora-cal-group">
-                                <div class="dora-cal-group-label">Meals</div>
-                                <router-link
-                                    v-for="(m, i) in selectedCalDay.meals"
-                                    :key="`${m.recipe_id}-${m.slot}-${i}`"
-                                    class="dora-cal-item"
-                                    :to="`/cookbook/${m.recipe_id}`"
-                                >
-                                    {{ m.recipe_name }} <span class="dora-cal-slot">· {{ m.slot }}</span>
-                                </router-link>
-                            </div>
-                            <div v-if="selectedCalDay.expiries.length > 0" class="dora-cal-group">
-                                <div class="dora-cal-group-label">Expiring</div>
-                                <router-link
-                                    v-for="e in selectedCalDay.expiries"
-                                    :key="e.stock_item_id"
-                                    class="dora-cal-item"
-                                    :to="`/stock/${e.stock_item_id}`"
-                                >
-                                    {{ e.name }}
-                                </router-link>
-                            </div>
-                            <div v-if="selectedCalDay.shopping.length > 0" class="dora-cal-group">
-                                <div class="dora-cal-group-label">Shopping</div>
-                                <router-link
-                                    v-for="s in selectedCalDay.shopping"
-                                    :key="s.list_id"
-                                    class="dora-cal-item"
-                                    :to="`/shopping-lists/${s.list_id}`"
-                                >
-                                    {{ s.name }}
-                                </router-link>
-                            </div>
-                        </div>
-                        <div v-else class="dora-cal-hint">
-                            Tap a day with dots to see what's on.
-                        </div>
-                    </template>
-                    <div v-else class="dora-empty">
-                        Nothing scheduled in the next fortnight — enjoy the calm.
-                    </div>
-                </DashboardCard>
+                <WhatsComingCard
+                    :cells="calendarCells"
+                    :span="calendarSpan"
+                    :spans="CALENDAR_SPANS"
+                    :span-label="calendarSpanLabel"
+                    :selected="selectedCalDate"
+                    :selected-day="selectedCalDay"
+                    :failed="slotFailed('upcoming')"
+                    @update:span="calendarSpan = $event"
+                    @select="selectCalDate"
+                    @retry="loadUpcoming"
+                />
             </div>
 
             <!-- ───── Restock radar (Phase 5) ─────────────────────────────── -->
             <div
-                v-if="isCardVisible('restock')"
-                class="col-12 col-sm-6 col-lg-6"
+                v-if="cardRendered('restock')"
+                :class="cardCol('restock')"
                 :style="{ order: cardCssOrder('restock') }"
             >
-                <DashboardCard :icon="ICONS.replay" title="Restock radar">
-                    <template #action>
-                        <router-link
-                            v-if="restockItems.length > 0"
-                            class="dora-card-action dora-card-link"
-                            to="/stock"
-                        >
-                            Pantry →
-                        </router-link>
-                    </template>
-                    <ul v-if="restockItems.length > 0" class="dora-cook-list">
-                        <li
-                            v-for="item in restockItems"
-                            :key="item.stock_item_id"
-                            class="dora-cook-row"
-                        >
-                            <router-link class="dora-cook-name" :to="`/stock/${item.stock_item_id}`">
-                                {{ item.name }}
-                            </router-link>
-                            <span class="dora-cook-meta">ran out {{ item.times_out_when_added }}×</span>
-                            <BaseButton
-                                variant="ghost"
-                                dense
-                                size="sm"
-                                :icon="ICONS.shopping_cart"
-                                label="Add"
-                                @click="addRestockToList(item.stock_item_id)"
-                            />
-                        </li>
-                    </ul>
-                    <div v-else class="dora-empty">
-                        Once you've restocked the same things a few times, I'll flag
-                        what to keep an eye on.
-                    </div>
-                </DashboardCard>
+                <RestockRadarCard
+                    :items="restockItems"
+                    :failed="slotFailed('restock')"
+                    @retry="loadKeepsRunningOut"
+                    @add="addRestockToList"
+                />
             </div>
 
             <!-- ───── Savings captured (Phase 4 — Money zone flagship) ────── -->
             <div
-                v-if="isCardVisible('savings')"
-                class="col-12 col-sm-6 col-lg-6"
+                v-if="cardRendered('savings')"
+                :class="cardCol('savings')"
                 :style="{ order: cardCssOrder('savings') }"
             >
-                <DashboardCard :icon="ICONS.savings">
-                    <template #title>
-                        You've saved
-                        <q-icon :name="ICONS.help_outline" size="14px" class="q-ml-xs">
-                            <q-tooltip>
-                                Total savings vs. RRP across every shopping list you
-                                finished in this window. Includes only lines where a
-                                real deal price was captured.
-                            </q-tooltip>
-                        </q-icon>
-                    </template>
-                    <template #action>
-                        <div class="dora-range-toggle">
-                            <button
-                                v-for="r in SAVINGS_RANGES"
-                                :key="r.value"
-                                type="button"
-                                class="dora-range-chip"
-                                :class="{ 'is-active': savingsRange === r.value }"
-                                @click="savingsRange = r.value"
-                            >
-                                {{ r.label }}
-                            </button>
-                        </div>
-                    </template>
-                    <div v-if="savings && savings.total_savings > 0">
-                        <div class="dora-savings-amount">
-                            <AnimatedNumber :value="savings.total_savings" :prefix="dashCurrencySymbol" />
-                        </div>
-                        <div class="dora-savings-sub">vs RRP, {{ savingsRangeLabel }}</div>
-                        <div class="dora-savings-spent">
-                            on {{ formatMoney(savings.total_spent) }} spent across
-                            {{ savings.lists.length }} shop{{ savings.lists.length === 1 ? '' : 's' }}
-                        </div>
-                    </div>
-                    <div v-else class="dora-empty">
-                        Finish a shop and I'll tally what you saved vs RRP.
-                    </div>
-                </DashboardCard>
+                <MoneyCard
+                    :budget="budgetStatus"
+                    :savings="savings"
+                    :swaps="swapSummary"
+                    :range="savingsRange"
+                    :ranges="SAVINGS_RANGES"
+                    :range-label="savingsRangeLabel"
+                    :budget-failed="slotFailed('budget')"
+                    :savings-failed="slotFailed('savings')"
+                    @update:range="savingsRange = $event"
+                    @retry-budget="loadBudget"
+                    @retry-savings="loadSavings"
+                    @open-swaps="router.push('/meal-plans')"
+                />
             </div>
 
             <!-- ───── Spend by store (Phase 4 — opt-in) ───────────────────── -->
             <div
-                v-if="isCardVisible('spend_trend')"
-                class="col-12 col-sm-6 col-lg-6"
+                v-if="cardRendered('spend_trend')"
+                :class="cardCol('spend_trend')"
                 :style="{ order: cardCssOrder('spend_trend') }"
             >
-                <DashboardCard :icon="ICONS.storefront" title="Spend by store">
-                    <template #action>
-                        <span class="dora-card-action">last 30 days</span>
-                    </template>
-                    <ul v-if="topSpendStores.length > 0" class="dora-spend-list">
-                        <li
-                            v-for="row in topSpendStores"
-                            :key="row.store_id ?? row.store"
-                            class="dora-spend-row"
-                        >
-                            <span class="dora-spend-store">{{ row.store }}</span>
-                            <span class="dora-spend-amt">{{ formatMoney(row.spend) }}</span>
-                        </li>
-                    </ul>
-                    <div v-if="topSpendStores.length > 0" class="dora-spend-total">
-                        {{ formatMoney(totalSpend) }} total
-                    </div>
-                    <div v-else class="dora-empty">
-                        Your spend by store shows up once you complete a shop.
-                    </div>
-                </DashboardCard>
+                <SpendByStoreCard
+                    :top="topSpendStores"
+                    :total="spendTotal"
+                    :store-count="spendStoreCount"
+                    :failed="slotFailed('spend')"
+                    @retry="loadSpendByStore"
+                />
             </div>
 
             <!-- ───── Pantry value (Phase 4 — opt-in) ─────────────────────── -->
             <div
-                v-if="isCardVisible('pantry_value')"
-                class="col-12 col-sm-6 col-lg-4"
+                v-if="cardRendered('pantry_value')"
+                :class="cardCol('pantry_value')"
                 :style="{ order: cardCssOrder('pantry_value') }"
             >
-                <DashboardCard :icon="ICONS.inventory" title="Pantry value">
-                    <div v-if="pantryValueLatest !== null">
-                        <div class="dora-stat-num">{{ formatMoney(pantryValueLatest) }}</div>
-                        <div
-                            v-if="pantryValueDelta !== null && pantryValueDelta !== 0"
-                            class="dora-pantry-delta"
-                            :class="pantryValueDelta > 0 ? 'is-up' : 'is-down'"
-                        >
-                            {{ pantryValueDelta > 0 ? '▲' : '▼' }}
-                            {{ formatMoney(Math.abs(pantryValueDelta)) }} over 90 days
-                        </div>
-                        <div
-                            v-if="pantryValue?.estimate_note"
-                            class="text-caption dora-text-muted q-mt-xs"
-                        >
-                            {{ pantryValue.estimate_note }}
-                        </div>
-                    </div>
-                    <div v-else class="dora-empty">
-                        Add prices to your stock items to see what your pantry's worth.
-                    </div>
-                </DashboardCard>
+                <PantryValueCard
+                    :latest="pantryValueLatest"
+                    :delta="pantryValueDelta"
+                    :estimate-note="pantryValue?.estimate_note"
+                    :failed="slotFailed('pantry_value')"
+                    @retry="loadPantryValue"
+                />
             </div>
 
             <!-- ───── Price drops (Phase 4 — Money zone, product-gated) ──── -->
             <div
-                v-if="isCardVisible('price_drops')"
-                class="col-12 col-sm-6 col-lg-6"
+                v-if="cardRendered('price_drops')"
+                :class="cardCol('price_drops')"
                 :style="{ order: cardCssOrder('price_drops') }"
             >
-                <DashboardCard :icon="ICONS.trending_down" title="Price drops">
-                    <template #action>
-                        <router-link
-                            v-if="priceDropRows.length > 0"
-                            class="dora-card-action dora-card-link"
-                            to="/my-products"
-                        >
-                            My products →
-                        </router-link>
-                    </template>
-                    <ul v-if="priceDropRows.length > 0" class="dora-deal-list">
-                        <li
-                            v-for="row in priceDropRows"
-                            :key="row.product_id"
-                            class="dora-deal-row"
-                        >
-                            <q-avatar rounded size="36px" class="dora-bg-sunken dora-deal-img">
-                                <img
-                                    v-if="row.has_image"
-                                    :src="`/api/products/${row.product_id}/image`"
-                                    :alt="row.name"
-                                />
-                                <q-icon v-else :name="ICONS.shopping_bag" size="18px" />
-                            </q-avatar>
-                            <div class="dora-deal-text">
-                                <div class="dora-deal-name">{{ row.name }}</div>
-                                <div class="dora-deal-meta">
-                                    {{ row.store_name }}
-                                    <span v-if="row.linked_stock_item_id">
-                                        ·
-                                        <router-link
-                                            class="text-primary"
-                                            :to="`/stock/${row.linked_stock_item_id}`"
-                                        >
-                                            {{ row.linked_stock_item_name }}
-                                        </router-link>
-                                    </span>
-                                </div>
-                            </div>
-                            <div class="dora-deal-price">
-                                <span class="dora-deal-now">
-                                    {{ formatMoney(row.price_now) }}
-                                </span>
-                                <span class="dora-deal-was">
-                                    was {{ formatMoney(row.previous_low) }}
-                                </span>
-                            </div>
-                            <q-badge class="dora-deal-badge" color="negative" text-color="white">
-                                {{ row.drop_percent }}% off
-                            </q-badge>
-                        </li>
-                    </ul>
-                    <div v-else class="dora-empty">
-                        Nothing at a new low right now — I'll flag one when a
-                        tracked product drops.
-                    </div>
-                </DashboardCard>
+                <PriceDropsCard
+                    :rows="priceDropRows"
+                    :failed="slotFailed('price_drops')"
+                    @retry="loadPriceDrops"
+                />
             </div>
 
             <!-- §2.6: the `recipes`, `meals`, `shopping_lists` and `products`
@@ -1153,34 +516,52 @@
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
-    import { formatDate as formatLocaleDate } from 'src/composables/useDateFormat';
+    // FU-820 — `formatRelativeDay` and the local-ISO parse now come from the
+    // shared date authority (D-006/R-003). The page's own copies parsed
+    // `YYYY-MM-DD` with `new Date(iso)`, i.e. as UTC midnight, so every relative
+    // day was off by one west of Greenwich.
+    import { formatRelativeDay } from 'src/composables/useDateFormat';
+    import { parseLocalIso } from 'src/helpers/weekDates';
     import FadeTransition from 'src/components/transitions/FadeTransition.vue';
     import AppSkeleton from 'src/components/AppSkeleton.vue';
-    import AnimatedNumber from 'src/components/AnimatedNumber.vue';
     import BaseButton from 'src/components/BaseButton.vue';
     import DashboardCard from 'src/components/dashboard/DashboardCard.vue';
+    // FU-829 chunk 5 — cards extracted out of this page. Data stays owned here
+    // (the parallel load, the per-slot error tracking and the post-action
+    // refresh are page concerns); each card takes what it renders and emits what
+    // it wants doing.
+    import AttentionCard from 'src/components/dashboard/AttentionCard.vue';
+    import MoneyCard from 'src/components/dashboard/MoneyCard.vue';
+    import PriceDropsCard from 'src/components/dashboard/PriceDropsCard.vue';
+    import SpendByStoreCard from 'src/components/dashboard/SpendByStoreCard.vue';
+    import PantryValueCard from 'src/components/dashboard/PantryValueCard.vue';
+    import RestockRadarCard from 'src/components/dashboard/RestockRadarCard.vue';
+    import PantryDonutCard, {
+        type DonutSegment,
+    } from 'src/components/dashboard/PantryDonutCard.vue';
+    import NextToCookCard from 'src/components/dashboard/NextToCookCard.vue';
+    import SuggestionsCard from 'src/components/dashboard/SuggestionsCard.vue';
+    import PrimaryListCard from 'src/components/dashboard/PrimaryListCard.vue';
+    import WhatsComingCard, {
+        type CalendarCell,
+        type CalendarSpan,
+    } from 'src/components/dashboard/WhatsComingCard.vue';
     import DoraScoreCard from 'src/components/dashboard/DoraScoreCard.vue';
     import ReconcilePastMealsChip from 'src/components/dashboard/ReconcilePastMealsChip.vue';
     import DraftShopCard from 'src/components/dashboard/DraftShopCard.vue';
     import { storeToRefs } from 'pinia';
+    // The alert *presentation* helpers (icon / colour / kind label / deep link)
+    // moved into `AttentionCard.vue` with the card. What the page still needs is
+    // the Alert shape it fetches, the action type it forwards, and the upcoming
+    // types the merged calendar reads.
     import {
-        actionsFor as alertActionsFor,
-        colorFor as alertColorFor,
-        iconFor as alertIconFor,
-        kindTheme,
-        linkFor as alertLinkFor,
         type Alert,
         type AlertAction,
-        type AlertKind,
-        type AlertSeverity,
         type Upcoming,
         type UpcomingDay,
     } from 'src/models/alert';
     import type { DashboardSummary, UpcomingMealPlanEntry } from 'src/models/dashboard';
-    import type { Product } from 'src/models/product';
-    import { discountPercent } from 'src/helpers/scrapedProductOfferLogic';
-    import { useMoney, formatMoney } from 'src/composables/useMoney';
-    import { pickWelcome, pickHint } from 'src/helpers/dashboardMessages';
+    import { epochDay, pickWelcome, pickHint } from 'src/helpers/dashboardMessages';
     import type { ShoppingListDetail } from 'src/models/shoppingList';
     import AlertApiService from 'src/services/api/alertApiService';
     import { useAlertActions } from 'src/composables/useAlertActions';
@@ -1192,7 +573,6 @@
     import type { DoraSuggestion } from 'src/services/api/suggestionsApiService';
     import DashboardApiService from 'src/services/api/dashboardApiService';
     import OnboardingApiService from 'src/services/api/onboardingApiService';
-    import ProductApiService from 'src/services/api/productApiService';
     import ShoppingListApiService from 'src/services/api/shoppingListApiService';
     import ReportsApiService, {
         type ReportRange,
@@ -1221,113 +601,31 @@
     import { computed, onMounted, ref, watch } from 'vue';
     import { useQuasar } from 'quasar';
     import { useRouter } from 'vue-router';
-    import { openProductSearch } from 'src/composables/useProductSearchUrl';
+    // FU-824 — reactive token reads for the SVG donut (see `stockSegments`).
+    import { paletteToken } from 'src/composables/useThemePalette';
+    // FU-631 #3 — column classes that never leave a card beside dead air.
+    import { CARD_COL_HALF, zoneColClasses } from 'src/helpers/dashboardGrid';
+    // FU-830 — the card registry, extracted so its default-visible count (a
+    // decision §2.2 owns) can be held by a test rather than by nothing.
+    import {
+        CARD_DEFS,
+        ZONES,
+        type CardId,
+        type ZoneId,
+    } from 'src/helpers/dashboardCards';
 
-    // money renders route through the shared install-currency
-    // formatter; the `$` prefix on <AnimatedNumber> reads the same symbol
-    // so a currency flip in Settings updates the dashboard atomically.
-    const { currencySymbol: dashCurrencySymbol } = useMoney();
+    // FU-821 — every money render goes through `formatMoney`, including the
+    // tweened <AnimatedNumber> ones (via its `format` prop). The old
+    // `currencySymbol` prefix is gone: it returned the symbol only, so it lost
+    // `formatMoney`'s decimals, grouping and locale-correct symbol *placement*
+    // (D-006 — one formatting authority, not a symbol plus a guess). Those
+    // renders now live in the extracted cards, which is why this page no longer
+    // imports the formatter at all.
 
-    type CardId =
-        | 'attention'
-        | 'primary_list'
-        // 'act' zone — the "draft this week's shop" card. It's a real,
-        // registered, rendered card (see CardDef registry + <DraftShopCard/>),
-        // but its id was missing from this union — an R-010 closed-set gap
-        // that broke `vue-tsc` and hard-failed `quasar build` (FU-550).
-        | 'draft_shop'
-        | 'budget'
-        | 'suggestions'
-        | 'cookable'
-        | 'best_deals'
-        | 'stock_items'
-        | 'meal_plan'
-        // Phase 4 — Money zone widgets backed by the reports API.
-        | 'savings'
-        | 'spend_trend'
-        | 'pantry_value'
-        | 'price_drops'
-        // Phase 5 — predictive restock.
-        | 'restock'
-        // Phase 6 — unified fortnight calendar (D7).
-        | 'calendar'
-        // kitchen-health score (top of Your kitchen zone).
-        | 'dora_score'
-        // FU-317 Chunk 5 — reconcile past meals nudge. Hide-when-empty
-        // (R-029): the component renders nothing when the queue is empty.
-        | 'reconcile_pending';
-
-    // Zones group cards into purpose-bands so the eye gets a triage gradient
-    // (Phase 2). They're fixed (a card belongs to one zone); the user reorders
-    // *within* a zone + toggles visibility. Render order = zone order, then the
-    // user's order within each zone (applied via CSS `order`, below).
-    type ZoneId = 'act' | 'today' | 'money' | 'kitchen';
-    const ZONES: { id: ZoneId; label: string }[] = [
-        { id: 'act', label: 'Act now' },
-        { id: 'today', label: 'Today' },
-        { id: 'money', label: 'Money' },
-        { id: 'kitchen', label: 'Your kitchen' },
-    ];
-
-    type CardDef = {
-        id: CardId;
-        label: string;
-        icon: string;
-        zone: ZoneId;
-        // Opt-in-by-default cards (Anti-creep, §2.2) start hidden — e.g. the
-        // secondary Money-zone glance widgets (spend trend, pantry value).
-        defaultHidden?: boolean;
-        // Feature gate: the card is unavailable (hidden from the dashboard AND
-        // the Cards menu) unless its gate is on. 'money' → useMoneyEnabled
-        // (any dollar surface, ADR-005); 'products' → product data-presence
-        // (§2.4 — don't offer product widgets to users with no products).
-        gate?: 'money' | 'products';
-    };
-
-    // The default order within each zone (and the toggle-menu order). The user
-    // can reorder within a zone; their saved order overrides this.
-    const CARD_DEFS: CardDef[] = [
-        { id: 'attention', label: 'Needs your attention', icon: ICONS.notifications_active, zone: 'act' },
-        // FU-351 — P6-10 one-click "Draft my shop" entry point. Sits in
-        // the `act` zone (home screen *does*) between Attention and
-        // Suggestions. Reuses the /auto-generate engine with sensible
-        // defaults (meal-plan-for-the-week + low/out + flagged).
-        { id: 'draft_shop', label: 'Draft this week\'s shop', icon: ICONS.playlist_add_check, zone: 'act' },
-        { id: 'suggestions', label: 'Dora suggests', icon: ICONS.dora_voice, zone: 'act' },
-        { id: 'cookable', label: 'Cookable tonight', icon: ICONS.restaurant_menu, zone: 'today' },
-        { id: 'meal_plan', label: 'The week ahead', icon: ICONS.calendar_month, zone: 'today' },
-        { id: 'primary_list', label: 'Primary shopping list', icon: ICONS.shopping_cart, zone: 'today' },
-        { id: 'restock', label: 'Restock radar', icon: ICONS.replay, zone: 'today' },
-        // Wide fortnight calendar — opt-in (it's large and overlaps the
-        // week-ahead strip; users enable it from the Cards menu).
-        { id: 'calendar', label: 'This fortnight', icon: ICONS.calendar_month, zone: 'today', defaultHidden: true },
-        // Money zone. Savings leads (the headline payoff, default-on when money
-        // is enabled); spend + pantry value are opt-in glances. best_deals is
-        // gated on product data-presence (§2.4).
-        { id: 'savings', label: 'Savings captured', icon: ICONS.savings, zone: 'money', gate: 'money' },
-        // Budget is money-gated like the other Money widgets (FU-297). Even the
-        // "no target set" body shows dollar amounts ("$X.YZ spent so far"), so
-        // it's not a money-neutral card and shouldn't render when the user has
-        // money features off — same posture as savings / spend / pantry value.
-        { id: 'budget', label: 'Grocery budget', icon: ICONS.savings, zone: 'money', gate: 'money' },
-        { id: 'best_deals', label: 'Best deals on saved products', icon: ICONS.local_offer, zone: 'money', gate: 'products' },
-        // Product-data-gated (FU-296) — surfaces only genuine new lows so the
-        // claim "price drop" is honest (§2.4). Opt-in like the other secondary
-        // money widgets.
-        { id: 'price_drops', label: 'Price drops', icon: ICONS.trending_down, zone: 'money', gate: 'products', defaultHidden: true },
-        { id: 'spend_trend', label: 'Spend by store', icon: ICONS.storefront, zone: 'money', gate: 'money', defaultHidden: true },
-        { id: 'pantry_value', label: 'Pantry value', icon: ICONS.inventory, zone: 'money', gate: 'money', defaultHidden: true },
-        // sits above 'Pantry' in the Kitchen zone by default;
-        // the composite score is the summary, the pantry donut is the
-        // detail underneath. `favorite` icon (♥) reads as "health" and
-        // isn't already used on the dashboard.
-        { id: 'dora_score', label: 'Kitchen health', icon: ICONS.favorite, zone: 'kitchen' },
-        // FU-317 Chunk 5 — dashboard nudge for the meal-plan reconcile
-        // queue. Card renders nothing when the queue is empty (R-029),
-        // so no `defaultHidden` — the component itself is the gate.
-        { id: 'reconcile_pending', label: 'Reconcile past meals', icon: ICONS.event_note, zone: 'kitchen' },
-        { id: 'stock_items', label: 'Pantry', icon: 'inventory_2', zone: 'kitchen' },
-    ];
+    // Card registry (ids, zones, gates, default visibility) + the zone list
+    // now live in `helpers/dashboardCards.ts` — extracted in FU-830 so the
+    // default-visible count, which is a decision §2.2 owns, can be asserted by
+    // a test instead of drifting unnoticed. Read that file before adding a card.
 
     const authStore = useAuthStore();
     const router = useRouter();
@@ -1350,7 +648,6 @@
 
     const dashboardApiService = new DashboardApiService();
     const alertApi = new AlertApiService();
-    const productApi = new ProductApiService();
     const { applyAction } = useAlertActions();
     const budgetApi = new BudgetApiService();
     const reportsApi = new ReportsApiService();
@@ -1369,7 +666,37 @@
     const summary = ref<DashboardSummary | null>(null);
     const loading = ref(false);
     const loadError = ref<string | null>(null);
-    const welcomeDismissed = ref(false);
+
+    // ── "Dora says" welcome band, dismissible for the day (FU-825) ───────
+    // The button's tooltip says "Hide for today", and it used to set a plain
+    // `ref(false)` that was recreated on every mount — so the band came back on
+    // the next navigation to the dashboard. Persist the epoch-day it was
+    // dismissed on, keyed off the SAME `epochDay` the message rotation uses
+    // (R-003), so "today" means one thing: the band stays hidden until the
+    // message itself changes at local midnight.
+    const WELCOME_DISMISSED_KEY = 'dora.dashboard.welcome_dismissed_day';
+    const welcomeDismissedDay = ref<number | null>(readWelcomeDismissedDay());
+    function readWelcomeDismissedDay(): number | null {
+        try {
+            const raw = localStorage.getItem(WELCOME_DISMISSED_KEY);
+            if (!raw) return null;
+            const day = Number(raw);
+            return Number.isFinite(day) ? day : null;
+        } catch {
+            // Private mode / storage disabled — the band just isn't dismissible
+            // across navigations, which is the old behaviour and no worse.
+            return null;
+        }
+    }
+    function dismissWelcome() {
+        const today = epochDay(new Date());
+        welcomeDismissedDay.value = today;
+        try {
+            localStorage.setItem(WELCOME_DISMISSED_KEY, String(today));
+        } catch {
+            // Ignore — the in-memory ref still hides it for this visit.
+        }
+    }
 
     // ── 24h "you skipped the wizard" reminder (F1) ───────────────────
     // The wizard writes `dora.onboarding.skipped_at` on Skip-everything;
@@ -1420,17 +747,71 @@
         }
     }
 
+    // ── Per-slot failure tracking (FU-840) ──────────────────────────────
+    // Every loader below used to `catch { thing.value = null }`, so the card
+    // then rendered its **empty** state. A 500 on savings told a household that
+    // had shopped for months "finish a shop and I'll tally what you kept"; a
+    // failed alerts fetch said "all clear — nothing needs your attention".
+    // Failure was indistinguishable from absence, in the direction that
+    // reassures — Honesty inverted, eleven times (`DASHBOARD_PAGE_REVIEW.md`
+    // §4.7 / finding 10).
+    //
+    // So each slot now records whether it failed, and its card renders
+    // <CardLoadError> instead of "nothing here yet". Kept as one id-keyed set
+    // rather than a per-slot `error` ref beside each data ref: the cards need
+    // "did *this* slot fail" and the banner needs "did *anything* fail", and one
+    // structure answers both without eleven more refs to keep in step (R-003).
+    type SlotId =
+        | 'alerts'
+        | 'primary_list'
+        | 'budget'
+        | 'swaps'
+        | 'savings'
+        | 'spend'
+        | 'pantry_value'
+        | 'price_drops'
+        | 'restock'
+        | 'upcoming';
+
+    const slotErrors = ref<Set<SlotId>>(new Set());
+    function slotFailed(id: SlotId): boolean {
+        return slotErrors.value.has(id);
+    }
+    /** Run a slot's fetch, recording success or failure against its id.
+     *
+     *  Still never throws — one bad slot must not take the page down, which is
+     *  what the original blanket catches were protecting. The difference is that
+     *  the failure is now *visible* instead of being laundered into an empty
+     *  state. A later retry that succeeds clears the flag, so the card recovers
+     *  without a reload. */
+    async function loadSlot(id: SlotId, run: () => Promise<void>): Promise<void> {
+        try {
+            await run();
+            if (slotErrors.value.has(id)) {
+                const next = new Set(slotErrors.value);
+                next.delete(id);
+                slotErrors.value = next;
+            }
+        } catch (err) {
+            // Logged, not swallowed: the console is how a self-hosting owner
+            // finds out *which* endpoint is unhappy.
+            console.warn(`dashboard slot "${id}" failed to load`, err);
+            const next = new Set(slotErrors.value);
+            next.add(id);
+            slotErrors.value = next;
+        }
+    }
+
     // Independent slot loaders. Each card surfaces a small chunk of data
     // beyond what the bulk dashboard summary endpoint returns. They live
     // in parallel and never block each other — a slow alerts response
     // shouldn't gate the rest of the dashboard.
     const alerts = ref<Alert[]>([]);
-    const bestDeals = ref<Product[]>([]);
     const primaryListDetail = ref<ShoppingListDetail | null>(null);
-    // grocery budget card. Always loads (so the passive "spent
-    // this week" state works for users who haven't opted in), but the
-    // card is hidden when the loader errors so we never block dashboard
-    // render on this slot.
+    // Feeds the budget half of the merged Money card. Always loads (so the
+    // passive "spent this period" figure works for users who haven't set a
+    // target), and the block is `v-if`'d out when the loader errors so a failed
+    // slot never blocks the rest of the card — the savings half still renders.
     const budgetStatus = ref<BudgetStatus | null>(null);
     // FU-451 — budget-defense swap summary for the current week (bullet + deep
     // link on the budget card). Null when money's off, no current-week plan, or
@@ -1565,10 +946,58 @@
         () => CARD_DEFS.filter((c) => isCardVisible(c.id)).length
     );
 
+    // ── Does this card actually render? (FU-631 #3) ──────────────────────
+    // `isCardVisible` answers "is it registered, gated on, and un-hidden".
+    // `reconcile_pending` additionally vanishes on its own *data* — it is
+    // hide-when-empty (R-029). This predicate folds that in, and is the ONE
+    // thing both the template's `v-if` and the column-width maths below consult:
+    // if they disagreed, the grid would pair a card that isn't there and leave
+    // the gap it was meant to fill (R-003).
+    //
+    // The merged Money card (`savings`) needs no data guard — it always has
+    // something to say, since the budget block is `v-if`'d inside it and the
+    // savings half carries its own empty state.
+    function cardRendered(id: CardId): boolean {
+        if (!isCardVisible(id)) return false;
+        if (id === 'reconcile_pending') return reconcileTotal.value > 0;
+        return true;
+    }
+
+    // Cards that are full-width by design rather than by parity.
+    //
+    // Currently none: the fortnight calendar used to be the one entry, and
+    // FU-818 merged it into `meal_plan`, which is half-width at both spans — the
+    // grid is 7 columns either way, so 14 days is simply two rows of it. Keeping
+    // the seam (rather than deleting it) because the *next* wide card should
+    // declare itself here instead of hard-coding `col-12` at its call site,
+    // which is how the mixed widths that caused the dead regions got in.
+    const FULL_WIDTH_CARDS: ReadonlySet<CardId> = new Set<CardId>();
+
+    // Column classes per card, computed per zone so no card is left in a
+    // half-width column beside dead air (D-011 / B4) — see
+    // `helpers/dashboardGrid` for the measured counts and why the parity is per
+    // run of consecutive half-width cards rather than per zone.
+    const cardColClasses = computed<Record<string, string>>(() => {
+        const out: Record<string, string> = {};
+        for (const zone of ZONES) {
+            const rendered = cardOrder.value.filter(
+                (id) => ZONE_OF.get(id) === zone.id && cardRendered(id),
+            );
+            Object.assign(out, zoneColClasses(rendered, FULL_WIDTH_CARDS));
+        }
+        return out;
+    });
+    function cardCol(id: CardId): string {
+        // A card that isn't rendered has no entry; the half default keeps the
+        // binding total rather than resolving to `undefined`.
+        return cardColClasses.value[id] ?? CARD_COL_HALF;
+    }
+
     // CSS `order` per card: a fixed per-zone base (so a card never visually
     // leaves its zone) plus its index in the user's order array (so reorder
-    // within a zone sticks). The base spacing (100) ≫ the ≤9 card indices, so
-    // zones never interleave. Zone headers sit just before their band.
+    // within a zone sticks). The base spacing (100) ≫ the card indices (17 and
+    // counting), so zones never interleave. Zone headers sit just before their
+    // band.
     const ZONE_BASE = 100;
     function orderIndexOf(id: CardId): number {
         const i = cardOrder.value.indexOf(id);
@@ -1582,7 +1011,11 @@
         return ZONES.findIndex((z) => z.id === zone) * ZONE_BASE - 1;
     }
     function zoneHasVisibleCards(zone: ZoneId): boolean {
-        return CARD_DEFS.some((c) => c.zone === zone && isCardVisible(c.id));
+        // `cardRendered`, not `isCardVisible` — otherwise a Money zone whose
+        // only visible card is `budget` with an unloaded status, or a Kitchen
+        // zone holding just an empty `reconcile_pending`, draws its band header
+        // above nothing.
+        return CARD_DEFS.some((c) => c.zone === zone && cardRendered(c.id));
     }
 
     // Reorder within a zone — the tap alternative to drag (C13: drag is the
@@ -1674,7 +1107,9 @@
         return lvl ? `/stock?level_id=${lvl.stock_level_id}` : '/stock';
     });
 
-    type DonutSegment = { label: string; percent: number; offset: number; colour: string; link: string | null };
+    // `DonutSegment` is the card's own shape, so it lives with the card and is
+    // imported above. The *building* of the segments stays here: it needs the
+    // stock-level ids for the deep links and the theme-token reads.
     const stockSegments = computed<DonutSegment[]>(() => {
         if (!summary.value || summary.value.stock_items.total === 0) return [];
         const total = summary.value.stock_items.total;
@@ -1694,12 +1129,18 @@
             // Negative offsets walk clockwise around the circle.
             cursor = (cursor - p + 100) % 100;
         };
-        // Read the semantic-* tokens off the document so the donut
-        // recolours when the user switches theme without a full reload.
-        const cs = getComputedStyle(document.documentElement);
-        const okColour = cs.getPropertyValue('--semantic-positive').trim() || '#6ba368';
-        const warnColour = cs.getPropertyValue('--semantic-warning').trim() || '#e89a45';
-        const badColour = cs.getPropertyValue('--semantic-negative').trim() || '#c85a4f';
+        // Read the semantic-* tokens off the document so the donut recolours
+        // when the user switches theme without a full reload.
+        //
+        // FU-824: that comment was a lie until now. The read was a bare
+        // `getComputedStyle`, which is not reactive, so this computed had no
+        // dependency on the theme and the palette was sampled once and frozen —
+        // switch light→dark on the dashboard and the donut kept its old colours
+        // until the summary refetched. `paletteToken` touches a version ref that
+        // `themeService.applyThemeKey` bumps, so the dependency is real now.
+        const okColour = paletteToken('--semantic-positive', '#6ba368');
+        const warnColour = paletteToken('--semantic-warning', '#e89a45');
+        const badColour = paletteToken('--semantic-negative', '#c85a4f');
         // "In stock" has no bucket-filter — it's the residual; clicking the
         // segment does nothing (would need `?level_id != low/out`, which the
         // page doesn't model). Low + out link to their filtered view.
@@ -1709,41 +1150,16 @@
         return segs;
     });
 
-    // ── Week strip ───────────────────────────────────────────────────────
-    type StripDay = {
-        iso: string;
-        dow: string;
-        dayNum: number;
-        isToday: boolean;
-        entries: UpcomingMealPlanEntry[];
-    };
-
-    const weekStrip = computed<StripDay[]>(() => {
-        if (!summary.value) return [];
-        const days: StripDay[] = [];
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const todayIso = isoOf(today);
-        const dowLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-
-        for (let i = 0; i < 7; i++) {
-            const d = new Date(today);
-            d.setDate(today.getDate() + i);
-            const iso = isoOf(d);
-            const entries = summary.value.meal_plan.upcoming_entries.filter(
-                (e) => e.scheduled_for === iso
-            );
-            days.push({
-                iso,
-                dow: dowLabels[d.getDay()]!,
-                dayNum: d.getDate(),
-                isToday: iso === todayIso,
-                entries
-            });
-        }
-        return days;
-    });
-
+    // FU-818 — `weekStrip` is gone. It built its own 7 days from
+    // `summary.meal_plan.upcoming_entries` while the fortnight calendar built 14
+    // from `/alerts/upcoming`, so the overlapping week was answered twice from
+    // two queries that could disagree (R-003). The merged card renders both
+    // spans from `calendarCells`, i.e. from `/alerts/upcoming` alone — which
+    // also gives the week view the expiry and shopping dots it never had.
+    //
+    // `nextEntry` survives because the hero line reads it (and that sentence is
+    // now the *only* place the next meal is stated in prose — the card's old
+    // "Next up" callout repeated it verbatim).
     const nextEntry = computed<UpcomingMealPlanEntry | null>(
         () => summary.value?.meal_plan.upcoming_entries[0] ?? null
     );
@@ -1777,11 +1193,20 @@
     // owns the not-yet-finished case). Recomputed cheaply on each render; the
     // underlying pick is deterministic so it doesn't flicker.
     const welcomeMessage = computed(() => pickWelcome());
-    const welcomeHint = computed(() => pickHint());
+    // FU-823 — the hint pool is filtered by the install's feature gates, so a
+    // money-off household is never told to set a grocery budget and a
+    // product-less one isn't sold the deals card (feedback L254 / ADR-005).
+    const welcomeHint = computed(() =>
+        pickHint({ money: moneyEnabled.value, products: productsEnabled.value })
+    );
     // Only greet once the user has finished (or skipped past) onboarding —
     // while the skip-reminder is showing, that banner is the message.
+    // Dismissal is per-day (FU-825): hidden only while the stored day is still
+    // today, so tomorrow's message arrives on its own.
     const showWelcome = computed(
-        () => !welcomeDismissed.value && !showSkipReminder.value
+        () =>
+            welcomeDismissedDay.value !== epochDay(new Date()) &&
+            !showSkipReminder.value
     );
 
     // ── Helpers ──────────────────────────────────────────────────────────
@@ -1801,74 +1226,21 @@
         return `${y}-${m}-${day}`;
     }
 
-    function formatRelativeDay(iso: string): string {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const target = new Date(iso);
-        target.setHours(0, 0, 0, 0);
-        const diff = Math.round((target.getTime() - today.getTime()) / 86_400_000);
-        if (diff === 0) return 'Today';
-        if (diff === 1) return 'Tomorrow';
-        if (diff > 1 && diff < 7) {
-            return formatLocaleDate(target, { weekday: 'long' });
-        }
-        return formatLocaleDate(target);
-    }
-
     function goTo(path: string) {
         void router.push(path);
     }
 
-    // ── Needs your attention (D6 two-section card) ───────────────────────
-    // Top section: a by-kind summary; bottom: a peek at the most-urgent few.
-    // The alerts control page (/alerts) is the canonical surface for the rest.
-    const SEVERITY_RANK: Record<AlertSeverity, number> = { high: 0, medium: 1, low: 2 };
-    const PEEK_LIMIT = 3;
-
-    const topAlerts = computed(() =>
-        [...alerts.value].sort(
-            (a, b) => (SEVERITY_RANK[a.severity] ?? 9) - (SEVERITY_RANK[b.severity] ?? 9)
-        )
-    );
-
-    // By-kind breakdown of the active alerts for the summary chips. This is
-    // display grouping of the *already-fetched* alerts list (not a new
-    // cross-entity aggregate), so it stays client-side — R-003 note. The
-    // per-kind label/icon come from the shared alert model (one source).
-    type AlertKindGroup = { kind: AlertKind; count: number; severity: AlertSeverity };
-    const alertKindSummary = computed<AlertKindGroup[]>(() => {
-        const groups = new Map<AlertKind, AlertKindGroup>();
-        for (const a of alerts.value) {
-            const g = groups.get(a.kind);
-            if (g) {
-                g.count += 1;
-                if (SEVERITY_RANK[a.severity] < SEVERITY_RANK[g.severity]) g.severity = a.severity;
-            } else {
-                groups.set(a.kind, { kind: a.kind, count: 1, severity: a.severity });
-            }
-        }
-        return [...groups.values()].sort(
-            (x, y) => SEVERITY_RANK[x.severity] - SEVERITY_RANK[y.severity] || y.count - x.count
-        );
-    });
-
-    // The peek rows (most-urgent first), each with its precomputed deep-link
-    // target so the template can render a real <router-link> (a11y).
-    const peekAlerts = computed(() =>
-        topAlerts.value.slice(0, PEEK_LIMIT).map((alert) => ({
-            alert,
-            link: alertLinkFor(alert),
-        }))
-    );
-
+    // ── Needs your attention ────────────────────────────────────────────
+    // The card is `components/dashboard/AttentionCard.vue` now (FU-829); the
+    // severity sort, the by-kind grouping and the peek slice moved with it,
+    // since they are presentation of the already-fetched list. What stays here
+    // is the fetch, the slot-error flag and the action handler — the action
+    // refreshes BOTH the alerts and the summary, which is a page-level concern.
     async function loadAlerts() {
-        try {
+        await loadSlot('alerts', async () => {
             const result = await alertApi.getAlertsAsync();
             alerts.value = result.items;
-        } catch {
-            // Non-fatal — the card just hides itself when empty.
-            alerts.value = [];
-        }
+        });
     }
 
     // Routed through the shared useAlertActions composable (FU-521); the
@@ -1906,42 +1278,17 @@
         return picks;
     });
 
-    function formatEntryWhen(entry: UpcomingMealPlanEntry): string {
-        const day = formatRelativeDay(entry.scheduled_for);
-        return `${day} ${entry.slot.toLowerCase()}`;
-    }
-    function nextToCookBadgeLabel(entry: UpcomingMealPlanEntry): string {
-        // IMPL_PLAN_RECIPE_IMPORTER §Chunk 4 — a null missing_count now
-        // has two flavours: "empty recipe" (no ingredients) and
-        // "unlinked" (tri-state None). Distinguish via the count.
-        if (entry.unlinked_ingredient_count > 0) {
-            return `${entry.unlinked_ingredient_count} to link`;
-        }
-        if (entry.missing_count === null) return 'No ingredients';
-        if (entry.missing_count === 0) return 'Ready';
-        return `Missing ${entry.missing_count}`;
-    }
-    function nextToCookBadgeColor(entry: UpcomingMealPlanEntry): string {
-        if (entry.missing_count === 0) return 'positive';
-        // was 'grey-6'; theme-aware --neutral-muted for
-        // "no signal yet / not applicable" (unlinked ingredients, or
-        // no ingredients logged).
-        if (entry.unlinked_ingredient_count > 0) return 'neutral-muted';
-        if (entry.missing_count === null) return 'neutral-muted';
-        return 'warning';
-    }
+    // The when-label and the ready/missing/to-link badge moved into
+    // `NextToCookCard.vue` with the card (FU-829) — they are presentation of the
+    // entry, and the tri-state badge logic is easier to follow next to the
+    // markup that renders it.
 
-    // ── Best deals on your saved products ────────────────────────────────
-    // Ranked + sliced server-side (state-ownership §8.2) — we fetch only the
-    // top 3 instead of downloading every product to sort in the browser. The
-    // `% off` badge still uses the shared `discountPercent` helper (display).
-    async function loadBestDeals() {
-        try {
-            bestDeals.value = await productApi.getBestDealsAsync(3);
-        } catch {
-            bestDeals.value = [];
-        }
-    }
+    // FU-819/830 — `loadBestDeals` is gone with the card. That leaves
+    // `productApiService.getBestDealsAsync` and the `/products/best-deals`
+    // endpoint behind it with no caller in the SPA, and the shared
+    // `discountPercent` helper with none either. Both logged as [[FU-838]]
+    // rather than deleted here: R-057 is explicit that a replaced surface's
+    // contracts are an inventory to check, not a casualty list.
 
     // ── Primary shopping list ────────────────────────────────────────────
     const quickAddTargetListId = computed(() => shoppingListStore.quickAddTargetListId);
@@ -1974,14 +1321,14 @@
     async function loadPrimaryListDetail() {
         const id = quickAddTargetListId.value;
         if (!id) {
+            // No primary list set is a real state, not a failure — the card has
+            // its own "pick one" empty state for it.
             primaryListDetail.value = null;
             return;
         }
-        try {
+        await loadSlot('primary_list', async () => {
             primaryListDetail.value = await shoppingListApi.getDetailAsync(id);
-        } catch {
-            primaryListDetail.value = null;
-        }
+        });
     }
 
     // Re-fetch detail when the primary list changes (e.g. set-primary from
@@ -1996,8 +1343,12 @@
         try {
             summary.value = await dashboardApiService.getSummaryAsync();
         } catch (err) {
-            loadError.value = 'Could not load the dashboard. Try refreshing.';
-
+            // This one is fatal to the grid — every card reads off `summary`, so
+            // the banner is the whole page's state. The copy no longer says "try
+            // refreshing": D3 deliberately removed the refresh button, so that
+            // sentence pointed at a control that doesn't exist. The banner now
+            // carries its own Retry (§3.13).
+            loadError.value = "I couldn't load your dashboard.";
             console.warn('dashboard summary failed', err);
         } finally {
             loading.value = false;
@@ -2007,18 +1358,14 @@
     async function loadBudget() {
         // budget is money-gated; skip the fetch when money is off.
         if (!moneyEnabled.value) { budgetStatus.value = null; return; }
-        try {
+        await loadSlot('budget', async () => {
             budgetStatus.value = await budgetApi.getStatusAsync();
-        } catch {
-            // The card is non-essential — if the backend is too old to
-            // serve /api/budget/status, just hide the card.
-            budgetStatus.value = null;
-        }
+        });
     }
 
     async function loadSwapSummary() {
         if (!moneyEnabled.value) { swapSummary.value = null; return; }
-        try {
+        await loadSlot('swaps', async () => {
             const [today, page] = await Promise.all([
                 mealPlanApi.getTodayAsync(),
                 mealPlanApi.getAllAsync(),
@@ -2039,16 +1386,15 @@
             } else {
                 swapSummary.value = null;
             }
-        } catch {
-            swapSummary.value = null;
-        }
+        });
     }
 
     // ── Money zone loaders (Phase 4) ─────────────────────────────────────
     // Guarded on `moneyEnabled` — the cards are gated on it, so there's no point
-    // fetching dollar reports when money is off. Each is non-fatal (the card
-    // shows its empty state on error). The reports endpoints already aggregate
-    // server-side (state-ownership) — we just render.
+    // fetching dollar reports when money is off. Each records its own failure
+    // through `loadSlot` so the card can say "couldn't load this" rather than
+    // "nothing here yet". The reports endpoints already aggregate server-side
+    // (state-ownership) — we just render.
     const RANGE_LABEL: Record<ReportRange, string> = {
         '30d': 'last 30 days',
         '90d': 'last 90 days',
@@ -2058,7 +1404,11 @@
         'all': 'all time',
     };
     const savingsRangeLabel = computed(() => RANGE_LABEL[savingsRange.value]);
-    // The savings card's range toggle (Month / Year / All).
+    // The savings range toggle (Month / Year / All). Now driven by
+    // `BaseSegmented` rather than the hand-rolled `.dora-range-chip` buttons it
+    // used to be: B2a says one-of-several goes through that component, and the
+    // lookalike carried no `aria-pressed`, no focus-visible state and an 11.5px
+    // label (R-048, D-003). Same option shape the component takes.
     const SAVINGS_RANGES: { value: ReportRange; label: string }[] = [
         { value: '30d', label: 'Month' },
         { value: '1y', label: 'Year' },
@@ -2067,52 +1417,42 @@
 
     async function loadSavings() {
         if (!moneyEnabled.value) { savings.value = null; return; }
-        try {
+        await loadSlot('savings', async () => {
             savings.value = await reportsApi.getSavingsCapturedAsync(savingsRange.value);
-        } catch {
-            savings.value = null;
-        }
+        });
     }
     // Re-fetch when the user flips the savings range toggle.
     watch(savingsRange, () => { void loadSavings(); });
 
     async function loadSpendByStore() {
         if (!moneyEnabled.value) { spendByStore.value = null; return; }
-        try {
+        await loadSlot('spend', async () => {
             spendByStore.value = await reportsApi.getSpendByStoreAsync('30d');
-        } catch {
-            spendByStore.value = null;
-        }
+        });
     }
 
     async function loadPantryValue() {
         if (!moneyEnabled.value) { pantryValue.value = null; return; }
-        try {
+        await loadSlot('pantry_value', async () => {
             pantryValue.value = await reportsApi.getStockValueAsync('90d');
-        } catch {
-            pantryValue.value = null;
-        }
+        });
     }
 
     // price-drops is product-gated (not money-gated); still cheap to
     // load, hides itself when empty.
     async function loadPriceDrops() {
         if (!productsEnabled.value) { priceDrops.value = null; return; }
-        try {
+        await loadSlot('price_drops', async () => {
             priceDrops.value = await reportsApi.getPriceDropsAsync(5);
-        } catch {
-            priceDrops.value = null;
-        }
+        });
     }
     const priceDropRows = computed(() => priceDrops.value?.rows ?? []);
 
     // ── Restock radar (Phase 5) ──────────────────────────────────────────
     async function loadKeepsRunningOut() {
-        try {
+        await loadSlot('restock', async () => {
             keepsRunningOut.value = await reportsApi.getKeepsRunningOutAsync(5);
-        } catch {
-            keepsRunningOut.value = null;
-        }
+        });
     }
     const restockItems = computed(() => keepsRunningOut.value?.rows ?? []);
 
@@ -2136,40 +1476,56 @@
     // joining of three sources). `dates` carries non-empty days only, so we
     // walk the full window and look each date up.
     async function loadUpcoming() {
-        try {
+        await loadSlot('upcoming', async () => {
             upcoming.value = await alertApi.getUpcomingAsync(14);
-        } catch {
-            upcoming.value = null;
-        }
+        });
     }
 
-    type CalendarCell = {
-        iso: string;
-        dayNum: number;
-        isToday: boolean;
-        hasExpiry: boolean;
-        hasShopping: boolean;
-        hasMeal: boolean;
-    };
-    function parseLocalIso(iso: string): Date {
-        const p = iso.split('-');
-        return new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]));
-    }
+    // FU-818 — the merged card's range toggle. 7 is the default because a week
+    // is the planning unit; 14 is the old "This fortnight" view. Both come from
+    // the SAME already-fetched 14 days, so flipping the toggle is a slice, not a
+    // refetch. `CalendarSpan` and `CalendarCell` are the card's own types, so
+    // they live with the card and are imported above.
+    const CALENDAR_SPANS: { label: string; value: CalendarSpan }[] = [
+        { label: '7 days', value: 7 },
+        { label: '14 days', value: 14 },
+    ];
+    const calendarSpan = ref<CalendarSpan>(7);
+    const calendarSpanLabel = computed(() =>
+        calendarSpan.value === 7 ? 'in the next week' : 'in the next fortnight'
+    );
+
+    const DOW_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     const calendarCells = computed<CalendarCell[]>(() => {
         const u = upcoming.value;
         if (!u) return [];
         const byDate = new Map(u.dates.map((d) => [d.date, d]));
         const todayIso = isoOf(new Date());
+        // Shared parser (`helpers/weekDates`) — this page used to declare its own
+        // correct copy here while `formatRelativeDay` a few hundred lines up used
+        // the broken `new Date(iso)` form. One source now (R-003).
         const start = parseLocalIso(u.start);
+        if (!start) return [];
         const cells: CalendarCell[] = [];
-        for (let i = 0; i < u.days; i++) {
+        // Never render more than the server sent, however the toggle is set.
+        const span = Math.min(calendarSpan.value, u.days);
+        for (let i = 0; i < span; i++) {
             const d = new Date(start);
             d.setDate(start.getDate() + i);
             const iso = isoOf(d);
             const day = byDate.get(iso);
+            const marks = [
+                day && day.meals.length > 0 ? 'meals' : null,
+                day && day.expiries.length > 0 ? 'expiring items' : null,
+                day && day.shopping.length > 0 ? 'shopping' : null,
+            ].filter(Boolean);
             cells.push({
                 iso,
                 dayNum: d.getDate(),
+                dow: DOW_LABELS[d.getDay()]!,
+                label:
+                    `${formatRelativeDay(iso)}` +
+                    (marks.length > 0 ? ` — ${marks.join(', ')}` : ' — nothing on'),
                 isToday: iso === todayIso,
                 hasExpiry: !!day && day.expiries.length > 0,
                 hasShopping: !!day && day.shopping.length > 0,
@@ -2184,20 +1540,24 @@
     function selectCalDate(iso: string) {
         selectedCalDate.value = selectedCalDate.value === iso ? null : iso;
     }
-    // Lazy-load the calendar's data the first time the user enables it.
-    watch(
-        () => isCardVisible('calendar'),
-        (visible) => {
-            if (visible && !upcoming.value) void loadUpcoming();
-        }
-    );
+    // FU-818 — `/alerts/upcoming` used to be lazy-loaded only when the opt-in
+    // fortnight card was switched on (R-016). It is now the merged card's only
+    // data source and that card is default-on, so it loads with everything else
+    // in `loadAll` and the visibility watch is gone. Net request count is
+    // unchanged for a user who had the calendar enabled, and +1 for everyone
+    // else — who in exchange get expiry and shopping dots on their week view,
+    // and one card instead of two rendering the same days.
 
     // Top stores by spend for the spend-trend card (display slice of the
     // server-aggregated rows).
     const topSpendStores = computed(() => spendByStore.value?.rows.slice(0, 3) ?? []);
-    const totalSpend = computed(() =>
-        (spendByStore.value?.rows ?? []).reduce((sum, r) => sum + r.spend, 0)
-    );
+    // R-041 / state-ownership — the total and its coverage come from the server
+    // now. This used to be a client-side `reduce` over every fetched row while
+    // the card displayed only the top 3, which is both a cross-collection
+    // aggregate computed in the browser and a total rendered without the count
+    // it was built from.
+    const spendTotal = computed(() => spendByStore.value?.total_spend ?? 0);
+    const spendStoreCount = computed(() => spendByStore.value?.store_count ?? 0);
 
     // Latest pantry value + the delta since the window's first point.
     const pantryValueLatest = computed(() => {
@@ -2236,7 +1596,6 @@
         await Promise.all([
             loadSummary(),
             loadAlerts(),
-            loadBestDeals(),
             loadBudget(),
             loadSwapSummary(),
             loadSavings(),
@@ -2244,9 +1603,9 @@
             loadPantryValue(),
             loadPriceDrops(),
             loadKeepsRunningOut(),
-            // Calendar is opt-in — only fetch the (heavier) aggregation when
-            // the card is actually shown (R-016 lazy hydration).
-            isCardVisible('calendar') ? loadUpcoming() : Promise.resolve(),
+            // FU-818 — the merged "What's coming" card is default-on and this is
+            // its only source, so it is no longer conditional.
+            loadUpcoming(),
             suggestionStore.refreshAsync(),
             shoppingListStore.ensureLoadedAsync(),
             // the donut's low/out segments deep-link to
@@ -2366,11 +1725,6 @@
     .dora-cards {
         animation: dora-fade-up 0.4s ease-out both;
     }
-    /* DR-8 loading skeleton — spacing between the placeholder body lines so a
-       skeleton card reads with the same rhythm as a populated one. */
-    .dash-skel-line {
-        margin-bottom: 10px;
-    }
     /* Zone band header — a full-width flex item; CSS `order` (set inline)
        places it just before its zone's cards, and being full-width it forces
        the cards onto the next line so each zone reads as a labelled band. */
@@ -2396,721 +1750,22 @@
         padding-top: 8px;
     }
     /* The card shell (`.dora-card`, head, icon, title, action, link, clickable
-       + hover) now lives in `components/dashboard/DashboardCard.vue` (R-001
-       de-monolith). Card BODY styles stay below — slotted content keeps this
-       page's scope. */
+       + hover) lives in `components/dashboard/DashboardCard.vue`.
 
-    /* ───── Stat grid (recipes / meals / shopping / products) ────────── */
-    .dora-stat-grid {
-        display: flex;
-        gap: 12px;
-    }
-    .dora-stat {
-        flex: 1 1 0;
-        min-width: 0;
-        padding: 14px 16px;
-        background: var(--surface-elevated);
-        border-radius: 12px;
-    }
-    .dora-stat-num {
-        font-size: 1.9rem;
-        font-weight: 700;
-        line-height: 1;
-        letter-spacing: -0.02em;
-        color: var(--c-ink);
-        display: flex;
-        align-items: center;
-    }
-    .dora-stat-label {
-        margin-top: 6px;
-        font-size: 0.78rem;
-        color: var(--c-ink-mute);
-        letter-spacing: 0.01em;
-        text-transform: lowercase;
-    }
-    .dora-stat-ok {
-        background: var(--c-ok-soft);
-    }
-    .dora-stat-ok .dora-stat-num {
-        color: var(--semantic-positive);
-    }
-    .dora-stat-accent {
-        background: var(--c-pink-soft);
-    }
-    .dora-stat-accent .dora-stat-num {
-        color: var(--brand-secondary);
-    }
+       FU-829 chunk 5 — the card BODY styles that used to sit here are gone too,
+       now that every card is its own component:
 
-    /* ───── Stock donut ──────────────────────────────────────────────── */
-    .dora-stock-body {
-        display: flex;
-        align-items: center;
-        gap: 18px;
-    }
-    .dora-donut {
-        width: 132px;
-        height: 132px;
-        flex-shrink: 0;
-        transform: rotate(-90deg);
-    }
-    .dora-donut-track {
-        fill: none;
-        stroke: var(--surface-sunken);
-        stroke-width: 4;
-    }
-    .dora-donut-seg {
-        transition: stroke-dasharray 0.6s ease, stroke-dashoffset 0.6s ease, opacity 0.15s ease;
-    }
-    /* FU-299 — clickable low/out segments. Slight hover feedback so the
-       affordance reads; keyboard focus mirrors it for parity. */
-    .dora-donut-seg--link:hover,
-    .dora-donut-seg--link:focus {
-        opacity: 0.8;
-        outline: none;
-    }
-    /* Legend rows deep-link to the filtered pantry view; low/out are the
-       "act" segments — underline on hover, keep the row layout stable. */
-    .dora-legend-link {
-        display: contents;
-        color: inherit;
-        text-decoration: none;
-    }
-    .dora-legend-link:hover .dora-legend-label,
-    .dora-legend-link:focus .dora-legend-label {
-        text-decoration: underline;
-    }
-    /* SVG text inherits the parent's -90deg rotation; rotate the text nodes
-       back so the centre label reads normally. */
-    .dora-donut-big,
-    .dora-donut-sub {
-        transform: rotate(90deg);
-        transform-origin: 18px 18px;
-    }
-    .dora-donut-big {
-        font-size: 7.5px;
-        font-weight: 700;
-        fill: var(--c-ink);
-    }
-    .dora-donut-sub {
-        font-size: 3px;
-        fill: var(--c-ink-mute);
-        text-transform: lowercase;
-        letter-spacing: 0.05em;
-    }
-    .dora-legend {
-        list-style: none;
-        margin: 0;
-        padding: 0;
-        font-size: 0.85rem;
-    }
-    .dora-legend li {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        padding: 4px 0;
-    }
-    .dora-dot {
-        width: 9px;
-        height: 9px;
-        border-radius: 999px;
-        flex-shrink: 0;
-    }
-    .dora-dot-ok { background: var(--c-ok); }
-    .dora-dot-warn { background: var(--c-warn); }
-    .dora-dot-bad { background: var(--c-bad); }
-    .dora-legend-num {
-        font-weight: 600;
-        min-width: 1.4em;
-        text-align: right;
-    }
-    .dora-legend-label {
-        color: var(--c-ink-mute);
-    }
+         · shared by several cards  → `css/dashboardCards.scss`
+           (`.dora-empty*`, `.dora-cook-*`, `.dora-stat-*`, `.dash-skel-line`)
+         · used by exactly one card → that card's own scoped block (R-027)
 
-    /* ───── Meal plan card ───────────────────────────────────────────── */
-    .dora-next-up {
-        padding: 14px 16px;
-        background: var(--c-accent-soft);
-        border-radius: 12px;
-        margin-bottom: 16px;
-    }
-    .dora-next-up-label {
-        font-size: 0.72rem;
-        color: var(--c-ink-mute);
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-    }
-    .dora-next-up-meal {
-        margin-top: 2px;
-        font-size: 1.25rem;
-        font-weight: 700;
-        letter-spacing: -0.01em;
-        color: var(--brand-secondary);
-    }
-    .dora-next-up-meta {
-        margin-top: 2px;
-        font-size: 0.85rem;
-        color: var(--c-ink-mute);
-    }
-    .dora-empty {
-        padding: 14px 16px;
-        margin-bottom: 16px;
-        color: var(--c-ink-mute);
-        font-size: 0.9rem;
-        background: var(--surface-elevated);
-        border-radius: 12px;
-    }
-    /* P2-05 budget card — visual hierarchy matches the existing P12
-       cards: a single big number, a muted denominator, and a small
-       remainder chip on the right. */
-    .dora-budget-body {
-        padding: 4px 4px 8px;
-    }
-    .dora-swap-bullet {
-        font-size: 0.85rem;
-        cursor: pointer;
-        color: var(--savings-accent);
-        display: flex;
-        align-items: center;
-        flex-wrap: wrap;
-        gap: 2px;
-    }
-    .dora-swap-bullet__cta {
-        text-decoration: underline;
-        margin-left: 2px;
-    }
-    .dora-budget-headline {
-        display: flex;
-        align-items: baseline;
-        gap: 8px;
-        flex-wrap: wrap;
-    }
-    .dora-budget-spent {
-        font-size: 1.6rem;
-        font-weight: 700;
-    }
-    .dora-budget-of {
-        font-size: 0.95rem;
-        color: var(--c-ink-mute);
-    }
-    .dora-budget-remaining {
-        margin-left: auto;
-        font-size: 0.85rem;
-        font-weight: 600;
-    }
+       What remains below is the page's own chrome: the root + its `--c-*` alias
+       layer, the hero, the quick-action bar, the zone band labels, the "Dora
+       says" welcome band, and the grid's fade transition. */
 
-    /* ───── Money zone widgets (Phase 4) ─────────────────────────────── */
-    /* Savings card — range toggle + headline amount. */
-    .dora-range-toggle {
-        display: inline-flex;
-        gap: 2px;
-        background: var(--surface-elevated);
-        border-radius: 999px;
-        padding: 2px;
-    }
-    .dora-range-chip {
-        border: none;
-        background: transparent;
-        color: var(--c-ink-mute);
-        font-size: 0.72rem;
-        font-weight: 600;
-        padding: 3px 9px;
-        border-radius: 999px;
-        cursor: pointer;
-        transition: background 0.15s ease, color 0.15s ease;
-    }
-    .dora-range-chip.is-active {
-        background: var(--c-accent);
-        color: var(--text-inverse);
-    }
-    .dora-savings-amount {
-        font-size: 2.2rem;
-        font-weight: 700;
-        line-height: 1.05;
-        letter-spacing: -0.02em;
-        color: var(--c-ok);
-    }
-    .dora-savings-sub {
-        margin-top: 2px;
-        font-size: 0.85rem;
-        font-weight: 600;
-        color: var(--c-ink-mute);
-    }
-    .dora-savings-spent {
-        margin-top: 6px;
-        font-size: 0.82rem;
-        color: var(--c-ink-mute);
-    }
-    /* Spend-by-store card. */
-    .dora-spend-list {
-        list-style: none;
-        margin: 0;
-        padding: 0;
-        display: flex;
-        flex-direction: column;
-        gap: 6px;
-    }
-    .dora-spend-row {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        padding: 6px 10px;
-        background: var(--surface-elevated);
-        border-radius: 10px;
-    }
-    .dora-spend-store {
-        flex: 1;
-        min-width: 0;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-        font-weight: 600;
-    }
-    .dora-spend-amt {
-        font-weight: 700;
-        white-space: nowrap;
-    }
-    .dora-spend-total {
-        margin-top: 8px;
-        font-size: 0.82rem;
-        font-weight: 600;
-        color: var(--c-ink-mute);
-        text-align: right;
-    }
-    /* Pantry-value card. */
-    .dora-pantry-delta {
-        margin-top: 4px;
-        font-size: 0.85rem;
-        font-weight: 600;
-    }
-    .dora-pantry-delta.is-up {
-        color: var(--c-ok);
-    }
-    .dora-pantry-delta.is-down {
-        color: var(--c-bad);
-    }
-
-    /* ───── Fortnight calendar (Phase 6 / D7) ────────────────────────── */
-    .dora-cal-legend {
-        display: flex;
-        gap: 12px;
-        font-size: 0.72rem;
-        color: var(--c-ink-mute);
-    }
-    .dora-cal-leg {
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-    }
-    .dora-cal-grid {
-        display: grid;
-        grid-template-columns: repeat(7, minmax(0, 1fr));
-        gap: 6px;
-    }
-    .dora-cal-cell {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 4px;
-        min-height: 56px;
-        padding: 8px 4px 6px;
-        border: 1px solid var(--c-line);
-        border-radius: 10px;
-        background: var(--surface-elevated);
-        color: var(--c-ink);
-        cursor: pointer;
-        transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
-    }
-    .dora-cal-cell.has-events:hover {
-        border-color: var(--border-strong);
-        transform: translateY(-1px);
-    }
-    .dora-cal-cell.is-today {
-        border-color: var(--c-accent);
-        font-weight: 700;
-    }
-    .dora-cal-cell.is-selected {
-        background: var(--c-accent-soft);
-        border-color: var(--c-accent);
-    }
-    .dora-cal-num {
-        font-size: 0.95rem;
-        line-height: 1;
-    }
-    .dora-cal-dots {
-        display: flex;
-        gap: 3px;
-        min-height: 6px;
-    }
-    .dora-cal-dot {
-        width: 6px;
-        height: 6px;
-        border-radius: 999px;
-        flex-shrink: 0;
-    }
-    .dora-cal-dot.dot-meal {
-        background: var(--c-ok);
-    }
-    .dora-cal-dot.dot-expiry {
-        background: var(--c-bad);
-    }
-    .dora-cal-dot.dot-shopping {
-        background: var(--c-accent);
-    }
-    .dora-cal-hint {
-        margin-top: 12px;
-        font-size: 0.82rem;
-        color: var(--c-ink-mute);
-    }
-    .dora-cal-detail {
-        margin-top: 14px;
-        padding: 12px 14px;
-        background: var(--surface-elevated);
-        border-radius: 12px;
-    }
-    .dora-cal-detail-date {
-        font-weight: 700;
-        margin-bottom: 8px;
-    }
-    .dora-cal-group {
-        margin-top: 8px;
-    }
-    .dora-cal-group-label {
-        font-size: 0.72rem;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-        color: var(--c-ink-mute);
-        margin-bottom: 2px;
-    }
-    .dora-cal-item {
-        display: block;
-        color: var(--c-ink);
-        text-decoration: none;
-        font-size: 0.9rem;
-        padding: 2px 0;
-    }
-    .dora-cal-item:hover {
-        text-decoration: underline;
-    }
-    .dora-cal-slot {
-        color: var(--c-ink-mute);
-        font-size: 0.82rem;
-    }
-    /* P2-04 — suggestion rows on the dashboard card. Severity drives
-       the left border; the rest of the visual weight is on the title
-       and the primary action button. */
-    .dora-suggest-list {
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-    }
-    .dora-suggest-row {
-        padding: 8px 10px;
-        border-radius: 10px;
-        background: var(--surface-elevated);
-        border-left: 3px solid var(--c-accent);
-    }
-    .dora-suggest-row.dora-suggest-high { border-left-color: var(--semantic-negative); }
-    .dora-suggest-row.dora-suggest-medium { border-left-color: var(--semantic-warning); }
-    .dora-suggest-row.dora-suggest-low { border-left-color: var(--c-accent); }
-    .dora-suggest-title {
-        font-weight: 600;
-        font-size: 0.95rem;
-    }
-    .dora-suggest-body {
-        font-size: 0.85rem;
-        color: var(--c-ink-mute);
-        margin-top: 2px;
-    }
-    .dora-empty-cta {
-        color: var(--c-accent);
-        font-weight: 600;
-    }
-    .dora-strip {
-        display: grid;
-        grid-template-columns: repeat(7, minmax(0, 1fr));
-        gap: 6px;
-    }
-    .dora-strip-day {
-        position: relative;
-        padding: 10px 6px 8px;
-        border-radius: 10px;
-        background: var(--surface-elevated);
-        text-align: center;
-        transition: background 0.15s ease, transform 0.15s ease;
-        min-height: 76px;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-    }
-    .dora-strip-day.has-meals {
-        background: var(--c-accent-soft);
-    }
-    .dora-strip-day.is-today {
-        background: var(--c-ink);
-        color: var(--text-inverse);
-    }
-    .dora-strip-day.is-today.has-meals {
-        background: linear-gradient(180deg, var(--c-ink) 0%, var(--brand-secondary) 100%);
-    }
-    .dora-strip-dow {
-        font-size: 0.7rem;
-        letter-spacing: 0.06em;
-        text-transform: uppercase;
-        opacity: 0.7;
-    }
-    .dora-strip-num {
-        font-size: 1.3rem;
-        font-weight: 700;
-        line-height: 1.1;
-        margin-top: 2px;
-    }
-    .dora-strip-meals {
-        margin-top: auto;
-        display: flex;
-        align-items: center;
-        gap: 3px;
-        min-height: 10px;
-    }
-    .dora-strip-pip {
-        width: 6px;
-        height: 6px;
-        border-radius: 999px;
-        background: var(--c-accent);
-    }
-    .dora-strip-more {
-        font-size: 0.65rem;
-        font-weight: 600;
-        opacity: 0.7;
-    }
-
-
-    /* Needs your attention — D6 two-section card */
-    /* Top: by-kind summary chips. */
-    .dora-alert-summary {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 6px;
-        margin-bottom: 12px;
-    }
-    .dora-alert-chip {
-        display: inline-flex;
-        align-items: center;
-        gap: 5px;
-        padding: 4px 10px;
-        border-radius: 999px;
-        background: var(--surface-elevated);
-        border: 1px solid var(--c-line);
-        text-decoration: none;
-        color: var(--c-ink);
-        font-size: 0.8rem;
-        transition: border-color 0.15s ease, background 0.15s ease;
-    }
-    .dora-alert-chip:hover {
-        border-color: var(--border-strong);
-        background: var(--c-accent-soft);
-    }
-    .dora-alert-chip-num {
-        font-weight: 700;
-    }
-    .dora-alert-chip-label {
-        color: var(--c-ink-mute);
-    }
-    /* Bottom: peek + "see all". */
-    .dora-alert-seeall {
-        display: inline-block;
-        margin-top: 12px;
-        font-size: 0.85rem;
-        font-weight: 600;
-        color: var(--c-accent);
-        text-decoration: none;
-    }
-    .dora-alert-seeall:hover {
-        text-decoration: underline;
-    }
-    .dora-attn-list {
-        list-style: none;
-        margin: 0;
-        padding: 0;
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-    }
-    .dora-attn-row {
-        display: grid;
-        grid-template-columns: 6px 20px minmax(0, auto) 1fr auto;
-        align-items: center;
-        gap: 8px;
-        padding: 8px 10px;
-        background: var(--surface-elevated);
-        border-radius: 10px;
-    }
-    .dora-attn-dot {
-        width: 6px;
-        height: 100%;
-        min-height: 26px;
-        border-radius: 3px;
-    }
-    .dora-attn-dot-high { background: var(--c-bad); }
-    .dora-attn-dot-medium { background: var(--c-warn); }
-    .dora-attn-dot-low { background: var(--c-accent); }
-    .dora-attn-name {
-        font-weight: 600;
-        color: var(--c-ink);
-        text-decoration: none;
-        max-width: 220px;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
-    .dora-attn-name:hover {
-        text-decoration: underline;
-    }
-    .dora-attn-msg {
-        color: var(--c-ink-mute);
-        font-size: 0.85rem;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
-    /* When the message itself is the deep-link (non-stock nudges) — strip the
-       default anchor chrome, reveal an underline on hover. */
-    .dora-attn-msg-link {
-        text-decoration: none;
-    }
-    .dora-attn-msg-link:hover {
-        text-decoration: underline;
-    }
-    .dora-attn-actions {
-        display: flex;
-        gap: 2px;
-        flex-shrink: 0;
-    }
-
-    /* Primary shopping list */
-    .dora-primary-list-name {
-        font-size: 1.05rem;
-        font-weight: 600;
-        color: var(--c-ink);
-    }
-
-    /* Cookable tonight */
-    .dora-cook-list {
-        list-style: none;
-        margin: 0;
-        padding: 0;
-        display: flex;
-        flex-direction: column;
-        gap: 6px;
-    }
-    .dora-cook-row {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) auto auto;
-        align-items: center;
-        gap: 10px;
-        padding: 8px 10px;
-        background: var(--surface-elevated);
-        border-radius: 10px;
-    }
-    /* Next-to-cook rows carry an extra badge column between meta and the
-       Cook button (FU-298). Restock rows are unchanged. */
-    .dora-cook-row--with-badge {
-        grid-template-columns: minmax(0, 1fr) auto auto auto;
-    }
-    .dora-cook-badge {
-        font-weight: 600;
-    }
-    .dora-cook-name {
-        color: var(--c-ink);
-        text-decoration: none;
-        font-weight: 600;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
-    .dora-cook-name:hover {
-        text-decoration: underline;
-    }
-    .dora-cook-meta {
-        font-size: 0.8rem;
-        color: var(--c-ink-mute);
-        white-space: nowrap;
-    }
-
-    /* Best deals */
-    .dora-deal-list {
-        list-style: none;
-        margin: 0;
-        padding: 0;
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-    }
-    .dora-deal-row {
-        display: grid;
-        grid-template-columns: 36px minmax(0, 1fr) auto auto;
-        align-items: center;
-        gap: 10px;
-        padding: 8px 10px;
-        background: var(--surface-elevated);
-        border-radius: 10px;
-    }
-    .dora-deal-img img {
-        object-fit: contain;
-        max-width: 100%;
-        max-height: 100%;
-    }
-    .dora-deal-text {
-        min-width: 0;
-    }
-    .dora-deal-name {
-        font-weight: 600;
-        color: var(--c-ink);
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
-    .dora-deal-meta {
-        font-size: 0.78rem;
-        color: var(--c-ink-mute);
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
-    .dora-deal-price {
-        text-align: right;
-        white-space: nowrap;
-    }
-    .dora-deal-now {
-        font-weight: 700;
-        color: var(--c-ink);
-    }
-    .dora-deal-was {
-        font-size: 0.78rem;
-        color: var(--c-ink-mute);
-        text-decoration: line-through;
-        margin-left: 4px;
-    }
-    .dora-deal-badge {
-        font-weight: 700;
-    }
-
-    @media (max-width: 600px) {
-        .dora-attn-row,
-        .dora-deal-row {
-            grid-template-columns: auto minmax(0, 1fr) auto;
-            grid-template-rows: auto auto;
-        }
-        .dora-attn-msg,
-        .dora-attn-actions {
-            grid-column: 1 / -1;
-        }
-        .dora-deal-price,
-        .dora-deal-badge {
-            grid-column: 1 / -1;
-            text-align: left;
-        }
-    }
+    /* The deal-row styles (`.dora-deal-*`) and their mobile reflow moved into
+       `components/dashboard/PriceDropsCard.vue`, the only card that still uses
+       them now that FU-819 cut "Best deals" (R-027). */
 
     /* ───── Dora welcome / message banner (D1) ───────────────────────────
        Inline, top-of-dashboard greeting that replaced the old fixed
@@ -3164,31 +1819,6 @@
         gap: 6px;
     }
 
-    /* Positive ("all clear") empty state — softer + green-tinted so a calm
-       dashboard reads as reassuring rather than broken. Distinct from
-       R-029 (hide-when-off) — a happy zero isn't an opt-out. */
-    .dora-empty-ok {
-        display: flex;
-        align-items: center;
-        background: var(--c-ok-soft);
-        color: var(--c-ink-mute);
-    }
-    .dora-empty-ok .q-icon {
-        color: var(--c-ok);
-    }
-
-    /* Footer link on the primary-list card ("+N other lists →"). */
-    .dora-card-footer-link {
-        display: inline-block;
-        margin-top: 12px;
-        font-size: 0.8rem;
-        font-weight: 600;
-        color: var(--c-accent);
-        text-decoration: none;
-    }
-    .dora-card-footer-link:hover {
-        text-decoration: underline;
-    }
 
     .fade-enter-active,
     .fade-leave-active {
@@ -3214,9 +1844,10 @@
     /* Respect the user's motion preference — no animation or transitions. */
     @media (prefers-reduced-motion: reduce) {
         /* `.dora-card`/`.dora-card-action` motion is handled inside
-           DashboardCard's own reduced-motion rule. */
+           DashboardCard's own reduced-motion rule, and the donut segments' in
+           `PantryDonutCard` — a scoped rule can't reach into a child component
+           anyway, which is why each extracted card carries its own guard. */
         .dora-cards,
-        .dora-donut-seg,
         .fade-enter-active,
         .fade-leave-active {
             animation: none !important;
@@ -3246,13 +1877,12 @@
         .dora-quick-actions :deep(.q-btn) {
             flex: 1 1 auto;
         }
-        /* Give the savings range-toggle chips a comfortable tap height. */
-        .dora-range-chip {
-            padding: 6px 12px;
-        }
-        /* The summary chips wrap freely; keep them from getting too cramped. */
-        .dora-alert-chip {
-            padding: 6px 12px;
-        }
+        /* The savings range toggle's mobile tap-height rule is gone with the
+           hand-rolled chips — `BaseSegmented` carries its own sizing (FU-830).
+           Whether its `dense size="sm"` clears the D-004 44px floor on touch is
+           a real question, and it belongs to the chunk-6 tap-target pass rather
+           than a patch here. */
+        /* The alert summary chips' mobile padding moved into
+           `AttentionCard.vue`. */
     }
 </style>

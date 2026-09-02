@@ -64,6 +64,25 @@ def test__spend_by_store__ArchivedPurchase__SpendIsPriceTimesQuantity(api):
     assert row["list_count"] == 1
 
 
+def test__spend_by_store__Response__ShipsTotalAndStoreCountWithTheRows(api):
+    # R-041 — a derived aggregate travels with its coverage. The dashboard's
+    # spend card shows only the top 3 stores, so it must be able to say "top 3 of
+    # N" and print a total it didn't compute itself. Before this, it summed the
+    # fetched rows in the browser and rendered a bare "$X total" under three
+    # rows, which reads as the sum of those three.
+    seed_purchase(price_now=4.5, quantity=2)
+
+    body = requests.get(f"{REPORTS}/spend-by-store", params={"range": "all"}).json()
+
+    assert {"range", "rows", "total_spend", "store_count"} <= body.keys()
+    assert body["store_count"] == len(body["rows"])
+    # The total is the sum of every row, not just the ones a client might show.
+    assert body["total_spend"] == pytest.approx(
+        round(sum(r["spend"] for r in body["rows"]), 2)
+    )
+    assert body["total_spend"] >= 9.0
+
+
 #endregion spend by store
 
 #region ---------------- most-bought items ----------------

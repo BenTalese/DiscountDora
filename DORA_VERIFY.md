@@ -22,6 +22,66 @@ top-to-bottom.
 
 ---
 
+## Dashboard — chunk 1 fixes, confirm the visuals (2026-09-02)
+
+Chunk 1 of `DASHBOARD_PAGE_REVIEW.md` §7 is **shipped and unit-tested**; these
+are the items whose *appearance* still wants eyes. Each says what you should now
+see. (Two of the original nine were deleted rather than listed — the rounded
+money and the timezone date bug are both pinned by tests now; see
+`DORA_VERIFY_TRIAGE.md`.)
+
+- [ ] Reconcile chip: with something in the reconcile queue, the "Reconcile N
+      past meals" chip in Your kitchen should now carry a **1px border** matching
+      its neighbours (it had none — `--border-subtle` was never a real token).
+- [ ] Kitchen health, walked through a **dark** theme and at least one non-Pesto
+      family: bars should be green / amber / red from the semantic tokens, the
+      action links **green not yellow**, and the bar track visible on a dark
+      surface. This card previously painted hard-coded light-theme hex in all ten
+      themes, so it is the one to look at properly — it also closes feedback D2
+      ("dark mode not working").
+- [ ] Switch theme while sitting on the dashboard: the Pantry donut should
+      recolour **immediately**, without navigating away. Same check on `/reports`
+      for the charts.
+- [ ] Dismiss the "Dora says" band, navigate to Stock and back: it should stay
+      hidden, and reappear tomorrow.
+- [ ] Money-off install: Kitchen health should show **no Budget row at all** (not
+      a dormant one), and the hint line should never suggest setting a grocery
+      budget. Product-less install: no "saved products" hint.
+- [ ] Product photos on the deals rows and My Products still render (they moved
+      to an authenticated fetch — the failure mode would be the shopping-bag
+      glyph where a photo should be).
+- [ ] Wide desktop (**≥1440px**): every card is now half-width, where the Pantry
+      and Kitchen-health cards used to be thirds and "The week ahead" two-thirds.
+      No dead air either way, but it is a visible density change at that size —
+      worth a look to say whether you want a 3-up tier back for big screens
+      (FU-837 covers the related "short card stretched tall" question).
+- [ ] **The merged "What's coming" card** (chunk 3): flip 7 ↔ 14 days, tap a day
+      with dots, confirm the detail panel lists that day's meals / expiries /
+      shopping. Then check the *selected* segment of that toggle is legible — it
+      renders white on brand green at 3.88:1, which is under the 4.5 floor
+      app-wide (FU-839), so tell me if it reads badly to you and I'll bring that
+      forward.
+- [ ] **The merged "Grocery spend" card** (chunk 3): spend leads, budget bar
+      below it, "Kept vs RRP" underneath with its own Month/Year/All toggle. Two
+      periods are on show deliberately (the budget's, and the toggle's) — check
+      the labelling makes that obvious rather than confusing. With **no** budget
+      set, it should read "$X spent this week" and offer "Set a budget →".
+- [ ] With a **money-off** install the whole Money band should vanish, and with
+      **products off** Price drops should be absent from the grid *and* the Cards
+      menu.
+- [ ] A user with a **saved card layout from before today** should not lose their
+      ordering — the retired `calendar` / `budget` / `best_deals` ids are filtered
+      out of a stored layout, and "What's coming" inherits the old week-ahead
+      slot. Worth one check on your own account, which has a saved layout.
+- [ ] **Card error states** (chunk 4) were driven and measured with routes
+      force-failed, so the behaviour is confirmed — what's left is your taste
+      call: stop the backend, load the dashboard, and say whether five "I
+      couldn't load this just now" wells read as calm-and-honest or as alarming.
+      If it's too much, the alternative is one page-level notice plus silent
+      cards, which is less honest per-card but quieter.
+- [ ] Hero mascot centring (feedback L176, never confirmed since B9.8): is the
+      72px mascot centred in its tinted box?
+
 ## Reports — price trends 500 (2026-09-02) — origin FU-813
 
 Static read says this crashes on SQLite for every range but "All time"; needs

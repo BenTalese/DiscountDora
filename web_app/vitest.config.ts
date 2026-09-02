@@ -35,6 +35,21 @@ export default defineConfig({
     test: {
         environment: 'node',
         include: ['test/**/*.spec.ts'],
+        // FU-820 — pin a NEGATIVE-offset timezone for the whole suite.
+        //
+        // Date-only values (`YYYY-MM-DD`: expiry, scheduled_for, effective
+        // dates) are the app's most common date shape, and `new Date(iso)` parses
+        // that form as UTC midnight — so anything reading local parts afterwards
+        // reports the previous day whenever the host is west of Greenwich. East
+        // of Greenwich the two agree, which is precisely why the bug shipped:
+        // Australia is the shipping default and every developer runs there.
+        //
+        // Running the suite in `America/New_York` means a date test that passes
+        // here passes everywhere; running it in local time would have let
+        // `relativeDay.spec.ts` pass vacuously on the machine that wrote it.
+        // Node caches the zone before module evaluation, so it has to be set
+        // here rather than inside a spec.
+        env: { TZ: 'America/New_York' },
         // FU-541 — coverage is a MAP to find untested modules, not a gate.
         // Opt-in only: `npm run test:coverage` (passing --coverage enables
         // this block; a plain `npm test` run ignores it). Deliberately NO

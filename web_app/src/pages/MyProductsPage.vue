@@ -217,14 +217,16 @@
                             @click.stop
                             @update:model-value="toggleSelect(product.product_id)"
                         />
-                        <q-avatar v-else rounded size="40px" class="dora-bg-sunken">
-                            <img
-                                v-if="product.has_image"
-                                :src="`/api/products/${product.product_id}/image`"
-                                :alt="product.name"
-                            />
-                            <q-icon v-else :name="ICONS.shopping_bag" size="20px" />
-                        </q-avatar>
+                        <!-- FU-827 / R-045: fetched through the authenticated
+                             client, not a bare `<img src="/api/…">`. -->
+                        <ProductThumb
+                            v-else
+                            :product-id="product.product_id"
+                            :has-image="product.has_image"
+                            :alt="product.name"
+                            size="40px"
+                            icon-size="20px"
+                        />
                         <div class="col">
                             <div class="text-subtitle2 ellipsis-2-lines">
                                 {{ product.name }}
@@ -609,6 +611,7 @@
     import FilterBar from 'src/components/FilterBar.vue';
     import FilterToggleButton from 'src/components/FilterToggleButton.vue';
     import PageCountsFooter from 'src/components/PageCountsFooter.vue';
+    import ProductThumb from 'src/components/products/ProductThumb.vue';
     import { formatMoney } from 'src/composables/useMoney';
     import FadeTransition from 'src/components/transitions/FadeTransition.vue';
     import { storeToRefs } from 'pinia';

@@ -37,7 +37,11 @@
         gap: 0.75rem;
         padding: 0.75rem 1rem;
         background: var(--surface-component);
-        border: 1px solid var(--border-subtle);
+        /* R-060: was `--border-subtle`, a token that has never been declared —
+           so the whole declaration was invalid and this chip rendered with no
+           border at all, alone in a grid of bordered cards. A6: a card/panel
+           outline is `--border-default`. */
+        border: 1px solid var(--border-default);
         border-radius: var(--radius-md);
         color: var(--text-primary);
         text-decoration: none;

@@ -10,10 +10,7 @@ from datetime import date, timedelta
 from typing import List, Optional
 from uuid import UUID
 
-from sqlalchemy import func, select
-
 from dora_api.domain.entities.meal_plan_entry import MealPlanEntry
-from dora_api.domain.entities.product import Product
 from dora_api.domain.entities.recipe import Recipe
 from dora_api.domain.entities.shopping_list import (SHOPPING_LIST_STATUS_DONE,
                                                     ShoppingList)
@@ -38,39 +35,33 @@ class StockItemSummary:
 
 @dataclass(frozen=True, slots=True)
 class ShoppingListSummary:
-    total: int
-    total_items: int
-
-
-@dataclass(frozen=True, slots=True)
-class ProductSummary:
+    # Count of active (non-done) lists. The dashboard's primary-list card
+    # surfaces this as its "+N other active lists" footer link.
+    #
+    # FU-826: `total_items` (unticked lines across every list) was dropped —
+    # nothing in the app read it. It was also the subject of FU-767, a bug
+    # report about the count being wrong because it had no join to list status,
+    # so unticked leftovers on finished lists inflated it forever. The honest
+    # fix for a field no surface renders is deletion, not a status join; that
+    # retires FU-767 too.
     total: int
 
 
 @dataclass(frozen=True, slots=True)
 class RecipeSummary:
+    # FU-826: `favourites`, `cookable_count` and `needs_linking_count` were all
+    # dropped — no consumer. They were shipped for counter cards that
+    # IMPL_PLAN_DASHBOARD_REBUILD Phase 1 deleted (§2.6, "raw totals answer no
+    # question the user has"); the cards went, the payload behind them did not.
+    #
+    # `total` survives because AboutSettings' "at a glance" block renders it,
+    # and the dashboard's hero line reads it for the "your recipe book's empty"
+    # nudge.
+    #
+    # NOTE: the cookability map is still computed below — the per-entry
+    # `missing_count` on each upcoming meal-plan entry needs it. Only the two
+    # whole-collection *sums* are gone.
     total: int
-    favourites: int
-    # Recipes you can cook right now: nothing missing AND at least one
-    # ingredient (an empty recipe isn't something to "cook tonight"). Lets the
-    # dashboard show the count without the client pulling + joining every recipe
-    # against the whole pantry (state-ownership §3.3).
-    cookable_count: int
-    # IMPL_PLAN_RECIPE_IMPORTER §Chunk 4 — recipes with ≥1 unlinked
-    # required ingredient. Server-derived so the Dashboard card can
-    # render "N cookable · M need linking" copy without asking the SPA
-    # to walk the ingredient tree. Zero when no paste-imported recipes
-    # exist yet.
-    needs_linking_count: int = 0
-
-
-@dataclass(frozen=True, slots=True)
-class MealSummary:
-    # Number of recipes that currently have meals in the pool, and the
-    # total count of meals across all recipes. "Definitions" maps to
-    # recipes-with-meals since Meal-as-its-own-entity is gone.
-    total_definitions: int
-    total_in_stock: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -103,11 +94,14 @@ class MealPlanSummary:
 
 @dataclass(frozen=True, slots=True)
 class DashboardSummaryDto:
+    # FU-826 — `products` and `meals` were whole sub-objects nothing rendered.
+    # `products.total` and `meals.{total_definitions,total_in_stock}` existed for
+    # counter cards cut in the dashboard rebuild's Phase 1; the two `meals`
+    # figures were also a pair of dedicated aggregate queries run on every
+    # dashboard load, for nobody.
     stock_items: StockItemSummary
     shopping_lists: ShoppingListSummary
-    products: ProductSummary
     recipes: RecipeSummary
-    meals: MealSummary
     meal_plan: MealPlanSummary
 
 
@@ -116,8 +110,6 @@ class GetDashboardSummaryHandler:
         self.repository = repository
 
     def handle(self) -> DashboardSummaryDto:
-        session = self.repository.session
-
         # ── Stock items ───────────────────────────────────────────────────
         # Buckets are keyed to stock-status identity (sequence), not display
         # name — renaming a level in the UI must not change the counts.
@@ -143,56 +135,16 @@ class GetDashboardSummaryHandler:
         # actually in flight; finished shops live on the lists page.
         status_field = EntityField(ShoppingList, ShoppingList.Fields.STATUS)
         total_lists = self.repository.get(ShoppingList).count(status_field.ne(SHOPPING_LIST_STATUS_DONE))
-        # "Items queued" = unticked lines. Reaching into the registry's
-        # `metadata.tables` here was unreliable (the registry tracks a
-        # separate MetaData from the one Flask-SQLAlchemy creates the
-        # tables on, so the lookup intermittently raised KeyError).
-        # Going through the entity query builder uses the same mapper
-        # path as every other count() call in the codebase.
-        from dora_api.domain.entities.shopping_list import ShoppingListLine
-        is_ticked_field = EntityField(ShoppingListLine, ShoppingListLine.Fields.IS_TICKED)
-        shopping_list_items_count = self.repository.get(ShoppingListLine).count(
-            is_ticked_field.eq(False)
-        )
-
-        # ── Products ──────────────────────────────────────────────────────
-        total_products = self.repository.get(Product).count()
 
         # ── Recipes ───────────────────────────────────────────────────────
         total_recipes = self.repository.get(Recipe).count()
-        favourite_recipes = self.repository.get(Recipe).count(
-            EntityField(Recipe, Recipe.Fields.IS_FAVOURITE).eq(True)
-        )
-        # Cookable-now count via the shared cookability query (same rule the
-        # recipe DTO + `?cookable` filter use — R-003). Excludes empty recipes.
-        # IMPL_PLAN_RECIPE_IMPORTER §Chunk 4: also excludes recipes with any
-        # unlinked required ingredient — those are tri-state None
-        # (unknown), never counted as cookable. The frontend Dashboard
-        # card can render "N cookable · M need linking" from the API's
-        # per-recipe unlinked_ingredient_count.
+        # Cookability map via the shared query (same rule the recipe DTO and the
+        # `?cookable` filter use — R-003). Still needed: each upcoming meal-plan
+        # entry below carries a per-recipe `missing_count` derived from it, which
+        # is what drives the "Next to cook" card's ready / missing-N badge.
+        # FU-826 removed only the two whole-collection sums built on top of it
+        # (`cookable_count`, `needs_linking_count`), which nothing rendered.
         cookability = load_recipe_cookability(self.repository)
-        cookable_recipes = sum(
-            1 for missing, ingredient_count, unlinked in cookability.values()
-            if missing == 0 and ingredient_count > 0 and unlinked == 0
-        )
-        # Recipes that would be cookable if the user linked their unlinked
-        # ingredients (raw + StockItem all set, plus nothing linked-missing).
-        # The Dashboard uses this for the "M need linking" copy so the
-        # user knows the pipe: link → cookable count grows.
-        needs_linking_recipes = sum(
-            1 for _missing, ingredient_count, unlinked in cookability.values()
-            if unlinked > 0 and ingredient_count > 0
-        )
-
-        # ── Meals ─────────────────────────────────────────────────────────
-        # "Definitions" = recipes with any meals on hand. "In stock" =
-        # the sum of available_meals across every recipe.
-        total_meals_in_stock = session.execute(
-            select(func.coalesce(func.sum(Recipe.available_meals), 0))
-        ).scalar_one()
-        total_meal_definitions = session.execute(
-            select(func.count()).select_from(Recipe).where(Recipe.available_meals > 0)
-        ).scalar_one()
 
         # ── Meal plan: upcoming entries within the next week ──────────────
         # R-021 — "today" is the household-tz boundary, not server-local.
@@ -238,21 +190,8 @@ class GetDashboardSummaryHandler:
                 out_of_stock = out_of_stock_count,
                 low_stock = low_stock_count,
             ),
-            shopping_lists = ShoppingListSummary(
-                total = total_lists,
-                total_items = int(shopping_list_items_count),
-            ),
-            products = ProductSummary(total = total_products),
-            recipes = RecipeSummary(
-                total = total_recipes,
-                favourites = favourite_recipes,
-                cookable_count = cookable_recipes,
-                needs_linking_count = needs_linking_recipes,
-            ),
-            meals = MealSummary(
-                total_definitions = int(total_meal_definitions),
-                total_in_stock = int(total_meals_in_stock),
-            ),
+            shopping_lists = ShoppingListSummary(total = total_lists),
+            recipes = RecipeSummary(total = total_recipes),
             meal_plan = MealPlanSummary(
                 upcoming_entries = upcoming_entries_dto,
             ),

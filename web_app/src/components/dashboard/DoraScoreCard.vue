@@ -116,11 +116,16 @@
     import { ICONS } from 'src/style/icons';
     import InfoTip from 'src/components/help/InfoTip.vue';
     import { useDoraScore } from 'src/composables/useDoraScore';
+    import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
     import type {
         DoraScoreComponentKey,
     } from 'src/models/doraScore';
 
     const { doraScore: score, loading } = useDoraScore();
+    // Layers the install flag with the per-user money opt-in — the server's
+    // `money_features_enabled` is install-wide only, so a user who personally
+    // opted out still needs the render-side guard (FU-823).
+    const { moneyEnabled } = useMoneyEnabled();
 
     const trendIcon = computed(() => {
         if (score.value?.trend_direction === 'up') return ICONS.trending_up;
@@ -148,6 +153,16 @@
     type ActionLink = { to: string; label: string };
     function actionLinkFor(key: DoraScoreComponentKey): ActionLink | null {
         switch (key) {
+            // FU-823 / R-058 — belt and braces on the money gate. The server no
+            // longer emits a budget component at all when money features are
+            // off, so this branch shouldn't be reachable then; the guard is here
+            // because a "Set a budget →" link into /settings/money is the exact
+            // leak the FU was about, and a render-side check costs nothing if a
+            // future caller ever hands us a component the server didn't gate.
+            case 'budget':
+                return moneyEnabled.value
+                    ? { to: '/settings/money', label: 'Set a budget' }
+                    : null;
             case 'waste':
                 // No dedicated action link — PROPOSAL_WASTE_MINIMISATION
                 // dissolved the /waste page (D10). Users log waste inline
@@ -158,9 +173,6 @@
                 // without a dead button — this is the calm-empty-state
                 // pattern, not R-029 hide-when-off.
                 return null;
-            case 'budget':
-                // The budget input lives in Settings → Money.
-                return { to: '/settings/money', label: 'Set a budget' };
             case 'freshness':
                 // Filter stock to expiring / expired items so the user
                 // can act. The stock overview reads ?expiring=1.
@@ -182,6 +194,19 @@
 </script>
 
 <style scoped>
+    /* R-060 sweep (2026-09-02): every colour in this block used to reference a
+       `--dora-*` custom property — `--dora-text`, `--dora-primary`,
+       `--dora-positive(-bg)`, `--dora-negative(-bg)`, `--dora-muted-bg`,
+       `--dora-text-muted` — and **none of them has ever been declared** (only
+       `--dora-disc-bg` and `--dora-halo*` exist). So the card painted from its
+       hard-coded hex fallbacks in all ten themes, light and dark: the "fair" bar
+       and the action links came out yellow where the app's action colour is
+       green, and the bar track was a black wash that disappeared on a dark
+       surface. `--dora-text` had no fallback at all, so that declaration was
+       invalid and the score's headline number silently inherited.
+       Now on the real A1 tokens. This is also the honest close-out of feedback
+       D2 ("dark mode not working"), which Phase 0 of the dashboard rebuild
+       marked done. */
     .dora-score-hero {
         display: flex;
         align-items: baseline;
@@ -193,7 +218,7 @@
         font-size: 2.5rem;
         font-weight: 600;
         line-height: 1;
-        color: var(--dora-text);
+        color: var(--text-primary);
     }
 
     .dora-score-hero__caption {
@@ -209,13 +234,15 @@
         font-size: 0.75rem;
         font-weight: 500;
     }
+    /* A1 soft-token rule: a `-soft` token is a background only; the text on it
+       takes the full-strength semantic token. */
     .dora-score-trend--up {
-        background: var(--dora-positive-bg, rgba(34, 139, 34, 0.12));
-        color: var(--dora-positive, #228b22);
+        background: var(--semantic-positive-soft);
+        color: var(--semantic-positive);
     }
     .dora-score-trend--down {
-        background: var(--dora-negative-bg, rgba(180, 60, 60, 0.12));
-        color: var(--dora-negative, #b43c3c);
+        background: var(--semantic-negative-soft);
+        color: var(--semantic-negative);
     }
 
     .dora-score-components {
@@ -250,23 +277,26 @@
 
     .dora-score-component__bar {
         height: 4px;
-        border-radius: 999px;
-        background: var(--dora-muted-bg, rgba(0, 0, 0, 0.06));
+        border-radius: var(--radius-pill);
+        /* A1: an inset well sits on `--surface-sunken`, not a black wash. */
+        background: var(--surface-sunken);
         overflow: hidden;
     }
     .dora-score-component__bar-fill {
         height: 100%;
-        border-radius: 999px;
-        transition: width 300ms ease-out;
+        border-radius: var(--radius-pill);
+        transition: width var(--motion-slow) ease-out;
     }
+    /* Traffic-light banding straight off A1's semantic table, which names these
+       exact roles: positive = "good scores", warning = "fair scores". */
     .dora-score-component__bar-fill--good {
-        background: var(--dora-positive, #228b22);
+        background: var(--semantic-positive);
     }
     .dora-score-component__bar-fill--fair {
-        background: var(--dora-primary, #f5c462);
+        background: var(--semantic-warning);
     }
     .dora-score-component__bar-fill--weak {
-        background: var(--dora-negative, #b43c3c);
+        background: var(--semantic-negative);
     }
 
     .dora-score-component__foot {
@@ -277,15 +307,23 @@
         font-size: 0.75rem;
     }
     .dora-score-component__reason {
-        color: var(--dora-text-muted, #666);
+        color: var(--text-muted);
         flex: 1 1 auto;
     }
     .dora-score-component__action {
         white-space: nowrap;
-        color: var(--dora-primary, #f5c462);
+        /* An action link takes the brand action colour, not the accent yellow
+           the undeclared `--dora-primary` fallback was painting. */
+        color: var(--brand-primary);
         text-decoration: none;
     }
     .dora-score-component__action:hover {
         text-decoration: underline;
+    }
+    /* A6: focus is always visible, and it was not defined anywhere on this card. */
+    .dora-score-component__action:focus-visible {
+        outline: 2px solid var(--focus-ring);
+        outline-offset: 2px;
+        border-radius: var(--radius-sm);
     }
 </style>

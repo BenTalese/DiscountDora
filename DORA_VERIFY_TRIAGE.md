@@ -145,6 +145,32 @@ device packs for hardware items.
 
 ---
 
+## Pinned by test, not by a live drive — dashboard chunk 1 (2026-09-02)
+
+Two `DORA_VERIFY.md` lines added earlier the same day were **deleted rather than
+walked**, because both turned out to be exactly what the stance says *is* worth
+automating: a stable, low-churn contract that is expensive to re-check by hand.
+Recorded here per the delete-on-pass rule.
+
+| Deleted verify line | Why a test instead | Evidence |
+|---|---|---|
+| "Savings card: expect a whole-dollar headline (`$128`) above a 2-decimal line" (FU-821) | Money formatting is a formatter contract, not a feature flow. Re-checking it by hand means eyeballing three figures in two currencies. | `web_app/test/unit/animatedNumber.spec.ts` — 7 tests: decimals, thousands grouping, a **suffix-locale** formatter (`fr-FR`, which a manual AU walk could never catch), formatter-beats-prefix, and the untouched counter path. |
+| "With the clock in a negative UTC offset, plan a meal for tomorrow: expect 'Today'" (FU-820) | This needed an operator to change the container/device timezone — the single most expensive check in the pile — and it guards the app's *one* date authority, which every surface reads. | `web_app/test/unit/relativeDay.spec.ts` — 14 tests, and **`vitest.config.ts` now pins `TZ: 'America/New_York'` for the whole suite**, so every date test in the repo runs west of Greenwich from now on. That change immediately caught a second live instance: `alertRow.spec.ts` was computing its own expectation with the same broken `new Date(iso).toLocaleDateString()` pattern, so it *expected* the wrong day and passed only because the component was wrong in the same direction. |
+
+**Also worth noting as evidence of the same kind:** the R-060 guard
+(`designTokensDeclared.spec.ts`) replaced what would otherwise be a permanent
+"grep before you use a token" review habit — and found 21 undeclared tokens on
+its first run, 20 of which are outside this chunk ([[FU-834]]). A ratchet, so it
+stays green while the debt is enumerated in code.
+
+**Not** converted to tests, and left in `DORA_VERIFY.md` as live browser items:
+the Kitchen-health palette across themes, the donut's live theme repaint, the
+reconcile chip's border, the money-off walk, and the product-photo render. All
+five are "does this look right in a real theme/install", which is the manual-first
+case the stance is about.
+
+---
+
 ## Verified live — meal planner Unit 1, the app-shell conversion (2026-08-30)
 
 Driven with a throwaway Playwright script against the scratch pairing (backend

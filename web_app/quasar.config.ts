@@ -55,6 +55,12 @@ export default defineConfig((ctx): any => {
             // used by all three faces so they can't drift apart. Same
             // precedent as dnd.scss / subbar.scss.
             'shoppingList.scss',
+            // FU-829 chunk 5 — the dashboard's shared card-body primitives
+            // (empty states, the list-row, the stat tile) as its cards move out
+            // of the page into components. Only what several cards genuinely
+            // share; the card shell stays in DashboardCard.vue and anything
+            // used by one card lives in that card. Same precedent as above.
+            'dashboardCards.scss',
         ],
 
         // https://github.com/quasarframework/quasar/tree/dev/extras

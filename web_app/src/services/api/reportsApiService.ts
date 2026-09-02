@@ -27,6 +27,14 @@ export interface StoreSpendRow {
 export interface StoreSpendResponse {
     range: ReportRange;
     rows: StoreSpendRow[];
+    /** Total across **every** row, server-computed (R-041). The dashboard shows
+     *  only the top few stores, so it must not sum `rows` itself — that both
+     *  moves a cross-collection aggregate into the browser and produces a total
+     *  whose coverage the reader can't see. */
+    total_spend: number;
+    /** How many stores the total was built from, so a truncated list can say
+     *  "top 3 of 5" rather than presenting a partial view as the whole. */
+    store_count: number;
 }
 
 export interface MostBoughtRow {

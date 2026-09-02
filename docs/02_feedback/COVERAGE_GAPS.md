@@ -179,6 +179,19 @@ next reviewer can fast-skip them.
   in its §5 coverage table). Supersedes the prior "deferred per master plan" hold —
   the user pulled the dashboard forward. L480 (cross-app undo) marked out-of-scope
   there → tracked as a follow-up for the undo/toast owner.
+  **Re-verified 2026-09-02 → `05_investigations/DASHBOARD_PAGE_REVIEW.md` §10.**
+  Eleven of the fourteen bullets are genuinely shipped; **two are re-opened**:
+  **D2** ("dark mode not working", L56) — `DoraScoreCard` renders hard-coded
+  light-theme hex in all ten themes on undeclared `--dora-*` tokens, and the stock
+  donut freezes its palette on a theme switch (FU-822, FU-824); and **L254**
+  (money features switchable off) — the *cards* gate correctly, but the Kitchen
+  health composite is weighted by budget data on a money-off install and the hint
+  pool advertises money features (FU-823). L471 (heading type usage) is
+  **uncovered** on this surface: 44 raw font-sizes, zero tokens, zone labels at
+  11.5px (FU-828). Also unmet, and not feedback bullets but the plan's own
+  commitments: §2.2's curated 8-card default set (now 13 of 17 — FU-817) and §6's
+  DoD "thin composition over `components/dashboard/*`" (page is 3126 lines, 14
+  cards inline — FU-829).
 - STOCK OVERVIEW — `04_proposals/PROPOSAL_STOCK_OVERVIEW.md` (C-1, written
   2026-06-06; maps L63-99). Cart bullets → C-7; planned-meals metric → C-2;
   location display → `04_proposals/PROPOSAL_CONFIG_AND_OPTINS.md` §2.5 (C-cross);

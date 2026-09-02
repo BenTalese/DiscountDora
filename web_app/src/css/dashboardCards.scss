@@ -1,0 +1,164 @@
+/* The dashboard's shared card-body primitives.
+ *
+ * ## Why these live here
+ *
+ * `DASHBOARD_PAGE_REVIEW.md` §4.2 / FU-829: the rebuild's Definition of Done was
+ * *"`DashboardPage.vue` is a thin composition over `components/dashboard/*`
+ * widgets"*, and it never landed — fourteen card bodies stayed inline with ~970
+ * lines of scoped SCSS, and the page grew to 3200 lines. Extracting each card
+ * into its own component moves its *own* styles with it (R-027: the component
+ * owns its intrinsic appearance). But a handful of classes are used by
+ * **several** cards, and those cannot move into any one of them:
+ *
+ *   .dora-empty / -ok / -cta    9 cards
+ *   .dora-cook-*                2 cards (Next to cook, Restock radar)
+ *   .dora-stat-*                2 cards (Primary list, Pantry value)
+ *
+ * Copying them into each component is exactly the drift the shopping list's
+ * `shoppingList.scss` header warns about ("a variant of the same primitive, not
+ * a bespoke style island — or it becomes the next thing that drifts"). So they
+ * live once, here, on the same shared-affordance precedent as `dnd.scss`,
+ * `subbar.scss` and `shoppingList.scss`.
+ *
+ * ## Not here
+ *
+ * The card *shell* (`.dora-card`, its head, icon, title, action and link) is
+ * owned by `components/dashboard/DashboardCard.vue` and stays there. Anything
+ * used by exactly one card belongs in that card's component.
+ *
+ * ## Tokens
+ *
+ * These rules previously sat in `DashboardPage.vue`'s scoped block and referenced
+ * the page-local `--c-*` aliases it declares on `.dora-dash`. Those aliases are
+ * page-scoped, so they would resolve to **nothing** from a component or a global
+ * sheet — the R-060 failure mode exactly. Everything here uses the real global
+ * tokens instead, which is also why the alias layer is worth retiring (FU-747).
+ */
+
+/* ───── Empty states ──────────────────────────────────────────────────────
+ * `B9` anatomy lives in the copy; this is the container. R-014's inversion is
+ * the reason there are so many consumers: actionable cards render a *positive*
+ * empty state rather than vanishing, so the calm dashboard reads as reassuring
+ * instead of broken.
+ */
+.dora-empty {
+    padding: 14px 16px;
+    margin-bottom: 16px;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    background: var(--surface-elevated);
+    border-radius: 12px;
+}
+
+/* Positive ("all clear") empty state — softer + green-tinted so a calm
+ * dashboard reads as reassuring rather than broken. Distinct from R-029
+ * (hide-when-off): a happy zero isn't an opt-out.
+ *
+ * Distinct from the *error* state too, which is `CardLoadError.vue` on
+ * `--surface-sunken` — a failed fetch must never borrow this one (FU-840). */
+.dora-empty-ok {
+    display: flex;
+    align-items: center;
+    background: var(--semantic-positive-soft);
+    color: var(--text-secondary);
+}
+.dora-empty-ok .q-icon {
+    color: var(--semantic-positive);
+}
+
+.dora-empty-cta {
+    color: var(--brand-primary);
+    font-weight: 600;
+}
+
+/* ───── The list-row primitive ────────────────────────────────────────────
+ * A name, some meta, and trailing actions on an elevated row. Shared by
+ * "Next to cook" and "Restock radar", which is why it isn't in either.
+ */
+.dora-cook-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.dora-cook-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    background: var(--surface-elevated);
+    border-radius: 10px;
+}
+/* Next-to-cook rows carry an extra badge column between meta and the Cook
+   button (FU-298). Restock rows are unchanged. */
+.dora-cook-row--with-badge {
+    grid-template-columns: minmax(0, 1fr) auto auto auto;
+}
+.dora-cook-badge {
+    font-weight: 600;
+}
+.dora-cook-name {
+    color: var(--text-primary);
+    text-decoration: none;
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.dora-cook-name:hover {
+    text-decoration: underline;
+}
+.dora-cook-meta {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+/* Spacing between a skeleton's placeholder lines, so a loading card reads with
+ * the same rhythm as a populated one (D-007 / DR-8). Two consumers — the page's
+ * whole-grid loading skeleton and the primary-list card's stat skeleton — which
+ * is why it is here and not in either. */
+.dash-skel-line {
+    margin-bottom: 10px;
+}
+
+/* ───── The stat tile grid ────────────────────────────────────────────────
+ * A row of big-number tiles. Shared by the primary-list card's totals and the
+ * pantry-value figure.
+ */
+.dora-stat-grid {
+    display: flex;
+    gap: 12px;
+}
+.dora-stat {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 14px 16px;
+    background: var(--surface-elevated);
+    border-radius: 12px;
+}
+.dora-stat-num {
+    font-size: 1.9rem;
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: -0.02em;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+}
+.dora-stat-label {
+    margin-top: 6px;
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    letter-spacing: 0.01em;
+    text-transform: lowercase;
+}
+.dora-stat-ok {
+    background: var(--semantic-positive-soft);
+}
+.dora-stat-ok .dora-stat-num {
+    color: var(--semantic-positive);
+}

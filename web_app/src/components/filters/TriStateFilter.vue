@@ -272,10 +272,16 @@
     // and stay theme-token-aware (R-002). The matching *ink* is owned by
     // BaseSegmented — see the D-002 note there for why it can't be set here.
     .tri-state-filter__sort-toggle {
-        border: 1px solid var(--border-subtle);
+        /* R-060: `--border-subtle` is undeclared (invalid ⇒ no border rendered).
+           A6: control outline is `--border-default`. */
+        border: 1px solid var(--border-default);
         border-radius: var(--radius-md);
         overflow: hidden;
-        background: var(--surface-card);
+        /* R-060: was `--surface-card`, undeclared — the exact "looks like the
+           scale" mistake the rule names. The card surface is
+           `--surface-component`. Invalid `background` just inherits, so this
+           toggle has been picking up whatever sat behind it. */
+        background: var(--surface-component);
     }
     .tri-state-filter__sort-toggle :deep(.q-btn) {
         min-height: 28px;

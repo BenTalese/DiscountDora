@@ -130,19 +130,38 @@ class DoraScoreInputs:
     # excluded (brand-new install).
     items_checked_in_window: int
     total_stock_items: int
+    # FU-823 / R-058 — whether this install has money features on.
+    #
+    # The budget signal reasons entirely in money, so on a money-off install it
+    # must not be gathered, must not weight the composite, and must not appear
+    # in the component list at all (a dormant "Budget — no budget set" row with
+    # a "Set a budget →" link is still a money surface). R-058's test: with the
+    # flag off, is what remains correct? Yes — the mean of the other four
+    # signals is a valid kitchen-health score. So budget is a *dependent*
+    # signal, dropped rather than zeroed.
+    #
+    # Defaults True so the existing pure-core tests keep exercising the
+    # money-on path unchanged; the handler always passes it explicitly.
+    money_enabled: bool = True
 
 
 def compute_score(inputs: DoraScoreInputs) -> DoraScoreDto:
     """Compute the current-window score (no trend). The endpoint calls
     this twice — once with current inputs, once with lagged inputs —
     and stitches the trend on top."""
-    components: list[DoraScoreComponent] = [
-        _score_waste(inputs),
-        _score_budget(inputs),
+    components: list[DoraScoreComponent] = [_score_waste(inputs)]
+    # FU-823 / R-058 — the budget signal is *omitted*, not dormant, when money
+    # features are off. A dormant component still renders a row on the card
+    # (with its "Set a budget →" action), which is a money surface on an install
+    # that opted out of money. The composite stays correct because
+    # `_composite_of` means over applicable components either way.
+    if inputs.money_enabled:
+        components.append(_score_budget(inputs))
+    components.extend([
         _score_freshness(inputs),
         _score_runouts(inputs),
         _score_stocktake(inputs),
-    ]
+    ])
     composite = _composite_of(components)
     return DoraScoreDto(
         composite=composite,

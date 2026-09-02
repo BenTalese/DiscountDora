@@ -295,7 +295,106 @@ semver — major bumps signal schema or breaking-config changes.
   already-on-a-list counts came off it; both are visible on the ingredient rows
   a few centimetres below. The Add button still names how many it will add.
 
+### Changed
+- **The dashboard's week strip and fortnight calendar are now one card
+  (2026-09-02).** "The week ahead" and "This fortnight" showed the same days
+  twice — and pulled them from two different places, so the overlapping week
+  could disagree with itself. They're now a single **"What's coming"** card with
+  a 7 / 14-day switch. Two things improve on the way: the week view gains the
+  expiry and shopping dots it never had, and the days are labelled with weekdays
+  rather than bare numbers. The "Next up" block is gone from it — it was
+  repeating the line at the top of the page word for word.
+- **Grocery budget and Savings are one card now, and it leads with what you
+  spent (2026-09-02).** They were two halves of the same sentence: the budget
+  card knew your target, the savings card worked out your spending again from
+  somewhere else, and the two could show different time windows side by side.
+  The new **"Grocery spend"** card puts spend against your budget first, with
+  what you kept versus RRP underneath — each clearly labelled with the period it
+  covers.
+- **"Best deals on your saved products" has been removed (2026-09-02).** It and
+  "Price drops" showed near-identical lists of discounted products, differing
+  only in how they ranked them. Price drops survives, because a
+  server-verified new low is a claim Dora can stand behind; "biggest % off the
+  ticket" rewards a good special rather than a good decision.
+- **The dashboard no longer leaves gaps beside its cards (2026-09-02).** Zones
+  with an odd number of cards left the last one sitting in a half-width column
+  next to nothing, and on wide screens the wider cards couldn't share a row at
+  all — five empty regions on a large desktop, two on a laptop. The odd card out
+  now takes the full width of its band, so every row is full at every size, and
+  the spacing between cards matches the rest of the app. One knock-on worth
+  knowing: on very wide screens (1440px+) the Pantry and Kitchen-health cards
+  used to be a third of the width and are now half.
+
 ### Fixed
+- **⚠️ A dashboard card that fails to load now says so, instead of telling you
+  everything's fine (2026-09-02).** If the alerts request failed, the "Needs your
+  attention" card showed **"All clear — nothing needs your attention right
+  now."** — it told you nothing was wrong at exactly the moment it couldn't know.
+  Same shape elsewhere: a failed savings request told long-time users to "finish a
+  shop", and a failed restock request said it would flag things later. All eleven
+  of the dashboard's independent loaders now show a short "I couldn't load this
+  just now" with a **Try again** that reloads only that card, and the card
+  recovers in place. The whole-page error banner has a Try again too — it used to
+  say "try refreshing" while offering nothing to click.
+- **"Spend by store" now says what its total covers (2026-09-02).** The card lists
+  your top 3 stores and printed a bare total underneath, which read as the sum of
+  those three — it was actually the sum of all of them, worked out in the browser.
+  It now reads "$412 across 5 stores · top 3 shown", with the total coming from
+  the server.
+- **Pantry value always shows its caveat (2026-09-02).** The note explaining that
+  the figure is an estimate — items with no recorded price aren't counted — only
+  appeared sometimes. A number that undercounts shouldn't ever appear bare.
+- **A rising pantry value is no longer coloured green (2026-09-02).** Pantry value
+  going up was painted as good news while rising *spend* is painted as bad news on
+  the reports page — the same underlying fact, coloured two opposite ways. The
+  ▲/▼ arrow already tells you the direction; colour is now reserved for the
+  budget, which is the one figure with a target to miss.
+- **⚠️ Dates were showing a day early outside Australia (2026-09-02).** Every
+  date-only value in the app — expiry dates, planned meals, effective dates —
+  was rendering one day earlier than it should for anyone in a timezone west of
+  Greenwich. An expiry of 3 September displayed as 2 September; on the dashboard,
+  tomorrow's dinner read "Today". The cause was a single parsing detail
+  (`YYYY-MM-DD` is read as UTC midnight, then displayed in *your* zone), and it
+  was invisible from Australia because there the two agree — which is why it
+  lasted. Fixed in the one place the app formats dates, so every surface is
+  corrected at once, and the test suite now runs in a US timezone so this can't
+  come back.
+- **"You've saved $128.45" no longer renders as "$128" (2026-09-02).** Three
+  money figures on the dashboard — the savings headline and the primary list's
+  "remaining" and "saved" — were rounded to whole dollars, printed without a
+  thousands separator, and put the currency symbol in front even in currencies
+  that put it after. The savings card was the odd one: its big number used the
+  rounded form while the line right beneath it was formatted properly, so one
+  card showed two different formats for the same currency. All money now goes
+  through the one formatter.
+- **The Kitchen health card renders in your actual theme (2026-09-02).** Its
+  colours referenced theme variables that were never defined, so the whole card
+  fell back to hard-coded light-theme values in all ten themes: the "fair" bars
+  and the action links came out yellow instead of green, and the bar backgrounds
+  vanished on a dark theme. This is the honest close-out of the older "dark mode
+  not working on the dashboard" report.
+- **The pantry donut and the report charts follow a theme change (2026-09-02).**
+  Switching theme while looking at the dashboard or Reports left the donut and
+  every chart painted in the *previous* theme's colours until you navigated away.
+  Both surfaces claimed in their own code comments to handle this; neither did.
+- **The "Reconcile past meals" card has a border again (2026-09-02).** It
+  referenced a border colour that doesn't exist, which in CSS throws the whole
+  border away — so it sat in a grid of outlined cards with no outline of its own.
+  Four other places in the app had the same undefined-colour problem.
+- **"Hide for today" on Dora's dashboard note now lasts the day (2026-09-02).**
+  It hid the note until you navigated away from the dashboard and came back,
+  which was not "today" by any reading. It now stays hidden until the next day's
+  message.
+- **Kitchen health no longer scores you on a budget when money features are off
+  (2026-09-02).** If you'd set a grocery budget and later turned money features
+  off, your kitchen-health score was still being weighted by how you were
+  tracking against it — and the card still offered a "Set a budget" link into the
+  money settings you'd switched off.
+- **Product photos load on split-host and app installs (2026-09-02).** The deal
+  rows on the dashboard and the My Products list requested their images in a way
+  that doesn't carry your session when the app and the API are on different
+  hosts, or inside the installed mobile app — so photos silently didn't appear
+  and looked like products with no photo.
 - **Editing your meal slots takes effect immediately (2026-09-01).** Adding,
   renaming, deleting or reordering a meal slot in Settings left the rest of the
   app showing the old list until you reloaded the page — so the meal planner

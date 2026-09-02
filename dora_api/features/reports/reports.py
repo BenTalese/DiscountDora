@@ -449,9 +449,20 @@ class SpendByStoreHandler:
 def spend_by_store():
     _Since = _parse_range(request.args.get("range"))
     _Rows = SpendByStoreHandler(SqlAlchemyRepository()).handle(_Since)
+    # R-041 — the total and the row count travel WITH the rows.
+    #
+    # The dashboard's spend card shows only the top 3 stores but rendered a
+    # bare "$X total" that it had summed client-side over every row. Two
+    # problems in one: a cross-collection aggregate computed in the browser
+    # (state-ownership), and a total whose coverage the reader could not see —
+    # "$412 total" beside three stores looks like the sum of those three. Now
+    # the server ships both, so the client renders "top 3 of 5 stores" without
+    # doing any arithmetic.
     return ok({
         "range": request.args.get("range", "30d"),
         "rows": [asdict(r) for r in _Rows],
+        "total_spend": round(sum(r.spend for r in _Rows), 2),
+        "store_count": len(_Rows),
     })
 
 

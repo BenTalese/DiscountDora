@@ -137,23 +137,76 @@ own tint, 37px beside a 28px neighbour) that neither report had named.
 
 ## ⚠️ Needs your attention now
 
-**Total open backlog is 168 items in `DORA_FOLLOWUPS.md`** (recounted 2026-09-02:
-FU-809 through FU-816 opened by the reports review).
+**Total open backlog is 190 items in `DORA_FOLLOWUPS.md`** — *counted, not
+inferred* (`^## [OPEN] FU-` headings, 2026-09-02). The previously-stated 168 was
+carried forward arithmetically and was wrong; recount rather than adjust it. This
+session: FU-809-816 opened by the reports review and FU-817-829 by the dashboard
+review; then all seven owner calls (809/810/811/812/817/818/819) resolved by
+decision, with FU-830/831/832/833 opened to carry the decided work and FU-814
+amended to absorb the radius correction.
 These are the ones wanting a decision or a running-app check, most important first.
 
-1. **Four calls on `/reports`, all from one review (FU-809/810/811/812).** The
-   page has never been designed or reviewed — it's a faithful build of the 2025
-   N6 spec, and the feedback file's REPORTS section is literally `?`. Read
-   `docs/05_investigations/REPORTS_PAGE_REVIEW.md`; the four questions it can't
-   answer for you are: **(809)** should Reports share the dashboard's card
-   registry — five cards and five endpoints are already common; **(810)** does
-   "Savings captured" survive, given it measures the retailer's advertised
-   discount rather than money you kept; **(811)** correcting the shared 18px card
-   radius/padding onto the token scale changes how the *dashboard* looks;
-   **(812)** ECharts is a 562KB chunk for the app's only chart consumer. 809 and
-   810 gate the restructure. Separately and needing no decision: the page renders
-   every dollar surface with money switched off (FU-816), which contradicts your
-   own L254 bullet.
+1. **✅ The two page reviews are fully decided — all seven owner calls answered
+   2026-09-02. Nothing here needs you; it needs building.** Both `/reports` and the
+   dashboard got a PO + engineering review, and the two documents found opposite
+   problems, which was the useful part. `/reports` had **never been designed** — a
+   faithful build of the 2025 N6 spec, with the feedback file's REPORTS section
+   literally `?`. The dashboard **was** designed properly
+   (`IMPL_PLAN_DASHBOARD_REBUILD`, 7 phases, own coverage table closed); what
+   lapsed were the plan's *structural* commitments — curated 8-card default → 13 of
+   17; DoD *"the 1964-line monolith is gone"* → 3126 lines.
+
+   **The decisions** (details in each review's §8): card census → *merges only, no
+   demotions, then encode the number* (13 → 11 default-on); the meal plan rendered
+   four times → *keep Next to cook, merge the week strip into the fortnight card,
+   drop the "Next up" callout*; deals → *keep Price drops, cut Best deals*; savings
+   → *keep the card, change the baseline*, which grew into a **tense split**
+   ("saved" means vs shelf price while shopping, vs your own usual price in the
+   report, both labelled) plus a reseed; card sharing → *one flat catalogue +
+   an extracted `useCardLayout()`, not the card bodies, and explicitly a data table
+   rather than an abstraction layer*; the 18px card radius → *correct it to
+   `--radius-lg` (10px)*, once a survey showed 10px is the app's card radius at
+   **41 sites** against 18px at **3**; ECharts → *drop it*, once measurement showed
+   the app already owns an 8 KB hand-rolled SVG chart that does the same job.
+   Two answers went **against** the reviews' recommendations, both because a
+   measurement overturned the premise — recorded as such in the docs.
+
+   **One new rule:** **R-071 / ADR-068** — *a comparative figure carries its
+   baseline in its label, and one word never spans two baselines.*
+
+   **Build progress against the review's 6 chunks — 4 of 6 done, all green.**
+   ✅ **Chunk 1** (the eight functional defects, FU-820..827 — also retired
+   FU-767), ✅ **Chunk 2** (the grid packs, FU-631 #3), ✅ **Chunk 3** (the
+   decided restructure, FU-830), ✅ **Chunk 4** (honesty + error states, FU-840).
+   vitest 585 → **661**, pytest 2210, only the pre-existing buy-verdict 4 red.
+   The dashboard is **17 cards → 14, 13 default-on → 11**, and the count now has
+   a test holding it — the mechanism §2.2 never had, and the reason it drifted.
+
+   Chunk 4's headline is worth knowing about: every one of the dashboard's
+   eleven loaders used to turn a failed request into the card's *empty* state, so
+   a failed alerts fetch rendered **"All clear — nothing needs your attention"**.
+   The dashboard told you nothing was wrong at exactly the moment it couldn't
+   know. All eleven now say "I couldn't load this" with a per-card retry.
+
+   Three things found along the way were bigger than the dashboard: **every
+   date-only value in the app rendered a day early west of Greenwich** (fixed at
+   the single date authority; the suite now runs in a US timezone); a new R-060
+   guard found **21 undeclared design tokens app-wide**, two in the very file
+   that rule was written from (**FU-834**); and the app's **nine segmented
+   controls all render their selected label under the contrast floor**, with two
+   likely rendering it invisible (**FU-839**). Chunk 2 also corrected my own
+   review — the "five dead regions" claim holds at ≥1440px but was two below,
+   because Quasar's `lg` is ≥1440 while the app calls ≥1024 desktop (**FU-836**).
+
+   **Remaining, none of it blocked:** **Chunk 5** = **FU-829** (finish the
+   extraction + its ADR), **Chunk 6** = **FU-828** + **FU-814** (token sweep +
+   the card radius).
+   Runnable in parallel and not dashboard-scoped: **FU-816** (the Reports money
+   gate — ships standalone), **FU-831** (savings baseline, the only item needing
+   a migration), **FU-832** (shared catalogue), **FU-833** (drop ECharts).
+   Smaller spin-offs: **FU-835** (Kitchen health's stocktake component scores an
+   activity, not a signal), **FU-837** (short cards stretched to a tall row-mate),
+   **FU-838** (contracts orphaned by the Best-deals cut), **FU-839** (above).
 
 2. **Does the burger read at 12–14px, and does the deepened accent still look
    like the accent? (FU-800, and the `DORA_VERIFY.md` "Accent ink" section.)**
@@ -288,7 +341,7 @@ IMPL_PLAN_*); INV prompts produced their reports.
 | IMPL_PLAN_CONFIG_AND_OPTINS | Impl plan | ✅ done | Feature-flag/opt-in spine (C-cross) | `useFeatureFlags`/health flags shipped |
 | IMPL_PLAN_COOKBOOK | Impl plan | ✅ done | Recipe domain rebuild (C-4) | Structured steps/tags shipped |
 | IMPL_PLAN_COOK_MODE | Impl plan | ✅ done | Cook-mode rebuild (C-3) | `RecipeCookMode.vue` live |
-| IMPL_PLAN_DASHBOARD_REBUILD | Rebuild brief | ✅ done | Rebuild DashboardPage around savings | `DashboardPage.vue` rebuilt |
+| IMPL_PLAN_DASHBOARD_REBUILD | Rebuild brief | ➗ carve-outs | Rebuild DashboardPage around savings | Phases 0-7 all shipped; **two commitments unmet** (re-audited 2026-09-02, `DASHBOARD_PAGE_REVIEW.md` §2): §2.2's curated 8-card default set is now 13 of 17 (FU-817), and §6's DoD "thin composition over `components/dashboard/*` — the 1964-line monolith is gone" was closed by extracting the shell alone (FU-293); the page is 3126 lines with 14 cards inline (FU-829) |
 | IMPL_PLAN_ENV_TO_APPSETTING | Impl plan | ✅ done | Promote 12 env vars to AppSetting (FU-333B) | Header "SHIPPED 2026-07-05/06" |
 | IMPL_PLAN_ERROR_HANDLING | Impl plan | ➗ carve-outs | App-wide error-message polish (FU-099) | `apiErrorHandler.ts` live; full 166-catch sweep unconfirmed |
 | IMPL_PLAN_HELP_CHIPS | Impl plan | ✅ done | Add (?) hover-help chips (FU-044) | `help_outline` tooltip pattern across pages |
@@ -353,11 +406,12 @@ IMPL_PLAN_*); INV prompts produced their reports.
 | SHOPPING_LIST_REDESIGN_PROPOSAL | Proposal (v1) | 📦 superseded (SHOPPING_LIST_UX_V2) | Shopping-list lifecycle redesign | Structural work shipped as P6-01 |
 | STATE_OWNERSHIP_REFACTOR_PROPOSAL | Proposal | ➗ carve-outs | Server-vs-client state ownership refactor | `IMPL_PLAN_STATE_OWNERSHIP.md`; §8 addendum binding |
 
-## 05_investigations — reports (21)
+## 05_investigations — reports (22)
 
 | Doc | Type | State | Purpose/Notes | Evidence |
 |---|---|---|---|---|
-| REPORTS_PAGE_REVIEW | PO+eng review | 🔵 designed-not-built | `/reports` first-ever review — stands in for the empty REPORTS feedback section. Page is a faithful build of the 2025 N6 spec, ungated against the money flag | Written 2026-09-02; 8 FUs (809-816), chunks gated on FU-809/810 |
+| DASHBOARD_PAGE_REVIEW | PO+eng review | 🔵 designed-not-built | The dashboard as a **drift audit**, not a design pass — the surface was designed properly (`IMPL_PLAN_DASHBOARD_REBUILD`, 7 phases) and it is the plan's *structural* commitments that lapsed: curated 8-card default → 13 of 17; DoD "monolith is gone" → 3126 lines. Also re-opens feedback D2 (dark mode) and L254 (money opt-in) | Written 2026-09-02; 13 FUs (817-829); Chunks 1-2 shippable now, Chunk 3 gated on FU-817/818 |
+| REPORTS_PAGE_REVIEW | PO+eng review | 🔵 designed-not-built | `/reports` first-ever review — stands in for the empty REPORTS feedback section. Page is a faithful build of the 2025 N6 spec, ungated against the money flag | Written 2026-09-02; 8 FUs (809-816), chunks gated on FU-809/810. One item corrected by `DASHBOARD_PAGE_REVIEW` §3.10: the `themeTick` bug originated on the dashboard, so FU-824 supersedes half of FU-814 |
 | DATA_MODEL_SANITY_SWEEP_FU393 | Schema sweep | ✅ closed-actioned | Whole-schema sanity; remediation spawned FU-563/564/565 | Fully remediated 2026-07-15; schema-match test enforces (R-034) |
 | PERF_SCALE_SWEEP_FU388 | Perf sweep | ✅ closed-clean | Query-scale at 500/2000 items — no N+1s | "DB/query-scale pass done (clean)" |
 | AUTH_ASSISTANT_SECURITY_FINDINGS | Security audit | ➗ closed-with-carve-outs | Auth+assistant register; re-audited 2026-07-13 | HIGH/MED fixed (FU-197/442/515); A.5/A.6/A.7 accepted |

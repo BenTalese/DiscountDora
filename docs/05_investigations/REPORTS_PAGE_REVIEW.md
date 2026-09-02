@@ -260,6 +260,20 @@ line, and the honest comparison is against *your own historical unit price for
 that item* rather than the retailer's claimed RRP. That is a claim you can stand
 behind, and price-trends already holds the data for it.
 
+> **DECIDED (owner, 2026-09-02): the card survives with the inverted metric, and
+> the change is app-wide with a tense split.** Live in-list savings keep the
+> vs-shelf-price baseline; this retrospective card moves to the household's own
+> historical unit price; both name their baseline in the label. Existing archived
+> lists are reseeded rather than backfilled, because the new baseline needs a
+> pick-time snapshot column and deriving it later would make past figures move.
+> Recorded as **ADR-068 / R-071**; work carried by **FU-831**. Two consequences
+> for this page specifically: the **money and products gates this section asks for
+> are still needed** (they ride in Chunk 1 / FU-816), and the handler's current
+> "no RRP snapshot ⇒ contribute zero savings" fallback stops being acceptable —
+> under an own-price baseline an item with no price history has *no* baseline, so
+> it becomes an **R-041 coverage** case (report the count it was built from), not
+> a silent zero.
+
 ### 3.8 What is the point of "Meals cooked"? The widget is fine; the presentation is not selling it.
 
 It is cook-events-per-bucket as a line, plus a top-10 recipe list. Three
@@ -387,6 +401,16 @@ is 10px, `--radius-xl` 16px, `--radius-2xl` 22px; `--space-4` is 16px, `--space-
 the scale changes the dashboard's appearance. Those are two separate decisions —
 see D3 in §8.
 
+> **DECIDED (owner, 2026-09-02): both, and in one pass — correct to `--radius-lg`
+> (10px) + `--space-4` (16px).** The "two separate decisions" framing above was
+> right, but it implied the correction was a close call; a survey of every
+> `border-radius` in `web_app/src` settled it. **10px appears at 41 sites**
+> (`--radius-lg` ×22 + raw `10px` ×19); **18px at 3** — `DashboardCard`, this
+> page's fork, and the dashboard hero. The guide matches the app; these are the
+> outliers. `--radius-xl` (16px) was rejected as the gentler landing because it
+> would leave two card radii in the app (D-017). Folded into **FU-814** so
+> `DashboardCard` is touched once, not twice.
+
 ### 4.3 Typography: 17 raw font-size literals, zero tokens, two below the hard floor
 
 `A2` requires the `--font-size-*` unitless ratios applied as
@@ -508,6 +532,23 @@ bundle after the icon font, ahead of the entire main CSS file. If the redesign
 lands on one line chart and one sparkline, ECharts is no longer worth its weight;
 if it keeps five charts, it is. Worth deciding deliberately rather than by
 inertia.
+
+> **DECIDED (owner, 2026-09-02): ECharts goes.** Two corrections to the paragraph
+> above, both from measuring rather than reasoning. (1) The chunk is **549 KB**
+> measured (`ReportsPage-L-6CPwJ3.js`) and ECharts is **inlined into the route
+> chunk**, not a shared vendor bundle — so the cost is paid only by visitors to
+> `/reports`, never at app boot, which is a weaker argument for removal than
+> "second-largest asset" implied. (2) The far stronger argument, which this review
+> missed: **the app already owns a hand-rolled replacement that ships in 8 KB.**
+> `components/PriceHistoryChart.vue` is 462 lines of inline SVG doing multi-series
+> polylines, y-ticks and a hover tooltip — the exact chart price-trends needs.
+> Combined with this section's own recommendation (donuts → CSS proportional bars,
+> counts → columns), **no surviving chart needs a library**. ECharts is already
+> tree-shaken to `LineChart` + `PieChart` (`:457-465`), so removal is the only
+> remaining lever. Work in **FU-833**; it includes giving `PriceHistoryChart` the
+> legend, x-ticks and `aria`/text-alternative it currently lacks — which is also
+> how §4.9's "five canvas charts with no accessible alternative" finding finally
+> gets fixable, since SVG can carry what canvas cannot.
 
 ### 4.7 Loading and empty states
 
@@ -715,24 +756,96 @@ tokenising cards that are about to be deleted.
 ## 8 · Open decisions
 
 Every item below carries a recommendation so none is left dangling; the four that
-are genuinely the owner's call are also logged as FUs.
+are genuinely the owner's call were logged as FUs and **all four have since been
+answered**.
+
+> **Owner answered D1–D4 on 2026-09-02**, the same day as the review (D2 first,
+> then D1/D3/D4 in a second pass). FU-809, FU-810, FU-811 and FU-812 are all
+> **resolved**; the decided work is carried by **FU-831** (savings baseline),
+> **FU-832** (shared catalogue + layout machinery), **FU-833** (drop ECharts) and
+> an amended **FU-814** (un-fork *and* correct the card radius). No owner call
+> remains open on either page review.
 
 - **D1 — Do Reports and the dashboard's Money zone share one card registry?**
-  *Recommendation: yes.* Five cards and five endpoints are already common, and
-  the alternative is maintaining two card systems against one API. It is a real
-  architectural commitment, so it is the owner's call. → **FU-809**.
-- **D2 — Does "Savings captured" survive?** *Recommendation: keep the card, change
-  the metric* — spend as headline, savings against your own historical unit price
-  rather than retailer RRP (§3.7). Cutting it outright is defensible on
-  Anti-creep grounds. → **FU-810**.
+  *Recommendation was: yes.* **DECIDED (owner, 2026-09-02): share a flat catalogue
+  plus the machinery — but not the card bodies.** The scope was narrowed once the
+  overlap was measured properly: after the dashboard's own restructure (FU-830) the
+  two surfaces share **five endpoints** (`savings-captured`, `spend-by-store`,
+  `stock-value`, `price-drops`, `keeps-running-out`) but **no presentation** — the
+  dashboard's are glance-sized, Reports' are full-size with range controls. So what
+  gets shared is:
+  1. a **flat data table** keyed by card id declaring gate / label / icon /
+     endpoint — explicitly a table, **not** a plugin architecture or an abstraction
+     layer (the constraint the owner attached, and the right one for a
+     single-maintainer codebase);
+  2. an extracted **`useCardLayout()`** composable carrying visibility, order and
+     the server-persisted layout, which Reports currently has none of;
+  3. the **`DashboardCard` shell** (already FU-814's job).
+  Card *bodies* stay separate by design. The R-003 win is concrete: the money and
+  products **gate facts stop being declared twice** — today they are declared once
+  on the dashboard and zero times on Reports, which is exactly why FU-816 exists.
+  → **FU-809 resolved**; the work is **FU-832**. Note FU-816 (add the gates) still
+  ships standalone in Chunk 1 — do not wait for the catalogue to fix a live
+  contradiction with feedback L254.
+- **D2 — Does "Savings captured" survive?** *Recommendation was: keep the card,
+  change the metric.* **DECIDED (owner, 2026-09-02): exactly that, and two
+  follow-on calls settled the scope the recommendation left open.** **"Saved"
+  splits by tense** — live in-list savings stay vs shelf price (RRP), because in
+  the aisle "what this offer is under the ticket" is the honest question and it is
+  the only baseline available for an item with no price history; the retrospective
+  card moves to the household's **own historical unit price**; and **both are
+  labelled**, in the DTO field name as well as the copy. **Spend becomes the
+  headline** with savings as support. **Existing archived lists are reseeded, not
+  backfilled** — the own-price baseline needs its own pick-time snapshot column
+  (`usual_price_at_pick` beside `list_price_at_pick`), and deriving it
+  retroactively would make every past shop's savings move each time a price is
+  logged, which is what the existing snapshot design exists to prevent. Now
+  **ADR-068 / R-071** (*a comparative figure carries its baseline in its label,
+  and one word never spans two baselines*). → **FU-810 resolved**; the work is
+  **FU-831**, which spans this page, the dashboard's Money card and the shopping
+  list's live figure. Note the knock-on: the handler's current
+  RRP-snapshot-missing fallback silently contributes zero savings, which under the
+  new baseline becomes an R-041 coverage obligation rather than a fallback.
 - **D3 — Do the off-scale `18px` radius / `18px 20px 20px` padding get corrected
-  onto the token scale?** They are shared with `DashboardCard`, so correcting
-  them changes the dashboard's look. *Recommendation: consolidate onto the shared
-  component now (safe), and defer the scale correction to a deliberate visual
-  pass.* → **FU-811**.
-- **D4 — Does ECharts stay?** Contingent on the surviving chart count: one line
-  plus one sparkline does not justify a 562KB chunk; five charts does.
-  *Recommendation: defer until Chunk 3 fixes the card set.* → **FU-812**.
+  onto the token scale?** *Recommendation was: consolidate now, defer the
+  correction — it's a visual-taste call.* **DECIDED (owner, 2026-09-02): correct
+  them, to `--radius-lg` (10px) and `--space-4` (16px).**
+  **The recommendation was based on a wrong assumption and a survey overturned
+  it.** I framed this as guide-vs-reality, implying the 18px might be the app's de
+  facto card radius with the guide lagging. Counting every `border-radius` in
+  `web_app/src`: **10px appears at 41 sites** (`--radius-lg` ×22 plus a raw `10px`
+  ×19), 12px at 14, `--radius-xl` (16px) at 2, and **18px at exactly 3** —
+  `DashboardCard`, `ReportsPage`'s fork of it, and the dashboard hero. So A4 is
+  not aspirational: 10px *is* the app's card radius, and these are a three-site
+  outlier. That makes it a straightforward correction rather than a taste
+  judgement. `--radius-xl` (16px) was rejected as the softer landing precisely
+  because it would leave the app with **two** card radii, which is what D-017
+  exists to prevent. → **FU-811 resolved**; the correction is folded into
+  **FU-814** (amended), since shipping it separately means touching
+  `DashboardCard` twice.
+- **D4 — Does ECharts stay?** *Recommendation was: defer until the card set
+  settles.* **DECIDED (owner, 2026-09-02): drop it — extend
+  `PriceHistoryChart.vue` instead.** Two measurements made this answerable now
+  rather than later:
+  - **ECharts is already as small as it gets, and it is route-scoped.** It is
+    inlined into the `ReportsPage` route chunk (measured **549 KB** built,
+    `ReportsPage-L-6CPwJ3.js`), not a shared vendor chunk — so only visitors to
+    `/reports` pay it, never app boot. And it is *already* tree-shaken to
+    `LineChart` + `PieChart` + `CanvasRenderer` (`ReportsPage.vue:457-465`), so
+    there is no fat left to trim; the only lever is removal.
+  - **The replacement already exists and already ships.**
+    `web_app/src/components/PriceHistoryChart.vue` is **462 lines of hand-rolled
+    inline SVG** — multi-series polylines, y-ticks, hover tooltip, point circles,
+    a shared palette composable — and it builds to **8 KB**
+    (`PriceHistoryChart-nDFcRMh6.js`). It already draws precisely the chart
+    Reports' price-trends needs, on the same kind of data.
+  After the restructure every surviving chart is a CSS proportional bar (§4.6),
+  a sparkline polyline, columns, or a multi-series line — **nothing left needs
+  ECharts**. Honest cost, stated so it isn't a surprise: that component has **no
+  legend, no x-ticks and no `aria`/`role`**, so adopting it as the app's chart
+  means investing in it. That investment is worth having anyway — being SVG it
+  *can* be made accessible, which §4.9's canvas-charts finding says ECharts never
+  can. → **FU-812 resolved**; the work is **FU-833**.
 - **D5 — Does "category" → "stock group" go through the DTOs or stop at the
   label?** *Answered inline (§3.9): label now, DTOs when either handler is next
   opened.* No FU needed.
@@ -745,7 +858,16 @@ are genuinely the owner's call are also logged as FUs.
   Folded into Chunk 2.
 
 **Open decisions — closed:** all seven resolved above; D1–D4 additionally spawned
-as FU-809 through FU-812. No undecided fork remains in this document.
+as FU-809 through FU-812.
+
+**Owner status: all four answered 2026-09-02** (same day as the review) — D2 in a
+first pass, D1/D3/D4 in a second. FU-809/810/811/812 are resolved; the decided work
+is **FU-831** (savings baseline), **FU-832** (flat catalogue + `useCardLayout()`),
+**FU-833** (drop ECharts, promote `PriceHistoryChart`) and an amended **FU-814**
+(un-fork + correct the radius to `--radius-lg`). **No owner call remains open on
+either page review.** Two of the four answers went against this document's
+recommendation, both because a measurement overturned the premise — see D3 (the
+radius survey) and D4 (the chunk and the 8 KB alternative).
 
 ---
 

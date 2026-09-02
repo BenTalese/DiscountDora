@@ -43,6 +43,67 @@ def _component(dto: DoraScoreDto, key: DoraScoreComponentKey):
     return next(c for c in dto.components if c.key == key)
 
 
+def _keys(dto: DoraScoreDto) -> set[DoraScoreComponentKey]:
+    return {c.key for c in dto.components}
+
+
+# ── Money gate (FU-823 / R-058) ───────────────────────────────────────
+
+@pytest.mark.unit
+class TestMoneyGate:
+    """The budget signal reasons entirely in money, so a money-off install
+    must not see it *or* be scored by it.
+
+    Before this gate, `get_dora_score` called `GetBudgetStatusHandler`
+    unconditionally — and that handler deliberately computes its period even
+    when money is off (so the dashboard can show a passive spend figure). So an
+    install with money disabled but a budget amount still stored had its
+    kitchen-health composite weighted by a signal it had opted out of, and the
+    card rendered a Budget row linking into /settings/money.
+    """
+
+    def test__money_off__budget_component_is_omitted_entirely(self):
+        dto = compute_score(_healthy_inputs(money_enabled=False))
+        assert DoraScoreComponentKey.BUDGET not in _keys(dto)
+
+    def test__money_off__other_four_signals_still_scored(self):
+        # R-058's test: with the flag off, what remains must still be correct.
+        dto = compute_score(_healthy_inputs(money_enabled=False))
+        assert _keys(dto) == {
+            DoraScoreComponentKey.WASTE,
+            DoraScoreComponentKey.FRESHNESS,
+            DoraScoreComponentKey.RUNOUTS,
+            DoraScoreComponentKey.STOCKTAKE,
+        }
+        assert dto.composite == 100
+
+    def test__money_off__a_stored_budget_cannot_move_the_composite(self):
+        # The sharp version of the bug: a household that set a budget, then
+        # turned money off, was still being scored on it. Being 80% over budget
+        # would have dragged the composite to 96 via the mean; with the gate the
+        # figure must be identical to the no-budget case.
+        over_budget = _healthy_inputs(money_enabled=False, budget_over_pct=0.80)
+        no_budget = _healthy_inputs(
+            money_enabled=False, has_budget=False, budget_over_pct=None,
+        )
+        assert over_budget.money_enabled is False
+        assert compute_score(over_budget).composite == compute_score(no_budget).composite
+
+    def test__money_on__budget_still_present_and_scored(self):
+        # The gate must not change the money-on path at all.
+        dto = compute_score(_healthy_inputs())
+        assert DoraScoreComponentKey.BUDGET in _keys(dto)
+        assert _component(dto, DoraScoreComponentKey.BUDGET).score == 100
+
+    def test__money_on_but_no_budget_set__component_present_but_dormant(self):
+        # "No budget yet" is a discoverability state, not a gate — the row stays
+        # so the user can find the feature. Distinct from money-off, where the
+        # row must vanish (R-029: respect the off-state).
+        dto = compute_score(_healthy_inputs(has_budget=False, budget_over_pct=None))
+        assert DoraScoreComponentKey.BUDGET in _keys(dto)
+        assert _component(dto, DoraScoreComponentKey.BUDGET).score is None
+
+
 # ── Composite / applicability behaviour ──────────────────────────────
 
 @pytest.mark.unit

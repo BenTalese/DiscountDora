@@ -482,6 +482,8 @@
     import StockItemApiService from 'src/services/api/stockItemApiService';
     import WasteApiService, { type WasteInsights } from 'src/services/api/wasteApiService';
     import { computed, onMounted, ref } from 'vue';
+    // FU-824 — reactive theme-token reads; replaces the dead `themeTick` ref.
+    import { paletteToken } from 'src/composables/useThemePalette';
     import VChart from 'vue-echarts';
     import { useRouter } from 'vue-router';
 
@@ -570,14 +572,20 @@
     }
 
     // ── Chart options ────────────────────────────────────────────────────
-    // Pull the active theme's chart palette + brand colours from the
-    // document so charts re-paint when the user switches theme. Recomputes
-    // on `themeTick` bumps (triggered by the route nav + manual reload).
+    // Pull the active theme's chart palette + brand colours from the document
+    // so charts re-paint when the user switches theme.
+    //
+    // FU-824: this used to claim it recomputed "on `themeTick` bumps (triggered
+    // by the route nav + manual reload)". `themeTick` was declared, read here,
+    // and **never incremented anywhere in the repo** — so the palette was
+    // sampled once and frozen, and switching theme on this page left every
+    // chart on the old theme's colours. The ref is gone; `paletteToken` now
+    // carries a real dependency on the theme version, bumped by
+    // `themeService.applyThemeKey`.
     //
     // CSS custom properties return their literal stored value — modern
     // `hsl(h s% l%)` syntax for our tokens. Normalise through a canvas
     // so chart libraries always see a canonical hex/rgba string.
-    const themeTick = ref(0);
     const colourCanvas = typeof document === 'undefined'
         ? null : document.createElement('canvas').getContext('2d');
     function normaliseColour(raw: string): string {
@@ -591,10 +599,8 @@
         }
     }
     const chartPalette = computed(() => {
-        void themeTick.value;
-        const cs = typeof document === 'undefined' ? null : getComputedStyle(document.documentElement);
         const read = (name: string, fallback: string) =>
-            normaliseColour(cs?.getPropertyValue(name).trim() || fallback);
+            normaliseColour(paletteToken(name, fallback));
         return {
             primary: read('--brand-primary', '#17b073'),
             positive: read('--semantic-positive', '#6ba368'),
@@ -1133,7 +1139,10 @@
         gap: 8px;
         margin-top: 12px;
         padding: 8px 12px;
-        border-top: 1px solid var(--border-subtle, rgba(0, 0, 0, 0.08));
+        /* R-060: `--border-subtle` is undeclared, so this always fired its
+           hard-coded fallback — a black wash that reads wrong in a dark theme
+           (R-002). A6: an in-card separator is `--divider`. */
+        border-top: 1px solid var(--divider);
         color: var(--text-primary);
         font-weight: 600;
         font-size: 0.95rem;

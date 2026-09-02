@@ -3,8 +3,10 @@
 Built on the stock-status contract (:func:`is_missing`). One ingredient listed on
 multiple rows is still one shopping line, so "missing" is counted over *distinct*
 stock items. This is the only place the aggregation rule lives — the recipe DTO,
-the ``?cookable`` query filter, and the dashboard's ``cookable_count`` all consume
-it so the definition can't drift (R-003).
+the ``?cookable`` query filter, and the dashboard summary's per-entry
+``missing_count`` all consume it so the definition can't drift (R-003).
+(FU-826 removed the dashboard's collection-wide ``cookable_count``, which used to
+be listed here; the rule itself is untouched.)
 
 Cookbook revision §1.9 — **optional ingredients are ignored entirely** by every
 function in this module. A recipe with three missing optional items is still

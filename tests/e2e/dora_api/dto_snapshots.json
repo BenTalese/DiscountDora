@@ -116,8 +116,6 @@
   "dashboard_summary": {
     "keys": [
       "meal_plan",
-      "meals",
-      "products",
       "recipes",
       "shopping_lists",
       "stock_items"

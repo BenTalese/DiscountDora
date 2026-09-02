@@ -1131,9 +1131,13 @@ def _stock_coverage(recipe: Recipe) -> tuple[int, int, list[str]]:
 
     Cookbook revision §1.9 — **optional ingredients are excluded** so the
     assistant's coverage matches the recipe DTO's `cookable` rule and the
-    dashboard's `cookable_count` (R-003 single source). Otherwise: an
-    ingredient is missing when it has no stock item or its level is the
-    worst ("Out of Stock").
+    per-entry `missing_count` on the dashboard summary's upcoming meal-plan
+    entries (R-003 single source). Otherwise: an ingredient is missing when it
+    has no stock item or its level is the worst ("Out of Stock").
+
+    (This used to cite the dashboard's `cookable_count`; FU-826 removed that
+    field for having no consumer. The shared cookability rule it was built on is
+    unchanged — only the collection-wide sum went.)
     """
     total = 0
     in_stock = 0

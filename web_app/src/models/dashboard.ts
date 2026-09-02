@@ -1,3 +1,16 @@
+// Shape of GET /dashboard/summary — the single aggregated payload the
+// dashboard renders from (AboutSettings' "at a glance" block also reads it).
+//
+// FU-826 trimmed seven fields that nothing in the app rendered: `products`
+// and `meals` as whole sub-objects, `shopping_lists.total_items`, and
+// `recipes.{favourites, cookable_count, needs_linking_count}`. They were
+// shipped for the counter cards IMPL_PLAN_DASHBOARD_REBUILD Phase 1 deleted —
+// the cards went, the payload behind them didn't. Two of them
+// (`meals.*`) were dedicated aggregate queries running on every dashboard
+// load. `shopping_lists.total_items` was additionally the subject of FU-767,
+// a bug report about it over-counting; the honest fix for a field no surface
+// renders is deletion, which retires that FU too.
+
 export type StockItemSummary = {
     total: number;
     out_of_stock: number;
@@ -5,35 +18,15 @@ export type StockItemSummary = {
 };
 
 export type ShoppingListSummary = {
-    total: number;
-    total_items: number;
-};
-
-export type ProductSummary = {
+    /** Active (non-done) lists. Drives the primary-list card's
+     *  "+N other active lists" footer link. */
     total: number;
 };
 
 export type RecipeSummary = {
+    /** Read by AboutSettings' at-a-glance block and the dashboard hero's
+     *  "your recipe book's empty" nudge. */
     total: number;
-    favourites: number;
-    /** Recipes cookable right now (nothing missing, at least one ingredient).
-     *  Server-computed (§3.3) so the card shows the count without the client
-     *  fetching + joining every recipe against the whole pantry.
-     *  IMPL_PLAN_RECIPE_IMPORTER §Chunk 4 — excludes recipes with any
-     *  unlinked required ingredient (those are tri-state None, not True).
-     *  See ``needs_linking_count`` for that tally. */
-    cookable_count: number;
-    /** IMPL_PLAN_RECIPE_IMPORTER §Chunk 4 — recipes with ≥1 unlinked
-     *  required ingredient. The Dashboard "Cookable tonight" card can
-     *  render "N cookable · M need linking" when M > 0. Zero until the
-     *  paste importer ships (Chunk 5) — no existing recipe has unlinked
-     *  ingredients. */
-    needs_linking_count: number;
-};
-
-export type MealSummary = {
-    total_definitions: number;
-    total_in_stock: number;
 };
 
 export type UpcomingMealPlanEntry = {
@@ -62,8 +55,6 @@ export type MealPlanSummary = {
 export type DashboardSummary = {
     stock_items: StockItemSummary;
     shopping_lists: ShoppingListSummary;
-    products: ProductSummary;
     recipes: RecipeSummary;
-    meals: MealSummary;
     meal_plan: MealPlanSummary;
 };

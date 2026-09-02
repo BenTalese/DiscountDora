@@ -2571,6 +2571,93 @@ exceptions, which still must be commented) · **Source** (where it was establish
   'could not update the plan' after fiddling with the meal slot settings"*). See
   ADR-067.
 
+### R-071 — A comparative figure carries its baseline in its label, and one word never spans two baselines
+- **Rule:** any number that means "better/worse/cheaper/saved **than something**"
+  ships the baseline it was measured against, and that baseline appears in the
+  **label the user reads** — not only in a tooltip, a doc comment or the DTO. Where
+  one product word legitimately covers two baselines, each surface names its own
+  ("$4 under shelf price" vs "$4 less than you usually pay"); a bare "saved $4" is
+  not permitted on either. A baseline that is snapshotted at event time stays
+  snapshotted: never recompute a historical comparative from today's data, and
+  never sum two baselines into one total, chart or trend.
+- **Why:** "saved" was doing two incompatible jobs. The retrospective report
+  (`SavingsCapturedHandler`) computed `list_price_at_pick − picked_offer_price` —
+  savings against the *retailer's advertised* RRP — while the live shopping-list
+  figure computed savings against the chosen offer's `price_was`. Both rendered as
+  "saved vs RRP", both were correct for their own question, and neither said which
+  question it was answering, so the dashboard could claim "You've saved $128" on a
+  number that measures how good the specials were rather than how little the
+  household spent. It is the metric equivalent of R-041's partial total: a
+  comparative with an unstated baseline is a confident claim about an unnamed
+  thing. The tense split is the fix, and it only works if both halves are labelled
+  — otherwise the app has two definitions of one word and the reader picks whichever
+  they assume.
+- **Apply:** name the baseline in the DTO field, not just the copy
+  (`savings_vs_usual_price`, not `savings`), so the seam is visible at the API. When
+  the baseline is an event-time fact, give it its own snapshot column written on the
+  same path that writes the compared value (`usual_price_at_pick` beside
+  `list_price_at_pick`) — deriving it later makes past figures move, which is the
+  failure R-063's planning/recording split is also about. If a period contains
+  records from before the baseline existed, report `None` for that period or reseed;
+  do not backfill and do not mix.
+- **Violation signal:** a field named `savings` / `delta` / `difference` with no
+  baseline in its name; a comparative whose "what it's measured against" lives only
+  in a `<q-tooltip>` (this is also the R-041 signal); the same noun rendered from two
+  different computations on two screens; a "just recompute the baseline from current
+  data" fix on a historical series.
+- **Non-goal:** not a demand that every number be comparative. An absolute figure
+  (spend, count, pantry value) has no baseline to name — this rule fires only once a
+  number claims a comparison.
+- **Established by:** the savings-baseline decision, 2026-09-02, out of
+  `DASHBOARD_PAGE_REVIEW.md` §3.5/§3.11 and `REPORTS_PAGE_REVIEW.md` §3.7 (owner:
+  keep the card, change the baseline; split by tense and label both). See ADR-068.
+
+
+### R-072 — A Definition of Done outlives the follow-up that deferred it
+- **Rule:** when a plan's Definition of Done item is deferred into a
+  `DORA_FOLLOWUPS.md` entry, that FU becomes a *pointer* to the DoD row, not a
+  replacement for it. Resolving the FU **partially** does not satisfy the DoD row.
+  So: an FU spun off a DoD **names the plan + the DoD row it stands for**, and its
+  resolution note must state, explicitly, **which DoD rows it closed and which
+  remain open** — spawning a fresh FU for each remainder before it is archived. A
+  DoD row is only closed by something that says it closed *that row*.
+- **Why:** `IMPL_PLAN_DASHBOARD_REBUILD.md` §6 promised *"`DashboardPage.vue` is a
+  thin composition over `components/dashboard/*` widgets (R-001 — the 1964-line
+  monolith is gone)"*, and Phase 0 called the extraction *"the single most
+  important structural move"*. [[FU-293]] was spun off to do it, resolved honestly
+  after extracting the card **shell** (`DashboardCard.vue`) — its own note even
+  records the carve-out, *"card BODY SCSS stays in the page"* — and was archived.
+  Nothing then tracked the fourteen bodies. Two months later the page was **3126
+  lines, 59% larger than the monolith the rebuild set out to dissolve**, and the
+  DoD row still read as satisfied because the FU standing in for it was in the
+  resolved file. The failure is not that the partial was wrong — a shell-first
+  extraction is the right order — it is that the *residue was invisible*. A
+  resolved FU is read as an ending; a DoD row is read as a promise; nobody
+  re-reads a two-month-old impl plan to check whether the promise survived its
+  proxy.
+- **Apply:** in the FU title or `What`, cite the plan and row (*"…the DoD it stood
+  for is still open"* is the shape). On resolution, write a
+  **`DoD rows: closed / still open`** line naming each, and open the remainder FU
+  in the same edit — the remainder must exist in `DORA_FOLLOWUPS.md` before the
+  parent moves to `DORA_FOLLOWUPS_RESOLVED.md`. Same discipline for a plan phase,
+  a review's chunk list, or a proposal's acceptance criteria; the mechanism is
+  identical wherever a durable checklist is worked through disposable tickets.
+- **Violation signal:** a resolved FU whose note contains "stays in the page /
+  for now / follow-up later" with no FU id beside it; a DoD row with no live FU
+  and no evidence in `CHANGELOG.md`; a plan whose §6 checklist is entirely ticked
+  while the artifact it describes is bigger than when the plan was written; the
+  phrase "resolved at the shell level" (or any level) without a statement of what
+  the other levels are.
+- **Non-goal:** not a ban on partial resolution, and not a demand that FUs never
+  close until the whole plan does — the opposite. It exists precisely so a partial
+  *can* be closed cleanly, by making its remainder a first-class object rather
+  than an absence. Nor does it apply to a follow-up that was never spun off a
+  written DoD; a free-standing finding is closed when the finding is gone.
+- **Established by:** the dashboard de-monolith, 2026-09-02 ([[FU-829]]) — the
+  fifth sighting of componentisation-not-finished and the first where the goal
+  had been written into a Definition of Done and closed by a partial. See
+  ADR-069.
+
 
 ## ADR process (evaluate every task)
 
@@ -4619,3 +4706,107 @@ A non-binding cookbook of solutions to recurring problems. Not rules — just a
   deliberately continues to list only the live vocabulary. `new_recipe_version`
   copies `time_of_day` without validating, so it was already correct.
 - **Promotes rule:** R-070.
+
+### ADR-068 — "Saved" splits by tense: vs shelf price while shopping, vs your own usual price in the report (promotes R-071)
+- **Date / task:** 2026-09-02 (owner decisions on the dashboard + reports page reviews)
+- **Status:** accepted
+- **Context:** both page reviews landed on the same metric from different sides.
+  `SavingsCapturedHandler` (`reports.py:774-843`) sums
+  `list_price_at_pick − picked_offer_price` over ticked lines of archived lists —
+  i.e. **savings against the retailer's advertised RRP**, snapshotted at pick time
+  — and renders as "You've saved $X vs RRP" on both the Reports card and the
+  dashboard's Money-zone flagship. The reviews' objection (REPORTS §3.7, DASHBOARD
+  §3.5) was that this measures *how good the specials were*, not *how little the
+  household spent*: it rises when you buy a heavily-discounted thing you did not
+  need, which is the opposite of what Dora is for. Meanwhile three other surfaces
+  render a **different** computation under the same words — the primary-list card
+  stat (`DashboardPage.vue:396`), `ShoppingListOverviewCard.vue:496`, and the
+  per-line model (`shoppingList.ts:282`), all live in-list savings against the
+  chosen offer's `price_was`. Two computations, one word, neither labelled.
+- **Decision:** *(owner, 2026-09-02)* **split by tense.**
+  1. **Live, in-list** savings stay **vs shelf price (RRP)** — while standing in
+     the aisle, "what this offer is under the ticket" is the honest question, and
+     it is the only baseline available for an item with no price history.
+  2. **Retrospective** savings — the "Savings captured" card on both surfaces —
+     move to **the household's own historical unit price** for that item, so the
+     number means "money you kept versus what you normally pay".
+  3. **Both are labelled.** Neither renders a bare "saved $X"; each names its
+     baseline in the copy *and* in the DTO field name (R-071).
+  4. **Spend becomes the headline** on the retrospective card, with savings as the
+     supporting line — the card answers "what did this cost" first.
+  5. The own-price baseline gets its **own snapshot column** (`usual_price_at_pick`
+     or equivalent) written on the finish-shop path beside `list_price_at_pick`.
+     Deriving it retroactively is rejected: it would make every past shop's savings
+     move each time a new price is logged, which is precisely what the existing
+     snapshot design prevents.
+  6. **Existing archived lists are reseeded, not backfilled** *(owner)* — the
+     column is added, nothing is back-filled, and the dev/demo dataset is
+     regenerated so the metric is coherent from its first row. Consistent with the
+     standing pre-release posture (no real users; clean non-preserving migrations
+     are allowed). The three rejected alternatives: backfill from today's
+     observations (dishonest per (5)); null savings before a cutover date (honest
+     but opens the chart on a dead region); keep pre-cutover lists on the old
+     metric (one chart summing two baselines — the exact thing R-071 forbids).
+- **Consequences:** "saved" becomes two named figures rather than one ambiguous
+  one, and the retrospective number stops rewarding advertised discounts. The
+  Money-zone consolidation (DASHBOARD §3.5 — budget folded into savings) is
+  downstream of this and inherits the spend-first hierarchy. Cutting "Best deals"
+  (FU-819) removes the last *card* whose ranking rested on the vs-RRP baseline;
+  `discountPercent` survives as a per-offer display helper, which is legitimate —
+  a single offer's % off the ticket is a shelf-price question. A stock item with no
+  price history has no own-price baseline, so the retrospective figure must report
+  its coverage per R-041 rather than treating unpriced lines as zero savings (the
+  current handler's RRP-missing fallback does exactly that and will need the same
+  treatment).
+- **Promotes rule:** R-071.
+
+### ADR-069 — A deferred DoD row keeps its own tracking; the follow-up is a pointer, not a substitute (promotes R-072)
+- **Date / task:** 2026-09-02 (dashboard review Chunk 5 — the de-monolith, FU-829)
+- **Status:** accepted
+- **Context:** componentisation-not-finished has now been found **five** times
+  (`ShoppingListDetail.vue` at 3,784 lines — [[FU-780]], still open; the reports
+  page's inline card bodies; two earlier sweeps flagged for promotion at the
+  2026-09-01 close-gate; and this one). R-001 already says componentise, so a
+  sixth restatement of R-001 would not have helped — every one of those sightings
+  happened in a codebase that already had R-001 and whose authors had read it. The
+  dashboard instance is the diagnostic one because the goal was not merely implied
+  by a rule, it was **written down as a Definition of Done** and assigned to a
+  follow-up: `IMPL_PLAN_DASHBOARD_REBUILD.md` §6 promised the monolith was gone,
+  [[FU-293]] was spun off to make it so, FU-293 extracted the card shell,
+  documented its own carve-out (*"card BODY SCSS stays in the page"*), resolved,
+  and moved to the archive. From that moment the DoD row had no tracker, the impl
+  plan read as complete, and the page grew from 1,964 to 3,126 lines — with the
+  three cards that *had* been extracted drifting to three different token
+  conventions ([[FU-822]]) and `.dora-deal-row` duplicated by two cards 400 lines
+  apart. So the recurring decision is not "should we componentise" but **"where
+  does a deferred promise live once its ticket is closed?"**
+- **Decision:** the DoD row is the durable object; the FU is a pointer to it.
+  1. An FU spun off a written DoD **cites the plan and the row** it stands for.
+  2. A partial resolution is allowed and encouraged — but its resolution note
+     carries a **`DoD rows: closed / still open`** statement, and the remainder
+     FU must be **open in `DORA_FOLLOWUPS.md` before** the parent is archived.
+  3. A DoD row is closed only by something that says it closed *that row*.
+  4. This generalises past DoDs to any durable checklist worked through
+     disposable tickets: plan phases, a review's chunk list, a proposal's
+     acceptance criteria.
+  Rejected: **(a)** re-verifying every impl plan's DoD at each close-gate —
+  unbounded work, and the reason the retired `STATUS.md` audit went stale;
+  **(b)** forbidding partial resolution — shell-before-bodies was the *right*
+  order here, and a rule that made it inexpressible would have produced a
+  worse refactor or a stalled FU; **(c)** leaving the parent FU open until the
+  whole DoD lands — an FU that stays open for two months across five phases
+  stops being read, which is the same invisibility by a different route.
+- **Consequences:** commits every future DoD-derived FU to naming its parent row
+  and enumerating its residue at close — a few lines of bookkeeping per
+  resolution, paid by whoever is already writing the note. It does **not**
+  introduce a new ledger or a periodic audit; the invariant is local to the
+  moment of archiving, which is the one moment someone is definitely looking. The
+  four other componentisation sightings are *not* retroactively covered by this —
+  they were never DoD-derived, so they remain plain R-001 findings ([[FU-780]] is
+  the live one). Two consequences fall out immediately: this session's own Chunk 5
+  close must state which `IMPL_PLAN_DASHBOARD_REBUILD.md` §6 rows it closed (the
+  thin-composition row — now genuinely closed at 1,775 lines with all fourteen
+  bodies extracted) and which it did not (the token rows, still [[FU-828]]); and
+  the residue this refactor itself deferred — the page-local `--c-*` alias layer
+  ([[FU-747]]) — is named rather than left as a comment.
+- **Promotes rule:** R-072.

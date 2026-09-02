@@ -71,29 +71,53 @@ export const WEEKDAY_WELCOMES: Record<number, string[]> = {
     ],
 };
 
+/** Which feature a hint talks about, when it talks about a gated one.
+ *
+ *  FU-823 — the pool used to advertise money and product features to every
+ *  install, so a household that had switched money off got told, one day in
+ *  fifteen, to set a grocery budget. That is the same contradiction with
+ *  feedback L254 that the card gates exist to prevent (ADR-005): a gated
+ *  feature shouldn't be *promoted* on an install that turned it off any more
+ *  than it should be rendered. An ungated hint has no `gate`. */
+export type HintGate = 'money' | 'products';
+
+export type Hint = { text: string; gate?: HintGate };
+
+/** Which gated hints the current install may show. */
+export type HintGates = { money: boolean; products: boolean };
+
 // Helpful hints, day-agnostic. The first eight are the original "Dora says"
 // tips; the rest are new (feedback D1d asked for a larger hint pool too).
-export const HINTS: string[] = [
-    "I quietly judge anyone who lets the salmon hit six months in the freezer.",
-    "Mark a stock item as 'open' and the opened-on date is recorded automatically.",
-    "Recipes greyed out on the list? At least one ingredient is fully out.",
-    "Cook mode auto-detects 'X minutes' in your steps and offers a timer.",
-    "Setting your default shopping list makes the cart button one-tap.",
-    "Logging a cook on a recipe also bumps its last-cooked date.",
-    "Filter recipes by 'all ingredients in stock' to decide what's actually cookable now.",
-    "A meal plan entry's servings can exceed the recipe's; quantities scale.",
-    "Tap a stock item's level chip to change it without opening the full editor.",
-    "Sort the stock list by 'Expires soonest' to see what to cook first.",
-    "Linking a product to a stock item lets me track its price over time.",
-    "Your saved products power the 'Best deals' card — save the ones you actually buy.",
-    "Set a grocery budget and I'll quietly track spend against it for you.",
-    "Reorder dashboard cards from the Cards menu — drag the ones you check most to the top.",
-    "Stock groups are tags: one item can live in several, handy for filtering.",
+export const HINTS: Hint[] = [
+    { text: "I quietly judge anyone who lets the salmon hit six months in the freezer." },
+    { text: "Mark a stock item as 'open' and the opened-on date is recorded automatically." },
+    { text: "Recipes greyed out on the list? At least one ingredient is fully out." },
+    { text: "Cook mode auto-detects 'X minutes' in your steps and offers a timer." },
+    { text: "Setting your default shopping list makes the cart button one-tap." },
+    { text: "Logging a cook on a recipe also bumps its last-cooked date." },
+    { text: "Filter recipes by 'all ingredients in stock' to decide what's actually cookable now." },
+    { text: "A meal plan entry's servings can exceed the recipe's; quantities scale." },
+    { text: "Tap a stock item's level chip to change it without opening the full editor." },
+    { text: "Sort the stock list by 'Expires soonest' to see what to cook first." },
+    { text: "Linking a product to a stock item lets me track its price over time.", gate: 'products' },
+    { text: "Your saved products power the deals card — save the ones you actually buy.", gate: 'products' },
+    { text: "Set a grocery budget and I'll quietly track spend against it for you.", gate: 'money' },
+    // Ungated (no `gate` key — `exactOptionalPropertyTypes` forbids writing it
+    // as `undefined`). Reworded: it used to say "drag the ones you check most to
+    // the top", but drag is the desktop power-user extra — `cardDragEnabled`
+    // switches the handle off on touch — so the hint now names the control every
+    // platform actually has.
+    { text: "Show, hide and reorder your dashboard cards from the Cards menu." },
+    { text: "Stock groups are tags: one item can live in several, handy for filtering." },
 ];
 
 // Days since the Unix epoch — the stable "which day is it" key both pickers
 // share. Local-date based so the message flips at the user's midnight.
-function epochDay(date: Date): number {
+//
+// Exported because the *dismissal* needs the same key: "Hide for today" has to
+// mean the same "today" the message rotation means, or the band could come back
+// mid-day or stay hidden into tomorrow (FU-825).
+export function epochDay(date: Date): number {
     const local = new Date(date.getFullYear(), date.getMonth(), date.getDate());
     return Math.floor(local.getTime() / 86_400_000);
 }
@@ -104,8 +128,28 @@ export function pickWelcome(date: Date = new Date()): string {
     return pool[epochDay(date) % pool.length]!;
 }
 
+/** The hints this install is allowed to show — ungated ones, plus the gated
+ *  ones whose feature is on (FU-823). */
+export function hintsFor(gates: HintGates): Hint[] {
+    return HINTS.filter((h) => {
+        if (h.gate === 'money') return gates.money;
+        if (h.gate === 'products') return gates.products;
+        return true;
+    });
+}
+
 /** Day-agnostic hint, stable for a given calendar day. The +3 offset keeps the
- *  hint from rotating in lock-step with the welcome (so the pair feels fresh). */
-export function pickHint(date: Date = new Date()): string {
-    return HINTS[(epochDay(date) + 3) % HINTS.length]!;
+ *  hint from rotating in lock-step with the welcome (so the pair feels fresh).
+ *
+ *  Rotates over the *gated* pool, so a money-off install cycles a shorter list
+ *  rather than showing a blank on the days a money hint would have come up.
+ *  That does mean the rotation differs per install — which is correct: the
+ *  guarantee is "stable for a given day", not "the same hint everywhere". */
+export function pickHint(
+    gates: HintGates = { money: true, products: true },
+    date: Date = new Date(),
+): string {
+    const pool = hintsFor(gates);
+    if (pool.length === 0) return '';
+    return pool[(epochDay(date) + 3) % pool.length]!.text;
 }

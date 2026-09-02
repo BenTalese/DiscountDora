@@ -43,6 +43,7 @@ from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.entities.stock_item_waste_event import StockItemWasteEvent
 from dora_api.domain.entities.user import User
 from dora_api.domain.stock_status import OUT_OF_STOCK_SEQUENCE
+from dora_api.features.app_settings.access import money_features_enabled
 from dora_api.features.budget.budget import GetBudgetStatusHandler
 from dora_api.features.routers import DASHBOARD_ROUTER
 from dora_api.infrastructure.api_response import ok, unauthorized
@@ -109,10 +110,22 @@ class GetDoraScoreHandler:
         # dormant (score=None) so it doesn't drag or lift the trend
         # arrow — trend should reflect the *loop* signals, not a
         # calendar boundary crossing.
+        #
+        # FU-823 / R-058 — and skip it entirely when money features are off.
+        # `GetBudgetStatusHandler` deliberately computes period boundaries
+        # *even when the feature is off* (see budget.py) so the dashboard can
+        # show a passive "spent this week" figure — which means it happily
+        # returns a live budget for a money-off install. Calling it
+        # unconditionally here meant the composite was weighted by money data
+        # the household had opted out of, and the card rendered a Budget row
+        # linking to /settings/money. Same shape as the buy verdict's gate
+        # (`get_buy_verdict.py`, ADR-055): the reasoning is gated at the
+        # gather, not just suppressed at the render.
+        money_enabled = money_features_enabled(self.repository)
         has_budget = False
         budget_over_pct: float | None = None
-        if not lagged:
-            budget = GetBudgetStatusHandler(SqlAlchemyRepository()).handle()
+        if money_enabled and not lagged:
+            budget = GetBudgetStatusHandler(self.repository).handle()
             if budget is not None and budget.amount is not None and budget.enabled:
                 has_budget = True
                 if budget.amount > 0:
@@ -200,6 +213,7 @@ class GetDoraScoreHandler:
             unplanned_runout_count=unplanned_runout_count,
             items_checked_in_window=items_checked_in_window,
             total_stock_items=total_stock_items,
+            money_enabled=money_enabled,
         )
 
 

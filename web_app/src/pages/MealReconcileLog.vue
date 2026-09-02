@@ -283,7 +283,9 @@
         justify-content: space-between;
         gap: 0.75rem;
         padding: 0.6rem 0.75rem;
-        border: 1px solid var(--border-subtle);
+        /* R-060: `--border-subtle` is undeclared (invalid ⇒ no border rendered).
+           A6: panel outline is `--border-default`. */
+        border: 1px solid var(--border-default);
         border-radius: var(--radius-md);
         background: var(--surface-component);
         margin-bottom: 0.5rem;

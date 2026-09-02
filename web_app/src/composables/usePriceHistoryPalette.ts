@@ -11,7 +11,16 @@
  * Colours come from the active theme via `--chart-1` … `--chart-5`. The
  * hex fallbacks match the Pesto defaults so a server-render / pre-paint
  * call still returns a sensible colour.
+ *
+ * FU-824 — the token read goes through `paletteToken`, which registers a
+ * dependency on the theme version. This was the **third** copy of the same
+ * one-shot `getComputedStyle` read (with the dashboard donut and Reports'
+ * `chartPalette`): correct on first paint, frozen thereafter, so a theme switch
+ * left the chart on the old theme's hues. Callers still need to be inside a
+ * reactive scope for the invalidation to reach them.
  */
+import { paletteToken } from 'src/composables/useThemePalette';
+
 const CHART_TOKEN_FALLBACKS: readonly string[] = [
     'hsl(150, 76%, 39%)', // --chart-1 (primary)
     'hsl(189, 100%, 32%)', // --chart-2 (secondary)
@@ -21,11 +30,7 @@ const CHART_TOKEN_FALLBACKS: readonly string[] = [
 ];
 
 function readVar(index: number): string {
-    if (typeof document === 'undefined') return CHART_TOKEN_FALLBACKS[index]!;
-    const value = getComputedStyle(document.documentElement)
-        .getPropertyValue(`--chart-${index + 1}`)
-        .trim();
-    return value || CHART_TOKEN_FALLBACKS[index]!;
+    return paletteToken(`--chart-${index + 1}`, CHART_TOKEN_FALLBACKS[index]);
 }
 
 export function seriesColour(index: number): string {

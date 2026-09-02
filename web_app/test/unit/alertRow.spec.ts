@@ -212,7 +212,14 @@ describe('AlertRow — chrome emits and read state', () => {
 
         const caption = wrapper.find('.q-item__label--caption').text();
         expect(caption).toContain('Greek yoghurt');
-        expect(caption).toContain(new Date(related).toLocaleDateString());
+        // FU-820: this assertion used to build its expectation with
+        // `new Date(related).toLocaleDateString()` — the exact broken pattern the
+        // component was fixed for. That parses the date-only form as UTC midnight
+        // and renders it in the local zone, so in any negative-offset timezone the
+        // test *expected* the wrong day (30/06 for a 2026-07-01 alert) and passed
+        // only because the component was wrong in the same direction.
+        // Assert the day the string names instead.
+        expect(caption).toContain('01/07/2026');
     });
 
     // FU-542 — accessibility. AlertRow renders icon-only action buttons

@@ -13,7 +13,7 @@ from uuid import uuid4
 
 import requests
 
-from tests.factories import make_product, make_stock_item
+from tests.factories import make_stock_item
 
 BASE = "http://localhost:5170/api"
 SUMMARY = f"{BASE}/dashboard/summary"
@@ -54,18 +54,22 @@ def _make_recipe(name_prefix: str = "Dashboard Recipe", **body) -> dict:
 
 
 def test__dashboard_summary__ResponseShape__CarriesEveryCardPayload(api):
+    # FU-826 — the payload is exactly what a surface renders, no more. Seven
+    # fields were dropped here (`products` and `meals` whole, plus
+    # `shopping_lists.total_items` and `recipes.{favourites, cookable_count,
+    # needs_linking_count}`): they backed counter cards the dashboard rebuild's
+    # Phase 1 deleted, and grepping both consumers — DashboardPage and
+    # AboutSettings — found no reader for any of them. Asserting the keys
+    # *exactly* is deliberate: it is what stops the payload growing a field
+    # nothing renders again.
     _Body = _summary()
 
     assert _Body.keys() == {
-        "stock_items", "shopping_lists", "products", "recipes", "meals", "meal_plan",
+        "stock_items", "shopping_lists", "recipes", "meal_plan",
     }
     assert _Body["stock_items"].keys() == {"total", "out_of_stock", "low_stock"}
-    assert _Body["shopping_lists"].keys() == {"total", "total_items"}
-    assert _Body["products"].keys() == {"total"}
-    assert _Body["recipes"].keys() == {
-        "total", "favourites", "cookable_count", "needs_linking_count",
-    }
-    assert _Body["meals"].keys() == {"total_definitions", "total_in_stock"}
+    assert _Body["shopping_lists"].keys() == {"total"}
+    assert _Body["recipes"].keys() == {"total"}
     assert _Body["meal_plan"].keys() == {"upcoming_entries"}
     assert isinstance(_Body["meal_plan"]["upcoming_entries"], list)
 
@@ -102,62 +106,28 @@ def test__dashboard_summary__CreatingLowStockItem__LowCountIncreases(api):
     assert _After["out_of_stock"] == _Before["out_of_stock"]
 
 
-def test__dashboard_summary__CreatingProduct__ProductTotalIncreases(api):
-    _Before = _summary()["products"]["total"]
-
-    make_product(
-        name=f"Dashboard Product {uuid4().hex[:8]}",
-        merchant_stockcode=uuid4().hex[:10],
-    )
-
-    assert _summary()["products"]["total"] == _Before + 1
-
 #endregion stock / product cards
 
 #region ---------------- recipe card ----------------
 
-
-def test__dashboard_summary__FavouritingRecipe__FavouritesCountIncreases(api):
-    _Before = _summary()["recipes"]
-    _Recipe = _make_recipe("Dashboard Favourite")
-
-    _MidTotal = _summary()["recipes"]["total"]
-    assert _MidTotal == _Before["total"] + 1
-
-    assert requests.patch(
-        f"{RECIPES}/{_Recipe['recipe_id']}", json={"is_favourite": True},
-    ).status_code == 204
-
-    _After = _summary()["recipes"]
-    assert _After["favourites"] == _Before["favourites"] + 1
+# FU-826 removed three tests here along with the fields they asserted:
+#   • CreatingProduct → products.total       (sub-object dropped, no consumer)
+#   • CookableRecipe  → recipes.cookable_count        (dropped, no consumer)
+#   • FavouritingRecipe → recipes.favourites          (dropped, no consumer)
+# The cookability *rule* is still exercised — by the per-entry `missing_count`
+# and `unlinked_ingredient_count` on upcoming meal-plan entries below, which is
+# the only place the dashboard consumes it. The recipe-level cookability
+# contract belongs to the recipes router's own suite, not this one.
 
 
-def test__dashboard_summary__CookableRecipe__CookableCountIncreases(api):
-    _Before = _summary()["recipes"]["cookable_count"]
-    _Item = make_stock_item(
-        stock_level_id=_stock_level_id(0),
-        name=f"Dashboard Stocked Ing {uuid4().hex[:8]}",
-    )
+def test__dashboard_summary__CreatingRecipe__RecipeTotalIncreases(api):
+    # `recipes.total` survives the FU-826 trim: AboutSettings' at-a-glance block
+    # renders it, and the dashboard hero reads it for the empty-cookbook nudge.
+    _Before = _summary()["recipes"]["total"]
 
-    _make_recipe("Dashboard Cookable", ingredients=[
-        {"stock_item_id": _Item["stock_item_id"]},
-    ])
+    _make_recipe("Dashboard Recipe Total")
 
-    assert _summary()["recipes"]["cookable_count"] == _Before + 1
-
-
-def test__dashboard_summary__RecipeWithUnlinkedIngredient__NeedsLinkingCountIncreases(api):
-    # IMPL_PLAN_RECIPE_IMPORTER §Chunk 4 — unlinked recipes are tri-state
-    # None: counted under needs_linking, never under cookable.
-    _Before = _summary()["recipes"]
-
-    _make_recipe("Dashboard Unlinked", ingredients=[
-        {"raw_text": "2 cups mystery flour"},
-    ])
-
-    _After = _summary()["recipes"]
-    assert _After["needs_linking_count"] == _Before["needs_linking_count"] + 1
-    assert _After["cookable_count"] == _Before["cookable_count"]
+    assert _summary()["recipes"]["total"] == _Before + 1
 
 #endregion recipe card
 
@@ -224,6 +194,41 @@ def test__dashboard_summary__UpcomingEntryForEmptyRecipe__MissingCountIsNull(api
     )
     assert _Entry["missing_count"] is None
     assert _Entry["unlinked_ingredient_count"] == 0
+
+
+def test__dashboard_summary__UpcomingEntryWithUnlinkedIngredient__ReportsCountAndNullMissing(api):
+    # IMPL_PLAN_RECIPE_IMPORTER §Chunk 4 — the OTHER null flavour. An entry whose
+    # recipe has an unlinked required ingredient is tri-state None for
+    # `missing_count` but reports a non-zero `unlinked_ingredient_count`, which
+    # is how the "Next to cook" card renders "N to link" rather than the
+    # ambiguous "No ingredients".
+    #
+    # Converted from the old `needs_linking_count` test (FU-826): the
+    # collection-wide sum was dropped for having no consumer, but the per-entry
+    # field it was derived from is live and drives the badge, so the coverage
+    # moved here rather than being deleted with the field.
+    _Today = _household_today()
+    _Recipe = _make_recipe("Dashboard Unlinked Upcoming", ingredients=[
+        {"raw_text": "2 cups mystery flour"},
+    ])
+    _Slot = requests.get(f"{BASE}/meal-slots").json()[0]["name"]
+
+    _CreateResponse = requests.post(MEAL_PLANS, json={
+        "start_date": _Today.isoformat(),
+        "entries": [{
+            "recipe_id": _Recipe["recipe_id"],
+            "scheduled_for": _Today.isoformat(),
+            "slot": _Slot,
+        }],
+    })
+    assert _CreateResponse.status_code == 201, _CreateResponse.text
+
+    _Entry = next(
+        e for e in _summary()["meal_plan"]["upcoming_entries"]
+        if e["recipe_id"] == _Recipe["recipe_id"]
+    )
+    assert _Entry["unlinked_ingredient_count"] == 1
+    assert _Entry["missing_count"] is None
 
 #endregion meal-plan card
 

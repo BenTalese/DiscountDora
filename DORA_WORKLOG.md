@@ -28,7 +28,736 @@ next.
 
 ---
 
-## 2026-09-02 (latest) — **Reports page: PO + engineering review (read-only), the surface's first**
+## 2026-09-02 (latest) — **Dashboard chunk 4: the dashboard stops telling you everything's fine when it doesn't know**
+
+**Status:** complete + green + verified live under forced failures.
+`DASHBOARD_PAGE_REVIEW.md` §7 **Chunk 4** shipped; **FU-840 resolved** (findings
+10, 11, 13 and 20). Gate: `vue-tsc` clean, `eslint` clean, **vitest 661 passed**,
+**pytest 2210 passed** with only the pre-existing buy-verdict 4 red.
+
+**The defect, in its sharpest form.** Every slot loader did
+`catch { thing.value = null }` — with a comment explaining the card would then
+show its *empty* state. So a failed alerts fetch rendered ***"All clear — nothing
+needs your attention right now."*** **The dashboard told you nothing was wrong at
+exactly the moment it could not know.** A failed savings fetch told a household
+that had shopped for months to "finish a shop". Eleven instances, all biased
+toward reassurance — Honesty inverted, which is worse than a blank.
+
+**What shipped.**
+- **A third card state**: `CardLoadError.vue` — muted cloud-off glyph, Dora-voice
+  line, and a **Try again** that re-runs only that slot. Deliberately *not* a
+  toast: one dashboard load fires eleven parallel requests, so a dead network
+  would raise eleven toasts (D-009's placement budget), and a toast outlives the
+  thing it describes. The failure belongs in the card, so the reader can see which
+  parts of the page to trust.
+- **`loadSlot(id, run)`** records per-slot success/failure in one id-keyed set,
+  chosen over eleven parallel `error` refs because the cards need "did *this*
+  fail" and the banner needs "did *anything* fail" (R-003). It still never
+  throws — one bad slot must not take the page down, which is what the blanket
+  catches were protecting; the difference is the failure is now visible, and a
+  successful retry clears the flag so the card recovers **in place**.
+- **The summary banner got a Retry** (§3.13). Its copy said "Try refreshing",
+  pointing at the manual refresh button D3 deliberately removed — and since every
+  card reads off `summary`, that banner was the only thing on the page when it
+  failed, with nothing to click.
+- **R-041 on spend-by-store**: the server now ships `total_spend` +
+  `store_count`, and the card reads *"$412 across 5 stores · top 3 shown"*. It
+  used to `reduce` over every fetched row **in the browser** and print a bare "$X
+  total" under three rows — which reads as the sum of those three.
+- **Pantry value's caveat is unconditional** — R-041 wants coverage rendered
+  whenever the number is, and this figure silently undercounts.
+- **Finding 20 fixed in passing:** the pantry delta's green/red is gone. A rising
+  pantry value was **green** while Reports paints rising *spend* **red** — the
+  same fact, opposite colours, two screens. The ▲/▼ already carries direction;
+  semantic colour stays for budget, which has a real threshold.
+
+**Verified the way this particular fix has to be.** A unit test can prove the
+component says the right thing; only a browser can prove the *card* does. Routes
+force-failed via Playwright, then measured: **5 cards in the error state, each
+with a retry, and none leaked its reassuring copy** — "All clear", "Finish a shop
+and I'll tally", "I'll flag" all absent. Unblocking the alerts route and pressing
+Try again recovered the card in place. `cardLoadError.spec.ts` adds a guard that
+the copy can never be *reworded* into something reassuring, which is the failure
+mode most likely to creep back.
+
+**Deliberately not done, and said out loud.** R-041 coverage for **savings** and
+for pantry value's counted/total is **FU-831's item 3** — that FU rewrites the
+savings handler for the own-price baseline and already includes "R-041 coverage,
+replacing a silent zero". Building it here is work done twice. And pantry value's
+underlying metric is recommended for *replacement* in `REPORTS_PAGE_REVIEW` §3.3,
+so plumbing coverage into a number that is slated to go is the wrong investment;
+the unconditional caveat is the honest interim. Two of the four §7 Chunk 4 items
+were therefore *correctly* someone else's, which is worth recording so the next
+session doesn't read the chunk as half-finished.
+
+**Standing-rules close-gate.** **Charter Honesty** (the whole chunk), **D-007**
+(three distinct states — skeleton / empty / error), **R-041** (spend-by-store's
+total ships with its coverage; pantry value's caveat unconditional), **R-003**
+(one slot-error structure, not eleven refs), **A1** (the error well on
+`--surface-sunken`, distinct from the positive empty state's
+`--semantic-positive-soft`), **A6** (`role="status"` so a card silently swapping
+to an error is announced), **R-017** (7 new tests + an e2e). **ADR evaluation:
+none promoted.** The candidate worth naming — *"a catch that assigns an empty
+value is a decision to display a lie"* — is really Honesty restated, and D-007
+already covers the three-state requirement. Recorded here rather than promoted.
+
+**Next up:** **Chunk 5 — finish the extraction** (FU-829): the remaining card
+bodies into `components/dashboard/`, plus the ADR that pattern has now earned six
+sightings of. Then **Chunk 6** (FU-828 + FU-814 — the token sweep and the card
+radius), which is much cheaper once each card is a 40-line component.
+
+---
+
+## 2026-09-02 — **Dashboard chunk 3: the decided restructure — 17 cards to 14, and the count now has a test holding it**
+
+**Status:** complete + green + verified in a browser. `DASHBOARD_PAGE_REVIEW.md`
+§7 **Chunk 3** shipped; **FU-830 resolved**. Gate: `vue-tsc` clean, `eslint`
+clean, **vitest 655 passed** (from 642 — 13 new). Two spin-offs logged.
+
+**What shipped** — the five parts the owner decided:
+1. **Week strip + fortnight calendar → one card, "What's coming"** (FU-818), on
+   the `meal_plan` id so saved layouts keep their slot, with a `BaseSegmented`
+   **7/14-day** toggle that slices the already-fetched 14 days rather than
+   refetching. This retires the R-003 defect that motivated the merge: the strip
+   built 7 days from `/dashboard/summary` while the grid built 14 from
+   `/alerts/upcoming`, so the overlapping week was answered twice by two queries
+   that could disagree. The week view *gains* expiry and shopping dots it never
+   had, and the strip's weekday label was carried across (D-012 wants labelled
+   cells; a 14-cell grid of bare numbers is worse).
+2. **The "Next up" callout dropped** — it restated the hero line verbatim.
+3. **Budget folded into the Money card → "Grocery spend"** (FU-810/ADR-068),
+   spend-led: `$X of $Y this week` + bar + remaining, then `Kept vs RRP` as a
+   supporting line with its own range toggle. **Both windows labelled**, which is
+   what R-071 demands of two comparatives in one place, and never summed.
+4. **Best deals cut** (FU-819).
+5. **The card count encoded**, which was the point of the whole census.
+
+**The fifth part is the one that matters beyond today.** `CARD_DEFS` + `ZONES` +
+the id union are extracted to **`helpers/dashboardCards.ts`** with a
+`DEFAULT_VISIBLE_COUNT`, and `dashboardCards.spec.ts` (13 tests) asserts it —
+plus that the retired ids stay retired, that every Money-zone card carries a
+gate (FU-297/ADR-005), and that the "merges only, no demotions" set is intact.
+**That test is the mechanism §2.2 never had.** The count drifted 8 → 13 precisely
+because nothing failed when a card shipped default-on; now adding one turns the
+suite red and forces the conversation. It is also the first slice of the R-001
+extraction FU-829 finishes, and it was extracted *because* a registry buried in a
+3200-line SFC cannot be asserted against — the testability was the reason, not a
+side effect.
+
+**Net: 17 registered → 14; 13 default-on → 11.** Verified live on the dense seed:
+**10 cards render** (the 11th, `reconcile_pending`, is hide-when-empty — exactly
+the "10 in practice" the docs claim), **zero dead grid regions** at 1440px before
+and after the span toggle, the retired cards absent, and both segmented controls
+present. Page 3184 → **3014 lines**, with the dead `.dora-strip*` /
+`.dora-next-up*` / `.dora-range-*` / `.dora-savings-*` CSS gone.
+
+**⚠️ I introduced a D-002 defect and only caught it by looking at the
+screenshot.** I passed `flat` to `BaseSegmented`, which suppresses Quasar's
+primary fill — so the component's forced white `--text-on-primary` ink landed on
+the bare pill track. **Measured 1.21:1: the selected label was invisible.**
+`BaseSegmented`'s own header comment documents this exact trap and it caught me
+anyway. Removing `flat` took it to 3.88:1, matching every other segmented control
+in the app.
+
+**That led somewhere worth having.** Measuring the fix rather than eyeballing it
+showed 3.88:1 is *still* under D-002's 4.5 floor — so **all nine** selected
+segments in the app are under it, which is R-069's shape (a colour tuned as a
+fill is not automatically a background for white ink). And surveying the call
+sites found **two consumers that pass `flat` with no fill of their own** —
+`PriceHistoryPage.vue:84` and `RecipeCookMode.vue:667` — where the same
+invisible-label bug is likely live. Logged as **FU-839**, with the two-surface
+half marked *not confirmed* per the reported-defect rule: cook mode may sit on a
+dark ground where white works, and price history needs a product selected to
+reach. The general lesson is in the FU: a component whose correct use depends on
+the caller also painting a fill should paint it itself or refuse `flat` without
+one.
+
+**Also spun off: FU-838.** The Best-deals cut orphaned three contracts —
+`getBestDealsAsync`, the `/products/best-deals` endpoint behind it, and
+`discountPercent`, which now has **zero** callers app-wide. Worth noting the
+review and ADR-068 both say `discountPercent` "survives"; that was a statement
+about it being *legitimate*, not about it having a consumer. Not deleted here:
+R-057/ADR-054 is explicit that a replaced surface's contracts are an inventory to
+check, not a casualty list. Same shape as FU-766 and worth deciding together.
+
+**Standing-rules close-gate.** **R-003** (one endpoint for the merged card, one
+`cardRendered` predicate), **R-071** (both money windows labelled — the rule
+written two units ago earning its keep immediately), **R-001** (registry
+extracted; page down 170 lines), **R-048/B2a** (the hand-rolled
+`.dora-range-chip` lookalike replaced — it had no `aria-pressed`, no focus state
+and an 11.5px label), **R-016** (the lazy-load gate deliberately removed *with*
+its justification recorded, since the card is now default-on), **R-057**
+(orphaned contracts logged, not deleted), **D-012** (labelled calendar cells),
+**A6** (`--divider` for the new in-card separator), **R-017** (13 tests ship with
+it), **D-002** (the defect above, caught and fixed). **ADR evaluation: one
+candidate, worth a second sighting** — *"a component whose correct rendering
+depends on a caller-supplied companion style should supply it or reject the
+option"*. It has one clear instance (`BaseSegmented` + `flat`) and one suspected
+pair; if FU-839's two consumers confirm, that is three and it should be written
+up.
+
+**Next up:** **Chunk 4 — honesty and error states**: the third "couldn't load
+this one" card state across the eleven slot loaders (which currently render a
+*failed* fetch as the card's empty state), R-041 coverage on the remaining bare
+aggregates, and a Retry on the summary banner — whose copy still says "try
+refreshing" while offering nothing to click. Then Chunk 5 (finish the extraction,
+FU-829) and Chunk 6 (the token sweep, FU-828 + FU-814).
+
+---
+
+## 2026-09-02 — **Dashboard chunk 2: the grid packs — and measuring it proved my own "five dead regions" claim wrong**
+
+**Status:** complete + green + **measured in a browser**.
+`DASHBOARD_PAGE_REVIEW.md` §7 **Chunk 2** shipped. Gate: `vue-tsc` clean,
+`eslint` clean, **vitest 642 passed** (from 626 — 16 new). FU-631 #3's dashboard
+half resolved; two spin-offs logged.
+
+**What shipped.** `helpers/dashboardGrid.ts` — `zoneColClasses()` gives the last
+card of any **odd run of consecutive half-width cards** the full row. Parity is
+per *run*, not per zone, because a genuinely full-width card mid-zone (the
+fortnight calendar) splits the zone into independent runs — the naive "is the
+zone odd?" test gets `[A, WIDE, B, C]` wrong and strands `A`. Driven by a new
+**`cardRendered()`** predicate that folds in the two data guards (`budget`'s
+loaded status, `reconcile_pending`'s empty queue) so the layout maths cannot
+disagree with the template's `v-if` (R-003) — `zoneHasVisibleCards` moved onto it
+too, since a Money zone holding only an unloaded budget was drawing a band header
+above nothing. All 17 wrappers now bind `cardCol(id)`; the ad-hoc `col-lg-4` /
+`col-lg-8` / missing-`col-sm-6` variants are gone, and the gutter moved to
+`q-col-gutter-lg` (24px = `--space-6`, which is what B4 specifies).
+
+**⚠️ I had to correct my own published analysis, and the correction is the more
+useful finding.** The review said **five deterministic dead regions on a default
+desktop**. Measured in a real browser — old classes re-applied at runtime so the
+fix didn't have to be reverted — the truth is:
+
+| Width | Dead regions (old) | (new) |
+|---|---|---|
+| 1920px | **5** | 0 |
+| 1440px | **5** | 0 |
+| 1280px | **2** | 0 |
+| 1024px | **2** | 0 |
+| 768px | **2** | 0 |
+| 375px | 0 | 0 |
+
+So "five on a default desktop" is right at **≥1440px** and wrong for the
+1024–1439 band most laptops sit in, where it was two. **The cause of my error is
+worth more than the arithmetic:** I assumed `col-lg-*` engaged at the app's own
+≥1024 "desktop" (A8), but **Quasar's `lg` is ≥1440**. Chasing that turned up that
+the dashboard was **the only surface in the app using `col-lg-*`** to mean
+desktop — 2 usages against 14 for `col-md-*` — so its intended desktop layout
+never engaged on a 1280px laptop, and "Needs your attention" and "The week
+ahead" (neither carrying a `col-sm-*` step) rendered **full-width** there.
+Certainly not the intent. Logged as **FU-836**, with a ⚠️ comment in
+`dashboardGrid.ts` so nobody re-adds `col-lg-*`, and a suggested one-line note
+for A8 — because A8 lists the app's breakpoints without saying that Quasar's `lg`
+isn't one of them, which is exactly the gap that produced this.
+
+**Corrections applied in place, not quietly:** `DASHBOARD_PAGE_REVIEW.md` §0,
+§4.1, §4.6 (a boxed correction with the measured table), §4.9.1, §3.13 and §6
+finding 9; FU-631 #3's amendment; `DORA_VERIFY.md`; `PROJECT_STATE.md`. The §4.6
+correction deliberately keeps the wrong claim visible with the measurement beside
+it rather than rewriting history — the next reader should see that the number was
+reasoned rather than measured, and what that cost.
+
+**How it was verified.** The Browser pane still can't drive routed pages in this
+repo (the transition freeze in `DORA_VERIFY_TRIAGE`'s banner), so: the isolated
+5171/5174 pairing from `.claude/launch.json` on the dense seed, plus **throwaway**
+Playwright probes (deleted after — not committed, per the stance) that measured
+every card wrapper's real bounding box, grouped them into visual rows by top
+edge, and reported any row using <85% of the grid width. A second probe re-applied
+the *old* class strings at runtime to establish the before-state without
+reverting anything. Screenshot captured at 1440px as evidence: Act-now pairs two
+cards and gives the odd third the full row, as designed.
+
+**Second spin-off from the screenshot: FU-837.** "Draft this week's shop" — three
+lines and a button — is stretched to match "Needs your attention" beside it,
+leaving ~180px of empty card below its button. Not the dead-grid air this chunk
+fixed (that row is 100% used); empty space *inside* a card, which arguably reads
+worse because the border boxes it. Deliberately not fixed here: equal-height
+cards are what make the bands read as rows, so it is a design call, and Chunk 3
+changes which cards sit together anyway.
+
+**Standing-rules close-gate.** **R-003** (one `cardRendered` predicate feeding
+both the render and the layout — the whole point, since a disagreement would pad
+for a card that isn't there), **D-011/B4** (the defect itself, plus the `--space-6`
+gutter), **R-001** (the parity logic is a pure helper, not inline page code —
+which is also what made it unit-testable and is the direction Chunk 5 goes),
+**R-017** (16 tests ship with it, including an exhaustive sweep of zone sizes 1–8
+and the four real zone compositions). **ADR evaluation: one candidate, not
+promoted** — *"a layout claim derived from breakpoint arithmetic gets measured
+before it is published"* is really just "measure the premise", which the previous
+unit already recorded as a shape. If it recurs a third time it should become a
+rule about design-review claims specifically.
+
+**Next up:** **Chunk 3 — the card census** (FU-830): merge the week strip into
+the fortnight card, fold Budget into the Money card, cut Best deals, drop the
+"Next up" callout, and encode the default count in `CARD_DEFS`. All four
+decisions are already made, so it is a defined build. Note FU-830's own sequencing
+warning: don't block it on FU-831 (the savings baseline) — merge against the
+existing figure and let that FU swap the number underneath.
+
+---
+
+## 2026-09-02 — **Dashboard chunk 1: the eight functional defects, and two of them were much bigger than the dashboard**
+
+**Status:** complete + green. `DASHBOARD_PAGE_REVIEW.md` §7 **Chunk 1** shipped.
+Gate: `vue-tsc` clean, `eslint` clean, **vitest 626 passed** (from 585 — 41 new
+tests across 5 specs), **pytest 2209 passed** with only the 4 pre-existing
+buy-verdict failures (FU-762) still red. Nine FUs resolved (**FU-820..827** plus
+**FU-767**), two new ones opened from what the work uncovered.
+
+**Trigger:** owner asked to start the dashboard work and do all the polish the
+review and FUs describe, with the chunk plan laid out first.
+
+**The two findings that outgrew their FUs.** Both were "fix the dashboard's copy
+of X" that turned into "X is wrong for the whole app":
+
+1. **FU-820 was an app-wide date bug, not a dashboard one.** The FU described
+   `formatRelativeDay` parsing `YYYY-MM-DD` as UTC. Fixing it meant looking at
+   the shared formatter, and **`useDateFormat.formatDate` — the app's single date
+   authority (D-006) — had the identical bug.** So *every date-only value in the
+   app* (expiry dates, `scheduled_for`, effective dates) rendered a day early
+   west of Greenwich. Demonstrated with a probe before touching anything: in
+   `America/New_York`, `formatDate('2026-09-03')` returned **"02/09/2026"**. The
+   file's own comment asserted date-only values were "tz-independent" — true of
+   the data, false of the render. Fixed at the source (`parseLocalIso` /
+   `daysFromToday` in `weekDates.ts`; `toDate` parses a bare date as local
+   midnight while values carrying a time fall through untouched), so every
+   surface corrected at once.
+2. **FU-822's two undeclared token families were 21.** The dashboard's
+   `--border-subtle` and `--dora-*` were real, but writing the R-060 guard the
+   rule actually needs turned up **21 undeclared custom properties app-wide** —
+   including **`--space-sm` and `--space-xs` in `RecipeCookMode.vue:19`**, which
+   is *the exact file R-060 was established from on 2026-08-28*. The rule was
+   written because cook mode's header was reported three times as "squished"
+   before anyone checked whether its gap tokens resolved. Two of them still
+   don't. The rule was written; the file was never finished.
+
+**The guard, and why it is a ratchet.** `designTokensDeclared.spec.ts` walks
+every `var(--x)` in `src/` and asserts the property is declared in `css/`
+(allowlisting `--q-*`, which Quasar writes at runtime, and
+`--dora-base-font-size`, written by `themeService`). Green *and* still guarding:
+a **new** undeclared token fails the suite, and a second assertion fails if a
+listed token is fixed without being removed from `KNOWN_UNDECLARED`, so the
+allowlist cannot rot into a permanent exemption. The 20 non-dashboard entries are
+**FU-834** with their call sites. A first-run test that finds 21 real defects is
+the argument for writing it.
+
+**Also learned the hard way: `vitest.config.ts` now pins `TZ:
+'America/New_York'`** for the whole suite. In local Australian time the new date
+tests would have passed vacuously — which is precisely how the bug reached
+production, since every developer runs east of Greenwich. That change immediately
+caught a **second** live instance: `alertRow.spec.ts` was building its own
+expectation with `new Date(related).toLocaleDateString()`, the same broken
+pattern, so it *expected* the wrong day and passed only because the component was
+wrong in the same direction. A test can encode the bug it is meant to catch.
+
+**What shipped, per FU.**
+- **820** — dates fixed at the authority (above); dashboard's two local copies
+  deleted (it held the *correct* parser and the broken one 350 lines apart).
+  +14 tests.
+- **821** — `AnimatedNumber` gained a `format` prop; the three dashboard money
+  sites now render through `formatMoney`. Chose the formatter seam over
+  `:decimals="2"` because decimals were only one of three defects — the bare
+  `currencySymbol` prefix also lost grouping and locale-correct symbol
+  *placement*, and that helper's own docstring says it exists for `q-input`
+  `prefix=`. +7 tests.
+- **822** — `--border-subtle` → `--border-default` (outlines) / `--divider`
+  (in-panel separators), per A6's own split, at all five sites; the reconcile
+  chip has a border again. `DoraScoreCard`'s seven `--dora-*` properties mapped
+  onto A1 tokens — the traffic-light bands read straight off A1's table, which
+  names these exact roles ("warning = **fair scores**"). **This is the honest
+  close-out of feedback D2**, which Phase 0 marked done.
+- **823** — R-058 gate: the score handler now reads `money_features_enabled` and
+  skips the budget gather; `compute_score` **omits** the budget component rather
+  than shipping it dormant, because a dormant component still renders a row with
+  a "Set a budget →" link into `/settings/money`. Second leak closed too — the
+  **hint pool** now carries per-hint gates, so a money-off household is never
+  told to set a budget. Fixed in passing: the handler was building a second
+  `SqlAlchemyRepository()` mid-request (finding 25, R-031). +14 tests, including
+  a walk of all 366 days asserting no day can surface the budget hint with money
+  off, and the sharp one — 80% over a stored budget with money off must score
+  *identically* to no budget at all.
+- **824** — new `useThemePalette()`; `themeService.applyThemeKey` (the single
+  writer of `data-theme`) notifies it. Fixed **all three** frozen-palette
+  instances: the donut, `usePriceHistoryPalette` (a third nobody had logged), and
+  Reports' `chartPalette` — where the dead `themeTick` ref is deleted. Both
+  surfaces' false comments corrected in place rather than removed. +7 tests,
+  built around the *negative* assertion (no re-evaluation without a
+  notification), which is what proves the dependency is real.
+- **825** — "Hide for today" persists the epoch-day in `localStorage`, keyed off
+  the same `epochDay` the message rotation uses, so "today" means one thing.
+- **826** — seven dead fields deleted from `/dashboard/summary` (two of them
+  dedicated aggregate queries on every load). The shape test now pins the key set
+  **exactly** — that is what stops the payload regrowing. Two tests were
+  *converted* rather than dropped, notably the `needs_linking_count` one, because
+  the per-entry field it derived from is live and drives the "N to link" badge.
+- **827** — new `ProductThumb.vue` fetches product images through the
+  authenticated client (R-045). Built as a component, not the composable the FU
+  suggested, because all three sites rendered identical anatomy — a composable
+  would have left the markup triplicated (R-001/R-027).
+
+**FU-767 resolved by deletion, and it's a shape worth keeping.** That FU was a
+bug report about the dashboard's "queued" count over-counting, deferred twice on
+"the historical rows need a decision". The field it was about —
+`shopping_lists.total_items` — **is rendered nowhere in the app.** So the fix was
+to stop computing it, not to add a status join. *Check whether a wrong number has
+a consumer before designing its fix.*
+
+**Standing-rules close-gate.** Rules applied rather than breached: **R-060** (the
+whole of 822 + the guard), **R-058/ADR-055** (823's gate shape, copied from
+buy-verdict), **R-003/D-006** (820, 821 — one date authority, one money
+authority), **R-001/R-027** (827 as a component, not a composable, with the
+`img` fit rules moving out of the page), **R-031** (823's repository reuse),
+**R-019** (824 notifies explicitly rather than via a MutationObserver),
+**A1/A6/D-003/D-005** (822's token mapping, the `:focus-visible` ring the score
+card lacked, the icon-button `aria-label` 825 added), **R-017** (tests ship with
+the change). One self-inflicted incident: a PowerShell `Set-Content` mangled the
+UTF-8 in `AnimatedNumber.vue` (the hazard my own memory note warns about) —
+caught immediately, file rewritten with the Write tool, and a repo-wide mojibake
+scan run to confirm nothing else was touched. **ADR evaluation: none promoted.**
+Everything here sat under existing rules; the closest candidate — "a test that
+builds its own expectation with the pattern under test proves nothing" — is a
+testing heuristic with one sighting, left for a second.
+
+**Ledgers.** Archived: **FU-767, 820, 821, 822, 823, 824, 825, 826, 827**, each
+with the mechanism and, where it differed from the plan, why. Opened: **FU-834**
+(the 20 app-wide undeclared tokens) and **FU-835** — the review's §8 **D5**
+(score stocktake against the configured cadence) which I had folded into FU-823
+as a threshold swap. It isn't: cadence is **per-item** with auto-tuning bands, so
+the honest version is "% of items checked within *their own* window", a
+scoring-semantics change to a champion-plan feature. Split out rather than
+redesigned inside a defect chunk. `CHANGELOG.md` gained 8 user-facing Fixed
+entries, led by the timezone one. `DORA_VERIFY.md`'s dashboard section rewritten
+from "confirm the bug" to "confirm the fix", with **two lines deleted** because
+tests now pin them — recorded with evidence in `DORA_VERIFY_TRIAGE.md` per the
+delete-on-pass rule.
+
+**Next up:** **Chunk 2 — make the grid pack** (FU-631 #3): the five deterministic
+dead regions on a default desktop dashboard. Independent of card identity, so it
+needs no decisions, and it is the highest visible improvement per line changed on
+the surface. Then Chunk 3 (the decided restructure, FU-830).
+
+---
+
+## 2026-09-02 — **The last three review calls answered; two went against the review, both because a measurement beat the reasoning**
+
+**Status:** complete. Decisions only — **no code changed**. All seven owner calls
+across the two page reviews are now closed. Two new work FUs, one existing FU
+amended, both review docs updated.
+
+**Trigger:** owner asked to go over the remaining open calls, straight after the
+first decision pass.
+
+**The decisions.**
+
+| FU | Decision |
+|---|---|
+| **809** shared card registry | **Share a flat catalogue + the machinery, not the card bodies.** A data table keyed by card id (gate / label / icon / endpoint) plus an extracted `useCardLayout()`; **explicitly a table, not an abstraction layer** — the owner's attached constraint. |
+| **811** the 18px card radius | **Correct it — `--radius-lg` (10px) + `--space-4` (16px).** Against the review's "defer". |
+| **812** ECharts | **Drop it; extend `PriceHistoryChart` instead.** Against the review's "defer". |
+
+**The useful part of this unit was checking the premises before presenting
+options, because two of them were wrong.**
+
+- **FU-811.** The review framed this as guide-vs-reality — implying 18px might be
+  the app's de facto card radius with A4 lagging — and recommended deferring on
+  those grounds. Counting every `border-radius` in `web_app/src` settled it the
+  other way: **10px at 41 sites** (`--radius-lg` ×22 + raw `10px` ×19), 12px at 14,
+  `--radius-xl` at 2, and **18px at exactly 3** — `DashboardCard`, its Reports
+  fork, and the dashboard hero. The guide matches the app; these are the outliers,
+  which turns a taste call into a correction. `--radius-xl` (16px) was offered as
+  the minimal-delta landing and rejected, correctly, because it would leave the app
+  with **two** card radii — the thing D-017 exists to prevent.
+- **FU-812.** The review's argument was "562KB, second-largest asset". Measuring
+  found that *weaker* than claimed **and** a much stronger argument it had missed.
+  Weaker: ECharts is **inlined into the `ReportsPage` route chunk** (549 KB
+  measured), not a shared vendor chunk, so only `/reports` visitors pay it and
+  never app boot — and it is *already* tree-shaken to `LineChart` + `PieChart` +
+  `CanvasRenderer`, so there is no fat to trim, only removal. Stronger, and the
+  thing that actually decided it: **the replacement already exists and already
+  ships.** `components/PriceHistoryChart.vue` is **462 lines of hand-rolled inline
+  SVG** — multi-series polylines, y-ticks, hover tooltip, point circles — that
+  builds to **8 KB** and already draws precisely the chart price-trends needs. With
+  the review's own recommendations (donuts → CSS bars, counts → columns,
+  stock-value cut), nothing surviving needs a library. Presented with the honest
+  cost attached: that component has no legend, no x-ticks and no `aria`/`role`, so
+  adopting it is an investment — one worth making, since SVG can carry the text
+  alternative §4.9 says ECharts' canvas never can.
+- **FU-809** was not wrong, but it was **too broad**. The review said "share one
+  card registry"; measuring the overlap after FU-830 showed the two surfaces share
+  **five endpoints and no presentation** — the dashboard's cards are glance-sized,
+  Reports' are full-size with range controls. So the shareable things are narrower
+  than "the cards": the gate declarations, the layout machinery, and the shell. The
+  decision reflects that, and the card bodies stay separate by design.
+
+**Worth keeping as a shape:** three review recommendations, and the two that a
+five-minute measurement contradicted were both ones where I had reasoned from a
+plausible premise ("the guide probably lags the app", "a big bundle is a big
+problem") instead of counting. The third was right in direction and wrong in scope
+for the same reason. Measure the premise before presenting the option — the options
+are only as good as the fact they rest on.
+
+**Standing-rules close-gate.** No code touched. **ADR evaluation: none promoted
+this unit** — R-071/ADR-068 was written in the previous unit and these three
+decisions sit under existing rules (R-001/R-003 for the catalogue, D-017/A4 for the
+radius, R-007 for the dependency). The componentisation-not-finished candidate stays
+on FU-829.
+
+**Ledgers.** **Resolved and archived:** FU-809, FU-811, FU-812, each with its
+decision and the measurement that drove it as the state note. **Opened:**
+**FU-832** (the flat catalogue + `useCardLayout()` extraction; carries the
+persistence-key decision, since Reports' layout must not collide with the
+dashboard's on `user.dashboard_layout`) and **FU-833** (drop `echarts` +
+`vue-echarts`, promote `PriceHistoryChart`, give it the legend/x-ticks/aria it
+lacks, and fold `usePriceHistoryPalette` into FU-824's shared `useThemePalette()` —
+it is a **third** instance of the same frozen-`getComputedStyle` palette bug).
+**Amended:** **FU-814** now carries the radius correction as its item (4), so
+`DashboardCard` is touched once rather than twice, with a note that it is a visible
+change wanting a screenshot pass. Both cross-referenced with a standing warning:
+**FU-816 (the Reports money gate) must not be blocked on FU-832** — it closes a
+live contradiction with feedback L254 and ships standalone.
+`REPORTS_PAGE_REVIEW.md` §3.2/§4.2/§4.6 and §8 D1/D3/D4 updated with the decisions
+and the two corrections; `PROJECT_STATE.md` attention item #1 flipped to ✅ (all
+seven calls closed, nothing there needs the owner).
+
+**Next up:** nothing waits on a decision. The whole queue out of both reviews is
+buildable: **FU-820..827** (the eight dashboard defects — no decisions in it, and it
+retires FU-767 as a side effect) is the recommended start, then dashboard Chunk 2
+(make the grid pack, FU-631 #3), then the restructures (FU-830, Reports chunk 3),
+with FU-831 (savings baseline — the only migration) runnable in parallel. FU-828
+(token sweep) and FU-829 (finish the extraction + write its ADR) stay last by
+design. The only owner call left anywhere in the ledger is the pre-existing FU-774
+(may a planned meal change a buy verdict), unrelated to these reviews.
+
+---
+
+## 2026-09-02 — **Owner answered four of the seven review calls; one grew into ADR-068 / R-071**
+
+**Status:** complete. Decisions only — **no code changed**. Six answers collected
+in one pass, recorded inline in both review docs, four FUs resolved, two work FUs
+opened, one new rule + ADR written.
+
+**Trigger:** owner asked to go over the FUs needing an answer, immediately after
+the dashboard review closed.
+
+**The decisions.** Four of the seven open owner calls across the two page reviews:
+
+| FU | Decision |
+|---|---|
+| **817** card census (13 default-on vs the plan's 8) | **Merges only, no demotions, then encode the number.** The three merges get there without any feature losing its front-page slot; `suggestions`, `restock`, `dora_score`, `stock_items` all stay default-on. A `CARD_DEFS` comment naming §2.2-as-amended becomes the thing the next card has to argue with. |
+| **818** the meal plan rendered four times | **Keep Next to cook; merge the week strip into the fortnight card (7-day default, expandable to 14, one endpoint); drop the "Next up" callout.** |
+| **819** Best deals vs Price drops | **Keep Price drops, cut Best deals.** |
+| **810** savings baseline | **Keep the card, change the metric** — and this one grew (below). |
+
+**FU-810 was bigger than a metric swap, and finding that out before agreeing scope
+was the useful part of this unit.** Reading `SavingsCapturedHandler`
+(`reports.py:774-843`) surfaced two things the answer didn't settle, both put back
+to the owner: (1) savings is computed from **pick-time snapshots**
+(`list_price_at_pick`, `picked_offer_price`) deliberately, so an own-price baseline
+needs *its own* snapshot column — deriving it retroactively would make every past
+shop's savings move each time a price is logged; and (2) **three other surfaces say
+"saved vs RRP" from a different computation** (the primary-list stat,
+`ShoppingListOverviewCard`, the per-line model), so the decision as given would
+have left one word meaning two things. Owner's answers: **split by tense** — live
+in-list savings keep the vs-shelf-price baseline (the honest question in the aisle,
+and the only baseline available for an item with no price history), the
+retrospective card moves to the household's own historical unit price, **both
+labelled**; and **reseed, don't backfill** (add the column, back-fill nothing,
+regenerate the dev/demo dataset — consistent with the pre-release posture).
+
+**New rule: R-071 + ADR-068** — *a comparative figure carries its baseline in its
+label, and one word never spans two baselines.* Written because the tense split
+only works if both halves are labelled, and because the general failure is worth
+naming: a comparative with an unstated baseline is the metric equivalent of R-041's
+partial total — a confident claim about an unnamed thing. The rule requires the
+baseline in the **DTO field name** as well as the copy
+(`savings_vs_usual_price`, not `savings`), keeps event-time baselines snapshotted,
+and forbids summing two baselines into one total or chart. Notably it also catches
+the knock-on nobody had flagged: the handler's current "no RRP snapshot ⇒
+contribute zero savings" fallback becomes an **R-041 coverage** case under an
+own-price baseline, because an item with no price history has *no* baseline — which
+is a named gap, not zero savings.
+
+**Correction made in place.** The review (and the option put to the owner) both
+said the three merges take default-on from 13 to **10**. They take it to **11** —
+the calendar merge removes a *registered* card that was already `defaultHidden`, so
+it doesn't move the default count. Corrected in `DASHBOARD_PAGE_REVIEW.md` §8 D1
+and in the resolved FU-817 entry. The decision is unaffected; the target is one
+card looser than quoted. (10 is still the *effective* count on a quiet install,
+since `reconcile_pending` is hide-when-empty.)
+
+**Standing-rules close-gate.** No code touched. **ADR evaluation: one promoted** —
+R-071/ADR-068, above; the other standing candidate (componentisation-not-finished /
+DoD-closed-by-a-partial) remains on FU-829 and is still worth writing. Both review
+docs now satisfy the CLAUDE.md "closing out a proposal" rule with their decisions
+recorded inline rather than as live open forks.
+
+**Ledgers.** **Resolved and archived:** FU-810, FU-817, FU-818, FU-819, each with
+the decision as its state note. **Opened:** **FU-830** (the decided dashboard
+restructure — three merges, one cut, encode the count; net 17→14 registered,
+13→11 default-on) and **FU-831** (the savings baseline — snapshot column +
+migration, handler onto the new baseline, R-041 coverage replacing the silent zero,
+spend-as-headline, the tense-split labelling across three surfaces, and a reseed;
+the only item out of either review needing a migration). Sequencing note carried on
+both: **FU-830 must not block on FU-831** — merge the Money card against the
+existing figure and let FU-831 swap the number underneath. `DASHBOARD_PAGE_REVIEW.md`
+§7 gained a Chunk 3b for the baseline work; `REPORTS_PAGE_REVIEW.md` §3.7 and §8 D2
+updated; `PROJECT_STATE.md` attention item rewritten (three calls left, all on
+Reports).
+
+**One count corrected while doing the ledger moves:** `PROJECT_STATE.md` said the
+open backlog was 168 (and I'd been adding to that figure). Counting `^## [OPEN] FU-`
+headings gives **191**. The 168 was carried forward arithmetically at some point and
+drifted; the dashboard now says 191 with a note to recount rather than adjust.
+
+**Next up:** **FU-809 is the one worth answering next** — should Reports share the
+dashboard's card registry. FU-830 is about to change the card set 809 would be
+sharing, so deciding before it lands is materially cheaper than after. FU-811 and
+FU-812 remain and neither blocks anything. On the build side, nothing waits on a
+decision: dashboard Chunk 1 (the eight defects, FU-820..827 — retires FU-767 as a
+side effect) and Chunk 2 (make the grid pack, FU-631 #3) are both shippable now.
+
+---
+
+## 2026-09-02 — **Dashboard page: PO + engineering review (read-only) — a drift audit, not a design pass**
+
+**Status:** complete. Assessment only — **no code changed**. Output is
+`docs/05_investigations/DASHBOARD_PAGE_REVIEW.md`. Nothing was driven live; every
+finding is line-cited, and the nine that need eyes on the running app are carried
+as a new DORA_VERIFY section rather than claimed as confirmed.
+
+**Trigger:** owner asked for the same treatment just given `/reports` — the
+80/20 PO-weighted review plus a design/UI/UX pass, written up as a doc. No
+specific questions were supplied this time, so §3 answers the twelve the page
+raises on a close read.
+
+**The framing, and the thing that makes this review different.** Reports had never
+been designed. **The dashboard was designed thoroughly and the design is good** —
+`IMPL_PLAN_DASHBOARD_REBUILD.md` (2026-06-23) diagnosed the old page in one line
+(*"counters, not answers"*), resolved ten decisions with the owner, shipped seven
+phases and closed every row of its own coverage table. The zones, the
+server-persisted per-card layout, the two-section alert card, the Money zone, the
+fortnight calendar: all landed, all work. So this is **a drift audit**, and the
+drift is of one specific kind — **the plan's structural commitments were the ones
+that didn't hold, and none of them failed because a decision was wrong.** Its
+curated 8-card default set is now 13 of 17, because three later features
+(`draft_shop`, `dora_score`, `reconcile_pending`) each shipped default-on and
+nothing held the number: no test, no comment in `CARD_DEFS`, no line saying "adding
+a default-on card reopens §2.2". Its Definition of Done — *"`DashboardPage.vue` is
+a thin composition over `components/dashboard/*` (R-001 — the 1964-line monolith
+is gone)"* — was closed by FU-293 extracting the card *shell* only, honestly, and
+the DoD row stopped being tracked; the page is now **3126 lines, 59% larger than
+the monolith the rebuild set out to dissolve**. Worth remembering as a shape: when
+a plan's process commitments and its feature commitments are tracked by the same
+mechanism (a follow-up id), the process ones lose.
+
+**Headline findings.** (1) `formatRelativeDay` (`:1804`) parses `YYYY-MM-DD` as
+UTC then normalises to local, so **every relative day is off by one west of
+Greenwich** — tomorrow's dinner reads "Today" — across four user-facing call
+sites, while the correct parser (`parseLocalIso`) sits 350 lines below in the same
+file. (2) Three money figures render through `AnimatedNumber`'s `toFixed(0)`, so
+the app's flagship claim **"You've saved $128"** is rounded to whole dollars and
+sits directly above a `formatMoney` line reading "$1,004.37" — two formats, one
+card. (3) **Two undeclared token families** (R-060, the rule written for exactly
+this on 2026-08-28): `--border-subtle` is referenced in five components and
+declared nowhere, so the reconcile chip renders **borderless**; and
+`DoraScoreCard`'s entire colour vocabulary is seven undeclared `--dora-*`
+properties, so Kitchen health paints hard-coded light-theme hex in all ten themes
+— which is the honest answer to feedback D2 ("dark mode not working"), marked
+closed in Phase 0. (4) Kitchen health calls the budget handler unconditionally and
+that handler doesn't check the money flag, so **a money-off install's composite is
+weighted by budget data it opted out of** — R-058 textbook, with the precedent
+(`get_buy_verdict.py:840`, ADR-055) one directory away. (5) `/dashboard/summary`
+still computes and ships **seven fields nothing in the app renders** — the payload
+behind the vanity counters Phase 1 cut — and FU-767 is a bug report about one of
+them, so its fix is deletion, not a status join.
+
+**Design pass.** Split three ways: the card *interiors* are good and mostly need
+protecting; the page *composition* is not, and it is arithmetic rather than taste;
+the *token discipline* is the app's worst and invisible from the rendered page.
+The composition finding is the strongest thing in the review — walking the default
+visible set at ≥1024px in `order` sequence gives **five deterministic dead grid
+regions** (Act now ×1, Today ×2, Money ×1, Your kitchen ×1), not an odd-count edge
+case; `meal_plan` at `col-lg-8` in a zone of `col-lg-6`s strands a card above it
+*and* a third beside it. FU-631 #3 already owned this and described it as "a lone
+card at the end of a zone" — amended in place with the arithmetic rather than
+duplicated. Second: **one dataset rendered four times** — the meal plan appears in
+the hero line, Next-to-cook, the week-ahead "Next up" callout and the week-ahead
+strip, with the fortnight calendar making five from a *different endpoint*, so
+seven overlapping days can disagree on one screen. Quantified elsewhere: 44 raw
+font-sizes / 22 radii across six values / 95 spatial literals and **zero**
+`--font-size-*`, `--radius-*` or `--space-*` tokens in 3126 lines; 8 declarations
+below the 12px floor including the zone band labels (the page's own information
+architecture) at 11.5px; twelve nested rows on `--surface-elevated` inside
+`--surface-component` cards — the inverted ladder Reports copied from here; zero
+`:focus-visible` rules and one `outline: none` whose replacement is an opacity
+change identical to hover.
+
+**Two corrections to the Reports review, both worth carrying.** Its finding 11
+treated `ReportsPage.vue`'s dead `themeTick` as a Reports defect; it is the same
+frozen-palette bug and **this is where it came from** — Reports' author saw the
+dashboard's one-shot `getComputedStyle` read, recognised it needed invalidating,
+added the ref and never wired the bump. One shared `useThemePalette()` fixes both
+(FU-824 supersedes half of FU-814's scope). And its §4.5.3 objection to semantic
+colour for spend direction now has a sharper form: the dashboard colours **rising
+pantry value green** while Reports colours **rising spend red** — the same fact,
+opposite semantics, two screens.
+
+**What's genuinely good and should be protected** (§1, and this matters because
+the review is otherwise a list of problems): the card layout system is real
+engineering and is the machinery FU-809 wants Reports to adopt; `CardDef.gate` +
+`cardAvailable` is the app's reference feature-gate; the loading skeleton reuses
+the real card shell so placeholders match by construction (Reports ships ten
+spinners); the empty-state inversion makes a fresh install the app's *best*
+first-run page against Reports' 3000px of nothing; and the Dora Score backend is
+the only place on the page that gets R-041 coverage right.
+
+**Standing-rules close-gate.** No code touched, so nothing introduced. Findings
+logged against the rules they breach: **R-060** ×2 (the headline — both produce
+real mis-rendering), **R-058** (money leak), **R-041** ×3 (bare aggregates:
+client-summed spend total behind a top-3 list, pantry value, savings-with-coverage-
+in-a-tooltip), **R-045** (three `<img src="/api/…">` sites), **R-048** (hand-rolled
+segmented control where `BaseSegmented` exists), **R-001** (14 of 17 cards inline),
+R-002, R-003, R-007, R-016, R-019 ×2 (comment≠code: `parseLayout` appends where its
+comment says it inserts, so `dora_score` sorts below Pantry for every existing
+user; the stale `ZONE_BASE` "≤9 cards" invariant), R-031, **A6/D-016** (zero focus
+rings), **D-011** (five dead regions), **D-003** (8 under-floor declarations),
+D-006, D-012, D-013, D-017, A1/A2/A3/A4/A8, B4/B9/B10, ADR-005.
+**ADR evaluation: promote, and the review says so.** The
+componentisation-not-finished pattern has its **fifth** sighting here and its
+first where the goal was written into a Definition of Done and closed by a
+partial. The rule worth writing is narrower and more useful than R-001's
+"componentise first": **a DoD item deferred to a follow-up is not satisfied by
+that follow-up's partial resolution — the DoD outlives the FU, and closing the FU
+must state which DoD rows remain open.** Carried on FU-829 with the remaining
+extraction; explicitly flagged as writable *before* the refactor.
+
+**Ledgers.** Thirteen FUs opened, **FU-817..FU-829**: three owner calls (**817**
+the card census, **818** the meal-plan quadruplication, **819** Best deals vs
+Price drops), eight defects (**820** the UTC date parse, **821** the rounded money,
+**822** the two undeclared token families, **823** the money leak, **824** the
+frozen donut palette, **825** "Hide for today" that isn't, **826** the six dead
+DTO fields, **827** the `<img src>` sites), and two debt items (**828** the scale
+sweep, **829** the extraction + ADR). Sequencing in §7 deliberately puts the token
+sweep *last* and the grid-packing fix *second*, for the same reason as Reports:
+don't tokenise cards about to be merged. FU-631 #3 amended in place with the
+five-region arithmetic. New `## Dashboard` section in `DORA_VERIFY.md` with nine
+tight checks (one is an operator TZ check, not a browser one).
+`COVERAGE_GAPS.md:177` amended — the DASHBOARD entry read as closed; **D2 and
+L254 are re-opened**, L471 is uncovered on this surface, and the plan's §2.2 and
+§6 DoD rows are recorded as unmet.
+
+**Next up:** owner reads the review and answers FU-817 and FU-818 — they gate the
+restructure (Chunk 3) and FU-818 is the largest area saving on the page.
+Independently shippable without waiting on either: **Chunk 1** (the eight
+functional defects, FU-820..827 — no design decisions in any of them, and it
+retires FU-767 as a side effect) and **Chunk 2** (make the grid pack, FU-631 #3 —
+highest visible improvement per line changed on the whole surface).
+
+---
+
+## 2026-09-02 — **Reports page: PO + engineering review (read-only), the surface's first**
 
 **Status:** complete. Assessment only — **no code changed**. Output is
 `docs/05_investigations/REPORTS_PAGE_REVIEW.md`. Nothing was driven live; every

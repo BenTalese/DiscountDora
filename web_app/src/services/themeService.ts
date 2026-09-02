@@ -4,6 +4,7 @@ import type {
     FontSizePreference,
     ThemePreference,
 } from 'src/models/auth';
+import { notifyThemeChanged } from 'src/composables/useThemePalette';
 
 /*
  * DS1 — Themed palettes.
@@ -331,6 +332,12 @@ function applyThemeKey(themeKey: string) {
     }
     syncQuasarPaletteFromCssVars();
     Dark.set(theme.isDark);
+    // FU-824 — surfaces that can't express a colour in CSS (the dashboard's SVG
+    // donut, chart series) read their tokens off the document with
+    // `getComputedStyle`, which is not reactive. Tell them the theme moved so
+    // their computeds re-evaluate; without this they keep the old theme's
+    // colours until something else happens to invalidate them.
+    notifyThemeChanged();
 }
 
 /**

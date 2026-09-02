@@ -191,20 +191,22 @@
     .dora-alert-summary {
         display: flex;
         flex-wrap: wrap;
-        gap: 6px;
-        margin-bottom: 12px;
+        gap: var(--space-2);
+        margin-bottom: var(--space-3);
     }
     .dora-alert-chip {
         display: inline-flex;
         align-items: center;
-        gap: 5px;
-        padding: 4px 10px;
+        gap: var(--space-1);
+        padding: var(--space-1) var(--space-3);
         border-radius: var(--radius-pill);
-        background: var(--surface-elevated);
+        /* A1: an inset chip inside a card sits on `--surface-sunken`;
+           `--surface-elevated` is for things floating above a card. */
+        background: var(--surface-sunken);
         border: 1px solid var(--border-default);
         text-decoration: none;
         color: var(--text-primary);
-        font-size: 0.8rem;
+        font-size: calc(var(--font-size-xs) * 1rem);
         transition: border-color 0.15s ease, background 0.15s ease;
     }
     .dora-alert-chip:hover {
@@ -221,10 +223,11 @@
     /* Bottom: peek + "see all". */
     .dora-alert-seeall {
         display: inline-block;
-        margin-top: 12px;
-        font-size: 0.85rem;
+        margin-top: var(--space-3);
+        font-size: calc(var(--font-size-sm) * 1rem);
         font-weight: 600;
-        color: var(--brand-primary);
+        /* R-069: accent as text is `--accent-ink`, not the fill tone. */
+        color: var(--accent-ink);
         text-decoration: none;
     }
     .dora-alert-seeall:hover {
@@ -236,22 +239,22 @@
         padding: 0;
         display: flex;
         flex-direction: column;
-        gap: 8px;
+        gap: var(--space-2);
     }
     .dora-attn-row {
         display: grid;
         grid-template-columns: 6px 20px minmax(0, auto) 1fr auto;
         align-items: center;
-        gap: 8px;
-        padding: 8px 10px;
-        background: var(--surface-elevated);
-        border-radius: 10px;
+        gap: var(--space-2);
+        padding: var(--space-2) var(--space-3);
+        background: var(--surface-sunken);
+        border-radius: var(--radius-md);
     }
     .dora-attn-dot {
         width: 6px;
         height: 100%;
         min-height: 26px;
-        border-radius: 3px;
+        border-radius: var(--radius-xs);
     }
     .dora-attn-dot-high { background: var(--semantic-negative); }
     .dora-attn-dot-medium { background: var(--semantic-warning); }
@@ -270,7 +273,7 @@
     }
     .dora-attn-msg {
         color: var(--text-secondary);
-        font-size: 0.85rem;
+        font-size: calc(var(--font-size-sm) * 1rem);
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
@@ -285,7 +288,7 @@
     }
     .dora-attn-actions {
         display: flex;
-        gap: 2px;
+        gap: var(--space-1);
         flex-shrink: 0;
     }
 
@@ -300,7 +303,7 @@
         }
         /* The summary chips wrap freely; keep them from getting too cramped. */
         .dora-alert-chip {
-            padding: 6px 12px;
+            padding: var(--space-2) var(--space-3);
         }
     }
 </style>

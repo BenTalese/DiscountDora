@@ -28,7 +28,183 @@ next.
 
 ---
 
-## 2026-09-02 (latest) — **Dashboard chunk 4: the dashboard stops telling you everything's fine when it doesn't know**
+## 2026-09-02 (latest) — **Dashboard chunk 6: the last chunk — one scale, and a 10px label the review never caught**
+
+**Status:** complete + green + verified live. `DASHBOARD_PAGE_REVIEW.md` §7
+**Chunk 6** shipped, which closes **all six chunks**; **FU-828 resolved**, and
+**FU-814 item 4** with it. Gate: `vue-tsc` clean, `eslint` clean, **vitest 661
+passed / 58 files**. Backend untouched.
+
+**Recounted first, as FU-828 demanded — and the totals held.** 44 font-size
+literals, 16 radii, 106 spatial declarations across the 14 files. Residual after
+the sweep: **zero** radius, **zero** spacing, **two** font-size, both SVG carve-outs.
+
+**Two owner calls, asked before touching anything**, because both change how the
+page looks and the review recommended without deciding. **Zone band headers** →
+*keep the uppercase eyebrow, raise it to `--font-size-sm`* rather than A2's full
+20px section header, which would have restructured the page's vertical rhythm.
+**~15 decorative card icons in `--brand-primary`** → *mute them*, so the
+quick-action bar and "Draft my shop" stop competing with a field of green that
+carries no meaning (A1 keeps the accent for the one primary CTA). Reports
+inherits the icon change through the shared component, which is the point.
+
+**One rule settled the six-radius spread.** A card is `--radius-lg`; a row or
+tile nested inside one is `--radius-md`. Nested rows had been 10, 12 or 14px
+depending on which card you were in — D-017's "one element type, one radius"
+with the element type finally named.
+
+**The two R-002 carve-outs are real, not laziness.** SVG `font-size` inside a
+viewBox is in **user units**, so a rem-ratio token cannot express it — a token
+there would be *wrong*. Both are commented with the arithmetic (36-unit box
+rendered at 132px ⇒ ×3.67). The donut's `3px` sub-label, one of the eight
+sub-floor items, went to `3.4px` ≈ 12.5px effective, which is the only way to
+clear D-003 in units.
+
+**⚠️ The browser found what neither the review nor any test could.** Quasar's
+`size` prop sets a button's font-size *directly*, and **`sm` is 10px**. So every
+segmented-control label on the dashboard — "7 days", "14 days", "Month", "Year",
+"All" — was rendering at 10px: under the hard floor, on an **interactive**
+element, where B2 asks for 14. The review counted 44 literals in the stylesheet
+and missed this entirely, because the number is not *in* the stylesheet — it
+arrives from a prop. Fixed in `BaseSegmented.vue`, not at the call sites: the
+size prop is doing real work (padding, height, density) and only its type scale
+is wrong, so pinning the label keeps the compact control. One place, 19 consumers.
+
+**And what I deliberately did not fix.** The same 10px hits `size="sm"` *action*
+buttons — "Cook" ×3, "Mark restocked" ×2, "Open item" ×2, "Dismiss" ×2, "Add",
+"Push 7 days", "Clear expiry", ten on this page alone. §4.8 assigns that to
+**FU-631 #2** as an app-wide pattern, so it is **measured and recorded there**,
+not widened into a token sweep. The temptation to keep pulling was the thing to
+resist; re-scaling every `size="sm"` in the app is a design change, not a tidy.
+
+**Retiring the `--c-*` aliases set off a tripwire, which is the good outcome.**
+Removing the declaration took `--c-line` out of the R-060 guard's declared set,
+and the guard immediately failed on **`MarkAsWastedDialog.vue`** and
+**`StocktakeRunner.vue`** — which reference `--c-line`, `--c-surface-2`,
+`--c-surface-3`, `--c-line-strong`, **declared nowhere either file can see**.
+They had always painted hard-coded rgba fallbacks instead of following the theme,
+silently, in all ten themes. Fixed (4 declarations) and the four came off the
+`KNOWN_UNDECLARED` ratchet. A test that only fires when an *unrelated* file
+changes is still the test that found this.
+
+**Citation correction worth carrying forward:** FU-828 and the review §4.5 #5
+both cite **FU-747** as tracking the `--c-*` alias layer. FU-747 is not that —
+it is the resolved cookbook item about `RecipeCard`/`RecipeRow` carrying the
+rating block twice. The alias layer never had its own follow-up; it lived inside
+FU-828. Nothing was lost, but don't chase FU-747 for alias history.
+
+**Verified the only way this class of change can be.** An unresolved `var()`
+invalidates the whole declaration at computed-value time — no warning, no build
+failure, no lint error, nothing `vue-tsc` sees; the element just renders
+unstyled. A throwaway Playwright probe at 1440×1200 on the dense seed (deleted
+after use) measured on the running page: the alias layer resolving to **empty**
+(retired, not merely unreferenced); card radius **10px**, padding **16px**; head
+icons at `--text-secondary`; zone labels **14.4px at opacity 1**; all five
+reachable nested-row primitives with a background **different from their card's**
+at 6px; and **zero** elements styled by the dashboard's own sheets under 12px.
+Screenshot shared with the owner.
+
+**Standing-rules close-gate.** **R-002/A2/A3/A4** (the sweep itself),
+**D-003** (eight sub-floor items, plus the 10px labels the probe found),
+**D-017** (one radius per element type — the rule that made the six-value spread
+decidable), **A1** (the surface ladder un-inverted: ten nested regions off
+`--surface-elevated`; and the accent reserved for the one CTA), **R-069**
+(`--accent-ink` for accent-coloured *text/hairlines* — eight sites were using the
+fill tone as ink), **A6/D-016** (the donut's `outline: none` replaced with a real
+`:focus-visible` ring, distinguishable from hover), **R-060** (the two files
+above), **R-001/D-015** (the label floor fixed once in the shared component, not
+19 times). **Two R-002 carve-outs**, both commented in place naming the rule.
+**ADR evaluation: none promoted.** The candidate — *"a component's visual
+contract includes what its framework props do to it"* — is the third sighting of
+the `BaseSegmented`-shaped problem (FU-839's `flat`, now `size`), and it is
+really R-069/D-015 restated from the caller's side. Recorded here; if a fourth
+lands, write it up.
+
+**Ledgers.** FU-828 → resolved (with the recount, the carve-outs, and the
+citation correction). FU-814 item 4 → done inside it. **FU-841 opened**:
+`MarkAsWastedDialog`'s tiles set `outline: none` and give focus the same styling
+as hover — same A6/D-016 pair the donut had, different surface, not fixed here
+because the chunk only touched that file for its tokens. FU-631 #2 gained the
+10px measurement. Two `DORA_VERIFY` sections: the dark-theme/non-Pesto look of
+the re-laddered surfaces, and the 17 unlooked-at `BaseSegmented` call sites.
+
+**Next up:** the dashboard review is **fully built — 6 of 6 chunks**. Nothing on
+that surface is blocked. The open dashboard-adjacent items are **FU-839**
+(`BaseSegmented` selected-segment contrast at 3.88:1, and its two suspected
+invisible-label consumers — now a natural pair with the `size` finding above),
+**FU-838** (contracts orphaned by the Best-deals cut), **FU-837**, **FU-835**.
+Off the dashboard: **FU-831** (savings baseline — the migration), **FU-816**
+(Reports money gate), **FU-832**, **FU-833**.
+
+---
+
+## 2026-09-02 — **Dashboard chunk 5: fourteen card bodies leave the page — close-gate finished after the building session ran out of room**
+
+**Status:** complete + green. `DASHBOARD_PAGE_REVIEW.md` §7 **Chunk 5** shipped;
+**FU-829 resolved** with its second deliverable, **R-072 + ADR-069**. Gate
+re-run against the committed tree this session: `vue-tsc` clean, `eslint` clean,
+**vitest 661 passed / 58 files**. No Python touched by this chunk — the pytest
+figure stands from chunk 4's entry.
+
+**Read this entry for what it is: a close-gate, written after the fact.** The
+building session did the extraction, resolved FU-829, rewrote FU-828's scope and
+wrote the ADR — then ran out of tokens *before* the worklog entry and the
+`PROJECT_STATE.md` refresh. This session verified the committed state rather than
+trusting the ledger, and finished the two missing steps. That ordering matters
+because the ledger was the only record, and it turned out to be slightly wrong
+(below).
+
+**What shipped.** All fourteen inline card bodies are now components under
+`web_app/src/components/dashboard/` — eleven new this chunk (`AttentionCard`,
+`WhatsComingCard`, `MoneyCard`, `PantryDonutCard`, `PriceDropsCard`,
+`PrimaryListCard`, `SpendByStoreCard`, `SuggestionsCard`, `NextToCookCard`,
+`RestockRadarCard`, plus chunk 4's `CardLoadError`), joining `DashboardCard`,
+`DoraScoreCard`, `DraftShopCard` and `ReconcilePastMealsChip`. Shared primitives
+(`.dora-empty`, `.dora-cook-*`, `.dora-stat-*`, `.dash-skel-line`) moved to
+`web_app/src/css/dashboardCards.scss` and were **re-based onto global tokens** —
+the page's `--c-*` aliases are declared on `.dora-dash` and resolve to nothing
+from a global sheet or a child component (R-060), which would have failed
+*silently* as unstyled boxes rather than loudly. The grid maths simplified with
+them: two cards that were sibling `<div>`s with per-branch column classes are now
+one component with a `v-if`, so `dashboardGrid.ts`'s odd-run widening no longer
+has to know a card can be two elements.
+
+**The numbers were wrong in the ledger, and are corrected.** FU-829 recorded
+`DashboardPage.vue` at **3,158 → 1,775**; measured against the committed file it
+is **3,258 → 1,888** (`git show 16fbce3b:…` vs `HEAD`), with a 244-line `<style>`
+block of page chrome only. A mid-chunk count, written before the last edits
+landed. The claim it was supporting survives — 1,888 is still under the
+1,964-line monolith the rebuild set out to dissolve — but the figure has been
+fixed in `DORA_FOLLOWUPS_RESOLVED.md` with a note saying why. **A close-gate that
+re-measures is the reason this was caught**; a session that copied the ledger
+forward would have propagated it into `PROJECT_STATE.md`.
+
+**No CHANGELOG entry, deliberately.** Chunk 5 is a pure refactor — same fourteen
+cards, same copy, same behaviour. `CHANGELOG.md` is the user-visible log; the
+structural win belongs here and in the DoD row.
+
+**Standing-rules close-gate.** **R-001** (the point of the chunk — the page is now
+a thin composition), **R-060** (the token re-basing above; the one trap that would
+have shipped silently), **R-003** (grid maths owned in one place per card),
+**R-072/ADR-069** — *"a Definition of Done outlives the follow-up that deferred
+it"*, written here as FU-829's second deliverable. **DoD:** the
+`IMPL_PLAN_DASHBOARD_REBUILD.md` §6 composition row is **closed**, and only that
+row — the token/scale rows stay open under **FU-828**, whose scope was rewritten
+at this gate to say the literals were **relocated into 14 files, not fixed**
+(re-count before starting; don't trust the old 44/22/95 per-file figures).
+**FU-747** (`--c-*` aliases) is now page-chrome-only and can be retired inside
+FU-828's pass. **ADR evaluation: none newly promoted** — ADR-069 is this chunk's.
+
+**Next up:** **Chunk 6 — the design-rule sweep** (FU-828 + FU-814 item 4):
+tokens, focus rings, the surface ladder, semantic colour, the `B9` empty-state
+icons, and the card radius (`DashboardCard.vue`'s 18px → `--radius-lg`). Cheaper
+per file than it was — each home is 40–100 lines — but wider: 14 files, not 1.
+**FU-839** (`BaseSegmented` selected-segment contrast, and its two unconfirmed
+consumers) is still open and touches the same design surface; worth folding in.
+
+---
+
+## 2026-09-02 — **Dashboard chunk 4: the dashboard stops telling you everything's fine when it doesn't know**
 
 **Status:** complete + green + verified live under forced failures.
 `DASHBOARD_PAGE_REVIEW.md` §7 **Chunk 4** shipped; **FU-840 resolved** (findings

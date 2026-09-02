@@ -47,8 +47,14 @@
         text-decoration: none;
         background: var(--surface-component);
         border: 1px solid var(--border-default);
-        border-radius: 18px;
-        padding: 18px 20px 20px;
+        /* FU-811 / FU-814 item 4, owner-decided 2026-09-02: the shared card
+           radius was 18px — off A4's 4/6/10/16/22 ladder, and against 10px at
+           41 other card sites app-wide. A card is `--radius-lg`. The padding
+           was `18px 20px 20px`, three values, none on the spacing scale; D-017
+           wants one inner padding value for one element type. Reports inherits
+           both corrections through this component, which is the point. */
+        border-radius: var(--radius-lg);
+        padding: var(--space-4);
         height: 100%;
         transition:
             transform 0.18s ease,
@@ -67,15 +73,21 @@
     .dora-card-head {
         display: flex;
         align-items: center;
-        gap: 8px;
-        margin-bottom: 14px;
+        gap: var(--space-2);
+        margin-bottom: var(--space-4);
     }
     .dora-card-icon {
-        color: var(--brand-primary);
+        /* A1 reserves the brand accent for the ONE primary CTA in a view. On a
+           dashboard of ~15 cards it was painting 15 decorative head icons, so
+           the quick-action bar and "Draft my shop" — the actual calls to
+           action — competed with a field of green that carried no meaning.
+           Owner-decided 2026-09-02 (§4.5 #3); Reports inherits the same fix
+           from this component. */
+        color: var(--text-secondary);
     }
     .dora-card-title {
         margin: 0;
-        font-size: 1.05rem;
+        font-size: calc(var(--font-size-md) * 1rem);
         font-weight: 600;
         flex: 1;
         letter-spacing: 0.005em;
@@ -84,18 +96,19 @@
        the parent's scope, not this component's — the shell still owns the
        action's resting/hover look so it's consistent across every card. */
     :deep(.dora-card-action) {
-        font-size: 0.8rem;
+        font-size: calc(var(--font-size-xs) * 1rem);
         font-weight: 500;
         color: var(--text-secondary);
         opacity: 0.85;
         transition: color 0.18s ease, opacity 0.18s ease;
     }
     .dora-card-clickable:hover :deep(.dora-card-action) {
-        color: var(--brand-primary);
+        /* R-069: accent as text is `--accent-ink`, not the fill tone. */
+        color: var(--accent-ink);
         opacity: 1;
     }
     :deep(.dora-card-link) {
-        color: var(--brand-primary);
+        color: var(--accent-ink);
         text-decoration: none;
         font-weight: 600;
     }

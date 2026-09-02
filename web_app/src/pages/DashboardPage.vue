@@ -1643,82 +1643,76 @@
 </script>
 
 <style scoped lang="scss">
-    /* ───── Palette ─────────────────────────────────────────────────────
-       Warm, food-y, deliberately un-corporate. Scoped to this page so it
-       doesn't leak. The variables are exported as CSS custom properties on
-       the root .dora-dash element so every descendant can reference them.
+    /* ───── Page root ───────────────────────────────────────────────────
+       FU-747 / chunk 6: the page-local `--c-*` alias layer that used to be
+       declared here is **gone**. It mapped 14 global tokens to page-local
+       names, which cost a second vocabulary for no behaviour (every alias
+       resolved to exactly one global token), and it could not be seen by the
+       scoped blocks of the card components — the file's own Cards-menu comment
+       said as much. Everything below references the global tokens directly.
     */
     .dora-dash {
-        /* Dashboard reads the active theme's signature hero gradient as
-           its page background — this is the "special touch" per theme.
-           Every other surface reference here goes through the global
-           tokens so the dashboard reskins automatically with the rest
-           of the app. */
-        --c-bg-1: var(--surface-elevated);
-        --c-bg-2: var(--surface-sunken);
-        --c-surface: var(--surface-component);
-        --c-ink: var(--text-primary);
-        --c-ink-mute: var(--text-secondary);
-        --c-line: var(--border-default);
-        --c-accent: var(--brand-primary);
-        --c-accent-soft: var(--brand-primary-soft);
-        --c-ok: var(--semantic-positive);
-        --c-ok-soft: var(--semantic-positive-soft);
-        --c-warn: var(--semantic-warning);
-        --c-warn-soft: var(--semantic-warning-soft);
-        --c-bad: var(--semantic-negative);
-        --c-bad-soft: var(--semantic-negative-soft);
-        --c-pink-soft: var(--brand-secondary-soft);
-
         min-height: 100%;
-        padding: 24px 24px 96px;
+        /* The bottom value is 2 × --space-12: clearance for the mobile bottom
+           bar, kept on the scale rather than the old off-scale 96px (A3). */
+        padding: var(--space-6) var(--space-6) calc(var(--space-12) * 2);
+        /* Dashboard reads the active theme's signature hero gradient as its
+           page background — the "special touch" per theme. Every other surface
+           reference here goes through the global tokens so the dashboard
+           reskins automatically with the rest of the app. */
         background: var(--hero-gradient);
-        color: var(--c-ink);
+        color: var(--text-primary);
     }
 
     /* ───── Hero ─────────────────────────────────────────────────────── */
     .dora-hero {
         display: flex;
         align-items: center;
-        gap: 16px;
-        padding: 24px;
-        margin-bottom: 24px;
-        background: var(--c-surface);
-        border: 1px solid var(--c-line);
-        border-radius: 18px;
+        gap: var(--space-4);
+        padding: var(--space-6);
+        margin-bottom: var(--space-6);
+        background: var(--surface-component);
+        border: 1px solid var(--border-default);
+        /* A4/D-017: a card is `--radius-lg`. This was 18px, off-scale, and
+           shared its value with `DashboardCard` — corrected together, per the
+           owner's FU-811 decision (10px is the app's card radius at 41 sites,
+           18px at 3). */
+        border-radius: var(--radius-lg);
         box-shadow: var(--elevation-card);
     }
     .dora-hero-mascot {
-        border-radius: 14px;
-        background: var(--c-accent-soft);
-        padding: 2px;
+        /* Same radius as `.dora-welcome-mascot` — one element type, one
+           radius (D-017). Was 14px here and 10px there for the same thing. */
+        border-radius: var(--radius-lg);
+        background: var(--brand-primary-soft);
+        padding: var(--space-1);
         flex-shrink: 0;
     }
     .dora-hero-text {
         min-width: 0;
     }
     .dora-hero-greeting {
-        font-size: 1.5rem;
+        font-size: calc(var(--font-size-2xl) * 1rem);
         font-weight: 600;
         line-height: 1.2;
     }
     .dora-hero-line {
-        margin-top: 2px;
-        color: var(--c-ink-mute);
-        font-size: 0.95rem;
+        margin-top: var(--space-1);
+        color: var(--text-secondary);
+        font-size: calc(var(--font-size-md) * 1rem);
     }
     .dora-hero-actions {
         display: flex;
         align-items: center;
-        gap: 4px;
+        gap: var(--space-1);
     }
 
     /* Phase 5 quick-action bar — sits between the hero and the cards. */
     .dora-quick-actions {
         display: flex;
         flex-wrap: wrap;
-        gap: 8px;
-        margin-bottom: 16px;
+        gap: var(--space-2);
+        margin-bottom: var(--space-4);
     }
 
     /* ───── Cards ────────────────────────────────────────────────────── */
@@ -1729,25 +1723,35 @@
        places it just before its zone's cards, and being full-width it forces
        the cards onto the next line so each zone reads as a labelled band. */
     .dora-zone-label {
-        font-size: 0.72rem;
+        /* Was 0.72rem (11.5px) — under D-003's 12px hard floor, and the
+           smallest text on a page whose zones ARE its information
+           architecture (§4.3). Owner decision 2026-09-02: keep the uppercase
+           eyebrow treatment, raise it to `--font-size-sm`, rather than take
+           A2's full 20px section-header row (which would restructure the
+           page's vertical rhythm). The `opacity: 0.8` went with it — dimming
+           an already-muted token is the contrast compounding D-002 warns
+           about, and it was doing the work the size should have done. */
+        font-size: calc(var(--font-size-sm) * 1rem);
         font-weight: 700;
         letter-spacing: 0.1em;
         text-transform: uppercase;
-        color: var(--c-ink-mute);
-        opacity: 0.8;
-        margin-top: 6px;
+        color: var(--text-secondary);
+        margin-top: var(--space-2);
     }
     /* Zone sub-header inside the Cards toggle menu. NB: q-menu teleports to
-       <body>, outside `.dora-dash` — so use the GLOBAL `--brand-primary` token
-       here, not the page-local `--c-accent` alias (which wouldn't resolve). */
+       <body>, outside `.dora-dash`, so this cannot rely on any page-scoped
+       custom property — one of the reasons the `--c-*` alias layer was
+       retired (FU-747). */
     .dora-cards-menu-zone {
-        font-size: 0.7rem;
+        font-size: calc(var(--font-size-xs) * 1rem);
         font-weight: 700;
         letter-spacing: 0.08em;
         text-transform: uppercase;
-        color: var(--brand-primary);
-        opacity: 0.9;
-        padding-top: 8px;
+        /* R-069: `--brand-primary` is a *fill* tone and fails the contrast
+           floor as text; `--accent-ink` is its ink-strength sibling. The
+           `opacity: 0.9` that used to sit here was compounding that. */
+        color: var(--accent-ink);
+        padding-top: var(--space-2);
     }
     /* The card shell (`.dora-card`, head, icon, title, action, link, clickable
        + hover) lives in `components/dashboard/DashboardCard.vue`.
@@ -1759,9 +1763,10 @@
            (`.dora-empty*`, `.dora-cook-*`, `.dora-stat-*`, `.dash-skel-line`)
          · used by exactly one card → that card's own scoped block (R-027)
 
-       What remains below is the page's own chrome: the root + its `--c-*` alias
-       layer, the hero, the quick-action bar, the zone band labels, the "Dora
-       says" welcome band, and the grid's fade transition. */
+       What remains below is the page's own chrome: the root, the hero, the
+       quick-action bar, the zone band labels, the "Dora says" welcome band, and
+       the grid's fade transition. All of it on global tokens — chunk 6 retired
+       the `--c-*` alias layer this block used to declare (FU-747). */
 
     /* The deal-row styles (`.dora-deal-*`) and their mobile reflow moved into
        `components/dashboard/PriceDropsCard.vue`, the only card that still uses
@@ -1774,49 +1779,52 @@
     .dora-welcome {
         display: flex;
         align-items: center;
-        gap: 12px;
-        padding: 12px 12px 12px 14px;
-        background: var(--c-surface);
-        border: 1px solid var(--c-line);
-        border-left: 4px solid var(--c-accent);
-        border-radius: 14px;
+        gap: var(--space-3);
+        /* Asymmetric on purpose: the wider inline-start pad sits behind the
+           4px accent rule so the text keeps an even optical inset. */
+        padding: var(--space-3) var(--space-3) var(--space-3) var(--space-4);
+        background: var(--surface-component);
+        border: 1px solid var(--border-default);
+        border-left: 4px solid var(--brand-primary);
+        border-radius: var(--radius-lg);
         box-shadow: var(--elevation-card);
     }
     .dora-welcome--warn {
-        border-left-color: var(--c-warn);
-        background: var(--c-warn-soft);
+        border-left-color: var(--semantic-warning);
+        background: var(--semantic-warning-soft);
     }
     .dora-welcome-mascot {
-        border-radius: 10px;
-        background: var(--c-accent-soft);
-        padding: 1px;
+        border-radius: var(--radius-lg);
+        background: var(--brand-primary-soft);
+        padding: var(--space-1);
     }
     .dora-welcome-body {
         min-width: 0;
         flex: 1;
     }
     .dora-welcome-line {
-        font-size: 0.95rem;
+        font-size: calc(var(--font-size-md) * 1rem);
         line-height: 1.35;
-        color: var(--c-ink);
+        color: var(--text-primary);
     }
     .dora-welcome-line strong {
-        color: var(--c-accent);
+        /* R-069: accent as *text* is `--accent-ink`, not the fill tone. */
+        color: var(--accent-ink);
         font-weight: 700;
     }
     .dora-welcome--warn .dora-welcome-line strong {
-        color: var(--c-warn);
+        color: var(--semantic-warning);
     }
     .dora-welcome-hint {
-        margin-top: 3px;
-        font-size: 0.82rem;
-        color: var(--c-ink-mute);
+        margin-top: var(--space-1);
+        font-size: calc(var(--font-size-sm) * 1rem);
+        color: var(--text-secondary);
     }
     .dora-welcome-actions {
-        margin-top: 6px;
+        margin-top: var(--space-2);
         display: flex;
         flex-wrap: wrap;
-        gap: 6px;
+        gap: var(--space-2);
     }
 
 
@@ -1866,13 +1874,13 @@
             justify-content: flex-end;
         }
         .dora-dash {
-            padding: 16px 16px 96px;
+            padding: var(--space-4) var(--space-4) calc(var(--space-12) * 2);
         }
         /* Phase 7 mobile pass. The zone grid already stacks (cards are
            col-12 below sm); these tidy the new Phase 4/5 bits for touch. */
         /* Quick-action buttons span the row so they're easy thumb targets. */
         .dora-quick-actions {
-            gap: 8px;
+            gap: var(--space-2);
         }
         .dora-quick-actions :deep(.q-btn) {
             flex: 1 1 auto;

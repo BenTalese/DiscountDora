@@ -10,12 +10,129 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-828 — Dashboard scale sweep: 44 font-sizes, 22 radii, 95 spatial literals, zero tokens
+- **Raised:** 2026-09-02 (dashboard page PO + engineering review)
+- **Resolved:** 2026-09-02 (dashboard review §7 **Chunk 6** — the last chunk).
+  Recounted first, as this entry demanded, and the totals held: **44 font-size
+  literals, 16 radii, 106 spatial declarations** across the 14 files. All of them
+  are now tokens. The residual count is **zero** for radius and spacing, and two
+  for font-size — both SVG, both carve-outs (below).
+  - **Type → A2.** Every size is `calc(var(--font-size-*) * 1rem)`. The eight
+    below D-003's 12px floor are gone: the calendar legend and its group labels,
+    the weekday cells and the Cards-menu zone header all went to `--font-size-xs`.
+    **Zone band headers** were the owner's call (the one this entry flagged as
+    "worth acting on beyond the sweep") — **decided: keep the uppercase eyebrow,
+    raise it to `--font-size-sm`**, not A2's full 20px section-header row, which
+    would have restructured the page's vertical rhythm. Its `opacity: 0.8` went
+    too: dimming an already-muted token is D-002 compounding, and it was doing
+    the work the size should have done.
+  - **Spacing → A3, radius → A4.** The off-scale 3/5/6/9/10/14/18px values are
+    gone; page padding's `96px` is now `calc(var(--space-12) * 2)`. One rule
+    settled the six-radius spread (D-017): **a card is `--radius-lg`, a row or
+    tile nested inside one is `--radius-md`** — nested rows had been 10/12/14px
+    depending on which card you were in.
+  - **R-002 carve-outs, 2, both in `PantryDonutCard.vue`:** SVG `font-size`
+    inside a viewBox is in **user units**, not CSS px, so a rem-ratio token
+    cannot express it — a token there would be wrong, not just unconventional.
+    Both are commented with the maths (36-unit box at 132px ⇒ ×3.67). The `3px`
+    sub-label — one of the eight sub-floor items — went to `3.4px`, ≈12.5px
+    effective, which is the only way to clear D-003 in user units.
+  - **The riders both travelled with it.** [[FU-814]] item 4 landed: the shared
+    card radius is `--radius-lg` (was 18px) and its padding one `--space-4` (was
+    `18px 20px 20px`) — **Reports inherits both**, which was the point. And the
+    page-local **`--c-*` alias layer is retired**: 14 aliases, each resolving to
+    exactly one global token, gone.
+- **⚠️ Citation correction:** this entry and `DASHBOARD_PAGE_REVIEW.md` §4.5 #5
+  both cite **[[FU-747]]** as tracking the `--c-*` alias layer. **FU-747 is not
+  that** — it is the resolved cookbook item about `RecipeCard`/`RecipeRow`
+  carrying the rating block twice. The alias layer never had its own follow-up;
+  it was carried inside this one. Nothing was lost (the work is done), but don't
+  chase FU-747 looking for alias history.
+- **Two things the retirement exposed, both fixed here.** Removing the alias
+  declaration took `--c-line` out of the R-060 guard's declared set, and the
+  guard immediately failed on **`MarkAsWastedDialog.vue`** and
+  **`StocktakeRunner.vue`** — which reference `--c-line`, `--c-surface-2`,
+  `--c-surface-3` and `--c-line-strong`, custom properties **declared nowhere
+  either file can see**. They had always been painting their hard-coded rgba
+  fallbacks instead of following the theme, silently, in all ten themes. Now on
+  real tokens, and the four came off `designTokensDeclared.spec.ts`'s
+  `KNOWN_UNDECLARED` ratchet. *A test that only fires when an unrelated file
+  changes is still the test that found this.*
+- **Verified live**, because this is a class of change that fails **silently**:
+  an unresolved `var()` invalidates the whole declaration at computed-value time
+  and the element just renders unstyled — no warning, no build failure, no lint
+  error, nothing `vue-tsc` can see. A throwaway Playwright probe at 1440×1200 on
+  the dense seed (deleted after use) measured, on the running page: the alias
+  layer resolving to **empty** (retired, not merely unreferenced); card radius
+  **10px** and padding **16px**; head icons at `--text-secondary`; zone labels
+  **14.4px at opacity 1**; all five nested-row primitives rendering a background
+  **different from their card's**, at 6px; and **zero** elements styled by the
+  dashboard's own sheets under the 12px floor.
+- **The probe found one thing the review had not:** Quasar's `size` prop sets a
+  button's font-size directly, and **`sm` is 10px** — so every segmented-control
+  label on the page ("7 days", "14 days", "Month", "Year", "All") was rendering
+  at 10px, under the hard floor and on an *interactive* element, where B2 asks
+  for 14. Fixed in **`BaseSegmented.vue`** rather than at the call sites: the
+  size prop is doing real work (padding, height, density) and only its type
+  scale is wrong, so pinning the label alone keeps the compact control. One
+  place, **19 consumers** — the other 18 want an eyes-on pass, logged in
+  `DORA_VERIFY.md` rather than as a follow-up, since the outstanding work is
+  purely "look at them and confirm".
+- **Deliberately NOT fixed here:** the same 10px applies to `size="sm"` **action
+  buttons** ("Cook", "Add", "Dismiss", "Open item", "Mark restocked", "Push 7
+  days", "Clear expiry" — 10 of them on the dashboard alone). That is the
+  app-wide `size="sm"` pattern, which `DASHBOARD_PAGE_REVIEW.md` §4.8 assigns to
+  **[[FU-631]] #2**, not to this chunk. Measured and recorded there rather than
+  widened into a token sweep.
+
+- **Type:** finding (R-002 / D-017 / D-003 / A2-A4)
+- **What:** `DashboardPage.vue`'s ~970 lines of scoped SCSS contain **zero**
+  `--font-size-*`, `--radius-*` or `--space-*` tokens. Instead: 44 raw font-size
+  literals (**8 below the 12px D-003 floor**, one of them `.dora-strip-more` at
+  10.4px carrying a count, one `.dora-range-chip` at 11.5px on an interactive
+  control, and `.dora-zone-label` — the page's information architecture — at
+  11.5px where A2 wants a section header); 22 raw `border-radius` values across
+  **six** distinct radii (999/10/12/14/18/3px) against a 4/6/10/16/22/pill
+  ladder; 95 raw spatial declarations across 15 px values of which ~57 are
+  off-scale, including the `5px` and `18px` A3 names explicitly. Also: the card
+  grid is `q-col-gutter-md` (16px) where B4 specifies `--space-6` (24px), and page
+  padding is `24px 24px 96px`. Full tables: `DASHBOARD_PAGE_REVIEW.md` §4.3-4.4.
+  `ReconcilePastMealsChip.vue` is the one file in the scope that does it right and
+  is the template.
+- **Why deferred:** it is the largest line-count item on the surface and the
+  cheapest in judgement, so it is worth almost nothing until the card set stops
+  moving — tokenising fourteen inline card bodies that are about to become
+  components ([[FU-829]]) or be merged away ([[FU-817]]/[[FU-818]]/[[FU-819]]) is
+  work done twice.
+- **⚠️ Scope moved (2026-09-02, chunk 5 close):** the blockers above are now
+  **cleared** — the merges landed (chunks 1-2) and [[FU-829]] extracted every card
+  body (chunk 5). The literals were **not** fixed by that work, only relocated, so
+  the counts above still stand but the files do not. They are now spread across
+  **`web_app/src/components/dashboard/*.vue`** (12 card components' scoped blocks),
+  **`web_app/src/css/dashboardCards.scss`** (the shared `.dora-empty` /
+  `.dora-cook-*` / `.dora-stat-*` primitives), and what remains in
+  `DashboardPage.vue`'s block (page chrome only: `.dora-dash`, `.dora-hero*`,
+  `.dora-quick-actions`, `.dora-cards`, `.dora-zone-label`, `.dora-welcome*`).
+  Re-count before starting rather than trusting the 44/22/95 figures per file.
+  This is a **cheaper** sweep than it was — each home is now 40-100 lines with one
+  card's worth of decisions in it — but a **wider** one: 14 files, not 1. Two riders
+  travel with it: the `--c-*` page-alias layer ([[FU-747]]) is now used only by
+  page chrome and can finally be retired in the same pass, and the card radius
+  correction from [[FU-814]] item 4 (`DashboardCard.vue`'s 18px → `--radius-lg`,
+  `18px 20px 20px` → `--space-4`, plus the hero's 18px) is the same edit in the
+  same files.
+- **Recommended resolution:** **now** — `DASHBOARD_PAGE_REVIEW.md` §7 Chunk 6,
+  last, deliberately. Nothing is blocking it.
+
 ## [RESOLVED] FU-829 — R-001: the dashboard de-monolith stopped at the shell, and the DoD it stood for is still open
 - **Resolved:** 2026-09-02 (dashboard review §7 Chunk 5) — **the DoD row is now
   genuinely closed.** All fourteen inline card bodies are components under
-  `web_app/src/components/dashboard/`; `DashboardPage.vue` is **3,158 → 1,775
+  `web_app/src/components/dashboard/`; `DashboardPage.vue` is **3,258 → 1,888
   lines** (below the 1,964-line monolith the rebuild set out to dissolve, and
-  ~44% smaller than its peak) and its `<style>` block holds **page chrome only**.
+  ~42% smaller than its peak) and its `<style>` block holds **page chrome only**
+  (244 lines). *(Figures re-measured against the committed file at the close-gate;
+  as first written this row said 3,158 → 1,775, which was a mid-chunk count. The
+  claim it supports — under the 1,964-line monolith — holds either way.)*
   - **New components (this chunk, 11):** `AttentionCard` (292), `WhatsComingCard`
     (305, exports `CalendarSpan`/`CalendarCell`), `MoneyCard` (256),
     `PantryDonutCard` (204, exports `DonutSegment`), `PriceDropsCard` (151),

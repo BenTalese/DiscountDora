@@ -112,7 +112,7 @@
     .dora-stock-body {
         display: flex;
         align-items: center;
-        gap: 18px;
+        gap: var(--space-5);
     }
     .dora-donut {
         width: 132px;
@@ -129,16 +129,18 @@
         transition: stroke-dasharray 0.6s ease, stroke-dashoffset 0.6s ease, opacity 0.15s ease;
     }
     /* FU-299 — clickable low/out segments.
-       ⚠️ This rule sets `outline: none` on `:focus` with only an opacity change
-       as the replacement, which A6 forbids ("never `outline: none` without a
-       replacement") and D-016 compounds (hover and focus are byte-identical, so
-       they aren't distinguishable). Carried across the extraction verbatim
-       rather than fixed here — it belongs to the chunk-6 focus pass, where the
-       whole page's missing `:focus-visible` is dealt with in one go. */
-    .dora-donut-seg--link:hover,
-    .dora-donut-seg--link:focus {
+       This used to set `outline: none` on `:focus` with an opacity change as
+       its only replacement — which A6 forbids outright ("never `outline: none`
+       without a replacement"), and D-016 compounds, because an identical
+       opacity shift makes hover and focus indistinguishable. Fixed in chunk 6:
+       hover keeps the dim, focus gets a real ring. `:focus-visible` rather than
+       `:focus` so a mouse click on a segment doesn't leave a ring behind. */
+    .dora-donut-seg--link:hover {
         opacity: 0.8;
-        outline: none;
+    }
+    .dora-donut-seg--link:focus-visible {
+        outline: 2px solid var(--focus-ring);
+        outline-offset: 2px;
     }
     /* Legend rows deep-link to the filtered pantry view; low/out are the "act"
        segments — underline on hover, keep the row layout stable. */
@@ -158,16 +160,22 @@
         transform: rotate(90deg);
         transform-origin: 18px 18px;
     }
+    /* R-002 carve-out: SVG `font-size` inside a viewBox is in USER UNITS, not
+       CSS px, so the `--font-size-*` rem ratios cannot express it — a token here
+       would be wrong, not merely unconventional. The viewBox is 36 units wide
+       rendered at 132px, so the scale factor is 132/36 ≈ 3.67: 7.5 units ≈ 27px
+       effective. The effective size is what D-003 governs, and it is checked
+       here in the comment because no tooling can see it. */
     .dora-donut-big {
         font-size: 7.5px;
         font-weight: 700;
         fill: var(--text-primary);
     }
-    /* 3 user units in a 36-unit viewBox rendered at 132px ≈ 11px effective —
-       under the D-003 12px floor. Noted for the chunk-6 type pass; the fix is a
-       larger unit size, not a token (SVG font-size is in viewBox units). */
+    /* Was 3 units ≈ 11px effective — under D-003's 12px floor (§4.3 counted it
+       among the eight). 3.4 units × 3.67 ≈ 12.5px, which clears it. Same
+       user-units carve-out as `.dora-donut-big` above. */
     .dora-donut-sub {
-        font-size: 3px;
+        font-size: 3.4px;
         fill: var(--text-secondary);
         text-transform: lowercase;
         letter-spacing: 0.05em;
@@ -176,13 +184,13 @@
         list-style: none;
         margin: 0;
         padding: 0;
-        font-size: 0.85rem;
+        font-size: calc(var(--font-size-sm) * 1rem);
     }
     .dora-legend li {
         display: flex;
         align-items: center;
-        gap: 8px;
-        padding: 4px 0;
+        gap: var(--space-2);
+        padding: var(--space-1) 0;
     }
     .dora-dot {
         width: 9px;

@@ -22,6 +22,36 @@ top-to-bottom.
 
 ---
 
+## Segmented controls app-wide, after the label-size fix (2026-09-02) — origin FU-828
+
+`BaseSegmented.vue` now pins its label to `--font-size-sm`, because Quasar's
+`size="sm"` was rendering them at **10px**. Verified on the dashboard's two;
+the other **17 call sites** were not looked at, and the labels are now bigger
+than the component's authors sized them for.
+
+- [ ] Skim the segmented controls outside the dashboard — the shopping list's
+      grouping switch, the recipe method's step-style switch (the pill one),
+      cookbook filter sorts, price history, cook mode — for labels that now
+      **wrap or overflow** their segment at 14px where 10px used to fit.
+
+## Dashboard — after the chunk 6 sweep (2026-09-02) — origin FU-828
+
+The sweep was measured live at 1440px (tokens resolve, radii, surfaces, the
+12px floor) — those checks are done and not repeated here. What a probe cannot
+judge is whether the result *looks right*, and two branches never rendered.
+
+- [ ] **A dark theme, and a non-Pesto family.** Every nested row moved from
+      `--surface-elevated` to `--surface-sunken`; on a dark ground the wells
+      should still read as inset, not vanish into the card.
+- [ ] **Kitchen health's score number** dropped 40px → 30px to match the other
+      hero numbers. Confirm it still reads as the card's headline.
+- [ ] Set a primary shopping list: the **Primary shopping list** card should
+      render its populated branch fully styled (`.dora-stat-*` tiles laid out on
+      a sunken well), not the "No primary set" branch — the dense seed has no
+      primary set, so this branch has never been seen since the extraction.
+- [ ] Turn on the money cards: **Spend by store** is `defaultHidden`, so its row
+      styling is the one nested-row primitive the probe could not reach.
+
 ## Dashboard — chunk 1 fixes, confirm the visuals (2026-09-02)
 
 Chunk 1 of `DASHBOARD_PAGE_REVIEW.md` §7 is **shipped and unit-tested**; these

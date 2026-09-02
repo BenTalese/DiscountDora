@@ -179,30 +179,34 @@
        resolve to nothing from a component (R-060). */
     .dora-cal-legend {
         display: flex;
-        gap: 12px;
-        font-size: 0.72rem;
+        gap: var(--space-3);
+        /* Was 11.5px — under D-003's floor, on the card's own decoder ring
+           (D-013). The legend must be the most legible thing here. */
+        font-size: calc(var(--font-size-xs) * 1rem);
         color: var(--text-secondary);
     }
     .dora-cal-leg {
         display: inline-flex;
         align-items: center;
-        gap: 4px;
+        gap: var(--space-1);
     }
     .dora-cal-grid {
         display: grid;
         grid-template-columns: repeat(7, minmax(0, 1fr));
-        gap: 6px;
+        gap: var(--space-2);
     }
     .dora-cal-cell {
         display: flex;
         flex-direction: column;
         align-items: center;
-        gap: 4px;
+        gap: var(--space-1);
         min-height: 56px;
-        padding: 8px 4px 6px;
+        padding: var(--space-2) var(--space-1);
         border: 1px solid var(--border-default);
-        border-radius: 10px;
-        background: var(--surface-elevated);
+        border-radius: var(--radius-md);
+        /* A1: nested rows are inset wells inside a card — `--surface-sunken`.
+           `--surface-elevated` is for surfaces floating ABOVE a card. */
+        background: var(--surface-sunken);
         color: var(--text-primary);
         cursor: pointer;
         transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
@@ -212,7 +216,8 @@
         transform: translateY(-1px);
     }
     .dora-cal-cell.is-today {
-        border-color: var(--brand-primary);
+        /* An accent-coloured hairline is `--accent-ink` (R-069). */
+        border-color: var(--accent-ink);
         font-weight: 700;
     }
     .dora-cal-cell.is-selected {
@@ -229,23 +234,23 @@
        calendar cells labelled rather than reduced to bare dots, and a 14-cell
        grid of numbers alone is genuinely hard to read. */
     .dora-cal-dow {
-        font-size: 0.72rem;
+        font-size: calc(var(--font-size-xs) * 1rem);
         letter-spacing: 0.06em;
         text-transform: uppercase;
         color: var(--text-secondary);
         line-height: 1;
     }
     .dora-cal-cell.is-today .dora-cal-dow {
-        color: var(--brand-primary);
+        color: var(--accent-ink);
         font-weight: 700;
     }
     .dora-cal-num {
-        font-size: 0.95rem;
+        font-size: calc(var(--font-size-md) * 1rem);
         line-height: 1;
     }
     .dora-cal-dots {
         display: flex;
-        gap: 3px;
+        gap: var(--space-1);
         min-height: 6px;
     }
     .dora-cal-dot {
@@ -264,43 +269,43 @@
         background: var(--brand-primary);
     }
     .dora-cal-hint {
-        margin-top: 12px;
-        font-size: 0.82rem;
+        margin-top: var(--space-3);
+        font-size: calc(var(--font-size-sm) * 1rem);
         color: var(--text-secondary);
     }
     .dora-cal-detail {
-        margin-top: 14px;
-        padding: 12px 14px;
-        background: var(--surface-elevated);
-        border-radius: 12px;
+        margin-top: var(--space-4);
+        padding: var(--space-3) var(--space-4);
+        background: var(--surface-sunken);
+        border-radius: var(--radius-md);
     }
     .dora-cal-detail-date {
         font-weight: 700;
-        margin-bottom: 8px;
+        margin-bottom: var(--space-2);
     }
     .dora-cal-group {
-        margin-top: 8px;
+        margin-top: var(--space-2);
     }
     .dora-cal-group-label {
-        font-size: 0.72rem;
+        font-size: calc(var(--font-size-xs) * 1rem);
         text-transform: uppercase;
         letter-spacing: 0.06em;
         color: var(--text-secondary);
-        margin-bottom: 2px;
+        margin-bottom: var(--space-1);
     }
     .dora-cal-item {
         display: block;
         color: var(--text-primary);
         text-decoration: none;
-        font-size: 0.9rem;
-        padding: 2px 0;
+        font-size: calc(var(--font-size-sm) * 1rem);
+        padding: var(--space-1) 0;
     }
     .dora-cal-item:hover {
         text-decoration: underline;
     }
     .dora-cal-slot {
         color: var(--text-secondary);
-        font-size: 0.82rem;
+        font-size: calc(var(--font-size-sm) * 1rem);
     }
 
     @media (prefers-reduced-motion: reduce) {

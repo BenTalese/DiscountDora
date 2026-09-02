@@ -134,12 +134,12 @@
     .dora-draft-shop {
         display: flex;
         flex-direction: column;
-        gap: 12px;
+        gap: var(--space-3);
     }
     .dora-draft-shop__blurb {
         margin: 0;
         color: var(--text-secondary);
-        font-size: 0.9rem;
+        font-size: calc(var(--font-size-sm) * 1rem);
         line-height: 1.35;
     }
 </style>

@@ -109,8 +109,13 @@
         gap: var(--space-1, 4px);
         min-height: 84px;
         padding: var(--space-2, 8px) var(--space-3, 12px);
-        border: 1px solid var(--c-line, rgba(0, 0, 0, 0.12));
-        background: var(--c-surface-2, transparent);
+        /* R-060: was `--c-line` / `--c-surface-2`, custom properties that have
+           never been declared anywhere this component can see — so these have
+           always painted their hard-coded rgba fallbacks and never followed the
+           theme. Surfaced when the dashboard's page-local `--c-*` alias layer
+           was retired (FU-747) and the R-060 guard lost that declaration. */
+        border: 1px solid var(--border-default);
+        background: transparent;
         border-radius: var(--radius-md, 8px);
         color: inherit;
         font: inherit;
@@ -119,8 +124,8 @@
     }
     .mark-wasted__tile:hover,
     .mark-wasted__tile:focus-visible {
-        background: var(--c-surface-3, rgba(0, 0, 0, 0.04));
-        border-color: var(--c-line-strong, rgba(0, 0, 0, 0.24));
+        background: var(--surface-sunken);
+        border-color: var(--border-strong);
         outline: none;
     }
     .mark-wasted__tile--wide {

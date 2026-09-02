@@ -35,9 +35,15 @@ links on every save, one linked step made *every* later edit to that recipe fail
 pattern is that reported "design" complaints keep having real bugs underneath
 them: a filter width justified by a label deleted a week earlier, a unit picker
 that filtered its own vocabulary down to one entry and then stored the option
-object, a `load()` that blanked the page on every list-level edit. Suites are at
-their highest counts — backend **2176 passed** / 1 skipped / 1 xfailed, frontend
-**571 vitest**, `vue-tsc` + `eslint src/` clean — with the four pre-existing
+object, a `load()` that blanked the page on every list-level edit. **As of
+2026-09-02 the active stream is the dashboard**, working through
+`DASHBOARD_PAGE_REVIEW.md`'s six chunks, and **all six are now built and green**:
+the card census is down to 14 registered / 11 default-on with a test holding the
+count, the eleven loaders no longer answer a failed request with a reassuring
+empty state, the page is a thin composition at 1,888 lines, and it is drawn to
+one type/spacing/radius scale rather than assembled from snippets. Suites are at
+their highest counts — backend **2210 passed**, frontend
+**661 vitest**, `vue-tsc` + `eslint src/` clean — with the four pre-existing
 buy-verdict e2e failures outstanding (FU-762). The dominant debt is unchanged and
 still growing: a large stacked body of shipped UI has never been seen in a
 browser, though the last three units were each driven live against a scratch
@@ -174,13 +180,26 @@ These are the ones wanting a decision or a running-app check, most important fir
    **One new rule:** **R-071 / ADR-068** — *a comparative figure carries its
    baseline in its label, and one word never spans two baselines.*
 
-   **Build progress against the review's 6 chunks — 4 of 6 done, all green.**
+   **Build progress against the review's 6 chunks — 6 of 6 done, all green.**
    ✅ **Chunk 1** (the eight functional defects, FU-820..827 — also retired
    FU-767), ✅ **Chunk 2** (the grid packs, FU-631 #3), ✅ **Chunk 3** (the
-   decided restructure, FU-830), ✅ **Chunk 4** (honesty + error states, FU-840).
+   decided restructure, FU-830), ✅ **Chunk 4** (honesty + error states, FU-840),
+   ✅ **Chunk 5** (the extraction, FU-829 — see below), ✅ **Chunk 6** (the
+   design-rule sweep, FU-828 + FU-814 item 4 — see below).
    vitest 585 → **661**, pytest 2210, only the pre-existing buy-verdict 4 red.
    The dashboard is **17 cards → 14, 13 default-on → 11**, and the count now has
    a test holding it — the mechanism §2.2 never had, and the reason it drifted.
+
+   **Chunk 5 closed the DoD row that started this whole review.** All fourteen
+   card bodies are now components under `components/dashboard/`;
+   `DashboardPage.vue` is **3,258 → 1,888 lines**, finally under the 1,964-line
+   monolith the rebuild set out to dissolve, with a 244-line style block of page
+   chrome only. New rule **R-072 / ADR-069** — *a Definition of Done outlives the
+   follow-up that deferred it*. Note the chunk's building session **ran out of
+   room before its close-gate**; the worklog entry and this refresh were finished
+   on 09-02 by a following session, which re-measured rather than copying the
+   ledger forward and found the recorded line counts were a mid-chunk snapshot
+   (3,158 → 1,775). Corrected in `DORA_FOLLOWUPS_RESOLVED.md`.
 
    Chunk 4's headline is worth knowing about: every one of the dashboard's
    eleven loaders used to turn a failed request into the card's *empty* state, so
@@ -198,9 +217,34 @@ These are the ones wanting a decision or a running-app check, most important fir
    review — the "five dead regions" claim holds at ≥1440px but was two below,
    because Quasar's `lg` is ≥1440 while the app calls ≥1024 desktop (**FU-836**).
 
-   **Remaining, none of it blocked:** **Chunk 5** = **FU-829** (finish the
-   extraction + its ADR), **Chunk 6** = **FU-828** + **FU-814** (token sweep +
-   the card radius).
+   **Chunk 6 closed the review out.** The page is drawn to one scale now —
+   zero raw radii, zero raw spacing, and the only two raw font-sizes are inside
+   the donut's SVG, where the value is in viewBox *user units* and a token would
+   be wrong (both commented). Two calls were yours: zone headings keep their
+   uppercase eyebrow but go up to 14px rather than becoming 20px section headers,
+   and the ~15 decorative card icons are muted so "Draft my shop" is the only
+   green thing asking to be pressed. The `--c-*` alias layer is retired.
+
+   **The browser found what the review couldn't.** Quasar's `size` prop sets a
+   button's font-size directly and **`sm` is 10px** — so "7 days", "Month",
+   "Year", "All" were rendering at 10px on *interactive* controls, under the
+   12px floor. It wasn't in any stylesheet to be counted; it arrived from a prop.
+   Fixed once in `BaseSegmented` (19 consumers). The same 10px hits `size="sm"`
+   action buttons ("Cook", "Dismiss", "Add" — 10 on this page); that's the
+   app-wide pattern **FU-631 #2** owns and it was deliberately left there, with
+   the measurement attached.
+
+   **A side effect worth knowing:** retiring the aliases dropped `--c-line` from
+   the R-060 guard's declared set, and the guard immediately failed on two *stock*
+   files that reference four never-declared `--c-*` properties. They'd been
+   painting hard-coded greys instead of your theme, in every theme, silently.
+   Fixed. **New: FU-841** — `MarkAsWastedDialog`'s tiles remove the focus outline
+   and give focus the same look as hover.
+
+   **Still open on this surface, none of it blocking:** **FU-839**
+   (`BaseSegmented`'s selected segment at 3.88:1, plus two consumers that may
+   render the label invisible — now a natural pair with the `size` finding),
+   **FU-838**, **FU-837**, **FU-835**.
    Runnable in parallel and not dashboard-scoped: **FU-816** (the Reports money
    gate — ships standalone), **FU-831** (savings baseline, the only item needing
    a migration), **FU-832** (shared catalogue), **FU-833** (drop ECharts).
@@ -341,7 +385,7 @@ IMPL_PLAN_*); INV prompts produced their reports.
 | IMPL_PLAN_CONFIG_AND_OPTINS | Impl plan | ✅ done | Feature-flag/opt-in spine (C-cross) | `useFeatureFlags`/health flags shipped |
 | IMPL_PLAN_COOKBOOK | Impl plan | ✅ done | Recipe domain rebuild (C-4) | Structured steps/tags shipped |
 | IMPL_PLAN_COOK_MODE | Impl plan | ✅ done | Cook-mode rebuild (C-3) | `RecipeCookMode.vue` live |
-| IMPL_PLAN_DASHBOARD_REBUILD | Rebuild brief | ➗ carve-outs | Rebuild DashboardPage around savings | Phases 0-7 all shipped; **two commitments unmet** (re-audited 2026-09-02, `DASHBOARD_PAGE_REVIEW.md` §2): §2.2's curated 8-card default set is now 13 of 17 (FU-817), and §6's DoD "thin composition over `components/dashboard/*` — the 1964-line monolith is gone" was closed by extracting the shell alone (FU-293); the page is 3126 lines with 14 cards inline (FU-829) |
+| IMPL_PLAN_DASHBOARD_REBUILD | Rebuild brief | ✅ done | Rebuild DashboardPage around savings | Phases 0-7 shipped; the **two commitments the 2026-09-02 re-audit found unmet are now both met**: §2.2's card census is encoded at 14 registered / 11 default-on with `dashboardCards.spec.ts` holding it (FU-830), and §6's DoD "thin composition over `components/dashboard/*` — the 1964-line monolith is gone" closed for real at chunk 5 — all 14 card bodies extracted, page 3,258 → 1,888 lines (FU-829, R-072/ADR-069) |
 | IMPL_PLAN_ENV_TO_APPSETTING | Impl plan | ✅ done | Promote 12 env vars to AppSetting (FU-333B) | Header "SHIPPED 2026-07-05/06" |
 | IMPL_PLAN_ERROR_HANDLING | Impl plan | ➗ carve-outs | App-wide error-message polish (FU-099) | `apiErrorHandler.ts` live; full 166-catch sweep unconfirmed |
 | IMPL_PLAN_HELP_CHIPS | Impl plan | ✅ done | Add (?) hover-help chips (FU-044) | `help_outline` tooltip pattern across pages |
@@ -410,7 +454,7 @@ IMPL_PLAN_*); INV prompts produced their reports.
 
 | Doc | Type | State | Purpose/Notes | Evidence |
 |---|---|---|---|---|
-| DASHBOARD_PAGE_REVIEW | PO+eng review | 🔵 designed-not-built | The dashboard as a **drift audit**, not a design pass — the surface was designed properly (`IMPL_PLAN_DASHBOARD_REBUILD`, 7 phases) and it is the plan's *structural* commitments that lapsed: curated 8-card default → 13 of 17; DoD "monolith is gone" → 3126 lines. Also re-opens feedback D2 (dark mode) and L254 (money opt-in) | Written 2026-09-02; 13 FUs (817-829); Chunks 1-2 shippable now, Chunk 3 gated on FU-817/818 |
+| DASHBOARD_PAGE_REVIEW | PO+eng review | ✅ all 6 chunks built | The dashboard as a **drift audit**, not a design pass — the surface was designed properly (`IMPL_PLAN_DASHBOARD_REBUILD`, 7 phases) and it is the plan's *structural* commitments that lapsed: curated 8-card default → 13 of 17; DoD "monolith is gone" → 3,258 lines. Also re-opens feedback D2 (dark mode) and L254 (money opt-in) | Written 2026-09-02; 13 FUs (817-829); all 8 §8 decisions closed. All 6 chunks shipped 2026-09-02 — both structural commitments met and the design-rule sweep done (FU-828/829/830/840 resolved). Spin-offs still open: FU-835/837/838/839/841 |
 | REPORTS_PAGE_REVIEW | PO+eng review | 🔵 designed-not-built | `/reports` first-ever review — stands in for the empty REPORTS feedback section. Page is a faithful build of the 2025 N6 spec, ungated against the money flag | Written 2026-09-02; 8 FUs (809-816), chunks gated on FU-809/810. One item corrected by `DASHBOARD_PAGE_REVIEW` §3.10: the `themeTick` bug originated on the dashboard, so FU-824 supersedes half of FU-814 |
 | DATA_MODEL_SANITY_SWEEP_FU393 | Schema sweep | ✅ closed-actioned | Whole-schema sanity; remediation spawned FU-563/564/565 | Fully remediated 2026-07-15; schema-match test enforces (R-034) |
 | PERF_SCALE_SWEEP_FU388 | Perf sweep | ✅ closed-clean | Query-scale at 500/2000 items — no N+1s | "DB/query-scale pass done (clean)" |

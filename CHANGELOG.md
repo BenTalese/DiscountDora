@@ -26,6 +26,35 @@ semver — major bumps signal schema or breaking-config changes.
   from, so a guess never looks like something you set.
 
 ### Changed
+- **The dashboard is drawn to one scale (2026-09-02).** It had been assembled
+  from snippets: card corners at six different roundnesses, text at 44 different
+  sizes, and padding at fifteen. Nothing looked broken, it just looked
+  *assembled*. Everything now comes off the app's own type, spacing and corner
+  scales, so the page holds together and follows along when those change.
+  - **Small text got bigger where it was too small to read.** Eight things were
+    under the app's 12px minimum — the calendar's colour legend, its weekday
+    labels and "MEALS"/"EXPIRING" headings, the Cards menu's headings, and the
+    count inside the pantry donut. The zone headings that organise the page
+    ("Act now", "Today", "Money", "Your kitchen") were the smallest text on the
+    screen despite being its signposts; they're now bigger and no longer dimmed.
+  - **Buttons that switch between views can be read.** "7 days / 14 days" and
+    "Month / Year / All" were rendering their labels at 10px. They're 14px now,
+    everywhere in the app that uses that control.
+  - **Rows inside a card now look like they're inside it.** Alert rows, recipe
+    rows, calendar cells and empty states were all shaded as though they floated
+    *above* the card holding them, which flattened the page. They're inset now.
+  - **Card icons are no longer green.** Fifteen decorative icons were painted in
+    the same green as the buttons you're meant to press, so "Draft my shop" had
+    to compete with them. The icons are muted; the actions keep the colour.
+  - **Cards have the app's corner radius**, matching the other 41 places a card
+    appears rather than being 8px rounder. Reports gets this too — the two pages
+    share the card.
+  - **The pantry donut's centre is keyboard-navigable again**: focusing the "low"
+    or "out" segment now shows a focus ring, where it used to remove the outline
+    and dim the segment exactly as hovering did.
+  - **Two stock screens follow your theme.** The "mark as wasted" reason tiles
+    and the stocktake runner's restock prompt were painting fixed greys from a
+    fallback rather than theme colours, in every theme, light and dark.
 - **The shopping list looks like one surface on all three faces (2026-09-01).**
   The shop face was still drawing its items inside hard-bordered boxes while the
   draft and receipt faces had moved to soft panels — so the page changed shape

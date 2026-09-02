@@ -34,15 +34,17 @@
     .reconcile-chip {
         display: flex;
         align-items: center;
-        gap: 0.75rem;
-        padding: 0.75rem 1rem;
+        gap: var(--space-3);
+        padding: var(--space-3) var(--space-4);
         background: var(--surface-component);
         /* R-060: was `--border-subtle`, a token that has never been declared —
            so the whole declaration was invalid and this chip rendered with no
            border at all, alone in a grid of bordered cards. A6: a card/panel
            outline is `--border-default`. */
         border: 1px solid var(--border-default);
-        border-radius: var(--radius-md);
+        /* It sits in the card grid and reads as one of the cards, so it takes
+           the card radius, not the control radius (D-017). */
+        border-radius: var(--radius-lg);
         color: var(--text-primary);
         text-decoration: none;
         transition: background 120ms ease, border-color 120ms ease;
@@ -50,12 +52,14 @@
         &:hover,
         &:focus-visible {
             background: color-mix(in srgb, var(--brand-primary) 6%, var(--surface-component));
-            border-color: var(--brand-primary);
+            border-color: var(--accent-ink);
         }
     }
 
     .reconcile-chip__icon {
-        color: var(--brand-primary);
+        /* Decorative leading icon — muted, same call as the card head icons:
+           A1 keeps the brand accent for the view's one primary CTA. */
+        color: var(--text-secondary);
         flex: 0 0 auto;
     }
 

@@ -210,12 +210,15 @@
     .dora-score-hero {
         display: flex;
         align-items: baseline;
-        gap: 12px;
-        margin-bottom: 12px;
+        gap: var(--space-3);
+        margin-bottom: var(--space-3);
     }
 
     .dora-score-hero__number {
-        font-size: 2.5rem;
+        /* A2's ladder tops out at `--font-size-3xl` (30px). This was
+           2.5rem/40px — the largest type on the page, and off the scale. It
+           now matches `.dora-stat-num`, the dashboard's other hero number. */
+        font-size: calc(var(--font-size-3xl) * 1rem);
         font-weight: 600;
         line-height: 1;
         color: var(--text-primary);
@@ -228,10 +231,10 @@
     .dora-score-trend {
         display: inline-flex;
         align-items: center;
-        gap: 2px;
-        padding: 2px 6px;
-        border-radius: 999px;
-        font-size: 0.75rem;
+        gap: var(--space-1);
+        padding: var(--space-1) var(--space-2);
+        border-radius: var(--radius-pill);
+        font-size: calc(var(--font-size-xs) * 1rem);
         font-weight: 500;
     }
     /* A1 soft-token rule: a `-soft` token is a background only; the text on it
@@ -251,7 +254,7 @@
         margin: 0;
         display: flex;
         flex-direction: column;
-        gap: 10px;
+        gap: var(--space-3);
     }
 
     .dora-score-component {
@@ -265,7 +268,7 @@
         display: flex;
         justify-content: space-between;
         align-items: baseline;
-        margin-bottom: 4px;
+        margin-bottom: var(--space-1);
     }
     .dora-score-component__label {
         font-weight: 500;
@@ -302,9 +305,9 @@
     .dora-score-component__foot {
         display: flex;
         justify-content: space-between;
-        gap: 8px;
-        margin-top: 4px;
-        font-size: 0.75rem;
+        gap: var(--space-2);
+        margin-top: var(--space-1);
+        font-size: calc(var(--font-size-xs) * 1rem);
     }
     .dora-score-component__reason {
         color: var(--text-muted);
@@ -313,8 +316,9 @@
     .dora-score-component__action {
         white-space: nowrap;
         /* An action link takes the brand action colour, not the accent yellow
-           the undeclared `--dora-primary` fallback was painting. */
-        color: var(--brand-primary);
+           the undeclared `--dora-primary` fallback was painting — and as *text*
+           that is `--accent-ink`, the ink-strength sibling (R-069). */
+        color: var(--accent-ink);
         text-decoration: none;
     }
     .dora-score-component__action:hover {

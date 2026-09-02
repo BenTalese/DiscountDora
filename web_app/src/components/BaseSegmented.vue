@@ -66,6 +66,23 @@
     }
 
     /*
+     * Label floor (D-003 / B2). Quasar's `size` prop sets the button's
+     * font-size directly — `sm` is **10px**, `xs` is 8px — so every call site
+     * passing `size="sm"` (most of them, to get a compact control) was
+     * rendering its label under the 12px hard floor, on an *interactive*
+     * element where B2 asks for 14. Measured live on the dashboard at chunk 6:
+     * "7 days" / "14 days" / "Month" / "Year" / "All" all came back at 10px.
+     *
+     * Fixed here rather than at the call sites: the size prop is doing real
+     * work (padding, height, density) and only its type scale is wrong, so
+     * pinning the label alone keeps the compact control and makes the label
+     * legible. One place, so the nineteen consumers can't drift (D-015).
+     */
+    .dora-segmented-btn :deep(.q-btn__content) {
+        font-size: calc(var(--font-size-sm) * 1rem);
+    }
+
+    /*
      * Pill variant. `rounded` on QBtnToggle rounds the *group's* outer ends;
      * the segments inside stay square, so the selected one reads as a block
      * clipped by a curve. Rounding each segment to the pill radius makes the

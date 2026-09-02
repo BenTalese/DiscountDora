@@ -130,17 +130,18 @@
     /* The stat-grid primitive is shared with Pantry value, so it lives in
        `css/dashboardCards.scss`. These two are this card's own. */
     .dora-primary-list-name {
-        font-size: 1.05rem;
+        font-size: calc(var(--font-size-md) * 1rem);
         font-weight: 600;
         color: var(--text-primary);
     }
     /* Footer link ("+N other lists →"). */
     .dora-card-footer-link {
         display: inline-block;
-        margin-top: 12px;
-        font-size: 0.8rem;
+        margin-top: var(--space-3);
+        font-size: calc(var(--font-size-xs) * 1rem);
         font-weight: 600;
-        color: var(--brand-primary);
+        /* R-069: accent as text is `--accent-ink`. */
+        color: var(--accent-ink);
         text-decoration: none;
     }
     .dora-card-footer-link:hover {

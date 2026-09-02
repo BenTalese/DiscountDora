@@ -29,10 +29,16 @@
  * ## Tokens
  *
  * These rules previously sat in `DashboardPage.vue`'s scoped block and referenced
- * the page-local `--c-*` aliases it declares on `.dora-dash`. Those aliases are
+ * the page-local `--c-*` aliases it declared on `.dora-dash`. Those aliases were
  * page-scoped, so they would resolve to **nothing** from a component or a global
  * sheet — the R-060 failure mode exactly. Everything here uses the real global
- * tokens instead, which is also why the alias layer is worth retiring (FU-747).
+ * tokens instead; chunk 6 then retired the alias layer outright (FU-747).
+ *
+ * Chunk 6 (FU-828) also took the scale literals out: sizes are the `--font-size-*`
+ * ratios multiplied by 1rem in a calc (A2), spacing is `--space-*` (A3),
+ * radii are `--radius-*` (A4) — nested rows and tiles at `--radius-md`, the card
+ * shell at `--radius-lg` — and the inset wells sit on `--surface-sunken`, not the
+ * `--surface-elevated` they were painted with (A1). Add nothing raw here.
  */
 
 /* ───── Empty states ──────────────────────────────────────────────────────
@@ -42,12 +48,15 @@
  * instead of broken.
  */
 .dora-empty {
-    padding: 14px 16px;
-    margin-bottom: 16px;
+    padding: var(--space-4);
+    margin-bottom: var(--space-4);
     color: var(--text-secondary);
-    font-size: 0.9rem;
-    background: var(--surface-elevated);
-    border-radius: 12px;
+    font-size: calc(var(--font-size-sm) * 1rem);
+    /* A1: `--surface-elevated` is for things that float *above* a card
+       (menus, popovers); an inset well inside one is `--surface-sunken`.
+       Every nested region on this page had it inverted (§4.5). */
+    background: var(--surface-sunken);
+    border-radius: var(--radius-md);
 }
 
 /* Positive ("all clear") empty state — softer + green-tinted so a calm
@@ -67,7 +76,9 @@
 }
 
 .dora-empty-cta {
-    color: var(--brand-primary);
+    /* R-069: the brand accent is a fill tone and fails the contrast floor as
+       text — `--accent-ink` is its ink-strength sibling. */
+    color: var(--accent-ink);
     font-weight: 600;
 }
 
@@ -81,16 +92,20 @@
     padding: 0;
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: var(--space-2);
 }
 .dora-cook-row {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto auto;
     align-items: center;
-    gap: 10px;
-    padding: 8px 10px;
-    background: var(--surface-elevated);
-    border-radius: 10px;
+    gap: var(--space-3);
+    padding: var(--space-2) var(--space-3);
+    background: var(--surface-sunken);
+    /* D-017, one element type = one radius: a row nested inside a card is a
+       row, not a card. Rows/controls are `--radius-md`; `--radius-lg` stays
+       the card's own. This is the same value for every nested row on the
+       dashboard — they used to be 10 / 12 / 14px depending on the card. */
+    border-radius: var(--radius-md);
 }
 /* Next-to-cook rows carry an extra badge column between meta and the Cook
    button (FU-298). Restock rows are unchanged. */
@@ -112,7 +127,7 @@
     text-decoration: underline;
 }
 .dora-cook-meta {
-    font-size: 0.8rem;
+    font-size: calc(var(--font-size-xs) * 1rem);
     color: var(--text-secondary);
     white-space: nowrap;
 }
@@ -122,7 +137,7 @@
  * whole-grid loading skeleton and the primary-list card's stat skeleton — which
  * is why it is here and not in either. */
 .dash-skel-line {
-    margin-bottom: 10px;
+    margin-bottom: var(--space-3);
 }
 
 /* ───── The stat tile grid ────────────────────────────────────────────────
@@ -131,17 +146,17 @@
  */
 .dora-stat-grid {
     display: flex;
-    gap: 12px;
+    gap: var(--space-3);
 }
 .dora-stat {
     flex: 1 1 0;
     min-width: 0;
-    padding: 14px 16px;
-    background: var(--surface-elevated);
-    border-radius: 12px;
+    padding: var(--space-4);
+    background: var(--surface-sunken);
+    border-radius: var(--radius-md);
 }
 .dora-stat-num {
-    font-size: 1.9rem;
+    font-size: calc(var(--font-size-3xl) * 1rem);
     font-weight: 700;
     line-height: 1;
     letter-spacing: -0.02em;
@@ -150,8 +165,8 @@
     align-items: center;
 }
 .dora-stat-label {
-    margin-top: 6px;
-    font-size: 0.78rem;
+    margin-top: var(--space-2);
+    font-size: calc(var(--font-size-xs) * 1rem);
     color: var(--text-secondary);
     letter-spacing: 0.01em;
     text-transform: lowercase;

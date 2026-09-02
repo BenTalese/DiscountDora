@@ -975,7 +975,9 @@
     }
 
     .runner-restock-prompt {
-        border-top: 1px solid var(--c-line, rgba(0, 0, 0, 0.12));
+        /* R-060: `--c-line` was never declared where this page can see it, so
+           this always painted the hard-coded fallback (FU-747). */
+        border-top: 1px solid var(--divider);
     }
 
 </style>

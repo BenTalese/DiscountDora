@@ -76,8 +76,8 @@
        pantry getting cheaper is none of those. The ▲/▼ carries the direction;
        semantic colour is kept for **budget**, which has a real threshold. */
     .dora-pantry-delta {
-        margin-top: 4px;
-        font-size: 0.85rem;
+        margin-top: var(--space-1);
+        font-size: calc(var(--font-size-sm) * 1rem);
         font-weight: 600;
         color: var(--text-secondary);
     }

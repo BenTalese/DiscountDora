@@ -77,9 +77,12 @@ const KNOWN_UNDECLARED = [
     '--overlay-pressed',   // ShoppingListDetail.vue:3009
     '--negative',
     '--stock-row-height',
-    '--c-surface-2',
-    '--c-surface-3',
-    '--c-line-strong',
+    // `--c-surface-2`, `--c-surface-3`, `--c-line-strong` and `--c-line` came
+    // off this list on 2026-09-02 (dashboard chunk 6). Retiring the dashboard's
+    // page-local `--c-*` alias layer (FU-747) removed `--c-line` from the
+    // declared set, which exposed all four in `MarkAsWastedDialog.vue` and
+    // `StocktakeRunner.vue` — they had always been painting hard-coded rgba
+    // fallbacks instead of following the theme. Now on real tokens.
 ];
 
 /** Recursively collect files under `dir` whose name matches one of `exts`. */

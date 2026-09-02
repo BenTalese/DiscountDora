@@ -39,6 +39,31 @@ long session summary. Distinct from the other logs:
 
 ---
 
+## [OPEN] FU-841 — `MarkAsWastedDialog`'s tiles remove the focus outline and replace it with their hover state
+- **Raised:** 2026-09-02 (dashboard chunk 6 — found while fixing the same file's
+  undeclared `--c-*` references, which the R-060 guard surfaced)
+- **Type:** finding (A6 / D-016)
+- **What:** `components/stock/MarkAsWastedDialog.vue` styles its reason tiles with
+  a single `:hover, :focus-visible` rule that sets `outline: none` and changes the
+  background + border colour. Two problems, the same pair `PantryDonutCard` had
+  before chunk 6 fixed it there: **A6 forbids `outline: none` without a
+  replacement**, and because hover and focus share one rule the two states are
+  **byte-identical**, which D-016 requires be distinguishable. A keyboard user
+  tabbing through the tiles gets the same feedback as a mouse hovering, and no
+  ring.
+- **Not fixed in chunk 6** — different surface (stock, not the dashboard), and the
+  chunk only touched this file because retiring the dashboard's `--c-*` aliases
+  made the R-060 guard fail on its undeclared token references. Fixing the focus
+  ring too would have been scope creep into a dialog nobody was reviewing.
+- **The fix is known and small**: split the rule, keep the background change on
+  hover, and give `:focus-visible` a real `outline: 2px solid var(--focus-ring)`
+  with an offset — copy `PantryDonutCard.vue`'s, which is the worked example.
+- **Worth checking in the same pass:** how many other `outline: none` rules exist
+  app-wide. The dashboard review counted one on its own surface; nobody has
+  counted the rest.
+- **Recommended resolution:** **opportunistic** — next time anyone is in the stock
+  dialogs, or as part of an app-wide focus-ring pass alongside [[FU-631]].
+
 ## [OPEN] FU-834 — 20 undeclared design tokens app-wide, incl. two in the file R-060 was written from
 - **Raised:** 2026-09-02 (dashboard chunk 1 — found by the new R-060 guard test)
 - **Type:** finding (R-060)
@@ -203,47 +228,6 @@ long session summary. Distinct from the other logs:
 - **Recommended resolution:** later — its own unit, parallel to the dashboard
   chunks. Cross-ref: ADR-068, R-071, R-041, [[FU-810]] (resolved), and
   `REPORTS_PAGE_REVIEW.md` §3.7 / `DASHBOARD_PAGE_REVIEW.md` §3.5.
-
-## [OPEN] FU-828 — Dashboard scale sweep: 44 font-sizes, 22 radii, 95 spatial literals, zero tokens
-- **Raised:** 2026-09-02 (dashboard page PO + engineering review)
-- **Type:** finding (R-002 / D-017 / D-003 / A2-A4)
-- **What:** `DashboardPage.vue`'s ~970 lines of scoped SCSS contain **zero**
-  `--font-size-*`, `--radius-*` or `--space-*` tokens. Instead: 44 raw font-size
-  literals (**8 below the 12px D-003 floor**, one of them `.dora-strip-more` at
-  10.4px carrying a count, one `.dora-range-chip` at 11.5px on an interactive
-  control, and `.dora-zone-label` — the page's information architecture — at
-  11.5px where A2 wants a section header); 22 raw `border-radius` values across
-  **six** distinct radii (999/10/12/14/18/3px) against a 4/6/10/16/22/pill
-  ladder; 95 raw spatial declarations across 15 px values of which ~57 are
-  off-scale, including the `5px` and `18px` A3 names explicitly. Also: the card
-  grid is `q-col-gutter-md` (16px) where B4 specifies `--space-6` (24px), and page
-  padding is `24px 24px 96px`. Full tables: `DASHBOARD_PAGE_REVIEW.md` §4.3-4.4.
-  `ReconcilePastMealsChip.vue` is the one file in the scope that does it right and
-  is the template.
-- **Why deferred:** it is the largest line-count item on the surface and the
-  cheapest in judgement, so it is worth almost nothing until the card set stops
-  moving — tokenising fourteen inline card bodies that are about to become
-  components ([[FU-829]]) or be merged away ([[FU-817]]/[[FU-818]]/[[FU-819]]) is
-  work done twice.
-- **⚠️ Scope moved (2026-09-02, chunk 5 close):** the blockers above are now
-  **cleared** — the merges landed (chunks 1-2) and [[FU-829]] extracted every card
-  body (chunk 5). The literals were **not** fixed by that work, only relocated, so
-  the counts above still stand but the files do not. They are now spread across
-  **`web_app/src/components/dashboard/*.vue`** (12 card components' scoped blocks),
-  **`web_app/src/css/dashboardCards.scss`** (the shared `.dora-empty` /
-  `.dora-cook-*` / `.dora-stat-*` primitives), and what remains in
-  `DashboardPage.vue`'s block (page chrome only: `.dora-dash`, `.dora-hero*`,
-  `.dora-quick-actions`, `.dora-cards`, `.dora-zone-label`, `.dora-welcome*`).
-  Re-count before starting rather than trusting the 44/22/95 figures per file.
-  This is a **cheaper** sweep than it was — each home is now 40-100 lines with one
-  card's worth of decisions in it — but a **wider** one: 14 files, not 1. Two riders
-  travel with it: the `--c-*` page-alias layer ([[FU-747]]) is now used only by
-  page chrome and can finally be retired in the same pass, and the card radius
-  correction from [[FU-814]] item 4 (`DashboardCard.vue`'s 18px → `--radius-lg`,
-  `18px 20px 20px` → `--space-4`, plus the hero's 18px) is the same edit in the
-  same files.
-- **Recommended resolution:** **now** — `DASHBOARD_PAGE_REVIEW.md` §7 Chunk 6,
-  last, deliberately. Nothing is blocking it.
 
 ## [OPEN] FU-839 — `BaseSegmented`'s selected segment is under the contrast floor, and two consumers may render it invisible
 - **Raised:** 2026-09-02 (dashboard chunk 3 — found by introducing the bug myself)
@@ -3402,6 +3386,18 @@ Resolved entries carry one extra line, and live in `DORA_FOLLOWUPS_RESOLVED.md`:
      push-menu, open→dialog, cart=`AddToListButton`) that a naive menu-in-menu would
      regress. **Tap-target pass (#19)** rides with it: `RowActionButton` is `size="md"`
      (~36px); D-004 wants ≥44px on touch surfaces.
+     **⚠️ Measured addition (2026-09-02, dashboard chunk 6) — it is not only the
+     tap target, it is the label.** Quasar's `size` prop sets a button's
+     *font-size* directly, and **`sm` is 10px** — under D-003's 12px hard floor,
+     on an interactive element where B2 asks for 14. Counted live on the
+     dashboard at 1440px: **10 action-button labels at 10px** — "Cook" ×3,
+     "Mark restocked" ×2, "Open item" ×2, "Dismiss" ×2, "Add", "Push 7 days",
+     "Clear expiry". Chunk 6 fixed the *segmented-control* half of this in
+     `BaseSegmented.vue` (one component, 19 consumers) and deliberately left the
+     action buttons here: `size="sm"` on `q-btn` is an app-wide pattern, and
+     re-scaling it is a design change across every surface, not a token sweep.
+     The fix is one rule on a shared button wrapper, the same shape as
+     `BaseSegmented`'s — not per-call-site edits.
   3. **Dashboard / reports stranded half-width cards (#30).** A lone `col-lg-6` card
      at the end of a zone sits beside dead air (D-011). The dashboard uses a CSS
      `order`-based zone system, so "make a lone last-in-zone card full-width" needs

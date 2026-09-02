@@ -187,46 +187,46 @@
        declared on `.dora-dash` and resolve to nothing from a component (R-060);
        on the real tokens now. */
     .dora-budget-body {
-        padding: 4px 4px 8px;
+        padding: var(--space-1) var(--space-1) var(--space-2);
     }
     .dora-budget-headline {
         display: flex;
         align-items: baseline;
-        gap: 8px;
+        gap: var(--space-2);
         flex-wrap: wrap;
     }
     .dora-budget-spent {
-        font-size: 1.6rem;
+        font-size: calc(var(--font-size-2xl) * 1rem);
         font-weight: 700;
     }
     .dora-budget-of {
-        font-size: 0.95rem;
+        font-size: calc(var(--font-size-md) * 1rem);
         color: var(--text-secondary);
     }
     .dora-budget-remaining {
         margin-left: auto;
-        font-size: 0.85rem;
+        font-size: calc(var(--font-size-sm) * 1rem);
         font-weight: 600;
     }
     .dora-swap-bullet {
-        font-size: 0.85rem;
+        font-size: calc(var(--font-size-sm) * 1rem);
         cursor: pointer;
         color: var(--savings-accent);
         display: flex;
         align-items: center;
         flex-wrap: wrap;
-        gap: 2px;
+        gap: var(--space-1);
     }
     .dora-swap-bullet__cta {
         text-decoration: underline;
-        margin-left: 2px;
+        margin-left: var(--space-1);
     }
 
     /* The savings half. Deliberately quieter than the spend headline above it:
        savings is support, not the claim (ADR-068). */
     .dora-money-savings {
-        margin-top: 14px;
-        padding-top: 12px;
+        margin-top: var(--space-4);
+        padding-top: var(--space-3);
         /* A6: an in-card separator is `--divider`, not a border token. */
         border-top: 1px solid var(--divider);
     }
@@ -234,31 +234,31 @@
         display: flex;
         align-items: center;
         justify-content: space-between;
-        gap: 8px;
+        gap: var(--space-2);
         flex-wrap: wrap;
     }
     .dora-money-savings__label {
         display: inline-flex;
         align-items: center;
-        font-size: 0.85rem;
+        font-size: calc(var(--font-size-sm) * 1rem);
         font-weight: 600;
         color: var(--text-secondary);
     }
     .dora-money-savings__body {
         display: flex;
         align-items: baseline;
-        gap: 8px;
+        gap: var(--space-2);
         flex-wrap: wrap;
-        margin-top: 4px;
+        margin-top: var(--space-1);
     }
     .dora-money-savings__amount {
-        font-size: 1.3rem;
+        font-size: calc(var(--font-size-xl) * 1rem);
         font-weight: 700;
         color: var(--semantic-positive);
     }
     .dora-money-savings__meta {
-        font-size: 0.85rem;
+        font-size: calc(var(--font-size-sm) * 1rem);
         color: var(--text-secondary);
-        margin-top: 4px;
+        margin-top: var(--space-1);
     }
 </style>

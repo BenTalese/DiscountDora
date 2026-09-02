@@ -96,16 +96,18 @@
         padding: 0;
         display: flex;
         flex-direction: column;
-        gap: 8px;
+        gap: var(--space-2);
     }
     .dora-deal-row {
         display: grid;
         grid-template-columns: 36px minmax(0, 1fr) auto auto;
         align-items: center;
-        gap: 10px;
-        padding: 8px 10px;
-        background: var(--surface-elevated);
-        border-radius: 10px;
+        gap: var(--space-3);
+        padding: var(--space-2) var(--space-3);
+        /* A1: nested rows are inset wells inside a card — `--surface-sunken`.
+           `--surface-elevated` is for surfaces floating ABOVE a card. */
+        background: var(--surface-sunken);
+        border-radius: var(--radius-md);
     }
     .dora-deal-text {
         min-width: 0;
@@ -118,7 +120,7 @@
         white-space: nowrap;
     }
     .dora-deal-meta {
-        font-size: 0.78rem;
+        font-size: calc(var(--font-size-xs) * 1rem);
         color: var(--text-secondary);
         overflow: hidden;
         text-overflow: ellipsis;
@@ -133,10 +135,10 @@
         color: var(--text-primary);
     }
     .dora-deal-was {
-        font-size: 0.78rem;
+        font-size: calc(var(--font-size-xs) * 1rem);
         color: var(--text-secondary);
         text-decoration: line-through;
-        margin-left: 4px;
+        margin-left: var(--space-1);
     }
     .dora-deal-badge {
         font-weight: 700;

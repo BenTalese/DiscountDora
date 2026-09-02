@@ -83,12 +83,14 @@
     .dora-suggest-list {
         display: flex;
         flex-direction: column;
-        gap: 8px;
+        gap: var(--space-2);
     }
     .dora-suggest-row {
-        padding: 8px 10px;
-        border-radius: 10px;
-        background: var(--surface-elevated);
+        padding: var(--space-2) var(--space-3);
+        border-radius: var(--radius-md);
+        /* A1: nested rows are inset wells inside a card — `--surface-sunken`.
+           `--surface-elevated` is for surfaces floating ABOVE a card. */
+        background: var(--surface-sunken);
         border-left: 3px solid var(--brand-primary);
     }
     .dora-suggest-row.dora-suggest-high { border-left-color: var(--semantic-negative); }
@@ -96,11 +98,11 @@
     .dora-suggest-row.dora-suggest-low { border-left-color: var(--brand-primary); }
     .dora-suggest-title {
         font-weight: 600;
-        font-size: 0.95rem;
+        font-size: calc(var(--font-size-md) * 1rem);
     }
     .dora-suggest-body {
-        font-size: 0.85rem;
+        font-size: calc(var(--font-size-sm) * 1rem);
         color: var(--text-secondary);
-        margin-top: 2px;
+        margin-top: var(--space-1);
     }
 </style>

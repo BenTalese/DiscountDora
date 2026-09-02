@@ -83,15 +83,17 @@
         padding: 0;
         display: flex;
         flex-direction: column;
-        gap: 6px;
+        gap: var(--space-2);
     }
     .dora-spend-row {
         display: flex;
         align-items: center;
-        gap: 10px;
-        padding: 6px 10px;
-        background: var(--surface-elevated);
-        border-radius: 10px;
+        gap: var(--space-3);
+        padding: var(--space-2) var(--space-3);
+        /* A1: nested rows are inset wells inside a card — `--surface-sunken`.
+           `--surface-elevated` is for surfaces floating ABOVE a card. */
+        background: var(--surface-sunken);
+        border-radius: var(--radius-md);
     }
     .dora-spend-store {
         flex: 1;
@@ -106,8 +108,8 @@
         white-space: nowrap;
     }
     .dora-spend-total {
-        margin-top: 8px;
-        font-size: 0.82rem;
+        margin-top: var(--space-2);
+        font-size: calc(var(--font-size-sm) * 1rem);
         font-weight: 600;
         color: var(--text-secondary);
         text-align: right;

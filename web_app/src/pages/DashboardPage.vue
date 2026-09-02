@@ -1685,7 +1685,15 @@
            radius (D-017). Was 14px here and 10px there for the same thing. */
         border-radius: var(--radius-lg);
         background: var(--brand-primary-soft);
-        padding: var(--space-1);
+        /* R-002 / A3 carve-out — do NOT round this to `--space-1` (4px).
+           The mascot artwork is not centred within its own bounding box, so
+           the padding that makes it *look* centred in the square is optical,
+           not spatial: it was tuned by hand to 2px in commit 12229346
+           ("Properly centre the dora mascot on dashboard"). The chunk-6 scale
+           sweep put it on the token and silently doubled it, pushing the glyph
+           off centre again. A token here would be wrong for the same reason a
+           token is wrong inside an SVG viewBox — the number isn't spacing. */
+        padding: 2px;
         flex-shrink: 0;
     }
     .dora-hero-text {
@@ -1796,7 +1804,10 @@
     .dora-welcome-mascot {
         border-radius: var(--radius-lg);
         background: var(--brand-primary-soft);
-        padding: var(--space-1);
+        /* Optical, hand-tuned — see the carve-out note on `.dora-hero-mascot`.
+           This one is a 40px square rather than 72px, so it takes 1px, and the
+           same sweep had quadrupled it. */
+        padding: 1px;
     }
     .dora-welcome-body {
         min-width: 0;

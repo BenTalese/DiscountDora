@@ -241,6 +241,9 @@
         align-items: center;
         gap: var(--space-3);
         padding: var(--space-2) var(--space-3);
+        /* D-004 tap-target floor — see the sibling note in
+           `WasteAndRunOutsCard`. Every row is a link. */
+        min-height: 44px;
         background: var(--surface-sunken);
         border-radius: var(--radius-md);
     }

@@ -232,6 +232,11 @@
         align-items: center;
         gap: var(--space-3);
         padding: var(--space-2) var(--space-3);
+        /* D-004 — every row here is a link to the item, so it is a tap target
+           and gets the 44px floor. Measured at 375px it came out 38px on the
+           padding alone (the old page's rows were ~37px for the same reason);
+           the raw value is the rule's own constant, not an off-scale guess. */
+        min-height: 44px;
         background: var(--surface-sunken);
         border-radius: var(--radius-md);
     }

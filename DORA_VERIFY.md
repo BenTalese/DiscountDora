@@ -112,15 +112,15 @@ money and the timezone date bug are both pinned by tests now; see
 - [ ] Hero mascot centring (feedback L176, never confirmed since B9.8): is the
       72px mascot centred in its tinted box?
 
-## Reports — price trends 500 (2026-09-02) — origin FU-813
+## Reports — the price-trends picker (2026-09-02) — origin FU-813
 
-Static read says this crashes on SQLite for every range but "All time"; needs
-eyes on the running app to confirm before it's fixed blind.
+The 500 is fixed and confirmed (all four ranges 200, crash reproduced then
+gone). The picker itself can't be agent-driven — a Quasar dropdown never opens
+in the pane (FU-737).
 
-- [ ] `/reports`, pick a product in Price trends on the default 30-day range —
-      confirm whether the request 500s (and that "All time" succeeds).
-- [ ] Click the picker's clear (x) with a product selected — confirm whether the
-      page throws.
+- [ ] Type in the picker: results come from the whole catalogue now, not the
+      first 50. Search for a product you know is well down an alphabetical list.
+- [ ] With products selected, click the picker's clear (x) — it used to throw.
 
 ## Shopping list — receipt lightbox (2026-09-01)
 

@@ -5,6 +5,45 @@ semver — major bumps signal schema or breaking-config changes.
 
 ## [Unreleased]
 
+### Fixed
+- **Reports honours the money switch (2026-09-02).** It was the last significant
+  surface in the app that didn't: with money turned off you still got spend by
+  store, savings captured, spend by category, year-over-year, price trends and
+  two dollar-signed chart axes. Those six reports are now hidden when money is
+  off — and the endpoints behind them refuse outright, so nothing can quietly
+  put them back. The page keeps its nav entry, because what's left works: most
+  bought, what you keep running out of, wastage and meals cooked are all counts,
+  not money.
+- **Reports could show an empty store breakdown for a shop it had the receipt
+  for (2026-09-02).** "Spend by store" only recognised a store if the item had a
+  linked product, so a household that tags things "I buy this at Aldi" and never
+  touches products saw a full breakdown on the finished list and nothing at all
+  in Reports. It now works out the store the same way the shopping list does —
+  where you bought it, else where you planned to, else the item's usual store,
+  else the offer's. It also says when items were left out: *"1 item had no price
+  recorded, so it isn't counted here"* — before, those were dropped in silence
+  and the total was quietly low.
+- **Stores are the same colour everywhere (2026-09-02).** Reports coloured a
+  store by hashing its name, so Woolworths was its logo green on your shopping
+  list and whatever the hash landed on here. It uses the logo colour now, like
+  every other surface. Spend with no store attached is drawn in a deliberately
+  neutral grey rather than being given a store's colour.
+- **Price trends crashed on every range except "All time" (2026-09-02)** on a
+  SQLite install — the card just failed. Fixed.
+- **The price-trends product picker could only ever see 50 products
+  (2026-09-02).** It searched a single page it had already downloaded, so
+  anything past the first 50 was unfindable with nothing on screen saying so.
+  The search now runs on the server, across the whole catalogue. Clicking the
+  picker's clear button also used to throw.
+- **A failed report no longer reads as an empty one (2026-09-02).** Every card
+  turned a failed request into its "nothing here yet" state — a broken wastage
+  fetch rendered *"Nothing wasted in this range — nicely played"*. Each card now
+  says it couldn't load, with its own Try again, and the rest of the page
+  carries on.
+- **"You keep running out of these" now honours the range picker
+  (2026-09-02).** It sat directly under a control saying "30 days" while
+  counting every run-out you've ever had.
+
 ### Added
 - **The meal planner's recipe rail filters by time of day and difficulty
   (2026-09-01).** Two dropdowns under the filter chips — "Any time" / "Any

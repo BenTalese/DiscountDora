@@ -37,7 +37,8 @@ from sqlalchemy import text
 
 from dora_api.app import app, db
 from tests.factories import make_stock_item
-from tests.support import assert_envelope, assert_problem, uuid_bind
+from tests.support import (assert_envelope, assert_problem, set_money_enabled,
+                           uuid_bind)
 
 BASE = "http://localhost:5170/api"
 STOCK_ITEMS = f"{BASE}/stock-items"
@@ -428,7 +429,9 @@ def test__delete_store__purchased_on_finished_list__spend_by_store_still_reads(a
     assert requests.delete(f"{STORES}/{_StoreId}").status_code == 200
 
     # The spend report must still answer after the store behind a finished
-    # purchase disappears (line FK is SET NULL).
+    # purchase disappears (line FK is SET NULL). Money on first — the report
+    # refuses with 403 otherwise (FU-816).
+    set_money_enabled(True)
     _Spend = requests.get(f"{BASE}/reports/spend-by-store")
     assert _Spend.status_code == 200, _Spend.text
     _assert_dashboard_reads("store delete after finished shopping")

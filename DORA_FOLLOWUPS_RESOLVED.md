@@ -10,6 +10,97 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-816 — `/reports` renders every money surface with the money flag off
+- **Raised:** 2026-09-02 (reports page PO + engineering review)
+- **Resolved:** 2026-09-02 (Reports chunk 1, driven live at :5171 with money
+  flipped both ways). Gated in **two places, deliberately** — the R-058 lesson
+  from the buy verdict is that a render gate alone leaves the hole open for the
+  next caller.
+  - **Server:** `stock-value-over-time`, `spend-by-store`, `savings-captured`,
+    `spend-by-category`, `spend-year-over-year` and `price-trends` return
+    **403** when `money_features_enabled` is false. `most-bought-items`,
+    `keeps-running-out` and `meals-cooked` stay open — they are counts.
+  - **Client:** the six money cards `v-if` off `useMoneyEnabled()`; savings and
+    price trends additionally require `products` (B9 — don't render a card whose
+    empty state tells you to go use a feature you opted out of). Gated-off cards
+    do not fetch, so a 403 never reaches a loader.
+  - **The nav entry stays unconditional**, against the FU's own wording. With
+    money off the page still carries four working reports (most bought, run-outs,
+    wastage, meals cooked); hiding it would cost four to gate six. Recorded here
+    because it is a deviation from what the review's Chunk 1 said.
+  - **Verified live:** money **on** → all ten cards render and every endpoint
+    200s; money **off** → four cards, no dollar figure anywhere on the page, and
+    **zero requests** to any money endpoint.
+  - **Tests:** a parametrized 403 test per gated endpoint plus a 200 test per
+    counting endpoint (`test_reports_router.py`), and a shared
+    `tests/support.set_money_enabled` — three e2e modules needed it, since money
+    is off on a fresh install and the reports suite reads dollar endpoints.
+- **One thing this found that the review could not.** The first live run showed
+  only *three* requests firing: the gates read the once-per-document
+  `/api/health` probe, which has **not resolved** when the page mounts, so every
+  gated loader early-returned and the money cards rendered their **empty** state
+  as if the household had never shopped. That is FU-586 exactly, reproduced on a
+  second page. Fixed with the same per-gate watchers; the fact that the
+  workaround now exists twice is logged as [[FU-844]].
+
+## [RESOLVED] FU-815 — Reports spend-by-store attributes stores by a different rule than the shopping list
+- **Raised:** 2026-09-02 (reports page PO + engineering review)
+- **Resolved:** 2026-09-02 (Reports chunk 2). `SpendByStoreHandler` now routes
+  every ticked line through **`_line_price.resolve_store_id`**, the same R-003
+  chokepoint the shopping list uses, so the two agree by construction rather than
+  by coincidence. The `selected_product_id IS NOT NULL` requirement — justified
+  in a comment as "store grouping needs a product" — is gone; the product's store
+  is only the *last* rung of five.
+  - **One rung is deliberately passed as `None`: `last_purchase_store_id`.** That
+    rung exists to prefill a line you have not bought yet from where you last
+    bought it. These lines are ticked on a **finished** list, so the purchase is a
+    record, not a guess — attributing one shop's spend to a different shop's store
+    would be a fabrication. Commented in place.
+  - **R-041 coverage shipped with it:** `counted_lines` + `unpriced_lines` travel
+    with the rows, and the card renders *"1 item had no price recorded, so it
+    isn't counted here"*. Unpriced lines are no longer filtered away in SQL, which
+    is what let the total run quietly low.
+  - **The "Unknown" bucket became "No store set"** — the shopping list's own
+    wording. "Unknown" read as a store whose name had been lost.
+  - **Proof it was real, from the running app:** on the dense seed the card now
+    shows **"Northside Farmers Market · $40.70 · 2 lists"** and a **"No store
+    set · $35.00"** bucket. The market has exactly one product in the catalogue,
+    so under the old product-only rule most of that spend was invisible.
+  - **Tests:** a ladder test (item with `usual_store_id`, line with **no**
+    selected product, attributed correctly) and a coverage test.
+
+## [RESOLVED] FU-813 — Reports price trends: confirm the SQLite tz crash in the running app
+- **Raised:** 2026-09-02 (reports page PO + engineering review)
+- **Resolved:** 2026-09-02 (Reports chunk 2). **The crash was real and is now
+  reproduced, not merely reasoned about** — which is what this FU was opened to
+  demand. Reverting the one-line fix and running the new regression test against
+  a live app yields, verbatim:
+  `TypeError: can't compare offset-naive and offset-aware datetimes`.
+  `PriceTrendsHandler` compared `offered_on` (naive out of SQLite, which drops
+  the tzinfo of a `DateTime(timezone=True)`) against an aware `since`, so **every
+  bounded range 500'd** and only "All time" — where `since is None` and the
+  comparison never runs — worked. Fixed with the `_as_utc()` coercion every
+  sibling handler in the file already had.
+  - **Why nothing caught it:** the only seeded price-trends test passed
+    `range=all`. The new test is parametrized over `30d`/`90d`/`1y` for that
+    reason. It would also have passed on Postgres, so it was a §7.5 portability
+    break as much as a crash.
+  - **Verified live at :5171:** `range=30d|90d|1y|all` → **200** on all four.
+  - **The two sibling defects in the same card, both also fixed:**
+    - `clearable` on a `multiple` q-select emits **`null`**, and
+      `loadPriceTrends` read `.length` off it on the next line — clicking clear
+      threw. Normalised at the boundary (`onProductSelection`), so no reader
+      downstream has to be null-aware.
+    - The product picker could only ever see **50** products (FU-668's
+      unpaged-first-page trap, third instance): it filtered the store's hydrated
+      first page in the browser. The needle now goes to the server
+      (`ProductApiService.searchAsync`, `filter=name:ct:…`), verified against the
+      live catalogue. **One capability traded:** store name is no longer part of
+      the match, since it lives on the `Store` row rather than the `Product`.
+  - **Owed:** the picker itself has not been *driven* — Quasar dropdowns never
+    open in the agent browser pane (FU-737), so the clear button and the
+    type-to-search are a `DORA_VERIFY` line.
+
 ## [RESOLVED] FU-828 — Dashboard scale sweep: 44 font-sizes, 22 radii, 95 spatial literals, zero tokens
 - **Raised:** 2026-09-02 (dashboard page PO + engineering review)
 - **Resolved:** 2026-09-02 (dashboard review §7 **Chunk 6** — the last chunk).

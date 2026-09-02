@@ -31,6 +31,12 @@ Endpoints:
 
 Conventions:
 - `range=all` is accepted everywhere a range is and means "no lower bound".
+- **Money endpoints refuse when the install has money off** (R-058, FU-816).
+  Every report that answers in dollars — stock value, spend by store, savings,
+  spend by category, year-over-year, price trends — gates on
+  `money_features_enabled` and returns 403. The count-based reports
+  (most-bought, keeps-running-out, meals-cooked) are ungated, which is why the
+  page survives with money off rather than disappearing from the nav.
 - Prices use the moment-of-pick snapshot pair on ShoppingListLine
   (picked_offer_price, list_price_at_pick) added in migration c6e9f4a82d15.
   Lines without a snapshot (legacy, or never ticked) are skipped, never
@@ -63,14 +69,35 @@ from dora_api.domain.entities.stock_level_change import StockLevelChange
 from dora_api.domain.entities.stock_item_price_observation import StockItemPriceObservation
 from dora_api.domain.stock_status import (StockStatus, get_stock_item_unit_cost_at,
                                           level_for_status)
+from dora_api.features.app_settings.access import money_features_enabled
+from dora_api.features.shopping_lists._line_price import resolve_store_id
 from dora_api.features.routers import REPORTS_ROUTER
-from dora_api.infrastructure.api_response import bad_request, ok
+from dora_api.infrastructure.api_response import bad_request, forbidden, ok
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 from dora_api.infrastructure.ports import Repository
 
 
 _Logger = logging.getLogger(__name__)
+
+
+# ───── Money gate ─────────────────────────────────────────────────────────
+
+# FU-816 / R-058. `ReportsPage.vue` imported no feature flag at all, so an
+# install that had opted out of money still got spend by store, savings, spend
+# by category, year-over-year and two dollar-formatted chart axes — a live
+# contradiction with the owner feedback bullet the whole money opt-in was built
+# from. Gating the render alone is not enough: the same lesson as the buy
+# verdict (R-058) is that a money surface must refuse at the endpoint too, or
+# the next caller re-opens the hole.
+MONEY_DISABLED_DETAIL = (
+    "This report answers in dollars, and money features are turned off for "
+    "this install."
+)
+
+
+def _money_off() -> bool:
+    return not money_features_enabled(SqlAlchemyRepository())
 
 
 # ───── Range helpers ──────────────────────────────────────────────────────
@@ -340,6 +367,8 @@ def _cheapest_as_of(
 
 @REPORTS_ROUTER.route("/stock-value-over-time", methods=["GET"])
 def stock_value_over_time():
+    if _money_off():
+        return forbidden(MONEY_DISABLED_DETAIL)
     _Since = _parse_range(request.args.get("range"))
     _Points = StockValueOverTimeHandler(SqlAlchemyRepository()).handle(_Since)
     return ok({
@@ -358,15 +387,31 @@ def stock_value_over_time():
 class StoreSpendRow:
     store_id: UUID | None
     store: str
+    # FU-814 item 2 — the store's logo-derived colour travels with the row, so
+    # every surface that draws this dataset can paint a store the same colour.
+    # Reports used to hash the store *name* into the chart ramp, which is how
+    # Woolworths came out green on the shopping list and mauve here.
+    brand_colour: str | None
     spend: float
     list_count: int
+
+
+@dataclass(slots=True)
+class SpendByStoreResult:
+    rows: List[StoreSpendRow]
+    # R-041 coverage — how many ticked lines the total was built from, and how
+    # many were dropped for carrying no price at all. The shopping list's own
+    # card has always stated this ("12 items unpriced, not counted"); Reports
+    # quietly undercounted and said nothing.
+    counted_lines: int
+    unpriced_lines: int
 
 
 class SpendByStoreHandler:
     def __init__(self, repository: Repository) -> None:
         self.repository = repository
 
-    def handle(self, since: datetime | None) -> List[StoreSpendRow]:
+    def handle(self, since: datetime | None) -> SpendByStoreResult:
         session = self.repository.session
 
         # Only archived (completed) lists within the window contribute.
@@ -378,77 +423,134 @@ class SpendByStoreHandler:
         list_rows = session.execute(list_query).all()
         list_ids = [row[0] for row in list_rows]
         if not list_ids:
-            return []
+            return SpendByStoreResult(rows=[], counted_lines=0, unpriced_lines=0)
 
-        # Ticked lines with *any* captured price — the user's till-receipt
-        # override (actual_unit_price) wins over the offer snapshot
-        # (picked_offer_price). Matches the budget / waste / assistant /
-        # suggestions ladder via `line_paid_unit_price` (R-003 chokepoint in
-        # `shopping_lists/_line_price.py`); FU-229 carve-out — this handler
-        # works on column-projected rows rather than entity objects, so the
-        # ladder is expressed here as `actual if actual is not None else picked`
-        # instead of calling the helper. Lines with neither price stay
-        # silently skipped — they're not "spend". `selected_product_id IS
-        # NOT NULL` stays because store grouping needs a product.
+        # Every ticked line on those lists — priced or not. The unpriced ones
+        # are counted for the coverage figure rather than filtered away in SQL,
+        # which is what let this report undercount in silence.
+        #
+        # FU-815: `selected_product_id IS NOT NULL` used to be part of this
+        # WHERE clause "because store grouping needs a product". It doesn't —
+        # the product's store is only the *last* rung of the store ladder. A
+        # household that tags items "I buy this at Aldi" and never touches the
+        # products feature saw a populated breakdown on its receipt and an
+        # empty card here, off the same finished list.
         line_rows = session.execute(
             select(
                 ShoppingListLine.shopping_list_id,
+                ShoppingListLine.stock_item_id,
                 ShoppingListLine.selected_product_id,
                 ShoppingListLine.quantity,
                 ShoppingListLine.picked_offer_price,
                 ShoppingListLine.actual_unit_price,
+                ShoppingListLine.purchased_store_id,
+                ShoppingListLine.planned_store_id,
             ).where(
                 ShoppingListLine.shopping_list_id.in_(list_ids),
                 ShoppingListLine.is_ticked == True,  # noqa: E712
-                or_(
-                    ShoppingListLine.picked_offer_price.isnot(None),
-                    ShoppingListLine.actual_unit_price.isnot(None),
-                ),
-                ShoppingListLine.selected_product_id.isnot(None),
             )
         ).all()
         if not line_rows:
-            return []
+            return SpendByStoreResult(rows=[], counted_lines=0, unpriced_lines=0)
 
-        product_ids = {row[1] for row in line_rows if row[1]}
-        products = self.repository.get(Product).include(Product.Fields.STORE).all(
-            EntityField(Product, "id").in_(list(product_ids))
-        )
-        store_by_product: Dict[UUID, Store] = {
-            p.id: p.store for p in products if p.store
-        }
+        priced_rows = [
+            row for row in line_rows
+            if row[4] is not None or row[5] is not None
+        ]
+        unpriced_lines = len(line_rows) - len(priced_rows)
+        if not priced_rows:
+            return SpendByStoreResult(
+                rows=[], counted_lines=0, unpriced_lines=unpriced_lines,
+            )
+
+        product_ids = {row[2] for row in priced_rows if row[2]}
+        store_by_product: Dict[UUID, Store] = {}
+        if product_ids:
+            products = self.repository.get(Product).include(Product.Fields.STORE).all(
+                EntityField(Product, "id").in_(list(product_ids))
+            )
+            store_by_product = {p.id: p.store for p in products if p.store}
+
+        stock_item_ids = {row[1] for row in priced_rows if row[1]}
+        usual_store_by_item: Dict[UUID, UUID | None] = {}
+        if stock_item_ids:
+            usual_store_by_item = {
+                item_id: usual_store_id
+                for item_id, usual_store_id in session.execute(
+                    select(StockItem.id, StockItem.usual_store_id).where(
+                        StockItem.id.in_(list(stock_item_ids))
+                    )
+                ).all()
+            }
 
         spend_by_store: Dict[UUID | None, float] = {}
         lists_by_store: Dict[UUID | None, set] = {}
-        names: Dict[UUID | None, str] = {}
-        for list_id, product_id, quantity, picked, actual in line_rows:
-            store = store_by_product.get(product_id)
-            store_id = store.id if store else None
+        for (
+            list_id, stock_item_id, product_id, quantity,
+            picked, actual, purchased_store_id, planned_store_id,
+        ) in priced_rows:
+            offer_store = store_by_product.get(product_id) if product_id else None
+            # The R-003 chokepoint, same one the shopping list's own store
+            # breakdown goes through, so the two agree by construction.
+            #
+            # `last_purchase_store_id` is deliberately None here: that rung
+            # exists to *prefill* a line you haven't bought yet from where you
+            # last bought it. These lines are ticked on a finished list, so the
+            # purchase is a record rather than a guess — attributing one shop's
+            # spend to a different shop's store would be a fabrication.
+            store_id = resolve_store_id(
+                purchased_store_id=purchased_store_id,
+                planned_store_id=planned_store_id,
+                usual_store_id=(
+                    usual_store_by_item.get(stock_item_id) if stock_item_id else None
+                ),
+                last_purchase_store_id=None,
+                chosen_offer_store_id=offer_store.id if offer_store else None,
+            )
             unit_price = float(actual if actual is not None else picked)
             spend_by_store[store_id] = (
                 spend_by_store.get(store_id, 0.0)
                 + unit_price * float(quantity or 1)
             )
             lists_by_store.setdefault(store_id, set()).add(list_id)
-            names[store_id] = store.name if store else "Unknown"
 
-        out: List[StoreSpendRow] = [
-            StoreSpendRow(
+        stores_by_id: Dict[UUID, Store] = {}
+        resolved_store_ids = [sid for sid in spend_by_store if sid is not None]
+        if resolved_store_ids:
+            stores_by_id = {
+                s.id: s for s in self.repository.get(Store).all(
+                    EntityField(Store, "id").in_(resolved_store_ids)
+                )
+            }
+
+        out: List[StoreSpendRow] = []
+        for store_id, spend in spend_by_store.items():
+            store = stores_by_id.get(store_id) if store_id else None
+            out.append(StoreSpendRow(
                 store_id=store_id,
-                store=names[store_id],
+                # `None` means the ladder found no store at all — the shopping
+                # list calls that bucket "No store set" and so do we. "Unknown"
+                # read as a store whose name we'd lost.
+                store=store.name if store else "No store set",
+                brand_colour=store.brand_colour if store else None,
                 spend=round(spend, 2),
                 list_count=len(lists_by_store.get(store_id, set())),
-            )
-            for store_id, spend in spend_by_store.items()
-        ]
+            ))
         out.sort(key=lambda r: (-r.spend, r.store.lower()))
-        return out
+        return SpendByStoreResult(
+            rows=out,
+            counted_lines=len(priced_rows),
+            unpriced_lines=unpriced_lines,
+        )
 
 
 @REPORTS_ROUTER.route("/spend-by-store", methods=["GET"])
 def spend_by_store():
+    if _money_off():
+        return forbidden(MONEY_DISABLED_DETAIL)
     _Since = _parse_range(request.args.get("range"))
-    _Rows = SpendByStoreHandler(SqlAlchemyRepository()).handle(_Since)
+    _Result = SpendByStoreHandler(SqlAlchemyRepository()).handle(_Since)
+    _Rows = _Result.rows
     # R-041 — the total and the row count travel WITH the rows.
     #
     # The dashboard's spend card shows only the top 3 stores but rendered a
@@ -463,6 +565,10 @@ def spend_by_store():
         "rows": [asdict(r) for r in _Rows],
         "total_spend": round(sum(r.spend for r in _Rows), 2),
         "store_count": len(_Rows),
+        # R-041 / FU-815 — what the total was built from, so a card can say
+        # "12 items unpriced, not counted" instead of undercounting silently.
+        "counted_lines": _Result.counted_lines,
+        "unpriced_lines": _Result.unpriced_lines,
     })
 
 
@@ -550,12 +656,20 @@ class KeepsRunningOutHandler:
 
     Lines without an `added_at` (legacy rows from before X5) are skipped
     rather than guessed.
+
+    `since` bounds which *adds* count (REPORTS_PAGE_REVIEW.md §3.5 / D7). The
+    endpoint used to take no range at all while the card sat directly under a
+    control that said "30 days", so it answered an all-time question under a
+    bounded label. The level *history* is still walked in full — resolving
+    "what level was this on the day it was added" needs the changes before the
+    window, or an item whose last level change predates the range resolves to
+    nothing.
     """
 
     def __init__(self, repository: Repository) -> None:
         self.repository = repository
 
-    def handle(self, limit: int) -> List[KeepsRunningOutRow]:
+    def handle(self, limit: int, since: datetime | None = None) -> List[KeepsRunningOutRow]:
         session = self.repository.session
 
         out_level = level_for_status(
@@ -567,12 +681,13 @@ class KeepsRunningOutHandler:
         # Every (item, added_at) pair across history. We don't filter by
         # archived; "added when out" is the signal we want even on lists
         # the user never finished.
-        add_rows = session.execute(
-            select(
-                ShoppingListLine.stock_item_id,
-                ShoppingListLine.added_at,
-            ).where(ShoppingListLine.added_at.isnot(None))
-        ).all()
+        add_query = select(
+            ShoppingListLine.stock_item_id,
+            ShoppingListLine.added_at,
+        ).where(ShoppingListLine.added_at.isnot(None))
+        if since is not None:
+            add_query = add_query.where(ShoppingListLine.added_at >= since)
+        add_rows = session.execute(add_query).all()
         if not add_rows:
             return []
 
@@ -656,8 +771,19 @@ def keeps_running_out():
         _Limit = max(1, min(int(request.args.get("limit", "10")), 50))
     except (TypeError, ValueError):
         _Limit = 10
-    _Rows = KeepsRunningOutHandler(SqlAlchemyRepository()).handle(_Limit)
-    return ok({"rows": [asdict(r) for r in _Rows]})
+    # Unlike its siblings this endpoint defaults to **all time**, not 30 days.
+    # The other reports have always been range-bounded; this one never took a
+    # range at all, and the dashboard's restock radar calls it without one. An
+    # omitted param therefore keeps the old meaning, and only a caller that
+    # asks for a window gets one — Reports now does, because its card sits
+    # under the range picker.
+    _Raw = request.args.get("range")
+    _Since = _parse_range(_Raw) if _Raw else None
+    _Rows = KeepsRunningOutHandler(SqlAlchemyRepository()).handle(_Limit, _Since)
+    return ok({
+        "range": _Raw or "all",
+        "rows": [asdict(r) for r in _Rows],
+    })
 
 
 # ───── 5. Price trends ────────────────────────────────────────────────────
@@ -717,7 +843,15 @@ class PriceTrendsHandler:
         for pid, offered_on, price_now in list(current_rows) + list(historic_rows):
             if offered_on is None or price_now is None:
                 continue
-            if since is not None and offered_on < since:
+            # FU-813 — `offered_on` is `DateTime(timezone=True)`, but SQLite does
+            # not preserve tzinfo, so it comes back naive while `since` is aware.
+            # Comparing them raised `TypeError` — a 500 on every bounded range,
+            # invisible on Postgres and invisible to the suite, whose only seeded
+            # price-trends test passed `range=all` (the branch where `since` is
+            # None and this comparison never runs). Every sibling handler coerces
+            # first (see `_price_as_of`); this one was missed.
+            offered_on = _as_utc(offered_on)
+            if since is not None and offered_on is not None and offered_on < since:
                 continue
             points_by_product.setdefault(pid, []).append(
                 PricePoint(date=offered_on.date().isoformat(), unit_price=float(price_now))
@@ -740,6 +874,11 @@ class PriceTrendsHandler:
 
 @REPORTS_ROUTER.route("/price-trends", methods=["GET"])
 def price_trends():
+    # Money, not products: a household with no products gets an empty series
+    # (honest, and the card says so), but one that has opted out of money must
+    # not be handed a dollar axis at all.
+    if _money_off():
+        return forbidden(MONEY_DISABLED_DETAIL)
     raw_ids = request.args.get("product_ids", "")
     product_ids: List[UUID] = []
     for chunk in raw_ids.split(","):
@@ -868,6 +1007,8 @@ class SavingsCapturedHandler:
 
 @REPORTS_ROUTER.route("/savings-captured", methods=["GET"])
 def savings_captured():
+    if _money_off():
+        return forbidden(MONEY_DISABLED_DETAIL)
     _Since = _parse_range(request.args.get("range"))
     _Result = SavingsCapturedHandler(SqlAlchemyRepository()).handle(_Since)
     _Result["range"] = request.args.get("range", "30d")
@@ -1244,6 +1385,8 @@ class SpendByCategoryHandler:
 
 @REPORTS_ROUTER.route("/spend-by-category", methods=["GET"])
 def spend_by_category():
+    if _money_off():
+        return forbidden(MONEY_DISABLED_DETAIL)
     since = _parse_range(request.args.get("range"))
     rows, total = SpendByCategoryHandler(SqlAlchemyRepository()).handle(since)
     return ok({
@@ -1386,6 +1529,8 @@ class SpendYoYHandler:
 
 @REPORTS_ROUTER.route("/spend-year-over-year", methods=["GET"])
 def spend_year_over_year():
+    if _money_off():
+        return forbidden(MONEY_DISABLED_DETAIL)
     raw = request.args.get("range", "1y")
     days = _range_days(raw)
     if days is None:

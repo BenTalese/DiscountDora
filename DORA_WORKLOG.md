@@ -28,7 +28,127 @@ next.
 
 ---
 
-## 2026-09-02 (latest) — **Dashboard chunk 6: the last chunk — one scale, and a 10px label the review never caught**
+## 2026-09-02 (latest) — **Reports chunks 1+2: gate it, then the defects — and the gate itself had a bug**
+
+**Status:** complete + green + driven live. `REPORTS_PAGE_REVIEW.md` §7
+**Chunk 1** (gate it) and **Chunk 2** (functional defects) both shipped;
+**FU-816, FU-815, FU-813 resolved**, **FU-814 items 2/3 closed** (item 1 stays
+for chunk 3, item 4 already landed in dashboard chunk 6). Gate: **pytest 2225
+passed** / 1 skipped / 1 xfailed with the four pre-existing buy-verdict e2e reds
+(FU-762 — confirmed pre-existing by stashing and re-running), **vitest 661**,
+`vue-tsc` + `eslint` clean. The dashboard chunk-6 work was committed first, on
+the owner's call, so the two units don't share a diff.
+
+**Chunk 1 gates in two places, and the second one is the point.** R-058's lesson
+from the buy verdict is that a render gate alone leaves the hole open for the
+next caller, so the six dollar-answering endpoints — stock value, spend by store,
+savings, spend by category, YoY, price trends — return **403** when money is off,
+and the six cards `v-if` off `useMoneyEnabled()`. Savings and price trends need
+`products` as well (B9: don't render a card whose empty state tells you to go use
+a feature you opted out of). **The nav entry stays unconditional, against the
+FU's own wording** — with money off the page still carries four working
+count-based reports, and hiding it would cost four to gate six. Recorded as a
+deviation rather than done silently.
+
+**⚠️ The browser found that the gate I had just written was itself a race.** The
+first live run fired **three** requests, not nine: `useFeatureFlags` reads
+`/api/health` once per document and the map is empty until it resolves, so every
+gated loader early-returned — and nothing re-ran them when the flags landed. The
+money cards then rendered their **empty** state on a seed with five stores of
+spend, which is precisely the failure-reads-as-absence bug the same unit's error
+states exist to kill. This is **FU-586** reproduced on a second page; fixed the
+same way (per-gate watchers), and the fact that the workaround now exists twice
+is **FU-844** — the knowledge that *a false flag might mean "not yet"* belongs in
+the composable, not in each caller. A static read could not have caught this.
+
+**Chunk 2's headline is that spend-by-store was answering a different question
+from the receipt.** It required `selected_product_id IS NOT NULL` and took the
+store off that product — rung *five* of a five-rung ladder — with a comment
+justifying it as "store grouping needs a product". It doesn't. It now goes
+through `_line_price.resolve_store_id`, the same R-003 chokepoint the shopping
+list uses, so the two agree by construction. Live proof on the dense seed: the
+card now shows **"Northside Farmers Market · $40.70 · 2 lists"**, a store with
+exactly one product in the catalogue, whose spend was mostly invisible before.
+**One rung is deliberately `None`: `last_purchase_store_id`.** That rung prefills
+a line you haven't bought yet from where you last bought it; these lines are
+ticked on a *finished* list, so attributing one shop's spend to a different
+shop's store would be a fabrication.
+
+**R-041 rode along, because the same handler was undercounting in silence.**
+Unpriced ticked lines were filtered away in SQL and never mentioned; they are now
+counted and reported (`counted_lines` / `unpriced_lines`), and the card says
+*"1 item had no price recorded, so it isn't counted here"* — the sentence the
+shopping list's own card has always had. "Unknown" became **"No store set"**,
+that card's wording; "Unknown" read as a store whose name we'd lost.
+
+**The tz crash was reproduced, not reasoned about** — FU-813 was opened
+specifically to demand that. Reverting the one-line fix and running the new test
+gives `TypeError: can't compare offset-naive and offset-aware datetimes`
+verbatim. SQLite drops the tzinfo of a `DateTime(timezone=True)`, so `offered_on`
+came back naive against an aware `since` and **every bounded range 500'd**. The
+suite missed it because its only seeded price-trends test passed `range=all`, the
+one branch where the comparison never executes — the new test is parametrized
+over `30d`/`90d`/`1y` for exactly that reason. It would have passed on Postgres,
+so it was a §7.5 portability break as well as a crash.
+
+**Colour: stores now come from their logos, and the no-store bucket is not a
+store.** `colourFor` was hashing store *names* into the chart ramp; `brand_colour`
+now ships on the row and the legend + donut call `storeColour`. Measured live:
+Woolworths `rgb(23,136,65)`, Aldi `rgb(0,40,94)`, Coles `rgb(224,26,34)` — the
+logo colours, matching the shopping list. **And measuring it caught something no
+report had named:** "No store set" and "Northside Farmers Market" were rendering
+the *same* slate, because the hash palette is a sealed six. The no-store bucket
+now takes `--text-muted` — visibly not an identity hue. Full parity with the
+shopping list's *hatch* (D-001) waits for chunk 3, with the same-day finding that
+the categorical ramp collides too ("Pantry staples" and "Fruit & Veg" both
+`rgb(249,208,6)`) — both are **FU-843**, and both are arguments for §4.6's
+donut-to-bar replacement rather than for patching the legend.
+
+**Error states are the dashboard's, verbatim.** `loadSlot` + `CardLoadError`,
+ten cards, and the page-level red banner deleted — it said "something here is
+wrong" over ten cards without saying which, while the failed card underneath
+still read as empty. Driven live by shimming `XMLHttpRequest.open` to 404 a
+single endpoint: one card said *"I couldn't load your spend by store. Try
+again"*, the other nine rendered normally, and the retry recovered the card in
+place with no reload.
+
+**Also in chunk 2:** keeps-running-out takes a `range` (it sat under a control
+saying "30 days" while counting all history) — **defaulting to all-time when the
+param is omitted**, so the dashboard's restock radar keeps its meaning; both
+chart y-axes go through `formatMoney` instead of a hardcoded `$`; and the product
+picker searches server-side (`filter=name:ct:…`) rather than filtering a
+downloaded first page of 50 — FU-668's trap, third instance. One capability
+traded, stated rather than hidden: store name is no longer part of the product
+match, because it lives on the `Store` row.
+
+**Not done, deliberately:** the `.report-card*` fork of `DashboardCard`
+(FU-814 item 1). §4.2's fix is "render `<DashboardCard>`", and which cards
+survive is a chunk-3 decision — un-forking now means restyling cards that are
+about to merge or be cut.
+
+**Standing-rules close-gate.** **R-058** (money endpoints refuse, not just
+hide), **R-003** (the store ladder chokepoint; `formatMoney` as the one money
+authority), **R-041** (coverage travels with the aggregate), **R-002/D-001**
+(store colour from `storeColour`, no second palette), **D-006**, **D-007**
+(loading / empty / error kept distinct), **B9**, **§7.5** (the SQLite-only
+crash). **R-001**: `CardLoadError` is reused from `components/dashboard/`, not
+copied — worth noting that the component's name now understates its scope; if a
+third surface adopts it, move it out of `components/dashboard/`. No unexplained
+violations. **ADR evaluation: none promoted.** The candidate is FU-844's
+*"a feature flag is tri-state — on, off, and not-yet-known"*; it is the second
+sighting of one bug rather than a recurring decision, and the right home is the
+composable's API, so it is logged as a follow-up. Promote on a third sighting.
+
+**Next up:** Reports **chunk 3** — the restructure (11 cards → 4, `DashboardCard`
+shell + FU-814 item 1, the lede, cut stock-value-over-time, cap the wastage
+list). Everything in chunks 1+2 was built to survive it. Runnable in parallel and
+independent: **FU-831** (savings own-price baseline — the only migration),
+**FU-833** (drop ECharts), **FU-832** (shared catalogue, which also wants
+FU-844).
+
+---
+
+## 2026-09-02 — **Dashboard chunk 6: the last chunk — one scale, and a 10px label the review never caught**
 
 **Status:** complete + green + verified live. `DASHBOARD_PAGE_REVIEW.md` §7
 **Chunk 6** shipped, which closes **all six chunks**; **FU-828 resolved**, and

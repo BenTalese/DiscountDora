@@ -253,9 +253,12 @@ next reviewer can fast-skip them.
   `05_investigations/REPORTS_PAGE_REVIEW.md`** stands in for the missing feedback
   pass: owner-supplied bullets captured verbally, mapped in that doc's §10. No
   `F`/`L` bullets flip here (there were none to flip); the cross-cutting bullets
-  it *does* land on are **L254** (money switchable off — the page is ungated,
-  FU-816) and **L467/L471** (export formats, heading type sizes). Assessed, not
-  built; chunks gated on FU-809/810.
+  it *does* land on are **L254** (money switchable off) and **L467/L471** (export
+  formats, heading type sizes). **L254 is now covered (2026-09-02):** chunks 1+2
+  shipped, FU-816 resolved — the six dollar-answering reports are gated on the
+  client *and* refuse with 403 at the endpoint, while the four count-based ones
+  keep the page worth a nav entry. L467 (export) and L471 (heading sizes) remain
+  gaps, addressed by chunks 3 and 5 respectively.
 - WASTE — `04_proposals/PROPOSAL_WASTE_MINIMISATION.md` (C-waste, written 2026-06-24). Feedback was empty; this is charter-/scope-discipline driven. The `/waste` page is dissolved into a StockItemRow capture (Mark as wasted + Undo), a Cookbook filter (Uses expiring ingredients, 14d), a StockOverview sort (Expires soonest), and a simplified `waste_insights` Dora tool. Dora Score waste-as-pillar reassessment deferred → **FU-302**.
 - ALERTS — `04_proposals/PROPOSAL_ALERTS.md` (C-9, written 2026-06-06; maps
   L437-441 + dashboard alert bullets L57/L60). Dashboard card = contract only

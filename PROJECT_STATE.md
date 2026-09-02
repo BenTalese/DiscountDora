@@ -92,6 +92,16 @@ promoting **R-066 / ADR-063**: a chip's look is a shared class, never
 per-component CSS. The now-familiar pattern held once more — measuring the two
 chips side by side exposed a real defect (a two-word label wrapping inside its
 own tint, 37px beside a 28px neighbour) that neither report had named.
+**Later on 2026-09-02 the stream moved to `/reports`**, where chunks 1 and 2 of
+its review are now built and driven live: the page was the last significant
+surface ignoring the money opt-in, and underneath that sat three real defects —
+spend-by-store attributing stores by a *different rule* from the receipt that
+produced them, price trends 500ing on every bounded range on SQLite, and every
+card turning a failed fetch into a reassuring empty state. The pattern held one
+more time: driving it found two things the static review could not, including
+that the money gate I had just written was a **race** against the flags probe,
+so on a cold load the money cards said "nothing here yet" on a seed full of
+spend.
 
 ---
 
@@ -122,6 +132,7 @@ own tint, 37px beside a 28px neighbour) that neither report had named.
 | Cookbook | ➗ | Chunks 1–10 plus **five** feedback batches. Batch 5 (08-29, driven live) is two consistency asks, and the width one had a fossil under it: `FilterRow` ran a second, 20px-wider track for the numeric bounds, justified by a label — "Missing ingredients ≤" — **deleted on 2026-08-20**, so the only thing holding the two tracks apart was that they existed. One 210px track now, measured across all thirteen controls with no clipped labels; the sort field keeps its own because it packs a direction chip inside itself. The rating star went 14px → 18px, matching the filter fields' own leading glyphs. Batch 3 re-ordered filters to reported use, added `Serves ≥`, deleted meal-slot names from Category (migration `c8b3e5f0a712`). **Batch 4 shipped 2026-08-28, driven live**, off a report that the health-star and kcal filters "don't work" — three causes, only one of them the filters. The dominant one: **the recipe list was a permanent session cache**. `ensureLoadedAsync` never refetched and nothing invalidated it on a stock write, so linking nutrition to a stock item and walking to the cookbook rendered the pre-edit payload — which also explains "I don't see the rating on the cards" (the chip was there since 08-27; it had no data). A recipe DTO carries five stock-derived fields, so that became **R-062 / ADR-059**. Second, both thresholds exempted any recipe under `RELIABLE_COVERAGE_RATIO`, which on a young pantry is all of them — **owner reversed it: judge the figure you displayed**, sorts included. Third, "kcal looks off" and the dead filter were the same fact: the chip rendered `:outline` exactly when the rollup was unreliable. The rating became a **score pill beside the favourite heart** — five inline stars said little and, sitting behind per-recipe chips, never landed at the same x down a grid — with the full five-star render in the hover; Nutri-Score keeps its badge. Verification needed Playwright: **the Browser pane never advances a CSS transition**, so no routed page renders in it at all. Open: FU-773 (**owner call** — re-measured 08-29 after the row lost ~100px of width: still three wrapped rows at 1280px, not the two asked for), FU-772, FU-771, FU-770, FU-760, FU-691, FU-692, FU-693 | [PROPOSAL](docs/04_proposals/PROPOSAL_COOKBOOK.md) |
 | Nutrition (complex mode) | ➗ | Built end to end: install-wide mode, USDA + OFF import, 15 micronutrients, server-rendered panel, recipe rollup, cookbook badge, auto-suggest matching. Both rating schemes ride on top. Open: FU-643 (no AU/US synonym layer), FU-645, FU-646, FU-657, and **FU-750** | `AdminSystemNutritionSettings.vue` |
 | Products-as-overlay | ➗ | Phases 0–E code-complete; Phase-F tail is FU-214 browser-verify + L197 hard-delete decision + L205/206 bulk-select + the FU-210 tail pass | [RUNBOOK](docs/04_proposals/PRODUCTS_OVERLAY_RUNBOOK.md) |
+| **Reports page** | 🟡 | **Chunks 1+2 of `REPORTS_PAGE_REVIEW.md` shipped 2026-09-02, driven live.** The page had never been designed *and* was the last significant surface ignoring the money opt-in: it imported no feature flag at all, so an install that had opted out still got spend by store, savings, spend by category, YoY, price trends and two dollar-signed axes. Now gated in two places — six endpoints 403 (R-058) and six cards `v-if` off the flag — while the four count-based reports keep the nav entry. Chunk 2 took the defects: spend-by-store was answering a **different question from the receipt** (it required a linked product and read rung five of a five-rung store ladder, so a household that tags "I buy this at Aldi" saw an empty card off a finished list — it now goes through the same `resolve_store_id` chokepoint, and a market with one product in the catalogue appears at $40.70); price trends **500'd on every bounded range** on SQLite (naive-vs-aware datetime, reproduced by reverting the fix, invisible to a suite whose only seeded test passed `range=all`); the product picker could only see 50 products (FU-668, third instance) and threw on its own clear button; failed fetches rendered as *empty* states; keeps-running-out ignored the range picker it sat under. **Two things only the browser could find:** the new gates were a **race** against the `/api/health` probe, so on a cold load every money card rendered "nothing here yet" on a seed full of spend (FU-586 on a second page → **FU-844**), and the legend drew "No store set" in the same colour as a real store (→ **FU-843**). Next: chunk 3 (11 cards → 4, the `DashboardCard` un-fork, the lede). Open: FU-814 item 1, FU-843, FU-844 | [REVIEW](docs/05_investigations/REPORTS_PAGE_REVIEW.md) |
 | Prices surface | 🔴 | Investigation confirms the owner's diagnosis: all price *reading* capability sits on the product axis at `/price-history`, which has **no nav entry**, while the everyday user gets a single-item modal with no range and no compare. Placement settled; the keep/cut call is **FU-703** and gates FU-708 | [ASSESSMENT](docs/05_investigations/PRICES_SURFACE_UX_ASSESSMENT.md) |
 | ⭐ Zero-Input Pantry (P8-07) | 🟡 | Built and extended to recipes, shopping lists and the meal planner, each behind its own off-by-default opt-in (FU-653 now resolved). Server verified live; **all three client renders and the original P8-07 walk remain unseen** — the seed's two "Belief demo:" recipes make it a 30-second check | [PROPOSAL](docs/04_proposals/PROPOSAL_ZERO_INPUT_PANTRY.md) |
 | Stocktake Mode | ✅ | Three-phase runner, queue least-certain-first, install-wide switch. **08-27: it finally has a dataset** — the belief fixtures were never `stocktake_alerts` enabled, so nothing could rank `confident` and the Review phase was unreachable by construction. Both seeds now span all three ranks plus a Sweep fixture; seeding that Sweep exposed a naive-vs-aware datetime 500 in `resolve_newly_swept`. The (?) now deep-links to Help → Guides → Stocktake. Verify owed; FU-700, FU-728 open | [PROPOSAL](docs/04_proposals/PROPOSAL_STOCKTAKE_MODE.md) |
@@ -143,13 +154,17 @@ own tint, 37px beside a 28px neighbour) that neither report had named.
 
 ## ⚠️ Needs your attention now
 
-**Total open backlog is 190 items in `DORA_FOLLOWUPS.md`** — *counted, not
-inferred* (`^## [OPEN] FU-` headings, 2026-09-02). The previously-stated 168 was
-carried forward arithmetically and was wrong; recount rather than adjust it. This
-session: FU-809-816 opened by the reports review and FU-817-829 by the dashboard
-review; then all seven owner calls (809/810/811/812/817/818/819) resolved by
-decision, with FU-830/831/832/833 opened to carry the decided work and FU-814
-amended to absorb the radius correction.
+**Total open backlog is 184 items in `DORA_FOLLOWUPS.md`** — *counted, not
+inferred* (`^## [OPEN] FU-` headings, 2026-09-02, after the Reports chunk-1+2
+unit). **The previously-stated 190 was also wrong** — the same file measured 185
+at the commit that claimed it, so the entry that told the next session to recount
+rather than adjust had itself been adjusted. Recount; don't do arithmetic on this
+number. Latest movement: FU-816/815/813 **resolved** by the Reports build,
+FU-843/844 opened by it. Earlier the same day: FU-809-816 opened by the reports
+review and FU-817-829 by the dashboard review, then all seven owner calls
+(809/810/811/812/817/818/819) resolved by decision, with FU-830/831/832/833
+opened to carry the decided work and FU-814 amended to absorb the radius
+correction.
 These are the ones wanting a decision or a running-app check, most important first.
 
 1. **✅ The two page reviews are fully decided — all seven owner calls answered
@@ -245,9 +260,10 @@ These are the ones wanting a decision or a running-app check, most important fir
    (`BaseSegmented`'s selected segment at 3.88:1, plus two consumers that may
    render the label invisible — now a natural pair with the `size` finding),
    **FU-838**, **FU-837**, **FU-835**.
-   Runnable in parallel and not dashboard-scoped: **FU-816** (the Reports money
-   gate — ships standalone), **FU-831** (savings baseline, the only item needing
-   a migration), **FU-832** (shared catalogue), **FU-833** (drop ECharts).
+   Runnable in parallel and not dashboard-scoped: **FU-831** (savings baseline,
+   the only item needing a migration), **FU-832** (shared catalogue),
+   **FU-833** (drop ECharts). *(FU-816, the Reports money gate, shipped
+   2026-09-02 with Reports chunks 1+2 — see the Reports row above.)*
    Smaller spin-offs: **FU-835** (Kitchen health's stocktake component scores an
    activity, not a signal), **FU-837** (short cards stretched to a tall row-mate),
    **FU-838** (contracts orphaned by the Best-deals cut), **FU-839** (above).

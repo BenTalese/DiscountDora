@@ -20,6 +20,12 @@ export interface StockValueResponse {
 export interface StoreSpendRow {
     store_id: string | null;
     store: string;
+    /** The store's logo-derived colour, so every surface that draws this
+     *  dataset paints a store the same colour (FU-814). Pass it to
+     *  `storeColour(row.store, row.brand_colour)` — never hash the name into
+     *  the chart ramp, which is how one store came out green on the shopping
+     *  list and mauve in Reports. */
+    brand_colour: string | null;
     spend: number;
     list_count: number;
 }
@@ -35,6 +41,11 @@ export interface StoreSpendResponse {
     /** How many stores the total was built from, so a truncated list can say
      *  "top 3 of 5" rather than presenting a partial view as the whole. */
     store_count: number;
+    /** Ticked lines that carried a price and made it into the total (R-041). */
+    counted_lines: number;
+    /** Ticked lines with no price at all, excluded from the money. Rendered as
+     *  a coverage note — the report used to drop them without saying so. */
+    unpriced_lines: number;
 }
 
 export interface MostBoughtRow {
@@ -55,6 +66,11 @@ export interface KeepsRunningOutRow {
 }
 
 export interface KeepsRunningOutResponse {
+    /** `'all'` when the caller passed no range — the endpoint's default, which
+     *  is what the dashboard's restock radar relies on. Reports passes the
+     *  page's range so the card stops answering an all-time question under a
+     *  control that says "30 days". */
+    range: ReportRange;
     rows: KeepsRunningOutRow[];
 }
 
@@ -173,8 +189,12 @@ export default class ReportsApiService {
     getMostBoughtAsync = (range: ReportRange, limit = 10) =>
         this.httpClient.get<MostBoughtResponse>(`/reports/most-bought-items?range=${range}&limit=${limit}`);
 
-    getKeepsRunningOutAsync = (limit = 10) =>
-        this.httpClient.get<KeepsRunningOutResponse>(`/reports/keeps-running-out?limit=${limit}`);
+    /** Omit `range` for all-time (the endpoint's default). */
+    getKeepsRunningOutAsync = (limit = 10, range?: ReportRange) =>
+        this.httpClient.get<KeepsRunningOutResponse>(
+            `/reports/keeps-running-out?limit=${limit}`
+            + (range ? `&range=${range}` : ''),
+        );
 
     getPriceTrendsAsync = (productIds: string[], range: ReportRange) => {
         const csv = productIds.join(',');

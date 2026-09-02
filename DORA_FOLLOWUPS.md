@@ -39,6 +39,58 @@ long session summary. Distinct from the other logs:
 
 ---
 
+## [OPEN] FU-844 — Two pages have now shipped the same feature-flag race; the guard should be the composable's job
+- **Raised:** 2026-09-02 (Reports chunk 1 — found by driving it live)
+- **Type:** finding (R-003-adjacent)
+- **What:** a gated loader written as `if (!moneyEnabled.value) return;` is a
+  **race**, not a gate. `useFeatureFlags` reads `/api/health` once per document
+  and the map is empty until that resolves, so on a cold load every gated loader
+  early-returns and nothing re-runs it — the card then renders its *empty* state
+  forever, which is the honesty failure the whole error-state chunk exists to
+  kill. The dashboard hit this and fixed it with per-gate `watch`ers (**FU-586**,
+  and the comment there explains it well); `ReportsPage.vue` reproduced it
+  verbatim on its first live run — only the three ungated reports fetched, and
+  the six money cards said "no completed shopping lists" on a seed with five
+  stores of spend. Fixed the same way, so there are now **two** copies of the
+  workaround and any third gated page will write a third.
+- **The shape of the fix:** `useFeatureFlags()` already tracks `flagsLoaded`.
+  Either expose the load promise (`await flagsReady()`) so a page can simply not
+  fetch until the answer exists, or give the composable a `whenEnabled(flag, fn)`
+  that owns the watcher. Either way the knowledge — *"a false flag might mean
+  'not yet'"* — stops living in each caller.
+- **Why deferred:** it is a small refactor across two pages plus the composable,
+  and both call sites are correct today; doing it inside a defect chunk would
+  widen the diff for no user-visible change.
+- **Recommended resolution:** opportunistic — with [[FU-832]] (the shared card
+  catalogue + `useCardLayout()`), which is already touching exactly this seam on
+  both pages. Cross-ref: FU-586, `DashboardPage.vue:1629`, `ReportsPage.vue`.
+
+## [OPEN] FU-843 — Reports' categorical colour ramp collides at six entries, and the no-store bucket has no hatch
+- **Raised:** 2026-09-02 (Reports chunk 2 — measured live)
+- **Type:** finding (D-001)
+- **What:** two related colour problems on the two legends, both visible on the
+  dense seed at :5171.
+  1. **`colourFor` hashes into `--chart-1..6`, so with more than a handful of
+     buckets two adjacent rows share a hue.** Measured: "Pantry staples" and
+     "Fruit & Veg" both render `rgb(249,208,6)` in the spend-by-category legend.
+     Harmless-looking, but the legend's whole job is to tie a slice to a name.
+     Stock groups routinely run to eight or more, which is also §4.6's argument
+     for killing the donut outright.
+  2. **The "No store set" bucket is drawn as a flat colour.** The shopping list
+     solves the same bucket with a **hatched** themed grey, precisely because no
+     flat grey can be guaranteed to separate from a logo-derived brand colour
+     (D-001 — never distinguish by hue alone). Chunk 2 stopped it being handed a
+     *store identity* colour (it was drawing the same slate as the farmers market
+     directly above it) and gave it `--text-muted`, which is honest but is not
+     parity.
+- **Why deferred:** the real fix for both is §4.6's — replace the donut + legend
+  with the shopping list's own `.sl-store-bar`, which already solves the
+  zero-value bucket, the unassigned bucket **and** the hatch. Building a second
+  hatch here would be the third copy of a component the review wants shared.
+- **Recommended resolution:** later — with Reports chunk 3, and specifically with
+  [[FU-833]] (drop ECharts), which is the same edit. Cross-ref:
+  `REPORTS_PAGE_REVIEW.md` §4.6, `StoreSpendCard.vue:154-197`.
+
 ## [OPEN] FU-841 — `MarkAsWastedDialog`'s tiles remove the focus outline and replace it with their hover state
 - **Raised:** 2026-09-02 (dashboard chunk 6 — found while fixing the same file's
   undeclared `--c-*` references, which the R-060 guard surfaced)
@@ -370,42 +422,23 @@ long session summary. Distinct from the other logs:
   measuring the wrong thing for one component out of five. Cross-ref:
   `DASHBOARD_PAGE_REVIEW.md` §3.7.2 + §8 D5, [[FU-823]] (resolved), R-029.
 
-## [OPEN] FU-816 — `/reports` renders every money surface with the money flag off
-- **Raised:** 2026-09-02 (reports page PO + engineering review)
-- **Type:** finding
-- **What:** `ReportsPage.vue` imports no feature flag at all, and the nav entry
-  (`MainLayout.vue:278`) is unconditional. With `money` off the page still shows
-  spend by store, savings captured, spend by category, year-over-year, price
-  trends and two dollar-formatted chart axes. Directly contradicts the owner
-  feedback bullet at `Feedback _ Fixes - as of [06-Jun-2026].md:254` that every
-  money/budget surface must be switchable off, which is the bullet ADR-005 was
-  built from. `products` is ungated too, so a products-free install gets four
-  permanently-dead cards. The dashboard's `cardAvailable` (`DashboardPage.vue:1537`)
-  is the pattern to copy.
-- **Why deferred:** the review was read-only by brief.
-- **Recommended resolution:** now — it is the smallest chunk in
-  `05_investigations/REPORTS_PAGE_REVIEW.md` §7 and closes a live contradiction
-  with the owner's own feedback.
-
-## [OPEN] FU-815 — Reports spend-by-store attributes stores by a different rule than the shopping list
-- **Raised:** 2026-09-02 (reports page PO + engineering review)
-- **Type:** finding
-- **What:** `SpendByStoreHandler` requires `selected_product_id IS NOT NULL`
-  (`reports.py:407`) and takes the store from that product, i.e. rung five of the
-  store ladder. The shopping list resolves store through the five-rung R-003
-  chokepoint `resolve_store_id` — purchased → planned → usual → last-purchase →
-  offer (`_line_price.py:88`). Same finished list, two different breakdowns: a
-  household that sets `usual_store_id` and never uses products sees a populated
-  card on the receipt face and an empty one in Reports. Also drops unpriced lines
-  from the total with no footnote, where `StoreSpendCard.vue:251` states the gap
-  explicitly.
-- **Why deferred:** read-only review.
-- **Recommended resolution:** with the Reports chunk 2 defect pass, or sooner if
-  the empty-card symptom is hit in real use.
-
 ## [OPEN] FU-814 — Reports duplicates `DashboardCard`, `storeColour` and the money formatter
 - **Raised:** 2026-09-02 (reports page PO + engineering review)
 - **Type:** finding
+- **PARTIALLY DONE 2026-09-02 (Reports chunks 1+2). Items (2), (3) and (4) are
+  closed; only item (1), the card-shell fork, is still open.**
+  - **(2) done** — `StoreSpendRow` carries `brand_colour` server-side and the
+    legend + donut call `storeColour(row.store, row.brand_colour)`. Verified live
+    at :5171: Woolworths `rgb(23,136,65)`, Aldi `rgb(0,40,94)`, Coles
+    `rgb(224,26,34)` — the logo colours, matching the shopping list. `colourFor`
+    survives as the **categorical** helper for stock groups only, and now says so.
+  - **(3) done** — both y-axes take `formatter: (v) => formatMoney(v)`.
+  - **(4) done** — landed in the dashboard's chunk 6, in `DashboardCard.vue`
+    itself, so Reports inherits it once the fork goes.
+  - **(1) still open** — the `.report-card*` fork. Deliberately left: §4.2's own
+    fix is "render `<DashboardCard>`", and which cards survive is a chunk-3
+    decision, so un-forking now means restyling cards that are about to merge.
+- **Recommended resolution (amended):** item (1) with the chunk 3 restructure.
 - **What:** three separate duplications on one page. (1) `.report-card*` is a
   byte-identical copy of `components/dashboard/DashboardCard.vue`'s `.dora-card*`
   that has since drifted — it lost the hover elevation, the reduced-motion guard,
@@ -435,28 +468,6 @@ long session summary. Distinct from the other logs:
   with the chunk 3 restructure, since which cards survive decides how much shell is
   needed — and (4) should land in the same commit as (1) so the visual change is
   reviewed once. Cross-ref: `REPORTS_PAGE_REVIEW.md` §4.2 + §8 D3.
-
-## [OPEN] FU-813 — Reports price trends: confirm the SQLite tz crash in the running app
-- **Raised:** 2026-09-02 (reports page PO + engineering review)
-- **Type:** finding
-- **What:** owner asked "is price trends broken?". Static read says yes, on
-  SQLite, for every range except "All time": `PriceTrendsHandler` compares
-  `offered_on < since` with no `_as_utc()` (`reports.py:709`) while every sibling
-  handler coerces first (`reports.py:319`), and SQLite drops tzinfo on
-  `DateTime(timezone=True)` — naive vs aware raises `TypeError`, so a 500. The
-  test suite misses it because the only seeded price-trends test passes
-  `range=all`, the one branch where `since is None`
-  (`tests/e2e/dora_api/test_reports_router.py:156`). Would not reproduce on
-  Postgres, so it is also a §7.5 portability break. **Not confirmed live** — per
-  the reported-defect rule this stays open until it is.
-  Two further defects in the same card, independent of the crash: `clearable` on
-  a `multiple` q-select emits `null` and `loadPriceTrends` reads `.length` off it
-  (`ReportsPage.vue:773`); and the product picker only ever sees 50 products
-  (bare `getAllAsync()` → `DEFAULT_LIMIT`), which is FU-668's unpaged-first-page
-  trap, third instance.
-- **Why deferred:** read-only review.
-- **Recommended resolution:** confirm in browser, then fix with chunk 2. The fix
-  is one `_as_utc()` call plus a regression test on a bounded range.
 
 ## [OPEN] FU-808 — `space` and `u` are advertised in the shortcut cheatsheet on faces where they do nothing
 - **Raised:** 2026-09-01 (v4 chunk 4 — cutover audit)

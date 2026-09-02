@@ -22,13 +22,9 @@
             />
         </header>
 
-        <q-banner v-if="loadError" class="dora-bg-negative-soft text-negative q-mb-md" dense rounded>
-            {{ loadError }}
-        </q-banner>
-
         <div class="reports-grid">
-            <!-- Stock value over time -->
-            <article class="report-card report-card-wide">
+            <!-- Stock value over time — money-gated (FU-816). -->
+            <article v-if="moneyEnabled" class="report-card report-card-wide">
                 <header class="report-card-head">
                     <q-icon :name="ICONS.show_chart" size="22px" class="report-card-icon" />
                     <h3 class="report-card-title">Stock value over time</h3>
@@ -40,6 +36,11 @@
                 <div v-if="loading.stockValue" class="report-card-loading">
                     <AppSpinner size="32px" />
                 </div>
+                <CardLoadError
+                    v-else-if="slotFailed('stockValue')"
+                    line="I couldn't load your stock value."
+                    @retry="loadStockValue"
+                />
                 <v-chart
                     v-else-if="(stockValue?.points.length ?? 0) > 0"
                     class="report-chart"
@@ -52,8 +53,8 @@
                 </div>
             </article>
 
-            <!-- Spend by store (donut) -->
-            <article class="report-card">
+            <!-- Spend by store (donut) — money-gated (FU-816). -->
+            <article v-if="moneyEnabled" class="report-card">
                 <header class="report-card-head">
                     <q-icon :name="ICONS.donut_large" size="22px" class="report-card-icon" />
                     <h3 class="report-card-title">Spend by store</h3>
@@ -61,6 +62,11 @@
                 <div v-if="loading.storeSpend" class="report-card-loading">
                     <AppSpinner size="32px" />
                 </div>
+                <CardLoadError
+                    v-else-if="slotFailed('storeSpend')"
+                    line="I couldn't load your spend by store."
+                    @retry="loadStoreSpend"
+                />
                 <div v-else-if="(storeSpend?.rows.length ?? 0) > 0" class="store-row">
                     <v-chart
                         class="report-donut"
@@ -69,7 +75,7 @@
                     />
                     <ul class="store-legend">
                         <li v-for="row in storeSpend!.rows" :key="row.store">
-                            <span class="store-dot" :style="{ background: colourFor(row.store) }" />
+                            <span class="store-dot" :style="{ background: storeRowColour(row) }" />
                             <span class="store-name">{{ row.store }}</span>
                             <span class="store-spend">{{ formatMoney(row.spend) }}</span>
                             <span class="store-count">{{ row.list_count }} list{{ row.list_count === 1 ? '' : 's' }}</span>
@@ -79,6 +85,16 @@
                 <div v-else class="report-empty">
                     No completed shopping lists in this range — finish a list to see
                     your spend break down by store.
+                </div>
+                <!-- R-041 — the total says what it was built from. Lines with no
+                     price at all were dropped in silence, so the card undercounted
+                     while the shopping list's own card stated the same gap. -->
+                <div
+                    v-if="(storeSpend?.unpriced_lines ?? 0) > 0"
+                    class="report-card-note report-coverage"
+                >
+                    {{ storeSpend!.unpriced_lines }} item{{ storeSpend!.unpriced_lines === 1 ? '' : 's' }}
+                    had no price recorded, so {{ storeSpend!.unpriced_lines === 1 ? "it isn't" : "they aren't" }} counted here.
                 </div>
             </article>
 
@@ -91,6 +107,11 @@
                 <div v-if="loading.mostBought" class="report-card-loading">
                     <AppSpinner size="32px" />
                 </div>
+                <CardLoadError
+                    v-else-if="slotFailed('mostBought')"
+                    line="I couldn't load what you buy most."
+                    @retry="loadMostBought"
+                />
                 <ul v-else-if="(mostBought?.rows.length ?? 0) > 0" class="report-list">
                     <li v-for="row in mostBought!.rows" :key="row.stock_item_id">
                         <a class="report-list-name" @click="goToStock(row.stock_item_id)">
@@ -122,6 +143,11 @@
                 <div v-if="loading.keepsOut" class="report-card-loading">
                     <AppSpinner size="32px" />
                 </div>
+                <CardLoadError
+                    v-else-if="slotFailed('keepsOut')"
+                    line="I couldn't load your run-outs."
+                    @retry="loadKeepsOut"
+                />
                 <ul v-else-if="(keepsOut?.rows.length ?? 0) > 0" class="report-list">
                     <li v-for="row in keepsOut!.rows" :key="row.stock_item_id">
                         <a class="report-list-name" @click="goToStock(row.stock_item_id)">
@@ -144,6 +170,11 @@
                 <div v-if="loading.waste" class="report-card-loading">
                     <AppSpinner size="32px" />
                 </div>
+                <CardLoadError
+                    v-else-if="slotFailed('waste')"
+                    line="I couldn't load your wastage."
+                    @retry="loadWaste"
+                />
                 <template v-else-if="waste">
                     <div class="waste-summary">
                         <span class="waste-total">{{ waste.total_events }}</span>
@@ -191,8 +222,11 @@
                 </div>
             </article>
 
-            <!-- Savings captured -->
-            <article class="report-card">
+            <!-- Savings captured — needs money AND products (FU-816): the
+                 figure is only ever non-zero if you pick product offers, so on
+                 a products-free install this card is a permanent empty state
+                 telling you to go and use a feature you opted out of (B9). -->
+            <article v-if="productMoneyEnabled" class="report-card">
                 <header class="report-card-head">
                     <q-icon :name="ICONS.savings" size="22px" class="report-card-icon" />
                     <h3 class="report-card-title">Savings captured</h3>
@@ -200,6 +234,11 @@
                 <div v-if="loading.savings" class="report-card-loading">
                     <AppSpinner size="32px" />
                 </div>
+                <CardLoadError
+                    v-else-if="slotFailed('savings')"
+                    line="I couldn't load your savings."
+                    @retry="loadSavings"
+                />
                 <div v-else-if="savings && savings.total_spent > 0" class="savings-body">
                     <div class="savings-number">
                         {{ formatMoney(savings.total_savings) }}
@@ -257,6 +296,11 @@
                 <div v-if="loading.mealsCooked" class="report-card-loading">
                     <AppSpinner size="32px" />
                 </div>
+                <CardLoadError
+                    v-else-if="slotFailed('mealsCooked')"
+                    line="I couldn't load your cook history."
+                    @retry="loadMealsCooked"
+                />
                 <div
                     v-else-if="(mealsCooked?.cook_count ?? 0) > 0"
                     class="meals-cooked-body"
@@ -288,8 +332,8 @@
                 </div>
             </article>
 
-            <!-- Spend by category -->
-            <article class="report-card">
+            <!-- Spend by category — money-gated (FU-816). -->
+            <article v-if="moneyEnabled" class="report-card">
                 <header class="report-card-head">
                     <q-icon :name="ICONS.donut_large" size="22px" class="report-card-icon" />
                     <h3 class="report-card-title">Spend by category</h3>
@@ -303,6 +347,11 @@
                 <div v-if="loading.spendByCategory" class="report-card-loading">
                     <AppSpinner size="32px" />
                 </div>
+                <CardLoadError
+                    v-else-if="slotFailed('spendByCategory')"
+                    line="I couldn't load your spend by category."
+                    @retry="loadSpendByCategory"
+                />
                 <div
                     v-else-if="(spendByCategory?.rows.length ?? 0) > 0"
                     class="store-row"
@@ -327,8 +376,8 @@
                 </div>
             </article>
 
-            <!-- Year-over-year spend -->
-            <article class="report-card">
+            <!-- Year-over-year spend — money-gated (FU-816). -->
+            <article v-if="moneyEnabled" class="report-card">
                 <header class="report-card-head">
                     <q-icon :name="ICONS.compare_arrows" size="22px" class="report-card-icon" />
                     <h3 class="report-card-title">
@@ -354,6 +403,11 @@
                 <div v-if="loading.spendYoY" class="report-card-loading">
                     <AppSpinner size="32px" />
                 </div>
+                <CardLoadError
+                    v-else-if="slotFailed('spendYoY')"
+                    line="I couldn't load the year-over-year comparison."
+                    @retry="loadSpendYoY"
+                />
                 <div v-else-if="range === 'all'" class="report-empty">
                     Pick a bounded range (30d–5y) to compare it against
                     the same-length prior window.
@@ -405,15 +459,15 @@
                 </div>
             </article>
 
-            <!-- Price trends -->
-            <article class="report-card report-card-wide">
+            <!-- Price trends — needs money AND products (FU-816). -->
+            <article v-if="productMoneyEnabled" class="report-card report-card-wide">
                 <header class="report-card-head">
                     <q-icon :name="ICONS.query_stats" size="22px" class="report-card-icon" />
                     <h3 class="report-card-title">Price trends</h3>
                 </header>
                 <div class="price-picker">
                     <q-select
-                        v-model="selectedProductIds"
+                        :model-value="selectedProductIds"
                         :options="productOptions"
                         option-value="value"
                         option-label="label"
@@ -428,12 +482,17 @@
                         clearable
                         label="Pick up to 5 products"
                         @filter="filterProducts"
-                        @update:model-value="loadPriceTrends"
+                        @update:model-value="onProductSelection"
                     />
                 </div>
                 <div v-if="loading.priceTrends" class="report-card-loading">
                     <AppSpinner size="32px" />
                 </div>
+                <CardLoadError
+                    v-else-if="slotFailed('priceTrends')"
+                    line="I couldn't load these price trends."
+                    @retry="loadPriceTrends"
+                />
                 <v-chart
                     v-else-if="(priceTrends?.series.length ?? 0) > 0 && priceTrendsHasPoints"
                     class="report-chart"
@@ -464,8 +523,11 @@
     import { use } from 'echarts/core';
     import { CanvasRenderer } from 'echarts/renderers';
     import { Notify } from 'quasar';
-    import { useProductStore } from 'src/stores/productStore';
-    import { storeToRefs } from 'pinia';
+    import CardLoadError from 'src/components/dashboard/CardLoadError.vue';
+    import ProductApiService from 'src/services/api/productApiService';
+    import { storeColour } from 'src/style/storeSwatch';
+    import { useFeatureFlags } from 'src/composables/useFeatureFlags';
+    import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
     import ReportsApiService, {
         type KeepsRunningOutResponse,
         type StoreSpendResponse,
@@ -481,7 +543,7 @@
     } from 'src/services/api/reportsApiService';
     import StockItemApiService from 'src/services/api/stockItemApiService';
     import WasteApiService, { type WasteInsights } from 'src/services/api/wasteApiService';
-    import { computed, onMounted, ref } from 'vue';
+    import { computed, onMounted, ref, watch } from 'vue';
     // FU-824 — reactive theme-token reads; replaces the dead `themeTick` ref.
     import { paletteToken } from 'src/composables/useThemePalette';
     import VChart from 'vue-echarts';
@@ -501,10 +563,10 @@
     const reportsApi = new ReportsApiService();
     const stockApi = new StockItemApiService();
     const wasteApi = new WasteApiService();
-    // products read through the store so a save on product-search
-    // is visible here without a hard refresh (R-003).
-    const productStore = useProductStore();
-    const { products: allProducts } = storeToRefs(productStore);
+    // The picker searches the catalogue server-side rather than filtering a
+    // hydrated page in the browser, so it talks to the API service directly —
+    // there is no shared client-side product collection left to keep in sync.
+    const productApi = new ProductApiService();
 
     const RANGE_OPTIONS: { label: string; value: ReportRange }[] = [
         { label: '30 days', value: '30d' },
@@ -519,7 +581,28 @@
     ];
 
     const range = ref<ReportRange>('30d');
-    const loadError = ref<string | null>(null);
+
+    // ── Feature gates (FU-816) ───────────────────────────────────────────
+    // This page imported no feature flag at all, so an install that had turned
+    // money off still got spend by store, savings, spend by category,
+    // year-over-year, price trends and two dollar-formatted chart axes — the
+    // one significant surface in the app still contradicting the owner's own
+    // "money must be switchable off" feedback. The endpoints refuse with 403
+    // now too (R-058); these gates stop us asking.
+    //
+    // The nav entry stays unconditional on purpose: most-bought,
+    // keeps-running-out, wastage and meals-cooked are all count-based and
+    // survive a money-off install, so hiding the page would cost four working
+    // reports to gate six.
+    const { moneyEnabled } = useMoneyEnabled();
+    const { products: productsEnabled } = useFeatureFlags();
+    // Savings and price trends need both: savings is only ever non-zero if you
+    // pick product offers, and price trends charts products by definition. B9
+    // — don't render a card whose empty state tells the user to go and use a
+    // feature they opted out of.
+    const productMoneyEnabled = computed(
+        () => moneyEnabled.value && productsEnabled.value,
+    );
 
     const loading = ref({
         stockValue: false,
@@ -552,23 +635,64 @@
     // window returned by the server so what you see matches what's real.
     const waste = ref<WasteInsights | null>(null);
 
+    // ── Per-card failure (REPORTS_PAGE_REVIEW.md finding 8) ──────────────
+    // Every loader used to let a failed fetch fall through to the card's EMPTY
+    // state, so a 500 on the waste endpoint rendered "Nothing wasted in this
+    // range — nicely played" and a failed spend fetch rendered "no completed
+    // shopping lists". The page congratulated you on data it could not load.
+    // Same fix, same component and same reasoning as the dashboard's Chunk 4:
+    // failure is visible, per-card, and retryable where it happened.
+    type SlotId = keyof typeof loading.value;
+    const slotErrors = ref<Set<SlotId>>(new Set());
+    function slotFailed(id: SlotId): boolean {
+        return slotErrors.value.has(id);
+    }
+    /** Run one card's fetch, recording success or failure against its id.
+     *  Never throws — one bad card must not take the page down, which is what
+     *  the old blanket catch was protecting; the difference is that the failure
+     *  is no longer laundered into an empty state. */
+    async function loadSlot(id: SlotId, run: () => Promise<void>): Promise<void> {
+        loading.value[id] = true;
+        try {
+            await run();
+            if (slotErrors.value.has(id)) {
+                const next = new Set(slotErrors.value);
+                next.delete(id);
+                slotErrors.value = next;
+            }
+        } catch (err) {
+            // Logged, not swallowed: the console is how a self-hosting owner
+            // finds out which endpoint is unhappy.
+            console.warn(`reports card "${id}" failed to load`, err);
+            const next = new Set(slotErrors.value);
+            next.add(id);
+            slotErrors.value = next;
+        } finally {
+            loading.value[id] = false;
+        }
+    }
+
     const selectedProductIds = ref<string[]>([]);
     const productOptions = ref<{ label: string; value: string }[]>([]);
 
-    function filterProducts(input: string, doneFn: (cb: () => void) => void) {
-        const needle = input.trim().toLowerCase();
-        doneFn(() => {
-            const matches = needle.length === 0
-                ? allProducts.value
-                : allProducts.value.filter((p) =>
-                    p.name.toLowerCase().includes(needle)
-                    || (p.store_name ?? '').toLowerCase().includes(needle),
-                );
-            productOptions.value = matches.slice(0, 50).map((p) => ({
+    // FU-668, third instance. This used to filter `allProducts` — the store's
+    // hydrated first page — in the browser, and `GET /products` is paginated at
+    // 50, so product 51 onward was unsearchable with nothing on screen saying
+    // so. The needle now goes to the server. Store name is no longer part of
+    // the match (it lives on the Store row, not the Product), which is the one
+    // capability traded for seeing the whole catalogue.
+    async function filterProducts(input: string, doneFn: (cb: () => void) => void) {
+        let matches: { label: string; value: string }[] = [];
+        try {
+            const page = await productApi.searchAsync(input, 20);
+            matches = page.items.map((p) => ({
                 label: `${p.name} · ${p.store_name}`,
                 value: p.product_id,
             }));
-        });
+        } catch (err) {
+            console.warn('product search failed', err);
+        }
+        doneFn(() => { productOptions.value = matches; });
     }
 
     // ── Chart options ────────────────────────────────────────────────────
@@ -615,11 +739,44 @@
         };
     });
 
+    /** Categorical colour for a bucket that has no colour of its own — a stock
+     *  group, in practice. Deterministic so a group keeps its hue between
+     *  renders.
+     *
+     *  FU-814 item 2: this used to colour **stores** as well, hashing the store
+     *  name into the chart ramp, so Woolworths was its logo green on the
+     *  shopping list and whatever the hash landed on here. Stores now go
+     *  through `storeColour`, whose own header comment documents this exact bug
+     *  being fixed for the other two consumers. Do not put a store back in
+     *  here. */
     function colourFor(key: string): string {
         let hash = 0;
         for (let i = 0; i < key.length; i++) hash = (hash * 31 + key.charCodeAt(i)) | 0;
         const series = chartPalette.value.series;
         return series[Math.abs(hash) % series.length]!;
+    }
+
+    /** The one store-colour authority, shared with `StoreLogo` and the shopping
+     *  list's spend card: the logo's brand colour first, a deterministic name
+     *  hash only as a fallback.
+     *
+     *  The **no-store bucket is not a store** and must not be handed a store
+     *  identity colour — driving this live, the "No store set" row drew the
+     *  same slate as the farmers market directly above it, because the hash
+     *  palette is a sealed six and two names can land on one entry. The
+     *  shopping list solves the same problem with a hatched grey (D-001: never
+     *  distinguish by hue alone); here it takes the muted text token, which is
+     *  visibly not one of the identity hues. Full parity with the hatch comes
+     *  when the donut is replaced by that card's bar (§4.6, chunk 3). */
+    function storeRowColour(
+        row: { store_id: string | null; store: string; brand_colour: string | null },
+    ): string {
+        // Resolved, not a `var()` string: the same function feeds the donut,
+        // and a canvas fill cannot resolve a custom property.
+        if (row.store_id === null) {
+            return normaliseColour(paletteToken('--text-muted', '#6b7280'));
+        }
+        return storeColour(row.store, row.brand_colour);
     }
 
     const stockValueOption = computed(() => ({
@@ -630,7 +787,12 @@
             data: stockValue.value?.points.map((p) => p.date) ?? [],
             axisLabel: { fontSize: 10 },
         },
-        yAxis: { type: 'value', axisLabel: { formatter: '${value}' } },
+        // R-003 / D-006 — one money-formatting authority. A hard-coded `$`
+        // prefix here gave a non-AUD install correct legends and lying axes.
+        yAxis: {
+            type: 'value',
+            axisLabel: { formatter: (value: number) => formatMoney(value) },
+        },
         series: [{
             type: 'line',
             smooth: true,
@@ -652,7 +814,7 @@
             data: (storeSpend.value?.rows ?? []).map((row) => ({
                 name: row.store,
                 value: row.spend,
-                itemStyle: { color: colourFor(row.store) },
+                itemStyle: { color: storeRowColour(row) },
             })),
         }],
     }));
@@ -733,7 +895,12 @@
             legend: { bottom: 0, type: 'scroll' },
             grid: { left: 50, right: 16, top: 24, bottom: 40 },
             xAxis: { type: 'category', data: dates, axisLabel: { fontSize: 10 } },
-            yAxis: { type: 'value', axisLabel: { formatter: '${value}' } },
+            // R-003 / D-006 — one money-formatting authority. A hard-coded `$`
+        // prefix here gave a non-AUD install correct legends and lying axes.
+        yAxis: {
+            type: 'value',
+            axisLabel: { formatter: (value: number) => formatMoney(value) },
+        },
             series: series.map((s) => {
                 const byDate = new Map(s.points.map((p) => [p.date, p.unit_price]));
                 return {
@@ -750,69 +917,76 @@
     });
 
     // ── Loaders ──────────────────────────────────────────────────────────
+    // A gated-off card must not fetch: the endpoint would 403 (R-058) and the
+    // card would render a load failure for a report the install deliberately
+    // does not have.
     async function loadStockValue() {
-        loading.value.stockValue = true;
-        try { stockValue.value = await reportsApi.getStockValueAsync(range.value); }
-        finally { loading.value.stockValue = false; }
+        if (!moneyEnabled.value) { stockValue.value = null; return; }
+        await loadSlot('stockValue', async () => {
+            stockValue.value = await reportsApi.getStockValueAsync(range.value);
+        });
     }
     async function loadStoreSpend() {
-        loading.value.storeSpend = true;
-        try { storeSpend.value = await reportsApi.getSpendByStoreAsync(range.value); }
-        finally { loading.value.storeSpend = false; }
+        if (!moneyEnabled.value) { storeSpend.value = null; return; }
+        await loadSlot('storeSpend', async () => {
+            storeSpend.value = await reportsApi.getSpendByStoreAsync(range.value);
+        });
     }
     async function loadMostBought() {
-        loading.value.mostBought = true;
-        try { mostBought.value = await reportsApi.getMostBoughtAsync(range.value); }
-        finally { loading.value.mostBought = false; }
+        await loadSlot('mostBought', async () => {
+            mostBought.value = await reportsApi.getMostBoughtAsync(range.value);
+        });
     }
     async function loadKeepsOut() {
-        loading.value.keepsOut = true;
-        try { keepsOut.value = await reportsApi.getKeepsRunningOutAsync(); }
-        finally { loading.value.keepsOut = false; }
+        // Passes the page's range now (§3.5 / D7) — the card sat under a
+        // control saying "30 days" while counting all history, forever.
+        await loadSlot('keepsOut', async () => {
+            keepsOut.value = await reportsApi.getKeepsRunningOutAsync(10, range.value);
+        });
     }
     async function loadSavings() {
-        loading.value.savings = true;
-        try { savings.value = await reportsApi.getSavingsCapturedAsync(range.value); }
-        finally { loading.value.savings = false; }
+        if (!productMoneyEnabled.value) { savings.value = null; return; }
+        await loadSlot('savings', async () => {
+            savings.value = await reportsApi.getSavingsCapturedAsync(range.value);
+        });
     }
     async function loadPriceTrends() {
+        if (!productMoneyEnabled.value) { priceTrends.value = null; return; }
         if (selectedProductIds.value.length === 0) {
             priceTrends.value = null;
             return;
         }
-        loading.value.priceTrends = true;
-        try {
+        await loadSlot('priceTrends', async () => {
             priceTrends.value = await reportsApi.getPriceTrendsAsync(
                 selectedProductIds.value, range.value,
             );
-        }
-        finally { loading.value.priceTrends = false; }
+        });
+    }
+    /** `clearable` on a `multiple` q-select emits `null`, not `[]`, and the old
+     *  handler read `.length` off it on the next line — clicking the clear
+     *  affordance threw. Normalise at the boundary rather than making every
+     *  reader null-aware. */
+    function onProductSelection(value: string[] | null) {
+        selectedProductIds.value = value ?? [];
+        void loadPriceTrends();
     }
     async function loadProductsCatalogue() {
-        try {
-            // hydrate via the store so other surfaces see the same
-            // product list (R-003). The page-local `productOptions` is just
-            // a derived display slice, not a shadow of the catalog.
-            await productStore.getProductsAsync();
-            productOptions.value = allProducts.value.slice(0, 50).map((p) => ({
-                label: `${p.name} · ${p.store_name}`,
-                value: p.product_id,
-            }));
-        } catch {
-            productOptions.value = [];
-        }
+        // Seeds the picker before the user types. Empty needle ⇒ the server's
+        // first page, same as any other search.
+        await filterProducts('', (assign) => assign());
     }
 
     // ── P8-09 memory loaders ────────────────────────────────────────
     async function loadMealsCooked() {
-        loading.value.mealsCooked = true;
-        try { mealsCooked.value = await reportsApi.getMealsCookedAsync(range.value, 10); }
-        finally { loading.value.mealsCooked = false; }
+        await loadSlot('mealsCooked', async () => {
+            mealsCooked.value = await reportsApi.getMealsCookedAsync(range.value, 10);
+        });
     }
     async function loadSpendByCategory() {
-        loading.value.spendByCategory = true;
-        try { spendByCategory.value = await reportsApi.getSpendByCategoryAsync(range.value); }
-        finally { loading.value.spendByCategory = false; }
+        if (!moneyEnabled.value) { spendByCategory.value = null; return; }
+        await loadSlot('spendByCategory', async () => {
+            spendByCategory.value = await reportsApi.getSpendByCategoryAsync(range.value);
+        });
     }
     // Reason tiles for the Wastage card — one per canonical waste reason.
     // Zero-count tiles still render (dimmed) so the grid stays a stable
@@ -839,11 +1013,12 @@
         '30d': 30, '90d': 90, '1y': 365, '2y': 730, '5y': 1825, 'all': 3650,
     };
     async function loadWaste() {
-        loading.value.waste = true;
-        try { waste.value = await wasteApi.getInsightsAsync(RANGE_TO_DAYS[range.value]); }
-        finally { loading.value.waste = false; }
+        await loadSlot('waste', async () => {
+            waste.value = await wasteApi.getInsightsAsync(RANGE_TO_DAYS[range.value]);
+        });
     }
     async function loadSpendYoY() {
+        if (!moneyEnabled.value) { spendYoY.value = null; return; }
         // YoY skips the "all" range — it needs a bounded window to
         // compare against the same-length prior window. Blank the card
         // when the user's chosen "all" so it can render an explanation.
@@ -851,33 +1026,30 @@
             spendYoY.value = null;
             return;
         }
-        loading.value.spendYoY = true;
-        try {
+        await loadSlot('spendYoY', async () => {
             spendYoY.value = await reportsApi.getSpendYearOverYearAsync(
                 range.value as YoYReportRange,
             );
-        }
-        finally { loading.value.spendYoY = false; }
+        });
     }
 
+    // No page-level error banner: each loader records its own failure, so the
+    // reader can see exactly which parts of the page to trust. A banner over
+    // ten cards said "something here is wrong" without saying what, while the
+    // failed card underneath still read as empty.
     async function loadAll() {
-        loadError.value = null;
-        try {
-            await Promise.all([
-                loadStockValue(),
-                loadStoreSpend(),
-                loadMostBought(),
-                loadKeepsOut(),
-                loadSavings(),
-                loadPriceTrends(),
-                loadMealsCooked(),
-                loadSpendByCategory(),
-                loadSpendYoY(),
-                loadWaste(),
-            ]);
-        } catch {
-            loadError.value = 'Could not load reports. Try refreshing.';
-        }
+        await Promise.all([
+            loadStockValue(),
+            loadStoreSpend(),
+            loadMostBought(),
+            loadKeepsOut(),
+            loadSavings(),
+            loadPriceTrends(),
+            loadMealsCooked(),
+            loadSpendByCategory(),
+            loadSpendYoY(),
+            loadWaste(),
+        ]);
     }
 
     function goToStock(id: string) {
@@ -908,6 +1080,28 @@
             });
         }
     }
+
+    // FU-586's failure mode, found in the browser on this page's first live
+    // run: the gates read the once-per-document `/api/health` probe, which had
+    // NOT resolved when the page mounted — so every gated loader early-returned
+    // and only the three count-based reports fetched, while the money cards
+    // rendered their *empty* state as if the household had never shopped.
+    // Nothing re-ran them when the flags landed. The dashboard hit this exactly
+    // once before and fixed it the same way; re-fire only the gated loaders on
+    // a gate turning on. On a warm navigation the gate is already true at
+    // mount, `loadAll` fetches normally, and these never fire.
+    watch(moneyEnabled, (on) => {
+        if (!on) return;
+        void loadStockValue();
+        void loadStoreSpend();
+        void loadSpendByCategory();
+        void loadSpendYoY();
+    });
+    watch(productMoneyEnabled, (on) => {
+        if (!on) return;
+        void loadSavings();
+        void loadPriceTrends();
+    });
 
     onMounted(() => {
         void loadProductsCatalogue();
@@ -1130,6 +1324,8 @@
         margin-top: 12px;
     }
     .price-picker { margin-bottom: 12px; }
+    /* R-041 coverage note — sits under the card body, not inside it. */
+    .report-coverage { margin-top: 12px; }
 
     /* P8-09 memory section ─────────────────────────────────────── */
     .reports-memory-band {

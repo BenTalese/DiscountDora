@@ -731,6 +731,18 @@ design-rule or architecture debt.
 
 ## 7 · Recommended sequencing
 
+> **Build status (2026-09-02): Chunks 1 and 2 are done, green and driven live.**
+> FU-816, FU-815 and FU-813 are resolved; FU-814 items 2/3 closed (item 4 landed
+> with dashboard chunk 6; item 1 waits for chunk 3, below). Findings 1, 2, 3, 4,
+> 5, 6, 8, 10, 17 are fixed; finding 11 (`themeTick`) was already fixed by
+> FU-824 before this build started. **Two things the static review could not
+> have found, both caught by driving it:** the gates were a *race* against the
+> `/api/health` probe, so on a cold load every money card rendered its **empty**
+> state (FU-586 on a second page → **FU-844**); and the store legend drew "No
+> store set" in the *same* colour as a real store, because the hash palette is a
+> sealed six (→ **FU-843**, with the categorical ramp's own collision). Chunk 3
+> is next and is unaffected by both.
+
 **Chunk 1 — gate it.** Money and products gates on the cards and the nav entry,
 matching the dashboard's `cardAvailable`. Small, non-negotiable, and it closes an
 outstanding contradiction with the owner's own feedback.

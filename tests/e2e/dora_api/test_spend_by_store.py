@@ -15,6 +15,8 @@ import uuid
 
 import requests
 
+from tests.support import set_money_enabled
+
 BASE = "http://localhost:5170/api"
 STORES = f"{BASE}/stores"
 PRODUCTS = f"{BASE}/products"
@@ -24,6 +26,9 @@ SPEND = f"{BASE}/reports/spend-by-store"
 
 
 def test__spend_by_store__honours_actual_unit_price_over_picked(api):
+    # The report answers in dollars, so it 403s on a money-off install
+    # (FU-816 / R-058) — and a fresh install is money-off.
+    set_money_enabled(True)
     # Unique store + product so this test's spend is isolated from
     # whatever the dev seed already wrote against Woolworths/Coles/etc.
     suffix = uuid.uuid4().hex[:8]

@@ -2,7 +2,24 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
+import requests
+
 from tests.db_backend import IS_POSTGRES
+
+
+def set_money_enabled(enabled: bool) -> None:
+    """Flip the install-wide money switch (`AppSetting.money_enabled`).
+
+    FU-816 — the dollar-answering report endpoints refuse with 403 when money
+    is off (R-058), and money is **off** on a fresh install, so any test that
+    reads one has to turn it on first. Lives here rather than being re-typed
+    per file because three e2e modules need it.
+    """
+    response = requests.patch(
+        "http://localhost:5170/api/app-settings",
+        json={"money_enabled": enabled},
+    )
+    assert response.status_code in (200, 204), response.text
 
 
 # ── Shared response matchers (FU-169 / PROPOSAL_TEST_SUITE_IMPROVEMENTS §C)

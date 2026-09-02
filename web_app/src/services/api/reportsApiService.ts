@@ -142,6 +142,15 @@ export interface MealsCookedResponse {
     range: ReportRange;
     cook_count: number;
     meals_total: number;
+    /** Distinct recipes cooked in the range. A different fact from `cook_count`
+     *  — "14 cooks, 9 different recipes" — and the one that sends you back to
+     *  the cookbook (REPORTS_PAGE_REVIEW.md §3.8). */
+    distinct_recipes: number;
+    /** Repertoire, deliberately NOT range-scoped: these two are facts about the
+     *  cookbook, measured over the last 365 days, so a 30-day view doesn't
+     *  report that you've abandoned almost everything you own. */
+    total_recipes: number;
+    uncooked_recipes: number;
     top_recipes: MealsCookedTopRow[];
     timeline: MealsCookedBucketPoint[];
 }

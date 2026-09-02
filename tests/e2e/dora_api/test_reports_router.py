@@ -477,13 +477,40 @@ def test__meals_cooked__RecipeCookedTwice__CountsEventsAndPortionsSeparately(api
     ).json()
 
     assert set(body.keys()) == {
-        "range", "cook_count", "meals_total", "top_recipes", "timeline",
+        "range", "cook_count", "meals_total", "distinct_recipes",
+        "total_recipes", "uncooked_recipes", "top_recipes", "timeline",
     }
     top = next(r for r in body["top_recipes"] if r["recipe_id"] == recipe_id)
     assert top["recipe_name"] == f"{token} stew"
     assert top["cook_count"] == 2      # two cooking sessions...
     assert top["meals_total"] == 5     # ...feeding five meals total
     assert body["cook_count"] >= 2
+
+
+def test__meals_cooked__Repertoire__CountsDistinctRecipesAndTheUntouchedTail(api):
+    # §3.8 — "14 cooks" and "9 different recipes" are different facts, and only
+    # the second one sends you back to the cookbook. Two cooks of ONE recipe is
+    # the case that separates them.
+    token = _token()
+    recipe_id = requests.post(
+        f"{BASE}/recipes", json={"name": f"{token} laksa"},
+    ).json()["recipe_id"]
+    for meals in (2, 2):
+        requests.post(f"{BASE}/recipes/{recipe_id}/cook", json={"meals_cooked": meals})
+    # A second recipe that is never cooked — it must land in the untouched tail.
+    requests.post(f"{BASE}/recipes", json={"name": f"{token} never made"})
+
+    body = requests.get(
+        f"{REPORTS}/meals-cooked", params={"range": "all", "limit": 50},
+    ).json()
+
+    assert body["distinct_recipes"] < body["cook_count"]
+    assert body["total_recipes"] >= 2
+    # The uncooked tail is a fact about the cookbook, NOT about the range — it
+    # is always measured over the last 365 days, so a 30-day view doesn't report
+    # that you've abandoned almost everything you own.
+    assert body["uncooked_recipes"] >= 1
+    assert body["uncooked_recipes"] <= body["total_recipes"]
     assert body["meals_total"] >= 5
     assert sum(p["cook_count"] for p in body["timeline"]) == body["cook_count"]
 

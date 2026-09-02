@@ -29,15 +29,7 @@
                      items but no value still get a floor width so they can't
                      vanish from a bar whose own legend lists them; see
                      `segments`. -->
-                <div v-if="segments.length > 0" class="sl-store-bar" role="presentation">
-                    <div
-                        v-for="seg in segments"
-                        :key="seg.key"
-                        class="sl-store-bar__seg"
-                        :class="{ 'sl-store-bar__seg--unassigned': seg.isUnassigned }"
-                        :style="{ width: `${seg.width}%`, background: seg.colour }"
-                    />
-                </div>
+                <ProportionBar :segments="segments" />
             </div>
 
             <div class="q-pt-xs">
@@ -92,6 +84,7 @@
     import { computed } from 'vue';
     import { ICONS } from 'src/style/icons';
     import CollapsibleCard from 'src/components/CollapsibleCard.vue';
+    import ProportionBar from 'src/components/ProportionBar.vue';
     import { formatMoney } from 'src/composables/useMoney';
     import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
     import { storeColour } from 'src/style/storeSwatch';
@@ -145,56 +138,26 @@
         return moneyEnabled.value ? bucket.subtotal : bucket.line_count;
     }
 
-    /** Floor width for a bucket that has items but nothing to weigh them by.
-     *  Enough to read as a segment at a phone's width, small enough that it
-     *  doesn't misrepresent a bucket carrying two unpriced items as a big
-     *  share of the shop. */
-    const MIN_SEGMENT_PCT = 7;
-
     /**
-     * The bar's segments, with widths already resolved.
-     *
-     * Why this isn't just `value / total` inline: with money **on**, a bucket's
-     * width is its *spend*, and a bucket can hold items while contributing no
-     * money — the "No store set" catch-all whose lines are unpriced, or a real
-     * store whose lines you haven't priced yet. Those computed to `0%` and
-     * vanished from the bar while still being listed as a chip underneath it,
-     * so the bar quietly disagreed with its own legend (2026-08-28 owner
-     * feedback: *"also allocate space for 'no store'"*).
-     *
-     * So every bucket that has lines gets at least `MIN_SEGMENT_PCT`, and the
-     * buckets that do carry value share what's left in true proportion. The
-     * segments still sum to 100%, and the money comparison between two priced
-     * stores stays honest — only the "this exists" floor is synthetic.
+     * The bar's segments. The **widths** — including the floor that stops a
+     * bucket with items but no value from vanishing out of a bar whose own
+     * legend still lists it (2026-08-28 owner feedback: *"also allocate space
+     * for 'no store'"*) — now live in `ProportionBar`, shared with Reports so
+     * the two surfaces draw one dataset one way (R-001). What stays here is the
+     * only part that is this card's business: *what* each segment is weighed
+     * by, which is spend when money is on and item count when it isn't.
      */
-    const segments = computed(() => {
-        const present = props.buckets.filter((b) => b.line_count > 0);
-        const valued = present.filter((b) => barValue(b) > 0);
-        const total = valued.reduce((sum, b) => sum + barValue(b), 0);
-
-        // Nothing anywhere has a value (money on, nothing priced yet): there is
-        // no proportion to draw, so show the buckets as equal presences rather
-        // than inventing a ranking out of item counts the bar isn't measuring.
-        if (valued.length === 0) {
-            return present.map((b) => ({
+    const segments = computed(() =>
+        props.buckets
+            .filter((b) => b.line_count > 0)
+            .map((b) => ({
                 key: b.store_id ?? '__none__',
-                width: 100 / present.length,
+                label: b.store_name,
+                value: barValue(b),
                 colour: segmentColour(b),
                 isUnassigned: b.store_id === null,
-            }));
-        }
-
-        const floors = (present.length - valued.length) * MIN_SEGMENT_PCT;
-        const share = (100 - floors) / 100;
-        return present.map((b) => ({
-            key: b.store_id ?? '__none__',
-            width: barValue(b) > 0
-                ? (barValue(b) / total) * 100 * share
-                : MIN_SEGMENT_PCT,
-            colour: segmentColour(b),
-            isUnassigned: b.store_id === null,
-        }));
-    });
+            })),
+    );
 
     const unpricedCount = computed(() =>
         props.buckets.reduce((sum, b) => sum + (b.line_count - b.priced_line_count), 0)
@@ -269,42 +232,6 @@
     }
     .sl-store-card__title {
         min-height: 44px;
-    }
-    .sl-store-bar {
-        display: flex;
-        height: 8px;
-        border-radius: 4px;
-        overflow: hidden;
-        background: var(--surface-sunken);
-    }
-    .sl-store-bar__seg {
-        height: 100%;
-        min-width: 2px;
-    }
-    /* The catch-all: a themed grey, hatched.
-
-       The grey alone is `--border-strong`, the neutral every theme defines to
-       be seen against a surface — which is right in light themes and measurably
-       wrong in dark ones. Measured against the store fills either side of it:
-       3.55:1 in Pesto light, but **1.19:1** in Pesto Dark and **1.02:1** in
-       Cherry Cola Dark, i.e. the same lightness as its neighbour. That isn't
-       fixable by picking a better grey, because the fills it competes with are
-       partly *logo-derived brand colours* — arbitrary, and free to be grey
-       themselves. No single neutral can be guaranteed to separate from them.
-
-       So the segment is distinguished by **texture**, which no neighbouring
-       colour can collide with, and which says the right thing: a hatch reads as
-       unallocated rather than as one more store. Both stripe colours are theme
-       tokens, so it inverts correctly — dark stripes on grey in light themes,
-       light stripes on grey in dark ones. Colour is still carrying the message
-       for anyone who sees it, but it is no longer carrying it alone (D-001). */
-    .sl-store-bar__seg--unassigned {
-        background-color: var(--border-strong);
-        background-image: repeating-linear-gradient(
-            135deg,
-            transparent 0 3px,
-            var(--surface-component) 3px 5px
-        );
     }
     .sl-store-chip {
         background: var(--surface-sunken);

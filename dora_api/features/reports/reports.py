@@ -62,6 +62,7 @@ from dora_api.domain.entities.shopping_list import (SHOPPING_LIST_STATUS_DONE,
                                                     ShoppingList,
                                                     ShoppingListLine)
 from dora_api.domain.entities.cook_event import CookEvent
+from dora_api.domain.entities.recipe import Recipe
 from dora_api.domain.entities.stock_group import StockGroup
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.entities.stock_level import StockLevel
@@ -1187,8 +1188,10 @@ class MealsCookedHandler:
             return {
                 "cook_count": 0,
                 "meals_total": 0,
+                "distinct_recipes": 0,
                 "top_recipes": [],
                 "timeline": [],
+                **self._repertoire(),
             }
 
         # Top-N recipes by cook_count (with meals_total as tiebreak signal
@@ -1256,8 +1259,44 @@ class MealsCookedHandler:
         return {
             "cook_count": len(rows),
             "meals_total": sum(int(r.meals_cooked or 0) for r in rows),
+            # REPORTS_PAGE_REVIEW.md §3.8 — repertoire is the thing this report
+            # is uniquely able to say and never did: "9 different recipes" is a
+            # different fact from "14 cooks", and it is the one that sends you
+            # back to the cookbook. Counted the same way `top_recipes` groups —
+            # by recipe_id when there is one, else the denormalised name, so a
+            # deleted recipe still counts as something you cooked.
+            "distinct_recipes": len(by_key),
             "top_recipes": [asdict(r) for r in top_rows],
             "timeline": [asdict(p) for p in timeline],
+            **self._repertoire(),
+        }
+
+    def _repertoire(self) -> dict:
+        """How much of the cookbook is actually in rotation.
+
+        Deliberately **not** range-bounded, unlike everything else in this
+        handler: "you have 40 recipes and haven't cooked 31 of them in a year"
+        is a fact about the cookbook, not about the window the user picked, and
+        re-scoping it to a 30-day range would make it say "you haven't cooked 38
+        of them" every month — true, useless, and alarming.
+        """
+        session = self.repository.session
+        total_recipes = session.execute(
+            select(func.count(Recipe.id))
+        ).scalar_one()
+        a_year_ago = datetime.now(timezone.utc) - timedelta(days=365)
+        cooked_recently = {
+            row[0] for row in session.execute(
+                select(CookEvent.recipe_id).where(
+                    CookEvent.recipe_id.isnot(None),
+                    CookEvent.occurred_at >= a_year_ago,
+                )
+            ).all()
+        }
+        return {
+            "total_recipes": int(total_recipes),
+            # Saved recipes with no cook event in the last 365 days.
+            "uncooked_recipes": max(0, int(total_recipes) - len(cooked_recently)),
         }
 
 

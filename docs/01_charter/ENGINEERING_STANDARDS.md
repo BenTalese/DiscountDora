@@ -2659,6 +2659,50 @@ exceptions, which still must be commented) · **Source** (where it was establish
   ADR-069.
 
 
+### R-073 — A shared visual primitive takes neutral data; the payload's meaning lives in an adapter
+- **Rule:** a component that *draws* (a chart, a bar, a sparkline, a heatmap) takes
+  a shape expressed in its own vocabulary — lines, segments, values, labels — and
+  knows nothing about the endpoint that produced them. The translation from a
+  domain payload into that vocabulary lives in **one adapter module** beside the
+  types, not inside the component and not copied into each caller. A drawing
+  component must never carry a flag whose name comes from the domain
+  (`offersAsContext`, `isProductView`, `showObservations`).
+- **Why:** the same drawing code always ends up serving a second payload, and the
+  cost of the domain leak is paid at that moment. `PriceHistoryChart.vue` took
+  `PriceHistorySeries[]` — the *product* DTO — and held the interpretation inside
+  the drawing: an `offersAsContext` boolean, an `hasOffers()` fallback deciding
+  whether the user's own observations were drawn at all, and a reach into
+  `your_prices.baseline`. It drew one thing well and could not draw a stock
+  item's history without either a fake product DTO (which is exactly what
+  `PriceHistoryBottomSheet.vue` built: a `product_id` that was a stock-item id, a
+  `store: ''`, two `null` blocks) or a second component. Meanwhile the app carried
+  **ECharts, 549 KB inlined into one route**, to draw a chart it already owned in
+  8 KB. The same shape had just been settled one unit earlier: `ProportionBar`
+  takes `value` and lets the caller decide whether a segment is weighed by spend
+  or by item count — *"a question about the data, not about the bar"*.
+- **Apply:** name the neutral type after the drawing (`PriceChartSeries`,
+  `ProportionSegment`), keep it in the adapter module, and give the component
+  presentation-only props (`legend`, `contextLabel`, `emptyLine`, `ariaLabel`). One
+  exported function per payload (`productSeriesToChart`,
+  `stockItemHistoryToChart`, `trendSeriesToChart`) — those are the natural unit
+  test, since the mapping is pure and a wrong mapping is silent: the chart still
+  draws, it just draws the wrong line. The **empty state stays with the caller**:
+  only the caller knows what the reader should do about it (B9).
+- **Violation signal:** a drawing component importing from `services/api/`; a prop
+  or local named after a domain concept; a caller assembling a DTO it never
+  received in order to satisfy a chart; the same payload reshaped in two callers;
+  a charting dependency whose only consumer is one widget.
+- **Corollary — the a11y dividend:** an SVG primitive can carry `role="img"`, a
+  generated `aria-label`, and a `<desc>` summarising each series; a canvas
+  renderer cannot carry any of it. Consolidating onto one owned primitive is
+  therefore also how a "charts have no text alternative" finding becomes fixable
+  at all, and the summary belongs *in* the primitive, where every consumer gets
+  it — see D-001's channel argument.
+- **Established by:** FU-833, 2026-09-02 — ECharts dropped and
+  `PriceHistoryChart` promoted to the app's one chart, one unit after the same
+  decision was made for `ProportionBar`. Two sightings, one week, two different
+  primitives. See ADR-070.
+
 ## ADR process (evaluate every task)
 
 At the end of each work unit, ask: **did this task make or rely on a decision that
@@ -4810,3 +4854,41 @@ A non-binding cookbook of solutions to recurring problems. Not rules — just a
   the residue this refactor itself deferred — the page-local `--c-*` alias layer
   ([[FU-747]]) — is named rather than left as a comment.
 - **Promotes rule:** R-072.
+
+### ADR-070 — The chart is a drawing primitive, not a product-history widget (promotes R-073)
+- **Context:** `/reports` needed two charts — the product price-trends line it
+  already had, and a new own-item trend for chunk 4 — while carrying ECharts at
+  **549 KB inlined into the Reports route chunk** for the first of them. The app
+  also owned `PriceHistoryChart.vue`: 488 lines of inline SVG doing multi-series
+  polylines, y-ticks, x-labels and a hover crosshair, in **8 KB**, already
+  drawing exactly that chart. It could not be reused as it stood, because its
+  props were the *product* price-history DTO and its drawing logic branched on
+  `offersAsContext` / `hasOffers()`. The evidence that this was a real cost, not
+  a theoretical one: `PriceHistoryBottomSheet.vue` had already resorted to
+  fabricating a product DTO out of a stock item's history to get a chart out of
+  it, with a `product_id` holding a stock-item id.
+- **Options:** (a) keep ECharts and add a second ECharts chart for chunk 4 — the
+  inertia option, and it makes the 549 KB serve two widgets instead of one;
+  (b) build a second SVG chart for stock items — two chart components, guaranteed
+  to drift; (c) generalise the owned chart to a neutral series shape and move
+  payload interpretation into an adapter module.
+- **Decision: (c).** `PriceChartSeries` (`key`, `name`, `points`,
+  `contextPoints`, `baseline`) is the chart's vocabulary; `usePriceChartSeries.ts`
+  holds one adapter per payload; the chart's remaining props are presentation
+  (`legend`, `contextLabel`, `emptyLine`, `ariaLabel`). Four consumers now share
+  it — `/price-history`, the stock item's full-history sheet, Reports' Price
+  trends and Reports' Price changes — and `echarts` + `vue-echarts` are out of
+  `package.json`. **Measured: the Reports route chunk went 549 KB → 24 KB**, plus
+  an 8.5 KB shared chart chunk.
+- **Consequences, including the ones that cost something:** the line is no longer
+  smoothed and a gap in a series is now a gap — both make the chart claim less
+  than ECharts did, which is the point, but they are visible changes. ECharts'
+  `autoresize` is gone, so each host measures its own box and passes a width; that
+  is now the same three-line pattern in four places and is a candidate for a
+  `useMeasuredWidth()` if a fifth appears. Touch interaction is still absent
+  ([[FU-705]]) — the swap neither fixed nor worsened it. In exchange the chart
+  gained a legend (two of three consumers had none; the third hand-rolled one
+  above it) and a text alternative, which is what finally made
+  `REPORTS_PAGE_REVIEW.md` §4.9's "charts with no accessible alternative"
+  fixable: canvas could not carry one.
+- **Promotes rule:** R-073.

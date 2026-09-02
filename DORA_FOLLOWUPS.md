@@ -39,6 +39,84 @@ long session summary. Distinct from the other logs:
 
 ---
 
+## [OPEN] FU-847 — Four hosts now measure their own box to size the SVG chart
+- **Raised:** 2026-09-02 (FU-833 — dropping ECharts)
+- **Type:** finding (R-001)
+- **What:** `PriceHistoryChart` is sized in **px**, not by CSS, so every host
+  measures its own content box with a `ResizeObserver` and passes `:width`.
+  ECharts' `autoresize` did this internally; losing it is the one thing the swap
+  cost. The same ~12 lines (`measure()` + observer + `onBeforeUnmount` cleanup)
+  now exist in **four** places: `PriceHistoryPage.vue`,
+  `PriceHistoryBottomSheet.vue`, `reports/PriceTrendsCard.vue` and
+  `reports/ItemPriceMoversCard.vue`. Two of them differ slightly and for real
+  reasons (one subtracts card padding, one re-attaches when the host appears as
+  the card leaves its empty state), which is exactly how a fourth copy becomes a
+  fifth that is subtly wrong.
+- **Two ways out, and the second is better:** extract `useMeasuredWidth(elRef)`;
+  or teach the chart to fill its container (a `viewBox` + `width: 100%` and
+  internal coordinates in a fixed space), which deletes the prop and the
+  observers together. The second is a change to the chart's coordinate handling
+  and wants its own unit, since `preserveAspectRatio="none"` currently means a
+  CSS-scaled SVG would distort (already noted in
+  `PRICES_SURFACE_UX_ASSESSMENT.md` §5.5).
+- **Why deferred:** ADR-070 called it at the third and fourth copies and chose to
+  ship the swap rather than widen it. Not urgent: the copies work, and they were
+  driven live on all four surfaces.
+- **Recommended resolution:** opportunistic — with [[FU-705]] (the chart's
+  missing touch interaction), since both are changes to the same interaction
+  layer. Cross-ref: ADR-070, R-073, R-001.
+
+## [OPEN] FU-846 — `/price-history`'s per-product cards still read `seriesColour(i)` by list position
+- **Raised:** 2026-09-02 (FU-833)
+- **Type:** finding
+- **What:** the chart assigns a series' colour by its index in the array it is
+  handed; `PriceHistoryPage.vue` colours its picker chips and comparison cards by
+  calling `seriesColour(i)` with the index of *its own* `series` array. Those
+  agree today only because `productSeriesToChart` preserves order 1:1. The moment
+  the chart drops a series with no plottable points — which it already does,
+  `plottable` filters them — the chart's index and the page's index diverge, and
+  a chip is painted the colour of a different product's line. Not currently
+  reachable: the page only lists products the API returned series for, and a
+  series with zero points still renders a card. It is a latent off-by-one, not a
+  live defect.
+- **The fix is to key the colour, not the position:** have the adapter stamp each
+  `PriceChartSeries` with its resolved colour, and let both the chart and the
+  page read `series.colour`. That also kills the "call it inside a reactive
+  scope" caveat on `seriesColour`, since the value would be computed once where
+  the array is built.
+- **Why deferred:** it is not reachable from the current UI, and the fix touches
+  the colour contract for all four consumers — worth doing deliberately rather
+  than inside the ECharts removal.
+- **Recommended resolution:** opportunistic, or with [[FU-843]] item 1 (the
+  categorical ramp's collision), which is the same "who owns a series' colour"
+  question. Cross-ref: R-073, `useThemePalette.seriesColour`.
+
+## [OPEN] FU-845 — Two of §4.10's ten design moves survived the Reports restructure unbuilt
+- **Raised:** 2026-09-02 (Reports chunk 3 close-gate)
+- **Type:** deferred job
+- **What:** `REPORTS_PAGE_REVIEW.md` §4.10 lists ten moves; chunk 3 built eight
+  of them. The two left:
+  1. **#2 — make the range control honest about its window.** Show the resolved
+     dates beside it ("2 Aug – 2 Sep") so "30 days" is concrete. Chunk 3 fixed
+     the half of #2 that was a lie (keeps-running-out now takes the range, waste
+     reports the window the server actually used); what's missing is the
+     *dates*. The API already computes `since` per range, so this is one server
+     field away from being honest rather than a client re-deriving the calendar
+     (R-003).
+  2. **#8 — every number is a door.** N6 asked for this and it has never been
+     built: a store row should filter shopping-list history to that store, a
+     group row should open Stock filtered to that group, the wastage count
+     should open the waste log. Chunk 3 landed the *cheap* half — recipe and
+     stock-item rows in Kitchen memory are links now — so what remains is the
+     aggregate rows, each of which needs a target route that accepts the filter.
+- **Why deferred:** neither is in chunk 3's brief (restructure) or chunk 5's
+  (design-rule sweep: tokens, skeletons, B9, a11y, breakpoints), and #8's real
+  cost is in the *destination* pages accepting a filter param, not in Reports.
+- **Recommended resolution:** later — #2 with chunk 5 (it is a one-line copy
+  change once the server ships the dates); #8 on its own, after chunk 4, since
+  it touches three other pages. Cross-ref: `REPORTS_PAGE_REVIEW.md` §4.10 #2 +
+  #8, [[FU-703]].
+
 ## [OPEN] FU-844 — Two pages have now shipped the same feature-flag race; the guard should be the composable's job
 - **Raised:** 2026-09-02 (Reports chunk 1 — found by driving it live)
 - **Type:** finding (R-003-adjacent)
@@ -68,6 +146,20 @@ long session summary. Distinct from the other logs:
 ## [OPEN] FU-843 — Reports' categorical colour ramp collides at six entries, and the no-store bucket has no hatch
 - **Raised:** 2026-09-02 (Reports chunk 2 — measured live)
 - **Type:** finding (D-001)
+- **PARTIALLY DONE 2026-09-02 (Reports chunk 3). Item (2) is closed; item (1)
+  survives but is smaller than it was.**
+  - **(2) done** — the donut is gone and both spend axes render
+    `ProportionBar`, **extracted from `StoreSpendCard.vue`** so the hatch, the
+    zero-value floor and the unassigned bucket are one implementation rather
+    than a second copy (R-001). Verified live: the no-store segment computes
+    `repeating-linear-gradient(...)` over `--border-strong`, and its legend
+    swatch is hatched to match — parity with the shopping list, not a lookalike.
+  - **(1) still open, and downgraded** — `colourFor` still hashes into a sealed
+    `--chart-1..6`, so two stock groups can still share a hue. What changed is
+    that **colour is no longer the channel that ties a value to a name**: the
+    donut it labelled is gone, and each group is now a labelled row carrying its
+    own name, dollar figure and share. The collision went from misleading to
+    cosmetic. The fix is still to rank-assign rather than hash.
 - **What:** two related colour problems on the two legends, both visible on the
   dense seed at :5171.
   1. **`colourFor` hashes into `--chart-1..6`, so with more than a handful of
@@ -87,9 +179,11 @@ long session summary. Distinct from the other logs:
   with the shopping list's own `.sl-store-bar`, which already solves the
   zero-value bucket, the unassigned bucket **and** the hatch. Building a second
   hatch here would be the third copy of a component the review wants shared.
-- **Recommended resolution:** later — with Reports chunk 3, and specifically with
-  [[FU-833]] (drop ECharts), which is the same edit. Cross-ref:
-  `REPORTS_PAGE_REVIEW.md` §4.6, `StoreSpendCard.vue:154-197`.
+- **Recommended resolution (amended):** item (1) opportunistically, with
+  chunk 5's colour sweep, or [[FU-846]] — which is the same "who owns a series'
+  colour" question, and the better home now that [[FU-833]] has shipped. It is a
+  cosmetic ranking change, not a legibility defect. Cross-ref:
+  `REPORTS_PAGE_REVIEW.md` §4.6, `components/ProportionBar.vue`.
 
 ## [OPEN] FU-841 — `MarkAsWastedDialog`'s tiles remove the focus outline and replace it with their hover state
 - **Raised:** 2026-09-02 (dashboard chunk 6 — found while fixing the same file's
@@ -157,45 +251,6 @@ long session summary. Distinct from the other logs:
   those files, fix its entry and delete it from `KNOWN_UNDECLARED`. Or one
   dedicated sweep unit; either way the test tells you when you're done.
 
-## [OPEN] FU-833 — Drop ECharts; promote `PriceHistoryChart` to the app's chart component
-- **Raised:** 2026-09-02 (owner decision on [[FU-812]])
-- **Type:** deferred job (decided, not started)
-- **What:** remove the `echarts` / `vue-echarts` dependency and draw the surviving
-  Reports charts with the SVG component the app already owns.
-  **Why this is now the cheap option, measured:** ECharts is inlined into the
-  `ReportsPage` route chunk at **549 KB** (`ReportsPage-L-6CPwJ3.js`) and is
-  *already* tree-shaken to `LineChart` + `PieChart` + `CanvasRenderer`
-  (`ReportsPage.vue:457-465`), so removal is the only lever left — while
-  `components/PriceHistoryChart.vue` is **462 lines of inline SVG** (multi-series
-  polylines, y-ticks, hover tooltip, point circles) that builds to **8 KB** and
-  already draws the exact chart price-trends needs.
-  The work:
-  1. **Move price-trends onto `PriceHistoryChart`** (extended as below) — the one
-     genuinely chart-shaped widget on the page.
-  2. **The rest need no library at all**, per `REPORTS_PAGE_REVIEW.md` §4.6: both
-     donuts become the shopping list's CSS proportional bar (`.sl-store-bar`),
-     meals-cooked becomes columns, the savings sparkline becomes a polyline, and
-     stock-value-over-time is cut outright (§3.3).
-  3. **Invest in the component while adopting it** — it has **no legend, no
-     x-ticks, and no `aria`/`role`**. The a11y half is not optional: it is how
-     §4.9's "five canvas charts with no accessible alternative" finding becomes
-     fixable at all, since SVG can carry a title/desc or a visually-hidden data
-     table and canvas cannot.
-  4. **Remove `echarts ^6.1.0` + `vue-echarts ^8.0.1`** from
-     `web_app/package.json`, and drop the now-stale ECharts reference in the
-     `--chart-*` token comment (`tokens.scss:164`).
-  5. **Fold `usePriceHistoryPalette` into [[FU-824]]'s shared `useThemePalette()`.**
-     `seriesColour` reads `--chart-N` off the document with the same one-shot
-     `getComputedStyle` pattern as the donut and Reports' dead `themeTick`, so it
-     is a third instance of the frozen-palette bug and should land on the same
-     reactive fix rather than a fourth copy (R-003).
-- **Why deferred:** it depends on the Reports restructure having picked the
-  surviving chart set, and step 3 is a real (worthwhile) investment rather than a
-  deletion.
-- **Recommended resolution:** later — with or just after Reports chunk 3. Nothing
-  blocks on it. Cross-ref: `REPORTS_PAGE_REVIEW.md` §4.6 + §8 D4, [[FU-812]]
-  (resolved), [[FU-824]].
-
 ## [OPEN] FU-832 — One flat card catalogue + an extracted `useCardLayout()`, shared by the dashboard and Reports
 - **Raised:** 2026-09-02 (owner decision on [[FU-809]])
 - **Type:** deferred job (decided, not started)
@@ -219,8 +274,9 @@ long session summary. Distinct from the other logs:
      dashboard's on the same `User` column — either a second column or a namespaced
      payload (`{dashboard: {...}, reports: {...}}`), which is a migration decision
      to make inside this unit.
-  3. **The `DashboardCard` shell** is already [[FU-814]]'s job; this FU just
-     consumes it.
+  3. **The `DashboardCard` shell** was [[FU-814]]'s job and is **done** (Reports
+     chunk 3, 2026-09-02) — all four Reports cards render `<DashboardCard>`, so
+     this FU just consumes it.
   **The concrete R-003 win:** the money/products **gate facts stop being declared
   twice** — today they are declared once on the dashboard and *zero* times on
   Reports, which is precisely why [[FU-816]] exists.
@@ -232,7 +288,9 @@ long session summary. Distinct from the other logs:
   is a live contradiction with feedback L254 and ships standalone in Reports
   chunk 1; the catalogue later moves those declarations, it does not need to
   introduce them.
-- **Recommended resolution:** later — after FU-830 and Reports chunk 3.
+- **Recommended resolution:** later — **both gating restructures have now
+  landed** (FU-830 on the dashboard; Reports chunk 3 on 2026-09-02, which settled
+  the card set at four), so the blocker this FU was waiting on is gone.
   Cross-ref: `REPORTS_PAGE_REVIEW.md` §3.2 + §8 D1, [[FU-809]] (resolved),
   [[FU-814]], [[FU-830]].
 
@@ -421,53 +479,6 @@ long session summary. Distinct from the other logs:
   open. Not urgent — the score is honest about what it measured, it is just
   measuring the wrong thing for one component out of five. Cross-ref:
   `DASHBOARD_PAGE_REVIEW.md` §3.7.2 + §8 D5, [[FU-823]] (resolved), R-029.
-
-## [OPEN] FU-814 — Reports duplicates `DashboardCard`, `storeColour` and the money formatter
-- **Raised:** 2026-09-02 (reports page PO + engineering review)
-- **Type:** finding
-- **PARTIALLY DONE 2026-09-02 (Reports chunks 1+2). Items (2), (3) and (4) are
-  closed; only item (1), the card-shell fork, is still open.**
-  - **(2) done** — `StoreSpendRow` carries `brand_colour` server-side and the
-    legend + donut call `storeColour(row.store, row.brand_colour)`. Verified live
-    at :5171: Woolworths `rgb(23,136,65)`, Aldi `rgb(0,40,94)`, Coles
-    `rgb(224,26,34)` — the logo colours, matching the shopping list. `colourFor`
-    survives as the **categorical** helper for stock groups only, and now says so.
-  - **(3) done** — both y-axes take `formatter: (v) => formatMoney(v)`.
-  - **(4) done** — landed in the dashboard's chunk 6, in `DashboardCard.vue`
-    itself, so Reports inherits it once the fork goes.
-  - **(1) still open** — the `.report-card*` fork. Deliberately left: §4.2's own
-    fix is "render `<DashboardCard>`", and which cards survive is a chunk-3
-    decision, so un-forking now means restyling cards that are about to merge.
-- **Recommended resolution (amended):** item (1) with the chunk 3 restructure.
-- **What:** three separate duplications on one page. (1) `.report-card*` is a
-  byte-identical copy of `components/dashboard/DashboardCard.vue`'s `.dora-card*`
-  that has since drifted — it lost the hover elevation, the reduced-motion guard,
-  the `#action` styling and the router-link variant (R-001). (2) `colourFor()`
-  (`ReportsPage.vue:612`) hashes store names into `--chart-1..6` instead of
-  calling `storeColour()`, whose own header comment documents this exact bug
-  being fixed for the other two consumers (R-002/D-001); `StoreSpendRow` needs
-  `brand_colour` adding server-side. (3) two chart y-axes hard-code
-  `formatter: '${value}'` (`:627`, `:730`) past `formatMoney`, so a non-AUD
-  install gets correct legends and lying axes (R-003/D-006).
-- **(4) AMENDED 2026-09-02 — the radius/padding correction folded in from
-  [[FU-811]] (resolved).** Owner decided the off-scale values get corrected, not
-  just consolidated: `DashboardCard.vue`'s `border-radius: 18px` →
-  **`--radius-lg` (10px)** and `padding: 18px 20px 20px` → **`--space-4` (16px)**,
-  plus the dashboard hero's own `18px` (`DashboardPage.vue:2329`). Folded here
-  rather than kept as its own FU so `DashboardCard` is touched **once**, not twice.
-  The survey that decided it: counting every `border-radius` in `web_app/src`,
-  **10px appears at 41 sites** (`--radius-lg` ×22 + raw `10px` ×19), 12px at 14,
-  `--radius-xl` (16px) at 2, and **18px at exactly 3** — this component, its fork,
-  and the hero. A4 matches the app; these are the outliers. `--radius-xl` (16px)
-  was rejected as the gentler landing because it would leave the app with two card
-  radii (D-017). **This is a visible change to the dashboard and Reports** — cards
-  get squarer and slightly tighter — so it wants a screenshot pass; a DORA_VERIFY
-  line rides with it when it ships.
-- **Why deferred:** read-only review.
-- **Recommended resolution:** (2) and (3) with the chunk 2 defect pass; (1) and (4)
-  with the chunk 3 restructure, since which cards survive decides how much shell is
-  needed — and (4) should land in the same commit as (1) so the visual change is
-  reviewed once. Cross-ref: `REPORTS_PAGE_REVIEW.md` §4.2 + §8 D3.
 
 ## [OPEN] FU-808 — `space` and `u` are advertised in the shortcut cheatsheet on faces where they do nothing
 - **Raised:** 2026-09-01 (v4 chunk 4 — cutover audit)
@@ -2160,6 +2171,16 @@ Resolved entries carry one extra line, and live in `DORA_FOLLOWUPS_RESOLVED.md`:
   verdict a home next to the price history it reasons from. Weigh it when this
   fork is decided; it changes nothing about the keep/cut call on `/price-history`
   itself.
+- **PARTIALLY ANSWERED IN CODE 2026-09-02 (Reports chunk 4).** D3's *"trend
+  section in Reports"* half is **built**: `/reports` now carries a **Price
+  changes** card driven by a new `GET /reports/item-price-movers`, which ranks
+  the user's own stock items by per-unit price movement inside the range and
+  opens each one into the shared price chart. That answers the **trend** and
+  **triage** jobs from D2 for a household with no product catalogue at all —
+  which is the strongest evidence yet for the fork below, because the everyday
+  price question now has a home that does not involve `/price-history`. Still
+  open and unchanged: the **keep/cut call on the product-keyed surfaces**, and
+  the D3 *"price lens on Stock overview"* half.
 - **Why deferred:** owner's call; it decides whether FU-704…708 are polish on a
   surviving page or throwaway work on one that gets retired.
 - **Recommended resolution:** now-ish, before any of FU-704…708 — it sets their scope.

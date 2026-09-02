@@ -44,7 +44,7 @@ from dora_api.domain.entities.store import Store
 from dora_api.persistence.field import EntityField
 
 
-def _system_from_repo(repo) -> str:
+def measurement_system_from_repo(repo) -> str:
     """Resolve the install-wide measurement system ("metric" / "imperial" /
     "us") from the AppSetting singleton. Falls back to metric if no row exists
     yet (the accessor lazily creates one on first read elsewhere). Single read
@@ -96,10 +96,15 @@ class YourPrices:
     offers_sidecar: list[OfferSidecarEntry]
 
 
-def _per_unit_in_canonical(
+def per_unit_in_canonical(
     *, total_price: float, total_measure: float, unit: str,
 ) -> tuple[float, str] | None:
     """Convert one observation to (per-unit-price, canonical-unit).
+
+    Public (was `_per_unit_in_canonical`) since Reports' item-price-movers
+    report normalises the same observations the same way — R-003 wants one
+    definition of "per-unit price of an observation", not a second one in a
+    reporting handler.
 
     Returns None when the unit is unknown or the measure is zero. The
     canonical unit is the dimension's display denominator
@@ -138,7 +143,7 @@ def build_your_prices_for_item(
          unit. Never contributes to the median.
     """
     _now = now or datetime.now(timezone.utc)
-    _system = system or _system_from_repo(repo)
+    _system = system or measurement_system_from_repo(repo)
 
     observations: list[StockItemPriceObservation] = repo.get(StockItemPriceObservation).all(
         EntityField(
@@ -170,7 +175,7 @@ def build_your_prices_for_item(
     active_dim = latest_def.dimension
     canonical_unit = units.CANONICAL_PRICE_UNIT[active_dim]
 
-    latest_per_unit = _per_unit_in_canonical(
+    latest_per_unit = per_unit_in_canonical(
         total_price=latest.total_price,
         total_measure=latest.total_measure,
         unit=latest.unit,
@@ -209,7 +214,7 @@ def build_your_prices_for_item(
             continue
         if _as_naive_utc(obs.observed_at) < cutoff:
             continue
-        pu = _per_unit_in_canonical(
+        pu = per_unit_in_canonical(
             total_price=obs.total_price,
             total_measure=obs.total_measure,
             unit=obs.unit,
@@ -300,7 +305,7 @@ def build_your_prices_for_product(
         )
 
     _now = now or datetime.now(timezone.utc)
-    _system = system or _system_from_repo(repo)
+    _system = system or measurement_system_from_repo(repo)
     observations: list[StockItemPriceObservation] = repo.get(StockItemPriceObservation).all(
         EntityField(
             StockItemPriceObservation,
@@ -337,7 +342,7 @@ def build_your_prices_for_product(
             continue
         if _as_naive_utc(obs.observed_at) < cutoff:
             continue
-        pu = _per_unit_in_canonical(
+        pu = per_unit_in_canonical(
             total_price=obs.total_price,
             total_measure=obs.total_measure,
             unit=obs.unit,
@@ -345,7 +350,7 @@ def build_your_prices_for_product(
         if pu is not None:
             in_dim_window.append(pu[0])
 
-    latest_pu = _per_unit_in_canonical(
+    latest_pu = per_unit_in_canonical(
         total_price=latest.total_price,
         total_measure=latest.total_measure,
         unit=latest.unit,
@@ -423,7 +428,7 @@ def _resolve_store_names(repo, store_ids: Iterable[UUID | None]) -> dict[UUID, s
     return out
 
 
-def _display_for_series(
+def display_denominator_for_series(
     observations: list[StockItemPriceObservation],
     products: list[Product],
     *,
@@ -432,6 +437,13 @@ def _display_for_series(
     system: str = units.METRIC,
 ) -> tuple[str, float]:
     """Pick the shelf display denominator for a chart series.
+
+    Public (was `_display_for_series`) because Reports' item-price-movers report
+    quotes the same prices for the same items and must use the same
+    denominator: it reported "$24.00/L" for an item whose own chart, one click
+    away, said "$2.40/100ml" — the same price in two languages, which
+    `display_denominator_for`'s own docstring exists to prevent. Found by
+    driving it (R-003).
 
     Mirrors the YourPrices rule: use the latest observation's measure in
     canonical units to decide whether to flip to the smaller unit
@@ -463,11 +475,15 @@ def _display_for_series(
     return units.display_denominator_for(active_dim, measure_in_canonical, system=system)
 
 
-def _active_dim_from_latest(
+def active_dim_from_latest(
     observations: list[StockItemPriceObservation],
 ) -> str | None:
     """Active price dimension = dimension of the most-recent observation (B4).
-    None when there are no observations or the latest unit is non-price."""
+    None when there are no observations or the latest unit is non-price.
+
+    Public (was `_active_dim_from_latest`) for the same reason as
+    `per_unit_in_canonical`: an item's "usual" and its reported movement must
+    not disagree about which unit they are talking about."""
     if not observations:
         return None
     latest = max(observations, key=lambda o: o.observed_at)
@@ -489,7 +505,7 @@ def _observation_points(
         obs_def = units.find_unit(obs.unit)
         if obs_def is None or obs_def.dimension != active_dim:
             continue
-        pu = _per_unit_in_canonical(
+        pu = per_unit_in_canonical(
             total_price=obs.total_price,
             total_measure=obs.total_measure,
             unit=obs.unit,
@@ -606,7 +622,7 @@ def build_stock_item_price_series(
     back to a linked product's dimension so offer context still renders.
     Returns ``(None, [])`` when neither exists.
     """
-    _system = system or _system_from_repo(repo)
+    _system = system or measurement_system_from_repo(repo)
     observations: list[StockItemPriceObservation] = repo.get(StockItemPriceObservation).all(
         EntityField(
             StockItemPriceObservation,
@@ -615,7 +631,7 @@ def build_stock_item_price_series(
     )
     products = _linked_products(repo, stock_item_id)
 
-    active_dim = _active_dim_from_latest(observations) or _first_product_price_dim(products)
+    active_dim = active_dim_from_latest(observations) or _first_product_price_dim(products)
     if active_dim is None:
         return None, []
     canonical_unit = units.CANONICAL_PRICE_UNIT[active_dim]
@@ -624,7 +640,7 @@ def build_stock_item_price_series(
     # (the user's most-recent buy is the strongest signal for "what size are
     # we shopping in?"); falls back to the cheapest linked offer's size so
     # the chart axis still flips sensibly for an offer-only item.
-    display_unit, display_factor = _display_for_series(
+    display_unit, display_factor = display_denominator_for_series(
         observations, products, active_dim=active_dim,
         canonical_unit=canonical_unit, system=_system,
     )
@@ -680,12 +696,12 @@ def build_product_observation_series(
             StockItemPriceObservation.Fields.STOCK_ITEM_ID,
         ).in_(stock_item_ids)
     )
-    active_dim = _active_dim_from_latest(observations)
+    active_dim = active_dim_from_latest(observations)
     if active_dim is None:
         return None, []
     canonical_unit = units.CANONICAL_PRICE_UNIT[active_dim]
-    _system = system or _system_from_repo(repo)
-    display_unit, display_factor = _display_for_series(
+    _system = system or measurement_system_from_repo(repo)
+    display_unit, display_factor = display_denominator_for_series(
         observations, [], active_dim=active_dim,
         canonical_unit=canonical_unit, system=_system,
     )

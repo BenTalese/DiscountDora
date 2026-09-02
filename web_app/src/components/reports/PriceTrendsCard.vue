@@ -28,12 +28,14 @@
             line="I couldn't load these price trends."
             @retry="emit('retry')"
         />
-        <v-chart
-            v-else-if="hasPoints"
-            class="pt-chart"
-            :option="option"
-            autoresize
-        />
+        <div v-else-if="hasPoints" ref="chartHostRef" class="pt-chart">
+            <PriceHistoryChart
+                :series="chartSeries"
+                :width="chartWidth"
+                :height="280"
+                legend
+            />
+        </div>
         <div v-else class="dora-empty">
             Pick a product to chart its unit price over time.
         </div>
@@ -44,46 +46,29 @@
     /**
      * "Is this worth buying?" — unit price over time, per product.
      *
-     * The one genuinely chart-shaped widget on the page, and the only surviving
-     * ECharts consumer after chunk 3 (composition became CSS bars, counts became
-     * CSS columns, the savings sparkline became a sentence, stock-value-over-time
-     * was cut). That makes **FU-833** a one-widget job now: move this onto
-     * `PriceHistoryChart.vue` — 462 lines of inline SVG the app already ships in
-     * 8 KB, which draws exactly this chart — and the dependency goes with it.
-     * Left in place here deliberately: swapping the renderer is a behavioural
-     * change to the one thing on this page that has to keep working, and it
-     * carries its own a11y investment (the SVG component has no legend, no
-     * x-ticks and no `aria`).
+     * **FU-833 landed here:** this was the app's last ECharts consumer, and the
+     * dependency is gone with it. The replacement is `PriceHistoryChart` — the
+     * inline-SVG chart the app already owned, which ships in ~8 KB against the
+     * 549 KB ECharts was inlining into this route's chunk, and which draws
+     * exactly this: a multi-series line with y-ticks, x-labels, a hover
+     * crosshair and (new, and the reason the swap was worth doing rather than
+     * merely cheap) a legend and a real text alternative. A canvas chart cannot
+     * carry one, which is what left §4.9's finding unfixable while it stood.
+     *
+     * Two behavioural changes worth naming, both accepted: the line is no longer
+     * smoothed — a spline through fortnightly price points invents readings
+     * between them — and a gap in one product's series is a gap, where
+     * `connectNulls` used to bridge it. Both make the chart say less than it
+     * did, which is the point.
      */
-    import { computed } from 'vue';
+    import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
     import { ICONS } from 'src/style/icons';
     import AppSpinner from 'src/components/AppSpinner.vue';
     import CardLoadError from 'src/components/dashboard/CardLoadError.vue';
     import DashboardCard from 'src/components/dashboard/DashboardCard.vue';
-    import VChart from 'vue-echarts';
-    import { LineChart } from 'echarts/charts';
-    import {
-        GridComponent,
-        LegendComponent,
-        TitleComponent,
-        TooltipComponent,
-    } from 'echarts/components';
-    import { use } from 'echarts/core';
-    import { CanvasRenderer } from 'echarts/renderers';
-    import { formatMoney } from 'src/composables/useMoney';
+    import PriceHistoryChart from 'src/components/PriceHistoryChart.vue';
+    import { trendSeriesToChart } from 'src/composables/usePriceChartSeries';
     import type { PriceTrendsResponse } from 'src/services/api/reportsApiService';
-
-    // Registration lives with the one component that draws a chart, so the page
-    // itself no longer imports ECharts at all. `PieChart` is gone with the
-    // donuts — the tree-shaken set is now a line chart and nothing else.
-    use([
-        CanvasRenderer,
-        LineChart,
-        GridComponent,
-        TitleComponent,
-        TooltipComponent,
-        LegendComponent,
-    ]);
 
     const props = withDefaults(defineProps<{
         priceTrends: PriceTrendsResponse | null;
@@ -113,47 +98,51 @@
     const hasPoints = computed(() =>
         (props.priceTrends?.series ?? []).some((s) => s.points.length > 0),
     );
+    const chartSeries = computed(
+        () => trendSeriesToChart(props.priceTrends?.series ?? []),
+    );
 
-    const option = computed(() => {
-        const series = props.priceTrends?.series ?? [];
-        const allDates = new Set<string>();
-        for (const s of series) for (const p of s.points) allDates.add(p.date);
-        const dates = [...allDates].sort();
-        return {
-            tooltip: {
-                trigger: 'axis',
-                valueFormatter: (v: number) => (v == null ? '—' : formatMoney(v)),
-            },
-            legend: { bottom: 0, type: 'scroll' },
-            grid: { left: 50, right: 16, top: 24, bottom: 40 },
-            xAxis: { type: 'category', data: dates, axisLabel: { fontSize: 10 } },
-            // R-003 / D-006 — one money-formatting authority. A hardcoded `$`
-            // gave a non-AUD install correct legends and a lying axis.
-            yAxis: {
-                type: 'value',
-                axisLabel: { formatter: (value: number) => formatMoney(value) },
-            },
-            series: series.map((s) => {
-                const byDate = new Map(s.points.map((p) => [p.date, p.unit_price]));
-                return {
-                    name: s.name,
-                    type: 'line',
-                    smooth: true,
-                    connectNulls: true,
-                    symbol: 'circle',
-                    symbolSize: 4,
-                    data: dates.map((d) => byDate.get(d) ?? null),
-                };
-            }),
-        };
+    // The SVG chart is sized in px, not by CSS, so the card measures its own
+    // content box and hands the width down — the same pattern `/price-history`
+    // and the bottom sheet already use. ECharts' `autoresize` did this
+    // internally; losing it is the one thing the swap costs.
+    const chartHostRef = ref<HTMLElement | null>(null);
+    const chartWidth = ref(640);
+    let observer: ResizeObserver | null = null;
+
+    function measure(): void {
+        const el = chartHostRef.value;
+        if (!el) return;
+        const next = Math.max(260, Math.floor(el.clientWidth));
+        if (next !== chartWidth.value) chartWidth.value = next;
+    }
+
+    function observe(): void {
+        const el = chartHostRef.value;
+        if (!el || typeof ResizeObserver === 'undefined') return;
+        measure();
+        if (observer) return;
+        observer = new ResizeObserver(() => measure());
+        observer.observe(el);
+    }
+
+    onMounted(observe);
+    // The host only exists once there is something to draw, so re-attach when
+    // the card crosses from its empty state into a chart.
+    watch(hasPoints, (has) => {
+        if (has) requestAnimationFrame(observe);
+    });
+    onBeforeUnmount(() => {
+        observer?.disconnect();
+        observer = null;
     });
 </script>
 
 <style scoped lang="scss">
     .pt-picker { margin-bottom: var(--space-3); }
     .pt-chart {
-        height: 280px;
         min-height: 220px;
+        overflow-x: auto;
     }
     .pt-loading {
         display: flex;

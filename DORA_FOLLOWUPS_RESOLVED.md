@@ -10,6 +10,134 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-833 — Drop ECharts; promote `PriceHistoryChart` to the app's chart component
+- **Resolved:** 2026-09-02 (driven live on all four chart surfaces). `echarts`
+  and `vue-echarts` are out of `package.json`, and **the Reports route chunk went
+  549 KB → 24 KB** (plus an 8.5 KB shared chart chunk) — measured in
+  `dist/spa/assets`, which is the number this FU was opened on. All five steps
+  landed:
+  1. **Price trends is on `PriceHistoryChart`**, which was generalised to a
+     neutral `PriceChartSeries` shape with the payload mapping moved into
+     `composables/usePriceChartSeries.ts` — the `offersAsContext` flag and the
+     `hasOffers()` fallback are gone from the drawing code. Promoted to **R-073 /
+     ADR-070**, because `ProportionBar` had reached the same shape one unit
+     earlier.
+  2. **Nothing else needed a library**, as predicted: the donuts became
+     `ProportionBar` and meals-cooked became CSS columns in chunk 3, and
+     stock-value-over-time was cut.
+  3. **The a11y investment shipped**: `role="img"`, a generated `aria-label` and
+     a `<desc>` naming each series' range and latest value, plus the **legend**
+     the component never had — two of its three consumers had none and the third
+     hand-rolled one above the chart, which is now deleted. Verified live:
+     *"Extra Virgin Olive Oil: 9 prices, $0.80 to $2.40, latest $2.40."*
+  4. **The dependency and the stale `--chart-*` token comment are gone.**
+  5. **`usePriceHistoryPalette.ts` is deleted**, `seriesColour` folded into
+     `useThemePalette` — the file that already owns "token name → live colour"
+     (R-003). Its unused `paletteSnapshot` was dropped rather than carried.
+  Driven on every consumer: `/price-history` (2 series, tooltip, deal markers),
+  the stock item's full-history sheet (legend + baseline + dashed offer context),
+  Reports' Price trends (2 polylines in `--chart-1`/`--chart-2`, hover tooltip,
+  **0 canvases**) and chunk 4's new Price changes card. Two behavioural changes
+  accepted and stated: the line is no longer smoothed, and a gap in a series is
+  now drawn as a gap. Spun off: **[[FU-847]]** (four hosts measuring their own
+  width, now ECharts' `autoresize` is gone) and **[[FU-846]]** (the page's chips
+  colour by list position). [[FU-705]] (no touch interaction) is untouched.
+
+- **Raised:** 2026-09-02 (owner decision on [[FU-812]])
+- **Type:** deferred job (decided, not started)
+- **What:** remove the `echarts` / `vue-echarts` dependency and draw the surviving
+  Reports charts with the SVG component the app already owns.
+  **Why this is now the cheap option, measured:** ECharts is inlined into the
+  `ReportsPage` route chunk at **549 KB** (`ReportsPage-L-6CPwJ3.js`) and is
+  *already* tree-shaken to `LineChart` + `PieChart` + `CanvasRenderer`
+  (`ReportsPage.vue:457-465`), so removal is the only lever left — while
+  `components/PriceHistoryChart.vue` is **462 lines of inline SVG** (multi-series
+  polylines, y-ticks, hover tooltip, point circles) that builds to **8 KB** and
+  already draws the exact chart price-trends needs.
+  The work:
+  1. **Move price-trends onto `PriceHistoryChart`** (extended as below) — the one
+     genuinely chart-shaped widget on the page.
+  2. **The rest need no library at all**, per `REPORTS_PAGE_REVIEW.md` §4.6: both
+     donuts become the shopping list's CSS proportional bar (`.sl-store-bar`),
+     meals-cooked becomes columns, the savings sparkline becomes a polyline, and
+     stock-value-over-time is cut outright (§3.3).
+  3. **Invest in the component while adopting it** — it has **no legend, no
+     x-ticks, and no `aria`/`role`**. The a11y half is not optional: it is how
+     §4.9's "five canvas charts with no accessible alternative" finding becomes
+     fixable at all, since SVG can carry a title/desc or a visually-hidden data
+     table and canvas cannot.
+  4. **Remove `echarts ^6.1.0` + `vue-echarts ^8.0.1`** from
+     `web_app/package.json`, and drop the now-stale ECharts reference in the
+     `--chart-*` token comment (`tokens.scss:164`).
+  5. **Fold `usePriceHistoryPalette` into [[FU-824]]'s shared `useThemePalette()`.**
+     `seriesColour` reads `--chart-N` off the document with the same one-shot
+     `getComputedStyle` pattern as the donut and Reports' dead `themeTick`, so it
+     is a third instance of the frozen-palette bug and should land on the same
+     reactive fix rather than a fourth copy (R-003).
+- **Why deferred:** it depends on the Reports restructure having picked the
+  surviving chart set, and step 3 is a real (worthwhile) investment rather than a
+  deletion.
+- **Recommended resolution:** later — with or just after Reports chunk 3. Nothing
+  blocks on it. Cross-ref: `REPORTS_PAGE_REVIEW.md` §4.6 + §8 D4, [[FU-812]]
+  (resolved), [[FU-824]].
+
+## [RESOLVED] FU-814 — Reports duplicates `DashboardCard`, `storeColour` and the money formatter
+- **Resolved:** 2026-09-02 (Reports chunk 3, driven live at :5171). Item **(1)**,
+  the last one open: the `.report-card*` fork is deleted and all four surviving
+  cards render `<DashboardCard>`, so the hover elevation, the reduced-motion
+  guard, the `#action` slot styling and the router-link variant come back for
+  free (R-001). Measured in the browser on the restructured page:
+  `border-radius: 10px`, `padding: 16px` — item (4)'s corrected values,
+  inherited from the component rather than re-declared. `[class*="report-card"]`
+  now matches **0** elements. Items (2), (3) and (4) were already closed by
+  chunks 1+2 and dashboard chunk 6; the notes below are kept as the trail.
+
+- **Raised:** 2026-09-02 (reports page PO + engineering review)
+- **Type:** finding
+- **PARTIALLY DONE 2026-09-02 (Reports chunks 1+2). Items (2), (3) and (4) are
+  closed; only item (1), the card-shell fork, is still open.**
+  - **(2) done** — `StoreSpendRow` carries `brand_colour` server-side and the
+    legend + donut call `storeColour(row.store, row.brand_colour)`. Verified live
+    at :5171: Woolworths `rgb(23,136,65)`, Aldi `rgb(0,40,94)`, Coles
+    `rgb(224,26,34)` — the logo colours, matching the shopping list. `colourFor`
+    survives as the **categorical** helper for stock groups only, and now says so.
+  - **(3) done** — both y-axes take `formatter: (v) => formatMoney(v)`.
+  - **(4) done** — landed in the dashboard's chunk 6, in `DashboardCard.vue`
+    itself, so Reports inherits it once the fork goes.
+  - **(1) still open** — the `.report-card*` fork. Deliberately left: §4.2's own
+    fix is "render `<DashboardCard>`", and which cards survive is a chunk-3
+    decision, so un-forking now means restyling cards that are about to merge.
+- **Recommended resolution (amended):** item (1) with the chunk 3 restructure.
+- **What:** three separate duplications on one page. (1) `.report-card*` is a
+  byte-identical copy of `components/dashboard/DashboardCard.vue`'s `.dora-card*`
+  that has since drifted — it lost the hover elevation, the reduced-motion guard,
+  the `#action` styling and the router-link variant (R-001). (2) `colourFor()`
+  (`ReportsPage.vue:612`) hashes store names into `--chart-1..6` instead of
+  calling `storeColour()`, whose own header comment documents this exact bug
+  being fixed for the other two consumers (R-002/D-001); `StoreSpendRow` needs
+  `brand_colour` adding server-side. (3) two chart y-axes hard-code
+  `formatter: '${value}'` (`:627`, `:730`) past `formatMoney`, so a non-AUD
+  install gets correct legends and lying axes (R-003/D-006).
+- **(4) AMENDED 2026-09-02 — the radius/padding correction folded in from
+  [[FU-811]] (resolved).** Owner decided the off-scale values get corrected, not
+  just consolidated: `DashboardCard.vue`'s `border-radius: 18px` →
+  **`--radius-lg` (10px)** and `padding: 18px 20px 20px` → **`--space-4` (16px)**,
+  plus the dashboard hero's own `18px` (`DashboardPage.vue:2329`). Folded here
+  rather than kept as its own FU so `DashboardCard` is touched **once**, not twice.
+  The survey that decided it: counting every `border-radius` in `web_app/src`,
+  **10px appears at 41 sites** (`--radius-lg` ×22 + raw `10px` ×19), 12px at 14,
+  `--radius-xl` (16px) at 2, and **18px at exactly 3** — this component, its fork,
+  and the hero. A4 matches the app; these are the outliers. `--radius-xl` (16px)
+  was rejected as the gentler landing because it would leave the app with two card
+  radii (D-017). **This is a visible change to the dashboard and Reports** — cards
+  get squarer and slightly tighter — so it wants a screenshot pass; a DORA_VERIFY
+  line rides with it when it ships.
+- **Why deferred:** read-only review.
+- **Recommended resolution:** (2) and (3) with the chunk 2 defect pass; (1) and (4)
+  with the chunk 3 restructure, since which cards survive decides how much shell is
+  needed — and (4) should land in the same commit as (1) so the visual change is
+  reviewed once. Cross-ref: `REPORTS_PAGE_REVIEW.md` §4.2 + §8 D3.
+
 ## [RESOLVED] FU-816 — `/reports` renders every money surface with the money flag off
 - **Raised:** 2026-09-02 (reports page PO + engineering review)
 - **Resolved:** 2026-09-02 (Reports chunk 1, driven live at :5171 with money

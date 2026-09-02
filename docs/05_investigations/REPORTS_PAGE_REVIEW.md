@@ -684,7 +684,10 @@ cards and a disclaimer.
 
 **What is missing entirely:**
 
-- **A price trend over your own data.** Price trends charts *products* — a
+- ~~**A price trend over your own data.**~~ **BUILT 2026-09-02 (chunk 4)** — the
+  **Price changes** card + `GET /reports/item-price-movers`. The rest of this
+  bullet is kept because it is the argument the card was built from:
+  Price trends charts *products* — a
   power-user feature most installs never populate. The everyday user's own
   `StockItemPriceObservation` history (the very substrate the stock-value
   estimate falls back to) has **no trend surface anywhere in the app**. FU-703
@@ -731,7 +734,55 @@ design-rule or architecture debt.
 
 ## 7 · Recommended sequencing
 
-> **Build status (2026-09-02): Chunks 1 and 2 are done, green and driven live.**
+> **Build status (2026-09-02): Chunks 1, 2, 3 and 4 are done, green and driven
+> live — only chunk 5 (the design-rule sweep) remains.**
+> **Chunk 4 (the missing widget)** shipped with **FU-833** beside it, and the two
+> belong together: chunk 4 needed a chart, and the app was carrying ECharts at
+> 549 KB to draw one it already owned in 8 KB. So `PriceHistoryChart` was
+> generalised to a neutral series shape (payload mapping moved out to
+> `usePriceChartSeries.ts` — promoted to **R-073 / ADR-070**), given the
+> **legend** and the **`role="img"` + `<desc>` text alternative** §4.9 asked for,
+> and adopted by all four consumers; `echarts` + `vue-echarts` are out of
+> `package.json` and **the Reports route chunk is 549 KB → 24 KB, measured**. The
+> new card is **Price changes**: `GET /reports/item-price-movers` ranks the
+> household's *own* stock items by per-unit price movement in the range, refuses
+> to compare across price dimensions or off a single reading, reports what it
+> skipped (R-041), and opens each row into the shared chart with the item's usual
+> price drawn in. Money-gated, **not** products-gated — the whole point is that it
+> works on an install with an empty catalogue (FU-703 D3, whose keep/cut fork on
+> the product surfaces is now better-informed but still the owner's). **Two
+> defects the browser found and the code review would not have:** the report
+> quoted "$24.00/L" for an item whose own chart, one click away, said
+> "$2.40/100ml" — it had skipped the display-denominator authority every other
+> price surface shares — and three items whose price hadn't moved were counted as
+> movers, so the card claimed "7 of your items changed price" and then rendered
+> four, the flat ones belonging to neither list. Both fixed with tests; the second
+> also produced the *"3 others held steady"* line, which is the reassuring half of
+> the answer the card had been leaving out.
+>
+> **Chunks 1, 2 and 3:**
+> **Chunk 3 (the restructure)** landed second: eleven cards became **four** —
+> `SpendCard` (store / group / vs-last-period on one axis control),
+> `WasteAndRunOutsCard`, `KitchenMemoryCard`, `PriceTrendsCard` — plus
+> `ReportsLede`. Stock-value-over-time is cut from this page (§3.3; the endpoint
+> stays for the dashboard's opt-in `pantry_value`), the wastage list is capped,
+> the `.report-card*` fork is gone in favour of `<DashboardCard>` (**FU-814
+> closed in full**), the donuts are gone in favour of a shared `ProportionBar`
+> extracted from the shopping list's own bar (§4.6 / §4.10.4), and §3.8's
+> repertoire count ("5 different recipes"; "9 of your 16 saved recipes haven't
+> been cooked in a year") is built. **Three defects were found by driving it that
+> the static review had not named:** the cook timeline emitted *only* buckets
+> that had a cook, so ten scattered cooking days drew as ten adjacent
+> full-height columns — a quiet month rendered as an unbroken green slab (fixed
+> server-side, R-003, with a test); the Spend card kept its coverage footnote
+> *underneath* "I couldn't load your spend", a footnote about numbers that
+> weren't on screen (D-007); and the `MealsCookedHandler` unit stub had not been
+> re-run against the repertoire queries, so three unit tests were red on the
+> commit. Still open from §4.10: **#2** (resolved dates beside the range
+> control) and **#8** ("every number is a door") — both logged as **FU-845**.
+> Chunks 4 and 5 remain.
+>
+> **Chunks 1 and 2 (gate it, then the defects):**
 > FU-816, FU-815 and FU-813 are resolved; FU-814 items 2/3 closed (item 4 landed
 > with dashboard chunk 6; item 1 waits for chunk 3, below). Findings 1, 2, 3, 4,
 > 5, 6, 8, 10, 17 are fixed; finding 11 (`themeTick`) was already fixed by

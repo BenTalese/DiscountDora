@@ -112,15 +112,52 @@ money and the timezone date bug are both pinned by tests now; see
 - [ ] Hero mascot centring (feedback L176, never confirmed since B9.8): is the
       72px mascot centred in its tinted box?
 
-## Reports — the price-trends picker (2026-09-02) — origin FU-813
+## Reports — chunk 4 + the ECharts removal (2026-09-02) — origin FU-833
 
-The 500 is fixed and confirmed (all four ranges 200, crash reproduced then
-gone). The picker itself can't be agent-driven — a Quasar dropdown never opens
-in the pane (FU-737).
+All four chart surfaces were driven live at :5171 and pass: `/price-history`
+(two series, hover tooltip, deal dots), the stock item's **Full history** sheet
+(legend + "usually $1.70/100ml" baseline + dashed offer context), Reports'
+**Price trends** (two polylines in `--chart-1`/`--chart-2`, **0** canvases) and
+the new **Price changes** card (rows, drill-in chart, `aria-label` + `<desc>`).
+What's left needs an eye, a theme, or a phone:
 
-- [ ] Type in the picker: results come from the whole catalogue now, not the
-      first 50. Search for a product you know is well down an alphabetical list.
-- [ ] With products selected, click the picker's clear (x) — it used to throw.
+- [ ] **The chart in a dark theme.** The SVG reads its colours from
+      `--chart-*`, `--divider`, `--text-muted` and repaints on a theme switch
+      (FU-824) — switch themes while looking at a chart and confirm the lines,
+      gridlines, baseline and legend all follow, with the legend's dashed
+      entries still legible.
+- [ ] **The chart on a phone.** It is sized in px by its host, so the card
+      scrolls horizontally rather than squashing. At 390px, confirm Price
+      changes and Price trends both look deliberate rather than cropped — and
+      note that **touch interaction is still absent** (FU-705): the hover
+      crosshair and tooltip are mouse-only, so a phone reader gets the line and
+      the axis labels and nothing else.
+- [ ] **Price changes with your own data.** Log two prices on the same item a
+      few days apart (different amounts), then check the card ranks it, quotes
+      the same denominator as the item's own YourPrices widget, and that opening
+      the row draws the two readings you logged.
+
+## Reports — after the chunk 3 restructure (2026-09-02)
+
+The page was driven live at :5171 on the dense seed: four cards render (no
+`.report-card` fork left), the Spend axis switch works on all three axes, the
+lede reads *"You spent $109.69 across 5 shops…"*, the cook timeline spans the
+window, a single 404'd endpoint fails exactly one card, the price-trends picker
+searches server-side (`filter=name:ct:yog`) and its clear (x) no longer throws,
+money-off leaves exactly two count-based cards and fires no money endpoints, and
+390px-wide renders one column with no horizontal overflow. What's left needs
+data the seed doesn't have, or an eye rather than an assertion:
+
+- [ ] **The wastage cap.** Waste more than **6** distinct items inside one range,
+      then check the card shows *"+ N more, not shown"* under the list and that
+      the two lists still end level with each other.
+- [ ] **The card set at a glance.** Four cards where there were eleven — is the
+      page short enough now, and is anything you actually used missing? Stock
+      value over time is deliberately gone (it multiplied a 0–5 level by a
+      price); it survives as the dashboard's opt-in pantry-value card.
+- [ ] **Squarer cards.** `DashboardCard` dropped to a 10px radius and 16px
+      padding app-wide (FU-814 item 4) — confirm the dashboard *and* Reports
+      both still look right to you, in a dark theme as well as a light one.
 
 ## Shopping list — receipt lightbox (2026-09-01)
 

@@ -91,6 +91,39 @@ export interface PriceTrendsResponse {
     series: PriceTrendSeries[];
 }
 
+/** One stock item whose own logged prices moved inside the range (chunk 4 /
+ *  FU-703 D3). Every figure is per **canonical unit** and server-derived: the
+ *  client never divides a total by a measure (R-003). */
+export interface ItemPriceMoverRow {
+    stock_item_id: string;
+    name: string;
+    /** The denominator both prices share — "L" / "kg" / "ea". */
+    unit: string;
+    first_price: number;
+    last_price: number;
+    delta: number;
+    delta_pct: number;
+    observation_count: number;
+    first_observed_on: string;
+    last_observed_on: string;
+}
+
+export interface ItemPriceMoversResponse {
+    range: ReportRange;
+    /** Biggest movement first, in either direction — a fall is as much news as
+     *  a rise, so the card takes risers from the top and fallers from the
+     *  bottom without re-sorting. */
+    rows: ItemPriceMoverRow[];
+    /** R-041 coverage. These describe the whole pantry, not the returned page:
+     *  "3 movers" out of forty items means something different from "3 of 3". */
+    items_with_movement: number;
+    items_with_one_observation: number;
+    items_with_mixed_units: number;
+    /** Two readings, same price. An answer, but not a change — so it is counted
+     *  here and kept out of `rows`. */
+    items_unchanged: number;
+}
+
 export interface SavingsListBreakdown {
     shopping_list_id: string;
     name: string;
@@ -232,5 +265,13 @@ export default class ReportsApiService {
     getSpendYearOverYearAsync = (range: YoYReportRange) =>
         this.httpClient.get<SpendYoYResponse>(
             `/reports/spend-year-over-year?range=${range}`,
+        );
+
+    /** "Which of my own items got more expensive?" — the everyday-user price
+     *  report, built from stock-item observations rather than the product
+     *  catalogue, so it works on an install that has never touched products. */
+    getItemPriceMoversAsync = (range: ReportRange, limit = 8) =>
+        this.httpClient.get<ItemPriceMoversResponse>(
+            `/reports/item-price-movers?range=${range}&limit=${limit}`,
         );
 }

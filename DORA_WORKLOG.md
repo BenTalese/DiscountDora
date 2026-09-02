@@ -28,7 +28,233 @@ next.
 
 ---
 
-## 2026-09-02 (latest) — **Reports chunks 1+2: gate it, then the defects — and the gate itself had a bug**
+## 2026-09-02 (latest) — **FU-833 + Reports chunk 4: the 549 KB chart library came out, and the report it made room for went in**
+
+**Status:** complete + green + driven live on all five surfaces. **FU-833
+resolved**; **Reports chunk 4 shipped**, which leaves only chunk 5 (the design
+sweep) on `REPORTS_PAGE_REVIEW.md` §7. **FU-703's D3 "trend section in Reports"
+half is built** (its keep/cut fork stays the owner's). New: **R-073 / ADR-070**,
+**FU-846**, **FU-847**. Gate: **pytest 2238 passed** / 1 skipped / 1 xfailed with
+only the four pre-existing buy-verdict reds (FU-762), **vitest 685 / 61 files**
+(19 new across two specs), `vue-tsc` + `eslint` clean.
+
+**The two units were done together because each was the other's argument.**
+Chunk 4 needs a chart. The app was carrying **ECharts, 549 KB inlined into the
+Reports route chunk**, to draw one line — while owning
+`PriceHistoryChart.vue`, 488 lines of inline SVG that builds to 8 KB and already
+drew multi-series polylines with y-ticks, x-labels and a hover crosshair. Adding
+a second ECharts chart would have made the 549 KB serve two widgets instead of
+one. **Measured after: the Reports chunk is 24 KB**, plus an 8.5 KB shared chart
+chunk. That is the whole ECharts payload gone from the only route that paid it.
+
+**What made the reuse possible was deleting the domain out of the drawing.** The
+chart's props *were* the product price-history DTO, and its rendering branched on
+`offersAsContext` and an `hasOffers()` fallback that decided whether the user's
+own observations were drawn at all. The proof that this had already cost
+something: `PriceHistoryBottomSheet.vue` **fabricated a product DTO** — a
+`product_id` holding a stock-item id, a `store: ''`, two `null` blocks — purely
+to get a chart out of a stock item. So the chart now takes a neutral
+`PriceChartSeries` (`key`, `name`, `points`, `contextPoints`, `baseline`) and
+every payload is mapped in `composables/usePriceChartSeries.ts`: three adapters,
+pure, unit-tested, because a wrong mapping is **silent** — the chart still draws,
+it just draws the wrong line. `ProportionBar` had reached the same shape one unit
+earlier, which is two sightings in one week of the same decision on two
+primitives: **R-073 / ADR-070**.
+
+**The a11y half was not a bonus, it was the reason the swap was worth doing
+rather than merely cheap.** §4.9's "five canvas charts with no text alternative"
+had **no fix** while ECharts stood — a canvas cannot carry one. The SVG now
+carries `role="img"`, a generated `aria-label`, and a `<desc>` naming each
+series' range and where it ended up: verified live as *"Extra Virgin Olive Oil: 9
+prices, $0.80 to $2.40, latest $2.40."* It also gained the **legend** it never
+had — two of its three consumers had none and the third hand-rolled one above the
+chart, which is now deleted, along with its stylesheet.
+
+**Chunk 4's card is "Price changes", and it is the first surface in the app that
+answers the price question for a household with no product catalogue.** `GET
+/reports/item-price-movers` ranks stock items by the movement between their
+earliest and latest observation *inside the range*, per canonical unit. What it
+**refuses** to do is the interesting half: fewer than two readings is a price and
+not a movement; two readings in different price dimensions (a bottle then a
+litre) cannot be compared per-unit, so only the item's *active* dimension counts
+— the same rule the buy verdict's baseline uses, reached by promoting
+`active_dim_from_latest` and `per_unit_in_canonical` from private helpers to the
+shared chokepoint they now are (R-003); and a first reading of zero is dropped
+rather than reported as an infinite rise. Each refusal is **counted and
+reported** (R-041), because the reason this card looks thin on a real pantry is
+almost always that most items have one logged price — a fact about the data, not
+about the prices.
+
+**Driving it found two defects a static read would not have, and the first is a
+textbook R-003 break I had just written.** The card said **"$24.00/L"** for an
+item whose own chart, one click away, said **"$2.40/100ml"** — the same price in
+two languages. The movers handler had normalised to the dimension's *canonical*
+unit and stopped there, skipping `display_denominator_for`, whose own docstring
+exists to say it is the single source *"so the chart axis, sidecar entries,
+widget headline and chart points all share one denominator"*. Fixed by promoting
+`display_denominator_for_series` too and quoting every figure through it; pinned
+by a test that logs 100ml twice and asserts the row reads `100ml`, not `L`.
+
+**The second was the card contradicting itself between its headline and its
+rows.** It read *"7 of your items changed price"* and then rendered **four**: the
+other three had two readings at the *same* price, counted as movers by the
+handler and belonging to neither the Dearer nor the Cheaper list, so they
+vanished between the sentence and the lists. A flat price is an answer but not a
+change — they are now `items_unchanged`, out of the rows, and the card says *"3
+others held steady"*, which is the reassuring half of the answer it had been
+dropping. Rounding happens **before** the comparison, so two readings a
+twentieth of a cent apart are the same shelf price rather than a "+0.0%" row.
+
+**A third thing the browser caught, this one purely visual:** at half width the
+card stranded an empty column beside itself — **D-011**, the same dead-air rule
+the dashboard's grid was fixed for (FU-631 #3). It is full width now, and its two
+lists collapse to one column when only one direction has rows, which is the
+within-card version of the same rule.
+
+**Verified live across every consumer** (throwaway seeded backend + built SPA +
+scratchpad Playwright): `/price-history` — two series, deal dots, tooltip
+carrying both; the stock item's **Full history** sheet — legend, baseline
+*"usually $1.70/100ml"*, dashed offer context, `aria-label` naming both series;
+Reports' **Price trends** — two polylines in `--chart-1`/`--chart-2`, hover
+tooltip, and **zero** `<canvas>` elements on the page; **Price changes** — rows,
+drill-in chart, and the row as a real `<button>` (`aria-expanded` flipping on
+Enter, so it is keyboard-operable, unlike the `<a href>`-less report rows §4.9
+found).
+
+**Standing-rules close-gate.** **R-073/ADR-070** written from this unit.
+**R-003** twice — the display-denominator break above, and the four promoted
+`your_prices` helpers, so an item's "usual", its chart and its reported movement
+cannot disagree about the unit. **R-041** (three coverage counts on the new
+aggregate). **R-001** (`PriceHistoryChart`, `CardLoadError`, `DashboardCard`,
+`AppSpinner` all reused; `usePriceHistoryPalette.ts` **deleted** into
+`useThemePalette`, which already owns "token name → live colour"). **A6/D-004**
+(the mover row is a focusable 44px `<button>` with a visible focus ring).
+**§4.5.3/A1** (no red/green for price direction — the arrow carries it; semantic
+colour stays with the budget card, which has a threshold). **B9** (the empty
+state distinguishes "you have no prices logged" from "you have prices but none
+twice"). **D-011** (the width fix). Explained-not-fixed: nothing. Flagged:
+**FU-847** (four hosts now measure their own box to size the chart — ECharts'
+`autoresize` is the one thing the swap cost) and **FU-846** (`/price-history`
+still colours its chips by list position, a latent off-by-one now that the chart
+filters empty series). **FU-705** (no touch interaction on the chart) is
+untouched and named in the component's own docblock.
+
+**Next up:** **chunk 5**, the last one — the design-rule sweep (tokens,
+skeletons, `B9` empty states, accessibility, breakpoints), now with five cards
+settled and two of them brand new. FU-845 #2 (resolved dates beside the range
+control) rides along with it. Independent and unblocked: **FU-831** (savings
+own-price baseline, the only migration), **FU-832** (shared catalogue +
+`useCardLayout()`), **FU-844** (feature-flag tri-state), **FU-846/847**.
+
+---
+
+## 2026-09-02 — **Reports chunk 3 finished: the restructure the last session left half-closed**
+
+**Status:** complete + green + driven live. Picked up commit `69fb29e5`
+("Report redesign work pt 1"), which shipped the chunk-3 *code* — eleven cards
+→ four, the lede, the `DashboardCard` un-fork, the shared `ProportionBar`, the
+repertoire count — and then **closed nothing**: no worklog entry, no CHANGELOG,
+no FU movement, no verify pass, and **the backend suite had never been run
+against it** (three reds). Gate now: **pytest 2228 passed** / 1 skipped / 1
+xfailed with only the four pre-existing buy-verdict reds (FU-762), **vitest 666
+passed / 59 files** (five new), `vue-tsc` + `eslint` clean.
+
+**The three unit reds are the reason "green on the frontend" isn't a gate.**
+`_repertoire()` added two queries to `MealsCookedHandler` — a
+`count(Recipe.id)` and a one-column `CookEvent.recipe_id` — and
+`tests/test_reports_memory.py`'s hand-rolled `_Session` answers *every* query
+with the same cook rows and nothing else, so `scalar_one()` didn't exist:
+`AttributeError`, three tests, on a commit whose own e2e tests passed. The stub
+now discriminates on the query's **selected columns**, not on call order — an
+order-based stub would hand the wrong rows to whichever query ran first the next
+time the handler is reordered — and the grouping tests assert
+`distinct_recipes` and the untouched tail, which are now part of what that
+handler computes. A botched edit in the e2e file rode along: the two closing
+assertions of `test__meals_cooked__RecipeCookedTwice…` had been left dangling on
+the *end of the newly-appended test*, so the first test silently stopped
+checking `meals_total` and its timeline sum. Restored.
+
+**Driving it found two defects the static read couldn't, and the first one is
+the interesting one: the cook timeline was drawing a quiet month as a busy
+one.** `MealsCookedHandler` only ever emitted buckets that **had** a cook, so
+the dense seed's ten scattered cooking days came back as ten *adjacent*
+full-height columns — 72px of solid brand green, no gaps, reading as "we cooked
+every day for ten days". A chart whose whole value is "you cooked twice this
+week, against the weeks you didn't" had silently deleted the denominator. Fixed
+server-side, because empty buckets are a derived fact about the window and not
+each client's calendar to reconstruct (**R-003**): a bounded range spans its
+whole window (30d ⇒ 31 daily buckets), "all time" runs back to the oldest cook,
+and the new test pins the span, the ordering, and that filling the gaps neither
+invents nor loses a cook. The screenshots either side of the fix are the whole
+argument — same data, slab before, sparse columns after.
+
+**The second: the Spend card kept its footnote inside its own error state.**
+Shimming `XMLHttpRequest.open` to 404 `spend-by-store` left *"1 item had no
+price recorded, so it isn't counted here"* sitting directly under *"I couldn't
+load your spend"* — a coverage caveat about numbers that are not on screen,
+which is the same failure-dressed-as-data the error states exist to kill
+(**D-007**). The support lines are gated on `!failed` now. Chunk 2 built the
+error state; the card that inherited it just happened to have a footnote below
+it, which is exactly the kind of thing only a live 404 shows you.
+
+**What the drive confirmed rather than found:** four cards and **zero**
+`[class*="report-card"]` matches, so **FU-814 is closed in full** — item (1),
+the `.report-card*` fork, is deleted and all four cards render
+`<DashboardCard>`, measured live at `border-radius: 10px` / `padding: 16px`
+(item (4)'s corrected values, inherited rather than re-declared). All three
+Spend axes render (store / group / vs-last-period, the last one ranked by
+absolute dollar delta, which is what makes the lede's "biggest mover" the same
+fact as its first row). Store swatches are the logo colours and the no-store
+bucket is **hatched** now, not merely a different grey — parity with the
+shopping list, because `ProportionBar` was extracted from *its* bar rather than
+reimplemented (**FU-843 item 2 closed**; item 1, the six-colour hash collision,
+survives but is downgraded — the donut it mislabelled is gone and every group is
+now a labelled row carrying its own name and dollars, so the collision is
+cosmetic). Money off: **exactly two** count-based cards, no money endpoint
+called, no lede, nav entry intact — the deviation chunk 1 recorded, still
+deliberate. 390px and 700px both render one column with
+`scrollWidth == clientWidth`. Price trends: the picker searches server-side
+(`filter=name:ct:yog`) and its clear (x) no longer throws, so both FU-813 verify
+lines were **deleted on pass** and recorded in `DORA_VERIFY_TRIAGE.md`.
+
+**Not done, deliberately.** Two of §4.10's ten moves survive unbuilt and are now
+**FU-845**: **#2** (resolved dates beside the range control — the *lying* half of
+#2 was already fixed in chunk 2; what's missing is the dates, and they want a
+server field rather than a client re-deriving the calendar) and **#8** ("every
+number is a door" — the recipe and stock-item rows *are* links now; the
+aggregate rows need destination pages that accept a filter, which is three other
+pages' work). Chunk 4 (own-item price trends) and chunk 5 (the design-rule
+sweep) are untouched, as sequenced.
+
+**Standing-rules close-gate.** **R-003** (the timeline's empty buckets belong to
+the server; also why #2's dates are deferred rather than computed client-side),
+**D-007** (loading / empty / **error** kept distinct — the footnote leak),
+**R-001** (`ProportionBar` extracted *from* the existing bar, not a second one;
+`DashboardCard` + `CardLoadError` reused), **R-041** (the coverage line still
+travels with the total — just not into the error state), **D-001** (hatch, not
+hue, for the catch-all). One thing worth flagging rather than fixing:
+`CardLoadError` and `DashboardCard` still live under `components/dashboard/`
+while a second page now depends on both — the note from chunks 1+2 stands, and
+**FU-832** is the right place to move them, since it is already the "shared
+machinery" unit. No unexplained violations. **ADR evaluation: none promoted.**
+Two candidates were considered and both are single sightings of existing rules —
+"a card's support lines must not outlive its data" is D-007 applied, and "a
+hand-rolled Session stub should discriminate on the query, not on call order" is
+a testing habit rather than an architecture decision. Promote either on a second
+sighting.
+
+**Next up:** **chunk 4** (own-item price trends per FU-703 D3 — the largest
+missing widget on the page) or **chunk 5** (the design-rule sweep: tokens,
+skeletons, B9, a11y, breakpoints — now unblocked, since the surviving card set
+is settled). Runnable in parallel and independent: **FU-831** (savings own-price
+baseline — the only migration), **FU-833** (drop ECharts, which `PriceTrendsCard`
+is now the *only* consumer of), **FU-832** (shared catalogue + `useCardLayout()`,
+whose two blocking restructures have both now landed), **FU-844** (the
+feature-flag tri-state), **FU-845**.
+
+---
+
+## 2026-09-02 — **Reports chunks 1+2: gate it, then the defects — and the gate itself had a bug**
 
 **Status:** complete + green + driven live. `REPORTS_PAGE_REVIEW.md` §7
 **Chunk 1** (gate it) and **Chunk 2** (functional defects) both shipped;

@@ -161,9 +161,12 @@
     --nav-slide-flash: hsl(330 90% 65%);
 
     /* ────────────────────────────── Chart palette ────────────────── */
-    /* Six categorical hues per theme. Used by ECharts series (Reports
-       page), cytoscape group colouring (Substitutes), and any future
-       data-vis surface that needs distinguishable accents. Keep them
+    /* Six categorical hues per theme. Read through
+       `useThemePalette.seriesColour()` by the price chart's series, the
+       pickers whose chips have to match them, and Reports' categorical
+       buckets; also cytoscape group colouring (Substitutes). (The ECharts
+       reference this comment used to carry went with the dependency —
+       FU-833.) Keep them
        distinct hue-wise within each theme — values shouldn't be too
        close in luminance or they get hard to read against the page. */
     --chart-1: hsl(150 76% 39%);   /* primary */

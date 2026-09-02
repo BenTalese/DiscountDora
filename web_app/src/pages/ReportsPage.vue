@@ -71,6 +71,24 @@
                 @retry-bought="loadMostBought"
             />
 
+            <!-- Chunk 4 / FU-703 D3 — the everyday-user price report, built
+                 from your own logged prices. Money-gated but NOT products-gated:
+                 it is the price trend an install with an empty catalogue can
+                 still have, which is the whole reason it exists. -->
+            <!-- Full width, and D-011 is why: it holds two lists side by side
+                 *and* opens a chart under them, so at half width it stranded an
+                 empty column beside itself — the same dead-air rule the
+                 dashboard's own grid was fixed for (FU-631 #3). Measured in the
+                 browser, not reasoned about. -->
+            <div v-if="moneyEnabled" class="reports-grid__wide">
+                <ItemPriceMoversCard
+                    :range="range"
+                    :movers="itemMovers"
+                    :failed="slotFailed('itemMovers')"
+                    @retry="loadItemMovers"
+                />
+            </div>
+
             <!-- Needs money AND products: the chart is products by definition,
                  and it answers in dollars. -->
             <div v-if="productMoneyEnabled" class="reports-grid__wide">
@@ -98,9 +116,15 @@
      * `REPORTS_PAGE_REVIEW.md` §5: eleven widgets answered four questions, and
      * three of them were the same query sliced three ways. The card set is now
      * question-led — where did my money go (Spend), what am I mismanaging (Waste
-     * & run-outs), what do we actually eat (Kitchen memory), is this worth buying
-     * (Price trends) — plus a lede sentence that gives the answer before the
-     * instruments do.
+     * & run-outs), what do we actually eat (Kitchen memory), what am I paying
+     * more for (Price changes), is this worth buying (Price trends) — plus a
+     * lede sentence that gives the answer before the instruments do.
+     *
+     * **Added in chunk 4:** Price changes, the report §5 called the largest
+     * missing widget on the page — the everyday user's own
+     * `StockItemPriceObservation` history had no trend surface anywhere in the
+     * app, while Price trends charted a product catalogue most installs never
+     * populate (FU-703 D3).
      *
      * **Cut in chunk 3:** stock value over time. Its formula was a 0–5 level
      * *ordinal* multiplied by a price, which is not a dollar figure at all, and
@@ -119,6 +143,7 @@
     import { computed, onMounted, ref, watch } from 'vue';
     import { ICONS } from 'src/style/icons';
     import BaseSegmented from 'src/components/BaseSegmented.vue';
+    import ItemPriceMoversCard from 'src/components/reports/ItemPriceMoversCard.vue';
     import KitchenMemoryCard from 'src/components/reports/KitchenMemoryCard.vue';
     import PriceTrendsCard from 'src/components/reports/PriceTrendsCard.vue';
     import ReportsLede from 'src/components/reports/ReportsLede.vue';
@@ -133,6 +158,7 @@
         type StoreSpendResponse,
         type MostBoughtResponse,
         type PriceTrendsResponse,
+        type ItemPriceMoversResponse,
         type ReportRange,
         type SavingsCapturedResponse,
         type MealsCookedResponse,
@@ -187,6 +213,7 @@
         spendByCategory: false,
         spendYoY: false,
         waste: false,
+        itemMovers: false,
     });
 
     const storeSpend = ref<StoreSpendResponse | null>(null);
@@ -203,6 +230,8 @@
     // a 2y/5y/all pick still shows the last year. The card's caption uses the
     // effective window the server returned, so what you read is what's real.
     const waste = ref<WasteInsights | null>(null);
+    // Chunk 4 — movement in the prices you logged yourself, per canonical unit.
+    const itemMovers = ref<ItemPriceMoversResponse | null>(null);
 
     // ── Per-card failure (REPORTS_PAGE_REVIEW.md finding 8) ──────────────
     // Every loader used to let a failed fetch fall through to the card's EMPTY
@@ -362,6 +391,13 @@
         });
     }
 
+    async function loadItemMovers() {
+        if (!moneyEnabled.value) { itemMovers.value = null; return; }
+        await loadSlot('itemMovers', async () => {
+            itemMovers.value = await reportsApi.getItemPriceMoversAsync(range.value, 8);
+        });
+    }
+
     async function loadPriceTrends() {
         if (!productMoneyEnabled.value) { priceTrends.value = null; return; }
         if (selectedProductIds.value.length === 0) {
@@ -399,6 +435,7 @@
             loadKeepsOut(),
             loadMealsCooked(),
             loadWaste(),
+            loadItemMovers(),
             loadPriceTrends(),
         ]);
     }
@@ -417,6 +454,7 @@
         void loadStoreSpend();
         void loadSpendByCategory();
         void loadSpendYoY();
+        void loadItemMovers();
     });
     watch(productMoneyEnabled, (on) => {
         if (!on) return;

@@ -11,6 +11,7 @@ value against data seeded through the API:
 the 30d default window; the actual→picked price ladder for spend-by-store is
 already pinned by `test_spend_by_store.py` and not re-tested here.
 """
+from datetime import datetime, timezone
 from uuid import uuid4
 
 import pytest
@@ -32,6 +33,10 @@ def _money_on(api):
 
 def _token() -> str:
     return f"zqr{uuid4().hex[:8]}"
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
 
 #region ---------------- stock value over time ----------------
@@ -485,6 +490,8 @@ def test__meals_cooked__RecipeCookedTwice__CountsEventsAndPortionsSeparately(api
     assert top["cook_count"] == 2      # two cooking sessions...
     assert top["meals_total"] == 5     # ...feeding five meals total
     assert body["cook_count"] >= 2
+    assert body["meals_total"] >= 5
+    assert sum(p["cook_count"] for p in body["timeline"]) == body["cook_count"]
 
 
 def test__meals_cooked__Repertoire__CountsDistinctRecipesAndTheUntouchedTail(api):
@@ -511,8 +518,29 @@ def test__meals_cooked__Repertoire__CountsDistinctRecipesAndTheUntouchedTail(api
     # that you've abandoned almost everything you own.
     assert body["uncooked_recipes"] >= 1
     assert body["uncooked_recipes"] <= body["total_recipes"]
-    assert body["meals_total"] >= 5
-    assert sum(p["cook_count"] for p in body["timeline"]) == body["cook_count"]
+
+
+def test__meals_cooked__BoundedRange__TimelineSpansTheWindowIncludingQuietBuckets(api):
+    # Only buckets that HAD a cook used to be emitted, so ten scattered cooking
+    # days came back as ten evenly-spaced points and the quiet days between them
+    # disappeared — a month that was mostly quiet drew as an unbroken run of
+    # activity. The gaps are the point of the chart.
+    token = _token()
+    recipe_id = requests.post(
+        f"{BASE}/recipes", json={"name": f"{token} congee"},
+    ).json()["recipe_id"]
+    requests.post(f"{BASE}/recipes/{recipe_id}/cook", json={"meals_cooked": 2})
+
+    body = requests.get(f"{REPORTS}/meals-cooked", params={"range": "30d"}).json()
+
+    timeline = body["timeline"]
+    # 30 daily buckets plus today's.
+    assert len(timeline) == 31
+    assert [p["date"] for p in timeline] == sorted(p["date"] for p in timeline)
+    assert any(p["cook_count"] == 0 for p in timeline)
+    # Filling the gaps must not invent or lose any cooks.
+    assert sum(p["cook_count"] for p in timeline) == body["cook_count"]
+    assert sum(p["meals_total"] for p in timeline) == body["meals_total"]
 
 
 #endregion meals cooked
@@ -574,6 +602,204 @@ def test__spend_year_over_year__RangeAll__RejectedAsUnbounded(api):
 
 #endregion spend year-over-year
 
+#region ---------------- item price movers ----------------
+
+
+def _stock_item(name: str) -> str:
+    level = requests.get(f"{BASE}/stock-levels").json()["items"][0]["stock_level_id"]
+    resp = requests.post(f"{BASE}/stock-items", json={
+        "name": name, "stock_level_id": level,
+    })
+    assert resp.status_code == 201, resp.text
+    return resp.json()["stock_item_id"]
+
+
+def _observe(item_id: str, *, price: float, measure: float, unit: str, on: str) -> None:
+    resp = requests.post(f"{BASE}/stock-items/{item_id}/price-observations", json={
+        "total_price": price, "total_measure": measure, "unit": unit,
+        "observed_at": on,
+    })
+    assert resp.status_code == 204, resp.text
+
+
+def _row_for(body: dict, item_id: str) -> dict | None:
+    return next((r for r in body["rows"] if r["stock_item_id"] == item_id), None)
+
+
+def test__item_price_movers__TwoObservations__ReportsTheDriftPerCanonicalUnit(api):
+    # REPORTS_PAGE_REVIEW.md section 5 - "which of MY items got more
+    # expensive?", the largest missing widget on the page and the only price
+    # report an install with no product catalogue can have (FU-703 D3).
+    token = _token()
+    item = _stock_item(f"{token} rolled oats")
+    # $4 for 2kg = $2.00/kg, then $6 for 2kg = $3.00/kg. The comparison is
+    # per-unit, so the pack size is not allowed to look like a price change.
+    _observe(item, price=4.0, measure=2.0, unit="kg", on="2026-01-05T00:00:00+00:00")
+    _observe(item, price=6.0, measure=2.0, unit="kg", on="2026-02-05T00:00:00+00:00")
+
+    body = requests.get(f"{REPORTS}/item-price-movers", params={"range": "all"}).json()
+
+    assert set(body.keys()) == {
+        "range", "rows", "items_with_movement", "items_with_one_observation",
+        "items_with_mixed_units", "items_unchanged",
+    }
+    row = _row_for(body, item)
+    assert row is not None
+    assert row["unit"] == "kg"
+    assert row["first_price"] == 2.0
+    assert row["last_price"] == 3.0
+    assert row["delta"] == 1.0
+    assert row["delta_pct"] == 50.0
+    assert row["observation_count"] == 2
+    assert row["first_observed_on"] == "2026-01-05"
+    assert row["last_observed_on"] == "2026-02-05"
+
+
+def test__item_price_movers__SamePricePaidForABiggerPack__ReadsAsAFall(api):
+    # The per-unit normalisation earning its keep: paying the same $6 for twice
+    # as much is a 50% fall, and a report comparing totals would call it flat.
+    token = _token()
+    item = _stock_item(f"{token} flour")
+    _observe(item, price=6.0, measure=1.0, unit="kg", on="2026-01-05T00:00:00+00:00")
+    _observe(item, price=6.0, measure=2.0, unit="kg", on="2026-02-05T00:00:00+00:00")
+
+    body = requests.get(f"{REPORTS}/item-price-movers", params={"range": "all"}).json()
+
+    row = _row_for(body, item)
+    assert row["first_price"] == 6.0
+    assert row["last_price"] == 3.0
+    assert row["delta_pct"] == -50.0
+
+
+def test__item_price_movers__SmallPack__QuotesTheShelfDenominatorTheChartUses(api):
+    # The bug this pins was found by driving it: the report said "$24.00/L" for
+    # an item whose own chart, one click away, said "$2.40/100ml". Same price,
+    # two languages. The per-unit maths runs in the canonical unit, but the
+    # shelf convention flips below a full litre, and `display_denominator_for`
+    # is the one authority on that flip — the widget, the chart and now this
+    # report all resolve it the same way (R-003).
+    token = _token()
+    item = _stock_item(f"{token} vanilla essence")
+    _observe(item, price=4.0, measure=100.0, unit="ml", on="2026-01-05T00:00:00+00:00")
+    _observe(item, price=6.0, measure=100.0, unit="ml", on="2026-02-05T00:00:00+00:00")
+
+    body = requests.get(f"{REPORTS}/item-price-movers", params={"range": "all"}).json()
+
+    row = _row_for(body, item)
+    assert row["unit"] == "100ml"
+    # $4 per 100ml — NOT $40.00/L, which is the same fact in a denominator this
+    # household never sees on a shelf.
+    assert row["first_price"] == 4.0
+    assert row["last_price"] == 6.0
+    assert row["delta"] == 2.0
+    assert row["delta_pct"] == 50.0
+
+
+def test__item_price_movers__OneObservation__IsCountedNotReported(api):
+    # One reading is a price, not a movement - and R-041 says an aggregate
+    # states what it was built from, so it is counted rather than dropped in
+    # silence.
+    token = _token()
+    item = _stock_item(f"{token} saffron")
+    _observe(item, price=9.0, measure=1.0, unit="kg", on="2026-02-05T00:00:00+00:00")
+
+    body = requests.get(f"{REPORTS}/item-price-movers", params={"range": "all"}).json()
+
+    assert _row_for(body, item) is None
+    assert body["items_with_one_observation"] >= 1
+
+
+def test__item_price_movers__SamePriceTwice__IsSteadyNotAMover(api):
+    # Two readings at the same price is an answer, not a change. Counting it as
+    # a mover is what made the card claim "7 of your items changed price" and
+    # then render four of them — the flat ones belonged to neither the dearer
+    # nor the cheaper list, so they vanished between the headline and the rows.
+    token = _token()
+    item = _stock_item(f"{token} bicarb")
+    _observe(item, price=3.0, measure=1.0, unit="kg", on="2026-01-05T00:00:00+00:00")
+    _observe(item, price=3.0, measure=1.0, unit="kg", on="2026-02-05T00:00:00+00:00")
+
+    body = requests.get(f"{REPORTS}/item-price-movers", params={"range": "all"}).json()
+
+    assert _row_for(body, item) is None
+    assert body["items_unchanged"] >= 1
+    # Every returned row really moved, in one direction or the other.
+    assert all(r["delta"] != 0 for r in body["rows"])
+
+
+def test__item_price_movers__MixedDimensions__ComparesOnlyTheActiveOne(api):
+    # A litre of something and an each-of-something cannot be compared
+    # per-unit. The row is built from the observations sharing the item's
+    # *active* dimension - the dimension of its latest reading, the same rule
+    # the buy verdict's baseline uses - and the mismatch is reported.
+    token = _token()
+    item = _stock_item(f"{token} yoghurt")
+    _observe(item, price=8.0, measure=4.0, unit="ea", on="2026-01-05T00:00:00+00:00")
+    _observe(item, price=4.0, measure=1.0, unit="L", on="2026-02-05T00:00:00+00:00")
+    _observe(item, price=6.0, measure=1.0, unit="L", on="2026-03-05T00:00:00+00:00")
+
+    body = requests.get(f"{REPORTS}/item-price-movers", params={"range": "all"}).json()
+
+    row = _row_for(body, item)
+    assert row["unit"] == "L"
+    assert row["observation_count"] == 2      # the "ea" reading is not in it
+    assert row["first_price"] == 4.0 and row["last_price"] == 6.0
+    assert body["items_with_mixed_units"] >= 1
+
+
+def test__item_price_movers__Range__ExcludesObservationsOutsideTheWindow(api):
+    # The bounded-range branch, which is where FU-813's naive-vs-aware crash
+    # lived on a sibling report: an old reading plus a recent one is not a
+    # movement inside a 30-day window.
+    token = _token()
+    item = _stock_item(f"{token} rice")
+    _observe(item, price=4.0, measure=2.0, unit="kg", on="2020-01-05T00:00:00+00:00")
+    _observe(item, price=9.0, measure=1.0, unit="kg", on=_now_iso())
+
+    windowed = requests.get(f"{REPORTS}/item-price-movers", params={"range": "30d"})
+    assert windowed.status_code == 200, windowed.text
+    assert _row_for(windowed.json(), item) is None
+
+    all_time = requests.get(f"{REPORTS}/item-price-movers", params={"range": "all"}).json()
+    assert _row_for(all_time, item) is not None
+
+
+def test__item_price_movers__Ranking__BiggestMovementFirstEitherDirection(api):
+    # "What changed" is the question, so a big fall outranks a small rise: the
+    # card takes risers from the top and fallers from the bottom without a
+    # second sort.
+    token = _token()
+    riser = _stock_item(f"{token} a riser")
+    faller = _stock_item(f"{token} b faller")
+    _observe(riser, price=1.0, measure=1.0, unit="kg", on="2026-01-05T00:00:00+00:00")
+    _observe(riser, price=1.1, measure=1.0, unit="kg", on="2026-02-05T00:00:00+00:00")
+    _observe(faller, price=10.0, measure=1.0, unit="kg", on="2026-01-05T00:00:00+00:00")
+    _observe(faller, price=2.0, measure=1.0, unit="kg", on="2026-02-05T00:00:00+00:00")
+
+    body = requests.get(
+        f"{REPORTS}/item-price-movers", params={"range": "all", "limit": 50},
+    ).json()
+
+    ranks = [r["stock_item_id"] for r in body["rows"]]
+    assert ranks.index(faller) < ranks.index(riser)
+
+
+def test__item_price_movers__Limit__CapsTheRowsButNotTheCounts(api):
+    body = requests.get(
+        f"{REPORTS}/item-price-movers", params={"range": "all", "limit": 1},
+    ).json()
+
+    assert len(body["rows"]) <= 1
+    # The coverage counts describe the whole pantry, not the page of rows -
+    # otherwise "1 of 1" would be a lie told by a limit.
+    assert body["items_with_movement"] >= len(body["rows"])
+    assert requests.get(
+        f"{REPORTS}/item-price-movers", params={"limit": "abc"},
+    ).status_code == 200
+
+
+#endregion item price movers
+
 #region ---------------- money gate ----------------
 
 
@@ -589,6 +815,7 @@ _MONEY_GATED = [
     ("spend-by-category", {}),
     ("spend-year-over-year", {}),
     ("price-trends", {"product_ids": ""}),
+    ("item-price-movers", {}),
 ]
 
 

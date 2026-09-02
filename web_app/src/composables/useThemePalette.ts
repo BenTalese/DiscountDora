@@ -24,7 +24,8 @@ import { computed, ref } from 'vue';
  *    added a `themeTick` ref to invalidate it, then never incremented it
  *    anywhere. Dead state advertising a fix.
  *  - `usePriceHistoryPalette.seriesColour` — the same one-shot read, no
- *    invalidation.
+ *    invalidation. That file is now gone: its `seriesColour` moved into this
+ *    one (FU-833), so the ramp and the token read are no longer two hops.
  *
  * ## How this works
  *
@@ -84,6 +85,42 @@ export function paletteTokens(names: string[], fallbacks: string[] = []): string
     return names.map((name, i) => paletteToken(name, fallbacks[i] ?? ''));
 }
 
+/**
+ * The categorical chart ramp, as the app's six `--chart-N` tokens.
+ *
+ * Folded in from `usePriceHistoryPalette.ts` (**FU-833** step 5), which was a
+ * six-line wrapper over `paletteToken` living beside the price chart. It lives
+ * here because this file is already the one place that turns a token name into
+ * the colour it currently resolves to (R-003), and because the ramp has three
+ * consumers now — the price chart's series, the picker chips that must match
+ * them, and Reports' categorical buckets.
+ *
+ * The hex fallbacks mirror the Pesto defaults so a pre-paint call still returns
+ * a sensible colour rather than an empty string.
+ */
+const CHART_RAMP_FALLBACKS: readonly string[] = [
+    'hsl(150, 76%, 39%)',  // --chart-1 (primary)
+    'hsl(189, 100%, 32%)', // --chart-2 (secondary)
+    'hsl(50, 95%, 50%)',   // --chart-3 (accent)
+    'hsl(20, 85%, 60%)',   // --chart-4 (warm tertiary)
+    'hsl(280, 50%, 58%)',  // --chart-5 (cool tertiary)
+    'hsl(220, 45%, 55%)',  // --chart-6 (cool quaternary)
+];
+
+/**
+ * Colour for the *n*th series, by position. Stable for as long as the selection
+ * is, so a chip in a picker, the polyline it selected and the swatch in a
+ * comparison card all agree. Wraps past the end of the ramp.
+ *
+ * Call it inside a `computed()` or a render function — same reactivity rule as
+ * `paletteToken`, for the same reason.
+ */
+export function seriesColour(index: number): string {
+    const slot = ((index % CHART_RAMP_FALLBACKS.length) + CHART_RAMP_FALLBACKS.length)
+        % CHART_RAMP_FALLBACKS.length;
+    return paletteToken(`--chart-${slot + 1}`, CHART_RAMP_FALLBACKS[slot]);
+}
+
 export function useThemePalette() {
     return {
         /** Increments on each theme application. Depend on this directly if you
@@ -91,5 +128,6 @@ export function useThemePalette() {
         themeVersion: computed(() => themeVersion.value),
         paletteToken,
         paletteTokens,
+        seriesColour,
     };
 }

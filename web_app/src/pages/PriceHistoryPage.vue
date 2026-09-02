@@ -99,7 +99,17 @@
 
             <q-card ref="chartCardRef" flat bordered>
                 <q-card-section class="q-pa-sm">
-                    <PriceHistoryChart :series="series" :width="chartWidth" :height="320" />
+                    <!-- FU-833 — the chart takes neutral series now; the
+                         product payload is mapped by `productSeriesToChart`,
+                         which also owns the "no offers ⇒ show your own prices"
+                         fallback this page relies on. -->
+                    <PriceHistoryChart
+                        :series="chartSeries"
+                        :width="chartWidth"
+                        :height="320"
+                        legend
+                        empty-line="Pick one or more products on the left to see their price history."
+                    />
                 </q-card-section>
             </q-card>
 
@@ -262,7 +272,8 @@
     import { useRoute } from 'vue-router';
     import BaseDialog from 'src/components/BaseDialog.vue';
     import PriceHistoryChart from 'src/components/PriceHistoryChart.vue';
-    import { seriesColour } from 'src/composables/usePriceHistoryPalette';
+    import { seriesColour } from 'src/composables/useThemePalette';
+    import { productSeriesToChart } from 'src/composables/usePriceChartSeries';
     import type { Product } from 'src/models/product';
     import PriceHistoryApiService, {
         type PriceAlert, type PriceHistorySeries, type PriceRange,
@@ -289,6 +300,11 @@
     ];
 
     const series = ref<PriceHistorySeries[]>([]);
+    /** What the chart draws. Offers lead on this page — it is the *product*
+     *  price surface — so `offersAsContext` stays off and the adapter falls back
+     *  to the user's own observations only for a product that has no offers at
+     *  all (the H2 rule, unchanged; it just no longer lives inside the chart). */
+    const chartSeries = computed(() => productSeriesToChart(series.value));
     const alerts = ref<PriceAlert[]>([]);
     const alertsOpen = ref(false);
     const alertInputs = reactive<Record<string, number | null>>({});

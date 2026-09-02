@@ -224,15 +224,39 @@ def _cook_row(recipe_id, name, meals=1, occurred_at=None):
 
 @pytest.mark.unit
 class TestMealsCookedGrouping:
-    def _run(self, rows) -> dict:
+    def _run(self, rows, total_recipes: int = 0) -> dict:
         from dora_api.features.reports.reports import MealsCookedHandler
 
+        class _Res:
+            def __init__(self, rows, scalar=None):
+                self._rows = rows
+                self._scalar = scalar
+
+            def all(self):
+                return self._rows
+
+            def scalar_one(self):
+                return self._scalar
+
         class _Session:
-            def execute(self, _query):
-                class _Res:
-                    def all(_self):
-                        return rows
-                return _Res()
+            """Enough Session to answer the handler's three queries.
+
+            It discriminates on the query's *selected columns*, not on call
+            order: `_repertoire()` (§3.8) added a `count(Recipe.id)` and a
+            one-column CookEvent query beside the handler's original
+            four-column one, and an order-based stub would hand the wrong rows
+            to whichever ran first if the handler is ever reordered.
+            """
+
+            def execute(self, query):
+                names = [c.name for c in query.selected_columns]
+                if any("count" in (n or "") for n in names):
+                    return _Res([], scalar=total_recipes)
+                if names == ["recipe_id"]:
+                    # The repertoire's "cooked in the last year" set — rows come
+                    # back as one-tuples, the shape the handler unpacks.
+                    return _Res([(r.recipe_id,) for r in rows if r.recipe_id])
+                return _Res(rows)
 
         stub_repo = SimpleNamespace(session=_Session())
         # Constructor injection — no patch.object needed.
@@ -242,8 +266,13 @@ class TestMealsCookedGrouping:
         out = self._run([])
         assert out["cook_count"] == 0
         assert out["meals_total"] == 0
+        assert out["distinct_recipes"] == 0
         assert out["top_recipes"] == []
         assert out["timeline"] == []
+        # Repertoire still reports, because "you have recipes and cooked none of
+        # them" is exactly the case the empty branch has to be able to say.
+        assert out["total_recipes"] == 0
+        assert out["uncooked_recipes"] == 0
 
     def test__groups_by_recipe(self):
         rid = uuid4()
@@ -253,6 +282,9 @@ class TestMealsCookedGrouping:
         ])
         assert out["cook_count"] == 2
         assert out["meals_total"] == 6
+        # Two cooks of one recipe: the fact that separates "how often did we
+        # cook" from "how much of the cookbook do we actually use" (§3.8).
+        assert out["distinct_recipes"] == 1
         top = out["top_recipes"]
         assert len(top) == 1
         assert top[0]["cook_count"] == 2
@@ -268,3 +300,15 @@ class TestMealsCookedGrouping:
         ])
         order = [row["recipe_name"] for row in out["top_recipes"]]
         assert order == ["A", "B", "C"]
+        assert out["distinct_recipes"] == 3
+
+    def test__repertoire_counts_the_cookbook_not_the_range(self):
+        # Five saved recipes, one of them cooked: the untouched tail is four,
+        # and it is a fact about the cookbook — the handler is run with
+        # `since=None` here, but the tail is measured over the last 365 days
+        # either way, so a 30-day view can't report the whole cookbook as
+        # abandoned.
+        rid = uuid4()
+        out = self._run([_cook_row(rid, "Curry", meals=2)], total_recipes=5)
+        assert out["total_recipes"] == 5
+        assert out["uncooked_recipes"] == 4

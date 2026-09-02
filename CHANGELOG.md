@@ -5,7 +5,61 @@ semver — major bumps signal schema or breaking-config changes.
 
 ## [Unreleased]
 
+### Added
+- **Reports tells you which of *your own* items got dearer (2026-09-02).** A new
+  **Price changes** card, and it is the first thing in the app that answers the
+  everyday price question: not "what does this product cost across stores", but
+  "what am *I* paying more for than I was". It is built from the prices you log
+  yourself — on a shelf, or harvested when you finish a priced shopping list —
+  so it works even if you never touch the product catalogue.
+  - Two lists, **Dearer** and **Cheaper**, ranked by how much the price moved,
+    each row showing the trip: *"Extra Virgin Olive Oil · +200.4% · $0.80 →
+    $2.40/100ml"*. Tap one and its price history opens underneath, with your
+    usual price drawn in and any store offers behind it.
+  - It refuses to make things up. An item with one logged price can't show a
+    change, and an item logged first by the bottle and then by the litre can't be
+    compared per-unit — so it says how many it left out and why, rather than
+    quietly reporting a shorter list. Items whose price held steady are counted
+    too: *"3 others held steady"*.
+
+### Changed
+- **Charts are ~500 KB lighter, and now readable by a screen reader
+  (2026-09-02).** Every chart in the app is drawn by the same small in-house
+  component now, and the charting library it needed is gone: opening Reports
+  used to pull 549 KB of it, and pulls 24 KB today. Along the way the charts
+  gained a **legend** — most of them never had one — and a text description, so
+  a screen reader can now say what a chart shows instead of skipping it. Two
+  honest losses: lines are no longer smoothed into curves, and a gap in a price
+  history is now drawn as a gap instead of a straight line through it.
+- **Reports is four cards and an opening line, not eleven widgets
+  (2026-09-02).** The page now answers one question per card — **Spend** (where
+  the money went, with a store / group / vs-last-period switch instead of three
+  separate cards), **Waste & run-outs**, **Kitchen memory**, and **Price
+  trends** — and it opens with the answer rather than a disclaimer: *"You spent
+  $109.69 across 5 shops in the last 30 days — 163% more than the 30 days
+  before. Biggest mover: Pantry staples, up $47.39."* The "estimates, not
+  accounting" caveat moved to an info icon beside the range picker.
+  - The pie charts are gone. Spend divides up the same horizontal bar your
+    shopping list already uses, so the two pages read alike — including the
+    hatched "no store set" slice.
+  - **Stock value over time is cut from Reports.** It multiplied a 0–5 stock
+    *level* by a price and called the result dollars, and every unpriced item
+    counted as zero — so the number was never really money. It survives as the
+    dashboard's opt-in pantry-value card.
+  - The wastage list is capped, with *"+ N more, not shown"* when there is more
+    behind it, instead of growing without limit.
+  - Kitchen memory can now tell you something no report could before: how much
+    of your cookbook you actually use — *"You cooked 10 times — 34 meals, 5
+    different recipes"*, and *"9 of your 16 saved recipes haven't been cooked in
+    a year"*. Recipes and stock items in its lists are links now.
+  - Cards look and behave like the dashboard's, because they are literally the
+    same card component now — hover, spacing and corners included.
+
 ### Fixed
+- **The cook timeline drew a quiet month as a busy one (2026-09-02).** It only
+  ever plotted the days you *did* cook, side by side, so ten cooking sessions
+  scattered across a month rendered as ten adjacent full-height columns — a
+  solid block of activity. It now spans the whole range, so the gaps show.
 - **Reports honours the money switch (2026-09-02).** It was the last significant
   surface in the app that didn't: with money turned off you still got spend by
   store, savings captured, spend by category, year-over-year, price trends and

@@ -145,6 +145,33 @@ device packs for hardware items.
 
 ---
 
+## Verified live — Reports chunk 3, the restructure (2026-09-02)
+
+Driven on the dense seed at :5171 (throwaway backend + built SPA + a scratchpad
+Playwright script, per the stance — no committed specs added). The two
+`DORA_VERIFY.md` price-trends lines were **deleted on pass**; the section they
+were in was replaced with what the drive could *not* cover.
+
+| Deleted verify line | Evidence from the drive |
+|---|---|
+| "Type in the picker: results come from the whole catalogue, not the first 50" (FU-813) | Typing `yog` fired `GET /products?filter=name:ct:yog&sort=name:asc&page=1&limit=20` and returned the one match ("Chobani Greek Yoghurt 6x170g · Woolworths"). The needle goes to the server — which is the contract; the seed only holds 12 products, so "well down an alphabetical list" is proven by the request, not by the count. |
+| "With products selected, click the picker's clear (x) — it used to throw" (FU-813) | Selected a product (chart drew, y-axis `$0.00`–`$3.00` through `formatMoney`), clicked clear: chips emptied, the card fell back to *"Pick a product to chart its unit price over time"*, and **zero** page errors were recorded. |
+
+**Also confirmed in the same drive, no verify line needed:** four cards and no
+`[class*="report-card"]` fork (0 matches); `border-radius: 10px` /
+`padding: 16px` measured on a live card (FU-814 item 4); all three Spend axes;
+one 404'd endpoint failing exactly one card while the other three render;
+money-off leaving exactly two count-based cards with **no** money endpoint
+called and the nav entry intact; one grid column at both 700px and 390px with
+`scrollWidth == clientWidth`.
+
+**Three defects the drive found** (all fixed in the same unit): the cook
+timeline's missing gaps, the Spend card's coverage footnote surviving into its
+error state, and — from running the suite rather than the browser — three red
+`MealsCookedHandler` unit tests whose stub session predated `_repertoire()`.
+
+---
+
 ## Pinned by test, not by a live drive — dashboard chunk 1 (2026-09-02)
 
 Two `DORA_VERIFY.md` lines added earlier the same day were **deleted rather than

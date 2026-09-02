@@ -103,12 +103,20 @@
         </template>
 
         <!-- Savings, as a support line rather than a card of its own (§5).
+             Suppressed while the card is in its error state: found in the
+             browser, where a 404 on spend-by-store left *"1 item had no price
+             recorded, so it isn't counted here"* sitting under "I couldn't load
+             your spend" — a coverage footnote about numbers that aren't on
+             screen, which is the same failure-dressed-as-data the error state
+             exists to prevent (D-007).
              R-071: the figure names its baseline. This one is still computed
              against the retailer's shelf price; FU-831 moves the retrospective
              figure to your own usual price and re-words it, which is exactly why
              the label can't be a bare "saved". -->
-        <div v-if="savingsLine" class="spend-support">{{ savingsLine }}</div>
-        <div v-if="coverageLine" class="spend-support">{{ coverageLine }}</div>
+        <template v-if="!failed">
+            <div v-if="savingsLine" class="spend-support">{{ savingsLine }}</div>
+            <div v-if="coverageLine" class="spend-support">{{ coverageLine }}</div>
+        </template>
     </DashboardCard>
 </template>
 

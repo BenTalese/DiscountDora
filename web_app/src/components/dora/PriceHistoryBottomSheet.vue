@@ -25,21 +25,12 @@
             </div>
 
             <template v-else-if="hasPoints">
-                <!-- Legend (D2 names the two series + the baseline). -->
-                <div class="row items-center q-gutter-md q-mb-sm text-caption dora-text-secondary">
-                    <span class="row items-center no-wrap">
-                        <span class="legend-dot" :style="{ background: yourColour }" />
-                        Your prices
-                    </span>
-                    <span v-if="hasOffers" class="row items-center no-wrap">
-                        <span class="legend-dash" :style="{ color: yourColour }" />
-                        Store offers
-                    </span>
-                    <span v-if="history?.baseline != null" class="row items-center no-wrap">
-                        <span class="legend-dash legend-dash--baseline" />
-                        Usually {{ formatMoney(history.baseline)
-                        }}{{ history.baseline_unit ? `/${history.baseline_unit}` : '' }}
-                    </span>
+                <!-- The "above usual" chip stays here: it is a verdict about
+                     the item, not a key to the chart. The legend itself moved
+                     *into* `PriceHistoryChart` (FU-833) — it named the two
+                     series and the baseline, which are the chart's own facts,
+                     and two other consumers needed the same thing. -->
+                <div class="row items-center q-mb-sm">
                     <q-space />
                     <q-chip
                         v-if="history?.above_baseline"
@@ -53,10 +44,12 @@
                 </div>
 
                 <PriceHistoryChart
-                    :series="series"
+                    :series="chartSeries"
                     :width="chartWidth"
                     :height="300"
-                    offers-as-context
+                    legend
+                    context-label="Store offers"
+                    :aria-label="`Price history for ${itemName || history?.name || 'this item'}: your logged prices against store offers.`"
                 />
             </template>
 
@@ -72,13 +65,10 @@
     import AppSpinner from 'src/components/AppSpinner.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
     import PriceHistoryChart from 'src/components/PriceHistoryChart.vue';
-    import { seriesColour } from 'src/composables/usePriceHistoryPalette';
-    import { formatMoney } from 'src/composables/useMoney';
+    import { stockItemHistoryToChart } from 'src/composables/usePriceChartSeries';
     import { ICONS } from 'src/style/icons';
     import StockItemApiService from 'src/services/api/stockItemApiService';
-    import type {
-        PriceHistorySeries, StockItemPriceHistory,
-    } from 'src/services/api/priceHistoryApiService';
+    import type { StockItemPriceHistory } from 'src/services/api/priceHistoryApiService';
 
     const props = withDefaults(
         defineProps<{
@@ -97,46 +87,13 @@
     const history = ref<StockItemPriceHistory | null>(null);
     const loading = ref(false);
 
-    // "Your data" series colour — index 0 of the shared palette, same hue the
-    // chart paints the observation line/dots with.
-    const yourColour = computed(() => seriesColour(0));
-
     const hasPoints = computed(() => (history.value?.points.length ?? 0) > 0);
-    const hasOffers = computed(
-        () => history.value?.points.some((p) => p.source === 'offer') ?? false,
-    );
 
-    // Split the server's tagged points into the chart's offer + observation
-    // series shapes. Everything is already per-unit and date-sorted server-side.
-    const series = computed<PriceHistorySeries[]>(() => {
-        const h = history.value;
-        if (!h) return [];
-        return [{
-            product_id: h.stock_item_id,
-            name: h.name,
-            store: '',
-            points: h.points
-                .filter((p) => p.source === 'offer')
-                .map((p) => ({
-                    date: p.observed_at, unit_price: p.unit_price,
-                    list_price: null, on_deal: false,
-                })),
-            observation_points: h.points
-                .filter((p) => p.source === 'observation')
-                .map((p) => ({
-                    date: p.observed_at, unit_price: p.unit_price, store_name: p.store_name,
-                })),
-            your_prices: {
-                baseline: h.baseline,
-                baseline_unit: h.baseline_unit,
-                current: h.current,
-                above_baseline: h.above_baseline,
-                sample_count: h.sample_count,
-            },
-            current: null,
-            all_time_low: null,
-        }];
-    });
+    /** The chart's series. `stockItemHistoryToChart` splits the server's tagged
+     *  union — your observations lead, offers become the subordinate dashed
+     *  line, the baseline rides along — so this component no longer rebuilds a
+     *  product-shaped DTO it never had (FU-833). */
+    const chartSeries = computed(() => stockItemHistoryToChart(history.value));
 
     // ── Responsive chart width (mirrors PriceHistoryPage) ───────────────────
     const bodyRef = ref<{ $el?: HTMLElement } | null>(null);
@@ -186,19 +143,3 @@
         resizeObserver = null;
     });
 </script>
-
-<style scoped>
-    .legend-dot {
-        width: 10px; height: 10px; border-radius: 50%;
-        display: inline-block; margin-right: 6px;
-    }
-    .legend-dash {
-        width: 16px; height: 0; display: inline-block; margin-right: 6px;
-        border-top: 2px dashed currentColor;
-        opacity: 0.6;
-    }
-    .legend-dash--baseline {
-        border-top-color: var(--text-muted);
-        opacity: 0.8;
-    }
-</style>

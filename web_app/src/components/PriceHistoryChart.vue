@@ -6,7 +6,18 @@
             :viewBox="`0 0 ${width} ${height}`"
             class="chart-svg"
             preserveAspectRatio="none"
+            role="img"
+            :aria-label="ariaLabel"
         >
+            <!-- The text alternative. An SVG can carry one; the ECharts canvas
+                 this component replaced could not, which is what made §4.9's
+                 "five charts with no accessible alternative" unfixable while it
+                 stood (FU-833 step 3). `<title>` is the accessible name,
+                 `<desc>` the detail — one line per series, with the range and
+                 the latest value, which is what the chart is *for*. -->
+            <title>{{ ariaLabel }}</title>
+            <desc v-if="seriesSummaries.length > 0">{{ seriesSummaries.join(' ') }}</desc>
+
             <!-- Horizontal gridlines + y-axis labels -->
             <g class="gridlines">
                 <line
@@ -46,46 +57,45 @@
                 </text>
             </g>
 
-            <!-- One group per series: offers (context) + observations (your
-                 data) + baseline reference line (FU-227 chunk 6 / D2 + F-3). -->
-            <g v-for="(s, i) in renderableSeries" :key="s.product_id">
-                <!-- Offers polyline. In the union view (offersAsContext) offers
-                     are subordinate: dashed + faint. On the per-product page
-                     they're the primary data: solid + full strength. -->
+            <!-- One group per series: its own line, an optional subordinate
+                 context line for the same subject, and an optional baseline. -->
+            <g v-for="(s, i) in renderableSeries" :key="s.key">
+                <!-- Context line — the same subject from a lesser source (store
+                     offers under your own logged prices). Dashed + faint, and
+                     deliberately the *same* hue: it is not a second series. -->
                 <polyline
-                    v-if="s.path.length"
-                    :points="s.path"
+                    v-if="s.contextPath"
+                    :points="s.contextPath"
                     fill="none"
                     :stroke="seriesColour(i)"
-                    :stroke-width="offersAsContext ? 1.4 : 1.8"
-                    :stroke-dasharray="offersAsContext ? '5,3' : undefined"
-                    :opacity="offersAsContext ? 0.5 : 1"
+                    stroke-width="1.4"
+                    stroke-dasharray="5,3"
+                    opacity="0.5"
                 />
-                <!-- Deal markers (only when on_deal) -->
-                <g v-for="(point, j) in s.dealMarkers" :key="`d-${i}-${j}`">
-                    <circle
-                        :cx="point.x"
-                        :cy="point.y"
-                        r="3"
-                        :fill="seriesColour(i)"
-                        :opacity="offersAsContext ? 0.5 : 0.9"
-                    />
-                </g>
+                <circle
+                    v-for="(point, j) in s.contextMarkers"
+                    :key="`cm-${i}-${j}`"
+                    :cx="point.x"
+                    :cy="point.y"
+                    r="3"
+                    :fill="seriesColour(i)"
+                    opacity="0.5"
+                />
 
-                <!-- Observations ("your data") — solid line + dots. -->
+                <!-- The series' own line. -->
                 <polyline
-                    v-if="s.observationPath.length"
-                    :points="s.observationPath"
+                    v-if="s.path"
+                    :points="s.path"
                     fill="none"
                     :stroke="seriesColour(i)"
                     stroke-width="2"
                 />
                 <circle
-                    v-for="(point, j) in s.observationDots"
+                    v-for="(point, j) in s.dots"
                     :key="`o-${i}-${j}`"
                     :cx="point.x"
                     :cy="point.y"
-                    r="2.6"
+                    :r="point.marked ? 3.4 : 2.6"
                     :fill="seriesColour(i)"
                 />
 
@@ -124,6 +134,26 @@
             </g>
         </svg>
 
+        <!-- Legend. Lived in the callers before — the bottom sheet hand-rolled
+             one above the chart while `/price-history` and Reports had none at
+             all, so two of the three consumers couldn't tell you which line was
+             which (FU-833 step 3). It belongs to the thing that assigns the
+             colours. -->
+        <ul v-if="legend && renderableSeries.length > 0" class="chart-legend">
+            <li v-for="(s, i) in renderableSeries" :key="`lg-${s.key}`">
+                <span class="chart-legend__line" :style="{ background: seriesColour(i) }" />
+                {{ s.name }}
+            </li>
+            <li v-if="hasContext">
+                <span class="chart-legend__line chart-legend__line--dashed" />
+                {{ contextLabel }}
+            </li>
+            <li v-for="s in baselineSeries" :key="`lb-${s.key}`">
+                <span class="chart-legend__line chart-legend__line--baseline" />
+                {{ s.baselineLabel }}
+            </li>
+        </ul>
+
         <!-- Hover tooltip card -->
         <div
             v-if="hover"
@@ -133,112 +163,130 @@
             <div class="chart-tooltip-date">{{ hover.dateLabel }}</div>
             <div
                 v-for="(s, i) in renderableSeries"
-                :key="`t-${s.product_id}`"
+                :key="`t-${s.key}`"
                 class="chart-tooltip-row"
             >
                 <span class="chart-tooltip-swatch" :style="{ background: seriesColour(i) }" />
                 <span class="chart-tooltip-name">{{ s.name }}</span>
                 <span class="chart-tooltip-price">
-                    {{ hover.byProduct[s.product_id]?.price !== undefined
-                        ? formatMoney(hover.byProduct[s.product_id]!.price!)
+                    {{ hover.bySeries[s.key]?.value !== undefined
+                        && hover.bySeries[s.key]?.value !== null
+                        ? formatMoney(hover.bySeries[s.key]!.value!)
                         : '—' }}
                 </span>
                 <q-icon
-                    v-if="hover.byProduct[s.product_id]?.on_deal"
-                    name="local_offer"
+                    v-if="hover.bySeries[s.key]?.marked"
+                    :name="ICONS.local_offer"
                     size="12px"
                     color="positive"
                     class="q-ml-xs"
                 />
-                <q-icon
-                    v-if="hover.byProduct[s.product_id]?.is_observation"
-                    name="mdi-circle"
-                    size="8px"
-                    color="primary"
-                    class="q-ml-xs"
-                >
-                    <q-tooltip>Your logged price</q-tooltip>
-                </q-icon>
             </div>
         </div>
 
         <div v-if="renderableSeries.length === 0" class="chart-empty">
-            Pick one or more products on the left to see their price history.
+            {{ emptyLine }}
         </div>
     </div>
 </template>
 
 <script lang="ts" setup>
+    /**
+     * The app's price chart — inline SVG, no charting library.
+     *
+     * ## What changed (FU-833)
+     *
+     * This drew product price history and nothing else; it now draws every price
+     * series in the app, and ECharts is gone from `package.json` because of it.
+     * Two things made that a small change rather than a rewrite: the drawing code
+     * was already general (multi-series polylines, y-ticks, x-labels, hover
+     * crosshair), and the *interpretation* of a payload moved out to
+     * `usePriceChartSeries.ts`, so this component no longer knows what an offer,
+     * an observation or a product is. It takes lines and draws them.
+     *
+     * What it gained while being adopted, because the owner's decision on FU-812
+     * made the a11y half non-negotiable: a **legend** (two of three consumers
+     * had none, and the third hand-rolled one above the chart), and a **text
+     * alternative** — `role="img"` with a generated `aria-label` plus a `<desc>`
+     * naming each series' range and latest value. That last part is only
+     * possible at all because this is SVG: the canvas it replaced was opaque to
+     * assistive tech, which is why §4.9's finding had no fix while ECharts
+     * stood.
+     *
+     * ## What it does not do
+     *
+     * No touch interaction — the hover crosshair is mouse-only, which is
+     * **FU-705**, still open and deliberately not folded in here.
+     */
     import { computed, ref } from 'vue';
-    import { seriesColour } from 'src/composables/usePriceHistoryPalette';
+    import { ICONS } from 'src/style/icons';
+    import { seriesColour } from 'src/composables/useThemePalette';
     import { formatDate as formatLocaleDate } from 'src/composables/useDateFormat';
     import { formatMoney } from 'src/composables/useMoney';
-    import type { PriceHistorySeries } from 'src/services/api/priceHistoryApiService';
+    import type {
+        PriceChartPoint, PriceChartSeries,
+    } from 'src/composables/usePriceChartSeries';
 
     const props = defineProps<{
-        series: PriceHistorySeries[];
+        series: PriceChartSeries[];
         width?: number;
         height?: number;
-        /** FU-227 chunk 6 — the union view (bottom-sheet) renders offers as
-         *  subordinate "context" (dashed + faint) under the user's own
-         *  observation line. The per-product page leaves it false, so offers
-         *  stay the primary solid series and observations only appear as the
-         *  H2 fallback when a product has no offer points. */
-        offersAsContext?: boolean;
+        /** Render the built-in legend under the plot. */
+        legend?: boolean;
+        /** Names the dashed subordinate line when any series has one. */
+        contextLabel?: string;
+        /** What to say when there is nothing to draw. The empty state is the
+         *  caller's, because only the caller knows what the reader should do
+         *  about it (B9). */
+        emptyLine?: string;
+        /** Overrides the generated accessible name. */
+        ariaLabel?: string;
     }>();
 
     const width = computed(() => props.width ?? 720);
     const height = computed(() => props.height ?? 320);
-    const offersAsContext = computed(() => props.offersAsContext ?? false);
+    const legend = computed(() => props.legend ?? false);
+    const contextLabel = computed(() => props.contextLabel ?? 'Store offers');
+    const emptyLine = computed(
+        () => props.emptyLine ?? 'Nothing to chart yet.',
+    );
     const padding = { top: 12, right: 16, bottom: 22, left: 48 };
 
+    interface PlottedPoint { x: number; y: number; marked?: boolean }
     interface RenderableSeries {
-        product_id: string;
+        key: string;
         name: string;
         path: string;
-        dealMarkers: Array<{ x: number; y: number }>;
-        observationPath: string;
-        observationDots: Array<{ x: number; y: number }>;
+        dots: PlottedPoint[];
+        contextPath: string;
+        contextMarkers: PlottedPoint[];
         baselineY: number | null;
         baselineLabel: string | null;
     }
 
-    // Whether a series has any plottable offer point. Drives the H2 fallback:
-    // on the per-product page (offersAsContext=false) observations + baseline
-    // only render when a product has no offers, so the per-unit observation
-    // scale never clashes with the raw offer scale on the same series.
-    function hasOffers(s: PriceHistorySeries): boolean {
-        return s.points.some((p) => p.unit_price !== null && p.date !== null);
-    }
-    function showObservationsFor(s: PriceHistorySeries): boolean {
-        if ((s.observation_points?.length ?? 0) === 0) return false;
-        return offersAsContext.value || !hasOffers(s);
-    }
-    function showBaselineFor(s: PriceHistorySeries): boolean {
-        if (s.your_prices?.baseline == null) return false;
-        return offersAsContext.value || !hasOffers(s);
+    /** Every series with at least one point. A series the caller passed but
+     *  which has no data contributes nothing to the axes and isn't drawn,
+     *  legended or announced. */
+    const plottable = computed(
+        () => props.series.filter(
+            (s) => s.points.length > 0 || (s.contextPoints?.length ?? 0) > 0,
+        ),
+    );
+
+    /** Every point a series draws, own line and context line together — the
+     *  shape the axes and the hover lookup both want. */
+    function pointsOf(s: PriceChartSeries): PriceChartPoint[] {
+        return [...s.points, ...(s.contextPoints ?? [])];
     }
 
-    // Compute the chart-space bounds across all series. A series with no
-    // points contributes nothing; if every series is empty we render an
-    // empty-state message.
+    // Chart-space bounds across every drawn line and baseline. Both lines of a
+    // series are always in the same unit (the server normalises before it
+    // unions them), so they can share one axis.
     const valueBounds = computed(() => {
         const all: number[] = [];
-        for (const s of props.series) {
-            for (const p of s.points) {
-                if (p.unit_price !== null) all.push(p.unit_price);
-            }
-            // Include observation points + baseline only when they're drawn,
-            // so a hidden per-unit observation series can't skew a raw-offer
-            // axis (H2-fallback-only).
-            if (showObservationsFor(s)) {
-                for (const p of s.observation_points ?? []) {
-                    if (p.unit_price !== null) all.push(p.unit_price);
-                }
-            }
-            if (showBaselineFor(s) && s.your_prices?.baseline != null) {
-                all.push(s.your_prices.baseline);
-            }
+        for (const s of plottable.value) {
+            for (const p of pointsOf(s)) all.push(p.value);
+            if (s.baseline != null) all.push(s.baseline.value);
         }
         if (all.length === 0) return null;
         const min = Math.min(...all);
@@ -257,15 +305,10 @@
 
     const timeBounds = computed(() => {
         const all: number[] = [];
-        const pushDate = (date: string | null) => {
-            if (!date) return;
-            const t = new Date(date).getTime();
-            if (!Number.isNaN(t)) all.push(t);
-        };
-        for (const s of props.series) {
-            for (const p of s.points) pushDate(p.date);
-            if (showObservationsFor(s)) {
-                for (const p of s.observation_points ?? []) pushDate(p.date);
+        for (const s of plottable.value) {
+            for (const p of pointsOf(s)) {
+                const t = new Date(p.date).getTime();
+                if (!Number.isNaN(t)) all.push(t);
             }
         }
         if (all.length === 0) return null;
@@ -287,54 +330,65 @@
         return padding.top + innerH - ((value - vb.min) / (vb.max - vb.min)) * innerH;
     }
 
+    /** Project one line's points, dropping any with an unparseable date. */
+    function project(points: PriceChartPoint[]): PlottedPoint[] {
+        const out: PlottedPoint[] = [];
+        for (const p of points) {
+            const t = new Date(p.date).getTime();
+            if (Number.isNaN(t)) continue;
+            out.push({
+                x: projectX(t),
+                y: projectY(p.value),
+                ...(p.marked ? { marked: true } : {}),
+            });
+        }
+        return out;
+    }
+    const toPath = (points: PlottedPoint[]) =>
+        points.map((p) => `${p.x},${p.y}`).join(' ');
+
     const renderableSeries = computed<RenderableSeries[]>(() =>
-        props.series.map((s) => {
-            const points: Array<{ x: number; y: number; on_deal: boolean }> = [];
-            for (const p of s.points) {
-                if (p.date === null || p.unit_price === null) continue;
-                const t = new Date(p.date).getTime();
-                if (Number.isNaN(t)) continue;
-                points.push({
-                    x: projectX(t),
-                    y: projectY(p.unit_price),
-                    on_deal: p.on_deal,
-                });
-            }
-
-            // Observations ("your data") — only when this series should show
-            // them (offersAsContext, or the H2 no-offer fallback).
-            const obsPoints: Array<{ x: number; y: number }> = [];
-            if (showObservationsFor(s)) {
-                for (const p of s.observation_points ?? []) {
-                    if (p.date === null || p.unit_price === null) continue;
-                    const t = new Date(p.date).getTime();
-                    if (Number.isNaN(t)) continue;
-                    obsPoints.push({ x: projectX(t), y: projectY(p.unit_price) });
-                }
-            }
-
-            let baselineY: number | null = null;
-            let baselineLabel: string | null = null;
-            if (showBaselineFor(s) && s.your_prices?.baseline != null) {
-                baselineY = projectY(s.your_prices.baseline);
-                const unit = s.your_prices.baseline_unit;
-                baselineLabel = `usually ${formatMoney(s.your_prices.baseline)}${unit ? `/${unit}` : ''}`;
-            }
-
+        plottable.value.map((s) => {
+            const own = project(s.points);
+            const context = project(s.contextPoints ?? []);
             return {
-                product_id: s.product_id,
+                key: s.key,
                 name: s.name,
-                path: points.map((p) => `${p.x},${p.y}`).join(' '),
-                dealMarkers: points.filter((p) => p.on_deal).map(
-                    (p) => ({ x: p.x, y: p.y }),
-                ),
-                observationPath: obsPoints.map((p) => `${p.x},${p.y}`).join(' '),
-                observationDots: obsPoints,
-                baselineY,
-                baselineLabel,
+                path: toPath(own),
+                dots: own,
+                contextPath: toPath(context),
+                contextMarkers: context.filter((p) => p.marked),
+                baselineY: s.baseline != null ? projectY(s.baseline.value) : null,
+                baselineLabel: s.baseline?.label ?? null,
             };
         }),
     );
+
+    const hasContext = computed(
+        () => renderableSeries.value.some((s) => s.contextPath.length > 0),
+    );
+    const baselineSeries = computed(
+        () => renderableSeries.value.filter((s) => s.baselineY !== null),
+    );
+
+    // ── Text alternative ────────────────────────────────────────────────
+    /** One sentence per series: how many points, the range, and where it ended
+     *  up. Deliberately not a point-by-point table — a screen reader reading 90
+     *  daily prices aloud is worse than no alternative at all. */
+    const seriesSummaries = computed(() => plottable.value.map((s) => {
+        const values = pointsOf(s).map((p) => p.value);
+        if (values.length === 0) return `${s.name}: no prices.`;
+        const latest = s.points.at(-1)?.value ?? values.at(-1)!;
+        return `${s.name}: ${values.length} price${values.length === 1 ? '' : 's'}, `
+            + `${formatMoney(Math.min(...values))} to ${formatMoney(Math.max(...values))}, `
+            + `latest ${formatMoney(latest)}.`;
+    }));
+    const ariaLabel = computed(() => {
+        if (props.ariaLabel) return props.ariaLabel;
+        if (plottable.value.length === 0) return 'Price chart, no data.';
+        const names = plottable.value.map((s) => s.name).join(', ');
+        return `Price history over time for ${names}.`;
+    });
 
     // ── Y ticks: 4 evenly spaced over the visible range ─────────────────
     const yTicks = computed(() => {
@@ -366,7 +420,7 @@
     interface HoverState {
         x: number;
         dateLabel: string;
-        byProduct: Record<string, { price: number | null; on_deal: boolean; is_observation: boolean }>;
+        bySeries: Record<string, { value: number | null; marked: boolean }>;
     }
     const hostRef = ref<HTMLElement | null>(null);
     const hover = ref<HoverState | null>(null);
@@ -381,47 +435,27 @@
         const ratio = Math.max(0, Math.min(1, (localX - padding.left) / innerW));
         const targetTime = tb.min + ratio * (tb.max - tb.min);
 
-        const byProduct: HoverState['byProduct'] = {};
-        for (const s of props.series) {
-            // Nearest-point lookup per series, across offers + (when shown)
-            // the user's own observations. Build the candidate list first, then
-            // reduce — keeping the `best` assignment in this scope so TS narrows
-            // it (a closure would widen it back to never).
-            const candidates: Array<{
-                dt: number; price: number | null; on_deal: boolean; is_observation: boolean;
-            }> = [];
-            for (const p of s.points) {
-                if (!p.date) continue;
+        const bySeries: HoverState['bySeries'] = {};
+        for (const s of plottable.value) {
+            // Nearest point per series, across its own line and its context
+            // line — whichever actually has a reading near the cursor.
+            let best: { dt: number; value: number; marked: boolean } | null = null;
+            for (const p of pointsOf(s)) {
                 const t = new Date(p.date).getTime();
                 if (Number.isNaN(t)) continue;
-                candidates.push({
-                    dt: Math.abs(t - targetTime), price: p.unit_price,
-                    on_deal: p.on_deal, is_observation: false,
-                });
-            }
-            if (showObservationsFor(s)) {
-                for (const p of s.observation_points ?? []) {
-                    if (!p.date) continue;
-                    const t = new Date(p.date).getTime();
-                    if (Number.isNaN(t)) continue;
-                    candidates.push({
-                        dt: Math.abs(t - targetTime), price: p.unit_price,
-                        on_deal: false, is_observation: true,
-                    });
+                const dt = Math.abs(t - targetTime);
+                if (best === null || dt < best.dt) {
+                    best = { dt, value: p.value, marked: p.marked === true };
                 }
             }
-            let best: (typeof candidates)[number] | null = null;
-            for (const c of candidates) {
-                if (best === null || c.dt < best.dt) best = c;
-            }
-            byProduct[s.product_id] = best
-                ? { price: best.price, on_deal: best.on_deal, is_observation: best.is_observation }
-                : { price: null, on_deal: false, is_observation: false };
+            bySeries[s.key] = best
+                ? { value: best.value, marked: best.marked }
+                : { value: null, marked: false };
         }
         hover.value = {
             x: projectX(targetTime),
             dateLabel: formatLocaleDate(targetTime),
-            byProduct,
+            bySeries,
         };
     }
     function onLeave() { hover.value = null; }
@@ -440,7 +474,7 @@
     const tooltipTop = computed(() => padding.top + 4);
 </script>
 
-<style scoped>
+<style scoped lang="scss">
     .chart-host { position: relative; }
     .chart-svg { display: block; }
     .chart-gridline { stroke: var(--divider); }
@@ -450,28 +484,72 @@
        reads as a guide behind the data lines, not another series. */
     .chart-baseline { stroke: var(--text-muted); stroke-width: 1; opacity: 0.7; }
     .chart-baseline-label { fill: var(--text-muted); font-variant-numeric: tabular-nums; }
+    .chart-legend {
+        list-style: none;
+        margin: var(--space-2) 0 0;
+        padding: 0;
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--space-1) var(--space-4);
+        font-size: calc(var(--font-size-xs) * 1rem);
+        color: var(--text-secondary);
+
+        li {
+            display: flex;
+            align-items: center;
+            gap: var(--space-2);
+        }
+    }
+    .chart-legend__line {
+        width: 14px;
+        height: 3px;
+        border-radius: var(--radius-xs);
+        flex: 0 0 auto;
+    }
+    /* The dashed entries carry the same distinction the lines do: a repeating
+       gradient reads as a dashed rule at 14px, where a border-style dash
+       doesn't (D-001 — the shape is the channel, not just the colour). */
+    .chart-legend__line--dashed {
+        background: repeating-linear-gradient(
+            to right,
+            currentColor 0 4px,
+            transparent 4px 7px
+        );
+        color: var(--text-secondary);
+    }
+    .chart-legend__line--baseline {
+        background: repeating-linear-gradient(
+            to right,
+            var(--text-muted) 0 4px,
+            transparent 4px 7px
+        );
+    }
     .chart-tooltip {
         position: absolute;
         background: var(--surface-component);
         border: 1px solid var(--border-default);
-        border-radius: 6px;
-        padding: 8px 10px;
-        font-size: 12px;
+        border-radius: var(--radius-md);
+        padding: var(--space-2) var(--space-3);
+        font-size: calc(var(--font-size-xs) * 1rem);
         pointer-events: none;
         box-shadow: 0 2px 8px var(--overlay-active);
         min-width: 200px;
     }
     .chart-tooltip-date {
         font-weight: 600;
-        margin-bottom: 4px;
+        margin-bottom: var(--space-1);
         color: var(--text-secondary);
     }
     .chart-tooltip-row {
-        display: flex; align-items: center; gap: 6px;
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
         line-height: 1.4;
     }
     .chart-tooltip-swatch {
-        width: 10px; height: 10px; border-radius: 2px;
+        width: 10px;
+        height: 10px;
+        border-radius: var(--radius-xs);
         display: inline-block;
     }
     .chart-tooltip-name { flex: 1; }

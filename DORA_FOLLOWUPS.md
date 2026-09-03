@@ -39,6 +39,46 @@ long session summary. Distinct from the other logs:
 
 ---
 
+## [OPEN] FU-863 — Add-user dialog still changes height when "Generate password" flips
+- **Raised:** 2026-09-03 (owner feedback batch — admin settings)
+- **Type:** follow-up
+- **What:** the owner's complaint was that the dialog *grew* when you chose to
+  generate a password. The cause was a caption that appeared only in that state;
+  it's gone, so it no longer grows — but the password field itself is still
+  `v-if`'d away, so the dialog now **shrinks** by ~82px (measured live: 507 →
+  425). Less jarring, not zero.
+- **Why deferred:** the remaining jump is the field genuinely leaving, which is
+  arguably correct. Removing it entirely means rendering a disabled field that
+  says "Dora will generate this", i.e. a dead control — a worse trade unless the
+  owner finds the shrink annoying in use.
+- **Recommended resolution:** opportunistic — decide when the owner has walked the
+  dialog.
+
+## [OPEN] FU-862 — `companion_ingestion_enabled` gates nothing: `POST /api/ingest` never checks it
+- **Raised:** 2026-09-03 (admin settings batch — found while renaming the flag)
+- **Type:** finding
+- **What:** the switch now presented as **Product data ingestion** (Settings →
+  Admin → Data & access) does not stop ingestion. `submit_ingestion_batch()`
+  authenticates the bearer token against an `IngestionSource` and proceeds; it
+  never reads `AppSetting.companion_ingestion_enabled`. Nothing in the SPA reads
+  the `features.companion_ingestion` health flag either (nor
+  `features.deals_email`). The column's only readers are its own settings page,
+  the DTO and the health probe.
+- **Why this matters more than usual:** it is the second instance of exactly the
+  defect **R-078 / ADR-075** was written for this session, on the same page as the
+  first (`meal_planning_enabled`, deleted in migration `a7c3e5d19f2b`) — and
+  unlike that one, the owner-dictated copy now shipping *asserts* the gate
+  ("Accept product offer data from an external source. Enable this if you have a
+  tool…"). The toggle reads as a security control and isn't one.
+- **Why deferred:** the fix is a one-line 403 guard in the route, but the flag
+  **defaults to `False`**, so wiring it up would immediately break ingestion for
+  any install already pushing data without having flipped it on — including the
+  owner's. That is a deliberate behaviour change needing a call, not a tidy-up:
+  guard it and accept that existing pushers must switch it on, or flip the
+  default for existing rows in the same migration.
+- **Recommended resolution:** **now** — before anyone relies on the toggle
+  meaning what it says. R-078's own instruction applies: wire it up or drop it.
+
 ## [OPEN] FU-861 — Technical details → Build has no real build number
 - **Raised:** 2026-09-03 (owner feedback batch — settings/About)
 - **Type:** follow-up

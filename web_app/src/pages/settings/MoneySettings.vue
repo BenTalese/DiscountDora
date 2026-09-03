@@ -11,7 +11,7 @@
             class="settings-page__note dora-text-muted"
         >
             This install has money features turned off. Ask an admin to enable
-            them in System → Features.
+            them in Admin → Money.
         </div>
 
         <SettingsSection v-else>

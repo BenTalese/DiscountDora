@@ -31,16 +31,17 @@
             </template>
         </q-input>
 
+        <!-- Owner 2026-09-03 — this used to be a `dense` toggle carrying a
+             paragraph that appeared only once it was on, so the dialog changed
+             height as you flipped it and the switch didn't match the Admin
+             toggle three lines below. Same size, same shape, no caption: the
+             generated password gets its own dialog, which is where the
+             "copy it, it's shown once" instruction already lives. -->
         <q-toggle
             :model-value="generate"
-            dense
             :label="generateLabel"
             @update:model-value="$emit('update:generate', $event)"
         />
-        <div v-if="generate" class="text-caption dora-text-muted">
-            Dora will invent one and show it to you once — copy it and pass it
-            on out-of-band.
-        </div>
     </div>
 </template>
 
@@ -70,7 +71,7 @@
         }>(),
         {
             label: 'Password',
-            generateLabel: 'Generate one instead',
+            generateLabel: 'Generate password',
             error: '',
             autofocus: false,
         },

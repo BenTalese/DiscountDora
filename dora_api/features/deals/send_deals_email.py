@@ -87,7 +87,7 @@ def send_deals_email(
             repository = SqlAlchemyRepository()
             setting = get_or_create_app_setting(repository)
             if not setting.deals_email_enabled:
-                # Install-wide off switch (Settings → Admin → Features). The
+                # Install-wide off switch (Settings → Admin → Email). The
                 # per-user opt-ins stay on their rows untouched, so turning the
                 # install flag back on resumes everyone's existing choice.
                 return 0

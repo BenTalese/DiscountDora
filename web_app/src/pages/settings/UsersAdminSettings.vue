@@ -43,11 +43,13 @@
                         :text-color="user.is_admin ? 'dark' : undefined"
                     />
                     <div class="user-row__names">
+                        <!-- The `admin` and `deactivated` chips went 2026-09-03
+                             (owner): both restated a toggle sitting on the same
+                             row, and a deactivated row is already dimmed. `you`
+                             stays — nothing else on the row says it. -->
                         <div class="user-row__name">
                             <span class="text-weight-medium">{{ user.username }}</span>
-                            <q-badge v-if="user.is_admin" color="warning" text-color="dark">admin</q-badge>
                             <q-badge v-if="user.user_id === currentUserId" outline color="primary">you</q-badge>
-                            <q-badge v-if="!user.is_active" color="negative" text-color="white">deactivated</q-badge>
                         </div>
                         <div class="user-row__email dora-text-muted">
                             {{ user.email ?? 'No email on file' }}

@@ -47,7 +47,6 @@ from uuid import UUID
 from dora_api.domain.entities.recipe_ingredient import RecipeIngredient
 from dora_api.domain.stock_status import (LOW_STOCK_SEQUENCE,
                                           OUT_OF_STOCK_SEQUENCE)
-from dora_api.features.app_settings.access import get_or_create_app_setting
 from dora_api.features.meal_plans.planned_meals import upcoming_planned_meals
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
@@ -214,7 +213,3 @@ def gather_planned_demand(
         )
     return out
 
-
-def planner_enabled(repository: SqlAlchemyRepository) -> bool:
-    """The install-wide meal-planner switch. No planner, no plan, no signal."""
-    return bool(get_or_create_app_setting(repository).meal_planning_enabled)

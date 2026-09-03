@@ -16,6 +16,35 @@
             </template>
         </SettingsPageHeader>
 
+        <!-- Retention moved here 2026-09-03 when the Hosting page was retired
+             (owner: *"audit retention feels like a setting that should live
+             with…the audit logs page"*). It is the one knob that changes what
+             this page can still show you, so it sits above the log it prunes. -->
+        <SettingsSection>
+            <SettingsRow inline>
+                <template #label>
+                    Keep events for
+                    <InfoTip label="Audit retention">
+                        Audit events older than this are pruned nightly.
+                        Anything between 1 and 3650 days (10 years).
+                    </InfoTip>
+                </template>
+                <q-input
+                    v-model.number="retentionDraft"
+                    type="number"
+                    outlined
+                    dense
+                    suffix="days"
+                    style="max-width: 150px"
+                    :min="1"
+                    :max="3650"
+                    @blur="onSaveRetention"
+                />
+            </SettingsRow>
+        </SettingsSection>
+
+        <hr class="settings-divider" />
+
         <!-- ── Filters ───────────────────────────────────────────────── -->
         <section class="audit-filters">
             <div class="row q-col-gutter-sm">
@@ -251,6 +280,11 @@
     import { computed, onMounted, reactive, ref } from 'vue';
     import AuditApiService, { type AuditEvent, type AuditFilters } from 'src/services/api/auditApiService';
     import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
+    import SettingsSection from 'src/components/settings/SettingsSection.vue';
+    import SettingsRow from 'src/components/settings/SettingsRow.vue';
+    import InfoTip from 'src/components/help/InfoTip.vue';
+    import AppSettingsApiService from 'src/services/api/appSettingsApiService';
+    import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';
 
     const $q = useQuasar();
     const auditApi = new AuditApiService();
@@ -413,8 +447,40 @@
         URL.revokeObjectURL(url);
     }
 
+    // ── Retention ────────────────────────────────────────────────────
+    const appSettingsApi = new AppSettingsApiService();
+    const retentionDraft = ref(365);
+    let savedRetention = 365;
+
+    async function onSaveRetention() {
+        const next = Number(retentionDraft.value);
+        if (next === savedRetention) return;
+        try {
+            const result = await appSettingsApi.updateAsync({ audit_retention_days: next });
+            savedRetention = result.audit_retention_days;
+            retentionDraft.value = savedRetention;
+            $q.notify({
+                type: 'positive', position: 'bottom-right',
+                message: 'Audit retention saved.',
+            });
+        } catch (err) {
+            retentionDraft.value = savedRetention;
+            $q.notify({
+                type: 'negative', position: 'bottom-right',
+                message: 'Could not save audit retention.',
+                caption: toastCaption(err),
+            });
+        }
+    }
+
     onMounted(() => {
         void reload(1);
+        void appSettingsApi.getAsync()
+            .then((s) => {
+                savedRetention = s.audit_retention_days;
+                retentionDraft.value = savedRetention;
+            })
+            .catch(() => { /* the field just shows the default until a retry */ });
     });
 </script>
 

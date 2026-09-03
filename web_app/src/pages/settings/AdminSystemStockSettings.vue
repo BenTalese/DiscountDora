@@ -2,7 +2,7 @@
     <div class="settings-page">
         <SettingsPageHeader
             title="Stock"
-            description="How Dora auto-adds items to your shopping list when they run low."
+            description="Install-wide stock defaults: how Dora auto-adds items when they run low, and whether this install can scan barcodes and print QR labels."
             :icon="ICONS.inventory_2"
         />
 
@@ -29,6 +29,57 @@
                     />
                 </SettingsRow>
             </SettingsSection>
+
+            <!-- Moved here from the retired Features page 2026-09-03 (owner:
+                 *"scanning & qr can go to stock section"*). It is a stock
+                 affordance — the camera jumps to a stock item and the labels go
+                 on shelves — so it reads better beside the other stock
+                 defaults than in a pile of unrelated install switches. -->
+            <SettingsSection>
+                <template #title>Scanning &amp; QR labels</template>
+
+                <SettingsRow inline>
+                    <template #label>
+                        Scanning enabled
+                        <InfoTip label="Scanning and QR labels">
+                            Point the camera at a product barcode to jump
+                            straight to the stock item it's linked to, and print
+                            Dora's own QR labels for shelves and containers.
+                            Dora never looks up prices from a scan.
+                        </InfoTip>
+                    </template>
+                    <q-toggle
+                        :model-value="scanningDraft"
+                        @update:model-value="onScanningToggle"
+                    />
+                </SettingsRow>
+
+                <!-- 2026-08-15: tell the operator here, not at the viewfinder.
+                     Browsers withhold the camera API on a non-secure origin, so
+                     on a plain-http self-host the Scan button switches on and
+                     then can't open a camera. Shown only when it's actually
+                     true of the browser reading this page (so an admin on
+                     localhost, or in the app, sees nothing), and only once
+                     scanning is on. -->
+                <q-banner
+                    v-if="scanningDraft && cameraInsecure"
+                    dense
+                    rounded
+                    class="dora-bg-warning-soft q-mt-sm"
+                >
+                    <template #avatar>
+                        <q-icon :name="ICONS.info_outline" />
+                    </template>
+                    <div class="text-body2">
+                        <strong>Camera scanning won't work in this browser.</strong>
+                        You're reading this over a plain <code>http://</code>
+                        address, and browsers only hand out camera access over a
+                        secure connection. To scan with a camera, use the
+                        <strong>Dashy Dora Android app</strong> (it scans against
+                        any instance) or serve Dora over HTTPS.
+                    </div>
+                </q-banner>
+            </SettingsSection>
         </template>
     </div>
 </template>
@@ -46,6 +97,10 @@
     import SettingsRow from 'src/components/settings/SettingsRow.vue';
     import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
     import DoraSegmented, { type DoraSegmentedOption } from 'src/components/settings/DoraSegmented.vue';
+    import InfoTip from 'src/components/help/InfoTip.vue';
+    import { cameraBlockedByInsecureContext } from 'src/helpers/cameraAvailability';
+    import { useFeatureFlags } from 'src/composables/useFeatureFlags';
+    import { useScanningEnabled } from 'src/composables/useScanningEnabled';
 
     /**
      * FU-511 — install-wide auto-add mode. Replaces the retired per-item
@@ -69,6 +124,38 @@
     const loading = ref(true);
     const modeDraft = ref<AutoAddMode>('essential_only');
     let savedMode: AutoAddMode = 'essential_only';
+
+    // Scanning & QR labels — a real install-wide flag, saved on toggle.
+    const scanningDraft = ref(false);
+    // FU-580 — scanning has its own dedicated module-level probe composable
+    // (separate from useFeatureFlags), so the toggle handler must refresh
+    // *that* cache too or the gated UI (Stock Overview scan button, QR labels
+    // nav entry) stays stale until a reload.
+    const { refreshScanning } = useScanningEnabled();
+    const { refresh: featureFlags$refresh } = useFeatureFlags();
+    // Same authority the scan overlay consults, so the warning here and the
+    // explainer there can't drift apart (R-003). Evaluated once — the page's
+    // origin can't change under it.
+    const cameraInsecure = cameraBlockedByInsecureContext();
+
+    async function onScanningToggle(value: boolean) {
+        try {
+            const result = await api.updateAsync({ scanning_enabled: value });
+            scanningDraft.value = result.scanning_enabled;
+            await Promise.all([refreshScanning(), featureFlags$refresh()]);
+            $q.notify({
+                type: 'positive', position: 'bottom-right',
+                message: value ? 'Scanning & QR labels enabled.' : 'Scanning & QR labels disabled.',
+            });
+        } catch (err) {
+            scanningDraft.value = !value;
+            $q.notify({
+                type: 'negative', position: 'bottom-right',
+                message: 'Could not save scanning setting.',
+                caption: toastCaption(err),
+            });
+        }
+    }
 
     async function onModeChange(next: AutoAddMode) {
         if (next === savedMode) return;
@@ -101,6 +188,7 @@
                 savedMode = s.auto_add_mode;
                 modeDraft.value = savedMode;
             }
+            scanningDraft.value = s.scanning_enabled;
         } catch {
             // Leave defaults; nothing else on the page depends on the fetch.
         } finally {

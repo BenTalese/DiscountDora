@@ -12,7 +12,6 @@ export type AppSettings = {
     scanning_enabled: boolean;
     // buy-verdict oracle. Default on (pure-personal feature).
     // C-cross Chunk 1 — install-wide feature flags (proposal §2.6).
-    meal_planning_enabled: boolean;
     money_enabled: boolean;
     companion_ingestion_enabled: boolean;
     deals_email_enabled: boolean;

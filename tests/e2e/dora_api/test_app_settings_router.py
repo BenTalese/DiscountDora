@@ -87,8 +87,8 @@ def test__get_app_settings__SecretsNeverRideTheDto__OnlyConfiguredFlags(api):
 def test__get_app_settings__CoreFields__PresentAndTyped(api):
     body = _get_settings()
 
-    for flag in ("scanning_enabled", "meal_planning_enabled",
-                 "money_enabled", "nutrition_off_lookup_enabled",
+    for flag in ("scanning_enabled", "money_enabled",
+                 "nutrition_off_lookup_enabled",
                  "auto_drain_past_meals"):
         assert isinstance(body[flag], bool), flag
     # Nutrition is a three-state install-wide mode, not a bool (2026-08-14 —
@@ -123,7 +123,7 @@ def test__patch_app_settings__BoolAndBoundedInt__RoundTripsAndLeavesRestAlone(ap
     assert after["scanning_enabled"] is flipped
     assert after["expiring_soon_window_days"] == 14
     # Partial-update semantics: everything we didn't send is untouched.
-    assert after["meal_planning_enabled"] == before["meal_planning_enabled"]
+    assert after["money_enabled"] == before["money_enabled"]
     assert after["timezone"] == before["timezone"]
     assert after["auto_add_mode"] == before["auto_add_mode"]
 

@@ -28,6 +28,85 @@ next.
 
 ---
 
+## 2026-09-03 (later still ×3) — **Admin settings, ~25 owner items: five nav groups become three, and a feature flag that gated nothing gets a migration**
+
+**Status:** all items complete + green + driven live at 375 and 1280. New:
+**R-078 / ADR-075**, migration **`a7c3e5d19f2b`**, new pages
+`AdminSystemMoneySettings.vue` + `AdminSystemIngestionSettings.vue`, deleted
+pages `AdminSystemFeaturesSettings.vue` + `AdminSystemHostingSettings.vue`. Gate:
+**vitest 685 / 61 files**, `vue-tsc` + `eslint src/` clean, **pytest 2275
+passed** / 1 skipped / 1 xfailed with only the four pre-existing buy-verdict reds
+(FU-762).
+
+**Four decisions were the owner's and were taken before any code moved** — the
+meal-planning flag's fate, where money lands, where the weekly deals mail lands,
+and whether Hosting survives. All four went the recommended way, which matters
+mainly because the first one is destructive.
+
+**The headline is `meal_planning_enabled`, and the interesting part is how it
+survived.** The owner asked *"what does the meal planning toggle actually do? I
+feel like this was added accidentally."* Its caption said *"Hides the meal-plans
+surface when off."* It doesn't: `MainLayout`'s nav pushes **Meal Plans**
+unconditionally, `/meal-plans` has no guard, and not one component read the flag.
+The only real reader was `planned_demand.planner_enabled`, which short-circuited
+the planned-demand endpoint to `enabled: false` — so from the API side the flag
+looked load-bearing while doing nothing anyone could see. It shipped in C-cross
+Chunk 1 and lasted three months, and the reason is structural: it sat on a page
+of four other switches that *were* real, so nothing invited the question. That is
+**R-078 / ADR-075** — a switch is owned by the surface it governs, and it must
+actually govern it. The column is dropped in `a7c3e5d19f2b`; the health flag, the
+DTO field, the API request field, the `enabled` key on the planned-demand
+response and its client-side `enabled` ref all went with it, because a field
+whose value is now always the same is a lie waiting to be believed.
+
+**The IA change is the same rule applied to the whole area.** Five groups → three
+(Install · Kitchen features · Data & access), Users leading Install rather than
+being a headerless group of one, Messaging dissolved into Install, and the
+Features page dissolved outright with each switch sent to the surface it governs:
+scanning → Stock, money → a new one-row Money page, companion ingestion →
+**Product data ingestion** under Data & access with the product-search URL beside
+it, the weekly deals mail → Email. Hosting died the same way — public URL → Email
+(that is what builds the links), audit retention → the Audit log it prunes. Both
+retired routes redirect rather than 404.
+
+**Two of the owner's questions turned out to be about the same confusion, and the
+answer was already in the code.** He suspected email had been "incorrectly lumped
+with this weekly deals email". It hadn't — `email_enabled` (the SMTP subsystem)
+and `deals_email_enabled` (one scheduled mail) have been separate columns since
+the operational-config migration. What was missing was anywhere that *showed*
+that, because the deals switch lived on Features and the subsystem switch on
+Email. Putting them on one page, with the deals InfoTip naming its real
+dependency (ingested product data — `send_deals_email` ranks through
+`GetBestDealsHandler`), makes the relationship legible without changing a line of
+behaviour.
+
+**Image quality's Save/Discard pair had a real reason, and `@change` is that
+reason's proper seam.** The pair existed because a slider drag would otherwise
+PATCH per pixel. Measured in the running app: a full drag now fires **exactly one**
+PATCH, on release, and the number field one on blur. The page's four explanatory
+paragraphs are two info chips.
+
+**One defect the running-app gate caught that neither `vue-tsc` nor `eslint`
+could.** The quality slider carried `min-width: 220px`; an `inline` SettingsRow
+caps its control at 55% of the row, so at 375px the track ran off the right edge
+of the viewport. `width` + `max-width: 100%` — the same fix the settings selects
+took earlier the same day, which is now twice, so the pattern is worth
+remembering even though R-075 already covers the "measure it" half. Re-measured:
+`documentElement.scrollWidth === clientWidth` on all six touched pages at 375.
+
+**Also done:** the `admin` and `deactivated` chips left the Users rows (both
+restated a toggle on the same row; a deactivated row is already dimmed), the
+generate-password switch now matches the Admin switch exactly (measured: both
+56×40 at the same x) and lost the caption that made the Add-user dialog grow when
+you flipped it, and eleven routes stopped prefixing `System: ` onto the title the
+mobile toolbar renders.
+
+**Next up:** the owner walks the batch — none of it needs a device, but the money
+and ingestion flags change what other surfaces show, and that is worth seeing.
+Open: FU-862, FU-863.
+
+---
+
 ## 2026-09-03 (later still ×2) — **Settings, ~35 owner items: a NameError nobody could have downloaded past, and a browser blamed for HTTP**
 
 **Status:** all items complete + green + driven live at 375 and 1280. New:

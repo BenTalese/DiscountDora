@@ -7,15 +7,13 @@ import type { PlannedDemand } from 'src/models/plannedDemand';
 // `usePantryBeliefs` on purpose — they are two overlays on the same surfaces
 // and one pattern for both is one thing to understand rather than two.
 //
-// Gated server-side on the install-wide meal-planner switch: with no planner
-// there is no plan, so the endpoint returns `enabled: false` and we hold an
-// empty map. Note this is a *feature* gate, not a preference — unlike the
-// belief, planned demand is a plain fact about the user's own plan rather
-// than an inference, so there is nothing to opt out of.
+// Note this is not a preference — unlike the belief, planned demand is a
+// plain fact about the user's own plan rather than an inference, so there is
+// nothing to opt out of, and nothing gates it (the install-wide meal-planner
+// switch was removed 2026-09-03; meal planning is core).
 
 const stockItemApi = new StockItemApiService();
 
-const enabled = ref(false);
 const horizonDays = ref(0);
 const demand = ref<Record<string, PlannedDemand>>({});
 const loaded = ref(false);
@@ -28,14 +26,12 @@ export function usePlannedDemand() {
         loading.value = true;
         try {
             const result = await stockItemApi.getPlannedDemandAsync();
-            enabled.value = result.enabled;
             horizonDays.value = result.horizon_days ?? 0;
             demand.value = result.demand ?? {};
             loaded.value = true;
         } catch {
             // Non-fatal — the card just doesn't render. Nothing downstream
             // reads this; it is commentary beside the recorded level.
-            enabled.value = false;
             demand.value = {};
         } finally {
             loading.value = false;
@@ -43,7 +39,6 @@ export function usePlannedDemand() {
     }
 
     function demandFor(stockItemId: string): PlannedDemand | null {
-        if (!enabled.value) return null;
         return demand.value[stockItemId] ?? null;
     }
 
@@ -54,7 +49,6 @@ export function usePlannedDemand() {
     }
 
     return {
-        enabled: readonly(enabled),
         horizonDays: readonly(horizonDays),
         loaded: readonly(loaded),
         loadAsync,

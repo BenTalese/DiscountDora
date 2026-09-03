@@ -22,6 +22,24 @@ top-to-bottom.
 
 ---
 
+## Admin settings — after the group restructure (2026-09-03)
+
+Driven live at 375 and 1280 (nav, both new pages, redirects, save-on-change,
+the Users chips and the Add-user dialog), so only the install-shaped checks
+remain.
+
+- [ ] Flip **Money** off and on (Admin → Kitchen features → Money) and confirm the
+      surfaces follow without a reload — the `/settings/money` sidebar entry,
+      shopping-list totals, recipe costs.
+- [ ] Flip **Scanning enabled** (Admin → Kitchen features → Stock) and confirm the
+      QR labels nav entry and the stock-overview scan button appear/disappear
+      without a reload.
+- [ ] On an install with **SMTP configured**, Admin → Install → Email: the new
+      *Links in emails* and *Weekly deals email* sections save, and a real
+      verification email uses the public URL you set.
+
+---
+
 ## Settings — the 2026-09-03 owner batch
 
 Most of this batch was driven live at 375px and 1280px and those lines are not

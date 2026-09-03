@@ -101,7 +101,6 @@ def configure_mappings(db: SQLAlchemy):
         # buy-verdict oracle. Defaults on because it's pure-personal;
         # admin can turn off from Settings → System.
         # C-cross Chunk 1 — install-wide feature flags (proposal §2.6).
-        Column("meal_planning_enabled", Boolean, nullable=False, server_default=true()),
         Column("money_enabled", Boolean, nullable=False, server_default=false()),
         Column("companion_ingestion_enabled", Boolean, nullable=False, server_default=false()),
         Column("deals_email_enabled", Boolean, nullable=False, server_default=false()),

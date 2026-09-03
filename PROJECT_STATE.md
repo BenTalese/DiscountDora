@@ -26,26 +26,28 @@ pending device walks, and **Phase 4 (open-source release) remains ~0%**. The wor
 is a sustained **owner-feedback polish stream** that has now walked the app
 surface by surface — shopping lists, meal planner, cook mode, the dashboard
 review (6/6 chunks), the `/reports` review (5/5, closed 09-02), and on
-**2026-09-03 alone four consecutive owner batches**: themes/segmented anatomy,
-cook mode (5 items), cookbook + recipe view (15 items), and Settings (~35 items)
-— every one driven live in a browser at 375 and 1280. The recurring finding has
-hardened into a pattern: reported *design* complaints keep having real defects
-underneath, and the 09-03 run produced three of the sharpest yet — a `NameError`
-that made **every voice download fail, always**, in a module `tests/` never
-referenced once; a **$16.50 three-egg omelette** caused by a pack model that
-assumed one pack holds one countable thing; and an "install unavailable in this
-browser" message that had never asked the browser anything (the real cause was
-plain `http://`). Those became **R-076/ADR-073** (*a derived figure never rests
-on a fact the data does not record*) and **R-077/ADR-074** (*an unavailable
-capability names the condition it actually tested*), alongside **R-074/ADR-071**
-(planned demand as a sibling signal, not a term inside `compute_belief`) and
+**2026-09-03 alone five consecutive owner batches**: themes/segmented anatomy,
+cook mode (5 items), cookbook + recipe view (15 items), Settings (~35 items) and
+admin settings (~25 items) — every one driven live in a browser at 375 and 1280.
+The recurring finding has hardened into a pattern: reported *design* complaints
+keep having real defects underneath, and the 09-03 run produced four of the
+sharpest yet — a `NameError` that made **every voice download fail, always**, in a
+module `tests/` never referenced once; a **$16.50 three-egg omelette** caused by a
+pack model that assumed one pack holds one countable thing; an "install
+unavailable in this browser" message that had never asked the browser anything
+(the real cause was plain `http://`); and a **`meal_planning_enabled` switch that
+had governed nothing for three months**, surviving only because it sat among four
+real ones. Those became **R-076/ADR-073** (*a derived figure never rests on a fact
+the data does not record*), **R-077/ADR-074** (*an unavailable capability names the
+condition it actually tested*) and **R-078/ADR-075** (*a switch is owned by the
+surface it governs, and must actually govern it*), alongside **R-074/ADR-071** and
 **R-075/ADR-072** (*a layout fix isn't done until the running app is measured*).
 Suites are at their highest — backend **2275 passed** / 1 skipped / 1 xfailed,
-frontend **685 vitest across 61 files**, `vue-tsc` + `eslint src/` clean, with
-the four pre-existing buy-verdict e2e reds outstanding (FU-762). The dominant
-debt is unchanged: a large stacked body of shipped UI has still never been seen
-in a browser by a human, though the last several units are now the exception
-rather than the rule.
+frontend **685 vitest across 61 files**, `vue-tsc` + `eslint src/` clean, with the
+four pre-existing buy-verdict e2e reds outstanding (FU-762). The dominant debt is
+unchanged: a large stacked body of shipped UI has still never been seen in a
+browser by a human, though the last several units are now the exception rather
+than the rule.
 
 ---
 
@@ -53,11 +55,11 @@ rather than the rule.
 
 | Phase | Scope | Status | Remaining |
 |---|---|---|---|
-| **0 — Foundations** | Theme/buttons/modals/filters/text-size/renames + bug clusters + config/opt-ins | ✅ ~99% | Residual polish only. Live token debt: FU-674 (`--text-on-primary` fails D-002 in three themes), FU-801 (`--brand-primary` fails the same ink test), FU-850 (`--accent-mark` adoption beyond the sites this pass touched), FU-709 (dark themes' `--surface-page` never paints), FU-834/FU-764 (~20 undeclared custom properties app-wide; no lint gate), FU-777, FU-839. |
+| **0 — Foundations** | Theme/buttons/modals/filters/text-size/renames + bug clusters + config/opt-ins | ✅ ~99% | Residual polish only. Live token debt: FU-674 (`--text-on-primary` fails D-002 in three themes), FU-801 (`--brand-primary` fails the same ink test), FU-850 (`--accent-mark` adoption beyond the sites this pass touched), FU-709 (dark themes' `--surface-page` never paints), FU-834/FU-764 (~20 undeclared custom properties app-wide; no lint gate), FU-777, FU-839. **New:** FU-862 — the opt-in spine now has a *second* flag that gates nothing (`companion_ingestion_enabled`), on the same page as the one just deleted. |
 | **1 — Close the loop** | Shopping lists, cook mode, stock overview, cookbook, suggestions, costing, stocktake | ➗ ~95% | **Nothing left to build except meal-reconcile Chunk 6** (settings row/copy). Everything else is browser-verify: stock overview (08-20/21/22 batches), stocktake's three-phase runner, cookbook batch 3 + the cookbook-list lines the agent pane can't render, the recipe page's older stacked batches (08-20 parity pass, 08-24), the buy-verdict money gate, and the `planned_store_id` round trip (blocked, not skipped). |
-| **2 — Ingestion API + companion** | `/api/ingest` seam; standalone companion; Merchant→Store rename | ✅ done (backend-green) | Phase-F tail only: product-surface browser-verify (FU-214), L197 hard-delete decision, L205/206 bulk-select unbuilt, FU-210 tail browser pass. **FU-856** — `pack_count` can't be recorded through the products API at all, so R-076's better answer is unreachable. |
+| **2 — Ingestion API + companion** | `/api/ingest` seam; standalone companion; Merchant→Store rename | ✅ done (backend-green) | Phase-F tail only: product-surface browser-verify (FU-214), L197 hard-delete decision, L205/206 bulk-select unbuilt, FU-210 tail browser pass. **FU-856** — `pack_count` can't be recorded through the products API at all, so R-076's better answer is unreachable. **FU-862** — the ingestion route never checks its own enable flag, and the flag defaults to `False`, so wiring it up is a behaviour change needing a call. |
 | **3 — Champion** | Zero-Input Pantry, buy/wait oracles, barcode-add, Dora Score, culinary memory, native app | ➗ ~95% (verify pending) | P8-01..P8-10 fully built. Browser/device-verify of P8-07/08/09/10 remains; native FCM push parked until SaaS (FU-465). |
-| **4 — Open-source release** (was Commercialize) | README/showcase + release process + support channel (Postgres done) | ⚪ ~0% | **Not sold — donation/OSS/MIT, all free.** FU-406 (README+release), FU-608 (donation/OSS infra), FU-557 (support channel), FU-861 (no real build number anywhere — needs a version source through bundle + API). Ops/CI (FU-405) gates FU-520/FU-404/FU-721. SaaS parked. |
+| **4 — Open-source release** (was Commercialize) | README/showcase + release process + support channel (Postgres done) | ⚪ ~0% | **Not sold — donation/OSS/MIT, all free.** FU-406 (README+release), FU-608 (donation/OSS infra), FU-557 (support channel), FU-861 (no real build number anywhere — needs a version source through bundle + API, and tagging is on this phase's critical path anyway). Ops/CI (FU-405) gates FU-520/FU-404/FU-721. SaaS parked. |
 
 ---
 
@@ -65,27 +67,29 @@ rather than the rule.
 
 | Workstream | Status | Where it's at | Governing doc |
 |---|---|---|---|
-| **Settings & config polish** | 🟡 | The most active stream. The 09-03 owner sweep took **~35 items across nine pages**, driven live at both widths: narrow-control rows keep two columns on a phone (Notifications/Assistant no longer read as orphaned switches), Zero-Input Pantry's five paragraphs became five named lines + info chips, Stores renames in place and changes its logo by clicking it, Stock locations reads as one tree again (one `LocationAddChip` for "+ Area"/"+ Section"), and three pages stopped speaking raw Quasar — new shared `css/settingsCards.scss`, plus new `settings/LocationAddChip.vue` and `nutritionMatchingStore.ts`. Open: FU-858, FU-859, FU-860, FU-861 | `CHANGELOG [Unreleased]` |
+| **Settings & config polish** | 🟡 | The most active stream, two owner batches on 09-03. The **user-facing sweep** took ~35 items across nine pages (narrow-control rows keep two columns on a phone; Zero-Input Pantry's five paragraphs became five named lines; Stores renames in place; Stock locations reads as one tree via a shared `LocationAddChip`; three pages stopped speaking raw Quasar behind new `css/settingsCards.scss`). The **admin sweep** then took ~25: five nav groups → three (Install · Kitchen features · Data & access), the Features and Hosting pages dissolved with every switch sent to the surface it governs, two new pages (`AdminSystemMoneySettings`, `AdminSystemIngestionSettings`), image quality saves on `@change` (one PATCH per drag, measured), and eleven routes stopped prefixing `System: ` onto the mobile title. Open: FU-858..863 | `CHANGELOG [Unreleased]` |
+| **Feature flags & opt-ins** | 🔴 | New as its own line, because 09-03 found the class. `meal_planning_enabled` claimed to hide the meal-plans surface and never did — nav pushed it unconditionally, the route had no guard, nothing read the flag; column, health flag, DTO field and client ref all dropped in migration **`a7c3e5d19f2b`** (**R-078/ADR-075**). The very next find was the same shape: **FU-862**, `companion_ingestion_enabled` doesn't gate `POST /api/ingest`, and the copy now shipping *asserts* that it does | `ENGINEERING_STANDARDS` R-078 |
 | **Recipes & cookbook** | ➗ | 15-item owner batch shipped 09-03. **R-076/ADR-073** came out of it: one `_item_price` helper now owns "what does one of these cost?" across both the offer and observation branches and is allowed to answer *no*; seeds set `eggs_woolies.pack_count = 12` so the case resolves to $0.46/egg rather than an honest blank. Free-text steps share the structured face's numbering via new `css/recipeSteps.scss`. Open: FU-855, FU-856, FU-857 | `recipe_cost.py` · `css/recipeSteps.scss` |
 | **Cook mode** | ➗ | Five owner items 09-03: header collapsed to one band (first step ~60px higher at 375), Prev/Repeat/Next share one row and all clear the 44px floor (they previously missed by 2px), the finish modal's level picker became the shared `StockLevelPicker`, and its hand-rolled cart button — which named the retired "primary list" concept — is now the shared add-to-list button. Open: FU-853, FU-854 | `AddToListButton.vue` |
 | **Reports page** | ✅ | Review closed — all five chunks shipped 09-02, every one driven live. Money-gated (R-058); eleven cards → four question-led ones plus a lede; **Price changes** added; **ECharts deleted** (route chunk 549 KB → 24 KB on the app's own 8 KB SVG chart, R-073/ADR-070). Open: FU-843, FU-844, FU-845 #8, FU-846, FU-847 | [REVIEW](docs/05_investigations/REPORTS_PAGE_REVIEW.md) |
 | **Dashboard** | ✅ | Review closed — 6/6 chunks, all seven owner calls answered. 17 cards → 14 (11 default-on) with a test holding the count; all eleven loaders stopped turning a failed fetch into a reassuring empty state; `DashboardPage.vue` 3,258 → **1,888 lines** (R-072/ADR-069). Spin-offs: FU-831, FU-832, FU-835..839, FU-841 | [IMPL_PLAN_DASHBOARD_REBUILD](docs/04_proposals/IMPL_PLAN_DASHBOARD_REBUILD.md) |
 | **Theming & design tokens** | 🟡 | Seven families now: **Salt & Pepper** (neutral — one warm graphite hue; semantics and the six chart hues deliberately kept) and **Dragonfruit** (first pink) added 09-03, every pairing measured live. Accent split into `--accent-ink` (text) and `--accent-mark` (~7 lightness points brighter, for marks graded at 3:1 by D-002). Open: FU-850, FU-801, FU-674, FU-709, FU-834, FU-764 | `themes.scss` · `DESIGN_STYLE_GUIDE.md` |
-| **Shared component anatomy** | 🟡 | 09-03 collapsed **four looks of one control** into the pill anatomy with shared `--seg-*` tokens; the opt-in `pill` prop is gone (*a shape prop with a clear winner is an unfinished migration*). Primitives extracted the same day: **`StockLevelPicker`**, **`NumberStepper`**; and in the settings batch, **`LocationAddChip`** + `css/settingsCards.scss`. **FU-848** (merging `BaseSegmented` and `DoraSegmented`) stays its own unit — 19 consumers pass Quasar props that would go inert | `BaseSegmented.vue` · `StockLevelPicker.vue` |
-| **Zero-Input Pantry / inference (P8-07)** | 🟡 | Built and extended to recipes, shopping lists and the planner, each behind its own off-by-default opt-in — now named *"<area> hints"* on the settings page. New 09-03: **planned demand** as a sibling signal (R-074/ADR-071), not a term in `compute_belief` — a raw-SQL duplicate of the batch-pool model deleted on the way. Open: FU-851, FU-849 | [PROPOSAL](docs/04_proposals/PROPOSAL_ZERO_INPUT_PANTRY.md) |
+| **Shared component anatomy** | 🟡 | 09-03 collapsed **four looks of one control** into the pill anatomy with shared `--seg-*` tokens; the opt-in `pill` prop is gone (*a shape prop with a clear winner is an unfinished migration*). Primitives extracted the same day: **`StockLevelPicker`**, **`NumberStepper`**, **`LocationAddChip`** + `css/settingsCards.scss`. **FU-848** (merging `BaseSegmented` and `DoraSegmented`) stays its own unit — 19 consumers pass Quasar props that would go inert | `BaseSegmented.vue` · `StockLevelPicker.vue` |
+| **Zero-Input Pantry / inference (P8-07)** | 🟡 | Built and extended to recipes, shopping lists and the planner, each behind its own off-by-default opt-in — now named *"<area> hints"* on the settings page. **Planned demand** ships as a sibling signal (R-074/ADR-071), not a term in `compute_belief`; a raw-SQL duplicate of the batch-pool model was deleted on the way, and the endpoint's dead `enabled: false` short-circuit went with `meal_planning_enabled`. Open: FU-851, FU-849 | [PROPOSAL](docs/04_proposals/PROPOSAL_ZERO_INPUT_PANTRY.md) |
 | **Stocktake Mode** | ✅ | Three-phase runner, queue least-certain-first, install-wide switch. Recorded for good: **"confidently Out" is unreachable by construction**. Verify owed; FU-700, FU-728 open | [PROPOSAL](docs/04_proposals/PROPOSAL_STOCKTAKE_MODE.md) |
-| **Products-as-overlay** | ➗ | Phases 0–E code-complete, backend green throughout; **browser-verify never done on any of it**. Phase-F tail is FU-214 + L197 hard-delete decision + L205/206 bulk-select + the FU-210 tail pass. Single Alembic head after Phase 0: `c4e6a8b1d3f5` | [RUNBOOK](docs/04_proposals/PRODUCTS_OVERLAY_RUNBOOK.md) |
+| **Products-as-overlay** | ➗ | Phases 0–E code-complete, backend green throughout; **browser-verify never done on any of it**. Phase-F tail is FU-214 + L197 hard-delete decision + L205/206 bulk-select + the FU-210 tail pass. Single Alembic head after Phase 0: `c4e6a8b1d3f5`. The admin sweep renamed the surface to **Product data ingestion** and put the product-search URL beside it — which is what surfaced FU-862 | [RUNBOOK](docs/04_proposals/PRODUCTS_OVERLAY_RUNBOOK.md) |
 | **Prices surface** | 🔴 | All price *reading* capability sits on the product axis at `/price-history`, which has no nav entry, while the everyday user gets a single-item modal. Reports chunk 4 built the "trend in Reports" half, so the keep/cut call (**FU-703**) is better-informed but still open, and still gates FU-708 | [ASSESSMENT](docs/05_investigations/PRICES_SURFACE_UX_ASSESSMENT.md) |
 | **Meal reconcile** | ➗ | Chunks 1–5 shipped; **Chunk 6 (settings row/copy) is the last unbuilt Phase-1 item** | [IMPL_PLAN](docs/04_proposals/IMPL_PLAN_MEAL_RECONCILE.md) |
-| **Meal planner** | ➗ | Built; open defects from the 09-03 sweep — FU-852, FU-803, FU-802, FU-804 | [PROPOSAL](docs/04_proposals/PROPOSAL_MEAL_PLANS.md) |
+| **Meal planner** | ➗ | Built; the flag that pretended to gate it is deleted (R-078). Open defects from the 09-03 sweep — FU-852, FU-803, FU-802, FU-804 | [PROPOSAL](docs/04_proposals/PROPOSAL_MEAL_PLANS.md) |
 | **Shopping lists (v4)** | ✅ | Built end to end — all three faces on one row skeleton after chunk 5 moved the shared visual language out of the page's *scoped* block. Open: FU-808, FU-805 | [SHOPPING_LIST_UX_V2](docs/04_proposals/SHOPPING_LIST_UX_V2.md) |
 | **Alerts control centre** | ✅ | Nine kinds cut to six, severity the only importance scale, email digest deleted whole. Open: FU-701, FU-702, FU-854, and DR-12's Alerts half | [PROPOSAL](docs/04_proposals/PROPOSAL_ALERTS.md) |
+| **Email & notifications** | 🔴 | 09-03 made the shape legible without changing behaviour: `email_enabled` (the SMTP subsystem) and `deals_email_enabled` (one scheduled mail) have always been separate columns; they now sit on one page with the deals InfoTip naming its real dependency, and the public URL moved to Email because that is what builds the links. The finding underneath is **FU-860** — with products off, Dora sends **no scheduled email at all** | FU-860 |
 | **Assistant / Voice / Offline** | ➗ | Voice download was **broken for every voice, always** (`NameError` from `_download_voice`'s rename block drifting into `_record_progress`) — fixed 09-03 with the first two tests ever to touch `voice_provision`. Settings → Voice copy trimmed and the PWA-install message stopped blaming the browser (R-077). Still never verified on Firefox (FU-751, FU-788, FU-787). Offline's CSRF replay bug is fixed (R-047/ADR-043) but the **live round-trip verify is still owed** (FU-724) | `useOfflineQueue.ts` |
 | **Design remediation (DR)** | 🟡 | DR-1..11/14/15 done or done-with-carve-outs; **DR-13 and DR-16 (owner call) remain**; DR-12 half-settled. Adjacent: the undeclared-token class R-060 names but nothing enforces | [DESIGN_REMEDIATION_PLAN](docs/04_proposals/DESIGN_REMEDIATION_PLAN.md) |
 | **Build & deploy** | 🔴 | The 08-23 backups/import 404 was **the deploy script, not the app**: `--exclude='data'` matches the basename at any depth, so every deploy `--delete`d `dora_api/features/data/`. One-character fix, still owner-side. FU-720, FU-719, FU-721, FU-790 | FU-719/720 |
 | **Verify tooling** | 🟡 | A proven-safe isolated pairing is committed (`dora-verify-backend-5171[-linux]` + `dora-spa-5171`, scratch DB). Remaining limits: `QMenu` never opens, `screenshot` times out, some routes won't mount (**stock-item detail**, the cookbook list). The four original `:5170` + `DORA_ALLOW_DESTRUCTIVE=true` configs remain the footgun (**FU-758**) | FU-758 |
 | **Postgres datastore** | ✅ | Implemented + default (SQLite fallback); migrations kept portable. CI wiring blocked on FU-405 | `configuration_manager.py` |
-| **Test suite** | ✅ | Green 2026-09-03: backend **2275 passed** / 1 skipped / 1 xfailed, frontend **685 vitest / 61 files**, `vue-tsc` + `eslint src/` clean. Caveat: 4 pre-existing buy-verdict e2e reds (FU-762). This machine: bare `pytest` throws spurious setup errors from a missing system temp dir — pass `--basetemp`; the venv is `.venv/Scripts/python.exe`, not PATH python. Open: FU-756/743, FU-781, FU-778, FU-520 | [PROPOSAL](docs/04_proposals/PROPOSAL_TEST_SUITE_IMPROVEMENTS.md) |
+| **Test suite** | ✅ | Green 2026-09-03: backend **2275 passed** / 1 skipped / 1 xfailed, frontend **685 vitest / 61 files**, `vue-tsc` + `eslint src/` clean. Caveat: 4 pre-existing buy-verdict e2e reds (FU-762). This machine: bare `pytest` throws spurious setup errors from a missing system temp dir — pass `--basetemp`; the venv is `.venv/Scripts/python.exe` on Windows, `.venv/bin/python` on this Linux box, never PATH python. Open: FU-756/743, FU-781, FU-778, FU-520 | [PROPOSAL](docs/04_proposals/PROPOSAL_TEST_SUITE_IMPROVEMENTS.md) |
 | **Open-source release (P7)** | ⚪ | Not sold — donation/OSS/all-free. README/showcase, release process, support channel (FU-406/557/608), build number (FU-861) | [PLAN §5](docs/01_charter/RECONCILED_FINISHING_PLAN.md) |
 | **Finalisation sweep** | 🔵 | Designed, not started — 20 chunks, two-stage, single-maintainer north-star | [PLAN](docs/01_charter/FINALISATION_PLAN.md) |
 
@@ -93,80 +97,91 @@ rather than the rule.
 
 ## ⚠️ Needs your attention now
 
-**Total open backlog is ~198 items in `DORA_FOLLOWUPS.md`** — recount before
+**Total open backlog is exactly 200 items in `DORA_FOLLOWUPS.md`** (counted
+2026-09-03 via `grep -c '^## \[OPEN\]'`, less the template row) — recount before
 quoting it; don't do arithmetic on this number, the last three recorded figures
-were all wrong for exactly that reason. Latest movement: **FU-852..861 opened**
-across the four 09-03 batches.
+were all wrong for exactly that reason. Latest movement: **FU-852..863 opened**
+across the five 09-03 batches.
 
 These are the ones wanting a decision or a running-app check, most important first.
 
-1. **🔴 FU-860 wants a decision before anything is built.** With products off,
+1. **🔴 FU-862 wants a decision now, and it's the one with a security-shaped lie
+   in it.** The switch the admin sweep just renamed to **Product data ingestion**
+   does not stop ingestion — `submit_ingestion_batch()` never reads the flag —
+   yet the copy asserts it does. It is the *second* instance this session of the
+   defect R-078 was written for, on the same page as the first. The fix is a
+   one-line 403, but the flag defaults to `False`, so guarding it breaks every
+   install already pushing data (including yours) unless the migration flips
+   existing rows. Guard it or drop it.
+2. **🔴 FU-860 wants a decision before anything is built.** With products off,
    Dora sends **no scheduled email at all** — the weekly deals mail is the only
    one, and its section is already hidden. Your own follow-on ("perhaps there's
    something we could email that users would want") is the real question; the
    evening brief is the cheapest candidate, since it already exists and is
    already scheduled — only the channel is missing.
-2. **Walk the 09-03 Settings batch — all of it is device- or install-shaped and
-   none of it can be agent-driven.** A real Piper voice download (the `NameError`
-   fix, now test-covered but never watched end to end), the Docker-over-HTTP
-   install message on a phone, a real file picker on Stores, and the
-   Notifications email rows on an install that actually has SMTP.
-3. **Walk the earlier 09-03 batches — three `DORA_VERIFY` sections, one never
+3. **Walk the two 09-03 Settings batches.** The **admin** batch needs no device
+   but changes what other surfaces show (money and ingestion flags, two retired
+   routes now redirecting) and is worth seeing. The **user-facing** batch is
+   device- or install-shaped and none of it can be agent-driven: a real Piper
+   voice download (the `NameError` fix, now test-covered but never watched end to
+   end), the Docker-over-HTTP install message on a phone, a real file picker on
+   Stores, and the Notifications email rows on an install that actually has SMTP.
+4. **Walk the earlier 09-03 batches — three `DORA_VERIFY` sections, one never
    *seen*.** The two new themes, the segmented convergence across 19 consumers,
    and the **planned-demand card**, verified as data but whose stock-detail route
    won't mount in the agent's pane.
-4. **🔴 FU-855 is your call, and FU-856 is the lever that fixes it.** Setting
+5. **🔴 FU-855 is your call, and FU-856 is the lever that fixes it.** Setting
    `pack_count = 12` on the eggs made the omelette right, but "2 tins" of a 400 g
    tin with no `pack_count` is now honestly *unpriced* where it used to be right
    by luck — and `pack_count` isn't on `CreateProductRequest`, so there is
    currently **no way to record the fact through the API at all**.
-5. **🔴 May a planned meal change a buy verdict? (FU-774)** Your own idea, and the
+6. **🔴 May a planned meal change a buy verdict? (FU-774)** Your own idea, and the
    brief agrees — but your 2026-08-17 directive says "a planned meal's shortfall
    is unchanged", and an axis that moves `unsure` → `buy` breaks it head-on.
    Gates FU-775/776. 09-03 shipped planned demand as a *sibling* signal precisely
    because it must not change an answer (R-074); that precedent is on the table.
-6. **🔴 Four launch configs will still destroy the dev DB (FU-758).** The
+7. **🔴 Four launch configs will still destroy the dev DB (FU-758).** The
    `dora-verify-backend*` entries bind **:5170** with
    `DORA_ALLOW_DESTRUCTIVE=true`, which `drop_all`s on boot. The safe pairing is
    committed beside them. Point them at it, or delete them.
-7. **🔴 Four buy-verdict e2e tests are red (FU-762).** They pre-date the
+8. **🔴 Four buy-verdict e2e tests are red (FU-762).** They pre-date the
    money-gate change but sit directly on the surface it modified.
-8. **🟡 One character in `deploy-dora.sh`, still on your desktop.**
+9. **🟡 One character in `deploy-dora.sh`, still on your desktop.**
    `--exclude='data'` matches the basename at any depth, so every deploy deleted
    `dora_api/features/data/`. Change to `--exclude='/data'` — until you do,
    **FU-648 and FU-710 stay unreproducible**. The script also holds your SSH
    password in plaintext at mode 0664.
-9. **🟡 Four more surfaces still read "has a price" as "was bought" (FU-768).**
-   The budget bug fixed on 08-28 was one instance of a class. Needs a call on what
-   counts as proof of purchase, then a chokepoint in `_line_price.py`
-   (R-061 / ADR-058).
-10. **Does the re-brightened accent look right, and does the burger read at
+10. **🟡 Four more surfaces still read "has a price" as "was bought" (FU-768).**
+    The budget bug fixed on 08-28 was one instance of a class. Needs a call on what
+    counts as proof of purchase, then a chokepoint in `_line_price.py`
+    (R-061 / ADR-058).
+11. **Does the re-brightened accent look right, and does the burger read at
     12–14px? (FU-850, FU-800.)** The rest of the sweep wants your eye on this
     pass first.
-11. **🟡 A benign browser warning can silently revert an in-flight mutation
+12. **🟡 A benign browser warning can silently revert an in-flight mutation
     (FU-785).** A `ResizeObserver` loop notification shows an "Oops" toast, but
     `window.onerror` also runs `executeRollbacks()` — a layout hiccup can roll
     back an optimistic write. The toast is the lesser half.
-12. **🔴 Decide the fate of the product price axis (FU-703).** Reports chunk 4
+13. **🔴 Decide the fate of the product price axis (FU-703).** Reports chunk 4
     answers the everyday price question without a catalogue; the keep/cut call on
     the product surfaces is yours and **gates FU-708**.
-13. **Walk the whole stock + stocktake surface — built and unseen (FU-683,
+14. **Walk the whole stock + stocktake surface — built and unseen (FU-683,
     FU-715).** On the 08-22 bulk-bar check: open devtools Network, and **if any
     bulk action still fires N requests, a call site was missed** (FU-714 names one).
-14. **Existing installs need a re-import prompt or their ratings are wrong in one
+15. **Existing installs need a re-import prompt or their ratings are wrong in one
     direction (FU-750),** and both schemes want a walk against a real USDA import
     — **Nutri-Score has had no browser pass at all** (FU-746, FU-643).
-15. **🔴 Token and small-decision cleanups, all mechanical once called.** FU-674
+16. **🔴 Token and small-decision cleanups, all mechanical once called.** FU-674
     and **FU-801** (both fail the 4.5:1 ink test; the latter is consumed through
     Quasar's `color="primary"`, so it's its own unit); **FU-834/FU-764** — ~20
     undeclared custom properties that silently ignore your theme forever, no lint
     gate; FU-839, FU-709, FU-685/686.
-16. **Round-trip the offline queue live (FU-724).** It once queued changes and
-    lost every one while reporting "Synced everything" — a mocked transport
-    cannot reproduce this.
-17. **Phase-4 release readiness needs your steer on scope and timing.** FU-406,
-    FU-608, FU-557 (a one-line config change lights up Help / error-report),
-    FU-861 (a real build number). Ops/CI (FU-405) gates FU-520/FU-404/FU-721.
+17. **Round-trip the offline queue live (FU-724), and steer Phase 4.** The queue
+    once lost every change while reporting "Synced everything" — a mocked
+    transport cannot reproduce that. Phase-4 readiness needs your scope/timing
+    call: FU-406, FU-608, FU-557 (a one-line config change lights up Help /
+    error-report), FU-861 (a real build number, and tagging is on that phase's
+    path anyway). Ops/CI (FU-405) gates FU-520/FU-404/FU-721.
 
 ---
 
@@ -174,7 +189,7 @@ These are the ones wanting a decision or a running-app check, most important fir
 
 - **`DORA_WORKLOG.md`** — per-session handoff narrative (what ran, decisions, what's next).
 - **`CHANGELOG.md`** — product/code changes that shipped.
-- **`DORA_FOLLOWUPS.md`** — the full 188-item open backlog (this dashboard shows only the top).
+- **`DORA_FOLLOWUPS.md`** — the full 200-item open backlog (this dashboard shows only the top).
 - **`DORA_VERIFY.md`** — your browser-verify checklist (walk + delete as you confirm).
 - **The full per-doc register is below** — every planning doc's verified state.
 - **Charter / how & why:** `docs/01_charter/` (vision, standards, master plan).

@@ -38,7 +38,6 @@ class UpdateAppSettingsRequest(BaseModel):
     # means an old client still sending it here gets a 4xx rather than a silent
     # no-op, which is the honest failure.
     # C-cross Chunk 1 — install-wide feature flags (proposal §2.6).
-    meal_planning_enabled: bool | None = None
     money_enabled: bool | None = None
     companion_ingestion_enabled: bool | None = None
     deals_email_enabled: bool | None = None
@@ -158,7 +157,6 @@ class UpdateAppSettingsHandler:
         # like every other field above: only fields present in the body
         # change; the rest are left alone.
         for _Attr in (
-            "meal_planning_enabled",
             "money_enabled",
             "companion_ingestion_enabled",
             "deals_email_enabled",

@@ -9,13 +9,15 @@ import { computed, ref } from 'vue';
 import type { Router } from 'vue-router';
 import AppSettingsApiService from 'src/services/api/appSettingsApiService';
 
-// Admin Features page that owns the Product Search URL row. Used as the
-// fallback destination for the non-nav "Product Search" CTAs (find-&-link,
-// dashboard "hunt for deals", Dora quick-actions) when no URL is configured
-// yet, so those stay actionable for an admin instead of dead-ending on the
-// retired `/product-search` route. The main-nav entry no longer uses this —
-// it simply hides when no URL is set (see MainLayout).
-export const PRODUCT_SEARCH_SETTINGS_PATH = '/settings/admin/system/features';
+// Admin page that owns the Product Search URL row — the Product data
+// ingestion page since 2026-09-03, where the URL now sits beside the ingestion
+// switch it pairs with. Used as the fallback destination for the non-nav
+// "Product Search" CTAs (find-&-link, dashboard "hunt for deals", Dora
+// quick-actions) when no URL is configured yet, so those stay actionable for an
+// admin instead of dead-ending on the retired `/product-search` route. The
+// main-nav entry no longer uses this — it simply hides when no URL is set
+// (see MainLayout).
+export const PRODUCT_SEARCH_SETTINGS_PATH = '/settings/admin/system/ingestion';
 
 const url = ref<string>('');
 const loaded = ref(false);

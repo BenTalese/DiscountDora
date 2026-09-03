@@ -396,20 +396,36 @@ const routes: RouteRecordRaw[] = [
                     {
                         path: 'admin/system/region',
                         component: () => import('pages/settings/AdminSystemRegionSettings.vue'),
-                        meta: { title: 'System: Region & Locale' }
+                        meta: { title: 'Region & Locale' }
                     },
                     {
                         path: 'admin/system/alerts',
                         component: () => import('pages/settings/AdminSystemAlertsSettings.vue'),
-                        meta: { title: 'System: Alert Thresholds' }
+                        meta: { title: 'Alert Thresholds' }
                     },
                     // (The install-wide AI master toggle + its admin page were
                     // removed 2026-08-12 — AI mode is per-user only. No
                     // redirect kept: pre-release, no bookmarks to preserve.)
+                    // The Features page was dissolved 2026-09-03 (owner) — a
+                    // pile of unrelated install switches, each of which now
+                    // sits on the surface it governs: money here, scanning on
+                    // Stock, ingestion + product search under Data & access,
+                    // the weekly deals mail on Email. `meal_planning_enabled`
+                    // went entirely (it gated nothing). Redirect lands on Money,
+                    // the flag with the widest reach of the four.
                     {
                         path: 'admin/system/features',
-                        component: () => import('pages/settings/AdminSystemFeaturesSettings.vue'),
-                        meta: { title: 'System: Features' }
+                        redirect: '/settings/admin/system/money'
+                    },
+                    {
+                        path: 'admin/system/money',
+                        component: () => import('pages/settings/AdminSystemMoneySettings.vue'),
+                        meta: { title: 'Money' }
+                    },
+                    {
+                        path: 'admin/system/ingestion',
+                        component: () => import('pages/settings/AdminSystemIngestionSettings.vue'),
+                        meta: { title: 'Product data ingestion' }
                     },
                     {
                         // Nutrition is install-wide (2026-08-14) — mode +
@@ -417,29 +433,32 @@ const routes: RouteRecordRaw[] = [
                         // per-user page.
                         path: 'admin/system/nutrition',
                         component: () => import('pages/settings/AdminSystemNutritionSettings.vue'),
-                        meta: { title: 'System: Nutrition' }
+                        meta: { title: 'Nutrition' }
                     },
                     // four focused System pages carrying the
                     // operational config that used to live in DORA_* env vars.
                     {
                         path: 'admin/system/email',
                         component: () => import('pages/settings/AdminSystemEmailSettings.vue'),
-                        meta: { title: 'System: Email' }
+                        meta: { title: 'Email' }
                     },
                     {
                         path: 'admin/system/push',
                         component: () => import('pages/settings/AdminSystemPushSettings.vue'),
-                        meta: { title: 'System: Push Notifications' }
+                        meta: { title: 'Push Notifications' }
                     },
                     {
                         path: 'admin/system/voice',
                         component: () => import('pages/settings/AdminSystemVoiceSettings.vue'),
-                        meta: { title: 'System: Voice' }
+                        meta: { title: 'Voice' }
                     },
+                    // Hosting retired 2026-09-03 (owner) — a two-setting page
+                    // whose two settings had nothing to do with each other. The
+                    // public URL is what Dora writes into emails, so it moved to
+                    // Email; audit retention moved onto the Audit log it prunes.
                     {
                         path: 'admin/system/hosting',
-                        component: () => import('pages/settings/AdminSystemHostingSettings.vue'),
-                        meta: { title: 'System: Hosting' }
+                        redirect: '/settings/admin/system/email'
                     },
                     // PROPOSAL_STOCKTAKE_MODE §8 — new focused page for the
                     // two global stocktake dials (default cadence + Auto
@@ -448,7 +467,7 @@ const routes: RouteRecordRaw[] = [
                     {
                         path: 'admin/system/stocktake',
                         component: () => import('pages/settings/AdminSystemStocktakeSettings.vue'),
-                        meta: { title: 'System: Stocktake' }
+                        meta: { title: 'Stocktake' }
                     },
                     // FU-511 — install-wide auto-add mode
                     // (off / essential-only / all). Collapsed here from the
@@ -456,28 +475,28 @@ const routes: RouteRecordRaw[] = [
                     {
                         path: 'admin/system/stock',
                         component: () => import('pages/settings/AdminSystemStockSettings.vue'),
-                        meta: { title: 'System: Stock' }
+                        meta: { title: 'Stock' }
                     },
                     // FU-317 Chunk 6 — install-wide meal-plan reconcile
                     // posture (auto-drain vs hold-for-confirm).
                     {
                         path: 'admin/system/meal-reconcile',
                         component: () => import('pages/settings/AdminSystemMealReconcileSettings.vue'),
-                        meta: { title: 'System: Meal Reconciliation' }
+                        meta: { title: 'Meal Reconciliation' }
                     },
                     // FU-615 — install-wide household cooking config
                     // (headcount + cook-style), moved off the per-user record.
                     {
                         path: 'admin/system/cooking',
                         component: () => import('pages/settings/AdminSystemCookingSettings.vue'),
-                        meta: { title: 'System: Cooking' }
+                        meta: { title: 'Cooking' }
                     },
                     // 2026-08-23 owner feedback — image-encode knobs lifted out
                     // of Backup & Restore onto their own page.
                     {
                         path: 'admin/system/images',
                         component: () => import('pages/settings/AdminSystemImageSettings.vue'),
-                        meta: { title: 'System: Image quality' }
+                        meta: { title: 'Image quality' }
                     },
                     {
                         // Old single System page → first System page.

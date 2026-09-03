@@ -27,8 +27,6 @@ export interface PlannedDemand {
 }
 
 export interface PlannedDemandResponse {
-    /** False when the meal planner is switched off install-wide. */
-    enabled: boolean;
     /** How far ahead the signal looks, in days. */
     horizon_days: number;
     /** Keyed by stock_item_id. Items with no demand are absent, not zeroed. */

@@ -220,9 +220,9 @@
     const { channel, hasChannel } = useSupportChannel();
     const reportHref = computed(() => supportHref(channel.value));
 
-    // The money + meal-planning lines only claim what this install actually
-    // does — an install with money off shouldn't be told Dora tracks prices.
-    const { money: moneyEnabled, mealPlanning } = useFeatureFlags();
+    // The money line only claims what this install actually does — an
+    // install with money off shouldn't be told Dora tracks prices.
+    const { money: moneyEnabled } = useFeatureFlags();
 
     const whatDoraDoes = computed(() => {
         const lines: { icon: string; text: string }[] = [
@@ -235,17 +235,10 @@
                 text: 'Tells you what you can cook tonight from what you already have.',
             },
         ];
-        if (mealPlanning.value) {
-            lines.push({
-                icon: ICONS.event_note,
-                text: 'Plans your week of meals and turns it into a shopping list.',
-            });
-        } else {
-            lines.push({
-                icon: ICONS.shopping_cart,
-                text: 'Builds your shopping list from what the kitchen is short on.',
-            });
-        }
+        lines.push({
+            icon: ICONS.event_note,
+            text: 'Plans your week of meals and turns it into a shopping list.',
+        });
         if (moneyEnabled.value) {
             lines.push({
                 icon: ICONS.savings,
@@ -279,10 +272,8 @@
             { value: s.recipes.total, label: s.recipes.total === 1 ? 'recipe' : 'recipes' },
             { value: s.shopping_lists.total, label: s.shopping_lists.total === 1 ? 'shopping list' : 'shopping lists' },
         ];
-        if (mealPlanning.value) {
-            const upcoming = s.meal_plan.upcoming_entries.length;
-            out.push({ value: upcoming, label: upcoming === 1 ? 'meal coming up' : 'meals coming up' });
-        }
+        const upcoming = s.meal_plan.upcoming_entries.length;
+        out.push({ value: upcoming, label: upcoming === 1 ? 'meal coming up' : 'meals coming up' });
         return out;
     });
 

@@ -217,46 +217,49 @@
     // sidebar read as a single undifferentiated pile with an arbitrary nested
     // level. It's now shaped exactly like the personal side: several
     // top-level groups, each a flat list of destinations, no sub-headers
-    // anywhere. The URLs are untouched — this is purely how they're grouped
-    // in the nav, so every existing deep link and bookmark still resolves.
+    // anywhere.
     //
-    // The grouping answers "what am I here to change?": who can get in
-    // (Users) · what this install *is* (Install) · the household defaults the
-    // kitchen features read (Kitchen defaults) · how Dora reaches people
-    // (Messaging) · and the data itself, plus the keys and the paper trail
-    // over it (Data & access).
-    const adminUsers: SettingsNavEntry[] = [
-        { path: '/settings/admin/users', label: 'Users', icon: ICONS.group },
-    ];
-
+    // Owner call 2026-09-03 — three groups, not five, and no page whose only
+    // job is to hold switches that belong somewhere else:
+    //   * **Users leads Install.** It was a headerless group of one sitting
+    //     above everything, which read as though it were a category.
+    //   * **Messaging dissolved into Install.** Email/Push/Voice are things
+    //     this install has configured, not a separate concern.
+    //   * **Kitchen defaults → Kitchen features**, absorbing the Features
+    //     page: each of its switches now sits on the surface it governs
+    //     (money here, scanning on Stock, ingestion under Data & access,
+    //     the weekly deals mail on Email).
+    //   * **Hosting retired** — public URL to Email, audit retention to the
+    //     Audit log — and **Image quality** joined Data & access.
+    // Every URL that survives is untouched; the two retired pages redirect.
     const adminInstall: SettingsNavEntry[] = [
+        { path: '/settings/admin/users', label: 'Users', icon: ICONS.group },
         { path: '/settings/admin/system/region', label: 'Region & locale', icon: ICONS.language },
-        { path: '/settings/admin/system/features', label: 'Features', icon: ICONS.tune },
-        { path: '/settings/admin/system/hosting', label: 'Hosting', icon: ICONS.cloud_upload },
-        { path: '/settings/admin/system/images', label: 'Image quality', icon: ICONS.image },
-    ];
-
-    const adminKitchenDefaults: SettingsNavEntry[] = [
-        { path: '/settings/admin/system/stock', label: 'Stock', icon: ICONS.inventory_2 },
-        { path: '/settings/admin/system/stocktake', label: 'Stocktake', icon: ICONS.fact_check },
-        { path: '/settings/admin/system/cooking', label: 'Cooking', icon: ICONS.restaurant },
-        { path: '/settings/admin/system/meal-reconcile', label: 'Meal reconciliation', icon: ICONS.event_note },
-        { path: '/settings/admin/system/nutrition', label: 'Nutrition', icon: ICONS.monitor_heart },
-        { path: '/settings/admin/system/alerts', label: 'Alert thresholds', icon: ICONS.notifications },
-    ];
-
-    const adminMessaging: SettingsNavEntry[] = [
         { path: '/settings/admin/system/email', label: 'Email', icon: ICONS.mark_email_read },
         { path: '/settings/admin/system/push', label: 'Push notifications', icon: ICONS.notifications_active },
         { path: '/settings/admin/system/voice', label: 'Voice', icon: ICONS.record_voice_over },
     ];
 
+    const adminKitchenFeatures: SettingsNavEntry[] = [
+        { path: '/settings/admin/system/stock', label: 'Stock', icon: ICONS.inventory_2 },
+        { path: '/settings/admin/system/stocktake', label: 'Stocktake', icon: ICONS.fact_check },
+        { path: '/settings/admin/system/cooking', label: 'Cooking', icon: ICONS.restaurant },
+        { path: '/settings/admin/system/meal-reconcile', label: 'Meal reconciliation', icon: ICONS.event_note },
+        { path: '/settings/admin/system/nutrition', label: 'Nutrition', icon: ICONS.monitor_heart },
+        { path: '/settings/admin/system/money', label: 'Money', icon: ICONS.savings },
+        { path: '/settings/admin/system/alerts', label: 'Alert thresholds', icon: ICONS.notifications },
+    ];
+
     // Backup & restore + Import were relocated here from the retired `/data`
     // shell; API access and the Audit log join them because all four are about
-    // data leaving, entering, or being accounted for.
+    // data leaving, entering, or being accounted for — as are product data
+    // ingestion (data arriving from outside) and image quality (how uploaded
+    // data is stored), both added 2026-09-03.
     const adminData: SettingsNavEntry[] = [
+        { path: '/settings/admin/system/ingestion', label: 'Product data ingestion', icon: ICONS.cloud_upload },
         { path: '/settings/admin/data/backup', label: 'Backup & restore', icon: ICONS.cloud_download },
         { path: '/settings/admin/data/import', label: 'Import', icon: ICONS.file_upload },
+        { path: '/settings/admin/system/images', label: 'Image quality', icon: ICONS.image },
         { path: '/settings/admin/api-access', label: 'API access', icon: ICONS.key },
         { path: '/settings/admin/audit-log', label: 'Audit log', icon: ICONS.history },
     ];
@@ -325,12 +328,8 @@
     const navGroups = computed<SettingsNavGroupDef[]>(() => {
         if (isAdmin.value && mode.value === 'admin') {
             return [
-                // `headerless` for the same reason Account is: it's a single
-                // destination, not a category.
-                { label: 'Users', items: adminUsers, headerless: true },
                 { label: 'Install', items: adminInstall, icon: ICONS.settings },
-                { label: 'Kitchen defaults', items: adminKitchenDefaults, icon: ICONS.restaurant },
-                { label: 'Messaging', items: adminMessaging, icon: ICONS.notifications_active },
+                { label: 'Kitchen features', items: adminKitchenFeatures, icon: ICONS.restaurant },
                 { label: 'Data & access', items: adminData, icon: ICONS.storage },
             ];
         }

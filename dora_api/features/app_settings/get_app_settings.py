@@ -23,7 +23,6 @@ class AppSettingsDto:
     nutrition_rating_scheme: str
     # buy-verdict oracle toggle.
     # C-cross Chunk 1 — install-wide feature flags (proposal §2.6).
-    meal_planning_enabled: bool
     money_enabled: bool
     companion_ingestion_enabled: bool
     deals_email_enabled: bool
@@ -100,7 +99,6 @@ def _to_dto(setting) -> AppSettingsDto:  # noqa: ANN001 — duck-typed AppSettin
         nutrition_rating_scheme=str(
             getattr(setting, "nutrition_rating_scheme", RATING_SCHEME_NONE)
             or RATING_SCHEME_NONE),
-        meal_planning_enabled=bool(setting.meal_planning_enabled),
         money_enabled=bool(setting.money_enabled),
         companion_ingestion_enabled=bool(setting.companion_ingestion_enabled),
         deals_email_enabled=bool(setting.deals_email_enabled),

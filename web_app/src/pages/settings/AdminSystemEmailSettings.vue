@@ -2,7 +2,7 @@
     <div class="settings-page">
         <SettingsPageHeader
             title="Email"
-            description="SMTP configuration for transactional emails (verification, password reset, alerts digest). The install-wide switch reveals or hides email-related surfaces across the app."
+            description="Whether this install sends email at all, how it connects to a mail server, and what Dora sends."
             :icon="ICONS.mark_email_read"
         />
 
@@ -180,6 +180,62 @@
                     </div>
                 </SettingsRow>
             </SettingsSection>
+
+            <!-- Moved here 2026-09-03 when the Hosting page was retired (owner:
+                 *"Hosting page makes little sense to me"*). The public URL is a
+                 normal self-host setting — Gitea's ROOT_URL, Nextcloud's
+                 overwrite.cli.url — and its whole job is building the absolute
+                 links Dora puts in mail, so it belongs beside the mail config
+                 rather than on a page of its own. -->
+            <SettingsSection>
+                <template #title>Links in emails</template>
+                <template #description>
+                    Dora needs to know its own address to write links into
+                    verification and password-reset emails. Leave it blank and
+                    Dora uses the address the request came in on, which is right
+                    for most self-hosts — set it when Dora sits behind a proxy
+                    or the mail should point somewhere else.
+                </template>
+
+                <SettingsRow label="Public URL" stacked>
+                    <q-input
+                        v-model="draft.public_url"
+                        outlined dense clearable
+                        placeholder="https://dora.example.com"
+                        :error="publicUrlHasError"
+                        :error-message="publicUrlHasError ? 'Must start with http:// or https://.' : ''"
+                        @blur="onSavePublicUrl"
+                    />
+                </SettingsRow>
+            </SettingsSection>
+
+            <!-- Owner 2026-09-03 — the weekly deals mail used to be a row on
+                 the Features page, which read as though all of Dora's email
+                 hung off it. It doesn't: `email_enabled` above is the email
+                 subsystem, this is one scheduled mail. It lives here so the two
+                 are visibly separate, and its InfoTip names the *other*
+                 dependency — no ingested product data, no deals to send. -->
+            <SettingsSection>
+                <template #title>Weekly deals email</template>
+
+                <SettingsRow inline>
+                    <template #label>
+                        Send the weekly deals email
+                        <InfoTip label="Weekly deals email">
+                            A per-user weekly summary of what's on special and
+                            what's running low. It draws entirely on ingested
+                            product data, so with product data ingestion off (or
+                            no products yet) there is nothing to send. Each
+                            person subscribes themselves under
+                            Settings &rarr; Notifications.
+                        </InfoTip>
+                    </template>
+                    <q-toggle
+                        v-model="draft.deals_email_enabled"
+                        @update:model-value="() => onSaveField('deals_email_enabled')"
+                    />
+                </SettingsRow>
+            </SettingsSection>
         </template>
     </div>
 </template>
@@ -191,15 +247,18 @@
     import { useQuasar } from 'quasar';
     import AppSettingsApiService, { type AppSettings } from 'src/services/api/appSettingsApiService';
     import { useAuthStore } from 'src/stores/authStore';
-    import { onMounted, reactive, ref } from 'vue';
+    import { computed, onMounted, reactive, ref } from 'vue';
     import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';
     import SettingsSection from 'src/components/settings/SettingsSection.vue';
     import SettingsRow from 'src/components/settings/SettingsRow.vue';
     import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
     import EncryptionKeyBanner from 'src/components/settings/EncryptionKeyBanner.vue';
+    import InfoTip from 'src/components/help/InfoTip.vue';
+    import { useFeatureFlags } from 'src/composables/useFeatureFlags';
 
     type EmailField = 'email_enabled' | 'smtp_host' | 'smtp_port'
-        | 'smtp_username' | 'smtp_from' | 'smtp_use_tls';
+        | 'smtp_username' | 'smtp_from' | 'smtp_use_tls'
+        | 'deals_email_enabled' | 'public_url';
 
     const $q = useQuasar();
     const { isAdmin } = storeToRefs(useAuthStore());
@@ -214,8 +273,29 @@
         smtp_username: '',
         smtp_from: '',
         smtp_use_tls: true,
+        deals_email_enabled: false,
+        public_url: '',
     });
     const draft = reactive({ ...saved });
+
+    // `deals_email` is published as a health flag, so a flip has to invalidate
+    // the cached `/api/health` answer or every consumer keeps the old value
+    // until a reload.
+    const { refresh: featureFlags$refresh } = useFeatureFlags();
+
+    const publicUrlHasError = computed(() => {
+        const value = (draft.public_url ?? '').trim();
+        if (!value) return false;
+        return !value.startsWith('http://') && !value.startsWith('https://');
+    });
+
+    async function onSavePublicUrl() {
+        // Server validates too, but bail early on the obvious case so the user
+        // sees the inline error rather than a toast.
+        if (publicUrlHasError.value) return;
+        draft.public_url = (draft.public_url ?? '').trim();
+        await onSaveField('public_url');
+    }
     // Bucket-C secret is write-only — the server never returns the plaintext,
     // just a `_configured` bool. We hold the draft locally, submit explicitly.
     const passwordConfigured = ref(false);
@@ -233,6 +313,7 @@
             const result = await api.updateAsync({ [field]: value });
             (saved as Record<EmailField, unknown>)[field] = result[field];
             resetDrafts();
+            if (field === 'deals_email_enabled') await featureFlags$refresh();
             $q.notify({
                 type: 'positive', position: 'bottom-right',
                 message: 'Email settings saved.',
@@ -279,6 +360,8 @@
         saved.smtp_username = s.smtp_username;
         saved.smtp_from = s.smtp_from;
         saved.smtp_use_tls = s.smtp_use_tls;
+        saved.deals_email_enabled = s.deals_email_enabled;
+        saved.public_url = s.public_url;
         passwordConfigured.value = s.smtp_password_configured;
         resetDrafts();
     }

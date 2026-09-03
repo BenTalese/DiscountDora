@@ -18,7 +18,7 @@
                 <q-icon :name="ICONS.info" />
             </template>
             Scanning &amp; QR labels are turned off. An admin can enable them in
-            <router-link to="/settings/admin/system/features">Settings → System → Features</router-link>.
+            <router-link to="/settings/admin/system/stock">Settings → Admin → Stock</router-link>.
         </q-banner>
 
         <!-- Owner 2026-09-03: was a bare `q-card flat bordered` — Quasar's

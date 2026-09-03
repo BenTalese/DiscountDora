@@ -78,7 +78,6 @@ export function useFeatureFlags() {
         email: computed(() => readFlag('email')),
         // No `assistant` flag — AI mode has no install-wide gate (per-user
         // opt-in only), so there's nothing for the server to publish.
-        mealPlanning: computed(() => readFlag('meal_planning')),
         money: computed(() => readFlag('money')),
         nutrition: computed(() => readFlag('nutrition')),
         companionIngestion: computed(() => readFlag('companion_ingestion')),

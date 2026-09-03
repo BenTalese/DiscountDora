@@ -36,6 +36,47 @@ semver — major bumps signal schema or breaking-config changes.
   stretch), and stays quiet otherwise.
 
 ### Changed
+- **Admin settings is three groups, and every switch sits with the thing it
+  switches (2026-09-03).** The area had grown into five groups, one of which held
+  a single page, plus a "Features" page that collected unrelated toggles just
+  because they were toggles. It is now **Install** (Users first, then Region &
+  locale, Email, Push notifications, Voice), **Kitchen features** (Stock,
+  Stocktake, Cooking, Meal reconciliation, Nutrition, Money, Alert thresholds)
+  and **Data & access** (Product data ingestion, Backup & restore, Import, Image
+  quality, API access, Audit log). Nothing was lost — the switches moved:
+  - **Scanning & QR labels** is on the Stock page.
+  - **Money & budgets** has its own page under Kitchen features.
+  - **Companion ingestion is now "Product data ingestion"**, on its own page
+    under Data & access, with the **product search URL** beside it — the tool
+    that pushes the data is usually the tool you want to open. The URL field no
+    longer hides until products already exist, and its "must start with…" hint
+    is gone (the error still says so if you get it wrong).
+  - **The weekly deals email** is on the Email page, which makes the thing that
+    was never clear plain: it is *one* scheduled mail, not the email subsystem,
+    and it depends on ingested product data — with ingestion off there is
+    nothing for it to send.
+  - **The public URL** moved to Email, where the links it builds are sent from,
+    and **audit retention** onto the Audit log it prunes. The **Hosting** page is
+    gone. Old links to Features and Hosting still resolve.
+  - Every relocated switch now reads as one short line with an info chip and the
+    toggle on the right, rather than a paragraph.
+- **Settings pages no longer title themselves "System:" on a phone.** Eleven
+  pages put that prefix in the mobile toolbar where the page's name should be.
+- **Image quality saves as you change it.** The Save/Discard pair is gone (a
+  slider drag still writes once, on release, not once per pixel), and the page's
+  four paragraphs of explanation are two info chips.
+- **The Users list drops the "admin" and "deactivated" chips** — both restated a
+  toggle sitting on the same row, and a deactivated account is already dimmed.
+  In *Add user*, the generate-password switch matches the Admin switch beside it
+  and the dialog stops changing height when you flip it.
+
+### Removed
+- **The meal-planning feature toggle (2026-09-03).** It claimed to hide the
+  meal-plans surface and never did — the nav entry and the route were always
+  there and nothing read the flag. Meal planning is core to Dora; there was
+  nothing to turn off. The setting, its column and its health flag are gone.
+
+### Changed
 - **Settings — the 2026-09-03 owner sweep.** One pass across nine pages,
   driven live at phone and desktop width:
   - **Toggles stay on the right on a phone.** Notifications and Assistant used

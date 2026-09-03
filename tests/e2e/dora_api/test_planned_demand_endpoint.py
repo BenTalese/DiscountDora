@@ -80,7 +80,6 @@ def _plan(recipe_id: str, day_offsets, servings: int = 2) -> str:
 
 def _demand_for(item_id: str) -> dict | None:
     body = requests.get(DEMAND).json()
-    assert body["enabled"] is True, body
     return body["demand"].get(item_id)
 
 

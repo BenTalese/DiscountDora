@@ -106,10 +106,13 @@ class AppSetting(BaseEntity):
     # via `/api/health features.*` + admin-only `PATCH /api/admin/feature-
     # flags`. Per-user opt-ins (money, nutrition, image display) layer on
     # top of these — install flag = "available here at all"; user flag =
-    # "do I personally want to see it". Defaults are conservative: only
-    # `meal_planning_enabled` ships True so existing installs don't lose
-    # the meal-plan feature on first boot post-deploy.
-    meal_planning_enabled: bool = True
+    # "do I personally want to see it". Defaults are conservative: every
+    # flag here ships off.
+    # `meal_planning_enabled` removed 2026-09-03 (owner call). It never
+    # gated the meal-plans surface the way its own copy claimed — the nav
+    # entry and the route were unconditional — so the only thing it did was
+    # switch off the planned-demand signal. Meal planning is core; there was
+    # nothing to turn off. Column dropped in migration a7c3e5d19f2b.
     money_enabled: bool = False
     companion_ingestion_enabled: bool = False
     deals_email_enabled: bool = False
@@ -311,7 +314,6 @@ class AppSetting(BaseEntity):
     class Fields(BaseEntity.Fields):
         SCANNING_ENABLED = "scanning_enabled"
         NUTRITION_RATING_SCHEME = "nutrition_rating_scheme"
-        MEAL_PLANNING_ENABLED = "meal_planning_enabled"
         MONEY_ENABLED = "money_enabled"
         COMPANION_INGESTION_ENABLED = "companion_ingestion_enabled"
         DEALS_EMAIL_ENABLED = "deals_email_enabled"

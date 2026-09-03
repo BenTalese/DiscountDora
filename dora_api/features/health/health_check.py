@@ -124,7 +124,8 @@ def _feature_flags(setting) -> dict[str, bool]:
         # Each pairs with a per-user opt-in (where one exists) — install
         # off ⇒ feature hidden for everyone; install on ⇒ per-user opt-in
         # still applies. Resolved below from AppSetting.
-        "meal_planning": True,
+        # `meal_planning` removed 2026-09-03 — meal planning is core and had
+        # no real off switch; see migration a7c3e5d19f2b.
         "money": False,
         "nutrition": False,
         "companion_ingestion": False,
@@ -156,7 +157,6 @@ def _feature_flags(setting) -> dict[str, bool]:
             # 2026-08-19 (D-12), so the SPA reads it off /auth/me with the rest
             # of the user's display preferences. An install-wide flag here would
             # have been answering for the wrong scope.
-            flags["meal_planning"] = bool(setting.meal_planning_enabled)
             # Owner ask 2026-08-27 — which front-of-pack rating recipes carry.
             # `none` everywhere by default; Settings' "Match this device"
             # offers the locally-recognised scheme, and the picker takes any of

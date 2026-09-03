@@ -1729,7 +1729,6 @@ def seed_dense_data(qa_fixtures: bool = False, money_on: bool = True):
     settings.expiring_soon_window_days = 7
     settings.scanning_enabled = True
     settings.batch_features_enabled = True
-    settings.meal_planning_enabled = True
     settings.stocktake_enabled = True
     # Complex, not simple: the three NutritionFood rows + their portions above
     # only mean anything at this depth, and simple mode (a typed kcal per

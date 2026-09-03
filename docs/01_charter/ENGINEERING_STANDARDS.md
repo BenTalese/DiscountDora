@@ -2833,6 +2833,38 @@ exceptions, which still must be commented) · **Source** (where it was establish
   form "your browser doesn't support…" written from a check that never asked the
   browser anything.
 
+### R-078 — A switch is owned by the surface it governs, and it must actually govern it
+- **Rule:** an install-wide or per-user switch lives on the page whose behaviour
+  it changes, not on a general "features" page that collects switches by virtue
+  of their being switches. And every switch must gate something a reader can be
+  shown: if you cannot name the surface it hides or the behaviour it changes,
+  it is not a setting — delete it, column and all.
+- **Why:** a page of switches is organised by the *shape* of its contents rather
+  than by what the reader came to do, so it grows into a junk drawer and every
+  item on it is one click further from its own context. Dora's Features page ran
+  that course: it held meal planning, money, companion ingestion and the weekly
+  deals email — four unrelated concerns — while a fifth switch (the buy-verdict
+  oracle) had already escaped to Assistant under D-12 for exactly this reason.
+  The junk drawer also hides dead switches, because nothing on the page invites
+  you to ask what any one of them does. `meal_planning_enabled` shipped in
+  C-cross Chunk 1 with the caption *"Hides the meal-plans surface when off"* and
+  never did: the nav entry and the `/meal-plans` route were unconditional and no
+  component read the flag. It survived three months because it looked plausible
+  next to four real ones, and because the health flag it published made it look
+  load-bearing from the API side. The owner spotted it by asking the only
+  question the page could not answer — *"what does this toggle actually do?"*
+  (2026-09-03).
+- **Apply:** put the switch where its effect is — scanning on Stock, money on
+  Money, ingestion with the data it lets in, a scheduled mail on the page that
+  configures mail. When adding a flag, write down the surface it gates *and the
+  test that proves it* before the toggle; when you find one you can't explain,
+  trace every reader (`grep` the column, the DTO field, the health flag and the
+  composable) and either wire it up or drop it with a migration.
+- **Violation signal:** a page whose title is a category of control rather than a
+  concern ("Features", "Options", "Toggles"); a flag whose only readers are its
+  own settings page, its API field and a help paragraph; caption copy asserting
+  a gate that no `v-if`, route guard or query filter implements.
+
 ## ADR process (evaluate every task)
 
 At the end of each work unit, ask: **did this task make or rely on a decision that
@@ -5143,3 +5175,32 @@ A non-binding cookbook of solutions to recurring problems. Not rules — just a
   likely reason a self-hosted Dora can't be installed is now stated, with the fix,
   instead of being misattributed to the user's browser choice.
 - **Promotes rule:** R-077.
+
+### ADR-075 — The Features page is dissolved; a switch goes where its effect is (promotes R-078)
+- **Date / task:** 2026-09-03 (owner feedback batch — admin settings)
+- **Status:** accepted
+- **Context:** The owner read the admin area end to end and said the organisation
+  felt *"really weird/unintuitive"*: Users was a group of one above everything,
+  Features sat under Install holding four unrelated switches, Messaging split
+  Email/Push/Voice off from the install they belong to, and Hosting was two
+  settings with nothing in common. Of the four Features switches, one
+  (`meal_planning_enabled`) gated nothing at all — see R-078 — and the owner's own
+  instinct ("I feel like this was added accidentally") was right.
+- **Decision:** the Features page and the Hosting page are both dissolved, and the
+  admin nav collapses from five groups to three (Install · Kitchen features ·
+  Data & access), with Users leading Install. Every surviving switch moved to the
+  surface it governs: scanning → Stock, money → a new Money page under Kitchen
+  features, companion ingestion → renamed **Product data ingestion** under Data &
+  access with the product-search URL beside it, the weekly deals email → the
+  Email page (where its independence from `email_enabled` is finally visible),
+  audit retention → the Audit log it prunes, the public URL → Email, where the
+  links it builds are sent from. `meal_planning_enabled` is gone entirely
+  (migration `a7c3e5d19f2b`). Retired routes redirect rather than 404.
+- **Consequences:** More pages, each smaller, and two of them (Money, Product data
+  ingestion) hold a single row — deliberately, because a one-row page you can
+  find beats a four-row page you can't parse. Deep links to
+  `admin/system/features` and `admin/system/hosting` still resolve. The cost is
+  that "where is the install switch for X?" is now answered by knowing what X is,
+  rather than by one page that lists everything; the nav's three groups carry
+  that.
+- **Promotes rule:** R-078.

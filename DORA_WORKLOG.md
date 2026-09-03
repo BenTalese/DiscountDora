@@ -28,7 +28,110 @@ next.
 
 ---
 
-## 2026-09-03 (latest) — **A five-item owner batch: two new themes, one segmented anatomy, and the question that wasn't a belief**
+## 2026-09-03 (later) — **Cook mode, five owner items: two layout asks, and a cart button older than the concept it names**
+
+**Status:** all five complete + green + driven live at three widths (1280 /
+375 / 320). New: **R-075 / ADR-072**, **FU-852..854**. Two components
+extracted: `StockLevelPicker.vue`, `NumberStepper.vue`. Gate: **vitest 685 /
+61 files**, `vue-tsc` + `eslint src/` clean, **pytest 2265 passed** / 1
+skipped / 1 xfailed with only the four pre-existing buy-verdict reds (FU-762
+— backend untouched this unit). Same `TMP` caveat as the previous entry: bare
+`pytest` throws ~56 spurious setup errors unless you pass `--basetemp`.
+
+**The headline is item 5, because the owner diagnosed it from the toast.**
+*"Bug: incorrect old shopping cart button in use… I can tell how old it is
+because 1 it doesn't add to a list when one actually does exist, and it tells
+me to set up a primary list. We got rid of the concept of 'primary lists' ages
+ago."* Exactly right. The finish modal had a hand-rolled `BaseButton` reading
+`shoppingListStore.quickAddTargetListId` — a computed that is non-null **only
+when exactly one draft list exists**, because C-7 Chunk 2 replaced "primary"
+with a server-inferred quick-add target. With two drafts open (the dense seed's
+normal state, and any real household mid-week) it resolved to null and fell
+into a bail-out toast naming a concept that had been deleted around it. It is
+`AddToListButton variant="row"` now, and driving it confirms the difference:
+the click raises **"Which list? You have multiple draft lists — pick one"**,
+and rows for items already on a list render a filled cart the old button could
+never show, because it tracked no membership state at all.
+
+**Item 4a was a duplicated question, not a bad-looking control.** *"The level
+picker looks horrible, let's move to showing the stock level picker from the
+overview rows."* The modal asked "what level is this at now?" with a segmented
+control while the stock overview asks the identical question with a coloured
+square and a menu — and the segmented version scaled badly, since it puts one
+labelled segment per level the household has defined on *every* ingredient row.
+So the overview's control came out of `StockItemRow.vue` as
+**`StockLevelPicker.vue`** (R-001), slot-driven so the row can still inject its
+"Dora thinks…" / "due a stocktake check" menu header while the modal falls
+through to a plain "Set level". The write stayed with the consumers on purpose:
+the row persists immediately, the modal batches on confirm. One thing had to be
+*added back* — the picker is a swatch, and a colour alone is not an answer in a
+list you read top to bottom, so the level's **name** is now the row's caption
+("Extra Virgin Olive Oil / Low Stock"), which is the one job the segments were
+doing well.
+
+**Items 2 and 3 were the same complaint with two causes, and the second one
+taught the unit its rule.** *"We're halfway down the page on mobile before we
+read the step text."* The 08-28 header fix had bought breathing room by
+spending vertical space — three stacked bands — and a phone has less of that
+than width. The voice cluster moved inline beside the recipe name (the name
+ellipsises; it is the page you navigated to, so truncating it costs nothing),
+leaving the headcount pill as the only thing that wraps, and only below 600px.
+One band on desktop, two on a phone, where it was two and three; **measured,
+the first step now starts at y=286 instead of ~y=345 on a 375px screen.**
+
+The nav row is where it got interesting. Flexing the three buttons from a zero
+basis and stepping the type down in a media query *looked* correct and the row
+*did* collapse to one line — but reading `getComputedStyle` in the running app
+showed the buttons still at **20px**. Quasar's `size="lg"` writes font-size as
+an **inline style**, so the media-query rule was inert; the single-line win had
+come entirely from `flex-wrap: nowrap`, and the labels were fitting by nothing
+and crowding "Next". This is the second sighting in a week of *"the CSS was
+fine and did nothing"* — FU-764's `--space-sm`, a custom property that has
+never existed, dropped every gap in this same header to zero. So **R-075 /
+ADR-072**: a layout fix is not done until the running app is measured, and when
+a declaration is outranked by an inline style you change the prop
+(`:size="navButtonSize"`), you don't escalate the selector. Measuring also
+**deleted a rule that only existed because of the bug** — a `max-width: 359px`
+block hiding the button icons, added after 320px showed "Repeat" painting over
+"Next"; at the corrected 14px the overflow is gone (content 74.7px in a 90.7px
+button) and the special case went with it. A workaround built on an un-measured
+fix outlives the fix.
+
+**Items 1 and 4b were the small ones, and one of them paid for a third
+component.** The "Unlinked" chip is gone from cook mode's ingredient rows —
+linkage is an authoring concern and mid-cook the only question is what goes in
+the bowl (it was also a hardcoded `grey-6`/`grey-8` pair, so R-002 got a free
+win). And *"the servings for later could be styled consistently with how this
+sort of input is done in the meal planner"* was the third hand-rolled −/value/+
+in the app, after cook mode's own headcount pill and the meal-plan builder's
+servings cell — three copies with three different gaps, value widths and tap
+targets, which is R-001's threshold. **`NumberStepper.vue`** now owns all
+three, with two shapes that are contexts rather than taste: `pill` (bordered,
+44px targets — cook mode's header, reached for with a floury hand) and
+`inline` (dense — a settled row inside a dialog, and the builder). Both raw rem
+font-sizes carried over from the old markup were converted to the
+`--font-size-*` scale on the way (D-003).
+
+**Spun off, all observed rather than reported:** **FU-854** — the Alerts bell's
+"Add N low/out items to **primary list**" footer button is the last surviving
+instance of the pattern item 5 was about, with the same `quickAddTargetListId`
+dead end and a dialog literally titled "No primary list"; left for the owner
+because swapping it to `variant="bulk"` changes what the bell *does*, not just
+how it reads. **FU-853** — cook mode's timer chime is a `data:` WAV and the CSP
+sets no `media-src`, so the browser blocks it on every load: the countdown's
+audio has never played, and nothing looks broken because the bar and the toast
+still fire. **FU-852** — the meal-plan builder's review rows overlap their own
+selects, because the row's stacking rule is a *viewport* media query and the
+row lives in a ~560px dialog.
+
+**Next up:** FU-854 is the natural follow-on (it closes the owner's "no other
+instance in the app" ask); otherwise the outstanding cook-mode debt is
+unchanged — FU-765 (no re-fetch on recipe-id change), FU-763 (step text at
+`text-h4` on a phone, owner's call), and the two device-only checks.
+
+---
+
+## 2026-09-03 (earlier) — **A five-item owner batch: two new themes, one segmented anatomy, and the question that wasn't a belief**
 
 **Status:** all five items complete + green + driven live (except the one route
 the pane can't mount). New: **R-074 / ADR-071**, **FU-848..851**. Gate:

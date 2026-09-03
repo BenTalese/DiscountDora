@@ -2737,6 +2737,36 @@ exceptions, which still must be commented) · **Source** (where it was establish
   another; "just add a weight for it" in a design discussion.
 - **Established by:** the planned-demand signal, 2026-09-03. See ADR-071.
 
+### R-075 — A layout fix is not done until the running app is measured
+- **Rule:** when the fix for a visual defect is a **style declaration**, prove it
+  landed by reading the *computed* value or the element's geometry in the running
+  app. A CSS rule that parses cleanly and does nothing is invisible in a diff, in
+  review, in the type-checker and in the test suite — the only place it shows up
+  is on screen, and only if someone looks.
+- **Why:** this codebase has now shipped the same class of bug twice from two
+  different causes. (1) **An undefined custom property drops the whole
+  declaration.** Cook mode's header used `var(--space-sm)` / `var(--space-xs)`,
+  neither of which exists (the scale is `--space-1..--space-12`), so *every gap in
+  the header was zero* — the mechanical half of the owner's "everything is
+  squished badly" report, live for weeks (FU-764). (2) **A framework prop that
+  writes an inline style outranks any stylesheet.** Quasar's `size="lg"` on
+  `q-btn` emits an inline `font-size`, so the `font-size` added inside a media
+  query to fit Previous/Repeat/Next on one phone row was **inert** — measured at
+  `20px` on a 375px viewport after the "fix". Both read as correct code.
+- **Apply:** drive the surface and assert on `getComputedStyle(el)` /
+  `getBoundingClientRect()` — the number, not the screenshot; a screenshot at one
+  width hides the boundary case. If a declaration turns out to be outranked by an
+  inline style, **change the prop, don't escalate the selector** — hand the
+  framework a different value (`:size="isPhone ? 'md' : 'lg'"`) rather than
+  reaching for `!important`. If a custom property might not exist, it needs a
+  fallback or the linting gate (FU-834/FU-764).
+- **Violation signal:** a styling commit whose evidence is "it looks right in the
+  diff"; a `var(--…)` that grep can't find a declaration for; a new `!important`
+  next to a framework component; a media query that restates a value the
+  component already sets as a prop.
+- **Established by:** the cook-mode nav row, 2026-09-03 — the second sighting of
+  "the CSS was fine and did nothing", one week after FU-764. See ADR-072.
+
 ## ADR process (evaluate every task)
 
 At the end of each work unit, ask: **did this task make or rely on a decision that
@@ -4963,3 +4993,33 @@ A non-binding cookbook of solutions to recurring problems. Not rules — just a
   conservative, because the alternative goes quiet exactly when a batch is nearly
   out.
 - **Promotes rule:** R-074.
+
+### ADR-072 — Style fixes are verified by measurement, not by review (promotes R-075)
+- **Context:** the owner asked for Previous / Repeat / Next to share one row on a
+  phone. The first attempt was pure CSS: flex the three buttons from a zero basis
+  and step the type down inside `@media (max-width: 599px)`. It looked right in
+  the diff and the row did collapse to one line — but driving it and reading
+  `getComputedStyle` showed the buttons still at **20px**: the single-line win had
+  come entirely from `flex-wrap: nowrap` on `.q-btn__content`, and the `font-size`
+  rule had never applied at all, because Quasar's `size="lg"` writes font-size as
+  an **inline style**. The labels were fitting by ~0px of margin and crowding
+  "Next" at 375px.
+- **Options:** (a) `!important` on the media-query rule; (b) drop `size="lg"` and
+  reproduce the desktop scale in CSS; (c) make the size prop responsive.
+- **Decision: (c)** — `:size="navButtonSize"`, `'md'` below the phone breakpoint
+  and `'lg'` above it, off the same `$q.screen.lt.sm` computed the Sous Chef
+  button already uses. (a) starts a specificity fight with a framework component
+  the codebase has deliberately avoided elsewhere; (b) copies a scale Quasar
+  already owns, which is R-004's whole complaint. The inert rule was deleted
+  rather than left in place — dead CSS carrying a comment that explains a reason
+  that isn't real is worse than no comment.
+- **The measurement also deleted a rule that was only needed because of the bug.**
+  A `@media (max-width: 359px)` block hid the button icons, added after 320px
+  showed "Repeat" painting over "Next". At the corrected 14px that overflow is
+  gone — content is 74.7px inside a 90.7px button — so the special case went with
+  it. A workaround built on top of an un-measured fix outlives the fix.
+- **Consequences:** verification of a visual change now means reading numbers out
+  of the running app, not just capturing a screenshot: a screenshot at 375px would
+  have passed this, and did. Costs one extra `page.evaluate` per layout claim.
+- **Promotes rule:** R-075.
+

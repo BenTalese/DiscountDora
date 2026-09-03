@@ -161,21 +161,15 @@
                                     >
                                         <q-tooltip>Which meal slot</q-tooltip>
                                     </q-select>
-                                    <div class="builder-servings">
-                                        <BaseButton
-                                            variant="icon" dense
-                                            :icon="ICONS.remove"
-                                            :disable="entry.servings <= 1"
-                                            @click="entry.servings = Math.max(1, entry.servings - 1)"
-                                        />
-                                        <span class="builder-servings__count">{{ entry.servings }}</span>
-                                        <BaseButton
-                                            variant="icon" dense
-                                            :icon="ICONS.add"
-                                            @click="entry.servings = entry.servings + 1"
-                                        />
+                                    <NumberStepper
+                                        v-model="entry.servings"
+                                        :min="1"
+                                        decrement-label="One fewer serving"
+                                        increment-label="One more serving"
+                                        class="builder-servings"
+                                    >
                                         <q-tooltip>Servings</q-tooltip>
-                                    </div>
+                                    </NumberStepper>
                                     <BaseButton
                                         variant="icon" dense
                                         :icon="ICONS.swap_horiz"
@@ -340,6 +334,7 @@
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
     import BaseButton from 'src/components/BaseButton.vue';
+    import NumberStepper from 'src/components/NumberStepper.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
     import BaseSegmented from 'src/components/BaseSegmented.vue';
     import BaseToggleGroup, { type ToggleOption } from 'src/components/BaseToggleGroup.vue';
@@ -838,16 +833,6 @@
     }
     .builder-day-select {
         min-width: 130px;
-    }
-    .builder-servings {
-        display: flex;
-        align-items: center;
-        gap: 0.15rem;
-    }
-    .builder-servings__count {
-        min-width: 1.2rem;
-        text-align: center;
-        font-variant-numeric: tabular-nums;
     }
     .builder-picker {
         max-height: 55vh;

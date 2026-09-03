@@ -56,83 +56,45 @@
                  Replaces both the chip avatar and the old right-side
                  dropdown — one focus action for "what level is this".
             ────────────────────────────────────────────────────────── -->
-            <BaseButton
-                variant="ghost"
-                dense
-                :class="[
-                    'stock-row__level-btn',
-                    levelButtonClass,
-                    levelFeedback,
-                    { 'stock-row__level-btn--uncertain': levelUncertain },
-                ]"
-                :style="levelButtonStyle"
-                :aria-label="levelButtonAriaLabel"
-                @click.stop
+            <StockLevelPicker
+                :class="levelFeedback"
+                :level-id="item.stock_level_id"
+                :sequence="levelSequence"
+                :uncertain="levelUncertain"
+                :uncertainty-tooltip="uncertaintyTooltip"
+                :label="levelButtonAriaLabel"
+                @select="onSetLevel"
             >
-                <q-tooltip>
-                    {{ levelName ? `Level: ${levelName}` : 'Set stock level' }}
-                    <template v-if="levelUncertain">
-                        <br />
-                        {{ uncertaintyTooltip }}
-                    </template>
-                </q-tooltip>
-                <q-menu auto-close transition-show="jump-down" transition-hide="jump-up">
-                    <q-list dense style="min-width: 200px">
-                        <!-- 2026-08-15 feedback: the belief hint used to be a
-                             separate "Dora thinks…" pill sitting in the row,
-                             which is a second element saying something about
-                             the level the picker already owns. It rides the
-                             picker itself instead, and this header — which was
-                             a redundant "Set level" caption — carries the
-                             reasoning.
-                             D-5 (Chunk 4): the button now wears ONE dashed
-                             marker for "this number might be wrong", whichever
-                             of the two reasons fired, so the popover is the
-                             only place that says *which* reason. Falls back to
-                             "Set level" when nothing is uncertain. -->
-                        <q-item-label v-if="hasBelief" header class="stock-row__belief-header">
-                            <div class="row items-center no-wrap">
-                                <q-icon :name="ICONS.dora_voice" size="16px" class="q-mr-xs" />
-                                Dora thinks {{ beliefBandWord }}
-                            </div>
-                            <div class="stock-row__belief-reason">{{ belief?.reason }}</div>
-                        </q-item-label>
-                        <q-item-label v-else-if="needsCheck" header class="stock-row__belief-header">
-                            <div class="row items-center no-wrap">
-                                <q-icon :name="ICONS.fact_check" size="16px" class="q-mr-xs" />
-                                Due for a stocktake check
-                            </div>
-                            <div class="stock-row__belief-reason">
-                                It's been a while since this was counted.
-                            </div>
-                        </q-item-label>
-                        <q-item-label v-else header>Set level</q-item-label>
-                        <q-item
-                            v-for="level in stockLevels"
-                            :key="level.stock_level_id"
-                            clickable
-                            v-close-popup
-                            :active="level.stock_level_id === item.stock_level_id"
-                            active-class="stock-row__level-option--active"
-                            @click.stop="onSetLevel(level.stock_level_id)"
-                        >
-                            <q-item-section avatar>
-                                <q-avatar
-                                    :color="colourForSequence(level.sequence) ?? undefined"
-                                    :class="{ 'dora-bg-neutral': !colourForSequence(level.sequence) }"
-                                    size="14px"
-                                />
-                            </q-item-section>
-                            <!-- 2026-08-15 feedback: the current level is
-                                 shown by highlighting the whole row (the
-                                 `active` + `active-class` pattern used by
-                                 the settings nav and the shopping-list rail),
-                                 not a trailing tick. -->
-                            <q-item-section>{{ level.name }}</q-item-section>
-                        </q-item>
-                    </q-list>
-                </q-menu>
-            </BaseButton>
+                <!-- 2026-08-15 feedback: the belief hint used to be a
+                     separate "Dora thinks…" pill sitting in the row, which
+                     is a second element saying something about the level the
+                     picker already owns. It rides the picker itself instead,
+                     and this header — which was a redundant "Set level"
+                     caption — carries the reasoning.
+                     D-5 (Chunk 4): the button wears ONE dashed marker for
+                     "this number might be wrong", whichever of the two
+                     reasons fired, so the popover is the only place that says
+                     *which* reason. Falls through to the picker's own "Set
+                     level" caption when nothing is uncertain. -->
+                <template v-if="hasBelief || needsCheck" #menu-header>
+                    <q-item-label v-if="hasBelief" header class="stock-row__belief-header">
+                        <div class="row items-center no-wrap">
+                            <q-icon :name="ICONS.dora_voice" size="16px" class="q-mr-xs" />
+                            Dora thinks {{ beliefBandWord }}
+                        </div>
+                        <div class="stock-row__belief-reason">{{ belief?.reason }}</div>
+                    </q-item-label>
+                    <q-item-label v-else header class="stock-row__belief-header">
+                        <div class="row items-center no-wrap">
+                            <q-icon :name="ICONS.fact_check" size="16px" class="q-mr-xs" />
+                            Due for a stocktake check
+                        </div>
+                        <div class="stock-row__belief-reason">
+                            It's been a while since this was counted.
+                        </div>
+                    </q-item-label>
+                </template>
+            </StockLevelPicker>
 
             <!-- ──────────────────────────────────────────────────────
                  Name (emphasised) + main zone (L79 / L81).
@@ -363,6 +325,7 @@
     import BaseButton from 'src/components/BaseButton.vue';
     import RowActionButton from 'src/components/RowActionButton.vue';
     import StockItemRowPriceButton from 'src/components/stock/StockItemRowPriceButton.vue';
+    import StockLevelPicker from 'src/components/stock/StockLevelPicker.vue';
     import MarkAsWastedDialog from 'src/components/stock/MarkAsWastedDialog.vue';
     import WasteApiService from 'src/services/api/wasteApiService';
     import type { WasteReason } from 'src/services/api/wasteApiService';
@@ -371,7 +334,6 @@
     import { usePantryBeliefs } from 'src/composables/usePantryBeliefs';
     import { useStockItemActions } from 'src/composables/useStockItemActions';
     import { expiryIndicatorFor } from 'src/helpers/expiryIndicator';
-    import { colourForSequence } from 'src/helpers/stockLevelLogic';
     import { isOutOfStockSequence } from 'src/helpers/stockStatus';
     import type { StockItem } from 'src/models/stockItem';
     import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';
@@ -509,36 +471,8 @@
         const id = props.item.stock_level_id;
         return stockLevels.value.find((l) => l.stock_level_id === id)?.sequence ?? null;
     });
-    // The level button is text-less but coloured by the stock level.
-    // Saturated branches (well/sufficient/low) ride Quasar's brand
-    // semantics via the `bg-{positive|warning|negative}` utility class
-    // — those are theme-tokenised. The neutral / out-of-stock branch
-    // routes through `dora-bg-sunken` per R-002 (the previous
-    // `bg-grey-5` was a hardcoded palette literal and broke dark
-    // themes).
-    const levelButtonClass = computed<string>(() => {
-        const seq = levelSequence.value;
-        if (seq === null) return '';
-        const colour = colourForSequence(seq);
-        return colour ? `bg-${colour}` : 'dora-bg-neutral';
-    });
-    const levelButtonStyle = computed(() => {
-        // Empty-level fallback — dashed outline + page surface so the
-        // button reads as "unset" without competing with a colour. When the
-        // level is ALSO uncertain the box drops this border and lets the
-        // offset uncertainty ring speak alone: two dashed edges 2px apart
-        // read as one muddy smudge at 32px, and the ring is the louder of
-        // the two signals.
-        if (levelSequence.value === null) {
-            const surface = { background: 'var(--surface-component)' };
-            if (levelUncertain.value) return surface;
-            return {
-                ...surface,
-                border: '1px dashed color-mix(in srgb, var(--text-primary) 24%, transparent)',
-            };
-        }
-        return {};
-    });
+    // (the level button's colour + unset-state styling moved into
+    //  `StockLevelPicker.vue` with the control itself.)
 
     // C-cross Chunk 4 — show the *zone* (top-level breadcrumb node), not
     // the leaf location name. "Right shelf" → "Pantry"; full breadcrumb
@@ -949,64 +883,8 @@
         opacity: 0.62;
     }
 
-    /* Big text-less level button — colour comes from `levelButtonStyle`
-       (Quasar palette CSS variables), so light/dark themes inherit it. */
-    .stock-row__level-btn {
-        width: 32px;
-        height: 32px;
-        min-width: 32px;
-        min-height: 32px;
-        border-radius: var(--radius-sm, 4px);
-        padding: 0;
-        position: relative;
-    }
-
-    /* ── One uncertainty marker (D-5) ───────────────────────────────────────
-       Replaces BOTH the stocktake pulse and the belief ring. Dashed, so it
-       never competes with the level's own colour, and with no animation at
-       any preference — there is nothing to honour under
-       `prefers-reduced-motion` because nothing moves.
-
-       2026-08-22 feedback: "it's not obvious enough — keep the dashed style
-       but put it around the box with a tiny gap, like the old Dora-thinks
-       ring". So the dashes move OFF the box edge and onto a `::after` ring
-       sitting 2px outside it, which is the geometry of the retired belief
-       ring (`box-shadow: 0 0 0 2px surface, 0 0 0 4px warning`) drawn in
-       dashes instead of solid. Two things get louder at once: the ring is
-       outside the silhouette rather than eating into it, and the level
-       colour goes back to a full, unbroken 32px block.
-
-       Why `::after` and not `outline`/`box-shadow`:
-         • `outline` is spoken for — A6 makes the focus ring mandatory, and
-           one element cannot carry two.
-         • `box-shadow` cannot be dashed at all; that is what forced the old
-           ring to be solid.
-         • Quasar's QBtn already uses `:before` for its elevation shadow
-           (`quasar/src/components/btn/QBtn.sass`); `:after` is free.
-       The ring bleeds 5px past the button. The row is 56px painted with 6px
-       of vertical body padding, so it clears `overflow: hidden`; on phones
-       the body gap tightens to 8px, so the media query below drops the
-       dashes to 2px to keep daylight between the ring and the name.
-
-       Dash:gap RATIO is still not settable — the browser derives both from
-       the border width (Chrome: dash ≈ 2× width, gap ≈ 1× width). A gradient
-       overlay can do it, was built, measured and reverted on the owner's
-       call. Reopen that trade only if the proportions are genuinely wrong. */
-    .stock-row__level-btn--uncertain::after {
-        content: '';
-        position: absolute;
-        inset: -5px;
-        border: 3px dashed color-mix(in srgb, var(--text-primary) 65%, transparent);
-        border-radius: calc(var(--radius-sm, 4px) + 5px);
-        pointer-events: none;
-    }
-    @media (max-width: 599px) {
-        .stock-row__level-btn--uncertain::after {
-            inset: -4px;
-            border-width: 2px;
-            border-radius: calc(var(--radius-sm, 4px) + 4px);
-        }
-    }
+    /* The level button's own styling (size, unset state, uncertainty ring)
+       moved to `StockLevelPicker.vue` with the control. */
 
     /* The stocktake pulse (PROPOSAL_STOCKTAKE_MODE §7) and the belief ring
        both lived here. Both are gone — the one dashed marker above replaces
@@ -1041,15 +919,6 @@
         color: var(--text-secondary);
         white-space: normal;
     }
-    /* Current level = highlighted row, matching the `active-class` pattern
-       used by the settings nav + shopping-list rail. `:deep` because q-menu
-       teleports its list to body. */
-    :deep(.stock-row__level-option--active) {
-        background: var(--surface-sunken);
-        font-weight: 600;
-        color: var(--text-primary);
-    }
-
     /* Name + zone — emphasised name (L79), light zone with hover
        affordance (L81). */
     .stock-row__name-zone {

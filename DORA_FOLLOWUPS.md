@@ -39,6 +39,64 @@ long session summary. Distinct from the other logs:
 
 ---
 
+## [OPEN] FU-854 — The Alerts bell still hands out the retired "primary list" dead end
+- **Raised:** 2026-09-03 (cook-mode owner batch, item 5)
+- **Type:** finding
+- **What:** the owner's report was cook mode's finish-modal cart button ("there
+  should be **no other instance** of this old button in the app"). That one is
+  fixed. Sweeping for the same *class* of defect found one survivor:
+  `AlertsBell.vue:183` — the "Add N low/out items to primary list" footer
+  button reads `shoppingListStore.quickAddTargetListId`, which is non-null only
+  when exactly ONE draft list exists, and otherwise raises a dialog titled
+  **"No primary list"** telling the user to "set a primary shopping list
+  first". Primary lists were retired in C-7 Chunk 2; with two drafts open (the
+  dense seed's normal state) the bell's bulk shortcut is simply unusable.
+- **Why deferred:** it is a different surface and a different control — a
+  labelled bulk button, not the icon cart the owner reported — and the fix
+  (`AddToListButton variant="bulk"`, which resolves the target by prompting)
+  changes what the bell's footer *does*, not just how it reads. Doing it
+  silently inside a cook-mode batch would have shipped an unverified behaviour
+  change to Alerts. The label copy also needs a call: "add N to a list" vs
+  naming the resolved list.
+- **Recommended resolution:** now — it's a ~10-line swap plus one browser pass,
+  and it is the last known instance of the pattern the owner asked to be rid of.
+
+## [OPEN] FU-853 — Cook mode's timer chime is blocked by the app's own CSP
+- **Raised:** 2026-09-03 (cook-mode owner batch — observed, not reported)
+- **Type:** finding
+- **What:** driving cook mode live logs, on every load:
+  `Loading media from 'data:audio/wav;base64,…' violates the following Content
+  Security Policy directive: "default-src 'self'". Note that 'media-src' was
+  not explicitly set, so 'default-src' is used as a fallback.` The timer's
+  end-of-countdown sound is a `data:` WAV and the CSP has no `media-src`, so
+  **the chime never plays** — the one piece of feedback a hands-free cook with
+  a pot on the stove is relying on. The visual bar and the toast still fire, so
+  nothing looks broken.
+- **Why deferred:** pre-existing, unrelated to the five reported items, and the
+  fix is a server header change (`media-src 'self' data:`) that wants its own
+  verification — including a check for any other `data:`/blob media the same
+  directive would cover.
+- **Recommended resolution:** opportunistic — next time cook mode or the CSP is
+  touched. Pair with a live listen, since a silent-by-config chime and a
+  silent-by-bug chime look identical in the code.
+
+## [OPEN] FU-852 — The meal-plan builder's review rows overlap inside their own dialog
+- **Raised:** 2026-09-03 (cook-mode owner batch — observed in passing)
+- **Type:** finding
+- **What:** in "Build my week" → Review, a recipe with a long name ("Pizza dough
+  (60% hydration)") wraps to three lines and its text paints straight through
+  the day/slot selects beside it. Cause: `MealPlanBuilderDialog.vue`'s stacking
+  rule for the row is `@media (max-width: 599px)`, which keys off the
+  **viewport**, but the row lives in a ~560px dialog. On a 1280px desktop the
+  media query never fires, so a 560px container keeps the ~400px horizontal
+  control cluster and the name column gets whatever is left.
+- **Why deferred:** pre-existing and outside the reported batch; the honest fix
+  is a container query (or a width the dialog actually hands down), not another
+  viewport breakpoint, and it wants a pass over the other dialogs that stack on
+  viewport width for the same reason.
+- **Recommended resolution:** later, during the next meal-planner unit.
+
+
 ## [OPEN] FU-851 — Planned demand goes stale after a plan edit anywhere but the stock detail page
 - **Raised:** 2026-09-03 (owner batch — planned-demand signal)
 - **Type:** finding

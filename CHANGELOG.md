@@ -27,6 +27,32 @@ semver — major bumps signal schema or breaking-config changes.
   stretch), and stays quiet otherwise.
 
 ### Changed
+- **Cook mode's header is one line again, so the step is on screen sooner
+  (2026-09-03).** Sous Chef, the mic and the "what can I say?" button now sit
+  inline to the right of the recipe name instead of on their own row; only the
+  "Cooking for" stepper wraps below, and only on a phone. That's one band on
+  desktop and two on a phone where it used to be two and three — the first step
+  of a recipe now starts about 60px higher on a 375px screen. The recipe name
+  truncates rather than the row growing.
+- **Previous / Repeat / Next fit on one row on a phone.** Three large labelled
+  buttons wanted more width than a 375px screen has, so the third wrapped onto
+  its own line. They now share the row, a step down in type keeps each label on
+  a single line, and below ~360px the icons drop so the words survive. All three
+  clear the 44px tap-target floor, which they previously missed by 2px.
+- **The "finished cooking?" modal asks about stock levels the way the rest of
+  the app does.** Each ingredient row had a segmented control listing every
+  stock level — a second vocabulary for a question the stock overview already
+  asks with a coloured square and a menu, and one that grew a segment per level
+  the household has. It's the same picker as the overview now, with the level's
+  name beside it, and the row reads: swatch, ingredient, level, cart.
+- **"Extra servings for later" matches the meal planner's servings input.** It
+  was a bordered pill with 44px buttons — the right weight for cook mode's
+  header, too heavy for a settled row inside a dialog.
+- **The "Unlinked" chip is gone from cook mode's ingredient list.** Whether an
+  ingredient is linked to a stock item is an authoring concern; mid-cook the
+  only question is what goes in the bowl.
+
+### Changed
 - **Every single-select row of buttons in the app now looks the same
   (2026-09-03).** There were four looks for one control: a squared Quasar
   block, a grey-and-white one on Reports, a hand-painted variant in the stock
@@ -49,6 +75,13 @@ semver — major bumps signal schema or breaking-config changes.
   one where you restocked and never said so.
 
 ### Fixed
+- **The cart button in the "finished cooking?" modal actually adds to a list
+  (2026-09-03).** It was a hand-rolled button that only worked when you had
+  exactly one draft list open; with two, or with none, it did nothing except
+  raise a message telling you to "set up a primary list" — a concept the app
+  retired long ago. It's the shared add-to-list button now: it asks which list
+  when there's a choice, shows whether the item is already on one, and taps
+  back off to remove it.
 - **Reports no longer tells you it has nothing while it's still looking
   (2026-09-02).** Its cards had no loading state, so for the whole time a
   request was in flight the page rendered its *empty* answers: "Nothing cooked

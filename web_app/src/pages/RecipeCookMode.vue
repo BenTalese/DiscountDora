@@ -24,30 +24,34 @@
                  touching. Fixed to real tokens throughout; the app-wide sweep
                  for the same class of silent failure is FU-764.
 
-                 Layout is now three bands, and the controls never share a line
-                 with the title at any width — which is what "squished on
-                 desktop" was: a title, three round buttons and a labelled
-                 number input competing for one row. Identity (exit + name) on
-                 top, voice cluster and headcount below it. -->
+                 Owner feedback 2026-09-03: *"Could Sous chef and its info
+                 button be moved inline on the right of the recipe name? On
+                 mobile it pushes to its own line, and the cooking for control
+                 is its own entire row. We're halfway down the page on mobile
+                 before we read the step text."* Fair — the 08-28 fix bought
+                 breathing room by spending vertical space, which on a phone is
+                 the scarcer of the two. So the bands collapse: the voice
+                 cluster rides the identity line (the recipe name ellipsises
+                 rather than the row growing — it's the page you navigated to,
+                 so truncating it costs nothing), and only the headcount pill
+                 wraps below on a phone. One band on desktop, two on a phone,
+                 where it used to be two and three. -->
             <div class="cook-header q-mb-md">
-                <div class="cook-header__identity">
-                    <!-- Icon-only, matching the stocktake runner and the stock
-                         item detail page (owner feedback 2026-08-27) — the
-                         label was the widest thing competing with the recipe
-                         name for the top line. -->
-                    <BaseButton
-                        variant="icon"
-                        :icon="ICONS.arrow_back"
-                        aria-label="Exit cook mode"
-                        @click="exitCookMode"
-                    >
-                        <q-tooltip>Exit cook mode</q-tooltip>
-                    </BaseButton>
-                    <div class="text-h6 ellipsis cook-header__name">{{ recipe.name }}</div>
-                </div>
+                <!-- Icon-only, matching the stocktake runner and the stock
+                     item detail page (owner feedback 2026-08-27) — the
+                     label was the widest thing competing with the recipe
+                     name for the top line. -->
+                <BaseButton
+                    variant="icon"
+                    :icon="ICONS.arrow_back"
+                    aria-label="Exit cook mode"
+                    @click="exitCookMode"
+                >
+                    <q-tooltip>Exit cook mode</q-tooltip>
+                </BaseButton>
+                <div class="text-h6 ellipsis cook-header__name">{{ recipe.name }}</div>
 
-                <div class="cook-header__controls">
-                    <div class="cook-header__voice">
+                <div class="cook-header__voice">
                         <!-- Sous Chef. Owner feedback 2026-08-28: *"I prefer the
                              sous chef big button for desktop, the icon only version
                              can stay for mobile only"* and *"could be a bit bigger
@@ -65,7 +69,7 @@
                         <BaseButton
                             :variant="sousChefVariant"
                             :icon="ICONS.record_voice_over"
-                            :label="compactVoiceControls ? undefined : 'Sous Chef'"
+                            :label="isPhone ? undefined : 'Sous Chef'"
                             :aria-pressed="speechEnabled ? 'true' : 'false'"
                             aria-label="Sous Chef voice"
                             @click="toggleSpeech"
@@ -138,47 +142,36 @@
                                 </q-card>
                             </q-menu>
                         </BaseButton>
-                    </div>
-
-                    <!-- Headcount. Session-only; the saved recipe stays at
-                         `recipe.servings`.
-
-                         Owner feedback 2026-08-28: *"Cooking for input looks
-                         god awful. All squished together. Looks like a 5 year
-                         old did it."* It was a bare label + a 72px-wide
-                         `q-input[type=number]` at zero gap, so the words, the
-                         box and its native spinner arrows all ran together and
-                         the only touch target was a ~10px browser arrow.
-
-                         It is a stepper in a bordered pill now: one object with
-                         a label, and two 44px buttons either side of the number
-                         (D-004). Typing is deliberately gone — the value is
-                         seeded from the install-wide household headcount and
-                         nudged by one or two from there, which is exactly what
-                         ± is for, and a keyboard opening over the hob is the
-                         thing a cook least wants. -->
-                    <div class="cook-headcount">
-                        <q-icon :name="ICONS.group" size="20px" class="dora-text-muted" />
-                        <span class="cook-headcount__label">Cooking for</span>
-                        <BaseButton
-                            variant="icon"
-                            :icon="ICONS.remove"
-                            :disable="cookingFor <= 1"
-                            aria-label="Cook for one fewer"
-                            @click="adjustHeadcount(-1)"
-                        />
-                        <span class="cook-headcount__value" aria-live="polite">{{ cookingFor }}</span>
-                        <BaseButton
-                            variant="icon"
-                            :icon="ICONS.add"
-                            aria-label="Cook for one more"
-                            @click="adjustHeadcount(1)"
-                        />
-                        <q-tooltip>
-                            Rescales quantities for this cook only — the saved recipe stays at {{ recipe.servings ?? '?' }} serving{{ recipe.servings === 1 ? '' : 's' }}.
-                        </q-tooltip>
-                    </div>
                 </div>
+
+                <!-- Headcount. Session-only; the saved recipe stays at
+                     `recipe.servings`.
+
+                     Owner feedback 2026-08-28: *"Cooking for input looks god
+                     awful. All squished together."* It was a bare label + a
+                     72px-wide `q-input[type=number]` at zero gap, so the
+                     words, the box and its native spinner arrows all ran
+                     together and the only touch target was a ~10px browser
+                     arrow. It is a stepper in a bordered pill now — one
+                     object with a label and two 44px targets (D-004). Typing
+                     is deliberately gone: the value seeds from the
+                     install-wide household headcount and is nudged by one or
+                     two from there, and a keyboard opening over the hob is
+                     the thing a cook least wants. -->
+                <NumberStepper
+                    v-model="cookingFor"
+                    variant="pill"
+                    :min="1"
+                    :icon="ICONS.group"
+                    label="Cooking for"
+                    decrement-label="Cook for one fewer"
+                    increment-label="Cook for one more"
+                    class="cook-header__headcount"
+                >
+                    <q-tooltip>
+                        Rescales quantities for this cook only — the saved recipe stays at {{ recipe.servings ?? '?' }} serving{{ recipe.servings === 1 ? '' : 's' }}.
+                    </q-tooltip>
+                </NumberStepper>
             </div>
 
             <!-- PROPOSAL_RECIPE_IMAGE_STEPS — image-mode replaces the step-
@@ -294,11 +287,17 @@
                 </q-card-section>
             </q-card>
 
-            <div v-if="!isImageMode" class="row q-gutter-sm justify-center q-mb-lg">
+            <!-- Owner feedback 2026-09-03: *"Could we make the buttons prev
+                 next and repeat fit in one row for mobile?"* They wrapped
+                 because three `size="lg"` labelled buttons want ~380px and a
+                 phone gives ~340. One flex row with each button free to
+                 shrink to a third of it fixes that without dropping a label:
+                 the icons keep the meaning legible at the narrow end. -->
+            <div v-if="!isImageMode" class="cook-nav q-mb-lg">
                 <!-- ambiguous, mapped to ghost -->
                 <BaseButton
                     variant="ghost"
-                    size="lg"
+                    :size="navButtonSize"
                     :icon="ICONS.arrow_back"
                     label="Previous"
                     :disable="currentStepIndex === 0"
@@ -307,7 +306,7 @@
                 <!-- ambiguous, mapped to ghost -->
                 <BaseButton
                     variant="ghost"
-                    size="lg"
+                    :size="navButtonSize"
                     :icon="ICONS.replay"
                     label="Repeat"
                     @click="speakCurrent"
@@ -317,7 +316,7 @@
                      nothing on an MDI icon set; these have to come from the
                      ICONS registry like every other glyph (A7 / D-005). -->
                 <BaseButton
-                    size="lg"
+                    :size="navButtonSize"
                     variant="primary"
                     :icon-right="currentStepIndex === steps.length - 1 ? ICONS.check : ICONS.arrow_forward"
                     :label="currentStepIndex === steps.length - 1 ? 'Finish' : 'Next'"
@@ -392,14 +391,15 @@
                                              unlinked ingredients (stock_item_id === null) render
                                              as read-only raw_text — no substitute machinery, no
                                              swap chip, since there's no stock item to swap FROM.
-                                             No existing recipe has unlinked ingredients on
-                                             Chunk-4 ship; the paste importer (Chunk 5) is the
-                                             first source. -->
+
+                                             Owner feedback 2026-09-03: *"Remove 'unlinked' chip
+                                             in cook mode for ingredients — we don't care at this
+                                             point"*. Right: linkage is an authoring concern, and
+                                             mid-cook the only question is what to put in the
+                                             bowl. The chip also used a hardcoded `grey-6` /
+                                             `grey-8` pair (R-002), so it leaves nothing behind. -->
                                         <template v-if="row.ingredient.stock_item_id === null">
                                             <span class="ingredient-name">{{ row.ingredient.raw_text ?? 'Unlinked ingredient' }}</span>
-                                            <q-chip dense outline color="grey-6" text-color="grey-8" class="q-ml-xs">
-                                                Unlinked
-                                            </q-chip>
                                         </template>
                                         <template v-else-if="sessionSwaps.has(row.ingredient.stock_item_id)">
                                             <q-chip
@@ -648,7 +648,19 @@
              every ingredient of every recipe you finished. The dot goes with
              the chip and the select: the selected segment already *is* the
              level indicator, and a dot beside it would be the same fact twice
-             (owner's call). Name, states and cart sit on one line. -->
+             (owner's call). Name, states and cart sit on one line.
+
+             Owner feedback 2026-09-03: *"The level picker looks horrible,
+             let's move to showing the stock level picker from the overview
+             rows. Would look better and consistent."* The segmented control
+             was a *second vocabulary* for a question the app already asks one
+             way everywhere else — the coloured square + level menu on a stock
+             row. It also scaled badly: a household with five levels put five
+             labelled segments on every ingredient line. Same control now,
+             extracted as `StockLevelPicker`. The level *name* the segments
+             used to print comes back as the row's own caption, because a
+             colour alone is not a legible answer in a list you read top to
+             bottom. -->
         <BaseDialog v-model="finishDialogOpen" title="Finished cooking?" closable card-style="min-width: 360px; max-width: 720px">
             <q-card-section v-if="finishRows.length === 0" class="dora-text-muted">
                 This recipe has no ingredients to adjust — tap "Done" to log the cook.
@@ -663,22 +675,33 @@
                         :key="row.targetStockItemId"
                         class="finish-row"
                     >
-                        <span class="finish-row__name">{{ row.targetName }}</span>
-                        <BaseSegmented
-                            v-model="row.selectedLevelId"
-                            :options="levelSegmentOptions"
-                            :aria-label="`Stock level for ${row.targetName}`"
-                            dense
-                            class="finish-row__levels"
+                        <StockLevelPicker
+                            :level-id="row.selectedLevelId"
+                            :label="`Stock level for ${row.targetName}`"
+                            @select="row.selectedLevelId = $event"
                         />
-                        <BaseButton
-                            variant="icon"
-                            :icon="ICONS.shopping_cart"
-                            :aria-label="`Add ${row.targetName} to your shopping list`"
-                            @click="onFinishAddToList(row.targetStockItemId)"
-                        >
-                            <q-tooltip>Add to your shopping list</q-tooltip>
-                        </BaseButton>
+                        <div class="finish-row__name">
+                            <div>{{ row.targetName }}</div>
+                            <div class="finish-row__level text-caption">
+                                {{ levelNameFor(row.selectedLevelId) }}
+                            </div>
+                        </div>
+                        <!-- Owner feedback 2026-09-03: *"incorrect old shopping
+                             cart button in use… it doesn't add to a list when
+                             one actually does exist, and it tells me to set up
+                             a primary list"*. It was a hand-rolled button
+                             reading `quickAddTargetListId`, which is non-null
+                             only when exactly ONE draft list exists — every
+                             other case fell into a bail-out toast naming
+                             "primary lists", a concept retired in C-7 Chunk 2.
+                             The shared `AddToListButton` is the sanctioned
+                             path: it resolves the target (prompting on 2+
+                             drafts), shows on-list state, and toggles back
+                             off. -->
+                        <AddToListButton
+                            variant="row"
+                            :stock-item-id="row.targetStockItemId"
+                        />
                     </div>
                 </div>
             </q-card-section>
@@ -689,7 +712,15 @@
                  some commit got it reworded from pool because I hated that
                  wording)"* — so this says leftovers, and it is a stepper
                  rather than a bare number field, which is the shape the rest
-                 of the app uses for a small count you nudge. -->
+                 of the app uses for a small count you nudge.
+
+                 Owner feedback 2026-09-03: *"could be styled consistently with
+                 how this sort of input is done in the meal planner"*. The
+                 meal-plan builder's servings control is the compact inline
+                 shape; this was a bordered 44px pill, which is the right
+                 weight for cook mode's header (wet hands, mid-cook) but not
+                 for a settled row inside a dialog. Both are now the shared
+                 `NumberStepper` and differ only by which shape they ask for. -->
             <q-card-section v-if="batchEnabled" class="q-pt-md">
                 <div class="finish-meals">
                     <div class="finish-meals__copy">
@@ -698,22 +729,14 @@
                             Leave at 0 if you ate the lot.
                         </div>
                     </div>
-                    <div class="finish-meals__stepper">
-                        <BaseButton
-                            variant="icon"
-                            :icon="ICONS.remove"
-                            :disable="finishMealsCooked <= 0"
-                            aria-label="One fewer serving"
-                            @click="adjustFinishMeals(-1)"
-                        />
-                        <span class="finish-meals__value" aria-live="polite">{{ finishMealsCooked }}</span>
-                        <BaseButton
-                            variant="icon"
-                            :icon="ICONS.add"
-                            aria-label="One more serving"
-                            @click="adjustFinishMeals(1)"
-                        />
-                    </div>
+                    <NumberStepper
+                        v-model="finishMealsCooked"
+                        :min="0"
+                        decrement-label="One fewer serving"
+                        increment-label="One more serving"
+                    >
+                        <q-tooltip>Servings kept for later</q-tooltip>
+                    </NumberStepper>
                 </div>
             </q-card-section>
             <template #actions>
@@ -728,14 +751,15 @@
     import { ICONS } from 'src/style/icons';
     import AppSpinner from 'src/components/AppSpinner.vue';
     import BaseButton from 'src/components/BaseButton.vue';
-    import BaseSegmented from 'src/components/BaseSegmented.vue';
+    import AddToListButton from 'src/components/AddToListButton.vue';
+    import NumberStepper from 'src/components/NumberStepper.vue';
+    import StockLevelPicker from 'src/components/stock/StockLevelPicker.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
     import CookStepProgress from 'src/components/recipes/CookStepProgress.vue';
     import RecipeCookModeImageView from 'src/components/recipes/RecipeCookModeImageView.vue';
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';
     import { useCookingPolicy } from 'src/composables/useCookingPolicy';
-    import { useShoppingListActions } from 'src/composables/useShoppingListActions';
     import { formatQuantity } from 'src/helpers/formatQuantity';
     import { formatSubstituteRatio } from 'src/helpers/substituteRatio';
     import { scaleQuantity } from 'src/helpers/scaleQuantity';
@@ -771,7 +795,6 @@
     const shoppingListStore = useShoppingListStore();
     const recipeApiService = new RecipeApiService();
     const stockItemApi = new StockItemApiService();
-    const slActions = useShoppingListActions();
     const authStore = useAuthStore();
 
     // hold the screen awake for the whole cook session (both the
@@ -853,13 +876,7 @@
         return formatQuantity(scaled, unit);
     }
 
-    /** Nudge the session headcount. Clamps at 1 — a zero would collapse every
-     *  scaled quantity mid-cook — and floors, because `householdHeadcount` is
-     *  a stored setting this page doesn't get to assume is integral. */
-    function adjustHeadcount(delta: number) {
-        const current = Number.isFinite(cookingFor.value) ? Math.floor(cookingFor.value) : 1;
-        cookingFor.value = Math.max(1, current + delta);
-    }
+    // (the headcount nudge + its clamp live in `NumberStepper` now.)
 
 
     // ── P2-13 voice (extracted into composables) ────────────────────────
@@ -883,11 +900,19 @@
      *  sous chef big button for desktop, the icon only version can stay for
      *  mobile only"*). Reactive via Quasar's Screen plugin, activated in
      *  `boot/quasarScreen.ts`. */
-    const compactVoiceControls = computed(() => $q.screen.lt.sm);
+    const isPhone = computed(() => $q.screen.lt.sm);
     const sousChefVariant = computed(() => {
-        if (compactVoiceControls.value) return speechEnabled.value ? 'filled-icon' : 'icon';
+        if (isPhone.value) return speechEnabled.value ? 'filled-icon' : 'icon';
         return speechEnabled.value ? 'primary' : 'secondary';
     });
+
+    /** Owner feedback 2026-09-03 — the three step buttons have to share one
+     *  row on a phone. `size="lg"` is where the width goes: Quasar writes it as
+     *  an INLINE font-size, so no stylesheet rule can shrink it (a CSS
+     *  `font-size` in the media query below was tried, measured, and found
+     *  inert). The framework-level answer is to hand it a different size, not
+     *  to fight the inline style with `!important`. */
+    const navButtonSize = computed(() => (isPhone.value ? 'md' : 'lg'));
 
     const voiceInput = useVoiceInput({
         continuous: true,
@@ -1418,20 +1443,13 @@
     const finishMealsCooked = ref<number>(0);
     const finishRows = ref<FinishRow[]>([]);
 
-    /** The household's stock levels, in order, as segments. Three in the seed
-     *  (Stocked / Low / Out) but the vocabulary is a table, so this renders
-     *  whatever the household actually has rather than hardcoding three. */
-    const levelSegmentOptions = computed(() =>
-        [...stockLevels.value]
-            .sort((a, b) => a.sequence - b.sequence)
-            .map((l) => ({ value: l.stock_level_id, label: l.name })),
-    );
-
-    function adjustFinishMeals(delta: number) {
-        const current = Number.isFinite(finishMealsCooked.value)
-            ? Math.floor(finishMealsCooked.value)
-            : 0;
-        finishMealsCooked.value = Math.max(0, current + delta);
+    /** The selected level's name, printed under the ingredient name. The
+     *  picker itself is a colour swatch, and a colour on its own is not an
+     *  answer in a list you read row by row — the segments it replaced said
+     *  the word, so the row has to. */
+    function levelNameFor(levelId: string | undefined): string {
+        if (!levelId) return 'No level set';
+        return stockLevels.value.find((l) => l.stock_level_id === levelId)?.name ?? '';
     }
 
     function buildFinishRows(): FinishRow[] {
@@ -1464,33 +1482,6 @@
         pauseTimer();
         finishRows.value = buildFinishRows();
         finishDialogOpen.value = true;
-    }
-
-    async function onFinishAddToList(stockItemId: string) {
-        const targetId = shoppingListStore.quickAddTargetListId;
-        if (!targetId) {
-            $q.notify({
-                type: 'info',
-                position: 'bottom-right',
-                message: 'No active shopping list — set a primary list first.',
-            });
-            return;
-        }
-        try {
-            await slActions.addItems(targetId, [{ stock_item_id: stockItemId }]);
-            $q.notify({
-                type: 'positive',
-                position: 'bottom-right',
-                message: 'Added to your shopping list.',
-            });
-        } catch (err) {
-            $q.notify({
-                type: 'negative',
-                position: 'bottom-right',
-                message: 'Could not add to shopping list.',
-            });
-            console.warn('add-to-list failed during finish', err);
-        }
     }
 
     async function confirmFinish() {
@@ -1733,8 +1724,9 @@
         min-width: 300px;
         max-width: 360px;
     }
-    // Finish rows: name, level segments, cart — one line where there is room,
-    // wrapping the segments under the name where there isn't (a phone).
+    // Finish rows: [level swatch] name + level name ... [cart]. One line at
+    // every width now — the segmented control that used to wrap under the name
+    // on a phone is a 32px square, so the row no longer needs a wrap rule.
     .finish-list {
         max-height: 50vh;
         overflow-y: auto;
@@ -1745,21 +1737,23 @@
         display: flex;
         align-items: center;
         gap: var(--space-3);
-        padding: var(--space-2) var(--space-3);
+        // The level swatch wears a dashed uncertainty ring that bleeds 5px
+        // past the button; the vertical padding keeps it off the divider.
+        padding: var(--space-3);
         border-bottom: 1px solid var(--divider);
-        flex-wrap: wrap;
     }
     .finish-row:last-child {
         border-bottom: none;
     }
     .finish-row__name {
-        flex: 1 1 8rem;
+        flex: 1 1 auto;
         min-width: 0;
         font-weight: 500;
         overflow-wrap: anywhere;
     }
-    .finish-row__levels {
-        flex: 0 1 auto;
+    .finish-row__level {
+        font-weight: 400;
+        color: var(--text-secondary);
     }
     .finish-meals {
         display: flex;
@@ -1767,33 +1761,6 @@
         justify-content: space-between;
         gap: var(--space-4);
         flex-wrap: wrap;
-    }
-    .finish-meals__stepper {
-        display: flex;
-        align-items: center;
-        gap: var(--space-2);
-        padding: var(--space-1) var(--space-3);
-        border: 1px solid var(--border-default);
-        border-radius: var(--radius-pill);
-        background: var(--surface-elevated);
-    }
-    .finish-meals__value {
-        min-width: 1.75rem;
-        text-align: center;
-        font-size: 1.25rem;
-        font-weight: 600;
-        font-variant-numeric: tabular-nums;
-        color: var(--text-primary);
-    }
-    .finish-meals__stepper :deep(.dora-btn--icon) {
-        min-height: 44px;
-        min-width: 44px;
-    }
-    @media (max-width: 599px) {
-        .finish-row__levels {
-            flex: 1 1 100%;
-            order: 3;
-        }
     }
     // per-step highlight. A soft tint + accented border on
     // ingredient rows / tool chips that the current step references; the
@@ -1831,53 +1798,36 @@
         white-space: pre-wrap;
         line-height: 1.5;
     }
-    // Cook-mode header (owner feedback 2026-08-27 + 2026-08-28 — "everything is
-    // squished badly on desktop too for the header").
+    // Cook-mode header (owner feedback 2026-08-27, 08-28 and 09-03).
     //
-    // Three bands stacked, not one wrapping row: identity (exit + name), then a
-    // controls band holding the voice cluster and the headcount pill. The
-    // controls never share a line with the title at any width — that sharing
-    // *was* the squish, on desktop as much as on a phone. The identity band is
-    // `nowrap` so the recipe name can never fall below the exit button; it
-    // truncates instead, which is the right trade when the name is already the
-    // page you navigated to.
+    // ONE wrapping row: exit, name, voice cluster, headcount pill. The 08-28
+    // fix stacked these into bands to kill the squish, and 09-03 reported the
+    // bill for that — three bands push the step text (the entire point of the
+    // surface) below the fold on a phone. So the name absorbs the pressure
+    // instead: it is `flex: 1 1 0` with `min-width: 0`, which is what actually
+    // lets the ellipsis engage, and the controls beside it never shrink. The
+    // headcount is the only thing allowed to wrap, and only below 600px.
     //
-    // Every gap here used `--space-sm` / `--space-xs`, which do not exist (the
-    // scale is `--space-1..--space-12`). An undefined custom property with no
-    // fallback invalidates the declaration, so all of these were 0 — the
-    // mechanical half of "no margin from other elements". See FU-764.
+    // Note for anyone editing the gaps: `--space-sm` / `--space-xs` do NOT
+    // exist (the scale is `--space-1..--space-12`). Every gap in this block was
+    // one of those once, which invalidated the declaration and collapsed them
+    // all to 0 — the mechanical half of the original "everything is squished"
+    // report. See FU-764.
     .cook-header {
-        display: flex;
-        flex-direction: column;
-        gap: var(--space-3);
-    }
-    .cook-header__identity {
         display: flex;
         align-items: center;
         gap: var(--space-2);
-        // `min-width: 0` is what actually lets the ellipsis engage — without
-        // it the flex item refuses to shrink below its content width and the
-        // row grows instead of the name truncating.
-        min-width: 0;
-        flex-wrap: nowrap;
+        flex-wrap: wrap;
     }
     .cook-header__name {
         min-width: 0;
-        flex: 1 1 auto;
-    }
-    .cook-header__controls {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: var(--space-4);
-        flex-wrap: wrap;
+        flex: 1 1 0;
     }
     .cook-header__voice {
         display: flex;
         align-items: center;
         gap: var(--space-2);
-        flex: 0 1 auto;
-        min-width: 0;
+        flex: 0 0 auto;
     }
     // D-004 — the voice cluster is the one thing in cook mode you reach for
     // with a wet or floury finger, so its buttons clear the 44px floor rather
@@ -1889,49 +1839,46 @@
     .cook-header__voice :deep(.dora-btn--filled-icon) {
         min-width: 44px;
     }
-    // Headcount stepper as one bordered object, so the label, the buttons and
-    // the number read as a single control instead of three loose things.
-    .cook-headcount {
-        display: flex;
-        align-items: center;
-        gap: var(--space-2);
-        flex: 0 0 auto;
-        padding: var(--space-1) var(--space-3);
-        border: 1px solid var(--border-default);
-        border-radius: var(--radius-pill);
-        background: var(--surface-elevated);
-        white-space: nowrap;
-    }
-    .cook-headcount__label {
-        font-size: 0.875rem;
-        color: var(--text-secondary);
-    }
-    .cook-headcount__value {
-        min-width: 1.75rem;
-        text-align: center;
-        font-size: 1.25rem;
-        font-weight: 600;
-        font-variant-numeric: tabular-nums;
-        color: var(--text-primary);
-    }
-    .cook-headcount :deep(.dora-btn--icon) {
-        min-height: 44px;
-        min-width: 44px;
+    .cook-header__headcount {
+        margin-left: var(--space-2);
     }
     @media (max-width: 599px) {
-        .cook-header__controls {
-            // The voice cluster and the headcount each take a full row on a
-            // phone; side by side they are back to competing for width, which
-            // is the "layout at the top looks a bit odd" report.
-            flex-direction: column;
-            align-items: stretch;
-            gap: var(--space-3);
-        }
-        .cook-header__voice {
-            justify-content: flex-start;
-        }
-        .cook-headcount {
+        // A phone has room for the name + the voice icons on line one, and
+        // nothing else; the headcount takes the full second line rather than
+        // squeezing the name to three characters.
+        .cook-header__headcount {
+            flex: 1 1 100%;
+            margin-left: 0;
             justify-content: space-between;
+        }
+    }
+    // Prev / Repeat / Next — one row at every width (owner feedback
+    // 2026-09-03). Each button shrinks from a zero basis so three labelled
+    // `size="lg"` buttons share a 340px phone instead of wrapping the third
+    // one onto its own line.
+    .cook-nav {
+        display: flex;
+        justify-content: center;
+        gap: var(--space-2);
+    }
+    .cook-nav :deep(.dora-btn) {
+        flex: 0 1 auto;
+        min-width: 0;
+        // D-004. These were 42px at `size="lg"` before this pass and 42px
+        // after the mobile type step-down below — measured, not assumed — on
+        // the surface most likely to be tapped with a floury finger.
+        min-height: 44px;
+    }
+    @media (max-width: 599px) {
+        .cook-nav :deep(.dora-btn) {
+            flex: 1 1 0;
+            padding-left: var(--space-2);
+            padding-right: var(--space-2);
+        }
+        // …and stop q-btn's content from wrapping if a translation or a
+        // narrower phone puts it back on the boundary.
+        .cook-nav :deep(.q-btn__content) {
+            flex-wrap: nowrap;
         }
     }
 </style>

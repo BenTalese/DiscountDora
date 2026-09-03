@@ -327,15 +327,34 @@ def test__estimated_cost__converts_the_ingredient_quantity_into_the_priced_unit(
 
 
 def test__estimated_cost__counted_ingredient_is_priced_per_item(api):
-    # "2 tins" against a 2 L / $6.00 product: "tins" is not a unit we know,
-    # and doesn't need to be — a count means whole items, so 2 × $6.00.
-    _Priced = _link_priced_item(price_now=6.0, size_value=2.0)
+    # "2 tins" against a product sized as a count of one: "tins" is not a unit
+    # we know, and doesn't need to be — a count means whole items, so 2 × $6.00.
+    _Priced = _link_priced_item(price_now=6.0, size_value=1.0, size_unit="ea")
     _Recipe = _make_recipe("Cost Counted", ingredients=[
         {"stock_item_id": _Priced["stock_item_id"], "quantity": 2, "unit": "tins"},
     ])
     _Detail = _detail(_Recipe["recipe_id"])
     assert _Detail["estimated_cost"] == 12.0
     assert _Detail["estimated_cost_priced_count"] == 1
+
+
+def test__estimated_cost__count_against_a_measured_pack_is_unpriced(api):
+    # Owner-reported 2026-09-03: "3 yolks" of Free Range Eggs (a 700 g carton
+    # at $5.50) was billed as three whole cartons — $16.50 — because a measured
+    # pack was assumed to hold exactly one countable thing. It holds twelve,
+    # and nothing in the data said so, so the honest answer is that we can't
+    # price it. Same shape with the unit dropped ("3" on its own), which is the
+    # second half of the same report.
+    _Priced = _link_priced_item(price_now=5.50, size_value=700.0, size_unit="g")
+    _Recipe = _make_recipe("Cost Yolks", ingredients=[
+        {"stock_item_id": _Priced["stock_item_id"], "quantity": 3, "unit": "yolks"},
+    ])
+    _Detail = _detail(_Recipe["recipe_id"])
+    assert _Detail["estimated_cost"] is None
+    assert _Detail["estimated_cost_priced_count"] == 0
+    _Lines = _Detail["estimated_cost_lines"]
+    assert _Lines[0]["reason"] == "unit_mismatch"
+    assert _Lines[0]["line_cost"] is None
 
 
 def test__estimated_cost__unbridgeable_units_are_unpriced_not_guessed(api):
@@ -380,7 +399,10 @@ def test__estimated_cost__partial_coverage_prices_only_linked_products(api):
     _Priced = _link_priced_item(price_now=3.0, size_value=1.0)
     _Unpriced = _make_item("Cost Unpriced", 0)  # linked to no product / no offers
     _Recipe = _make_recipe("Cost Partial", ingredients=[
-        {"stock_item_id": _Priced["stock_item_id"], "quantity": 1},
+        # Measured, so the 1 L product can price it. (It used to be a bare
+        # count, which only worked while a measured pack was assumed to be one
+        # countable item — see the yolks test above.)
+        {"stock_item_id": _Priced["stock_item_id"], "quantity": 1, "unit": "L"},
         {"stock_item_id": _Unpriced["stock_item_id"], "quantity": 5},
     ])
     _Detail = _detail(_Recipe["recipe_id"])

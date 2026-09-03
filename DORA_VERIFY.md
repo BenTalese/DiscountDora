@@ -22,6 +22,70 @@ top-to-bottom.
 
 ---
 
+## Settings — the 2026-09-03 owner batch
+
+Most of this batch was driven live at 375px and 1280px and those lines are not
+here. What's left needs either a real device, a real download, or an install
+shaped differently from the scratch stack.
+
+- [ ] Piper voice download works end to end again — Settings → Voice, download a
+      voice and confirm it reaches **Ready** rather than erroring with
+      `name 'onnx_tmp' is not defined`. (The rename block had drifted into
+      `_record_progress`; fixed, and pinned by
+      `tests/test_voice_provision_download.py`, but nothing has downloaded a
+      real 60 MB model since.)
+- [ ] On the **Docker install over plain http://**, About → *Install as an app*
+      now says installing needs a secure connection and names HTTPS — not
+      "isn't available in this browser". Then, behind HTTPS, confirm the install
+      button actually appears.
+- [ ] Stores — pick a logo by clicking the store's tile (it saves immediately,
+      no dialog), then remove it with the image button. The pane can't drive a
+      real file picker.
+- [ ] Nutrition matching / QR labels / Unlinked ingredients on a real phone —
+      the three panels now share `css/settingsCards.scss`; confirm they read as
+      one surface with the rest of the app and that nothing scrolls sideways.
+- [ ] Notifications with **products enabled and SMTP configured** — the Email
+      block's rows (Weekly deals, Send on, Compact format) are now inline-right
+      on mobile; the scratch stack has no SMTP, so only the first row rendered.
+
+---
+
+## Cookbook — the 2026-09-03 chip + tooltip batch
+
+The recipe page's half of this batch was driven live and its lines are not
+here. These three are cookbook-list only, and the list body would not render in
+the agent's browser pane (the known rAF/paint limitation), so they are yours.
+
+- [ ] Compact view: Dora's "may be short / may be cookable" chip is a glyph in
+      an evenly-padded pill — not shoved against its left edge. (The scoped
+      rule and its selector were confirmed compiled; only the look is unseen.)
+- [ ] Card *and* compact view: hover a kcal figure carrying an asterisk — the
+      tooltip reads "Worked out from only part of this recipe." with nothing
+      after it.
+- [ ] Hover Dora's belief chip in both views: the tooltip stops after "…may
+      have run out of X" / "…you're back in stock" — no trailing "Nothing has
+      changed" or "Your recorded levels still decide…".
+
+## Recipe view — the empty-state and pack-count tails (2026-09-03)
+
+Everything else in this batch was walked live at 1280 and 375 (chip column,
+numbered free-text steps, tools in view mode, the empty-step save block, the
+meal-pool line, both chip tooltips, the 16px swap glyph). These are the corners
+the seed had no data for:
+
+- [ ] A **structured** recipe with no steps yet, in *read* mode: the block says
+      "No steps yet. Add one to link ingredients and tools to it and to get
+      per-step cook mode — or switch the step style to free text." — the same
+      sentence edit mode shows.
+- [ ] A **photo** recipe with no photos, in *read* mode: "No images yet. Add
+      photos of your steps…" — again matching edit mode.
+- [ ] With money on, open a costed recipe's price breakdown and confirm the
+      "Priced N of M" ratio plus the "Units don't match the price" group read
+      sensibly now that counted-against-a-measured-pack lands there (FU-855 —
+      this is the coverage narrowing; say whether it's acceptable).
+- [ ] A recipe ingredient that is on a *non-target* list: the cart tooltip reads
+      "On a list — click to remove".
+
 ## The two new themes (2026-09-03)
 
 Every token pair in Salt & Pepper and Dragonfruit (both modes) was measured

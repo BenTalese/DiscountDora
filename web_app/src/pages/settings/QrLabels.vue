@@ -2,7 +2,7 @@
     <div class="settings-page">
         <SettingsPageHeader
             title="QR labels"
-            description="Print Dora's own QR labels for your stock items — pick items, choose a sheet layout, and open a printable sheet. Save as PDF from your browser's print dialog. These are Dora's labels (a scannable QR that opens the item's page); they are not the product's real EAN/UPC barcode."
+            description="Print Dora's own QR labels. Pick items, choose a sheet layout, and open a printable sheet. Print them to scan for quick actions on your items."
             :icon="ICONS.qr_code"
         />
 
@@ -21,69 +21,60 @@
             <router-link to="/settings/admin/system/features">Settings → System → Features</router-link>.
         </q-banner>
 
-        <q-card v-if="scanningEnabled" flat bordered>
-            <q-card-section>
-                <div class="row q-col-gutter-md items-end">
-                    <SearchInput
-                        v-model="sheetFilter"
-                        label="Filter items"
-                        class="col-12 col-sm-6"
-                    />
-                    <q-select
-                        v-model="sheetLayout"
-                        :options="layoutOptions"
-                        label="Sheet layout"
-                        outlined
+        <!-- Owner 2026-09-03: was a bare `q-card flat bordered` — Quasar's
+             default chrome rather than the app's. `.settings-card` is the
+             shared settings-worklist panel (see css/settingsCards.scss); the
+             picker rows stack on a phone instead of squeezing. -->
+        <div v-if="scanningEnabled" class="settings-card">
+            <div class="settings-card__head qr-head">
+                <SearchInput
+                    v-model="sheetFilter"
+                    label="Filter items"
+                    class="qr-head__filter"
+                />
+                <q-select
+                    v-model="sheetLayout"
+                    :options="layoutOptions"
+                    label="Sheet layout"
+                    outlined
+                    dense
+                    emit-value
+                    map-options
+                    class="qr-head__layout"
+                />
+                <div class="qr-head__bulk">
+                    <BaseButton
+                        variant="secondary"
                         dense
-                        emit-value
-                        map-options
-                        class="col-12 col-sm-4"
+                        label="All"
+                        @click="onSelectAllVisible"
                     />
-                    <div class="col-auto">
-                        <BaseButton
-                            variant="ghost"
-                            dense
-                            label="All"
-                            @click="onSelectAllVisible"
-                        />
-                        <BaseButton
-                            variant="ghost"
-                            dense
-                            label="None"
-                            @click="selectedItemIds = []"
-                        />
-                    </div>
+                    <BaseButton
+                        variant="secondary"
+                        dense
+                        label="None"
+                        @click="selectedItemIds = []"
+                    />
                 </div>
-            </q-card-section>
-            <q-separator />
-            <q-card-section class="q-pa-none" style="max-height: 360px; overflow: auto">
-                <q-list dense>
-                    <q-item
-                        v-for="item in filteredStockItems"
-                        :key="item.stock_item_id"
-                        clickable
-                        @click="toggleItem(item.stock_item_id)"
-                    >
-                        <q-item-section avatar>
-                            <q-checkbox
-                                :model-value="selectedItemIds.includes(item.stock_item_id)"
-                                @update:model-value="toggleItem(item.stock_item_id)"
-                                @click.stop
-                            />
-                        </q-item-section>
-                        <q-item-section>
-                            <q-item-label>{{ item.name }}</q-item-label>
-                            <q-item-label caption>
-                                {{ item.stock_level_name ?? '—' }}
-                            </q-item-label>
-                        </q-item-section>
-                    </q-item>
-                </q-list>
-            </q-card-section>
-            <q-separator />
-            <q-card-actions align="right">
+            </div>
+
+            <div class="qr-picker">
+                <label
+                    v-for="item in filteredStockItems"
+                    :key="item.stock_item_id"
+                    class="settings-card__row qr-picker__row"
+                >
+                    <q-checkbox
+                        :model-value="selectedItemIds.includes(item.stock_item_id)"
+                        :label="item.name"
+                        @update:model-value="toggleItem(item.stock_item_id)"
+                    />
+                </label>
+            </div>
+
+            <div class="settings-card__foot">
                 <BaseButton
-                    variant="ghost"
+                    variant="secondary"
                     label="Print all items"
                     :icon="ICONS.print"
                     @click="openSheet({ allItems: true })"
@@ -95,8 +86,8 @@
                     :disable="selectedItemIds.length === 0"
                     @click="openSheet({ allItems: false })"
                 />
-            </q-card-actions>
-        </q-card>
+            </div>
+        </div>
     </div>
 </template>
 
@@ -164,3 +155,28 @@
         await stockItemStore.ensureLoadedAsync();
     });
 </script>
+
+<style scoped lang="scss">
+    .qr-head__filter { flex: 1 1 220px; min-width: 0; }
+    .qr-head__layout { flex: 1 1 200px; min-width: 0; }
+    .qr-head__bulk { flex: 0 0 auto; display: flex; gap: var(--space-2); }
+    /* The item list scrolls inside the card rather than growing the page —
+       a large pantry would otherwise push the sheet buttons off-screen. */
+    .qr-picker {
+        max-height: 360px;
+        overflow-y: auto;
+    }
+    .qr-picker__row {
+        cursor: pointer;
+        padding-block: var(--space-1);
+    }
+    .qr-picker__row:hover {
+        background: var(--surface-sunken);
+    }
+    /* The whole row is the label, so the checkbox owns the text and both the
+       tick and the name are one 44px target (D-004). */
+    .qr-picker__row :deep(.q-checkbox__label) {
+        font-size: 0.9375rem;
+        color: var(--text-primary);
+    }
+</style>

@@ -18,29 +18,34 @@
             <span class="text-caption dora-text-muted">Loading…</span>
         </div>
 
-        <div
-            v-else-if="groups.length === 0"
-            class="dora-text-muted text-caption q-pa-md"
-        >
-            No unlinked ingredients right now. Every recipe ingredient is
-            linked to a stock item.
+        <div v-else-if="groups.length === 0" class="settings-card">
+            <p class="settings-card__empty">
+                No unlinked ingredients right now. Every recipe ingredient is
+                linked to a stock item.
+            </p>
         </div>
 
-        <q-card v-else flat bordered>
-            <q-list separator>
-                <q-item
+        <!-- Owner 2026-09-03: was a bare `q-card flat bordered` wrapping a
+             `q-list`, whose side sections stay beside the label at every
+             width — on a phone that squeezed the picker into a sliver and
+             overlapped the buttons. `.settings-card__row` is a flex row that
+             stacks below 600px, and the panel now speaks the app's card
+             language rather than Quasar's default. -->
+        <div v-else class="settings-card">
+            <div class="settings-card__rows">
+                <div
                     v-for="group in groups"
                     :key="group.raw_text"
-                    class="q-py-md"
+                    class="settings-card__row unlinked-row"
                 >
-                    <q-item-section>
-                        <q-item-label>{{ group.raw_text }}</q-item-label>
-                        <q-item-label caption>
+                    <div class="settings-card__row-main">
+                        <span class="settings-card__row-name">{{ group.raw_text }}</span>
+                        <span class="settings-card__row-meta">
                             Used in {{ group.count }}
                             recipe<template v-if="group.count !== 1">s</template>
-                        </q-item-label>
-                    </q-item-section>
-                    <q-item-section style="min-width: 260px; max-width: 360px">
+                        </span>
+                    </div>
+                    <div class="settings-card__row-aux unlinked-row__aux">
                         <q-select
                             v-model="picks[group.raw_text]"
                             :options="stockItemOptions(group.raw_text)"
@@ -53,36 +58,45 @@
                             hide-selected
                             input-debounce="80"
                             label="Link to stock item"
+                            class="unlinked-row__picker"
                             @filter="(value, update) => onFilter(group.raw_text, value, update)"
                         >
                             <template #no-option>
                                 <q-item>
                                     <q-item-section class="text-caption dora-text-muted">
-                                        No matches. Use "Create new" →
+                                        No matches — use "Create new".
                                     </q-item-section>
                                 </q-item>
                             </template>
                         </q-select>
-                    </q-item-section>
-                    <q-item-section side>
-                        <div class="row q-gutter-xs">
-                            <BaseButton
-                                variant="primary"
-                                :label="linkingKey === group.raw_text ? 'Linking…' : 'Link'"
-                                :loading="linkingKey === group.raw_text"
-                                :disable="!picks[group.raw_text]"
-                                @click="onLink(group)"
-                            />
-                            <BaseButton
-                                variant="ghost"
-                                label="Create new"
-                                @click="onCreateAndLink(group)"
-                            />
-                        </div>
-                    </q-item-section>
-                </q-item>
-            </q-list>
-        </q-card>
+                        <BaseButton
+                            variant="primary"
+                            :label="linkingKey === group.raw_text ? 'Linking…' : 'Link'"
+                            :loading="linkingKey === group.raw_text"
+                            :disable="!picks[group.raw_text]"
+                            @click="onLink(group)"
+                        />
+                        <BaseButton
+                            variant="ghost"
+                            label="Create new"
+                            @click="onCreateNew(group)"
+                        />
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- "Create new" opens the app's real add-item dialog seeded with the
+             raw text, rather than silently POSTing a name + a guessed level.
+             The silent path gave a bare "Could not create + link" toast for
+             every server-side rejection — including the common one, a stock
+             item of that name already existing (owner 2026-09-03). The dialog
+             shows the field error and lets the name be adjusted. -->
+        <CreateStockItemDialog
+            v-model="createDialogOpen"
+            :prefill="createPrefill"
+            @created="onCreatedStockItem"
+        />
     </div>
 </template>
 
@@ -109,6 +123,8 @@
     import { computed, onMounted, reactive, ref, watch } from 'vue';
     import { useQuasar } from 'quasar';
     import BaseButton from 'src/components/BaseButton.vue';
+    import CreateStockItemDialog from 'src/components/stock/CreateStockItemDialog.vue';
+    import type { CreateStockItemPrefill } from 'src/components/stock/createStockItemPrefill';
     import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
     import { ICONS } from 'src/style/icons';
     import RecipeApiService, {
@@ -124,8 +140,8 @@
 
     const stockItemStore = useStockItemStore();
     const { stockItems } = storeToRefs(stockItemStore);
+    // Still hydrated on mount: CreateStockItemDialog reads the level list.
     const stockLevelStore = useStockLevelStore();
-    const { stockLevels } = storeToRefs(stockLevelStore);
     const unlinkedStore = useUnlinkedIngredientsStore();
 
     const groups = ref<UnlinkedIngredientGroup[]>([]);
@@ -234,54 +250,79 @@
         }
     }
 
-    async function onCreateAndLink(group: UnlinkedIngredientGroup) {
-        // Default the new item to the most-stocked level so it doesn't
-        // immediately count as "missing" — the user hasn't told us
-        // otherwise, and pulling it out of an imported recipe implies
-        // they do have some of it. Mirrors the recipe page's "create new
-        // inline" flow (`wellStocked` in RecipeIngredientRowEditor.vue).
-        const wellStocked = stockLevels.value[0];
-        if (!wellStocked) {
-            $q.notify({
-                type: 'negative',
-                position: 'bottom-right',
-                message: 'No stock levels configured — cannot create.',
-            });
-            return;
-        }
+    // ── "Create new" → the app's add-item dialog, prefilled ───────────
+    const createDialogOpen = ref(false);
+    const createPrefill = ref<CreateStockItemPrefill | null>(null);
+    /** The group the open dialog was launched from, so the new item can be
+     *  linked back to it once the dialog reports a successful create. */
+    const createForGroup = ref<UnlinkedIngredientGroup | null>(null);
+
+    function onCreateNew(group: UnlinkedIngredientGroup) {
         const name = group.raw_text.trim();
         if (!name) return;
+        createForGroup.value = group;
+        createPrefill.value = { name };
+        createDialogOpen.value = true;
+    }
+
+    async function onCreatedStockItem(stockItemId: string) {
+        const group = createForGroup.value;
+        createForGroup.value = null;
+        createPrefill.value = null;
+        if (!group) return;
+        // Link straight away — creating the item from this page only ever
+        // means "this is what that ingredient is".
         linkingKey.value = group.raw_text;
         try {
-            const created = await stockItemStore.createStockItemAsync({
-                name,
-                stock_level_id: wellStocked.stock_level_id,
-                stock_location_id: null,
-            });
             const result = await recipeApi.bulkLinkUnlinkedIngredientsAsync(
                 group.raw_text,
-                created.stock_item_id,
+                stockItemId,
             );
             $q.notify({
                 type: 'positive',
                 position: 'bottom-right',
                 message:
                     result.linked_count === 1
-                        ? `Created "${name}" and linked in 1 recipe.`
-                        : `Created "${name}" and linked in ${result.linked_count} recipes.`,
+                        ? `Linked "${group.raw_text}" in 1 recipe.`
+                        : `Linked "${group.raw_text}" in ${result.linked_count} recipes.`,
             });
             delete picks[group.raw_text];
             delete filters[group.raw_text];
             await refresh();
         } catch (err) {
-            console.warn('Create + bulk-link failed', err);
+            console.warn('Link after create failed', err);
             $q.notify({
                 type: 'negative',
                 position: 'bottom-right',
-                message: 'Could not create + link. Try again in a moment.',
+                message: 'Item created, but it could not be linked. Pick it above and press Link.',
             });
         } finally {
             linkingKey.value = null;
         }
     }
 </script>
+
+<style scoped lang="scss">
+    /* The picker is the widest thing in the row, so it owns the growth and
+       the two buttons stay their natural size. Below 600px the shared
+       `.settings-card__row-aux` rule stacks the whole group to full width. */
+    .unlinked-row__aux {
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        max-width: 60%;
+    }
+    .unlinked-row__picker {
+        flex: 1 1 240px;
+        min-width: 0;
+        max-width: 360px;
+    }
+    @media (max-width: 599px) {
+        .unlinked-row__aux {
+            max-width: 100%;
+        }
+        .unlinked-row__picker {
+            flex-basis: 100%;
+            max-width: 100%;
+        }
+    }
+</style>

@@ -1,0 +1,67 @@
+// ── Numbered method steps — the read face ────────────────────────────────
+//
+// Owner 2026-09-03: *"I don't see why we can't style free text steps the same
+// as structured in view mode. Just needs the numbers in the circles added."*
+// Quite right — a reader doesn't care how the method is *stored*, and the two
+// modes were reading as two different documents purely because the structured
+// face owned the numeral chrome privately inside
+// `RecipeStructuredMethod.vue`.
+//
+// So the chrome lives here instead: the list, the numeral, the content column
+// and the text measure, used by both the structured method and the free-text
+// block on `RecipeDetailPage`. R-001 / R-003 — the alternative was pasting a
+// second copy of the circle into the page, and the *next* change to it would
+// have had to be made twice. Same precedent as `shoppingList.scss` and
+// `dashboardCards.scss`.
+//
+// What is NOT here: everything only the structured face has — the lit/selected
+// state, the editing ground, sub-steps and their connecting rule, timers,
+// hints. Those stay scoped to that component, and build on these classes.
+
+.dora-steps {
+    // Named, because the sub-step rule in `RecipeStructuredMethod` has to
+    // line itself up with the centre of the numeral. Inherited by every
+    // descendant, so that rule can read them without redeclaring.
+    --dora-step-num: 34px;
+    --dora-step-gap: var(--space-4, 16px);
+
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4, 16px);
+}
+
+.dora-steps__item {
+    display: grid;
+    grid-template-columns: var(--dora-step-num) 1fr;
+    gap: var(--dora-step-gap);
+    align-items: start;
+    padding: var(--space-2, 8px);
+    border-radius: var(--radius-md, 6px);
+}
+
+.dora-steps__num {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--dora-step-num);
+    height: var(--dora-step-num);
+    border-radius: var(--radius-full, 50%);
+    background: var(--brand-primary-soft);
+    color: var(--brand-primary);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    user-select: none;
+}
+
+.dora-steps__body { min-width: 0; }
+
+// 78ch rather than the old 62ch: at 62ch the method column was mostly empty
+// on a desktop (owner: "serious lack of use of the horizontal space").
+.dora-steps__text {
+    max-width: 78ch;
+    margin: 0;
+    line-height: 1.6;
+}

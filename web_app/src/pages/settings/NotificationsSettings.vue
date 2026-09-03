@@ -42,7 +42,7 @@
                 {{ pushError }}
             </SettingsNotice>
 
-            <SettingsRow>
+            <SettingsRow inline>
                 <template #label>
                     Push notifications on this device
                     <InfoTip label="Push notifications on this device">
@@ -62,7 +62,7 @@
             <!-- The evening brief rides the push channel, so it lives inside
                  it rather than beside it — that relationship was invisible
                  while the two were peer sections. -->
-            <SettingsRow>
+            <SettingsRow inline>
                 <template #label>
                     Evening brief
                     <InfoTip label="Evening brief">
@@ -126,7 +126,7 @@
                     </template>
                 </SettingsNotice>
 
-                <SettingsRow>
+                <SettingsRow inline>
                     <template #label>
                         Weekly deals
                         <InfoTip label="Weekly deals">
@@ -143,7 +143,7 @@
                 </SettingsRow>
 
                 <template v-if="currentUser.deals_email_enabled">
-                    <SettingsRow label="Send on">
+                    <SettingsRow inline label="Send on">
                         <q-select
                             v-model="sendDealsOnDay"
                             :options="dayOptions"
@@ -153,12 +153,12 @@
                             map-options
                             outlined
                             dense
-                            style="min-width: 180px"
+                            class="deals-day-select"
                             @update:model-value="onSendDealsOnDayChange"
                         />
                     </SettingsRow>
 
-                    <SettingsRow>
+                    <SettingsRow inline>
                         <template #label>
                             Compact format
                             <!-- This used to promise "images and store logos".
@@ -312,6 +312,12 @@
     .settings-page {
         display: flex;
         flex-direction: column;
+    }
+    /* Stays on the right at every width (owner 2026-09-03), so no fixed floor
+       that would overflow the control column on a phone. */
+    .deals-day-select {
+        width: 180px;
+        max-width: 100%;
     }
     .settings-page__note {
         font-size: 0.8125rem;

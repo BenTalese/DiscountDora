@@ -274,7 +274,9 @@
     }>();
     const emit = defineEmits<{
         (e: 'update:modelValue', value: boolean): void;
-        (e: 'created'): void;
+        /** `stockItemId` lets a caller act on the new item — the unlinked-
+         *  ingredients linker links it to the group it was created from. */
+        (e: 'created', stockItemId: string): void;
     }>();
 
     const $q = useQuasar();
@@ -444,7 +446,7 @@
                     });
                 }
             }
-            emit('created');
+            emit('created', created.stock_item_id);
             emit('update:modelValue', false);
         } catch (err) {
             handleSaveError(err, 'Could not add the item. Please review the form.');

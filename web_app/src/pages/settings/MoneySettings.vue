@@ -16,13 +16,6 @@
 
         <SettingsSection v-else>
             <template #title>Grocery budget</template>
-            <template #description>
-                Set a weekly or monthly target and Dora tracks how much the
-                household has spent across every finished shopping list in the
-                period. Shared by everyone — leave the amount blank to turn it
-                off.
-            </template>
-
             <SettingsRow label="Amount">
                 <q-input
                     v-model.number="budgetAmountDraft"
@@ -84,7 +77,7 @@
     );
 
     const budgetPeriodOptions: DoraSegmentedOption<BudgetPeriod>[] = [
-        { label: 'Weekly (Mon–Sun)', value: 'weekly' },
+        { label: 'Weekly', value: 'weekly' },
         { label: 'Monthly', value: 'monthly' },
     ];
 

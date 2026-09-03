@@ -86,6 +86,7 @@
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';
     import { useAuthStore } from 'src/stores/authStore';
+    import { useNutritionMatchingStore } from 'src/stores/nutritionMatchingStore';
     import { useUnlinkedIngredientsStore } from 'src/stores/unlinkedIngredientsStore';
     import BaseButton from 'src/components/BaseButton.vue';
     import DonateButton from 'src/components/donate/DonateButton.vue';
@@ -149,6 +150,20 @@
     const { count: unlinkedCount } = storeToRefs(unlinkedStore);
     void unlinkedStore.refreshAsync().catch(() => { /* badge just stays 0 */ });
 
+    // Same badge for the nutrition matcher (owner 2026-09-03 — *"count of
+    // unmatched items same as unlinked ingredients would be good"*). Only
+    // fetched when the entry is actually shown; see the nav entry below.
+    const nutritionMatchingStore = useNutritionMatchingStore();
+    const { count: nutritionUnmatchedCount } = storeToRefs(nutritionMatchingStore);
+    // Only fetched when the nav entry actually exists — in off/simple nutrition
+    // mode there is no matching page to badge. `immediate` so the badge is
+    // right on first paint rather than one tick late.
+    watch(nutritionIsComplex, (isComplex) => {
+        if (!isComplex) return;
+        void nutritionMatchingStore.ensureLoadedAsync()
+            .catch(() => { /* badge just stays 0 */ });
+    }, { immediate: true });
+
     const kitchenSetupSections = computed<SettingsNavEntry[]>(() => {
         const base: SettingsNavEntry[] = [
             { path: '/settings/kitchen-setup/stock-locations', label: 'Stock locations', icon: ICONS.place },
@@ -171,13 +186,16 @@
         });
         // Complex-mode only: in off/simple there are no food links to make, so
         // the entry is hidden rather than shown leading to an empty page
-        // (R-029). No badge — the count is the size of a backlog the user opted
-        // into, not an alert, and nagging is the opposite of the ask.
+        // (R-029). It carries the same outstanding-work badge as Unlinked
+        // ingredients above — the earlier note here argued a backlog the user
+        // opted into shouldn't nag, and the owner reversed that on 2026-09-03:
+        // the two pages are the same job, so they read the same way.
         if (nutritionIsComplex.value) {
             base.push({
                 path: '/settings/kitchen-setup/nutrition-matching',
                 label: 'Nutrition matching',
                 icon: ICONS.monitor_heart,
+                badge: nutritionUnmatchedCount.value,
             });
         }
         // Recipe taxonomies — flat leaves (no sub-group), each with a

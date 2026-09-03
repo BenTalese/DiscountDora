@@ -69,10 +69,7 @@
                                 aria-hidden="true"
                             >*</span>
                         </span>
-                        <q-tooltip v-if="!kcal.judgeable">
-                            Worked out from only part of this recipe — open it
-                            to see what's missing.
-                        </q-tooltip>
+                        <q-tooltip v-if="!kcal.judgeable">{{ kcalTooltip }}</q-tooltip>
                     </span>
                 </div>
             </div>
@@ -175,7 +172,7 @@
     // `metaLine` deliberately not destructured — the compact row renders its
     // own two-or-three-fact second line rather than the card's prose one.
     const {
-        totalTime, ingredientCount, kcal, missingIds, cookable,
+        totalTime, ingredientCount, kcal, kcalTooltip, missingIds, cookable,
         cookButtonColor, cookButtonTooltip, addListTooltip,
     } = useRecipeDisplay(() => props.recipe);
 

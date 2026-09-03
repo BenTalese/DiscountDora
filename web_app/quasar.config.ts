@@ -61,6 +61,16 @@ export default defineConfig((ctx): any => {
             // share; the card shell stays in DashboardCard.vue and anything
             // used by one card lives in that card. Same precedent as above.
             'dashboardCards.scss',
+            // 2026-09-03 — the numbered method step's read chrome (list,
+            // numeral circle, content column, text measure), so the recipe
+            // page's free-text method and RecipeStructuredMethod draw the
+            // same step. Same precedent as the three above.
+            'recipeSteps.scss',
+            // 2026-09-03 — the settings "worklist" card (QR labels, Unlinked
+            // ingredients, Nutrition matching). All three were bare
+            // `q-card flat bordered`, which is the one place the app's own
+            // card language wasn't being spoken. Same precedent as above.
+            'settingsCards.scss',
         ],
 
         // https://github.com/quasarframework/quasar/tree/dev/extras

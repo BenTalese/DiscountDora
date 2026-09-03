@@ -382,7 +382,7 @@
                              claimed it. The line now says *why* whenever
                              something is spoken for, so the number moving (or
                              not) is explainable without opening the planner. -->
-                        <span class="rn__cellsub">
+                        <span v-if="poolLabel" class="rn__cellsub">
                             {{ poolLabel }}
                             <q-tooltip v-if="poolTooltip">{{ poolTooltip }}</q-tooltip>
                         </span>
@@ -544,6 +544,30 @@
                                                     can't tell whether you have it.
                                                 </q-tooltip>
                                             </q-chip>
+                                            <span v-if="row.notes" class="rn__ingnote">{{ row.notes }}</span>
+                                        </span>
+
+                                        <!-- Pantry state, in its own column.
+                                             Owner 2026-09-03: *"swappable/missing/etc
+                                             chip is too close to the ingredient name.
+                                             Perhaps put it to the left of the shopping
+                                             button with some margin?"* These two are the
+                                             only chips on the row that are facts about
+                                             the *pantry* rather than about the
+                                             ingredient line you're reading, and they are
+                                             the two the cart button acts on - so they
+                                             belong beside it, at a fixed x, not tacked
+                                             onto the end of a name whose length varies
+                                             row to row. The authoring chips (Optional /
+                                             Free text / Needs an item) stay with the
+                                             name, because that is what they describe.
+                                             `v-if`'d as a whole rather than left
+                                             to collapse: an empty flex span is
+                                             still a box, and measuring the running
+                                             page showed the column costing its 8px
+                                             margin on all twelve rows of a recipe
+                                             with nothing to report (R-075). -->
+                                        <span v-if="hasPantryState(row)" class="rn__ingstate" @click.stop>
                                             <!-- "Missing" and "missing, but you have
                                                  something you could use instead" are
                                                  different answers to tonight's
@@ -557,16 +581,13 @@
                                                  pantry is not what you came to change
                                                  (owner, same round) - so it doesn't
                                                  render at all in edit mode. -->
-                                            <span
-                                                v-else-if="!ingredientsEditing && isMissingItem(row.stock_item_id)"
-                                                class="rn__chipwrap"
-                                                @click.stop
-                                            >
-                                                <RecipeMissingIngredientChip
-                                                    :entries="substitutesForRow(row)"
-                                                    :ingredient-name="ingredientLabel(row)"
-                                                />
-                                            </span>
+                                            <RecipeMissingIngredientChip
+                                                v-if="!ingredientsEditing
+                                                    && row.stock_item_id
+                                                    && isMissingItem(row.stock_item_id)"
+                                                :entries="substitutesForRow(row)"
+                                                :ingredient-name="ingredientLabel(row)"
+                                            />
                                             <!-- Owner feedback 2026-09-01 — *"ensure
                                                  missing and use soon chips are styled
                                                  the same"*. This was a solid `q-chip`
@@ -576,7 +597,7 @@
                                                  `.dora-chip--tint` from `colours.scss`. -->
                                             <span
                                                 v-if="expiringChipFor(row.stock_item_id)"
-                                                class="rn__chip dora-chip--tint"
+                                                class="dora-chip--tint"
                                                 :class="`dora-chip--tint-${expiringChipFor(row.stock_item_id)!.tone}`"
                                             >
                                                 <q-icon
@@ -586,7 +607,6 @@
                                                 <span>{{ expiringChipFor(row.stock_item_id)!.label }}</span>
                                                 <q-tooltip>{{ expiringChipFor(row.stock_item_id)!.tooltip }}</q-tooltip>
                                             </span>
-                                            <span v-if="row.notes" class="rn__ingnote">{{ row.notes }}</span>
                                         </span>
                                         <!-- Per-row actions, split by mode. Reading a
                                              recipe, the only thing you want to *do* to
@@ -717,6 +737,7 @@
                             :section-options="sectionOptions"
                             :selected-step-id="selectedStepId"
                             :highlighted-step-ids="highlightedStepIds"
+                            :show-empty-errors="stepErrorsShown"
                             @update:steps="onStepsChanged"
                             @update:selected-step-id="onSelectStep"
                         />
@@ -732,12 +753,30 @@
                                 autogrow
                                 autofocus
                                 label="Instructions"
-                                hint="One line per step reads best in cook mode."
+                                hint="Separate steps onto their own lines."
                                 @update:model-value="markDirty"
                             />
-                            <div v-else-if="freeformLines.length > 0" class="rn__free">
-                                <p v-for="(line, i) in freeformLines" :key="`f-${i}`">{{ line }}</p>
-                            </div>
+                            <!-- Owner 2026-09-03: *"I don't see why we can't
+                                 style free text steps the same as structured
+                                 in view mode. Just needs the numbers in the
+                                 circles added."* The chrome is the shared
+                                 `.dora-steps*` in `css/recipeSteps.scss`, so
+                                 this really is the same step the structured
+                                 method draws rather than a lookalike (R-001).
+                                 What it deliberately doesn't get is the tap
+                                 affordance: a free-text line has no stored
+                                 ingredient links, so there is nothing to
+                                 light up. -->
+                            <ol v-else-if="freeformLines.length > 0" class="dora-steps">
+                                <li
+                                    v-for="(line, i) in freeformLines"
+                                    :key="`f-${i}`"
+                                    class="dora-steps__item"
+                                >
+                                    <span class="dora-steps__num">{{ i + 1 }}</span>
+                                    <p class="dora-steps__body dora-steps__text">{{ line }}</p>
+                                </li>
+                            </ol>
                             <p v-else class="rn__empty">No instructions yet — tap the pencil to write them.</p>
                         </template>
 
@@ -764,12 +803,24 @@
                              steps to derive from, so they keep a real field -
                              here, inside the method, rather than in a
                              general-purpose drawer at the bottom of the page. -->
-                        <div v-if="form.steps_mode !== 'structured'" class="rn__tools">
+                        <!-- Owner 2026-09-03: *"show the tools in view mode for
+                             structured steps, same as free text and image"*.
+                             Structured tools are derived, not authored, which
+                             is why there is no field for them here - but that
+                             is an argument against the *editor*, not against
+                             the answer. Reading a structured recipe you still
+                             want to know it needs a blender, and the derived
+                             list is exactly that answer. So the block renders
+                             in every mode; only the editor stays mode-bound. -->
+                        <div
+                            v-if="form.steps_mode !== 'structured' || !methodEditing"
+                            class="rn__tools"
+                        >
                             <span class="rn__toolk">
                                 <q-icon :name="ICONS.blender" size="14px" />Tools
                             </span>
                             <BaseSelect
-                                v-if="methodEditing"
+                                v-if="methodEditing && form.steps_mode !== 'structured'"
                                 v-model="form.tool_ids"
                                 label="Tools this recipe needs"
                                 :options="toolSelectOptions"
@@ -1195,22 +1246,26 @@
      * "Free" is `unallocated_meals` — what's in the pool minus what future
      * meal-plan entries have already claimed — so the two numbers move
      * independently and the old phrasing never said what ate the difference.
-     * Three states, because they are three different facts:
-     *   nothing planned → the pool count is the whole story, drop "free" from
-     *     the sentence entirely rather than say "2 free of 2";
-     *   partly claimed  → name the claim, so 0-of-1 has a visible cause;
+     *
+     * Owner 2026-09-03 trimmed it further: *"no need to restate what the
+     * counter shows … in a case where there's nothing planned we don't
+     * care"*. The stepper beside this line already shows the pool count, so
+     * "2 in the pool" was the number read out loud, and it was the state the
+     * line appeared in most often. The line now exists only when the meal
+     * plan has a claim on this recipe — which is the only thing the stepper
+     * can't tell you:
+     *   nothing planned → no line at all;
+     *   partly claimed  → name the claim, so 0-free-with-1-in-the-pool has a
+     *     visible cause;
      *   short           → the plan wants more than exists; say how many more,
      *     which is the number you'd cook.
      * Display phrasing only — every number here is server-derived (R-003). */
     const poolLabel = computed(() => {
         const r = recipe.value;
-        if (!r) return '';
+        if (!r || r.committed_meals === 0) return '';
         const shortfall = r.committed_meals - r.available_meals;
-        if (shortfall > 0) return `0 free — your meal plan needs ${shortfall} more`;
-        if (r.committed_meals > 0) {
-            return `${r.unallocated_meals} free · ${r.committed_meals} planned`;
-        }
-        return `${r.available_meals} in the pool`;
+        if (shortfall > 0) return `Your meal plan needs ${shortfall} more`;
+        return `${r.unallocated_meals} free · ${r.committed_meals} planned`;
     });
 
     const poolTooltip = computed(() => {
@@ -1324,8 +1379,29 @@
         if (saveState.value === 'error') saveState.value = 'idle';
     }
 
-    /** Mirrors the server's `recipe_ingredient_anchor` CHECK and the name
-     *  requirement, as human sentences. Empty = safe to send. */
+    /** Steps with nothing written in them. Only counted in structured mode,
+     *  where they are the rows that get sent. */
+    const emptySteps = computed(() => (form.steps_mode === 'structured'
+        ? form.steps.filter((st) => !st.text.trim())
+        : []));
+
+    /** Set once a save has been blocked by an empty step, so the editor can
+     *  mark the offending rows. Cleared when the save goes through. */
+    const stepErrorsShown = ref(false);
+
+    /** Mirrors the server's `recipe_ingredient_anchor` CHECK, the name
+     *  requirement and `UpdateRecipeStepRequest.text`'s `min_length=1`, as
+     *  human sentences. Empty = safe to send.
+     *
+     *  The step clause is owner-reported, 2026-09-03: adding one structured
+     *  step and pressing Done produced *"Couldn't save. Couldn't save — check
+     *  the highlighted fields."* with nothing highlighted. Two faults, and
+     *  this is the real one — the request went to the server, which rejected
+     *  `steps.0.text` on a length rule the page had no local copy of, so all
+     *  the client could do was relay a generic field-error caption and then
+     *  fail to honour it. A blocker keeps the whole exchange local, names the
+     *  rows in the same voice as the ingredient one, and `stepErrorsShown`
+     *  makes "highlighted" true. */
     const saveBlockers = computed(() => {
         const out: string[] = [];
         if (!form.name.trim()) out.push('the recipe needs a name');
@@ -1335,8 +1411,24 @@
                 ? '1 ingredient has no item or text yet'
                 : `${halfBuilt} ingredients have no item or text yet`);
         }
+        const blank = emptySteps.value.length;
+        if (blank > 0) {
+            out.push(blank === 1
+                ? '1 step has nothing written in it yet'
+                : `${blank} steps have nothing written in them yet`);
+        }
         return out;
     });
+
+    /** Does this row have anything to say about the pantry? Mirrors the two
+     *  `v-if`s inside `.rn__ingstate` — they stay the authority on *which*
+     *  chip; this only decides whether the column exists at all. */
+    function hasPantryState(row: IngredientForm): boolean {
+        const id = row.stock_item_id;
+        if (!id) return false;
+        if (!ingredientsEditing.value && isMissingItem(id)) return true;
+        return expiringChipFor(id) !== null;
+    }
 
     /** True for a row that would block the save — used to point at the row
      *  rather than only naming a count in the message. */
@@ -1350,10 +1442,12 @@
         const src = recipe.value;
         if (!src || saveState.value === 'saving') return;
         if (saveBlockers.value.length > 0) {
+            stepErrorsShown.value = emptySteps.value.length > 0;
             saveState.value = 'error';
             saveMessage.value = `Not saved — ${saveBlockers.value.join(', and ')}.`;
             return;
         }
+        stepErrorsShown.value = false;
         saveState.value = 'saving';
         saveMessage.value = 'Saving…';
         try {
@@ -1381,8 +1475,12 @@
             if (idleTimer) clearTimeout(idleTimer);
             idleTimer = setTimeout(() => { saveState.value = 'idle'; }, 1600);
         } catch (err) {
+            // `toastCaption` already opens with "Couldn't save — …", so the
+            // old prefix here produced the owner-reported *"Couldn't save.
+            // Couldn't save — check the highlighted fields."* Its own copy is
+            // only the fallback for an error it can say nothing about.
             saveState.value = 'error';
-            saveMessage.value = `Couldn't save. ${toastCaption(err)}`;
+            saveMessage.value = toastCaption(err) || "Couldn't save.";
         }
     }
 
@@ -1400,6 +1498,7 @@
             hydrateRecipeForm(form, src);
             imageDirty.value = false;
             stepImagesDirty.value = false;
+            stepErrorsShown.value = false;
             dirty.value = false;
             headerEditing.value = false;
             ingredientsEditing.value = false;
@@ -1681,8 +1780,26 @@
     // ── Method ──────────────────────────────────────────────────────────
     const topLevelSteps = computed(() =>
         [...form.steps].filter((s) => !s.parent_client_id).sort((a, b) => a.sequence - b.sequence));
-    const freeformLines = computed(() =>
-        (form.instructions ?? '').split('\n').map((l) => l.trim()).filter((l) => l.length > 0));
+    /* A leading ordinal the author typed themselves — "1. ", "2) ", "3: ".
+     * Free text is where people number their own steps, and the read face now
+     * draws a numeral in a circle beside each line (owner 2026-09-03), so left
+     * alone every step reads "(1) 1. Render the pancetta" — which is what
+     * driving the seed's Carbonara showed the moment the circles went in
+     * (R-075: measure it, don't assume).
+     * Deliberately narrow: the digits must be followed by real punctuation and
+     * a space, so an ingredient-ish line like "2 eggs, beaten" keeps its 2. */
+    const LEADING_ORDINAL = /^\d{1,3}\s*[.):]\s+/;
+
+    const freeformLines = computed(() => (form.instructions ?? '')
+        .split('\n')
+        .map((l) => l.trim())
+        .filter((l) => l.length > 0)
+        .map((l) => {
+            const stripped = l.replace(LEADING_ORDINAL, '');
+            // Never strip a line down to nothing — a lone "1." is all the
+            // content that line has, odd as it is.
+            return stripped.length > 0 ? stripped : l;
+        }));
     const methodCountLabel = computed(() => {
         if (form.steps_mode === 'structured') {
             const n = topLevelSteps.value.length;
@@ -2368,7 +2485,7 @@
     .rn__ing { list-style: none; margin: 0; padding: 0; }
     .rn__ing li {
         display: grid;
-        grid-template-columns: auto 1fr auto;
+        grid-template-columns: auto 1fr auto auto;
         gap: var(--space-3, 12px);
         /* Centred, not baseline-aligned. A 36px round icon button has no text
            baseline worth aligning to, so `baseline` pinned it to the *first*
@@ -2403,7 +2520,17 @@
     /* The row's one severity signal is `RecipeMissingIngredientChip`, which
        owns its own weight; the wrapper here only spaces it off the name and
        stops the row's click handler from reaching it. */
-    .rn__chipwrap { margin-left: var(--space-1, 4px); }
+    /* The pantry-state column. Its own grid cell, so the chips land at the
+       same x on every row instead of trailing a name of unpredictable width,
+       and `margin-right` is the gap the owner asked for between them and the
+       cart button. Empty on most rows, and an empty grid cell takes no space,
+       so nothing shifts. */
+    .rn__ingstate {
+        display: flex; align-items: center; flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: var(--space-1, 4px);
+        margin-right: var(--space-2, 8px);
+    }
     .rn__chip--unlinked { background: var(--surface-sunken); color: var(--text-muted); }
     /* No hover-reveal any more. In read mode the only thing in here is the
        cart button, which the owner asked to be permanently visible; in edit
@@ -2419,10 +2546,9 @@
        indent, the lit state — moved into `RecipeStructuredMethod.vue` with
        the markup, so the read and edit faces can't drift apart (owner
        feedback 2026-08-27). What's left here is the free-text face. */
-    /* 78ch rather than the old 62ch, for the same reason the structured
-       steps widened: at 62ch the method column was mostly empty on a desktop
-       (owner: "serious lack of use of the horizontal space"). */
-    .rn__free p { margin: 0 0 var(--space-3, 12px); max-width: 78ch; line-height: 1.6; }
+    /* The free-text read face is `.dora-steps*` now (owner 2026-09-03) — its
+       measure and spacing come from `css/recipeSteps.scss` with the structured
+       method's, so the old `.rn__free` rule has nothing left to say. */
     .rn__empty { color: var(--text-muted); font-size: 0.875rem; }
 
     /* Tools, for the two modes that have no steps to derive them from. Inside

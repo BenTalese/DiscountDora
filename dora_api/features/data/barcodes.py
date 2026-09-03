@@ -271,7 +271,6 @@ _SHEET_TEMPLATE = """<!doctype html>
       text-overflow: ellipsis;
     }
     .cell .name { font-weight: 600; }
-    .cell .level { color: #666; font-size: 8pt; }
     @media print { .cell { border-color: transparent; } }
   </style>
 </head>
@@ -286,7 +285,6 @@ _SHEET_TEMPLATE = """<!doctype html>
           <img src="{{ item.qr_data_uri }}" alt="QR" />
           <div class="caption">
             <div class="name">{{ item.name }}</div>
-            <div class="level">{{ item.level_name or '' }}</div>
           </div>
         </div>
       {% endfor %}
@@ -301,7 +299,6 @@ _SHEET_TEMPLATE = """<!doctype html>
 class _SheetItem:
     id: UUID
     name: str
-    level_name: str | None
     # The QR travels inside the HTML as a data: URI rather than as an
     # <img src="/api/..."> back-reference. The sheet is opened as a blob in
     # the SPA (so the fetch carries the session cookie the way every other
@@ -342,11 +339,10 @@ def stock_item_qr_sheet():
     requested = list(_iter_requested_ids(ids_raw))
     if not requested:
         # No ids → "print all stock items" shortcut from the brief.
-        all_items = repo.get(StockItem).include("stock_level").all()
+        all_items = repo.get(StockItem).all()
         items_for_sheet = [
             _SheetItem(
                 id=i.id, name=i.name,
-                level_name=i.stock_level.name if i.stock_level else None,
                 qr_data_uri=_qr_data_uri(i.id, QR_SHEET_CELL_SIZE),
             )
             for i in sorted(all_items, key=lambda x: x.name.lower())
@@ -354,14 +350,12 @@ def stock_item_qr_sheet():
     else:
         items = (
             repo.get(StockItem)
-            .include("stock_level")
             .all(EntityField(StockItem, "id").in_(requested))
         )
         by_id = {i.id: i for i in items}
         items_for_sheet = [
             _SheetItem(
                 id=i.id, name=i.name,
-                level_name=i.stock_level.name if i.stock_level else None,
                 qr_data_uri=_qr_data_uri(i.id, QR_SHEET_CELL_SIZE),
             )
             # Honour the order the caller specified.

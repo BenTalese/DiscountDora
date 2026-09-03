@@ -15,8 +15,7 @@
             v-if="modelValue.length === 0"
             class="recipe-step-images-editor__empty dora-text-muted q-mb-sm"
         >
-            No images yet. Add photos of your steps in the order you want to cook them.
-            Cook mode will show them as a scrollable gallery.
+            {{ NO_STEP_IMAGES_COPY }}
         </div>
 
         <!-- Owner feedback 2026-08-27 — the same grid of small rounded tiles
@@ -84,6 +83,7 @@
     import { ICONS } from 'src/style/icons';
     import ImageSourcePicker from 'src/components/ImageSourcePicker.vue';
     import type { ProcessedImage } from 'src/services/files/imageService';
+    import { NO_STEP_IMAGES_COPY } from 'src/components/recipes/recipeStepImageEditorTypes';
     import type { EditableStepImage } from 'src/components/recipes/recipeStepImageEditorTypes';
 
     const props = defineProps<{

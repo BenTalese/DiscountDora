@@ -2767,6 +2767,72 @@ exceptions, which still must be commented) · **Source** (where it was establish
 - **Established by:** the cook-mode nav row, 2026-09-03 — the second sighting of
   "the CSS was fine and did nothing", one week after FU-764. See ADR-072.
 
+### R-076 — A derived figure never rests on a fact the data does not record
+- **Rule:** when a calculation needs a quantity nobody stored, it does **not** get
+  to assume a plausible value. Return "unknown", give the gap a reason code, and
+  surface it — a coverage ratio, an explanatory chip, a blank where a number would
+  have been. Fill the gap properly by *recording the missing fact* (a real column,
+  set from real data), not by picking a default that is right on the example in
+  front of you.
+- **Why:** an unknown rendered as a confident number is undetectable. It passes
+  review, it passes the type-checker, it passes the tests written by whoever made
+  the assumption, and the only person who can catch it is a user who happens to
+  know the right answer. Recipe costing has now produced three of these from one
+  root cause. (1) "$4.20 per bottle" × "200 ml" billed **$840**, and a
+  two-ingredient seed recipe reported **$1590**. (2) The fix converted units but
+  kept the counted side pass-through, so `pack_amount` claimed every pack holds
+  exactly one countable thing — true of a tin, false of the seed's *Free Range
+  Eggs 12pk*, and "3 yolks" was billed as three whole 700 g cartons at **$16.50**
+  off a $7.86/kg shelf price (owner, 2026-09-03). (3) The same code sold a `dozen`
+  for the price of one. Each was a different guess standing in for "how many of
+  these are in there?", which nothing in the schema answered.
+- **Apply:** name the missing quantity out loud and ask whether a column holds it.
+  If one does (`Product.pack_count`, a count-dimension `size_unit`), read it — and
+  **backfill the data** where the fact was only ever written in prose, as the eggs
+  product had "12pk" in its *name* and nowhere queryable. If nothing holds it,
+  return `None` and a reason the UI can render. Prefer narrowing coverage to
+  widening error: "Priced 3 of 5" is a smaller failure than a wrong total, because
+  the reader can see it.
+- **Violation signal:** a default that happens to be right for the row you tested;
+  a magic `1` standing in for a count; a comment that says "assume"; two sibling
+  code paths where one reports a gap and the other guesses (the price-observation
+  branch got this right in 2026-08-19 and the offer branch beside it did not,
+  which is how the bug survived a fix aimed straight at it).
+- **Established by:** the recipe cost estimator, 2026-09-03. See ADR-073.
+
+### R-077 — An unavailable capability names the condition that blocks it, not the browser
+- **Rule:** when the UI reports that something can't be done here, the message
+  must name the **actual blocking condition** it tested. If the check was "did
+  `beforeinstallprompt` fire?", the honest answer is not "this browser doesn't
+  support installing" — it is whichever of *not a secure context*, *already
+  installed*, or *this browser genuinely lacks it* is true. Test for the
+  distinguishable causes and branch the copy; where a cause can't be
+  distinguished, say what you actually know rather than the most likely story.
+- **Why:** a wrong cause is worse than no cause, because it sends the user to fix
+  the wrong thing. Dora has now produced three of these, one per page. (1)
+  Settings → Voice told Firefox users the app "doesn't expose the Web Speech API",
+  which reads as a bug report about Dora when speech *recognition* is a browser
+  capability Firefox has never shipped. (2) The device-voice card said "always
+  available" when a browser can expose `SpeechSynthesis` and hold zero voices — a
+  dead control failing silently. (3) About → *Install as an app* said "Install
+  isn't available in this browser. Try Chrome on Android" to an owner already in
+  Chrome; the real cause was that a self-hosted Dora served over plain `http://`
+  on the LAN is not a **secure context**, so `beforeinstallprompt` never fires in
+  *any* browser (owner, 2026-09-03). The copy sent him to a browser that would
+  behave identically.
+- **Apply:** before writing "not supported here", enumerate what could make the
+  check fail and test the ones you can (`window.isSecureContext`, a feature's own
+  presence, an empty result from a present API, an install-wide flag). Give each
+  distinguishable cause its own sentence, and say what to *do*, not just what
+  isn't happening. Fold the check into a named helper beside the capability
+  (`installUnavailableReason()`) so the branch is testable and the next surface
+  reuses it rather than re-deriving it.
+- **Violation signal:** copy naming a browser or a platform where the code tested
+  neither; a "try X instead" that would fail the same way; a single `v-else`
+  carrying the message for several unrelated failure modes; any sentence of the
+  form "your browser doesn't support…" written from a check that never asked the
+  browser anything.
+
 ## ADR process (evaluate every task)
 
 At the end of each work unit, ask: **did this task make or rely on a decision that
@@ -5023,3 +5089,57 @@ A non-binding cookbook of solutions to recurring problems. Not rules — just a
   have passed this, and did. Costs one extra `page.evaluate` per layout claim.
 - **Promotes rule:** R-075.
 
+### ADR-073 — Unpriceable is a result, not a number to invent (promotes R-076)
+- **Date / task:** 2026-09-03 (owner feedback batch — recipe view item 13)
+- **Status:** accepted
+- **Context:** The owner asked how "3 yolks" of an ingredient shown at $7.86/kg
+  came to **$16.50**. The arithmetic was sound and the premise was not: a counted
+  ingredient is multiplied by `UnitPrice.pack_amount`, which the offer path set to
+  the shelf price for *every* product regardless of how it is sized. So a 700 g
+  carton of eggs was modelled as one countable egg, and three of them cost three
+  cartons. The price-observation path twenty lines above had already reached the
+  opposite conclusion for the same question — it only sets a per-item price when
+  the observed unit is a count — so the codebase held both answers at once.
+- **Decision:** One helper, `_item_price`, owns "what does one of these cost?" and
+  is allowed to answer **no**. It reads `pack_count` first, then a sizeless
+  product, then a count-dimension size (dividing by the unit's own factor, so a
+  `dozen` is twelve); a pack measured in mass or volume with no recorded count is
+  `None`, and the ingredient is reported `unit_mismatch` rather than billed. Both
+  price paths use it. Separately, the seeds now record `pack_count = 12` on the
+  eggs product, so the owner's case resolves to a *correct* $0.46 an egg rather
+  than merely to a gap.
+- **Consequences:** Coverage narrows where the data is thin: "2 tins" of a product
+  sized `400 g` with no `pack_count` is now unpriced where it used to (correctly,
+  by luck) bill two packs. That is the deliberate trade — the same data shape
+  cannot distinguish a tin from a carton, and the visible failure is the safer
+  one. It also creates a real follow-up: `pack_count` is not on
+  `CreateProductRequest`, so there is currently no way to record the fact that
+  restores that coverage through the API (**FU-856**).
+- **Promotes rule:** R-076.
+
+### ADR-074 — "Not supported in this browser" is a diagnosis, and it has to be earned (promotes R-077)
+- **Date / task:** 2026-09-03 (owner feedback batch — settings)
+- **Status:** accepted
+- **Context:** The owner reported that About → *Install as an app* "always says
+  unavailable even in chrome, when testing on mobile with docker install on
+  server". The page rendered that line from a single `v-else`: no deferred
+  `beforeinstallprompt` event, therefore "this browser can't". But that event is
+  gated on a **secure context**, and a Docker install reached at
+  `http://192.168.x.x:8080` is not one — so the check had never asked anything
+  about the browser, and its advice ("try Chrome on Android, Edge on Windows")
+  pointed at browsers that would do exactly the same thing. This is the third
+  capability message in the app to blame the browser for something else; the two
+  Voice ones were corrected the same way on 2026-08-27/29 without the lesson
+  being written down, which is why it recurred.
+- **Decision:** `installUnavailableReason()` sits beside the PWA lifecycle hooks
+  and returns `'insecure-context' | 'browser'`; `PwaInstallPrompt` branches on it,
+  and the insecure-context copy names HTTPS and a reverse proxy as the fix. The
+  generalised rule is R-077 — an unavailable-capability message names the
+  condition the code actually tested.
+- **Consequences:** One more branch per capability message, and a helper to keep
+  in step with the browser's own install-eligibility rules (a manifest or
+  service-worker problem still lands in `'browser'`, which is honest but coarse).
+  The payoff is that the self-host story stops looking broken: the single most
+  likely reason a self-hosted Dora can't be installed is now stated, with the fix,
+  instead of being misattributed to the user's browser choice.
+- **Promotes rule:** R-077.

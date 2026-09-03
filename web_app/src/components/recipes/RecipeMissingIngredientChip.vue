@@ -12,7 +12,10 @@
         :type="hasSwaps ? 'button' : undefined"
         :aria-label="`${label} — ${ingredientName}`"
     >
-        <q-icon :name="state === 'ready' ? ICONS.swap_horiz : ICONS.warning" size="14px" />
+        <q-icon
+            :name="state === 'ready' ? ICONS.swap_horiz : ICONS.warning"
+            :size="state === 'ready' ? '16px' : '14px'"
+        />
         <span>{{ label }}</span>
         <q-icon v-if="hasSwaps" :name="ICONS.expand_more" size="14px" />
 
@@ -144,13 +147,13 @@
         switch (state.value) {
             case 'ready':
                 return readyCount.value === 1
-                    ? 'Out of stock, but you have something you could use instead. Tap to see it.'
-                    : `Out of stock, but you have ${readyCount.value} things you could use instead. Tap to see them.`;
+                    ? 'Out of stock, but you have something you could use instead.'
+                    : `Out of stock, but you have ${readyCount.value} things you could use instead.`;
             case 'swaps':
                 return 'Out of stock. There are recorded alternatives, but you\'d have to buy those too — tap to see them.';
             case 'out':
             default:
-                return 'Out of stock, with nothing recorded to use instead. A low ingredient still counts as one you have.';
+                return 'Out of stock. No substitutes linked.';
         }
     });
 </script>

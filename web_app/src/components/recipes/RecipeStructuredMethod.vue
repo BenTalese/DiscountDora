@@ -25,11 +25,11 @@
         that use it light up here.
     -->
     <div class="rsm">
-        <ol v-if="topLevelSteps.length > 0" class="rsm__steps">
+        <ol v-if="topLevelSteps.length > 0" class="dora-steps">
             <li
                 v-for="(step, stepIndex) in topLevelSteps"
                 :key="step.client_id"
-                class="rsm__step"
+                class="dora-steps__item rsm__step"
                 :class="{
                     'rsm__step--lit': isLit(step.client_id),
                     'rsm__step--editing': editing,
@@ -41,7 +41,7 @@
                      column of its own would be a fourth thing competing with
                      the text for the width the owner asked us to give back. -->
                 <span
-                    class="rsm__num"
+                    class="dora-steps__num rsm__num"
                     :class="{ 'rsm__num--grab': editing }"
                     v-bind="editing ? dnd.bind(step).handleProps : {}"
                 >
@@ -49,12 +49,12 @@
                     <q-tooltip v-if="editing">Drag to reorder</q-tooltip>
                 </span>
 
-                <div class="rsm__content">
+                <div class="dora-steps__body rsm__content">
                     <!-- ── Read ─────────────────────────────────────────── -->
                     <template v-if="!editing">
                         <button
                             type="button"
-                            class="rsm__text rsm__pick"
+                            class="dora-steps__text rsm__text rsm__pick"
                             :aria-pressed="selectedStepId === step.client_id"
                             :aria-label="`Step ${stepIndex + 1} — highlight the ingredients it uses`"
                             @click="onPick(step.client_id)"
@@ -69,6 +69,14 @@
 
                     <!-- ── Edit ─────────────────────────────────────────── -->
                     <template v-else>
+                        <!-- The server rejects a step with no text
+                             (`text: Field(min_length=1)`), so the row that
+                             will block the save marks itself rather than
+                             leaving the page to report a count. Only after a
+                             save has actually been blocked: a step is empty
+                             the instant you add it, and painting it red then
+                             would be scolding you for pressing the button we
+                             offered. -->
                         <q-input
                             :model-value="step.text"
                             type="textarea"
@@ -76,6 +84,8 @@
                             outlined
                             dense
                             :label="`Step ${stepIndex + 1}`"
+                            :error="showEmptyErrors && !step.text.trim()"
+                            error-message="Write the step, or remove it."
                             @update:model-value="(v) => patch(step, { text: String(v ?? '') })"
                         />
                         <q-input
@@ -173,7 +183,7 @@
 
                     <!-- Sub-steps. The rule down their left is positioned so
                          it runs through the centre of the parent's numeral
-                         (owner ask) — see `--rsm-num` in the stylesheet. -->
+                         (owner ask) — see `--dora-step-num` in `css/recipeSteps.scss`. -->
                     <ol v-if="subStepsOf(step).length > 0" class="rsm__substeps">
                         <li
                             v-for="(sub, subIndex) in subStepsOf(step)"
@@ -186,15 +196,15 @@
                             v-bind="editing ? dnd.bind(sub).rowProps : {}"
                         >
                             <span
-                                class="rsm__num rsm__num--sub"
+                                class="dora-steps__num rsm__num rsm__num--sub"
                                 :class="{ 'rsm__num--grab': editing }"
                                 v-bind="editing ? dnd.bind(sub).handleProps : {}"
                             >{{ subIndex + 1 }}</span>
-                            <div class="rsm__content">
+                            <div class="dora-steps__body rsm__content">
                                 <template v-if="!editing">
                                     <button
                                         type="button"
-                                        class="rsm__text rsm__pick"
+                                        class="dora-steps__text rsm__text rsm__pick"
                                         :aria-pressed="selectedStepId === sub.client_id"
                                         :aria-label="`Sub-step ${subIndex + 1} of step ${stepIndex + 1} — highlight the ingredients it uses`"
                                         @click="onPick(sub.client_id)"
@@ -214,6 +224,8 @@
                                         outlined
                                         dense
                                         :label="`Sub-step ${subIndex + 1}`"
+                                        :error="showEmptyErrors && !sub.text.trim()"
+                                        error-message="Write the step, or remove it."
                                         @update:model-value="(v) => patch(sub, { text: String(v ?? '') })"
                                     />
                                     <q-input
@@ -321,9 +333,6 @@
             </li>
         </ol>
 
-        <p v-else-if="!editing" class="rsm__empty">
-            No steps yet — tap Edit to add them.
-        </p>
         <p v-else class="rsm__empty">
             No steps yet. Add one to link ingredients and tools to it and to get
             per-step cook mode — or switch the step style to free text.
@@ -366,9 +375,14 @@
         ToolOption,
     } from 'src/components/recipes/recipeStepEditorTypes';
 
-    const props = defineProps<{
+    const props = withDefaults(defineProps<{
         steps: EditableStep[];
         editing: boolean;
+        /** Mark steps with no text. The page turns this on once a save has
+         *  been blocked by one, so the message it shows has something to
+         *  point at (owner 2026-09-03: *"nothing is actually highlighted
+         *  red, so I don't know what it's on about"*). */
+        showEmptyErrors?: boolean;
         ingredientOptions: IngredientOption[];
         toolOptions: ToolOption[];
         sectionOptions: SectionOption[];
@@ -377,7 +391,7 @@
         /** Steps that use the ingredient the reader tapped on the rail. The
          *  page owns the mapping; this component only paints it. */
         highlightedStepIds: string[];
-    }>();
+    }>(), { showEmptyErrors: false });
 
     const emit = defineEmits<{
         (e: 'update:steps', value: EditableStep[]): void;
@@ -583,36 +597,30 @@
 </script>
 
 <style scoped lang="scss">
-    /* The numbering geometry, named once because three things depend on it:
-       the bullet, the content column, and the sub-step rule that has to run
-       through the bullet's centre (owner ask 2026-08-27). */
+    /* The list, the numeral circle, the content column and the text measure
+       are the shared `.dora-steps*` in `css/recipeSteps.scss` — the free-text
+       method on the recipe page draws the same step (owner 2026-09-03). Only
+       what is structured-only is below: sub-steps, the lit state, the editing
+       ground, timers and hints.
+       `--dora-step-num` / `--dora-step-gap` are declared on `.dora-steps` and
+       inherit down here, which is what the sub-step rule aligns against. */
     .rsm {
-        --rsm-num: 34px;
-        --rsm-gap: var(--space-4, 16px);
         --rsm-sub-num: 24px;
     }
 
-    .rsm__steps,
     .rsm__substeps {
         list-style: none;
         margin: 0;
         padding: 0;
     }
-    .rsm__steps {
-        display: flex;
-        flex-direction: column;
-        gap: var(--space-4, 16px);
-    }
-    .rsm__step,
     .rsm__sub {
         display: grid;
-        grid-template-columns: var(--rsm-num) 1fr;
-        gap: var(--rsm-gap);
+        grid-template-columns: var(--rsm-sub-num) 1fr;
+        gap: var(--space-3, 12px);
         align-items: start;
         padding: var(--space-2, 8px);
         border-radius: var(--radius-md, 6px);
     }
-    .rsm__sub { grid-template-columns: var(--rsm-sub-num) 1fr; gap: var(--space-3, 12px); }
     /* Editing rows carry fields, so they need breathing room the read rows
        don't — and a ground of their own, so it's obvious which block is live. */
     .rsm__step--editing {
@@ -621,15 +629,6 @@
         padding: var(--space-3, 12px);
     }
 
-    .rsm__num {
-        display: flex; align-items: center; justify-content: center;
-        width: var(--rsm-num); height: var(--rsm-num);
-        border-radius: var(--radius-full, 50%);
-        background: var(--brand-primary-soft);
-        color: var(--brand-primary);
-        font-weight: 700; font-variant-numeric: tabular-nums;
-        user-select: none;
-    }
     /* A sub-step is the same thing one level in, so it is the same bullet
        with the fill taken away rather than a second colour (owner: "the
        colouring choice between main steps and sub steps is a bit odd").
@@ -645,19 +644,15 @@
     .rsm__num--grab { cursor: grab; }
     .rsm__num--grab:active { cursor: grabbing; }
 
-    .rsm__content { min-width: 0; }
-
-    /* Read face. The old cap was 62ch, which left most of the method column
-       empty on a desktop (owner: "serious lack of use of the horizontal
-       space"); 78ch still keeps a readable measure on a wide monitor. */
+    /* Read face. The measure and line-height come from `.dora-steps__text`;
+       what is left here is the button reset and the tap affordance, which
+       only this face has (a free-text step isn't selectable). */
     .rsm__text {
         appearance: none; background: none; border: 0;
         font: inherit; color: inherit; text-align: left;
         display: block; width: 100%;
-        max-width: 78ch;
-        margin: 0; padding: var(--space-1, 4px) var(--space-2, 8px);
+        padding: var(--space-1, 4px) var(--space-2, 8px);
         margin-left: calc(-1 * var(--space-2, 8px));
-        line-height: 1.6;
         border-radius: var(--radius-sm, 4px);
         cursor: pointer;
         transition: background var(--motion-fast, 100ms) ease;
@@ -716,8 +711,8 @@
        `num / 2`; a 2px border wants its left edge 1px before that. */
     .rsm__substeps {
         margin: var(--space-3, 12px) 0 0;
-        margin-left: calc((var(--rsm-num) / 2) - var(--rsm-num) - var(--rsm-gap) - 1px);
-        padding-left: calc(var(--rsm-num) - (var(--rsm-num) / 2) + var(--rsm-gap) + var(--space-3, 12px));
+        margin-left: calc((var(--dora-step-num) / 2) - var(--dora-step-num) - var(--dora-step-gap) - 1px);
+        padding-left: calc(var(--dora-step-num) - (var(--dora-step-num) / 2) + var(--dora-step-gap) + var(--space-3, 12px));
         border-left: 2px solid var(--border-default);
         display: flex; flex-direction: column;
         gap: var(--space-2, 8px);

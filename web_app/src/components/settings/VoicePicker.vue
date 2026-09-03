@@ -27,10 +27,7 @@
                 />
             </div>
             <div class="voice-card__desc">
-                Uses your device or browser's built-in text-to-speech. No
-                download needed, but it sounds robotic next to the neural
-                voices — and it only exists where the browser has voices
-                installed.
+                Uses your device or browser's built-in text-to-speech.
             </div>
             <!-- "Always available" was the old copy and it wasn't true: a
                  browser can expose SpeechSynthesis and hold zero voices, in

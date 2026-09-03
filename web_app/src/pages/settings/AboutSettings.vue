@@ -49,9 +49,7 @@
         <SettingsSection>
             <template #title>Install as an app</template>
             <template #description>
-                Adds a Dora icon to your home screen or launcher and runs her
-                in her own window — no browser chrome, and she opens straight
-                to your kitchen.
+                Adds a Dora icon to your home screen or launcher.
             </template>
 
             <div class="about-install">
@@ -67,8 +65,8 @@
         <SettingsSection>
             <template #title>Project &amp; support</template>
             <template #description>
-                Dora is free and open-source (MIT). Contributions, bug reports,
-                and a little support all help.
+                Dora is a hobby project — free and open-source (MIT).
+                Contributions, bug reports, and a little support all help.
             </template>
 
             <q-list class="about-list">
@@ -188,11 +186,6 @@
             </q-list>
         </SettingsSection>
 
-        <hr class="settings-divider" />
-
-        <p class="about-footer dora-text-muted">
-            Dora is a hobby project. The mascot is doing its best.
-        </p>
     </div>
 </template>
 
@@ -281,6 +274,8 @@
         if (!s) return [];
         const out = [
             { value: s.stock_items.total, label: s.stock_items.total === 1 ? 'item tracked' : 'items tracked' },
+            { value: s.stock_items.low_stock, label: 'running low' },
+            { value: s.stock_items.out_of_stock, label: 'out of stock' },
             { value: s.recipes.total, label: s.recipes.total === 1 ? 'recipe' : 'recipes' },
             { value: s.shopping_lists.total, label: s.shopping_lists.total === 1 ? 'shopping list' : 'shopping lists' },
         ];
@@ -401,6 +396,16 @@
         grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
         gap: 10px;
     }
+    /* Two fixed columns on a phone, and an odd tile at the end spans both so
+       the block never ends on a lonely half-row (owner 2026-09-03). */
+    @media (max-width: 599px) {
+        .about-stats {
+            grid-template-columns: repeat(2, 1fr);
+        }
+        .about-stat:last-child:nth-child(odd) {
+            grid-column: 1 / -1;
+        }
+    }
     .about-stat {
         background: var(--surface-sunken);
         border-radius: 10px;
@@ -445,10 +450,6 @@
         .about-hero__title { font-size: 1.25rem; }
     }
 
-    .about-footer {
-        margin: 4px 0 0;
-        font-size: 0.8125rem;
-    }
     .settings-divider {
         border: 0;
         height: 1px;

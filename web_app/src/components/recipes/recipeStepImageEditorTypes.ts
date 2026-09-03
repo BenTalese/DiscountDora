@@ -3,6 +3,12 @@
 // import the row type from a plain .ts module (mirrors recipeStepEditorTypes
 // — cleaner than importing a type out of an SFC's <script setup>).
 
+/** The empty-state copy, shared by the viewer and the editor so the block
+ *  says the same thing whichever face you're on (owner 2026-09-03; R-003). */
+export const NO_STEP_IMAGES_COPY =
+    'No images yet. Add photos of your steps in the order you want to cook them. '
+    + 'Cook mode will show them as a scrollable gallery.';
+
 export type EditableStepImage = {
     /** Unique key for vuedraggable + row tracking. crypto.randomUUID() for
      *  freshly-uploaded rows; the existing RecipeStepImage.image_id when

@@ -27,6 +27,9 @@ export interface RecipeDisplay {
     ingredientCount: ComputedRef<number>;
     /** Per-serving kcal + whether the figure is solid enough to judge on. */
     kcal: ComputedRef<{ value: number | null; judgeable: boolean }>;
+    /** Why the kcal figure carries an asterisk. Only meaningful when
+     *  `kcal.judgeable` is false. */
+    kcalTooltip: ComputedRef<string>;
     /** "Weeknight dinners · Italian · Dinner · Evening" — collection first,
      *  case-insensitively de-duplicated (DR-4). */
     metaLine: ComputedRef<string>;
@@ -64,6 +67,12 @@ export function useRecipeDisplay(recipe: () => Recipe): RecipeDisplay {
         value: recipe().kcal_per_serving ?? null,
         judgeable: recipe().kcal_is_reliable === true,
     }));
+
+    // Owner 2026-09-03: "remove 'open it to see what's missing'". The chip is
+    // *on* the recipe you would open, so the instruction was telling you to do
+    // the thing you were already doing. Lives here rather than in the two
+    // components that render it (R-003) — it was the same sentence twice.
+    const kcalTooltip = computed(() => 'Worked out from only part of this recipe.');
 
     const metaLine = computed(() => {
         // DR-4 (FU-578 #14): dedupe case-insensitively so a recipe whose
@@ -158,8 +167,8 @@ export function useRecipeDisplay(recipe: () => Recipe): RecipeDisplay {
         const r = recipe();
         const list = (r.inference_stock_item_names ?? []).join(', ');
         return r.inference_hint === 'at_risk'
-            ? `Everything's recorded as in stock, but Dora thinks you may have run out of ${list}. Nothing has changed — check the item if you want to be sure.`
-            : `Recorded as missing ${list}, but Dora thinks you're back in stock. Your recorded levels still decide what counts as cookable.`;
+            ? `Everything's recorded as in stock, but Dora thinks you may have run out of ${list}.`
+            : `Recorded as missing ${list}, but Dora thinks you're back in stock.`;
     });
 
     const initial = computed(() => (recipe().name.trim()[0] ?? '?').toUpperCase());
@@ -174,6 +183,7 @@ export function useRecipeDisplay(recipe: () => Recipe): RecipeDisplay {
         totalTime,
         ingredientCount,
         kcal,
+        kcalTooltip,
         metaLine,
         tagNames,
         missingIds,

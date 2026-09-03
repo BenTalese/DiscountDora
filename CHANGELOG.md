@@ -6,6 +6,15 @@ semver — major bumps signal schema or breaking-config changes.
 ## [Unreleased]
 
 ### Added
+- **Settings knows why it can't install Dora as an app (2026-09-03).** The
+  About page used to answer "Install isn't available in this browser. Try Chrome
+  on Android" — including to people already in Chrome. The real reason a
+  self-hosted Dora often can't be installed is that she's being served over
+  plain `http://`, which no browser will offer an install prompt for; the page
+  now says exactly that, and points at HTTPS as the fix.
+- **Nutrition matching carries an outstanding-work count in the sidebar**, the
+  same as Unlinked ingredients beside it.
+
 - **Two new themes, and a neutral one at last (2026-09-03).** The picker had
   five families and all five had opinions. Now there are seven:
   - **Salt & Pepper** — the minimal one. A single warm grey hue carries the
@@ -25,6 +34,101 @@ semver — major bumps signal schema or breaking-config changes.
   three, it says so and counts one. It turns red when you've recorded the item
   as **out** (that meal can't be cooked), amber when **low** (it might not
   stretch), and stays quiet otherwise.
+
+### Changed
+- **Settings — the 2026-09-03 owner sweep.** One pass across nine pages,
+  driven live at phone and desktop width:
+  - **Toggles stay on the right on a phone.** Notifications and Assistant used
+    to drop every switch onto its own line below its label, so the pages read
+    as a column of orphaned controls. Rows holding a narrow control now keep
+    the two-column shape at every width; rows holding a text field still stack,
+    because those genuinely need the room.
+  - **The Zero-Input Pantry switches are named for where they show up** —
+    *Stock overview hints*, *Cookbook hints*, *Shopping list hints*, *Meal
+    planner hints* — and each one's paragraph moved into an info chip. The
+    section is now five short lines instead of five paragraphs.
+  - **Stores works like every other list in Settings.** The pencil renames in
+    place instead of opening a dialog, and the logo is changed by clicking the
+    logo — the same affordance as your profile picture and a recipe photo.
+  - **Stock locations reads as one tree again.** Zones and areas both count
+    plain items (the "3 here · 11 in total" arithmetic is gone), the overflow
+    menu sits at the right edge on a phone the way sections and areas already
+    did, areas gained the "View items" action they were missing, and "+ Area"
+    and "+ Section" are finally the same control.
+  - **QR labels, Unlinked ingredients and Nutrition matching share the app's
+    card**, not Quasar's default box, and their rows stack properly on a phone
+    — the unlinked-ingredient picker used to be squeezed into an unusable
+    sliver with the buttons overlapping it.
+  - **"Create new" on an unlinked ingredient opens the real add-item dialog**,
+    prefilled with the ingredient's name. It used to create the item silently
+    and report every rejection as "Could not create + link" — including the
+    common one, *a stock item with that name already exists*, which is what you
+    hit on ingredients used in several recipes. The dialog names the problem and
+    lets you fix it.
+  - **Nutrition matching: "Search" and "Not a food" look like buttons**, the
+    printable QR sheet and its picker no longer print a stock level nobody
+    needs on a label, and the *Money* page stops explaining the budget twice.
+  - Copy trims throughout, and the recipe taxonomy pages (Cuisines, Categories,
+    Tools, Meal slots, Dietary tags) no longer prefix "Recipe" onto their
+    mobile page titles.
+- **About shows six tiles at a glance** — items tracked, running low, out of
+  stock, recipes, shopping lists, meals coming up — so the block fills evenly on
+  a phone instead of ending on a half-row.
+
+- **Free-text recipe steps are numbered like structured ones (2026-09-03).** Read
+  mode gives them the same numeral-in-a-circle and the same measure the
+  structured method uses — one shared stylesheet, so the two can't drift — and a
+  "1. " you typed yourself is no longer printed next to the circle Dora drew.
+- **The missing / swap chip moved off the ingredient's name.** It sits in its own
+  column just left of the shopping-cart button now, so it lands in the same place
+  on every row instead of trailing a name of unpredictable length. The swap glyph
+  is 2px larger; the "Use soon" chip moved with it.
+- **Tools show while you're reading a structured recipe.** They're worked out
+  from the steps that use them, so there's no field to edit — but there was no
+  reason to hide the answer, and free-text and photo recipes had shown theirs all
+  along.
+- **Quieter wording in a few places the app was talking too much.**
+  - The meal-pool line no longer restates the counter beside it: with nothing
+    planned it says nothing at all, and it only speaks up when the meal plan has
+    a claim ("Your meal plan needs 2 more").
+  - "Out of stock. No substitutes linked." replaces a sentence that also
+    re-explained the low-vs-missing rule; "tap to see it" is gone from the
+    swap-ready tooltip, and "open it to see what's missing" from the kcal one.
+  - Dora's belief tooltip drops its two trailing reassurances.
+  - A cart button on a recipe row says "On a list — click to remove" rather than
+    "On another list", which had nothing to be *another* than.
+  - The free-text method hint reads "Separate steps onto their own lines."
+  - The empty structured-method and photo blocks say the same thing whether
+    you're reading or editing.
+- **Dora's belief chip sits straight in the compact cookbook row.** With its
+  label suppressed for width, the glyph was inheriting the margins that exist to
+  space an icon off words that weren't there, and sat hard against the left edge.
+
+### Fixed
+- **Downloading one of Dora's voices works again (2026-09-03).** Every voice
+  download failed with the raw error `name 'onnx_tmp' is not defined`: the step
+  that moves a finished download into place had drifted into the function that
+  reports progress, where those filenames don't exist, so the failure fired the
+  moment the first progress tick arrived. Nothing had ever tested the download
+  path; it is pinned now.
+- **Three egg yolks no longer cost $16.50 (2026-09-03).** The recipe cost
+  breakdown priced a *counted* ingredient by multiplying it by the whole pack's
+  shelf price, whatever the pack was. Against *Free Range Eggs 12pk* — a 700 g
+  carton at $5.50 — "3 yolks" therefore meant three cartons. Dora now works out
+  what **one** of something costs before multiplying, and if nothing in the data
+  says how many are in the pack, the ingredient is reported as unpriced ("Units
+  don't match the price") instead of guessed at. Where the count *is* known the
+  answer is better than before: the seeded egg carton now records that it holds
+  twelve, so three eggs cost $1.38, and a price given "per dozen" is divided by
+  twelve rather than charged whole.
+- **Adding a step and pressing Done now tells you what's wrong, and shows you
+  where.** It used to fail with *"Couldn't save. Couldn't save — check the
+  highlighted fields."* — the message said itself twice, and nothing on the page
+  was highlighted. The empty step is caught before the request goes anywhere:
+  the bar reads "Not saved — 1 step has nothing written in it yet", the step
+  itself turns red with "Write the step, or remove it", and the method stays open
+  so you can fix it. The doubled sentence is gone from every save failure on the
+  page.
 
 ### Changed
 - **Cook mode's header is one line again, so the step is on screen sooner

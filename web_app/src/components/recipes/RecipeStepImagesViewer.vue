@@ -19,7 +19,7 @@
         place that knows the configured backend base (R-003).
     -->
     <div v-if="images.length === 0" class="rsiv__empty">
-        No step photos yet.
+        {{ NO_STEP_IMAGES_COPY }}
     </div>
 
     <template v-else>
@@ -81,6 +81,7 @@
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
     import { ICONS } from 'src/style/icons';
+    import { NO_STEP_IMAGES_COPY } from 'src/components/recipes/recipeStepImageEditorTypes';
     import type { EditableStepImage } from 'src/components/recipes/recipeStepImageEditorTypes';
 
     const props = defineProps<{

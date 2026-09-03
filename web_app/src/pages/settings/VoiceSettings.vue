@@ -44,9 +44,6 @@
                 engine, and this browser doesn't have one. It works in
                 <strong>Chrome</strong>, <strong>Edge</strong>,
                 <strong>Safari</strong> and other Chromium-based browsers.
-                <strong>Firefox has never shipped speech recognition</strong>,
-                so there's nothing to turn on here — everything else on this
-                page, including Dora's voice, still works normally.
             </SettingsNotice>
         </SettingsSection>
 

@@ -216,17 +216,17 @@ def _download_voice(voice: VoiceDef) -> None:
     )
     _fetch(voice.json_url, json_tmp, expected_sha256=None)
 
-
-def _record_progress(voice_id: str, done: int, total: int) -> None:
-    with _LOCK:
-        _PROGRESS[voice_id] = (done, total)
-
     # Atomic-ish swap: rename both only once both fetched + verified, so a
     # partial download never looks "ready". A worker reload between the
     # fetches leaves the .part files; the next download attempt overwrites
     # them in place (no orphan accumulation).
     onnx_tmp.replace(onnx)
     json_tmp.replace(json_final)
+
+
+def _record_progress(voice_id: str, done: int, total: int) -> None:
+    with _LOCK:
+        _PROGRESS[voice_id] = (done, total)
 
 
 def _fetch(url: str, tmp_path: Path, expected_sha256: str | None, on_progress=None) -> None:  # noqa: ANN001

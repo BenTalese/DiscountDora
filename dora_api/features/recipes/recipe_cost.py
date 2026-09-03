@@ -13,6 +13,19 @@ Pricing ladder per ingredient (PROPOSAL §3.2):
   2. else the stock item's price-observation unit cost (FU-216 substrate)
   3. else unpriced (contributes nothing; surfaced via the priced/total ratio)
 
+**Counting the contents of a measured pack (feedback 2026-09-03).** The same
+category error survived on the counted side. `pack_amount` — the price used
+when a recipe says "2 tins" or a bare "3" — was set to the offer price for
+*every* product, including one whose size is a mass or a volume. So "3 yolks"
+of an ingredient linked to *Free Range Eggs 700 g @ $5.50* priced as three
+whole 700 g cartons: **$16.50**, off a shelf price of $7.86/kg, which is the
+owner's report. A measured pack does not say how many countable things are
+inside it — nobody recorded what one egg weighs — so a bare count can no
+longer be priced from one. Where the count *is* recorded the answer is better
+than it was: `pack_count` ("4 × 125 g") and a count-dimension size ("12 ea")
+both give a genuine per-item price, and a `dozen` is divided by twelve rather
+than sold whole. Everything else is reported unpriced.
+
 **Unit reconciliation (feedback 2026-08-19).** It used to be pass-through —
 the ingredient quantity was multiplied by the unit price whatever the two
 units were. That is not a rough heuristic, it's a category error: a price of
@@ -48,10 +61,13 @@ class UnitPrice:
     """A price and the unit it is *per*. The unit is the half that used to be
     dropped on the floor.
 
-    `pack_amount` is the price of one whole item where that's known — a 400 g
-    tin at $1.20 has `amount=0.003 per g` **and** `pack_amount=1.20`. Recipes
-    are written both ways ("400 g of tomatoes", "2 tins of tomatoes") and only
-    one of the two prices can answer each.
+    `pack_amount` is the price of one **countable item** where that is known
+    (see `_item_price`) — a 12-egg carton at $6.00 has `amount` per egg-less
+    unit of measure **and** `pack_amount=0.50`. Recipes are written both ways
+    ("400 g of tomatoes", "2 tins of tomatoes") and only one of the two prices
+    can answer each. It is `None` when the pack is measured rather than
+    counted, because then nothing in the data says how many items are in it —
+    that is a gap we report, not one we fill in.
     """
     amount: float
     unit: str
@@ -80,6 +96,37 @@ class CostEstimate:
     lines: tuple[CostLine, ...] = ()
 
 
+def _item_price(
+    pack_price: float,
+    size_value: float | None,
+    size_unit: str | None,
+    pack_count: int | None,
+) -> float | None:
+    """The price of **one countable item**, or None when that isn't knowable.
+
+    This is the half of a price a *counted* ingredient needs ("2 tins", "3",
+    "1 onion"), and it is not the same number as the shelf price. Three ways
+    it is knowable, and one way it isn't:
+
+    * an explicit multipack count ("4 x 125 g at $4.20") - divide by it;
+    * a sizeless product - the shelf item is the item;
+    * a size expressed as a count ("12 ea", "1 dozen") - divide by the total
+      count, remembering that a `dozen` is twelve of them;
+    * a size expressed as a mass or a volume with no pack count - **unknown**.
+      "700 g of eggs" answers "what does 200 g cost?" and says nothing at all
+      about what three of them cost. Guessing here is what charged $16.50 for
+      three egg yolks (owner, 2026-09-03).
+    """
+    if pack_count is not None and pack_count > 0:
+        return pack_price / float(pack_count)
+    if not (size_value and float(size_value) > 0 and size_unit):
+        return pack_price
+    found = units.find_unit(str(size_unit))
+    if found is None or found.dimension != units.COUNT:
+        return None
+    return pack_price / (float(size_value) * found.factor)
+
+
 def _key(v) -> str:
     if isinstance(v, UUID):
         return str(v)
@@ -106,6 +153,7 @@ def _unit_price_map(repository, stock_item_ids: list) -> tuple[dict, dict]:
             link_table.c.stock_item_id,
             product_table.c.size_value,
             product_table.c.size_unit,
+            product_table.c.pack_count,
             func.min(offer_table.c.price_now).label("price_now"),
         )
         .select_from(
@@ -122,22 +170,30 @@ def _unit_price_map(repository, stock_item_ids: list) -> tuple[dict, dict]:
             link_table.c.stock_item_id,
             product_table.c.size_value,
             product_table.c.size_unit,
+            product_table.c.pack_count,
         )
     )
     offer_by_item: dict[str, UnitPrice] = {}
-    for sid, size_value, size_unit, price in db.session.execute(stmt).all():
+    for sid, size_value, size_unit, pack_count, price in db.session.execute(stmt).all():
         if price is None:
             continue
         # A sized product prices per its own size unit ("$5 / 1000 g" → $/g);
-        # a sizeless one prices per item, which is a count of "ea". Either
-        # way the offer price itself is what one of them costs on the shelf,
-        # so it's always the pack price.
+        # a sizeless one prices per item, which is a count of "ea".
+        #
+        # The *item* price is a separate question, and the answer used to be
+        # "the shelf price, always" — which silently claimed that one pack
+        # holds one countable thing. True of a tin, false of a 700 g carton of
+        # eggs, and the recipe page charged $16.50 for three yolks on the
+        # strength of it. `_item_price` answers it honestly or not at all,
+        # which is the same stance the observation branch below already took.
         if size_value and float(size_value) > 0 and size_unit:
-            unit_price = UnitPrice(
-                float(price) / float(size_value), str(size_unit), float(price),
-            )
+            amount = float(price) / float(size_value)
+            unit = str(size_unit)
         else:
-            unit_price = UnitPrice(float(price), "ea", float(price))
+            amount, unit = float(price), "ea"
+        unit_price = UnitPrice(
+            amount, unit, _item_price(float(price), size_value, size_unit, pack_count),
+        )
         prev = offer_by_item.get(_key(sid))
         if prev is None or _cheaper(unit_price, prev):
             offer_by_item[_key(sid)] = unit_price
@@ -158,7 +214,11 @@ def _unit_price_map(repository, stock_item_ids: list) -> tuple[dict, dict]:
         # price. A measure observation ("$6 for 4 L") spans an unknown number
         # of packs, so it can't yield one.
         found = units.find_unit(cost.unit)
-        pack = cost.amount if found is not None and found.dimension == units.COUNT else None
+        # `/ factor` for the same reason `_item_price` divides: "$60 per dozen"
+        # is a per-item price of $5, not $60.
+        pack = (cost.amount / found.factor
+                if found is not None and found.dimension == units.COUNT
+                else None)
         obs_cost_by_item[sid_key] = UnitPrice(cost.amount, cost.unit, pack)
 
     return offer_by_item, obs_cost_by_item
@@ -189,9 +249,12 @@ def _line_cost(ingredient, price: UnitPrice) -> float | None:
       don't know the bottle's size) is **unpriced**. Guessing here is what
       produced the $1590 Juice Bowl.
     * **By the item** — "2 tins", "1 onion", or a bare "2". Multiply by the
-      price of one whole item. Deliberately permissive about the unit itself:
-      "tins" and "cloves" aren't units we know, and don't need to be, because
-      the count is all the arithmetic needs.
+      price of one countable item. Deliberately permissive about the unit
+      itself: "tins" and "cloves" aren't units we know, and don't need to be,
+      because the count is all the arithmetic needs. But the *price* side has
+      to be a real per-item figure — a pack measured in grams doesn't say how
+      many items are in it, so that combination is **unpriced** rather than
+      billed as whole packs (feedback 2026-09-03; see `_item_price`).
     """
     qty = float(ingredient.quantity) if ingredient.quantity is not None else 1.0
     ing_unit = (getattr(ingredient, "unit", None) or "").strip()

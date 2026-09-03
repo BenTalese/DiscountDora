@@ -28,6 +28,213 @@ next.
 
 ---
 
+## 2026-09-03 (later still ×2) — **Settings, ~35 owner items: a NameError nobody could have downloaded past, and a browser blamed for HTTP**
+
+**Status:** all items complete + green + driven live at 375 and 1280. New:
+**R-077 / ADR-074**, **FU-858..861**. New shared stylesheet
+`css/settingsCards.scss`, new component `settings/LocationAddChip.vue`, new
+store `nutritionMatchingStore.ts`, new test
+`tests/test_voice_provision_download.py`. Gate: **vitest 685 / 61 files**,
+`vue-tsc` + `eslint src/` clean, **pytest 2275 passed** / 1 skipped / 1 xfailed
+with only the four pre-existing buy-verdict reds (FU-762).
+
+**The headline is the voice download, and it is the least interesting bug in the
+batch — which is the point.** The owner reported *"Can't download voices
+suddenly? Getting `name 'onnx_tmp' is not defined` for all voices."* The cause is
+visible in twenty seconds of reading: `_download_voice` fetches the model and its
+sidecar into `.part` files and then renames both into place, and that trailing
+rename block had drifted into `_record_progress` — a function four lines long
+where none of `onnx_tmp`, `json_tmp`, `onnx` or `json_final` exist. So the
+NameError fired on the *first progress tick*, meaning it fired on every download,
+of every voice, always. A plain `NameError` in a module that only runs in
+production. **Nothing in `tests/` referenced `voice_provision` at all**, which is
+the whole explanation for how it shipped, so the fix comes with two tests that
+drive `on_progress` deliberately and assert no `.part` survives — per the
+verification stance this is exactly the case a test earns: a stable contract
+whose manual re-check costs a 60 MB download.
+
+**The rule that came out of it is item 2's, not item 3's.** The owner asked to
+delete the Firefox speech-recognition sentence, and separately reported that
+*"Install as app always says unavailable even in chrome, when testing on mobile
+with docker install on server"*. Those look like two unrelated copy notes. They
+are the same defect twice: a capability check that failed, reported as *"your
+browser can't"* when the code had never asked the browser anything.
+`beforeinstallprompt` is gated on a **secure context** — a Docker install reached
+at `http://192.168.x.x:8080` is not one, so the event never fires in *any*
+browser, and the page's advice ("try Chrome on Android, Edge on Windows") pointed
+at browsers that would behave identically. That is the third such message in the
+app; the two Voice ones were corrected the same way on 2026-08-27/29 and the
+lesson was never written down, which is why it recurred. Hence **R-077 /
+ADR-074**: an unavailable capability names the condition it actually tested.
+`installUnavailableReason()` now returns `'insecure-context' | 'browser'` and the
+insecure branch names HTTPS as the fix.
+
+**"Also got error creating new for one that was linked to more than one recipe"
+reproduced on the first try, live, and the correlation was real but not causal.**
+The unlinked-ingredients page's "Create new" silently POSTed the raw text as a
+stock item and reported every rejection as a bare *"Could not create + link."*
+Driving it in the pane on the top group — `Coconut milk`, used in 2 recipes —
+returned the actual reason the old toast was hiding: **"A stock item with the
+name 'Coconut milk' already exists."** The link to recipe-count is that common
+ingredients appear in many recipes *and* are exactly the ones already in your
+pantry — so the more recipes a group covers, the likelier the name collides. The
+fix isn't a better toast: "Create new" now opens the app's real
+`CreateStockItemDialog` prefilled with the name, which surfaces the field error
+and lets you rename (or notice you should have picked the existing item from the
+picker beside it). Renamed to `Coconut milk (tin)` and submitted: created, linked
+in 2 recipes, group gone, 5 rows → 4. `CreateStockItemDialog` now emits the new
+`stock_item_id` so a caller can act on it; the three existing consumers ignore
+the payload.
+
+**The mobile-toggle complaint was one media query, and it had to stay opt-in.**
+`SettingsRow` stacked *every* row below 600px. Flipping the default was tempting
+and wrong — of the 66 rows in the settings area, **30 hold a `q-input`** and
+genuinely need the width; only 23 are toggles. So there's an `inline` prop that
+opts a row out of the stack, applied to the rows the owner named, and the two
+selects that ride along (`Mode`, `Send on`) traded their `min-width` floors for
+`width` + `max-width:100%` so they can't overflow a 375px control column.
+Measured live: inline rows report `flex-direction: row` at 375, the provider
+`q-input` rows still report `column`.
+
+**Stock locations was four complaints with one shape underneath: the three levels
+of one tree spoke three visual languages.** The zone's overflow menu didn't stick
+right on a phone because `.zone-card__meta` — the thing that grew to push the
+actions over — is pulled out of the header row by the mobile media query, leaving
+nothing growing; `margin-left:auto` on the actions fixes it at every width
+(measured: zone and area menus both at a 16px right inset at 375). "+ Area" was a
+`BaseButton` ghost in the header while "+ Section" was a dashed inline chip in
+the body, so **R-001** — one `LocationAddChip`, used by both, and "+ Area" moved
+into the body where it matches. That also retires the paragraph an empty zone
+used to show explaining that zones may be flat: the affordance says it. Counts
+lost their arithmetic (`3 here · 11 in total` → `11 items`; the zone's area tally
+went entirely), and areas gained the "View items" the other two levels had.
+What the count change costs is logged as **FU-859**.
+
+**Three settings pages were the only place in the app still speaking Quasar.**
+QR labels, Unlinked ingredients and Nutrition matching all wrapped their work in
+`<q-card flat bordered>` — square-ish, hairline the theme never chose, no
+elevation, and `q-item` rows whose side sections stay beside the label at every
+width, which is precisely what squeezed the unlinked picker into a sliver with
+the buttons overlapping. `css/settingsCards.scss` is the app's card language
+(the `LocationZoneCard` statement of it) extracted once, with a row that stacks
+below 600px. Same shared-affordance precedent as `dnd.scss` / `subbar.scss` /
+`shoppingList.scss`. Verified: all three at 375 with zero horizontal overflow and
+a 10px (`--radius-lg`) card.
+
+**Two owner asks I answered rather than built.** *"If products is disabled, what
+email notifications exist?"* — none, and the section is already hidden entirely
+(`v-if="productsEnabled"`), because the weekly deals mail is the only scheduled
+email. His own follow-on (*"perhaps there is something we could email that users
+would want"*) is the real question and is **FU-860**, with the evening brief
+flagged as the cheapest candidate since it already exists and is already
+scheduled — only the channel is missing. And the About build number is **FU-861**
+(needs a version source wired through both bundle and API, not a page edit).
+
+**Next up:** FU-860 wants an owner decision before anything is built. The
+`DORA_VERIFY.md` block for this batch is short and all of it is
+device/install-shaped: a real Piper download, the Docker-over-HTTP install
+message, a real file picker on Stores, and the Notifications email rows on an
+install that actually has SMTP.
+
+---
+
+## 2026-09-03 (later still) — **Cookbook + recipe view, 15 owner items: a $16.50 omelette, and two layout fixes that only measurement caught**
+
+**Status:** all 15 complete + green + driven live at 1280 and 375. New:
+**R-076 / ADR-073**, **FU-855..857**. New shared stylesheet
+`css/recipeSteps.scss`. Gate: **vitest 685 / 61 files**, `vue-tsc` +
+`eslint src/` clean, **pytest 2273 passed** / 1 skipped / 1 xfailed with only
+the four pre-existing buy-verdict reds (FU-762). Bare `pytest` still needs
+`--basetemp`; the venv is `.venv/Scripts/python.exe`, not the PATH python.
+
+**The headline is item 13, and the owner had already done half the work.**
+*"It's saying that eggs are 7.86/kg and the app has decided it knows how to
+calculate how much 3 yolks is… which comes to 16.50? How?"* The arithmetic is
+exact: the seed's product is **`Woolworths Free Range Eggs 12pk`, 700 g,
+$5.50** — $7.857/kg on the shelf, and 3 × $5.50 = $16.50. A *counted*
+ingredient is priced by `UnitPrice.pack_amount`, and the offer path set that to
+the shelf price for **every** product regardless of how it was sized, which is
+the claim "one pack holds exactly one countable thing". True of a tin. False of
+a carton of twelve. The owner's follow-up — *"I get the same result when
+removing 'yolk' and just have 3 on its own"* — confirms the unit was never the
+variable; the pack model was.
+
+What makes it a rule rather than a fix is that **the correct answer was already
+in the file, twenty lines above**. The price-*observation* branch had been
+written to only produce a per-item price when the observed unit is a count, with
+a comment explaining exactly why a measured quantity can't yield one. The offer
+branch beside it guessed. So the same module held both answers at once, and the
+2026-08-19 unit-reconciliation pass — which was aimed straight at this class of
+bug and wrote "an honest gap beats a confident wrong number" into the
+docstring — walked past it. Hence **R-076 / ADR-073**: *a derived figure never
+rests on a fact the data does not record.* One helper, `_item_price`, now owns
+"what does one of these cost?" for both branches and is allowed to answer no —
+`pack_count` first, then sizeless, then a count-dimension size divided by the
+unit's own factor (which fixes a third latent guess: a price "per dozen" was
+being charged whole).
+
+**And then the data got fixed too, because a gap is the fallback, not the
+goal.** The product literally says **"12pk" in its name** and nowhere a query
+can read it, so all three seeds now set `eggs_woolies.pack_count = 12` and the
+owner's case resolves to a *right* number — $0.46 an egg, $1.38 for three —
+rather than merely to an honest blank. The narrowing this costs elsewhere is
+logged as **FU-855** ("2 tins" of a 400 g tin with no `pack_count` is now
+unpriced, where it used to be right by luck) and the lever that restores it as
+**FU-856** (`pack_count` isn't on `CreateProductRequest`, so there is currently
+no way to record the fact through the API at all).
+
+**Item 4 was two faults stacked, and the outer one was hiding the inner.** The
+owner reported *"Couldn't save. Couldn't save — check the highlighted fields."*
+plus *"nothing is actually highlighted red"*. The doubled sentence is a page
+that prefixes `Couldn't save.` onto a `toastCaption` that already opens with it.
+The unhighlighted fields are the real story: a brand-new structured step is
+empty, `UpdateRecipeStepRequest.text` is `Field(min_length=1)`, so the request
+reached the server and came back with `steps.0.text` in the errors map — and
+`describeApiError` translates any field-keyed error into "check the highlighted
+fields", a promise this page has no machinery to keep. The fix keeps the whole
+exchange local: an empty step is a `saveBlocker` in the same voice as the
+half-built-ingredient one, and `stepErrorsShown` makes "highlighted" true.
+Driven: the bar reads **"Not saved — 1 step has nothing written in it yet"**,
+**exactly one** field carries "Write the step, or remove it", the method stays
+open, typing clears it, and Done then saves.
+
+**Two layout items landed wrong the first time and only measurement said so
+(R-075, one unit after it was written).** (1) Free-text steps got the structured
+face's numbered circles — and the running page read **"① 1. Render the
+pancetta"**, because free text is precisely where people number their own steps
+and the seed's Carbonara does. The read view now strips a leading ordinal for
+display (`FU-857` covers the loose ends). (2) The new pantry-state column was
+`v-if`-free, and an empty flex span is still a box: `gridTemplateColumns`
+reported **`58px 268px 8px 0px`** on a recipe with nothing to report — the 8px
+margin, twelve times. Both were invisible in the diff and in every gate.
+
+**The rest, briefly.** The chip column itself works: measured at 1280 the chips
+land at **x=285 on every row** regardless of name width (197 vs 180) with a 20px
+gap to the cart, and at 375 there's no overflow and the empty columns collapse
+to `0px`. The swap glyph is **16px** in the ready state (14px elsewhere) —
+verified by creating the substitute the dense seed doesn't have (**FU-793**), then
+removing it. Tools now render in read mode for structured recipes (derived, so
+no editor) — Sunday Ragu shows "Knife & board | Large pot | Grater". The meal-pool
+line went quiet: nothing planned → no line at all, shortfall → "Your meal plan
+needs 2 more", both observed. Three de-duplications went in on the way (R-001 /
+R-003): the numbered-step chrome to **`css/recipeSteps.scss`** so the two method
+faces can't drift, the kcal tooltip into `useRecipeDisplay` (it was the same
+sentence in `RecipeCard` and `RecipeRow`), and `NO_STEP_IMAGES_COPY` into the
+step-image types module.
+
+**One judgement call the owner should confirm.** Item 12 specified "1/1 →
+1 free 1 planned". With one meal in the pool and one claimed by the plan,
+`unallocated_meals` is **0**, so the line renders "0 free · 1 planned" — the
+accurate reading, and the one the 2026-09-01 feedback asked for when it wanted
+0-of-1 explained. The bullet that mattered ("in a case where there's nothing
+planned we don't care") is implemented exactly.
+
+**Next up:** FU-856 is the natural continuation — it turns FU-855's gap back
+into a number. Otherwise the cookbook-list verify lines in `DORA_VERIFY.md`
+(the pane won't render that list) and the owner's call on FU-855.
+
+---
+
 ## 2026-09-03 (later) — **Cook mode, five owner items: two layout asks, and a cart button older than the concept it names**
 
 **Status:** all five complete + green + driven live at three widths (1280 /

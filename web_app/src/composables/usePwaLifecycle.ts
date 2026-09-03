@@ -52,6 +52,31 @@ export function isIosSafari(): boolean {
     return isIOS && /Safari/.test(ua);
 }
 
+/**
+ * Why the install button isn't offered, when it isn't.
+ *
+ * `beforeinstallprompt` only fires in a **secure context** — HTTPS, or
+ * localhost. A self-hosted Dora reached over plain HTTP on the LAN
+ * (`http://192.168.x.x:8080`, the shape a Docker install takes) therefore
+ * never fires it, in any browser. The page used to answer that with
+ * *"Install isn't available in this browser. Try Chrome…"*, which is wrong
+ * twice over: it blames the browser, and it sends the user to a browser that
+ * will do exactly the same thing (owner 2026-09-03 — *"always says
+ * unavailable even in chrome"*).
+ *
+ * `'browser'` stays the honest answer for a secure context that still hasn't
+ * fired the event — Firefox desktop, an already-dismissed prompt, or a
+ * manifest/SW the browser judged ineligible.
+ */
+export function installUnavailableReason() {
+    return computed<'insecure-context' | 'browser'>(() => {
+        if (typeof window !== 'undefined' && window.isSecureContext === false) {
+            return 'insecure-context';
+        }
+        return 'browser';
+    });
+}
+
 export function installPromptAvailable() {
     return computed(() => deferredPrompt.value !== null);
 }

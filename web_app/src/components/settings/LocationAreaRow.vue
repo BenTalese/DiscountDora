@@ -24,14 +24,7 @@
                     @delete="$emit('delete', $event)"
                     @view-items="$emit('viewItems', $event)"
                 />
-                <button
-                    type="button"
-                    class="area-row__add-section"
-                    @click="$emit('addChild', node)"
-                >
-                    <q-icon :name="ICONS.add" size="14px" />
-                    <span>Section</span>
-                </button>
+                <LocationAddChip label="Section" @click="$emit('addChild', node)" />
             </div>
         </div>
 
@@ -42,6 +35,17 @@
         >
             <q-menu auto-close anchor="bottom right" self="top right">
                 <q-list dense style="min-width: 180px">
+                    <q-item
+                        v-if="node.descendant_item_count > 0"
+                        v-close-popup
+                        clickable
+                        @click="$emit('viewItems', node)"
+                    >
+                        <q-item-section avatar>
+                            <q-icon :name="ICONS.inventory_2" size="18px" />
+                        </q-item-section>
+                        <q-item-section>View items</q-item-section>
+                    </q-item>
                     <q-item v-close-popup clickable @click="$emit('rename', node)">
                         <q-item-section avatar>
                             <q-icon :name="ICONS.edit" size="18px" />
@@ -71,6 +75,7 @@
     // control behind a hover tooltip and keyed its disclosure off
     // `children.length > 0`, so an empty container looked like a leaf.)
     import BaseButton from 'src/components/BaseButton.vue';
+    import LocationAddChip from 'src/components/settings/LocationAddChip.vue';
     import LocationSectionChip from 'src/components/settings/LocationSectionChip.vue';
     import { ICONS } from 'src/style/icons';
     import { computed } from 'vue';
@@ -85,12 +90,15 @@
         (e: 'viewItems', node: LocationNode): void;
     }>();
 
+    // Owner 2026-09-03: *"too much arithmetic/text going on, just show count
+    // of items"*. The old label split direct-vs-descendant ("3 here · 11 in
+    // total"), which asked the reader to do the subtraction; the sections are
+    // listed right below with their own counts, so the split was on screen
+    // twice over.
     const countLabel = computed(() => {
-        const direct = props.node.direct_item_count;
         const total = props.node.descendant_item_count;
         if (total === 0) return 'Empty';
-        if (direct === total) return total === 1 ? '1 item' : `${total} items`;
-        return `${direct} here · ${total} in total`;
+        return total === 1 ? '1 item' : `${total} items`;
     });
 </script>
 
@@ -153,35 +161,5 @@
         flex-wrap: wrap;
         align-items: center;
         gap: var(--space-2);
-    }
-    .area-row__add-section {
-        display: inline-flex;
-        align-items: center;
-        gap: var(--space-1);
-        padding: var(--space-1) var(--space-3);
-        border: 1px dashed var(--border-default);
-        border-radius: var(--radius-sm);
-        background: none;
-        font: inherit;
-        font-size: 0.8125rem;
-        line-height: 1.4;
-        color: var(--text-muted);
-        cursor: pointer;
-        transition: color var(--motion-fast, 120ms) ease,
-            border-color var(--motion-fast, 120ms) ease;
-    }
-    .area-row__add-section:hover {
-        color: var(--text-secondary);
-        border-color: var(--border-strong);
-    }
-    .area-row__add-section:focus-visible {
-        outline: 2px solid var(--focus-ring);
-        outline-offset: 2px;
-    }
-    @media (pointer: coarse) {
-        .area-row__add-section {
-            min-height: 44px;
-            padding-inline: var(--space-4);
-        }
     }
 </style>

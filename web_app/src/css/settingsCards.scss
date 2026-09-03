@@ -1,0 +1,130 @@
+/* The settings-area "worklist" card.
+ *
+ * ## Why this exists
+ *
+ * Three settings pages — QR labels, Unlinked ingredients and Nutrition
+ * matching — present the same shape: a bordered panel holding a list of rows
+ * you work through one at a time. All three reached for a bare
+ * `<q-card flat bordered>`, so all three rendered in Quasar's default chrome
+ * rather than the app's: square-ish corners, a hairline the theme never
+ * chose, no elevation, and rows whose padding came from `q-item` defaults.
+ * The owner's read (2026-09-03) was *"boring, default framework style, and
+ * out of place with the app"*.
+ *
+ * The app already has a card language — `LocationZoneCard` is its clearest
+ * statement of it (component surface, `--border-default`, `--radius-lg`,
+ * `--elevation-card`). These classes are that language, once, for the pages
+ * that are lists-of-work rather than dashboards. Same shared-affordance
+ * precedent as `dnd.scss`, `subbar.scss`, `shoppingList.scss`.
+ *
+ * ## Anatomy
+ *
+ *   .settings-card                 the panel
+ *     .settings-card__head         optional toolbar / filter strip
+ *     .settings-card__rows         the list (rows separated by --divider)
+ *       .settings-card__row        one unit of work
+ *         .settings-card__row-main  identity column (name + meta)
+ *         .settings-card__row-aux   the control(s) that resolve it
+ *     .settings-card__foot         optional actions strip
+ *
+ * ## Mobile
+ *
+ * A row stacks below 600px — identity, then controls at full width. That is
+ * the whole reason the row is a grid rather than a `q-item`: the framework
+ * row keeps its side sections beside the label at every width, which is what
+ * squashed the Unlinked ingredients picker into an unusable sliver on a
+ * phone. D-011 — no wrapping toolbars, no truncated primary label.
+ *
+ * Tokens only (R-002 / D-001). Nothing raw here.
+ */
+
+.settings-card {
+    background: var(--surface-component);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--elevation-card);
+    overflow: hidden;
+}
+
+.settings-card__head,
+.settings-card__foot {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+}
+.settings-card__head {
+    border-bottom: 1px solid var(--divider);
+}
+.settings-card__foot {
+    border-top: 1px solid var(--divider);
+    justify-content: flex-end;
+}
+
+.settings-card__rows {
+    display: flex;
+    flex-direction: column;
+}
+
+.settings-card__row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+}
+.settings-card__row + .settings-card__row {
+    border-top: 1px solid var(--divider);
+}
+
+.settings-card__row-main {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+}
+.settings-card__row-name {
+    color: var(--text-primary);
+    font-size: 0.9375rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.settings-card__row-meta {
+    color: var(--text-muted);
+    font-size: 0.8125rem;
+    line-height: 1.4;
+}
+
+.settings-card__row-aux {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+/* An empty / loading panel body — the same inset well the dashboard uses, so
+   "nothing to do here" doesn't read as a broken fetch. */
+.settings-card__empty {
+    padding: var(--space-5) var(--space-4);
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+}
+
+@media (max-width: 599px) {
+    .settings-card__row {
+        flex-direction: column;
+        align-items: stretch;
+        gap: var(--space-2);
+    }
+    .settings-card__row-aux {
+        width: 100%;
+        flex-wrap: wrap;
+    }
+    /* Buttons in a stacked row share the width rather than hugging the left
+       edge under a full-width picker. */
+    .settings-card__row-aux > * {
+        flex: 1 1 auto;
+    }
+}

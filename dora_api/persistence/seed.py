@@ -119,6 +119,13 @@ def seed_dev_data(
         price_now=5.50, price_was=6.20,
         history=[(30, 6.20, 6.20), (15, 5.90, 6.20), (5, 5.50, 6.20)],
     )
+    # Owner-reported 2026-09-03: "3 yolks" of this item priced at $16.50. The
+    # product says "12pk" in its *name* and nowhere a query can read it, so the
+    # cost estimator had nothing to divide by and (before the same day's fix)
+    # billed three whole cartons. `pack_count` is where that fact belongs —
+    # with it, a recipe calling for 3 eggs costs 3 × $0.46. Same idiom as the
+    # yoghurt multipack below.
+    eggs_woolies.pack_count = 12
     pasta_barilla = make_product(
         store=coles, name="Barilla Spaghetti No.5 500g", brand="Barilla",
         size="500g", size_unit="g", size_value=500.0, stockcode="C-PASTA-500",

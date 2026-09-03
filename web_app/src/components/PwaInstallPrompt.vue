@@ -26,6 +26,16 @@
         <strong>Share</strong> button in Safari, then
         <strong>Add to Home Screen</strong>.
     </q-banner>
+    <q-item-label
+        v-else-if="unavailableReason === 'insecure-context'"
+        caption
+        class="dora-text-secondary"
+    >
+        Installing needs a secure connection. This Dora is being served over
+        plain <strong>http://</strong>, and no browser offers the install
+        prompt there — put her behind HTTPS (a reverse proxy with a
+        certificate is the usual way) and the button appears.
+    </q-item-label>
     <q-item-label v-else caption class="dora-text-secondary">
         Install isn't available in this browser. Try Chrome on Android,
         Edge on Windows, or Safari on iOS.
@@ -37,7 +47,8 @@
     import { ICONS } from 'src/style/icons';
     import { useQuasar } from 'quasar';
     import {
-        installPromptAvailable, isInstalled, isIosSafari, showInstallPrompt,
+        installPromptAvailable, installUnavailableReason, isInstalled,
+        isIosSafari, showInstallPrompt,
     } from 'src/composables/usePwaLifecycle';
 
     // Quasar button size (e.g. 'md', 'lg'). About gives the install action a
@@ -49,6 +60,7 @@
     const available = installPromptAvailable();
     const installed = isInstalled();
     const ios = isIosSafari();
+    const unavailableReason = installUnavailableReason();
 
     async function onInstall() {
         const outcome = await showInstallPrompt();

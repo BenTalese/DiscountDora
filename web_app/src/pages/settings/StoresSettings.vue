@@ -8,8 +8,9 @@
             <template #actions>
                 <BaseButton
                     :icon="ICONS.add"
-                    label="Add store"
-                    @click="openCreate"
+                    label="New store"
+                    :loading="saving"
+                    @click="onCreate"
                 />
             </template>
         </SettingsPageHeader>
@@ -23,36 +24,70 @@
             {{ loadError }}
         </q-banner>
 
+        <!--
+            Owner 2026-09-03: this page used to open a create/edit dialog for
+            both the name and the logo, which made it the odd one out among its
+            neighbours. It now borrows the two affordances the rest of the app
+            already uses: rename in place (VocabListEditor / stock groups) and
+            click-the-picture-to-change-it (ImageEditTile — Account's profile
+            picture, the recipe masthead). Row + list styling matches
+            VocabListEditor so the two pages read as one surface.
+        -->
         <q-list v-if="stores.length > 0" class="settings-list" separator>
-            <q-item v-for="s in stores" :key="s.store_id">
+            <q-item v-for="s in stores" :key="s.store_id" class="settings-list__item">
                 <q-item-section avatar>
-                    <StoreLogo
-                        :name="s.name"
-                        :store-id="s.store_id"
-                        :has-image="s.has_image"
-                        :height="40"
+                    <ImageEditTile
+                        :label="s.has_image ? `Change ${s.name}'s logo` : `Add a logo for ${s.name}`"
+                        shape="rounded"
                         :width="64"
-                    />
+                        :height="40"
+                        :busy="imageBusyId === s.store_id"
+                        accept="image/png,image/jpeg,image/webp"
+                        @pick="(img) => onPickImage(s, img)"
+                        @error="onPickError"
+                    >
+                        <StoreLogo
+                            :name="s.name"
+                            :store-id="s.store_id"
+                            :has-image="s.has_image"
+                            :height="40"
+                            :width="64"
+                        />
+                    </ImageEditTile>
                 </q-item-section>
                 <q-item-section>
-                    <q-item-label>{{ s.name }}</q-item-label>
-                    <q-item-label caption v-if="!s.has_image">
-                        No logo uploaded — the hash-swatch fallback is shown.
-                    </q-item-label>
+                    <q-item-label v-if="editingId !== s.store_id">{{ s.name }}</q-item-label>
+                    <q-input
+                        v-else
+                        v-model="renameDraft"
+                        dense
+                        outlined
+                        autofocus
+                        @blur="saveRename(s)"
+                        @keydown.enter.prevent="saveRename(s)"
+                        @keydown.esc.prevent="editingId = null"
+                    />
                 </q-item-section>
                 <q-item-section side>
-                    <div class="row q-gutter-xs">
+                    <div class="row q-gutter-xs items-center">
                         <BaseButton
+                            v-if="s.has_image"
                             variant="icon"
-                            :icon="ICONS.edit"
-                            @click="openEdit(s)"
+                            :icon="ICONS.image_not_supported"
+                            @click="onRemoveImage(s)"
                         >
-                            <q-tooltip>Edit</q-tooltip>
+                            <q-tooltip>Remove logo</q-tooltip>
                         </BaseButton>
                         <BaseButton
                             variant="icon"
-                            :icon="ICONS.delete"
-                            class="text-negative"
+                            :icon="ICONS.edit"
+                            @click="startRename(s)"
+                        >
+                            <q-tooltip>Rename</q-tooltip>
+                        </BaseButton>
+                        <BaseButton
+                            variant="icon"
+                            :icon="ICONS.delete_outline"
                             @click="onDelete(s)"
                         >
                             <q-tooltip>Delete</q-tooltip>
@@ -66,85 +101,15 @@
             <q-icon :name="ICONS.store" size="48px" class="q-mb-sm" />
             <div>No stores yet. Add the ones you actually shop at.</div>
         </div>
+
+        <div v-if="pickError" class="text-caption text-negative q-mt-sm">
+            {{ pickError }}
+        </div>
     </div>
-
-    <!-- Create / edit dialog. The picker is reused for both modes; `editing`
-         carries the row when editing, null when creating. -->
-    <BaseDialog
-        v-model="dialogOpen"
-        :title="editing ? 'Edit store' : 'Add store'"
-        closable
-    >
-        <!-- The body belongs in BaseDialog's DEFAULT slot. It was written as
-             `#content` (a slot BaseDialog does not define), so the whole form
-             — name field and logo picker — silently rendered nowhere. -->
-        <q-card-section class="column q-gutter-md">
-            <q-input
-                v-model="draft.name"
-                outlined
-                dense
-                label="Store name"
-                autofocus
-                :rules="[(v) => !!v && v.trim().length > 0 || 'Name is required']"
-                @keydown.enter.prevent="onSave"
-            />
-
-            <div>
-                <div class="text-caption dora-text-muted q-mb-sm">
-                    Logo (optional)
-                </div>
-                <div class="row items-center q-gutter-md">
-                    <!-- Same click-the-picture affordance as the profile
-                         picture on Account (ImageEditTile), sized to the
-                         logo's rectangle rather than an avatar circle. -->
-                    <ImageEditTile
-                        :label="pickerVerb"
-                        shape="rounded"
-                        :width="80"
-                        :height="48"
-                        accept="image/png,image/jpeg,image/webp"
-                        @pick="onPickImage"
-                        @error="onPickError"
-                    >
-                        <StoreLogo
-                            :name="draft.name || '?'"
-                            :store-id="editing?.store_id ?? null"
-                            :has-image="!!editing?.has_image && !clearImage"
-                            :preview-src="draft.image"
-                            :height="48"
-                            :width="80"
-                        />
-                    </ImageEditTile>
-                    <BaseButton
-                        v-if="(editing?.has_image && !clearImage) || draft.image"
-                        variant="danger-ghost"
-                        dense
-                        :icon="ICONS.delete_outline"
-                        label="Remove logo"
-                        @click="onRemoveImage"
-                    />
-                </div>
-                <div v-if="pickError" class="text-caption text-negative q-mt-xs">
-                    {{ pickError }}
-                </div>
-            </div>
-        </q-card-section>
-
-        <template #actions="{ cancel }">
-            <BaseButton variant="ghost" label="Cancel" @click="cancel" />
-            <BaseButton
-                :label="editing ? 'Save' : 'Add'"
-                :loading="saving"
-                :disable="!draft.name || draft.name.trim().length === 0"
-                @click="onSave"
-            />
-        </template>
-    </BaseDialog>
 </template>
 
 <script lang="ts" setup>
     import BaseButton from 'src/components/BaseButton.vue';
-    import BaseDialog from 'src/components/BaseDialog.vue';
     import ImageEditTile from 'src/components/ImageEditTile.vue';
     import StoreLogo from 'src/components/StoreLogo.vue';
     import { useQuasar } from 'quasar';
@@ -153,7 +118,7 @@
     import { ICONS } from 'src/style/icons';
     import type { ProcessedImage } from 'src/services/files/imageService';
     import { storeToRefs } from 'pinia';
-    import { computed, onMounted, reactive, ref } from 'vue';
+    import { onMounted, ref } from 'vue';
     import type { Store } from 'src/models/store';
     import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
 
@@ -163,25 +128,13 @@
 
     const loading = ref(false);
     const loadError = ref<string | null>(null);
-
-    const dialogOpen = ref(false);
-    const editing = ref<Store | null>(null);
     const saving = ref(false);
-    const draft = reactive<{ name: string; image: string | null }>({
-        name: '',
-        image: null,
-    });
-    const clearImage = ref(false);
     const pickError = ref<string | null>(null);
 
-    // the picker verb tracks the current state so screen-reader
-    // users hear "Add" for a new store and "Change" for one that already
-    // has a logo. Matches the language ImageUploadField uses on the other
-    // upload surfaces.
-    const pickerVerb = computed(() => {
-        const hasExisting = !!editing.value?.has_image && !clearImage.value;
-        return hasExisting || draft.image ? 'Change logo' : 'Add logo';
-    });
+    const editingId = ref<string | null>(null);
+    const renameDraft = ref('');
+    /** Store whose logo round-trip is in flight — drives that tile's spinner. */
+    const imageBusyId = ref<string | null>(null);
 
     onMounted(() => {
         // R-016 ensureLoaded. There is no manual refresh control — every
@@ -198,83 +151,103 @@
             });
     });
 
-    function resetDraft(): void {
-        draft.name = '';
-        draft.image = null;
-        clearImage.value = false;
+    // ── Create — name only, same prompt shape as the vocabulary pages ──
+    async function onCreate(): Promise<void> {
+        const name = await new Promise<string | null>((resolve) => {
+            $q.dialog({
+                title: 'New store',
+                message: 'What is this store called? (e.g. "Woolworths", "Aldi")',
+                prompt: { model: '', type: 'text' },
+                cancel: { noCaps: true },
+            })
+                .onOk((v: string) => resolve(v.trim()))
+                .onCancel(() => resolve(null))
+                .onDismiss(() => resolve(null));
+        });
+        if (!name) return;
+        saving.value = true;
+        try {
+            await storesStore.createAsync({ name });
+            $q.notify({ type: 'positive', message: `Added ${name}.` });
+        } catch (e) {
+            $q.notify({
+                type: 'negative',
+                message: "Couldn't add the store.",
+                caption: toastCaption(e),
+            });
+        } finally {
+            saving.value = false;
+        }
+    }
+
+    // ── Rename in place ────────────────────────────────────────────────
+    function startRename(store: Store): void {
+        editingId.value = store.store_id;
+        renameDraft.value = store.name;
+    }
+
+    async function saveRename(store: Store): Promise<void> {
+        const next = renameDraft.value.trim();
+        editingId.value = null;
+        if (!next || next === store.name) return;
+        try {
+            await storesStore.updateAsync({ store_id: store.store_id, name: next });
+            $q.notify({ type: 'positive', message: `Updated ${next}.` });
+        } catch (e) {
+            $q.notify({
+                type: 'negative',
+                message: "Couldn't update the store.",
+                caption: toastCaption(e),
+            });
+        }
+    }
+
+    // ── Logo — click the tile, immediate save ──────────────────────────
+    async function onPickImage(store: Store, image: ProcessedImage): Promise<void> {
+        // ImageEditTile → processImageFile() already resized + re-encoded to
+        // JPEG using the install-wide image policy (R-003). We just hand the
+        // data URL to the update round-trip; the backend stores the bytes
+        // verbatim and serves them via `GET /stores/<id>/image`.
         pickError.value = null;
-        editing.value = null;
-    }
-
-    function openCreate(): void {
-        resetDraft();
-        dialogOpen.value = true;
-    }
-
-    function openEdit(store: Store): void {
-        resetDraft();
-        editing.value = store;
-        draft.name = store.name;
-        dialogOpen.value = true;
-    }
-
-    function onPickImage(image: ProcessedImage): void {
-        // ImageSourcePicker → processImageFile() already resized + re-encoded
-        // to JPEG using the install-wide image policy (R-003). We just hold
-        // the data URL for the save round-trip; the backend accepts it as-is
-        // (`POST /stores` / `PUT /stores/<id>` store the bytes verbatim and
-        // serve them via `GET /stores/<id>/image`).
-        clearImage.value = false;
-        pickError.value = null;
-        draft.image = image.dataUrl;
+        imageBusyId.value = store.store_id;
+        try {
+            await storesStore.updateAsync({
+                store_id: store.store_id,
+                name: store.name,
+                image: image.dataUrl,
+            });
+        } catch (e) {
+            $q.notify({
+                type: 'negative',
+                message: `Couldn't update ${store.name}'s logo.`,
+                caption: toastCaption(e),
+            });
+        } finally {
+            imageBusyId.value = null;
+        }
     }
 
     function onPickError(message: string): void {
         pickError.value = message;
     }
 
-    // Clears both a just-picked logo and (when editing) the saved one — the
-    // save below sends `clear_image` only when there is something on the
-    // server left to clear.
-    function onRemoveImage(): void {
-        draft.image = null;
+    async function onRemoveImage(store: Store): Promise<void> {
         pickError.value = null;
-        if (editing.value?.has_image) clearImage.value = true;
-    }
-
-    async function onSave(): Promise<void> {
-        const name = draft.name.trim();
-        if (!name) return;
-        saving.value = true;
+        imageBusyId.value = store.store_id;
         try {
-            if (editing.value) {
-                await storesStore.updateAsync({
-                    store_id: editing.value.store_id,
-                    name,
-                    ...(clearImage.value
-                        ? { clear_image: true }
-                        : draft.image
-                            ? { image: draft.image }
-                            : {}),
-                });
-                $q.notify({ type: 'positive', message: `Updated ${name}.` });
-            } else {
-                await storesStore.createAsync({
-                    name,
-                    ...(draft.image ? { image: draft.image } : {}),
-                });
-                $q.notify({ type: 'positive', message: `Added ${name}.` });
-            }
-            dialogOpen.value = false;
-            resetDraft();
+            await storesStore.updateAsync({
+                store_id: store.store_id,
+                name: store.name,
+                clear_image: true,
+            });
         } catch (e) {
             $q.notify({
                 type: 'negative',
-                message: editing.value ? "Couldn't update the store." : "Couldn't add the store.",
+                message: `Couldn't remove ${store.name}'s logo.`,
                 caption: toastCaption(e),
             });
         } finally {
-            saving.value = false;
+            imageBusyId.value = null;
         }
     }
 
@@ -311,8 +284,14 @@
 
 <style scoped lang="scss">
     .settings-page { display: flex; flex-direction: column; }
+    /* Matches VocabListEditor's list chrome — the two pages sit side by side
+       in the Kitchen setup nav group and used to disagree about row height and
+       list borders. */
     .settings-list {
         border-top: 1px solid color-mix(in srgb, var(--text-primary) 8%, transparent);
         border-bottom: 1px solid color-mix(in srgb, var(--text-primary) 8%, transparent);
+    }
+    .settings-list__item {
+        padding: 10px 4px;
     }
 </style>

@@ -19,24 +19,17 @@
              section stays scannable. -->
         <SettingsSection>
             <template #title>Assistant chat</template>
-            <!-- Owner 2026-08-29: *"should more clearly define the sections…
-                 one section is about the assistant chat, the other is about
-                 zero input pantry."* Both now carry a one-line description
-                 saying which job they belong to, the way the Notifications
-                 channels do. -->
-            <template #description>
-                The chat bubble you talk to — whether it appears, and which
-                brain answers it.
-            </template>
+            <!-- Owner 2026-09-03: the section description went — the two row
+                 labels beneath it already say what the section is. -->
 
-            <SettingsRow label="Show digital assistant chat bubble">
+            <SettingsRow inline label="Show digital assistant chat bubble">
                 <q-toggle
                     :model-value="currentUser.show_assistant !== false"
                     @update:model-value="onShowAssistantChange"
                 />
             </SettingsRow>
 
-            <SettingsRow>
+            <SettingsRow inline>
                 <template #label>
                     Mode
                     <InfoTip label="Mode">
@@ -52,7 +45,7 @@
                     map-options
                     outlined
                     dense
-                    style="min-width: 220px"
+                    class="assistant-mode-select"
                     @update:model-value="onModeChange"
                 />
             </SettingsRow>
@@ -66,8 +59,7 @@
                 Connect one or more language models. <strong>Ollama</strong>
                 runs locally (no key needed); <strong>OpenAI</strong>,
                 <strong>Anthropic</strong>, and <strong>Google Gemini</strong>
-                are paid hosted APIs — bring your own key. Details are checked
-                the moment you enter them.
+                are paid hosted APIs.
             </template>
 
             <!-- Warns (and offers to generate a key) when the install hasn't
@@ -255,10 +247,18 @@
                 >Learn more</router-link>.
             </template>
 
-            <SettingsRow
-                label="On the stock list and stock items"
-                help="Dora shows an inferred level (with a reason and confidence) alongside the recorded one, and can ask a targeted quick-check. Turn off for purely manual levels."
-            >
+            <!-- Owner 2026-09-03: each row is named "<area> hints" and its
+                 explanation moved into an InfoTip, so the section reads as a
+                 short list of switches rather than five paragraphs. -->
+            <SettingsRow inline>
+                <template #label>
+                    Stock overview hints
+                    <InfoTip label="Stock overview hints">
+                        Dora shows an inferred level (with a reason and
+                        confidence) alongside the recorded one, and can ask a
+                        targeted quick-check. Turn off for purely manual levels.
+                    </InfoTip>
+                </template>
                 <q-toggle
                     :model-value="currentUser.inferred_pantry_enabled"
                     @update:model-value="onInferredPantryChange"
@@ -269,30 +269,45 @@
                  up rather than where they're managed. Separate toggles because
                  they annotate three different jobs; all default off, since
                  they add remarks to pages you opened to do something else. -->
-            <SettingsRow
-                label="On recipes"
-                help="Flags a recipe as at risk when Dora believes an ingredient has run out — and points out one you may be able to cook after all. Never changes whether a recipe counts as cookable, and never filters your cookbook."
-            >
+            <SettingsRow inline>
+                <template #label>
+                    Cookbook hints
+                    <InfoTip label="Cookbook hints">
+                        Flags a recipe as at risk when Dora believes an
+                        ingredient has run out — and points out one you may be
+                        able to cook after all. Never changes whether a recipe
+                        counts as cookable, and never filters your cookbook.
+                    </InfoTip>
+                </template>
                 <q-toggle
                     :model-value="currentUser.inference_recipes_enabled"
                     @update:model-value="(v: boolean) => onSurfaceChange('recipes', v)"
                 />
             </SettingsRow>
 
-            <SettingsRow
-                label="On shopping lists"
-                help="Suggests items Dora believes you've run out of, beside the list. Nothing is added for you."
-            >
+            <SettingsRow inline>
+                <template #label>
+                    Shopping list hints
+                    <InfoTip label="Shopping list hints">
+                        Suggests items Dora believes you've run out of, beside
+                        the list. Nothing is added for you.
+                    </InfoTip>
+                </template>
                 <q-toggle
                     :model-value="currentUser.inference_shopping_enabled"
                     @update:model-value="(v: boolean) => onSurfaceChange('shopping', v)"
                 />
             </SettingsRow>
 
-            <SettingsRow
-                label="On the meal planner"
-                help="Flags a planned meal whose ingredient Dora believes has run out since you planned it. Your plan and its shopping figures are unchanged."
-            >
+            <SettingsRow inline>
+                <template #label>
+                    Meal planner hints
+                    <InfoTip label="Meal planner hints">
+                        Flags a planned meal whose ingredient Dora believes has
+                        run out since you planned it. Your plan and its shopping
+                        figures are unchanged.
+                    </InfoTip>
+                </template>
                 <q-toggle
                     :model-value="currentUser.inference_meal_plan_enabled"
                     @update:model-value="(v: boolean) => onSurfaceChange('meal_plan', v)"
@@ -310,19 +325,23 @@
                  Notifications — a toggle that vanishes leaves the dependency
                  undiscoverable, and the user's own preference is preserved
                  underneath for whenever money comes back on. -->
-            <SettingsRow label='"Should I buy this?"'>
-                <template #help>
-                    On a stock item and on your shopping list, Dora gives a buy
-                    / wait / skip verdict from your own price, cadence and waste
-                    history — nothing external, no crowd data. Turn it off to
-                    hide it; it's your view only, not the household's.
-                    <template v-if="!moneyEnabled">
-                        <br />
-                        <strong>
-                            Needs money features, which are off for this
-                            install{{ isAdmin ? '' : ' — ask an admin to turn them on' }}.
-                        </strong>
-                    </template>
+            <SettingsRow inline>
+                <template #label>
+                    "Should I buy this?"
+                    <InfoTip label="Should I buy this?">
+                        On a stock item and on your shopping list, Dora gives a
+                        buy / wait / skip verdict from your own price, cadence
+                        and waste history.
+                    </InfoTip>
+                </template>
+                <!-- The money prerequisite stays inline rather than moving into
+                     the tip: it is live state explaining why the switch is
+                     dead, not a description of the feature. -->
+                <template v-if="!moneyEnabled" #help>
+                    <strong>
+                        Needs money features, which are off for this
+                        install{{ isAdmin ? '' : ' — ask an admin to turn them on' }}.
+                    </strong>
                 </template>
                 <q-toggle
                     :model-value="currentUser.buy_verdict_enabled"
@@ -699,6 +718,13 @@
 
 <style scoped lang="scss">
     .settings-page { display: flex; flex-direction: column; }
+    /* Owner 2026-09-03: the mode picker stays on the right at every width, so
+       it can't carry a fixed 220px floor — that would overflow the row's
+       control column on a 375px viewport. */
+    .assistant-mode-select {
+        width: 220px;
+        max-width: 100%;
+    }
     .settings-page__link { color: var(--brand-primary); font-weight: 600; }
     .settings-divider {
         border: 0;

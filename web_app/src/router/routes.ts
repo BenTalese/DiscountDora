@@ -303,27 +303,27 @@ const routes: RouteRecordRaw[] = [
                     {
                         path: 'kitchen-setup/recipe-cuisines',
                         component: () => import('pages/settings/RecipeCuisinesSettings.vue'),
-                        meta: { title: 'Recipe Cuisines' }
+                        meta: { title: 'Cuisines' }
                     },
                     {
                         path: 'kitchen-setup/recipe-categories',
                         component: () => import('pages/settings/RecipeCategoriesSettings.vue'),
-                        meta: { title: 'Recipe Categories' }
+                        meta: { title: 'Categories' }
                     },
                     {
                         path: 'kitchen-setup/recipe-tools',
                         component: () => import('pages/settings/RecipeToolsSettings.vue'),
-                        meta: { title: 'Recipe Tools' }
+                        meta: { title: 'Tools' }
                     },
                     {
                         path: 'kitchen-setup/recipe-meal-slots',
                         component: () => import('pages/settings/RecipeMealSlotsSettings.vue'),
-                        meta: { title: 'Recipe Meal Slots' }
+                        meta: { title: 'Meal Slots' }
                     },
                     {
                         path: 'kitchen-setup/recipe-dietary-tags',
                         component: () => import('pages/settings/RecipeDietaryTagsSettings.vue'),
-                        meta: { title: 'Recipe Dietary Tags' }
+                        meta: { title: 'Dietary Tags' }
                     },
                     // QR labels (Print sheet). Relocated from
                     // `/data/barcodes`; the old page's Scan tab was retired

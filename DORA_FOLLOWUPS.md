@@ -39,6 +39,121 @@ long session summary. Distinct from the other logs:
 
 ---
 
+## [OPEN] FU-861 — Technical details → Build has no real build number
+- **Raised:** 2026-09-03 (owner feedback batch — settings/About)
+- **Type:** follow-up
+- **What:** About → Technical details renders `buildLabel` under a caption that
+  admits *"Versioning isn't tagged in this fork yet."* The owner asked for a real
+  build number there — the point of the row is that a bug report can name the
+  exact artifact it came from, and a placeholder can't do that.
+- **Why deferred:** it isn't a UI change. It needs a decision about where the
+  version comes from (a git tag/describe, the package version, a CI-stamped
+  build id) and a way to get it into both the SPA bundle and the Flask API so the
+  two can't disagree — which touches the build/packaging pipeline, not this page.
+- **Recommended resolution:** later during Phase 4 (open-source release), where
+  tagging a version is on the critical path anyway.
+
+## [OPEN] FU-860 — With products off, Dora sends no scheduled email at all
+- **Raised:** 2026-09-03 (owner feedback batch — settings/Notifications)
+- **Type:** finding
+- **What:** the owner asked what email notifications exist when products is
+  disabled, and whether the section is hidden. **It is** — the whole Email block
+  is behind `v-if="productsEnabled"`, because the weekly deals email is the only
+  thing Dora mails on a schedule and with no ingested product data it has no deal
+  source. So the answer to "what's left?" is *nothing*, which is the actual
+  finding: an install without products (the default self-host shape) has an empty
+  email channel, and the owner's own follow-on — *"perhaps there is something we
+  could email that users would want/enjoy and we're missing"* — is the open
+  question. Candidates already computed elsewhere: the evening brief (currently
+  push-only, so a user with no push support gets nothing), an expiring-soon
+  digest, a week-ahead meal plan, an end-of-month spend summary.
+- **Why deferred:** designing a second scheduled email is a feature, not a copy
+  fix, and it needs a call on which one earns being unprompted mail. The evening
+  brief is the cheapest — it already exists, is already scheduled, and only the
+  delivery channel is missing.
+- **Recommended resolution:** now-ish — it's a small product decision, and it
+  wants the owner's answer before anything is built.
+
+## [OPEN] FU-859 — Zone/area/section counts no longer distinguish direct from descendant items
+- **Raised:** 2026-09-03 (owner feedback batch — settings/Stock locations)
+- **Type:** finding
+- **What:** per the owner (*"too much arithmetic/text going on, just show count
+  of items"*), the area row's label went from `3 here · 11 in total` to plain
+  `11 items`, and the zone header dropped its area tally. That is what was asked
+  for and it reads far better, but it does lose one fact the old label carried:
+  how many items sit **directly** on a level rather than in its children. A zone
+  with 23 items and one area holding 23 now looks identical to a zone with 23
+  loose items.
+- **Why deferred:** the owner explicitly asked for less text here, so adding it
+  back inline would be re-litigating the request. If it turns out to matter, the
+  place for it is the overflow menu's "View items" (which now exists at all three
+  levels) or a tooltip — not the row.
+- **Recommended resolution:** opportunistic — only if the owner misses it in use.
+
+## [OPEN] FU-858 — Nutrition-matching badge fetches for every user in complex mode
+- **Raised:** 2026-09-03 (owner feedback batch — settings/Nutrition matching)
+- **Type:** finding
+- **What:** the new sidebar count (owner ask: *"count of unmatched items same as
+  unlinked ingredients would be good"*) hydrates from
+  `GET /api/nutrition/unmatched-items`, which on this seed returns the full 41
+  rows — the whole unmatched list — to render one integer. `unlinkedIngredients`
+  has exactly the same shape and the same cost, so this is consistent rather than
+  novel, but it now happens twice per settings mount.
+- **Why deferred:** it's a real but small waste, and fixing it properly means a
+  count-only endpoint (or a `?count_only=1` on both), which is server work beyond
+  a settings-polish batch. R-003 stays satisfied either way — the server owns the
+  number; the client just over-fetches to read it.
+- **Recommended resolution:** opportunistic, when either endpoint is next touched.
+
+## [OPEN] FU-857 — Free-text steps are numbered twice unless we strip the author's own ordinal
+- **Raised:** 2026-09-03 (recipe-view owner batch, item 10)
+- **Type:** finding
+- **What:** giving free-text steps the structured face's numbered circles made
+  the seed's Carbonara read "(1) 1. Render the pancetta" — the author had typed
+  their own "1. " prefixes, which is what people do in a free-text box. The read
+  view now strips a leading ordinal (`/^\d{1,3}\s*[.):]\s+/`) for display only;
+  the stored text and the editor are untouched. Two loose ends: (a) the strip is
+  display-side, so the *editor* still shows "1. Render…" and an author who
+  renumbers by hand gets no help; (b) the pattern is deliberately narrow and will
+  miss "Step 1 — " or "(1) ".
+- **Why deferred:** the owner asked for the circles, not for a numbering
+  authority. Deciding whether free text should be *normalised on save* (strip the
+  ordinals for real, since the app now draws them) is a data-shape call.
+- **Recommended resolution:** opportunistic — or now, if the doubled numbering
+  turns up in a recipe the strip doesn't catch.
+
+## [OPEN] FU-856 — `pack_count` can't be recorded through the products API, so R-076's better answer is unreachable
+- **Raised:** 2026-09-03 (recipe-view owner batch, item 13)
+- **Type:** follow-up
+- **What:** the cost fix (ADR-073) makes a bare count priceable whenever
+  `Product.pack_count` is set — "3 eggs" off a 12pk costs $1.38 rather than being
+  reported unpriced. But `CreateProductRequest` / `UpdateProductRequest` are
+  `extra="forbid"` and neither carries `pack_count`, so the only way it gets set
+  today is a seed script assigning the attribute directly. A user who links a
+  multipack product has no way to tell Dora how many are in it, and their counted
+  ingredients stay unpriced forever.
+- **Why deferred:** it's an API + form change on the products surface, which is
+  not what the owner's item was about, and it needs a UI decision (a field on the
+  manual product-add form? inferred from the name's "12pk"?).
+- **Recommended resolution:** now-ish — it is the half of the cost fix that turns
+  a gap back into a number.
+
+## [OPEN] FU-855 — Counted ingredients against a measured pack lost coverage they used to have
+- **Raised:** 2026-09-03 (recipe-view owner batch, item 13)
+- **Type:** finding
+- **What:** deliberate consequence of ADR-073, logged because it is a *narrowing*
+  and the owner should get to see it. "2 tins" of a product sized `400 g` with no
+  `pack_count` is now reported **unpriced** ("Units don't match the price") where
+  it previously billed 2 × the shelf price — which was the right answer for a tin
+  and the wrong one for the eggs carton that produced the $16.50 report. The two
+  are indistinguishable in the schema, so the honest gap won. Impact is visible
+  as a lower "Priced N of M" ratio on recipes that count packs.
+- **Why deferred:** it is the trade the fix was chosen for, not a bug — but if the
+  owner would rather have the old guess back for single-container products, the
+  lever is FU-856 (record `pack_count = 1`) rather than reverting the rule.
+- **Recommended resolution:** when the owner has walked a costed recipe and said
+  whether the narrower coverage reads acceptably.
+
 ## [OPEN] FU-854 — The Alerts bell still hands out the retired "primary list" dead end
 - **Raised:** 2026-09-03 (cook-mode owner batch, item 5)
 - **Type:** finding

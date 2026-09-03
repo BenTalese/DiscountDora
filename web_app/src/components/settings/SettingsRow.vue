@@ -1,5 +1,8 @@
 <template>
-    <div class="settings-row" :class="{ 'settings-row--stacked': stacked }">
+    <div
+        class="settings-row"
+        :class="{ 'settings-row--stacked': stacked, 'settings-row--inline': inline }"
+    >
         <div class="settings-row__info">
             <div v-if="label || $slots.label" class="settings-row__label">
                 <slot name="label">{{ label }}</slot>
@@ -21,7 +24,16 @@
     defineProps<{
         label?: string;
         help?: string;
+        /** Force label-above-control at every width. */
         stacked?: boolean;
+        /**
+         * Keep the control on the right at every width, including mobile.
+         * For narrow controls (a toggle, a short select) the automatic mobile
+         * stack wastes a whole line and reads as a list of orphaned switches —
+         * owner feedback 2026-09-03. Rows holding a wide control (a text input)
+         * still want the stack, so this stays opt-in rather than the default.
+         */
+        inline?: boolean;
     }>();
 </script>
 
@@ -81,14 +93,22 @@
     }
 
     @media (max-width: 599px) {
-        .settings-row {
+        .settings-row:not(.settings-row--inline) {
             flex-direction: column;
             align-items: stretch;
             gap: 10px;
         }
-        .settings-row__control {
+        .settings-row:not(.settings-row--inline) .settings-row__control {
             max-width: 100%;
             width: 100%;
+        }
+        /* Inline rows keep the two-column shape; the gap tightens so a long
+           label still gets most of the width. */
+        .settings-row--inline {
+            gap: 12px;
+        }
+        .settings-row--inline .settings-row__control {
+            max-width: 55%;
         }
     }
 </style>

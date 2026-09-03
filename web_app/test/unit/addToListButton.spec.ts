@@ -150,7 +150,7 @@ describe('AddToListButton — row variant (default)', () => {
 
         expect(wrapper.find('button').classes()).toContain('text-accent');
         expect(wrapper.find('button').attributes('aria-label'))
-            .toBe('On another list — click to remove');
+            .toBe('On a list — click to remove');
     });
 
     it('escalates to the attention checkout icon when on multiple lists', () => {

@@ -19,13 +19,6 @@
 
             <div class="zone-card__actions">
                 <BaseButton
-                    variant="ghost"
-                    :icon="ICONS.add"
-                    label="Area"
-                    size="sm"
-                    @click="$emit('addChild', node)"
-                />
-                <BaseButton
                     variant="icon"
                     :icon="ICONS.more_vert"
                     :aria-label="`Actions for ${node.name}`"
@@ -71,10 +64,13 @@
                 @add-child="$emit('addChild', $event)"
                 @view-items="$emit('viewItems', $event)"
             />
-            <p v-if="node.children.length === 0" class="zone-card__no-areas">
-                Nothing inside {{ node.name }} yet — add an area if you want to break it up,
-                or leave it flat and store items straight in the zone.
-            </p>
+            <!-- The "+ Area" chip sits at the end of the areas rather than in
+                 the header: it then matches "+ Section" one level down, and an
+                 empty zone shows the affordance instead of a paragraph
+                 explaining that zones may be flat (owner 2026-09-03). -->
+            <div class="zone-card__add">
+                <LocationAddChip label="Area" @click="$emit('addChild', node)" />
+            </div>
         </div>
     </section>
 </template>
@@ -89,6 +85,7 @@
     // old uniform recursive row could never express — and it drops the grey
     // `zone`/`area`/`section` chip that used to repeat on every single row.
     import BaseButton from 'src/components/BaseButton.vue';
+    import LocationAddChip from 'src/components/settings/LocationAddChip.vue';
     import LocationAreaRow from 'src/components/settings/LocationAreaRow.vue';
     import { ICONS } from 'src/style/icons';
     import { computed } from 'vue';
@@ -112,14 +109,11 @@
         (e: 'viewItems', node: LocationNode): void;
     }>();
 
+    // Owner 2026-09-03: items only. The area tally was arithmetic the reader
+    // could already do by looking — the areas are listed directly below.
     const metaLabel = computed(() => {
-        const areas = props.node.children.length;
         const items = props.node.descendant_item_count;
-        const itemsLabel = items === 1 ? '1 item' : `${items} items`;
-        // "0 areas · 9 items" reads like a defect; a flat zone is a perfectly
-        // ordinary shape, so it just states what it holds.
-        if (areas === 0) return itemsLabel;
-        return `${areas === 1 ? '1 area' : `${areas} areas`} · ${itemsLabel}`;
+        return items === 1 ? '1 item' : `${items} items`;
     });
 </script>
 
@@ -178,6 +172,7 @@
     }
     .zone-card__actions {
         flex: 0 0 auto;
+        margin-left: auto;
         display: flex;
         align-items: center;
         gap: var(--space-1);
@@ -186,13 +181,9 @@
         display: flex;
         flex-direction: column;
     }
-    .zone-card__no-areas {
-        margin: 0;
+    .zone-card__add {
         padding: var(--space-3) var(--space-4);
         border-top: 1px solid var(--divider);
-        color: var(--text-muted);
-        font-size: 0.8125rem;
-        line-height: 1.5;
     }
     /* Phone: the meta line loses its inline slot so the zone name keeps the
        width, and the actions stay on the header line (D-011 — no wrapping

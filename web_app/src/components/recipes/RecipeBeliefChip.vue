@@ -18,8 +18,11 @@
         v-if="recipe.inference_hint"
         dense
         :icon="ICONS.dora_voice"
-        class="dora-chip--neutral"
-        :class="recipe.inference_hint === 'at_risk' ? 'dora-chip--warning' : 'dora-chip--positive'"
+        class="dora-chip--neutral rbc"
+        :class="[
+            recipe.inference_hint === 'at_risk' ? 'dora-chip--warning' : 'dora-chip--positive',
+            { 'rbc--glyph': !labelled },
+        ]"
     >
         <span v-if="labelled">
             {{ recipe.inference_hint === 'at_risk' ? 'May be short' : 'May be cookable' }}
@@ -45,3 +48,24 @@
 
     const { inferenceTooltip } = useRecipeDisplay(() => props.recipe);
 </script>
+
+<style scoped lang="scss">
+    /* Owner 2026-09-03: in the compact row the chip "looks a bit off … like
+       the icon is being pushed left by a text area that is always empty".
+       Right diagnosis, wrong culprit — the label is `v-if`'d away and renders
+       nothing. What's left is Quasar's own icon geometry, which assumes a
+       label follows: `.q-chip__icon--left` carries `margin-left: -0.3em` (to
+       pull the glyph back into the chip's padding) plus `margin-right: 0.2em`
+       (to space it off the words). With no words, that is 0.5em of asymmetry
+       and the glyph sits hard against the left edge.
+       Unlabelled, the glyph *is* the chip, so it gets even padding and no
+       label margins. */
+    .rbc--glyph {
+        padding: 0 var(--space-1, 4px);
+
+        :deep(.q-chip__icon) {
+            margin-left: 0;
+            margin-right: 0;
+        }
+    }
+</style>

@@ -269,6 +269,13 @@ def seed_dense_data(qa_fixtures: bool = False, money_on: bool = True):
         price_now=5.50, price_was=6.20,
         history=[(30, 6.20, 6.20), (15, 5.90, 6.20), (5, 5.50, 6.20)],
     )
+    # Owner-reported 2026-09-03: "3 yolks" of this item priced at $16.50. The
+    # product says "12pk" in its *name* and nowhere a query can read it, so the
+    # cost estimator had nothing to divide by and (before the same day's fix)
+    # billed three whole cartons. `pack_count` is where that fact belongs —
+    # with it, a recipe calling for 3 eggs costs 3 × $0.46. Same idiom as the
+    # yoghurt multipack below.
+    eggs_woolies.pack_count = 12
     flour_coles = make_product(
         store=coles, name="Coles Plain Flour 1kg", brand="Coles",
         size="1kg", size_unit="kg", size_value=1.0, stockcode="C-FLOUR-1KG",

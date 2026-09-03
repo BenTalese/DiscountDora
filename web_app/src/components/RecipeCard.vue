@@ -73,10 +73,7 @@
                         class="recipe-card__part"
                         aria-hidden="true"
                     >*</span>
-                    <q-tooltip v-if="!kcal.judgeable">
-                        Worked out from only part of this recipe — open it to
-                        see what's missing.
-                    </q-tooltip>
+                    <q-tooltip v-if="!kcal.judgeable">{{ kcalTooltip }}</q-tooltip>
                 </q-chip>
                 <q-chip
                     v-if="(recipe.section_count ?? 0) > 1"
@@ -224,7 +221,7 @@
     // shared with the compact `RecipeRow` (R-003) — the card decides only
     // how to lay it out.
     const {
-        totalTime, ingredientCount, kcal, metaLine, tagNames, missingIds,
+        totalTime, ingredientCount, kcal, kcalTooltip, metaLine, tagNames, missingIds,
         cookable, cookButtonColor, cookButtonTooltip, addListTooltip,
         initial, mediaStyle, imageUrl,
     } = useRecipeDisplay(() => props.recipe);

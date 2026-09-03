@@ -2,7 +2,7 @@
     <div class="settings-page q-gutter-md">
         <SettingsPageHeader
             title="Nutrition matching"
-            description="Stock items that aren't linked to a food yet. Dora suggests a match from the installed food data where it can — nothing is saved until you accept it. Items you'll never want nutrition for can be set aside so they stop appearing here."
+            description="Stock items that aren't linked to a food yet. Dora suggests a match from the installed food data where it can."
             :icon="ICONS.monitor_heart"
         />
 
@@ -18,52 +18,47 @@
                  exactly like a broken feature unless we say otherwise. Checked
                  before the "nothing to match" line below, because that line is
                  the lie in this state. -->
-            <q-banner
-                v-if="catalogueSize === 0"
-                class="dora-bg-warning-soft q-mb-md"
-                rounded
-            >
-                <template #avatar>
-                    <q-icon :name="ICONS.info_outline" />
-                </template>
-                <div class="text-weight-medium">
-                    No offline food data is installed, so Dora can't suggest
-                    matches.
+            <div v-if="catalogueSize === 0" class="settings-card match-notice">
+                <q-icon :name="ICONS.info_outline" size="22px" class="match-notice__icon" />
+                <div class="match-notice__body">
+                    <div class="text-weight-medium dora-text-primary">
+                        No offline food data is installed, so Dora can't suggest
+                        matches.
+                    </div>
+                    <div class="text-caption dora-text-secondary q-mt-xs">
+                        Auto-matching and suggestions read the food database held
+                        on this install — they never call out to the internet,
+                        because they run across your whole pantry at once.
+                        Download it and this page fills in by itself.
+                        <template v-if="!isAdmin">
+                            Ask an admin to set it up under Settings → Admin →
+                            System → Nutrition.
+                        </template>
+                    </div>
                 </div>
-                <div class="text-caption q-mt-xs">
-                    Auto-matching and suggestions read the food database held on
-                    this install — they never call out to the internet, because
-                    they run across your whole pantry at once. Download it and
-                    this page fills in by itself.
-                    <template v-if="!isAdmin">
-                        Ask an admin to set it up under Settings → Admin →
-                        System → Nutrition.
-                    </template>
-                </div>
-                <template v-if="isAdmin" #action>
-                    <BaseButton
-                        variant="primary"
-                        label="Set up food data"
-                        to="/settings/admin/system/nutrition"
-                    />
-                </template>
-            </q-banner>
+                <BaseButton
+                    v-if="isAdmin"
+                    variant="primary"
+                    label="Set up food data"
+                    to="/settings/admin/system/nutrition"
+                    class="match-notice__action"
+                />
+            </div>
 
-            <div
-                v-else-if="items.length === 0"
-                class="dora-text-muted text-caption q-pa-md"
-            >
-                Every stock item is either linked to a food or set aside. Nothing
-                to match.
+            <div v-else-if="items.length === 0" class="settings-card">
+                <p class="settings-card__empty">
+                    Every stock item is either linked to a food or set aside.
+                    Nothing to match.
+                </p>
             </div>
 
             <!-- One tap for the whole confident set. Only near-certain matches
                  are swept up: the weaker ones are exactly the rows that need a
                  human to look, and bulk-accepting those is how a pantry fills
                  up with quietly wrong calories. -->
-            <q-card v-if="strongCount > 0" flat bordered class="q-pa-md">
-                <div class="row items-center q-gutter-md">
-                    <div class="col">
+            <div v-if="strongCount > 0" class="settings-card">
+                <div class="settings-card__row">
+                    <div class="settings-card__row-main">
                         <div class="dora-text-primary text-weight-medium">
                             {{ strongCount }} confident
                             match<template v-if="strongCount !== 1">es</template>
@@ -74,22 +69,28 @@
                             them together, or go through them one at a time below.
                         </div>
                     </div>
-                    <BaseButton
-                        variant="primary"
-                        :label="acceptingAll ? 'Accepting…' : `Accept all ${strongCount}`"
-                        :loading="acceptingAll"
-                        :disable="busy"
-                        @click="onAcceptAll"
-                    />
+                    <div class="settings-card__row-aux">
+                        <BaseButton
+                            variant="primary"
+                            :label="acceptingAll ? 'Accepting…' : `Accept all ${strongCount}`"
+                            :loading="acceptingAll"
+                            :disable="busy"
+                            @click="onAcceptAll"
+                        />
+                    </div>
                 </div>
-            </q-card>
+            </div>
 
-            <q-card v-if="items.length" flat bordered>
-                <q-list separator>
-                    <q-item v-for="item in items" :key="item.stock_item_id" class="q-py-md">
-                        <q-item-section>
-                            <q-item-label>{{ item.name }}</q-item-label>
-                            <q-item-label v-if="item.suggestion" caption>
+            <div v-if="items.length" class="settings-card">
+                <div class="settings-card__rows">
+                    <div
+                        v-for="item in items"
+                        :key="item.stock_item_id"
+                        class="settings-card__row"
+                    >
+                        <div class="settings-card__row-main">
+                            <span class="settings-card__row-name">{{ item.name }}</span>
+                            <span v-if="item.suggestion" class="settings-card__row-meta">
                                 <q-badge
                                     class="match-tag"
                                     :label="item.suggestion.is_strong
@@ -105,57 +106,56 @@
                                     </template>
                                     {{ item.suggestion.source_label }}
                                 </span>
-                            </q-item-label>
-                            <q-item-label v-else caption class="dora-text-muted">
-                                No match in the installed food data — search for one,
-                                or set it aside.
-                            </q-item-label>
-                        </q-item-section>
+                            </span>
+                        </div>
 
-                        <q-item-section side>
-                            <div class="row q-gutter-xs">
-                                <BaseButton
-                                    v-if="item.suggestion"
-                                    variant="primary"
-                                    dense
-                                    size="sm"
-                                    label="Use this"
-                                    :disable="busy"
-                                    :loading="workingId === item.stock_item_id"
-                                    @click="onAccept(item)"
-                                />
-                                <BaseButton
-                                    variant="ghost"
-                                    dense
-                                    size="sm"
-                                    label="Search"
-                                    :disable="busy"
-                                    @click="onSearch(item)"
-                                />
-                                <BaseButton
-                                    variant="ghost"
-                                    dense
-                                    size="sm"
-                                    label="Not a food"
-                                    :disable="busy"
-                                    @click="onIgnore(item)"
-                                >
-                                    <q-tooltip>
-                                        Stop asking about {{ item.name }}
-                                    </q-tooltip>
-                                </BaseButton>
-                            </div>
-                        </q-item-section>
-                    </q-item>
-                </q-list>
-            </q-card>
+                        <!-- Owner 2026-09-03: "Search" and "Not a food" were
+                             `ghost`, which on this row read as two more lines
+                             of prose rather than the two actions that resolve
+                             it. They are `secondary` now — still subordinate to
+                             "Use this", but unmistakably controls. -->
+                        <div class="settings-card__row-aux">
+                            <BaseButton
+                                v-if="item.suggestion"
+                                variant="primary"
+                                dense
+                                size="sm"
+                                label="Use this"
+                                :disable="busy"
+                                :loading="workingId === item.stock_item_id"
+                                @click="onAccept(item)"
+                            />
+                            <BaseButton
+                                variant="secondary"
+                                dense
+                                size="sm"
+                                label="Search"
+                                :disable="busy"
+                                @click="onSearch(item)"
+                            />
+                            <BaseButton
+                                variant="secondary"
+                                dense
+                                size="sm"
+                                label="Not a food"
+                                :disable="busy"
+                                @click="onIgnore(item)"
+                            >
+                                <q-tooltip>
+                                    Stop asking about {{ item.name }}
+                                </q-tooltip>
+                            </BaseButton>
+                        </div>
+                    </div>
+                </div>
+            </div>
 
             <!-- Set-aside items are hidden by default but never unreachable:
                  waving something off by mistake has to be undoable, and a
                  permanent flag with no way back is a trap. -->
             <div v-if="ignoredCount > 0">
                 <BaseButton
-                    variant="ghost"
+                    variant="secondary"
                     dense
                     size="sm"
                     :label="showIgnored
@@ -164,31 +164,31 @@
                     :disable="busy"
                     @click="onToggleIgnored"
                 />
-                <q-card v-if="showIgnored" flat bordered class="q-mt-sm">
-                    <q-list separator>
-                        <q-item
+                <div v-if="showIgnored" class="settings-card q-mt-sm">
+                    <div class="settings-card__rows">
+                        <div
                             v-for="item in ignoredItems"
                             :key="item.stock_item_id"
-                            class="q-py-sm"
+                            class="settings-card__row"
                         >
-                            <q-item-section>
-                                <q-item-label class="dora-text-muted">
+                            <div class="settings-card__row-main">
+                                <span class="settings-card__row-name dora-text-muted">
                                     {{ item.name }}
-                                </q-item-label>
-                            </q-item-section>
-                            <q-item-section side>
+                                </span>
+                            </div>
+                            <div class="settings-card__row-aux">
                                 <BaseButton
-                                    variant="ghost"
+                                    variant="secondary"
                                     dense
                                     size="sm"
                                     label="Track again"
                                     :disable="busy"
                                     @click="onUnignore(item)"
                                 />
-                            </q-item-section>
-                        </q-item>
-                    </q-list>
-                </q-card>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </template>
 
@@ -233,6 +233,7 @@
         type UnmatchedStockItem,
     } from 'src/services/api/nutritionApiService';
     import { useAuthStore } from 'src/stores/authStore';
+    import { useNutritionMatchingStore } from 'src/stores/nutritionMatchingStore';
     import { useRecipeStore } from 'src/stores/recipeStore';
     import { useStockItemStore } from 'src/stores/stockItemStore';
 
@@ -254,6 +255,7 @@
     const catalogueSize = ref(0);
     const showIgnored = ref(false);
     const { isAdmin } = storeToRefs(useAuthStore());
+    const matchingStore = useNutritionMatchingStore();
 
     const loading = ref(false);
     const busy = ref(false);
@@ -276,6 +278,7 @@
             ignoredCount.value = dto.ignored_count;
             ignoredItems.value = dto.ignored_items;
             catalogueSize.value = dto.catalogue_size;
+            matchingStore.setCount(dto.items.length);
         } catch (err) {
             notifyError('Could not load nutrition matches.', err);
         }
@@ -374,6 +377,27 @@
     /* Matches the suggestion tag on the stock-item detail page — the same
        "Dora is asking, nothing is saved" signal has to look the same on both
        surfaces. */
+    /* The "no food data installed" notice — the settings card, laid out as
+       icon / prose / action, tinted with the warning-soft surface so it reads
+       as a state of the page rather than a row of work. */
+    .match-notice {
+        display: flex;
+        align-items: flex-start;
+        gap: var(--space-3);
+        padding: var(--space-4);
+        background: var(--semantic-warning-soft);
+    }
+    .match-notice__icon {
+        flex: 0 0 auto;
+        color: var(--semantic-warning);
+        margin-top: 2px;
+    }
+    .match-notice__body { flex: 1 1 auto; min-width: 0; }
+    .match-notice__action { flex: 0 0 auto; }
+    @media (max-width: 599px) {
+        .match-notice { flex-wrap: wrap; }
+        .match-notice__action { width: 100%; }
+    }
     .match-tag {
         background: var(--surface-sunken);
         color: var(--text-secondary);

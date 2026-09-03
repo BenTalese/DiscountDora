@@ -271,7 +271,12 @@
             case 'on_target':
                 return 'On your list — click to remove';
             case 'on_other':
-                return 'On another list — click to remove';
+                // Owner 2026-09-03: "'On another list' makes no sense in this
+                // context". Right — "another" is a comparison, and outside the
+                // shopping-list surface there is no first list to compare
+                // against: on a recipe row the only fact is that the item is
+                // already on *a* list.
+                return 'On a list — click to remove';
             case 'on_multiple':
                 return 'On multiple lists — click to manage';
             case 'none':

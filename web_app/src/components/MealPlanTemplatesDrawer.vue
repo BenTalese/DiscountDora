@@ -99,17 +99,6 @@
                                     <BaseButton variant="icon" :icon="ICONS.edit" @click="startRename(t)">
                                         <q-tooltip>Rename</q-tooltip>
                                     </BaseButton>
-                                    <!-- FU-308 — Clone folded in from the retired templates
-                                         page. Same call site (`templateStore.cloneAsync`);
-                                         the drawer now covers the full per-template CRUD. -->
-                                    <BaseButton
-                                        variant="icon"
-                                        :icon="ICONS.content_copy"
-                                        :loading="cloningId === t.meal_plan_template_id"
-                                        @click="onClone(t)"
-                                    >
-                                        <q-tooltip>Clone</q-tooltip>
-                                    </BaseButton>
                                     <BaseButton variant="danger-ghost" :icon="ICONS.delete_outline" round dense @click="confirmDelete(t)">
                                         <q-tooltip>Delete</q-tooltip>
                                     </BaseButton>
@@ -170,10 +159,6 @@
     const renamingId = ref<string | null>(null);
     const renameDraft = ref('');
     const saving = ref(false);
-    // FU-308 — per-template pending state for the Clone action. Scoped
-    // per-template (not global) so multiple concurrent clones each spin
-    // their own row's icon.
-    const cloningId = ref<string | null>(null);
 
     function startRename(t: MealPlanTemplateSummary) {
         renamingId.value = t.meal_plan_template_id;
@@ -230,25 +215,22 @@
         emit('applyTemplate', t.meal_plan_template_id);
     }
 
-    // FU-308 — Clone folded in from the retired templates page. Same
-    // `templateStore.cloneAsync` call site; the store refreshes the list
-    // so the new template appears in the drawer without a manual reload.
-    async function onClone(t: MealPlanTemplateSummary) {
-        if (cloningId.value) return;
-        cloningId.value = t.meal_plan_template_id;
-        try {
-            await templateStore.cloneAsync(t.meal_plan_template_id);
-            $q.notify({ type: 'positive', position: 'bottom-right', message: 'Cloned.' });
-        } catch (err) {
-            $q.notify({
-                type: 'negative', position: 'bottom-right',
-                message: 'Could not clone the template.',
-                caption: toastCaption(err),
-            });
-        } finally {
-            cloningId.value = null;
-        }
-    }
+    // ── Clone: REMOVED 2026-09-03 (owner: "what's the point of cloning
+    // templates?") ────────────────────────────────────────────────────────
+    //
+    // The honest answer was "there isn't one, yet". Clone arrived with FU-308
+    // when the dedicated templates page was retired into this drawer, and it
+    // was carried over rather than re-justified. A clone would earn its place
+    // if you could then EDIT the copy's meals into a variant — but nothing in
+    // the app edits a template's contents: the drawer offers rename and delete,
+    // and the only way to change what a template holds is to apply it, edit the
+    // week, and save that week as a new template. Which is also the way to get
+    // a variant, without a clone. So the button produced a second identical
+    // template distinguishable only by name.
+    //
+    // `templateStore.cloneAsync` and its endpoint are left in place — they are
+    // harmless, tested, and are what an "edit a template" feature would build
+    // on if the owner ever wants one. Do not re-add the button without that.
 
     // FU-308 — jump to the dedicated Rotating Sets page. Close the drawer
     // first so the transition doesn't overlap the route push.

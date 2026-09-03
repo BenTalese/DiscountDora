@@ -9,10 +9,12 @@
             <span v-if="batchEnabled && shortfallCount > 0" class="week-status__cell text-warning">
                 <q-icon :name="ICONS.chef_hat" size="14px" class="q-mr-xs" />
                 {{ cookByLabel }}
+                <!-- Owner feedback 2026-09-03 - the closing sentence ("you'll
+                     need to cook or shop for the missing ingredients") is gone:
+                     it restated the two figures sitting either side of it. -->
                 <InfoTip label="Cook by">
                     Meal-plan slots whose recipe doesn't have enough
-                    cooked-and-frozen portions to cover them. You'll need to
-                    cook or shop for the missing ingredients.
+                    cooked-and-frozen portions to cover them.
                 </InfoTip>
             </span>
             <!-- Owner feedback 2026-08-27 — this used to count everything the
@@ -28,9 +30,12 @@
                 <q-icon :name="ICONS.shopping_cart" size="14px" class="q-mr-xs" />
                 {{ statusLabel }}
             </span>
-            <span v-if="onListCount > 0" class="week-status__cell dora-text-muted">
-                {{ onListCount }} already on a list
-            </span>
+            <!-- Owner feedback 2026-09-03 - *"X to buy, X already on list is
+                 duplicated information"*. It was: the right rail now says both
+                 halves per stock level ("2 of 3 to buy"), so repeating the
+                 handled half here as its own cell said the same thing a second
+                 time, less precisely. The strip keeps the number that is still
+                 the user's to act on. -->
         </template>
         <span v-else class="week-status__empty dora-text-muted">
             No meals planned for this week yet.

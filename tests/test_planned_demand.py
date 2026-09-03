@@ -34,7 +34,7 @@ _RECIPE = UUID("11111111-1111-1111-1111-111111111111")
 
 
 def _meal(day_offset: int, servings: int = 2, recipe_id: UUID = _RECIPE,
-          name: str = "Fried Rice") -> PlannedMeal:
+          name: str = "Fried Rice", cook_batch_id: UUID | None = None) -> PlannedMeal:
     return PlannedMeal(
         entry_id=uuid4(),
         recipe_id=recipe_id,
@@ -42,6 +42,7 @@ def _meal(day_offset: int, servings: int = 2, recipe_id: UUID = _RECIPE,
         scheduled_for=_TODAY + timedelta(days=day_offset),
         servings=servings,
         covered=False,
+        cook_batch_id=cook_batch_id,
     )
 
 
@@ -76,6 +77,74 @@ def test__allocate_pool__leftovers_reach_a_later_smaller_meal():
 
 def test__allocate_pool__negative_pool_is_treated_as_empty():
     assert allocate_pool([_meal(1)], -5)[0].covered is False
+
+
+# ── allocate_pool: cook batches are ONE unit ─────────────────────────────
+#
+# A cook batch is one cook eaten across several days. Allocating it per day
+# would let a small pool "cover" its first day and leave the rest reading as
+# further cooks that do not exist — and would put a chef hat on a leftovers
+# day, which nobody has to cook. Owner, 2026-09-03, on multi-day cooks:
+# *"feels like a feature that has great potential to break."*
+
+_BATCH = UUID("22222222-2222-2222-2222-222222222222")
+
+
+def test__allocate_pool__batch_is_covered_as_a_whole_or_not_at_all():
+    # Mon + Wed, 2 servings each: the cook has to yield 4. A pool of 3 covers
+    # neither day, even though it would have covered Monday alone.
+    meals = allocate_pool(
+        [_meal(1, cook_batch_id=_BATCH), _meal(3, cook_batch_id=_BATCH)], 3,
+    )
+    assert [m.covered for m in meals] == [False, True]
+    # …and the one that reads as uncovered is the COOK day, not the leftovers.
+    assert [m.is_cook_day for m in meals] == [True, False]
+
+
+def test__allocate_pool__leftover_days_are_never_flagged_as_needing_a_cook():
+    meals = allocate_pool(
+        [_meal(1, cook_batch_id=_BATCH), _meal(3, cook_batch_id=_BATCH)], 0,
+    )
+    needing = [m for m in meals if not m.covered]
+    assert len(needing) == 1
+    assert needing[0].is_cook_day is True
+
+
+def test__allocate_pool__batch_covered_when_the_pool_reaches_its_whole_yield():
+    meals = allocate_pool(
+        [_meal(1, cook_batch_id=_BATCH), _meal(3, cook_batch_id=_BATCH)], 4,
+    )
+    assert all(m.covered for m in meals)
+
+
+def test__allocate_pool__batch_spends_the_pool_at_its_cook_day_position():
+    # A standalone meal on day 2 sits between the batch's Mon and Wed. The
+    # batch queues at its cook day (day 1), so it is served first and the
+    # 2-serving pool goes to it, leaving day 2 uncovered.
+    standalone = _meal(2)
+    meals = allocate_pool(
+        [_meal(1, servings=1, cook_batch_id=_BATCH),
+         _meal(3, servings=1, cook_batch_id=_BATCH),
+         standalone], 2,
+    )
+    by_day = {m.scheduled_for.day: m.covered for m in meals}
+    assert by_day[_TODAY.day + 1] is True
+    assert by_day[_TODAY.day + 3] is True
+    assert by_day[_TODAY.day + 2] is False
+
+
+def test__recipe_shortfalls__earliest_needed_is_a_batch_cook_day():
+    meals = allocate_pool(
+        [_meal(1, cook_batch_id=_BATCH), _meal(3, cook_batch_id=_BATCH)], 0,
+    )
+    snapshot = PlannedMealSnapshot(meals=meals, available_by_recipe={_RECIPE: 0})
+    [row] = recipe_shortfalls(snapshot)
+    # Day 3 is a leftovers day, so the date the ingredients must exist by is
+    # day 1 — the day the single cook happens.
+    assert row.earliest_needed == _TODAY + timedelta(days=1)
+    # The servings gap is unchanged by the grouping: a batch's members still
+    # each carry their own share of the yield.
+    assert row.committed_meals == 4
 
 
 # ── recipe_shortfalls ────────────────────────────────────────────────────

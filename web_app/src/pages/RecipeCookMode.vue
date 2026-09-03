@@ -74,12 +74,15 @@
                             aria-label="Sous Chef voice"
                             @click="toggleSpeech"
                         >
-                            <!-- tooltip folds the toggle micro-label with a fuller
-                                 explanation of what Sous Chef does, per IMPL_PLAN_HELP_CHIPS. -->
-                            <q-tooltip>
-                                {{ speechEnabled ? 'Sous Chef is on — tap to turn it off.' : 'Sous Chef is off — tap to turn it on.' }}
-                                Reads each step aloud as you go, hands-free.
-                            </q-tooltip>
+                            <!-- Owner feedback 2026-09-03: *"Remove 'tap to turn it
+                                 on/off' - we know… just need 'Sous Chef reads each
+                                 step…'"*. The on/off state is already carried twice
+                                 over — filled vs outlined styling for the eye,
+                                 `aria-pressed` for a screen reader — so spelling it
+                                 out in the tooltip was a third copy of one fact, and
+                                 the half of the tooltip that actually teaches
+                                 something is what Sous Chef *does*. -->
+                            <q-tooltip>Sous Chef reads each step aloud as you go, hands-free.</q-tooltip>
                         </BaseButton>
                         <BaseButton
                             v-if="speechRecognitionAvailable"
@@ -117,8 +120,12 @@
                                 <q-card class="sous-chef-help" flat>
                                     <q-card-section>
                                         <div class="text-subtitle1 q-mb-sm">Sous Chef commands</div>
+                                        <!-- Owner feedback 2026-09-03 — reworded; the
+                                             old copy spent two clauses reassuring you
+                                             that kitchen chatter is ignored, which is
+                                             the unremarkable default. -->
                                         <div class="text-caption dora-text-muted q-mb-sm">
-                                            With listening on, say any of these. Sous Chef stays quiet for anything else — chat with someone in the kitchen freely.
+                                            With voice input enabled, say any of these to interact with your Sous Chef.
                                         </div>
                                         <q-list dense>
                                             <q-item v-for="cmd in sousChefCommands" :key="cmd.label">
@@ -130,14 +137,12 @@
                                                 </q-item-section>
                                             </q-item>
                                         </q-list>
-                                        <!-- FU-722 — which engine actually spoke. The
-                                             Piper→browser fallback is otherwise
-                                             invisible, and the two clip for different
-                                             reasons, so debugging "it cut the start
-                                             off" needs to start here. -->
-                                        <div v-if="spokenWith" class="text-caption dora-text-muted q-mt-sm">
-                                            Voice: {{ spokenWith }}
-                                        </div>
+                                        <!-- (FU-722's "Voice: Piper (server)" line was
+                                             removed on owner feedback 2026-09-03 — which
+                                             engine spoke is a debugging fact, and this
+                                             popover is a mid-cook command reference.
+                                             `useSpeechOutput().lastEngine` still carries
+                                             it for whoever needs it next.) -->
                                     </q-card-section>
                                 </q-card>
                             </q-menu>
@@ -168,9 +173,10 @@
                     increment-label="Cook for one more"
                     class="cook-header__headcount"
                 >
-                    <q-tooltip>
-                        Rescales quantities for this cook only — the saved recipe stays at {{ recipe.servings ?? '?' }} serving{{ recipe.servings === 1 ? '' : 's' }}.
-                    </q-tooltip>
+                    <!-- Owner feedback 2026-09-03: *"Trim text '- the saved
+                         recipe stays at X servings'"*. "for this cook only"
+                         already says it. -->
+                    <q-tooltip>Rescales quantities for this cook only.</q-tooltip>
                 </NumberStepper>
             </div>
 
@@ -887,14 +893,6 @@
     const speechEnabled = ref<boolean>(
         authStore.currentUser?.voice_output_enabled ?? false,
     );
-    // Null until she has actually spoken once this session.
-    const spokenWith = computed(() => {
-        const engine = speechOut.lastEngine.value;
-        if (engine === 'piper') return 'Piper (server)';
-        if (engine === 'browser') return 'Browser fallback';
-        return null;
-    });
-
     /** Below the phone breakpoint the voice controls go icon-only; above it
      *  Sous Chef gets its label back (owner feedback 2026-08-28: *"I prefer the
      *  sous chef big button for desktop, the icon only version can stay for
@@ -951,6 +949,13 @@
         { label: '"Next"', does: 'advance to the next step' },
         { label: '"Previous" / "Back"', does: 'go to the previous step' },
         { label: '"Repeat"', does: 'read the current step again' },
+        // Owner feedback 2026-09-03 — the three added verbs. "Ingredients"
+        // and "Tools" answer the two questions you have with both hands full
+        // and the panel scrolled off the bottom of a phone; "Stop" is the
+        // one word anybody says to something that is talking at them.
+        { label: '"Ingredients"', does: "read this step's ingredients aloud" },
+        { label: '"Tools"', does: "read this step's tools aloud" },
+        { label: '"Stop"', does: 'stop Sous Chef talking, or pause a running timer' },
         { label: '"Start timer"', does: 'start the step timer (uses detected duration, or 5 min)' },
         { label: '"Pause timer"', does: 'pause the running timer' },
         { label: '"Reset timer"', does: 'clear the timer' },
@@ -1567,6 +1572,91 @@
     // mirrors a visible button in the UI — we deliberately don't expose
     // voice-only side effects, so the user can always verify what we
     // think they said by spotting the corresponding click.
+    /** Speak an *answer* to something the cook asked out loud.
+     *
+     *  Deliberately not routed through `speak()`, which honours the Sous Chef
+     *  narration toggle: that toggle governs whether Dora reads each step
+     *  *unbidden*, and a direct spoken question deserves a spoken answer
+     *  whichever way it is set (the mic is independent of narration by
+     *  design — see the mic tooltip). Where no voice can produce sound at all
+     *  the answer falls back to a toast, so the command is never a no-op.
+     *  R-078: the message names the real condition rather than a generic
+     *  "nothing to say". */
+    function speakAnswer(text: string) {
+        if (speechOut.available.value) {
+            speechOut.speak(text);
+            return;
+        }
+        $q.notify({ type: 'info', message: text, icon: ICONS.record_voice_over });
+    }
+
+    /** The name to *say* for an ingredient: the substitute when one is swapped
+     *  in for this cook, because that is what's going in the bowl. */
+    function spokenIngredientName(ingredient: Recipe['ingredients'][number]): string {
+        const stockItemId = ingredient.stock_item_id;
+        const swap = stockItemId !== null ? sessionSwaps.value.get(stockItemId) : undefined;
+        if (swap) return swap.substituteName;
+        return ingredient.stock_item_name ?? ingredient.raw_text ?? 'an unnamed ingredient';
+    }
+
+    /** "Ingredients" — read the current step's ingredients, quantities scaled
+     *  to the headcount exactly as the panel shows them. */
+    function speakStepIngredients() {
+        const recipeIngredients = recipe.value?.ingredients ?? [];
+        if (recipeIngredients.length === 0) {
+            speakAnswer("This recipe doesn't list any ingredients.");
+            return;
+        }
+        const ids = highlightedIngredientIds.value;
+        const rows = recipeIngredients.filter((ing) => ids.has(ing.recipe_ingredient_id));
+        if (rows.length === 0) {
+            speakAnswer('No ingredients are linked to this step.');
+            return;
+        }
+        const parts = rows.map((ing) => {
+            const quantity = displayQuantity(ing.quantity, ing.unit);
+            const name = spokenIngredientName(ing);
+            const optional = ing.is_optional ? ', optional' : '';
+            return quantity ? `${quantity} ${name}${optional}` : `${name}${optional}`;
+        });
+        speakAnswer(`For this step: ${parts.join('; ')}.`);
+    }
+
+    /** "Tools" — same shape as the ingredients answer. Only a structured step
+     *  carries tool links, so a free-text method says so rather than guessing
+     *  (there is no text-match fallback for tools — see `highlightedToolIds`). */
+    function speakStepTools() {
+        if (recipeTools.value.length === 0) {
+            speakAnswer("This recipe doesn't list any tools.");
+            return;
+        }
+        const ids = highlightedToolIds.value;
+        const names = recipeTools.value.filter((tool) => ids.has(tool.tool_id)).map((tool) => tool.name);
+        if (names.length === 0) {
+            speakAnswer('No tools are linked to this step.');
+            return;
+        }
+        speakAnswer(`For this step: ${names.join('; ')}.`);
+    }
+
+    /** "Stop" — the one word people say to a thing that is talking at them.
+     *
+     *  It used to exit cook mode (grouped with "exit"/"quit"), which is the
+     *  most destructive reading of an ambiguous word: say it to shut Dora up
+     *  mid-sentence and you lose your place in the recipe. Owner feedback
+     *  2026-09-03 fixes the mapping — stop talking, or stop the timer. Speech
+     *  wins when both are live, so a second "stop" gets the timer; exiting now
+     *  needs "exit" / "quit", which nobody says by accident. */
+    function handleStopCommand() {
+        if (speechOut.busy.value) {
+            speechOut.cancel();
+        } else if (timerRunning.value) {
+            pauseTimer();
+        }
+        // Nothing talking and no timer running — nothing to stop, and
+        // silence is the right answer (see the tail comment below).
+    }
+
     function handleVoiceCommand(rawTranscript: string) {
         const transcript = rawTranscript.toLowerCase();
         if (/(^|\s)(next|forward|continue)(\s|$)/.test(transcript)) {
@@ -1575,6 +1665,10 @@
             prevStep();
         } else if (/(^|\s)(repeat|again|say it again)(\s|$)/.test(transcript)) {
             speakCurrent();
+        } else if (/(^|\s)(ingredients?|what do i need)(\s|$)/.test(transcript)) {
+            speakStepIngredients();
+        } else if (/(^|\s)(tools?|equipment|what tools)(\s|$)/.test(transcript)) {
+            speakStepTools();
         } else if (/(^|\s)(start timer|begin timer|set timer)(\s|$)/.test(transcript)) {
             // "start timer" → use whatever duration the current step
             // implies; fall back to 5 minutes when nothing's detectable.
@@ -1587,8 +1681,10 @@
         } else if (/(^|\s)(reset timer|clear timer)(\s|$)/.test(transcript)) {
             resetTimer();
             if (speechEnabled.value) speak('Timer reset.');
-        } else if (/(^|\s)(stop|exit|quit)(\s|$)/.test(transcript)) {
+        } else if (/(^|\s)(exit|quit)(\s|$)/.test(transcript)) {
             exitCookMode();
+        } else if (/(^|\s)(stop|quiet|hush|shush|be quiet)(\s|$)/.test(transcript)) {
+            handleStopCommand();
         }
         // Unrecognised commands are deliberately ignored — silence is
         // less annoying than a "I didn't understand that" interjection

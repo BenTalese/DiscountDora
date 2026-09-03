@@ -31,11 +31,9 @@
                     <q-icon :name="ICONS.link" size="12px" />
                     {{ cookMarkerLabel }}
                 </span>
-                <span class="rich-card__servings">×{{ entry.servings }}</span>
-                <span v-if="entry.cook_time_minutes" class="rich-card__cook-time">
-                    <q-icon :name="ICONS.timer" size="12px" />
-                    {{ entry.cook_time_minutes }}m
-                </span>
+                <!-- Owner feedback 2026-09-03 — the sometimes-there glyph sits
+                     LEFT of the always-there servings count, so the counts line
+                     up down the day's cards. Same order as the desktop chip. -->
                 <q-icon
                     v-if="entry.consumed_at"
                     :name="ICONS.check"
@@ -52,6 +50,11 @@
                 >
                     <q-tooltip>Needs cooking — pool is short</q-tooltip>
                 </q-icon>
+                <span class="rich-card__servings">×{{ entry.servings }}</span>
+                <span v-if="entry.cook_time_minutes" class="rich-card__cook-time">
+                    <q-icon :name="ICONS.timer" size="12px" />
+                    {{ entry.cook_time_minutes }}m
+                </span>
             </div>
         </div>
 
@@ -62,20 +65,21 @@
         >
             <q-list dense style="min-width: 220px">
                 <q-item-label header>{{ entry.recipe_name }}</q-item-label>
+                <!-- Shared `NumberStepper`, same as the desktop chip's menu
+                     and the auto builder's review row (R-001). -->
                 <q-item>
                     <q-item-section>Servings</q-item-section>
                     <q-item-section side>
-                        <div class="row items-center no-wrap q-gutter-xs">
-                            <BaseButton variant="icon" :icon="ICONS.remove" @click.stop="emit('adjust', -1)">
-                                <q-tooltip>One fewer (removes the entry at 0)</q-tooltip>
-                            </BaseButton>
-                            <span class="text-weight-medium" style="min-width: 1.2rem; text-align: center">
-                                {{ entry.servings }}
-                            </span>
-                            <BaseButton variant="icon" :icon="ICONS.add" @click.stop="emit('adjust', 1)">
-                                <q-tooltip>One more</q-tooltip>
-                            </BaseButton>
-                        </div>
+                        <NumberStepper
+                            :model-value="entry.servings"
+                            :min="0"
+                            decrement-label="One fewer serving"
+                            increment-label="One more serving"
+                            @click.stop
+                            @update:model-value="(v: number) => emit('adjust', v - entry.servings)"
+                        >
+                            <q-tooltip>Servings — removes the meal at 0</q-tooltip>
+                        </NumberStepper>
                     </q-item-section>
                 </q-item>
                 <q-separator />
@@ -121,7 +125,7 @@
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
-    import BaseButton from 'src/components/BaseButton.vue';
+    import NumberStepper from 'src/components/NumberStepper.vue';
     import { recipeImageUrl } from 'src/services/api/recipeApiService';
     import { useBatchEnabled } from 'src/composables/useBatchEnabled';
     import type { MealPlanEntry } from 'src/models/mealPlan';

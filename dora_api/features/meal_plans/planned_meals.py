@@ -26,6 +26,10 @@ covered: you are going to cook that meal, so its ingredients are demand. The
 leftover 3 stay in the pool for a later, smaller entry — which is what a
 household actually does with a half-batch.
 
+A **cook batch** (one cook, several days) is a single allocation unit, not one
+per day — see `allocate_pool`. Its leftover days are covered by their own
+cook, so they never read as needing one.
+
 The queue is ordered by date, so the pool is spent on the *soonest* meals.
 That is both what happens in a real kitchen and the reading that makes the
 "earliest needed" date honest: if anything is uncovered, the earliest
@@ -54,6 +58,14 @@ class PlannedMeal:
     servings: int
     # True when the recipe's already-cooked pool stretches to this entry.
     covered: bool
+    # PROPOSAL_MEAL_PLANS_PART_2 — the cook batch this entry belongs to, if
+    # any. A batch is ONE cook eaten across several days, so the pool is spent
+    # against the batch as a whole rather than per day (see `allocate_pool`).
+    cook_batch_id: UUID | None = None
+    # True when this entry is the day the cook actually happens (the batch's
+    # earliest day), or when the meal is standalone. A leftover day is never
+    # something anybody has to cook.
+    is_cook_day: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -83,15 +95,45 @@ def allocate_pool(meals: list[PlannedMeal], available_meals: int) -> list[Planne
     """Spend `available_meals` across one recipe's entries, soonest first.
 
     Pure — no repo access — so the rule is unit-testable on its own. Returns
-    the same entries with `covered` decided, in date order.
+    the same entries with `covered` and `is_cook_day` decided, in date order.
+
+    **A cook batch is one unit, not several.** Its days share a single cook, so
+    the pool is spent against the batch's whole yield on its earliest day; the
+    later days eat that cook's output and are never something anybody has to
+    cook, whatever the pool holds. Allocating per day instead would let a pool
+    of 2 "cover" the Monday of a Mon+Wed batch and leave the Wednesday reading
+    as a second cook that does not exist (owner, 2026-09-03: *"changing cook
+    days ... feels like a feature that has great potential to break"*).
     """
     remaining = max(0, available_meals)
+
+    # Group into allocation units: one per standalone meal, one per batch.
+    units: dict[str, list[PlannedMeal]] = {}
+    for meal in meals:
+        key = f"batch:{meal.cook_batch_id}" if meal.cook_batch_id else f"entry:{meal.entry_id}"
+        units.setdefault(key, []).append(meal)
+
+    def unit_sort_key(rows: list[PlannedMeal]):
+        first = min(rows, key=lambda m: (m.scheduled_for, str(m.entry_id)))
+        return (first.scheduled_for, str(first.entry_id))
+
     out: list[PlannedMeal] = []
-    for meal in sorted(meals, key=lambda m: (m.scheduled_for, str(m.entry_id))):
-        covered = meal.servings <= remaining
+    for rows in sorted(units.values(), key=unit_sort_key):
+        cook_day = min(rows, key=lambda m: (m.scheduled_for, str(m.entry_id)))
+        yield_needed = sum(m.servings for m in rows)
+        covered = yield_needed <= remaining
         if covered:
-            remaining -= meal.servings
-        out.append(replace(meal, covered=covered))
+            remaining -= yield_needed
+        for meal in rows:
+            is_cook_day = meal.entry_id == cook_day.entry_id
+            out.append(replace(
+                meal,
+                # A leftover day is covered by its own batch's cook, so it is
+                # never flagged as needing one.
+                covered=covered or not is_cook_day,
+                is_cook_day=is_cook_day,
+            ))
+    out.sort(key=lambda m: (m.scheduled_for, str(m.entry_id)))
     return out
 
 
@@ -153,6 +195,7 @@ def upcoming_planned_meals(
             scheduled_for=entry.scheduled_for,
             servings=int(entry.servings or 0),
             covered=False,
+            cook_batch_id=entry.cook_batch_id,
         ))
         available_by_recipe[recipe.id] = int(recipe.available_meals or 0)
 
@@ -180,7 +223,7 @@ def recipe_shortfalls(snapshot: PlannedMealSnapshot) -> list[RecipeShortfall]:
         available = snapshot.available_by_recipe.get(recipe_id, 0)
         if committed <= available:
             continue
-        uncovered = [m for m in rows if not m.covered]
+        uncovered = [m for m in rows if not m.covered and m.is_cook_day]
         out.append(RecipeShortfall(
             recipe_id=recipe_id,
             recipe_name=rows[0].recipe_name,

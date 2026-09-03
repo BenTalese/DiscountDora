@@ -29,7 +29,17 @@
             <div v-if="quantityLabel" class="mp-ing__qty">{{ quantityLabel }}</div>
         </div>
 
-        <AddToListButton variant="row" :stock-item-id="ingredient.stock_item_id" />
+        <!-- FU-803 asked the question this prop answers: the auto builder's
+             review step renders this row for a week that has NOT been saved
+             yet, where a per-ingredient cart button invites you to shop for a
+             plan that may never exist — and the builder already ends on "Add to
+             a shopping list" for the whole week. So the cart is opt-out, and
+             the two rail lists (real, saved demand) keep it. -->
+        <AddToListButton
+            v-if="showCart"
+            variant="row"
+            :stock-item-id="ingredient.stock_item_id"
+        />
     </div>
 </template>
 
@@ -41,7 +51,15 @@
     import type { MealPlanIngredient } from 'src/models/mealPlan';
     import { computed } from 'vue';
 
-    const props = defineProps<{ ingredient: MealPlanIngredient }>();
+    const props = withDefaults(
+        defineProps<{
+            ingredient: MealPlanIngredient;
+            /** Show the per-ingredient add-to-list button. Off for a preview
+             *  of demand that isn't committed yet (see the template note). */
+            showCart?: boolean;
+        }>(),
+        { showCart: true },
+    );
 
     const emit = defineEmits<{
         /** Hovering a needed ingredient highlights the day cells whose recipes

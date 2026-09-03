@@ -39,6 +39,53 @@ remain.
       verification email uses the public URL you set.
 
 ---
+## Sous Chef's new voice commands (2026-09-03)
+
+Three verbs were added — **"ingredients"**, **"tools"** and **"stop"** — and
+"stop" no longer exits cook mode (that needs "exit" / "quit" now). The command
+list in the help popover was verified live; the *dispatch* can't be driven
+headlessly because it needs a real microphone, so these are yours to say out
+loud. Recipe with structured steps + per-step links: **Sunday Ragu**.
+
+- [ ] Say **"ingredients"** on a step that has ingredient links — she should read
+      the quantities *as scaled to the "Cooking for" headcount*, and name the
+      substitute rather than the original where one is swapped in for this cook.
+- [ ] Say **"ingredients"** on a step with none — expect *"No ingredients are
+      linked to this step"*, not silence.
+- [ ] Say **"tools"** on a linked step, and on a free-text recipe — the second
+      should say *"This recipe doesn't list any tools"*.
+- [ ] Say **"stop"** while she is mid-sentence: she stops talking and **stays in
+      cook mode**. Say it again with a timer running: the timer pauses.
+- [ ] Turn Sous Chef **off**, leave the mic on, and ask for "ingredients" — the
+      answer should still be spoken (a direct question gets a direct answer;
+      narration-off only governs unprompted step reading).
+- [ ] Say **"exit"** — that, and only that, should leave cook mode.
+
+## Themes after the dark-page fix (2026-09-03)
+
+FU-709 landed: every dark theme now paints its own authored page colour instead
+of Quasar's grey, so **all seven dark variants changed background** at once.
+Salt & Pepper was rebuilt as a neutral modern-OS pair, and Lemon Tart Dark's
+surfaces were re-hued warm with a lifted toolbar. Salt & Pepper (both modes),
+Lemon Tart Dark and Pesto Dark were driven and screenshotted at 1280; contrast
+was computed for every ink × surface pair. What's left is taste, the four dark
+themes not walked, and phone width.
+
+- [ ] Wear the new **Salt & Pepper** light and dark for a session. The brief was
+      a modern OS look with one accent — check the blue is doing only
+      selected/primary work and nothing important went colourless (level
+      squares, essential stripe, attention outlines, alert kinds).
+- [ ] **Lemon Tart Dark**: the page is a warm charcoal now, not a blue-grey, and
+      the menu bar sits above it with a hairline. Confirm the bar reads as a bar
+      and the warmth doesn't tip into brown.
+- [ ] The **four dark themes not walked** — Blueberry, Cherry Cola, Sourdough,
+      Dragonfruit — are all showing their real page colour for the first time.
+      Check cards and rows still separate from the page in each.
+- [ ] All of the above at **375px**, where the header hairline and the page tint
+      are most of what you see.
+- [ ] The **header hairline** across a saturated bar (Pesto light) and a light
+      bar (Salt & Pepper light) — one rule draws both; it should be a whisper,
+      not a rule line.
 
 ## Settings — the 2026-09-03 owner batch
 
@@ -108,12 +155,9 @@ the seed had no data for:
 
 Every token pair in Salt & Pepper and Dragonfruit (both modes) was measured
 against the contrast floor in the running app and passes. What a probe cannot
-judge is whether they look *good*.
+judge is whether they look *good*. (Salt & Pepper was rebuilt later the same
+day — its bullet moved to "Themes after the dark-page fix" above.)
 
-- [ ] Wear **Salt & Pepper** (light and dark) for a session. The brief was
-      "very minimal" — check nothing important has become invisible now that
-      hue isn't doing any work: the level squares, the essential stripe, the
-      attention outlines, the alert kinds.
 - [ ] Wear **Dragonfruit** (light and dark) for a session. The pink primary is
       the strongest colour in the app; check the toolbar, the primary buttons
       and the dashboard hero don't fight each other.
@@ -315,6 +359,56 @@ no attachments.
 - [ ] On a finished list, add a receipt photo, tap the thumb, confirm the
       lightbox opens and closes on Esc and on a backdrop click.
 
+## Meal planner — the 2026-09-03 owner batch (~35 items)
+
+Most of this batch was driven live with Playwright at 1280 and 375 and deleted
+from this list: the calendar opening on September for a week starting 31 Aug;
+day squares holding 34×34 with five pips wrapped and no "+N" (measured before
+and after piling meals onto one day); the burger on "Build my week"; the armed
+slot's one-line `→ Lunch · 06/09/2026` + **Done** at 36px with zero per-row
+"→ Breakfast" lines; the two dot-led shopping lines ("3 of 4 to buy" red, "2 of
+6 to buy" amber); "All ingredients · 18" on one line; the status strip without
+"already on a list"; the chef hat left of the servings pill; the rail's cooked
+count as a real input with the disabled `−` hidden at rest; **all four multi-day
+cook scenarios** (link, change-days leaving no ghost, remove-the-cook asking
+first and taking its leftovers, servings-to-zero with no 400); the straddling
+batch keeping both leftover days; the builder's review rows not overlapping with
+"Pizza dough (60% hydration)" in them; servings defaulting to the household's 2;
+"I'll pick myself" gone; Clone gone; the recurring form's even 12px gaps and
+equal-width date fields; the mobile overflow menu carrying all five week
+actions; the phone's plain (un-collapsed) week card with its ingredient
+breakdown; and money-off producing `cost_total: null` with 0 of 12 entries
+priced and no `$` anywhere in the builder.
+
+What's left needs paint, a real finger, or data this seed doesn't have.
+
+- [ ] **The pool count as a typed field, with a real keyboard.** Click (or tap)
+      a rail row's count, type `6`, press Enter. Then try the awkward paths a
+      script can't: type nothing and blur; type `abc`; type `-2`; press Esc
+      mid-edit. Each should leave the count as it was, not blank or negative.
+- [ ] **Six pips in a 34px calendar square, at real screen scale.** The
+      geometry is measured, but whether two rows of three tiny dots under a date
+      *reads* rather than looking like dirt is a paint judgement.
+- [ ] **The rounding fix against a real repeating decimal.** The seed's
+      quantities all round clean; the owner's case was "needs 31.333333333333332
+      tbsp". Plan the same recipe three times with a `1/3`-ish quantity (or scale
+      one) and confirm the right rail reads `31.33 tbsp`. Unit tests pin the
+      formatter, so this is confirming the aggregate reaches it.
+- [ ] **The stacked builder review row on a phone.** It no longer has a
+      viewport breakpoint, so 375px now gets exactly what 1280px gets: check the
+      two selects, the stepper and the delete still sit comfortably and the
+      delete is thumb-reachable at the right edge.
+- [ ] **The recipe name as the swap control.** It reads as a title, not a
+      button. Confirm that's discoverable — hover shows the pointer and the
+      "Swap for another recipe" tooltip, and the swap glyph beside the name is
+      noticeable enough that the swap button's removal isn't a loss.
+- [ ] **A cook batch whose cook day you actually reach.** Advance the household
+      date (or plan Mon+Wed and wait) so a linked cook's day arrives, cook it,
+      and confirm the leftover days read as covered rather than needing a cook.
+- [ ] **"Apply recurring" end to end** — the polish is measured, but apply a
+      template across four weeks and confirm the forked weeks land where the
+      dates said, past days skipped.
+
 ## Meal planner — the 2026-09-01 owner batch
 
 Most of this batch was driven live in the pane and deleted: the meal-slot
@@ -329,18 +423,24 @@ left needs paint, a real pointer, or a real phone.
 - [ ] Open the rail's two new dropdowns ("Any time" / "Any level") with the
       mouse and pick a value — QMenu never opens in the pane, so only the
       underlying state was exercised. Check they clear back to the placeholder.
-- [ ] Hover a rail row and confirm the ± buttons fade in either side of the
-      count without the row shifting; then on a phone, tap the count tile and
-      confirm they appear (there is no hover on touch).
+- [ ] On a **phone**, tap a rail row's cooked-count field and confirm the ±
+      buttons appear either side of it (there is no hover on touch), and that
+      the on-screen keyboard doesn't cover the row you were editing. *(The
+      desktop half — steppers hidden at rest, revealed on hover, row never
+      shifting — was measured live 2026-09-03: `visibility: hidden` at rest on
+      every unhovered row, including the ones whose `−` is disabled, which is
+      the bug that batch fixed.)*
 - [ ] Scroll the right pane with "Full ingredient demand" expanded — the
       calendar is now `position: sticky` inside that scroller rather than a
       sibling above it. Nothing should show through it as rows slide under.
 - [ ] The folded past-day header: chevron, day, date, then the meals it held on
       one clamped line. Confirm a long list of meal names truncates rather than
       pushing the kcal figure off the card.
-- [ ] The phone day-strip pips at real size (4px, up to 3 + "+N"). Confirm they
-      read as distinct dots and that the white-on-primary override on the
-      *selected* chip is legible.
+- [ ] The phone day-strip pips at real size (4px, now up to **6 wrapped into
+      rows of three**, and the "+N" label is gone). Confirm they read as
+      distinct dots at that size, that six of them don't crowd the chip's
+      letter and date, and that the white-on-primary override on the *selected*
+      chip is legible.
 - [ ] Drag the window between 1024px and 1200px. The rail took 60px from the
       week pane, so the toolbar's compact threshold moved 1120 → 1180: check
       "Build my week" drops its label before the toolbar wraps to a third line,

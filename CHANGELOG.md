@@ -6,6 +6,137 @@ semver — major bumps signal schema or breaking-config changes.
 ## [Unreleased]
 
 ### Added
+- **Sous Chef answers two more questions, and "stop" now means stop
+  (2026-09-03).** Say **"ingredients"** or **"tools"** in cook mode and she
+  reads the current step's — quantities scaled to who you're cooking for, and
+  naming the substitute where you've swapped one in for this cook. A step with
+  no links says so rather than going quiet. **"Stop"** stops her talking, or
+  pauses a running timer if she wasn't; it used to *leave cook mode*, which is
+  a bad thing for the word you say to interrupt someone. Exiting is "exit" or
+  "quit". Both answers are spoken even with narration turned off — asking out
+  loud is a direct question, and narration-off only governs unprompted reading.
+- **Every dark theme paints its own background.** Dark mode has been showing a
+  generic charcoal in all seven themes while each theme's authored page colour
+  sat unused; the page now carries a tint of its own family — Pesto Dark's deep
+  green, Cherry Cola's merlot, Sourdough's dark crust.
+- **The meal planner tells you which meal needs cooking, not which recipe
+  (2026-09-03).** Plan three fried rices with two portions in the freezer and
+  only the *third* one wears the chef hat now — the pool is spent on the
+  soonest meals first, and the ones it reaches are simply covered. Previously
+  every meal of a short recipe lit up amber, which made the signal useless
+  exactly when you had partly got ahead. A multi-day cook counts as one cook:
+  its leftover days are covered by their own cook day and never ask to be
+  cooked again. The week's *"N to cook by <date>"* is now literally the number
+  of highlighted slots, and the date is the day their ingredients have to
+  exist by.
+- **The auto builder asks how many servings, and starts from your household.**
+  "Servings per meal" on the first step, seeded from *how many people you cook
+  for* (Settings → Cooking), so a four-person household stops re-stepping every
+  row of the proposal. Each row is still editable in the review step.
+- **Save a template, apply a template and clear the week are reachable on a
+  phone.** The mobile planner had two of the six week actions; it now carries
+  the same overflow menu the desktop toolbar does, in the same order.
+
+### Changed
+- **Salt & Pepper is a modern-OS theme now (2026-09-03).** The warm
+  graphite-and-clay palette is gone: light and dark are near-colourless
+  blue-greys with a single blue accent, the header is a plain chrome surface
+  with a hairline instead of a coloured band, and colour appears only where the
+  app is saying *selected* or *primary action* — plus the places that have to
+  convey meaning (stock levels, alerts, chart series), which are unchanged.
+- **Lemon Tart Dark's menu bar is visible again, and its charcoal is warm.**
+  The header had been set to the theme's darkest surface, so it vanished into
+  the page; it now sits a step above it. The surfaces moved onto the family's
+  gold axis too — the one dark theme whose background carried nothing of its
+  own colour.
+- **The app header has a hairline under it in every theme**, drawn from the
+  bar's own ink so it's a faint light line on dark bars and a faint dark one on
+  light ones.
+
+### Fixed
+- **Cook-mode copy trims (2026-09-03).** The Sous Chef tooltip drops "tap to
+  turn it on/off" (the button already looks on or off), the commands popover no
+  longer names which voice engine spoke, its intro reads *"With voice input
+  enabled, say any of these to interact with your Sous Chef"*, and the "Cooking
+  for" tooltip stops at *"Rescales quantities for this cook only."*
+- **A multi-day cook can now be edited without breaking (2026-09-03).** Four
+  separate defects, all in the "cook once, eat it across several days" feature:
+  - **Changing the cook days left a ghost meal behind.** Planned Mon + Tue,
+    changed to Mon + Wed, and Tuesday kept a copy of the meal showing as
+    unlinked. Un-ticking a day in *Change cook days* now means what it says.
+    (*Separate this cook* still keeps every day's meal — that's the case where
+    a copy is the point.)
+  - **Removing a multi-day cook failed** with a bare *"Could not update the
+    plan."* Removing the cook day now asks first — *"Carbonara is cooked once
+    for 2 days. Removing the cook removes its leftover day too."* — and takes
+    the leftovers with it. Removing a leftover day just shortens the cook.
+  - **Dropping a multi-day cook below 1 serving failed** the same way, for the
+    same reason: a cook batch that falls to a single day stops being a batch,
+    and now quietly becomes an ordinary meal instead of being refused.
+  - **A cook that straddled today split in two.** With the cook day in the
+    past, any unrelated edit elsewhere in the week turned its first remaining
+    leftover day into a second "Cook · serves 4" that nobody was going to do.
+- **The calendar opens on the month you're in.** A week running Mon 31 Aug –
+  Sun 6 Sep was showing AUGUST because its Monday was in August; it now shows
+  the month that holds *today*, or failing that the majority of the week's days.
+- **A busy week no longer knocks the calendar out of shape.** Day squares hold
+  their size and position however many meals a day holds: the dots wrap into a
+  second row inside the square and stop when it's full. The "+3" overflow label
+  is gone from the calendar and the phone's day strip alike.
+- **Quantities are rounded.** The right rail could read *"needs
+  31.333333333333332 tbsp"* — aggregated demand is a sum of scaled recipe
+  quantities, i.e. floating point. Every quantity Dora writes now rounds to at
+  most two decimals, everywhere, from one place.
+- **The cooked-meals count in the recipe rail is a real input.** Click it and
+  type — six cooked portions no longer takes six taps. And the `−` button
+  beside it stops being the one control visible at rest: it was showing
+  *precisely* when disabled (an empty pool, i.e. most rows), because
+  Quasar's disabled styling overrode the rule that hides it.
+- **The auto builder's review step fits.** A long recipe name ("Pizza dough
+  (60% hydration)") painted straight through the day and slot pickers on a
+  desktop, because the row's stacking rule keyed off the *window* while the row
+  lives in a ~600px dialog. It stacks at every width now, and the recipe name
+  has absorbed the swap button. Its "What you'll need" list wears the same
+  ingredient row as the right rail, and a cookable meal with no price estimate
+  stops printing "You have everything" twice.
+- **Money in the auto builder respects the install-wide gate.** Cost estimates
+  and the week total are no longer computed and sent for an install with money
+  off — previously they travelled and were merely hidden.
+
+### Changed
+- **Meal planner — the 2026-09-03 owner sweep.** ~35 items, driven live at 375
+  and 1280:
+  - **"Build my week" wears Dora's burger**, on the toolbar, the empty-week
+    banner, the phone and the builder's own first step.
+  - **Arming a slot no longer shoves the rail down.** The filled banner became
+    one line — `→ Lunch · 06/09/2026` in accent bold, with its button beside it
+    — and that button says **Done** rather than Cancel, which never undid
+    anything. The `→ Breakfast` line that repeated the same destination on
+    every recipe row is gone.
+  - **"This week's shopping" splits by stock level.** One red sentence became
+    two dot-led lines: *"3 of 4 to buy"* against a red dot for what you're out
+    of, *"2 of 6 to buy"* against amber for what's running low — each counting
+    against that level's own total. The figures no longer blink to
+    "Calculating…" on every plan edit; they hold the last answer while the new
+    one arrives.
+  - **"Full ingredient demand" is now "All ingredients"** in its own card, one
+    line, with the count in a badge — it used to wrap against the card edge.
+  - The week status strip drops *"N already on a list"* (the rail says it, per
+    level), and the cook-by tooltip drops its closing sentence.
+  - The **chef hat sits left of the servings count** on a meal, so the counts
+    line up down a day.
+  - **A tad more room between the day cards**; the servings ± in a meal's menu
+    is the app's shared stepper, matching the builder.
+  - The phone's week panel is **a plain card, expanded** — no collapsed header
+    restating what's inside it — and it now carries the per-ingredient
+    breakdown it never had.
+  - The **Apply recurring** dialog's fields are evenly spaced and equal width;
+    **"Browse + apply templates…"** is now **"Apply template…"**.
+  - **Removed:** *Clone* on a template (nothing edits a template's contents, so
+    a clone could only ever be a same-named duplicate — save an edited week as
+    a new template instead), and the builder's *"I'll pick myself"* path, which
+    jumped to an empty review step when the planner's own rail does that job
+    better. "Add a meal" inside the review step is unchanged.
 - **Settings knows why it can't install Dora as an app (2026-09-03).** The
   About page used to answer "Install isn't available in this browser. Try Chrome
   on Android" — including to people already in Chrome. The real reason a

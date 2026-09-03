@@ -18,7 +18,12 @@
             </div>
             <div class="entry-chip__main">
                 <span class="entry-chip__name">{{ entry.recipe_name }}</span>
-                <span class="entry-chip__pill">×{{ entry.servings }}</span>
+                <!-- Owner feedback 2026-09-03 — *"put the needs-cook chef hat
+                     on the LEFT of the servings counter so we get UI aligned
+                     where possible. The chef hat is the element that is
+                     sometimes there, sometimes not."* The servings pill is on
+                     every chip, so it is the one that has to hold a column;
+                     the conditional glyph moves to the variable side of it. -->
                 <q-icon
                     v-if="entry.consumed_at"
                     :name="ICONS.check"
@@ -35,6 +40,7 @@
                 >
                     <q-tooltip>Needs cooking — pool is short</q-tooltip>
                 </q-icon>
+                <span class="entry-chip__pill">×{{ entry.servings }}</span>
                 <!-- FU-653 — Dora's belief about this meal. Its own glyph, not
                      a change to the chip's state: the week's shortfall and
                      "need to buy" figures are unchanged, and this sits beside
@@ -55,21 +61,28 @@
         <q-menu v-if="!entry.consumed_at" transition-show="jump-down" transition-hide="jump-up">
             <q-list dense style="min-width: 220px">
                 <q-item-label header>{{ entry.recipe_name }}</q-item-label>
-                <!-- Inline servings adjuster — stays open for rapid ± taps. -->
+                <!-- Inline servings adjuster — stays open for rapid ± taps.
+                     The shared `NumberStepper` rather than a fourth hand-rolled
+                     − value + (R-001): owner feedback 2026-09-03 on the auto
+                     builder was that *"the +/- servings buttons are
+                     inconsistent with elsewhere"*, and the builder was already
+                     on the primitive — this chip's menu was the odd one out.
+                     `min="0"` because stepping the last serving away is how you
+                     take a meal off the plan; the host asks before it does
+                     anything a whole cook batch would notice. -->
                 <q-item>
                     <q-item-section>Servings</q-item-section>
                     <q-item-section side>
-                        <div class="row items-center no-wrap q-gutter-xs">
-                            <BaseButton variant="icon" :icon="ICONS.remove" @click.stop="emit('adjust', -1)">
-                                <q-tooltip>One fewer (removes the entry at 0)</q-tooltip>
-                            </BaseButton>
-                            <span class="text-weight-medium" style="min-width: 1.2rem; text-align: center">
-                                {{ entry.servings }}
-                            </span>
-                            <BaseButton variant="icon" :icon="ICONS.add" @click.stop="emit('adjust', 1)">
-                                <q-tooltip>One more</q-tooltip>
-                            </BaseButton>
-                        </div>
+                        <NumberStepper
+                            :model-value="entry.servings"
+                            :min="0"
+                            decrement-label="One fewer serving"
+                            increment-label="One more serving"
+                            @click.stop
+                            @update:model-value="(v: number) => emit('adjust', v - entry.servings)"
+                        >
+                            <q-tooltip>Servings — removes the meal at 0</q-tooltip>
+                        </NumberStepper>
                     </q-item-section>
                 </q-item>
                 <q-separator />
@@ -117,7 +130,7 @@
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
-    import BaseButton from 'src/components/BaseButton.vue';
+    import NumberStepper from 'src/components/NumberStepper.vue';
     import { useBatchEnabled } from 'src/composables/useBatchEnabled';
     import type { MealPlanEntry } from 'src/models/mealPlan';
     import { computed } from 'vue';

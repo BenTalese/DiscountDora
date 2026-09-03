@@ -1797,15 +1797,15 @@
        a dark green. Matching each mode's real body colour makes the header
        invisible, which is the ask: no visual separation here.
        (The deeper finding — every dark theme's authored `--surface-page` is
-       currently dead — is logged as FU-709 for the owner's call.) */
+       currently dead — was resolved 2026-09-03: `themeService` now syncs
+       `--q-dark-page` from `--surface-page`, so the dark body paints the
+       theme's authored page colour and one token covers both modes. The
+       `body.body--dark` fork that used to match Quasar's grey went with it.) */
     .stock-peek :deep(.stock-detail__header) {
         position: sticky;
         top: 0;
         z-index: 3;
         background: var(--q-page);
-    }
-    body.body--dark .stock-peek :deep(.stock-detail__header) {
-        background: var(--q-dark-page);
     }
     /* Left pane. Fills the splitter panel and hands the scroll to whichever
        list branch is mounted. */

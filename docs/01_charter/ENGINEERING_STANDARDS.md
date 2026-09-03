@@ -2833,7 +2833,101 @@ exceptions, which still must be commented) · **Source** (where it was establish
   form "your browser doesn't support…" written from a check that never asked the
   browser anything.
 
-### R-078 — A switch is owned by the surface it governs, and it must actually govern it
+### R-078 — A component sized by its container never branches on the viewport
+- **Rule:** a component's responsive behaviour keys off **the space it is
+  actually given**, not off `window`. If a component can render inside a dialog,
+  a rail, a drawer, a card column or a bottom sheet, then `@media (max-width: …)`
+  and `$q.screen.lt.*` are the wrong instruments: they describe the browser
+  window, which in those hosts is unrelated to the component's width. Use a
+  layout that needs no breakpoint (wrap, `flex-basis` with `min-width: 0`, a
+  stacked shape at every width), or take an **explicit prop** from the host that
+  names the situation, or a real container query. A viewport query is only
+  honest in a component that is always full-bleed.
+- **Why:** the app keeps producing the same defect from this one confusion, and it
+  is always invisible to the person who wrote it, because the width they tested
+  at is the width where it happens to work. Recorded instances: the meal-plan
+  builder's review row stacked under `@media (max-width: 599px)` while living in
+  a ~600px dialog, so a 1280px desktop kept the full ~400px control cluster and a
+  long recipe name ("Pizza dough (60% hydration)") painted straight through the
+  day/slot selects — the owner's diagnosis was exact: *"seems better on mobile,
+  so an edit to make mobile better stuffed up desktop"* (FU-852, fixed
+  2026-09-03). `RecipeRow.vue`'s `compact` derives from `$q.screen.lt.sm`, which
+  is why it cannot be reused in a 340px rail on a desktop and why
+  `MealPlanRecipeRow` had to exist at all. `MealPlanRecipePicker` once capped
+  itself at `max-height: 65vh` inside a pane that was already correctly sized.
+  Each was found by looking, not by testing.
+- **Apply:** ask "can this component be narrow while the window is wide?" If yes,
+  delete the breakpoint. Prefer the shape that needs no branch — the builder row
+  is stacked at *every* width now, because there was no width at which one line
+  was working. Where a genuine mode difference exists, pass it: `MealPlanRecipeRow`
+  takes an explicit `mode` prop precisely so the rail's width has nothing to do
+  with the window's. Reserve viewport queries for page-level chrome and for
+  things that really are about the device (touch targets under
+  `@media (hover: none)`, a phone's scroll regions).
+- **Violation signal:** a media query or `$q.screen` read inside a component that
+  a dialog, drawer, sheet, rail or side column also renders; a fix described as
+  "better on mobile" that made desktop worse (or the reverse); two breakpoints in
+  one component that disagree about what "narrow" means; a `vh`/`vw` size on a
+  child of a container that already has a definite size.
+
+### R-079 — A display formatter owns its own rounding
+- **Rule:** the function that decides how a value is *written* also decides how
+  many digits it is written to. A call site must never have to remember to round
+  before formatting, and must never carry its own private `round()` beside a
+  shared formatter.
+- **Why:** the alternative diverges immediately, and silently. `formatQuantity`
+  was the single authority for unit spacing (DEC-3) but not for precision, so it
+  did `String(quantity)` — and aggregated meal-plan demand is a sum of scaled
+  per-recipe quantities, i.e. binary floats. The meal planner's right rail read
+  *"needs 31.333333333333332 tbsp"* (owner, 2026-09-03) while the auto builder's
+  preview of the same figures looked fine, because the builder had grown a local
+  `function round(n)` and the rail had not. Two call sites, one formatter, two
+  answers — which is R-003's failure mode wearing a decimal point. The
+  every-call-site-remembers approach cannot be enforced and cannot be tested in
+  one place.
+- **Apply:** put the rounding inside the formatter, pin it with tests that include
+  the float artefacts (`94/3`, `0.1 + 0.2`) and the values that must survive
+  untouched (`0.25`, `0.5`, `2.0` → `"2"`, not `"2.00"`); use
+  `Number(v.toFixed(n)).toString()` rather than `Math.round(v * 100) / 100`,
+  which produces artefacts of its own. Then delete the call sites' local rounders
+  — leaving one in place is the divergence, dormant. Guard non-finite input so a
+  `NaN` renders as nothing rather than the word.
+- **Violation signal:** a `round`/`toFixed`/`Math.round` immediately beside a call
+  to a shared formatter; a formatter that takes an already-formatted string in one
+  place and a raw number in another; a rendered figure with more than a handful of
+  decimal places anywhere in the UI.
+
+### R-080 — When the framework paints from its own variable, feed that variable
+- **Rule:** where a third-party framework applies a style from a variable it owns
+  (`--q-dark-page`, `--q-primary`, …), the fix is to **sync that variable from our
+  token**, in the one place that already bridges the two systems. Never out-specify
+  the framework's selector with a competing rule, and never leave our token
+  authored-but-unpainted next to the framework's default.
+- **Why:** `css/app.scss` set `body { background-color: var(--q-page) }`, but Quasar
+  ships `body.body--dark { background: var(--q-dark-page) }` — a *class* selector,
+  so it wins on specificity, and nothing ever set `--q-dark-page`. For months every
+  dark theme painted Quasar's `$dark-page` grey while each theme block's authored
+  `--surface-page` (Pesto Dark `#00120B`, Cherry Cola `#2E0014`, Lemon Tart Dark's
+  charcoal) was **dead code** — invisible until a sticky header happened to paint
+  the token directly and read as a deliberate green band (FU-709). The failure mode
+  is the dangerous kind: no error, no visual break, and a whole design dimension
+  silently inert. Escalating specificity instead (`body.body--dark { … }` of our
+  own, or `!important`) would have "fixed" the page while leaving every *other*
+  Quasar-owned paint of the same variable disagreeing with us — two sources of
+  truth for one colour, which is R-003 with a vendor prefix.
+- **Apply:** find the framework's own bridge (here `syncQuasarPaletteFromCssVars`
+  in `themeService`) and set the framework variable from the semantic token there,
+  so the token stays the single source (R-003). Then **delete the workarounds the
+  old behaviour spawned** — the `body.body--dark` fork in `StockOverview`'s peek
+  header existed only to match Quasar's grey, and would have become a second
+  divergence the moment the sync landed. When you author a token, check it actually
+  paints: `getComputedStyle(document.body).backgroundColor` in the running app, not
+  the value of the custom property (R-075).
+- **Violation signal:** a rule whose only job is to beat a vendor selector; a
+  `!important` on a colour; a `.body--dark` / `[data-theme]` fork in a component
+  that restates what a token should already say; a theme token that no screenshot
+  can be found to show.
+### R-081 — A switch is owned by the surface it governs, and it must actually govern it
 - **Rule:** an install-wide or per-user switch lives on the page whose behaviour
   it changes, not on a general "features" page that collects switches by virtue
   of their being switches. And every switch must gate something a reader can be
@@ -5176,7 +5270,89 @@ A non-binding cookbook of solutions to recurring problems. Not rules — just a
   instead of being misattributed to the user's browser choice.
 - **Promotes rule:** R-077.
 
-### ADR-075 — The Features page is dissolved; a switch goes where its effect is (promotes R-078)
+### ADR-075 — A dialog is not a viewport; responsive components take the space they are given (promotes R-078)
+- **Date / task:** 2026-09-03 (meal-planner owner batch, ~35 items — FU-852)
+- **Status:** accepted
+- **Context:** the meal-plan builder's review row overlapped its own controls on
+  a 1280px desktop while looking correct on a 375px phone. The row stacked under
+  `@media (max-width: 599px)` but lives in a `min(640px, 94vw)` dialog, so the
+  query never fired on desktop and a ~400px control cluster fought a long recipe
+  name for a ~560px line. The owner had already reasoned his way to the cause
+  from the outside: *"seems better on mobile (no overlapping), so it seems an
+  edit to make it better on mobile stuffed up desktop."* The same confusion had
+  produced `RecipeRow`'s unusable-in-a-rail `compact`, and the recipe picker's
+  `max-height: 65vh` inside an already-sized pane. Three instances, one cause,
+  no rule.
+- **Decision:** components that can be hosted in a constrained container do not
+  read the viewport. Where the two shapes differ only by available width, pick
+  the shape that works at every width and drop the branch entirely — the review
+  row is now stacked unconditionally, and the `@media (max-width: 599px)` block
+  that remains covers only genuinely device-level concerns (scroll regions,
+  full-width action buttons). Where a real mode difference exists, the host
+  passes it as a prop.
+- **Consequences:** one more thing to check in review ("can this be narrow while
+  the window is wide?"), and a small cost in density — the stacked row is taller
+  than a working single-line row would have been at 1280px. That is the right
+  trade: a layout that is correct everywhere beats one that is tighter at one
+  width and broken at another. It also removes the temptation to "fix" a
+  component by adding a second, disagreeing breakpoint. Container queries are
+  now the sanctioned instrument where a genuine width branch is unavoidable;
+  none was needed here. Related: R-075 (measure the running app) is how all
+  three instances were actually found.
+- **Promotes rule:** R-078.
+
+### ADR-076 — Precision is part of formatting, not the caller's job (promotes R-079)
+- **Date / task:** 2026-09-03 (meal-planner owner batch, ~35 items)
+- **Status:** accepted
+- **Context:** the planner's right rail rendered *"needs 31.333333333333332
+  tbsp"*. `formatQuantity` was the app's single authority for the number/unit
+  spacing convention (DEC-3) but stringified the number as-is, so the decision
+  about precision had quietly devolved to every call site. The auto builder had
+  grown its own `function round(n)`; the rail had nothing; the two rendered the
+  same aggregate differently.
+- **Decision:** rounding moves into `formatQuantity` (two decimals, trailing
+  zeros stripped, non-finite input renders as nothing), and the builder's local
+  rounder is deleted. Pinned by unit tests covering the float artefacts and the
+  fractions that must survive.
+- **Consequences:** commits us to one precision for every quantity Dora writes;
+  a surface that genuinely needs more digits must extend the formatter (an
+  argument), not bypass it. Pre-formatted fraction strings from `scaleQuantity`
+  ("1½") still pass through untouched, so the two formatters compose as before.
+  This is R-003 applied to presentation: it says the shared formatter owns the
+  *whole* convention, not the half that happened to be extracted first.
+- **Promotes rule:** R-079.
+
+### ADR-077 — A vendor's variable is the seam; sync it, don't out-specify it (promotes R-080)
+- **Date / task:** 2026-09-03 (owner misc batch — theme neutrality + the invisible menu bar; resolves FU-709)
+- **Status:** accepted
+- **Context:** every dark theme's authored `--surface-page` had never painted.
+  `app.scss` styles `body` from `--q-page`; Quasar styles `body.body--dark` from
+  `--q-dark-page`, a variable nothing in Dora set. The class selector wins, so all
+  seven dark variants rendered Quasar's `$dark-page` (#14171a) and their authored
+  page colours were dead code. It surfaced only sideways — a sticky header that
+  *did* read `--surface-page` looked like a deliberate dark-green band — and was
+  parked as FU-709 because honouring the colours changes the whole app in dark
+  mode: an owner-visible design call, not a bug fix to slip in. The owner made the
+  call in this batch: *"Did we stop colouring everything in the app like the
+  background? Could adjust the background with each theme to have a tint of the
+  main colour of that theme."*
+- **Decision:** `themeService.syncQuasarPaletteFromCssVars` now also sets
+  `--q-dark-page` from `--surface-page`, so the dark page paints the theme's own
+  colour and one token feeds both modes. Generalised as R-080: where a framework
+  paints from a variable it owns, sync that variable from our semantic token in the
+  existing bridge — never fight its selector. The workaround the old behaviour
+  spawned (`StockOverview`'s `body.body--dark` peek-header fork) was deleted in the
+  same change.
+- **Consequences:** commits us to checking, for any framework-owned paint, whether
+  the framework has a variable we should be feeding — and to verifying a new token
+  actually paints in the running app rather than trusting that it is declared.
+  Costs us the freedom to let Quasar's defaults quietly stand in for our tokens;
+  every dark theme's page colour is now a real design decision that has to hold up
+  against card and row contrast, which is the honest position. Two themes needed
+  work the moment the colours became visible (Lemon Tart Dark's page hue and its
+  toolbar), which is the evidence the tokens were never being reviewed.
+- **Promotes rule:** R-080.
+### ADR-078 — The Features page is dissolved; a switch goes where its effect is (promotes R-081)
 - **Date / task:** 2026-09-03 (owner feedback batch — admin settings)
 - **Status:** accepted
 - **Context:** The owner read the admin area end to end and said the organisation
@@ -5184,7 +5360,7 @@ A non-binding cookbook of solutions to recurring problems. Not rules — just a
   Features sat under Install holding four unrelated switches, Messaging split
   Email/Push/Voice off from the install they belong to, and Hosting was two
   settings with nothing in common. Of the four Features switches, one
-  (`meal_planning_enabled`) gated nothing at all — see R-078 — and the owner's own
+  (`meal_planning_enabled`) gated nothing at all — see R-081 — and the owner's own
   instinct ("I feel like this was added accidentally") was right.
 - **Decision:** the Features page and the Hosting page are both dissolved, and the
   admin nav collapses from five groups to three (Install · Kitchen features ·
@@ -5203,4 +5379,4 @@ A non-binding cookbook of solutions to recurring problems. Not rules — just a
   that "where is the install switch for X?" is now answered by knowing what X is,
   rather than by one page that lists everything; the nav's three groups carry
   that.
-- **Promotes rule:** R-078.
+- **Promotes rule:** R-081.

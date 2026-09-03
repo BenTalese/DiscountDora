@@ -10,13 +10,38 @@ const NO_SPACE_UNITS: ReadonlySet<string> = new Set([
     'ml', 'g', 'kg', 'l', 'mg', 'oz', 'lb', 'floz', 'pt', 'qt',
 ]);
 
+/** Decimal places a quantity is ever shown to. Two is enough for the
+ *  fractions a recipe actually uses (0.25, 0.5, 1.33) and short enough to read
+ *  in a 300px rail. */
+const MAX_DECIMALS = 2;
+
+/**
+ * Round a numeric quantity for display, without leaving trailing zeros.
+ *
+ * Owner report 2026-09-03: the meal planner's right rail read *"needs
+ * 31.333333333333332 tbsp"*. Aggregated demand is a sum of scaled per-recipe
+ * quantities, so a third of a cup three times over is a binary float — and
+ * `String(31.333333333333332)` prints all seventeen digits. Rounding lives HERE
+ * rather than at the call site because this function is already the single
+ * authority for how a quantity is written (DEC-3), and the alternative is every
+ * surface that shows demand remembering to round first: the auto builder's
+ * preview had its own local `round()` and the rail had none, which is exactly
+ * how the two diverged.
+ */
+function formatNumber(value: number): string {
+    if (!Number.isFinite(value)) return '';
+    // `toFixed` then strip: `Math.round(v * 100) / 100` still prints artefacts
+    // of its own (0.145 -> 0.14500000000000002 territory).
+    return Number(value.toFixed(MAX_DECIMALS)).toString();
+}
+
 export function formatQuantity(
     quantity: number | string | null | undefined,
     unit: string | null | undefined,
 ): string {
     const qty = (quantity === null || quantity === undefined || quantity === '')
         ? ''
-        : String(quantity);
+        : (typeof quantity === 'number' ? formatNumber(quantity) : String(quantity));
     const trimmedUnit = (unit ?? '').trim();
     if (!qty && !trimmedUnit) return '';
     if (!trimmedUnit) return qty;

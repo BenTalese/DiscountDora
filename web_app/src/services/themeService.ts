@@ -170,20 +170,22 @@ export const THEMES: Record<string, ThemeOption> = {
     },
 
     // ───────── Salt & Pepper family (the neutral pair) ────────────────────
-    // Owner, 2026-09-03: "one neutral light theme, one neutral dark theme —
-    // so those two would be very minimal with the colours they use". One hue
-    // (a warm graphite/paper axis) carries the whole family; the interest is
-    // value, not hue. See the block comment in css/themes.scss.
+    // Owner, 2026-09-03 (revising his own earlier brief): "make it more
+    // neutral … a modern OS look with light/dark theme where you hardly see
+    // colour. There should only be maybe one accent colour." Achromatic
+    // blue-greys carry the family; one blue does primary + accent + focus.
+    // See the block comment in css/themes.scss for why the warm-graphite
+    // first cut didn't answer the brief.
     'salt-pepper': {
         key: 'salt-pepper', label: 'Salt & Pepper',
-        blurb: 'Warm paper + graphite, one peppercorn accent. Minimal.',
-        swatch: ['hsl(30,6%,26%)', 'hsl(40,8%,90%)', 'hsl(28,28%,52%)'],
+        blurb: 'Desktop-plain greys, one blue accent. Barely a colour.',
+        swatch: ['hsl(214,16%,95%)', 'hsl(214,12%,30%)', 'hsl(212,90%,40%)'],
         isDark: false,
     },
     'salt-pepper-dark': {
         key: 'salt-pepper-dark', label: 'Salt & Pepper Dark',
-        blurb: 'Cracked black pepper + bone. The same hue from the other end.',
-        swatch: ['hsl(35,8%,72%)', 'hsl(30,6%,13%)', 'hsl(32,45%,62%)'],
+        blurb: 'The same greys after dark, same single blue accent.',
+        swatch: ['hsl(214,10%,15%)', 'hsl(210,16%,94%)', 'hsl(210,90%,66%)'],
         isDark: true,
     },
 
@@ -248,7 +250,7 @@ export const THEME_FAMILIES: readonly ThemeFamily[] = [
     {
         key: 'salt-pepper',
         label: 'Salt & Pepper',
-        blurb: 'The minimal one — one warm grey hue, paper by day, pepper by night.',
+        blurb: 'The minimal one — plain greys and a single blue, light or dark.',
         light: 'salt-pepper', dark: 'salt-pepper-dark', system: 'system-salt-pepper',
     },
     {
@@ -400,6 +402,25 @@ function syncQuasarPaletteFromCssVars() {
         const value = computed.getPropertyValue(cssVar).trim();
         if (value) setCssVar(qKey, value);
     }
+    // FU-709 — the dark page background, resolved 2026-09-03.
+    //
+    // `css/app.scss` paints `body { background-color: var(--q-page) }`, but
+    // Quasar ships `body.body--dark { background: var(--q-dark-page) }` — a
+    // *class* selector, so it out-specifies ours, and nothing ever set
+    // `--q-dark-page`. Every dark theme therefore painted Quasar's
+    // `$dark-page` (#14171a) and each block's hand-authored `--surface-page`
+    // (Pesto Dark #00120B, Cherry Cola #2E0014, …) was dead code — visible
+    // only where a component happened to paint the token directly, which is
+    // how it was found (a peek header reading as a deliberate dark-green
+    // band). The FU held it as an owner-visible design call rather than
+    // slipping it in; the owner made it: *"Did we stop colouring everything
+    // in the app like the background? Could adjust the background with each
+    // theme to have a tint of the main colour of that theme."* That is option
+    // (a) — honour the authored colours — so the dark page reads from the
+    // same token as the light one, and the per-theme tint paints in both
+    // modes. One token, one source of truth (R-003).
+    const page = computed.getPropertyValue('--surface-page').trim();
+    if (page) setCssVar('dark-page', page);
 }
 
 function attachSystemListener() {

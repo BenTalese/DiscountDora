@@ -4,6 +4,7 @@ import { useListState } from 'src/composables/useListState';
 import { formatDate as formatLocaleDate } from 'src/composables/useDateFormat';
 import { useMealPlanExport } from 'src/composables/useMealPlanExport';
 import { useReducedMotion } from 'src/composables/useReducedMotion';
+import { useBatchEnabled } from 'src/composables/useBatchEnabled';
 import { useStockStatus } from 'src/composables/useStockStatus';
 import { DEFAULT_MEAL_SLOTS } from 'src/helpers/recipeVocabulary';
 import { isoDate as toIso, localTodayIso, mondayOf, shiftDays } from 'src/helpers/weekDates';
@@ -49,6 +50,9 @@ export function useMealPlanner() {
     const router = useRouter();
     const route = useRoute();
     const planExport = useMealPlanExport();
+    // The household cook-style. A "fresh" household has no cook pool, so it
+    // has no cook batches either and every batch branch below is inert.
+    const { batchEnabled } = useBatchEnabled();
 
     const mealPlanStore = useMealPlanStore();
     const mealPlanTemplateStore = useMealPlanTemplateStore();
@@ -60,7 +64,7 @@ export function useMealPlanner() {
     const shoppingListStore = useShoppingListStore();
     const { addStockItemsToList } = useShoppingListActions();
 
-    const { mealPlans, shortfall, today } = storeToRefs(mealPlanStore);
+    const { mealPlans, today } = storeToRefs(mealPlanStore);
     const { mealSlotNames } = storeToRefs(mealSlotStore);
     const { templates } = storeToRefs(mealPlanTemplateStore);
     const { sets } = storeToRefs(mealPlanTemplateSetStore);
@@ -160,19 +164,24 @@ export function useMealPlanner() {
         ) ?? null;
     }
 
-    const shortfallRecipeIds = computed(() => new Set(shortfall.value.map((s) => s.recipe_id)));
-    function isShortfallEntry(entry: MealPlanEntry): boolean {
-        return shortfallRecipeIds.value.has(entry.recipe_id);
-    }
-
-    // Moved shortfall summary (the page-top banner is gone): one sidebar line,
-    // chef-hat not warning-triangle. Deadline = earliest `earliest_needed`.
+    // Owner feedback 2026-09-03 — *"'X to cook by' needs to properly count
+    // this… it should be the highlighted meal slots after auto-allocation of
+    // meals from the pool."* It counted *recipes* in the shortfall report,
+    // which is a different number from the one on screen: three short fried
+    // rices counted 1. The figure is now exactly the set of chips wearing a
+    // chef hat in the week you are looking at — the server decides which those
+    // are (`MealPlanEntry.needs_cooking`), this only filters the week's own
+    // entries and reads the earliest of them. Deadline = the soonest such day,
+    // which is the day its ingredients have to exist by.
+    const needsCookingEntries = computed(
+        () => (focusedPlan.value?.entries ?? []).filter((e) => e.needs_cooking),
+    );
     const cookByLabel = computed(() => {
-        const dates = shortfall.value
-            .map((s) => s.earliest_needed)
-            .filter((d): d is string => !!d);
-        const earliest = dates.length ? dates.reduce((a, b) => (a < b ? a : b)) : null;
-        return `${shortfall.value.length} to cook${earliest ? ` by ${formatDate(earliest)}` : ''}`;
+        const days = needsCookingEntries.value
+            .map((e) => toIso(e.scheduled_for))
+            .sort();
+        const earliest = days[0] ?? null;
+        return `${needsCookingEntries.value.length} to cook${earliest ? ` by ${formatDate(earliest)}` : ''}`;
     });
 
     // ── "Dora suggests" (§4.4) ─────────────────────────────────────────────
@@ -270,10 +279,18 @@ export function useMealPlanner() {
         return plan.entries.filter(isForwardEditable).map(toCommand);
     }
 
+    // R-003 — `/meal-plans/shortfall` is deliberately NOT refetched here any
+    // more. Its recipe-level rows were the planner's only source of "what still
+    // needs cooking", and that reading is now per-entry and rides on the plan
+    // itself (`MealPlanEntry.needs_cooking`), which `updateMealPlanAsync`
+    // reloads. Keeping the second fetch would leave two answers to one question
+    // in the client, which is how the highlight and the "N to cook" figure came
+    // to disagree in the first place. The endpoint stays — the assistant's
+    // `meals_shortfall` tool reads it, and it answers a genuinely different
+    // question (how many SERVINGS short each recipe is).
     async function refreshAfterMutation() {
         await Promise.all([
             loadIngredients(),
-            mealPlanStore.getShortfallAsync(),
             recipeStore.getRecipesAsync(),
         ]);
     }
@@ -292,6 +309,37 @@ export function useMealPlanner() {
         });
     }
 
+    /**
+     * Drop the `cook_key` from any group left with fewer than two days.
+     *
+     * The server refuses a one-day "batch" — *"A cook batch must cover at least
+     * two days"* (`cook_batch_grouping.validate_cook_groups`) — and it is right
+     * to: a single day is just a meal. But every edit path builds its command
+     * list by mapping the plan's entries through `toCommand`, which carries
+     * each `cook_batch_id` along, so removing one day of a two-day cook (or
+     * stepping its servings to zero) resent a lone member and the whole PATCH
+     * came back 400 as *"Could not update the plan."* — owner, 2026-09-03:
+     * *"error updating the plan when trying to drop a multi-day cook below 0
+     * servings"* and *"cannot remove a multi-day cook from the plan either"*.
+     *
+     * One guard here rather than a fix in each caller (R-003): a batch that
+     * loses its second day stops being a batch, whichever edit did it, and no
+     * caller has to remember that rule.
+     */
+    function dissolveOrphanCookKeys(
+        entries: MealPlanEntryCommand[],
+    ): MealPlanEntryCommand[] {
+        const size = new Map<string, number>();
+        for (const cmd of entries) {
+            if (cmd.cook_key) size.set(cmd.cook_key, (size.get(cmd.cook_key) ?? 0) + 1);
+        }
+        return entries.map((cmd) => {
+            if (!cmd.cook_key || (size.get(cmd.cook_key) ?? 0) >= 2) return cmd;
+            const { cook_key: _dropped, ...rest } = cmd;
+            return rest;
+        });
+    }
+
     async function persistEntries(
         planId: string,
         entries: MealPlanEntryCommand[],
@@ -302,7 +350,7 @@ export function useMealPlanner() {
         try {
             await mealPlanStore.updateMealPlanAsync({
                 meal_plan_id: planId,
-                entries,
+                entries: dissolveOrphanCookKeys(entries),
                 ...(entries.length === 0 ? { confirm_clear_entries: true } : {}),
             });
             await refreshAfterMutation();
@@ -350,9 +398,18 @@ export function useMealPlanner() {
         const plan = focusedPlan.value;
         if (!plan) return;
         const next = entry.servings + delta;
+        // Stepping the last serving away means "take this meal off the plan",
+        // so it goes through the removal path rather than dropping the row
+        // here. That matters for a cook batch: removal is the code that knows
+        // a cook and its leftovers travel together, and that asks first
+        // (owner 2026-09-03 — dropping a multi-day cook below 0 servings used
+        // to return a bare "Could not update the plan").
+        if (next < 1) {
+            await removeEntry(entry);
+            return;
+        }
         const cmds = plan.entries
             .filter(isForwardEditable)
-            .filter((e) => !(e.meal_plan_entry_id === entry.meal_plan_entry_id && next < 1))
             .map((e) => ({
                 ...toCommand(e),
                 servings: e.meal_plan_entry_id === entry.meal_plan_entry_id ? next : e.servings,
@@ -360,11 +417,51 @@ export function useMealPlanner() {
         await persistEntries(plan.meal_plan_id, cmds);
     }
 
+    /**
+     * Take a meal off the plan.
+     *
+     * A cook batch is one cook eaten over several days, so removing its **cook
+     * day** takes the leftover days with it — they were only ever that cook's
+     * output, and leaving them behind would show meals that nothing produces.
+     * Because that touches days the user may not be looking at, it asks first.
+     * Removing a *leftover* day is local: the cook still happens, one day
+     * shorter, and `dissolveOrphanCookKeys` turns a batch of one back into a
+     * plain meal.
+     */
     async function removeEntry(entry: MealPlanEntry) {
         const plan = focusedPlan.value;
         if (!plan) return;
+
+        const batchIds = new Set<string>([entry.meal_plan_entry_id]);
+        if (batchEnabled.value && entry.cook_batch_id && entry.is_cook_day) {
+            const members = plan.entries.filter(
+                (e) => e.cook_batch_id === entry.cook_batch_id && isForwardEditable(e),
+            );
+            const leftovers = members.filter(
+                (e) => e.meal_plan_entry_id !== entry.meal_plan_entry_id,
+            );
+            if (leftovers.length > 0) {
+                const ok = await new Promise<boolean>((resolve) => {
+                    $q.dialog({
+                        title: 'Remove this cook?',
+                        message: `${entry.recipe_name} is cooked once for `
+                            + `${members.length} days. Removing the cook removes `
+                            + `${leftovers.length === 1 ? 'its leftover day' : `its ${leftovers.length} leftover days`} too.`,
+                        cancel: { noCaps: true },
+                        ok: { label: 'Remove all', noCaps: true, color: 'negative' },
+                        persistent: false,
+                    })
+                        .onOk(() => resolve(true))
+                        .onCancel(() => resolve(false))
+                        .onDismiss(() => resolve(false));
+                });
+                if (!ok) return;
+                leftovers.forEach((e) => batchIds.add(e.meal_plan_entry_id));
+            }
+        }
+
         const remaining = plan.entries
-            .filter((e) => e.meal_plan_entry_id !== entry.meal_plan_entry_id && isForwardEditable(e))
+            .filter((e) => !batchIds.has(e.meal_plan_entry_id) && isForwardEditable(e))
             .map(toCommand);
         await persistEntries(plan.meal_plan_id, remaining);
     }
@@ -380,12 +477,31 @@ export function useMealPlanner() {
             .map((e) => toIso(e.scheduled_for));
     }
 
-    /** Redefine `entry`'s cook to span exactly `selectedDayIsos` (same recipe +
-     *  slot). >=2 days links them as one cook; 0-1 days leaves/makes it a
-     *  standalone meal (i.e. this also implements "separate this cook"). Reuses
-     *  an existing same-recipe+slot entry on a day, else adds one; days dropped
-     *  from the set become standalone. Preserves every OTHER batch on the plan. */
-    async function setCookDays(entry: MealPlanEntry, selectedDayIsos: string[]) {
+    /**
+     * Redefine `entry`'s cook to span exactly `selectedDayIsos` (same recipe +
+     * slot). >=2 days links them as one cook; one day leaves a plain meal.
+     * Reuses an existing same-recipe+slot entry on a day, else adds one.
+     * Preserves every OTHER batch on the plan.
+     *
+     * **A day dropped out of the cook loses its meal.** Owner, 2026-09-03:
+     * *"changing cook days leaves behind a copy of that meal — planned Mon +
+     * Tue, change to Mon + Wed, and Tue still has a copy showing as not
+     * linked."* It did: the old code un-keyed every member of the batch and
+     * then re-keyed only the picked days, so a dropped day kept its entry and
+     * turned into an unlinked duplicate of the same meal. Un-ticking Tuesday in
+     * a dialog titled "Change cook days" means "don't eat this on Tuesday", not
+     * "cook it separately on Tuesday".
+     *
+     * `mode` is what keeps the other reading available, because the owner asked
+     * for it in the same breath: *"a copy SHOULD be left if the separate cook
+     * days option is used."* `'separate'` (the menu's "Separate this cook")
+     * keeps every day's meal and only breaks the link between them.
+     */
+    async function setCookDays(
+        entry: MealPlanEntry,
+        selectedDayIsos: string[],
+        mode: 'redefine' | 'separate' = 'redefine',
+    ) {
         const plan = focusedPlan.value;
         if (!plan) return;
         const selected = new Set(selectedDayIsos.filter((iso) => !isPastDay(iso)));
@@ -394,10 +510,23 @@ export function useMealPlanner() {
             ? (globalThis.crypto?.randomUUID?.() ?? `cook-${entry.meal_plan_entry_id}`)
             : undefined;
 
+        // Days this cook covers today but the new selection doesn't. On a
+        // redefine their meals go; on a separate they stay as standalone meals.
+        const droppedEntryIds = new Set(
+            mode === 'redefine' && oldKey
+                ? plan.entries
+                    .filter((e) => e.cook_batch_id === oldKey
+                        && isForwardEditable(e)
+                        && !selected.has(toIso(e.scheduled_for)))
+                    .map((e) => e.meal_plan_entry_id)
+                : [],
+        );
+
         // Start from the current forward entries, dropping this batch's old links
         // (we're redefining it) while keeping every other batch intact.
         const cmds: MealPlanEntryCommand[] = plan.entries
             .filter(isForwardEditable)
+            .filter((e) => !droppedEntryIds.has(e.meal_plan_entry_id))
             .map((e) => {
                 const cmd = toCommand(e);
                 if (oldKey && cmd.cook_key === oldKey) delete cmd.cook_key;
@@ -415,6 +544,20 @@ export function useMealPlanner() {
             if (newKey) cmd.cook_key = newKey; else delete cmd.cook_key;
         }
         await persistEntries(plan.meal_plan_id, cmds);
+    }
+
+    /** "Separate this cook" — every day the batch covered keeps its meal, they
+     *  just stop being one cook. The counterpart to a `redefine`, and the case
+     *  the owner explicitly wanted a copy left behind for. */
+    async function separateCook(entry: MealPlanEntry) {
+        const plan = focusedPlan.value;
+        if (!plan) return;
+        const days = entry.cook_batch_id
+            ? plan.entries
+                .filter((e) => e.cook_batch_id === entry.cook_batch_id)
+                .map((e) => toIso(e.scheduled_for))
+            : [toIso(entry.scheduled_for)];
+        await setCookDays(entry, days, 'separate');
     }
 
     // ── Week navigation (carousel) ─────────────────────────────────────────
@@ -530,7 +673,14 @@ export function useMealPlanner() {
     async function adjustPaletteMeals(recipeId: string, delta: number) {
         try {
             await recipeStore.adjustMealsAsync(recipeId, delta);
-            await Promise.all([recipeStore.getRecipesAsync(), mealPlanStore.getShortfallAsync()]);
+            // The plans reload too: spending or topping up the pool changes
+            // which planned meals still need cooking, and that verdict now
+            // rides on the entries themselves (`needs_cooking`), not on a
+            // separate recipe-level list.
+            await Promise.all([
+                recipeStore.getRecipesAsync(),
+                mealPlanStore.getMealPlansAsync(),
+            ]);
         } catch (err) {
             $q.notify({
                 type: 'negative',
@@ -633,7 +783,7 @@ export function useMealPlanner() {
     }
     async function doClearWeek(planId: string) {
         await mealPlanStore.deleteMealPlanAsync(planId);
-        await Promise.all([loadIngredients(), mealPlanStore.getShortfallAsync()]);
+        await loadIngredients();
     }
 
     // ── Templates (C-2.F) ──────────────────────────────────────────────────
@@ -863,7 +1013,6 @@ export function useMealPlanner() {
         try {
             await Promise.all([
                 mealPlanStore.getMealPlansAsync(),
-                mealPlanStore.getShortfallAsync(),
                 mealPlanStore.getTodayAsync(),
                 mealSlotStore.ensureLoadedAsync(),
                 mealPlanTemplateStore.getTemplatesAsync(),
@@ -891,7 +1040,6 @@ export function useMealPlanner() {
         templates,
         sets,
         mealPlans,
-        shortfall,
         today,
         ingredients,
         ingredientsLoading,
@@ -910,7 +1058,7 @@ export function useMealPlanner() {
         slotNameSet,
         currentDayIso,
         cookByLabel,
-        shortfallRecipeIds,
+        needsCookingEntries,
         needToBuy,
         needToBuyOnList,
         needToBuyOutstanding,
@@ -925,7 +1073,6 @@ export function useMealPlanner() {
         dayEntries,
         slotEntries,
         otherSlotEntries,
-        isShortfallEntry,
         isPastDay,
         isTargeted,
         formatDate,
@@ -935,6 +1082,7 @@ export function useMealPlanner() {
         removeEntry,
         cookBatchDays,
         setCookDays,
+        separateCook,
         confirmClearWeek,
         loadIngredients,
         addToListOpen,

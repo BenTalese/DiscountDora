@@ -49,14 +49,9 @@
                     :entries-for="planner.dayEntries"
                     :is-past-day="planner.isPastDay"
                     :current-day-iso="planner.currentDayIso.value"
-                    :shortfall-recipe-ids="planner.shortfallRecipeIds.value"
                     :week-range-label="planner.weekRangeLabel.value"
                     :planned-count="plannedCount"
-                    :shortfall-count="planner.shortfall.value.length"
-                    :need-to-buy-count="planner.needToBuy.value.length"
-                    :outstanding-count="planner.needToBuyOutstanding.value.length"
-                    :cook-by-label="planner.cookByLabel.value"
-                    :generating="planner.generating.value"
+                    :can-save-current-week="canSaveCurrentWeek"
                     @entry-view="planner.goToRecipe"
                     @entry-cook="planner.cookRecipe"
                     @entry-remove="planner.removeEntry"
@@ -65,13 +60,45 @@
                     @entry-unlink="onEntryUnlink"
                     @entry-lighter="onEntryLighter"
                     @add-to-slot="onMobileAddToSlot"
-                    @add-to-list="planner.openAddToList"
                     @open-builder="builderOpen = true"
                     @go-prev-week="planner.goPrevWeek"
                     @go-next-week="planner.goNextWeek"
                     @duplicate-week="planner.confirmDuplicateToNextWeek"
                     @print="planner.printFocusedWeek"
+                    @save-template="openSaveTemplate"
+                    @open-templates="templatesDrawerOpen = true"
+                    @clear-week="planner.confirmClearWeek"
                 />
+
+                <!-- The week's consequences, on the phone. Owner feedback
+                     2026-09-03: the collapsible card that used to live inside
+                     `MealPlanMobileFocus` *"duplicates information so much —
+                     just make it a normal card with the expanded contents
+                     shown"*, and separately, the ingredient breakdown *"can't
+                     be seen properly"* there because that card never had one.
+                     Both stop being mobile problems once the phone renders the
+                     SAME two components the desktop right rail does (R-001):
+                     the status strip, then "This week's shopping" with its
+                     per-ingredient rows and the full-demand disclosure. No
+                     wrapper, no header restating what is inside it. -->
+                <div v-if="plannedCount > 0" class="planner-mobile-week q-mt-md">
+                    <MealPlanWeekStatus
+                        :planned-count="plannedCount"
+                        :shortfall-count="planner.needsCookingEntries.value.length"
+                        :outstanding-count="planner.needToBuyOutstanding.value.length"
+                        :on-list-count="planner.needToBuyOnList.value.length"
+                        :cook-by-label="planner.cookByLabel.value"
+                    />
+                    <MealPlanShoppingSummary
+                        :focused-plan="planner.focusedPlan.value"
+                        :ingredients-loading="planner.ingredientsLoading.value"
+                        :ingredients="planner.ingredients.value"
+                        :need-to-buy="planner.needToBuy.value"
+                        :outstanding="planner.needToBuyOutstanding.value"
+                        :generating="planner.generating.value"
+                        @add-to-list="planner.openAddToList"
+                    />
+                </div>
             </template>
             <!-- ── Desktop: the fixed-height three-pane shell (Unit 1 §3.1) ──
                  Panes scroll, the page does not. The rail keeps its search and
@@ -224,7 +251,7 @@
                                  `/meal-plans/board` page were retired. -->
                             <BaseButton
                                 variant="secondary"
-                                :icon="ICONS.auto_awesome"
+                                :icon="ICONS.dora_voice"
                                 :label="compactToolbar ? undefined : 'Build my week'"
                                 @click="builderOpen = true"
                             >
@@ -290,7 +317,12 @@
                                             <q-item-section avatar>
                                                 <q-icon :name="ICONS.event_repeat" />
                                             </q-item-section>
-                                            <q-item-section>Browse + apply templates…</q-item-section>
+                                            <!-- Owner feedback 2026-09-03 —
+                                             "browse + apply" named the drawer's
+                                             mechanics; "Apply template…" names
+                                             what you came for, and the drawer
+                                             still browses. -->
+                                        <q-item-section>Apply template…</q-item-section>
                                         </q-item>
 
                                         <q-separator />
@@ -329,7 +361,7 @@
                             <MealPlanWeekStatus
                                 class="planner-toolbar__status"
                                 :planned-count="plannedCount"
-                                :shortfall-count="planner.shortfall.value.length"
+                                :shortfall-count="planner.needsCookingEntries.value.length"
                                 :outstanding-count="planner.needToBuyOutstanding.value.length"
                                 :on-list-count="planner.needToBuyOnList.value.length"
                                 :cook-by-label="planner.cookByLabel.value"
@@ -391,7 +423,7 @@
                                 <q-space />
                                 <BaseButton
                                     variant="primary"
-                                    :icon="ICONS.auto_awesome"
+                                    :icon="ICONS.dora_voice"
                                     label="Build my week"
                                     @click="builderOpen = true"
                                 />
@@ -417,7 +449,6 @@
                                     :slot-entries="(slot: string) => planner.slotEntries(day.iso, slot)"
                                     :other-entries="planner.otherSlotEntries(day.iso)"
                                     :is-targeted-slot="(slot: string) => planner.isTargeted(day.iso, slot)"
-                                    :shortfall-recipe-ids="planner.shortfallRecipeIds.value"
                                     :hovered-recipe-ids="planner.hoveredRecipeIds.value"
                                     :format-date="planner.formatDate"
                                     :show-all-slots="showAllSlots"
@@ -573,8 +604,21 @@
         />
 
         <!-- Apply a template recurringly over a week range ─────────── -->
-        <BaseDialog v-model="recurringOpen" title="Apply recurring" closable card-style="min-width: 360px; max-width: 95vw">
-            <q-card-section class="q-pt-none q-gutter-sm">
+        <!-- Owner feedback 2026-09-03 — *"apply recurring modal needs some
+             polish on it with the alignment and spacing of elements/inputs."*
+             Three things were off and all three were the markup, not taste:
+             `q-gutter-sm` puts a NEGATIVE top margin on its container and a
+             margin on every child, so the section's own top padding was
+             cancelled and the select sat tight under the title; the two date
+             inputs used `q-col-gutter-sm` while their parent used `q-gutter-sm`,
+             so the row's spacing didn't match the gap above it; and the
+             explanatory caption sat hard against the second field with no
+             separation from the controls it describes. One flex column with one
+             token gap, and the note gets its own space. `min-width: 360px` also
+             went — a floor beats `max-width: 95vw` on a 320px phone, which is
+             the FU-852 / builder-dialog lesson applied here. -->
+        <BaseDialog v-model="recurringOpen" title="Apply recurring" closable card-style="min-width: 0; width: min(420px, 94vw)">
+            <q-card-section class="q-pt-none recurring-form">
                 <q-select
                     v-model="recurringSource"
                     outlined dense
@@ -582,11 +626,11 @@
                     emit-value map-options
                     label="Template or rotating set"
                 />
-                <div class="row q-col-gutter-sm">
-                    <q-input class="col" v-model="recurringStart" outlined dense type="date" label="From (week of)" />
-                    <q-input class="col" v-model="recurringEnd" outlined dense type="date" label="To (week of)" />
+                <div class="recurring-form__dates">
+                    <q-input v-model="recurringStart" outlined dense type="date" label="From (week of)" />
+                    <q-input v-model="recurringEnd" outlined dense type="date" label="To (week of)" />
                 </div>
-                <div class="text-caption dora-text-muted">
+                <div class="text-caption dora-text-muted recurring-form__note">
                     Each week is forked from the template (a set rotates through its templates).
                     Past days are skipped; up to 26 weeks.
                 </div>
@@ -911,8 +955,13 @@
             void planner.setCookDays(entry, picked);
         });
     }
+    // "Separate this cook" keeps every day's meal and only breaks the link
+    // between them — the one case the owner wanted a copy left behind for
+    // (2026-09-03). `setCookDays` in its default `redefine` mode does the
+    // opposite, and used to be what this called, which is how un-ticking a day
+    // in "Change cook days" left an unlinked duplicate.
     function onEntryUnlink(entry: MealPlanEntry) {
-        void planner.setCookDays(entry, [dayOf(entry.scheduled_for)]);
+        void planner.separateCook(entry);
     }
 
     // ── Templates drawer (R-Phase 5 / §9-E) ────────────────────────────────
@@ -1145,6 +1194,41 @@
 
     .empty-week-banner {
         background: var(--surface-sunken);
+    }
+
+    /* The phone's week consequences — the status strip then "This week's
+       shopping", the same two components the desktop right rail renders. */
+    .planner-mobile-week {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-2);
+    }
+
+    /* The recurring-apply form: one column, one gap, and the note separated
+       from the fields it explains (see the template comment for what this
+       replaced). */
+    .recurring-form {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-3);
+    }
+    .recurring-form__dates {
+        display: flex;
+        gap: var(--space-3);
+    }
+    .recurring-form__dates > * {
+        flex: 1 1 0;
+        min-width: 0;
+    }
+    .recurring-form__note {
+        line-height: 1.35;
+    }
+    /* Two date fields side by side stop fitting well below ~340px of usable
+       width; they stack rather than squeeze their own labels (D-011). */
+    @media (max-width: 400px) {
+        .recurring-form__dates {
+            flex-direction: column;
+        }
     }
 
     /* FU-317 Chunk 5 — reconcile nudge above the planner. Text-link

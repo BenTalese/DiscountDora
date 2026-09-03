@@ -68,4 +68,38 @@ describe('formatQuantity — DEC-3 unit-spacing corpus', () => {
         expect(formatQuantity('1½', 'cups')).toBe('1½ cups');
         expect(formatQuantity('½', 'g')).toBe('½g');
     });
+
+    // Owner report 2026-09-03: the meal planner's right rail read "needs
+    // 31.333333333333332 tbsp". Aggregated week demand is a sum of scaled
+    // per-recipe quantities, so a repeating third is a binary float and
+    // `String()` prints all seventeen digits of it.
+    describe('float artefacts', () => {
+        it('rounds a repeating decimal to two places', () => {
+            expect(formatQuantity(94 / 3, 'tbsp')).toBe('31.33 tbsp');
+            expect(formatQuantity(0.1 + 0.2, 'l')).toBe('0.3l');
+        });
+
+        it('leaves no trailing zeros on a value that rounds clean', () => {
+            expect(formatQuantity(2.0, 'cloves')).toBe('2 cloves');
+            expect(formatQuantity(2.5, 'cups')).toBe('2.5 cups');
+            expect(formatQuantity(2.499, 'cups')).toBe('2.5 cups');
+        });
+
+        it('keeps the fractions a recipe actually uses', () => {
+            expect(formatQuantity(0.25, 'tsp')).toBe('0.25 tsp');
+            expect(formatQuantity(0.5, 'kg')).toBe('0.5kg');
+        });
+
+        it('rounds a value that would otherwise show as zero to zero, not blank', () => {
+            // 0.001 g is below the display precision; "0g" is the honest
+            // reading of a rounded figure, and never an empty string (which
+            // would render as a bare unit).
+            expect(formatQuantity(0.001, 'g')).toBe('0g');
+        });
+
+        it('renders nothing for a non-finite quantity rather than "NaN"', () => {
+            expect(formatQuantity(Number.NaN, 'g')).toBe('g');
+            expect(formatQuantity(Number.POSITIVE_INFINITY, 'g')).toBe('g');
+        });
+    });
 });

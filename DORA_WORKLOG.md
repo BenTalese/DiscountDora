@@ -28,10 +28,62 @@ next.
 
 ---
 
-## 2026-09-03 (later still ×3) — **Admin settings, ~25 owner items: five nav groups become three, and a feature flag that gated nothing gets a migration**
+> **2026-09-03 numbering reconciliation (two-machine merge):** the admin-settings
+> batch and the meal-planner / cook-mode / theme batches were built on two machines
+> in parallel and both allocated **R-078**, **ADR-075**, **FU-862** and **FU-863**.
+> The meal-planner machine's ids were already pushed and form a contiguous run, so
+> they keep those numbers (**R-078/079/080**, **ADR-075/076/077**, **FU-862..865**).
+> The admin-settings ids were renumbered **R-078→R-081, ADR-075→ADR-078,
+> FU-862→FU-866, FU-863→FU-867** (references in this file, `DORA_FOLLOWUPS.md`,
+> `PROJECT_STATE.md` and `ENGINEERING_STANDARDS.md` updated to match). Both
+> sequences are gap-free. The admin-settings worklog entry was also relabelled
+> **"later still ×3" → "×5"**, since ×3 and ×4 belong to the other machine.
+
+---
+
+## 2026-09-03 (merge) — **Two machines reconciled: disjoint code, four colliding ids, and a dashboard neither side could see**
+
+**Status:** merge complete, gate green. **vitest 691 / 61 files**, `vue-tsc` clean,
+**pytest 2280 passed** / 1 skipped / 1 xfailed on the merged tree, with only the
+four pre-existing buy-verdict reds (FU-762, all 403-vs-404 against the money
+gate). The seam between the two streams was checked first on its own
+(`test_planned_demand`, the planned-demand endpoint, the app-settings router —
+44 passed) before the full run.
+
+**The code did not overlap at all.** The two machines touched 30 and 34 files
+respectively with a zero-file intersection outside the bookkeeping docs, so every
+one of the five conflicts was in a log, not in source. Four were append-at-top
+logs where both sides prepended a block — resolved by keeping both, ordered
+(`ENGINEERING_STANDARDS` needed the reverse of the others, its rule and ADR lists
+being ascending rather than newest-first).
+
+**The real risk was semantic, not textual.** The admin machine deleted
+`meal_planning_enabled` and the planned-demand `enabled` key while the other
+machine was editing the meal-plan features and `test_planned_demand.py` — a clean
+textual merge could still have left a dangling reference. It did not: the only
+surviving mentions are three explanatory comments, and the seam tests pass.
+
+**Four ids collided** (R-078, ADR-075, FU-862, FU-863) — see the reconciliation
+notice at the top of this file for the resolution and the rule that produced it
+(renumber the smaller, unpushed side; keep sequences gap-free).
+
+**`PROJECT_STATE.md` was regenerated rather than merged.** Both machines had
+rebuilt the dashboard from their own vantage, so neither version was correct
+afterwards — the giveaway was the open-backlog count, 200 on one side and 199 on
+the other against a true post-merge 201. The four dashboard sections were rebuilt
+from merged ground truth; the document register below them was untouched, since
+no doc was added or superseded.
+
+**Next up:** nothing is queued by the merge itself. The owner still owes the
+admin-settings walk, and **FU-866** (the second flag that gates nothing) is the
+open item with a behaviour-change decision attached.
+
+---
+
+## 2026-09-03 (later still ×5) — **Admin settings, ~25 owner items: five nav groups become three, and a feature flag that gated nothing gets a migration**
 
 **Status:** all items complete + green + driven live at 375 and 1280. New:
-**R-078 / ADR-075**, migration **`a7c3e5d19f2b`**, new pages
+**R-081 / ADR-078**, migration **`a7c3e5d19f2b`**, new pages
 `AdminSystemMoneySettings.vue` + `AdminSystemIngestionSettings.vue`, deleted
 pages `AdminSystemFeaturesSettings.vue` + `AdminSystemHostingSettings.vue`. Gate:
 **vitest 685 / 61 files**, `vue-tsc` + `eslint src/` clean, **pytest 2275
@@ -53,7 +105,7 @@ the planned-demand endpoint to `enabled: false` — so from the API side the fla
 looked load-bearing while doing nothing anyone could see. It shipped in C-cross
 Chunk 1 and lasted three months, and the reason is structural: it sat on a page
 of four other switches that *were* real, so nothing invited the question. That is
-**R-078 / ADR-075** — a switch is owned by the surface it governs, and it must
+**R-081 / ADR-078** — a switch is owned by the surface it governs, and it must
 actually govern it. The column is dropped in `a7c3e5d19f2b`; the health flag, the
 DTO field, the API request field, the `enabled` key on the planned-demand
 response and its client-side `enabled` ref all went with it, because a field
@@ -103,7 +155,268 @@ mobile toolbar renders.
 
 **Next up:** the owner walks the batch — none of it needs a device, but the money
 and ingestion flags change what other surfaces show, and that is worth seeing.
-Open: FU-862, FU-863.
+Open: FU-866, FU-867.
+## 2026-09-03 (later still ×4) — **Cook-mode voice + copy, and a theme brief that landed on a dead token**
+
+**Status:** all 7 owner items complete + green + driven live at 1280. New:
+**R-080 / ADR-077**, **D-024**, **FU-865**; **FU-709 resolved**. Gate: **vitest
+691 / 61 files**, `vue-tsc` + `eslint src/` clean. No backend change, so pytest
+was not re-run.
+
+**Cook mode, five items, all in `RecipeCookMode.vue`.** Four were copy and did
+what they said: the Sous Chef tooltip drops *"tap to turn it on/off"* (the state
+is already carried twice — filled-vs-outlined for the eye, `aria-pressed` for a
+screen reader — so saying it in words was a third copy of one fact), the commands
+popover loses FU-722's *"Voice: Piper (server)"* line (which engine spoke is a
+debugging fact, and this popover is a mid-cook reference; `lastEngine` still
+carries it), its intro is now *"With voice input enabled, say any of these to
+interact with your Sous Chef"*, and the headcount tooltip stops at *"Rescales
+quantities for this cook only."*
+
+**The fifth was three new voice commands, and one of them was a latent
+footgun.** *"Ingredients"* and *"Tools"* read the current step's, via the same
+`highlightedIngredientIds` / `highlightedToolIds` the panels highlight from — so
+the spoken answer is the highlighted rows, scaled by `displayQuantity` to the
+"Cooking for" headcount, and naming the **substitute** where a session swap is in
+place (mid-cook, what's going in the bowl is the answer to the question). A step
+with no links names the real condition (R-077): *"No ingredients are linked to
+this step"* when the recipe has some, *"This recipe doesn't list any tools"* when
+it has none. Both bypass the narration toggle deliberately — that toggle governs
+*unprompted* step reading, and a question asked out loud deserves an answer —
+with a toast fallback where no voice can produce sound at all.
+
+Then **"stop"**: it was grouped with `exit|quit`, so the one word you say to
+interrupt something that is talking at you **left cook mode and lost your
+place**. It now cancels the utterance, or pauses a running timer if she wasn't
+talking (speech first, so a second "stop" gets the timer); exiting needs "exit"
+or "quit". `stop timer` / `pause timer` still match earlier in the chain, so
+"stop the timer please" lands on the pause path either way — checked by running
+the ten branch regexes over twenty transcripts.
+
+**The misc half started as a theme complaint and ended in FU-709, which had been
+sitting open since 2026-08-21.** The owner: *"Not really taken with salt & pepper
+… I was thinking a modern OS look where you hardly see colour … Did we stop
+colouring everything in the app like the background? Could adjust the background
+with each theme to have a tint of the main colour of that theme."* That last
+sentence is FU-709's decision. Quasar styles `body.body--dark` from
+`--q-dark-page` — a **class** selector that out-specifies `app.scss`'s
+`body { background-color: var(--q-page) }` — and nothing ever set it, so for
+months **all seven dark themes painted Quasar's `#14171a`** and every theme
+block's authored page colour was dead code. `themeService` now syncs
+`--q-dark-page` from `--surface-page`; measured live, `body` went from `#14171a`
+in every dark theme to `#191c1f` / `#24221e` / `#051411` in Salt & Pepper Dark /
+Lemon Tart Dark / Pesto Dark. `StockOverview`'s `body.body--dark` peek-header
+fork existed only to match Quasar's grey and was deleted with it. Generalised as
+**R-080 / ADR-077**: where a framework paints from a variable it owns, feed that
+variable in the existing bridge — never out-specify its selector, and never
+trust an authored token you haven't watched paint (R-075).
+
+**And that is what made the owner's other bullet findable.** *"Lemon tart dark
+theme you can't see any colour for the menu bar. Is this intentional or a
+mistake?"* A mistake, twice over: its `--surface-toolbar` was the theme's own
+**sunken** value — its darkest surface — where every sibling dark family lifts
+its bar above the page, and the header had nothing separating it from the page in
+*any* theme whose bar sits close to its page colour. So the bar moved above the
+page, and `MainLayout` now draws one hairline from `color-mix(… var(--text-on-toolbar)
+14% …)`, which resolves to a faint light line on a dark or saturated bar and a
+faint dark one on a light one — one rule, no per-theme token. That is **D-024**
+(chrome is separable from the page it sits on), a rule D-002 can't catch because
+the *ink* was fine; the bar had simply stopped being an object. Lemon Tart Dark's
+surfaces also moved from hue 225 to the family's gold axis — it was the one dark
+theme whose page carried nothing of its own colour — with `--surface-elevated`
+pulled to 21% because warm hues read lighter at equal HSL lightness and
+`--text-muted` / `--accent-ink` were landing at 4.3:1 on the naive translation.
+
+**Salt & Pepper was rebuilt rather than tweaked**, because the first cut's
+reading of "neutral" — one warm hue everywhere, 28–40° with a clay accent — *is*
+the brown the owner objected to, just diluted. A modern desktop OS is achromatic
+chrome (greys with a hint of blue), exactly one accent, and a toolbar that is a
+**surface** rather than a coloured band. So: hue 210–214 at 8–16% for every
+surface and ink, one blue doing primary + accent + focus, `--brand-secondary` as
+a graphite so secondary controls read as chrome, and a light chrome header (which
+also needed the two `*-on-coloured` hover veils inverted — they are white by
+default and invisible on a light bar — and the Pesto-teal-tinted overlay/shadow
+defaults from `tokens.scss` replaced with neutral ones). Contrast computed for
+every ink × surface pair; tightest is muted-on-sunken at 4.67:1. Note for
+FU-674: the new pair's `--text-on-primary` is 6.1:1 light / 7.1:1 dark, so it
+adds nothing to that backlog.
+
+**Verified by driving the built SPA** (seeded throwaway backend on 5171, local
+Chrome via Playwright, per the standing note): the commands popover read back
+with all three new verbs and no engine line; Salt & Pepper light/dark, Lemon Tart
+Dark, Pesto Dark and Pesto light screenshotted on the dashboard and stock pages
+with `body` background, header background and header border-colour logged per
+theme. **FU-865** logged on the way past: Quasar's `setCssVar` writes the palette
+to `<body>`, so `app.scss`'s `html { scrollbar-color: var(--q-secondary)
+var(--q-page) }` has never seen a theme — it should read the semantic tokens
+(which *are* on `:root`) instead.
+
+**Not done / next up:** four dark themes (Blueberry, Cherry Cola, Sourdough,
+Dragonfruit) are showing their real page colour for the first time and were not
+walked — queued in `DORA_VERIFY.md` along with the mic-dependent voice commands
+and a 375px pass. The theme-decision cluster the owner still owns is unchanged:
+FU-621 (brand-secondary), FU-622 (colour options board), FU-674
+(`--text-on-primary` in three older themes).
+
+---
+
+## 2026-09-03 (later still ×3) — **Meal planner, ~35 owner items: a shortfall that lit every meal of a recipe, and four ways to break a multi-day cook**
+
+**Status:** all items complete + green + driven live at 375 and 1280. New:
+**R-078 / ADR-075**, **R-079 / ADR-076**, **FU-862..864**; **FU-852, FU-803 and
+FU-804 resolved**. Gate: **vitest 691 / 61 files**, `vue-tsc` + `eslint src/`
+clean, **pytest 2280 passed** / 1 skipped / 1 xfailed with only the four
+pre-existing buy-verdict reds (FU-762).
+
+**The headline is the shortfall, because the owner reasoned his way to the
+correct model from the outside.** He reported: *"if I have 3 meals of fried rice
+planned, and 2 meals in the pool, I'd expect the last of the 3 to highlight
+orange and needing to be cooked. Currently they all light up."* They did, and the
+reason is one line: the client asked *"is this entry's **recipe** in the shortfall
+set?"* — a recipe-level answer to a per-entry question. The pool allocation that
+answers it properly already existed and was written the same day
+(`planned_meals.allocate_pool`, R-074/ADR-071); it just wasn't exposed per entry.
+So `MealPlanEntry` gained a server-owned `needs_cooking`, hydrated from that one
+allocation, and `shortfallRecipeIds` is gone from the planner. The knock-ons are
+the rest of the item: the owner's *"X to cook by… should be the highlighted meal
+slots after auto-allocation"* is now literally `entries.filter(needs_cooking)`
+rather than a count of recipes (three short fried rices used to count 1), the
+calendar's day pips code from the same fact, and the planner stopped fetching
+`/meal-plans/shortfall` at all — four round trips saved, and more importantly one
+answer to one question instead of two (FU-862 notes the now-orphaned store
+plumbing).
+
+**Allocating that pool needed one thing the pure function didn't know: a cook
+batch is one cook.** Mon+Wed at two servings each is a single cook yielding four,
+so spending the pool per day would let a pool of 2 "cover" the Monday and leave
+Wednesday reading as a second cook that does not exist — and would put a chef hat
+on a leftovers day, which nobody cooks. `allocate_pool` now groups into
+allocation *units* (one per standalone meal, one per batch), queues each at its
+cook day, and marks leftovers covered by construction. Pinned with five new tests.
+
+**Then driving it found the case the pure function still couldn't see.** At 1280
+a Thursday chip reading "Leftovers · Sunday Ragu" wore a chef hat while the
+Friday one didn't. `upcoming_planned_meals` only looks from today forward, so for
+a batch whose **cook day is in the past** the earliest day still in its window is
+a leftovers day — and the allocation called that the cook. The DTO's own
+`_apply_cook_batch_view` computes `is_cook_day` over the plan's *whole* entry
+list, past included, so the hydration now defers to it. This is R-075 doing its
+job: the model was right and the window was wrong, and nothing but looking would
+have said so.
+
+**The multi-day QA the owner asked for ("feels like a feature that has great
+potential to break") found four defects, and he had already found two of them.**
+Walked live, each scenario driven and asserted:
+
+1. ***"Changing cook days leaves behind a copy of that meal… tue still has a copy
+   and it shows as not linked."*** Exactly right. `setCookDays` un-keyed every
+   member of the batch and then re-keyed only the picked days, so a dropped day
+   kept its entry and became an unlinked duplicate. It now removes the dropped
+   days' meals — and takes a `mode` parameter, because the owner named the
+   counter-case in the same breath: *"a copy SHOULD be left if the separate cook
+   days option is used."* `separateCook` is that mode, and the entry menu's
+   "Separate this cook" routes through it.
+2. ***"Cannot remove a multi-day cook from the plan."*** Removing the cook day
+   resent the remaining member with its `cook_key`, and the server refuses a
+   one-day batch — so the whole PATCH came back 400 as *"Could not update the
+   plan."* Removing the cook now asks (*"Carbonara is cooked once for 2 days.
+   Removing the cook removes its leftover day too."*) and takes the leftovers
+   with it; removing a *leftover* day just shortens the cook.
+3. ***"Error updating the plan when trying to drop a multi-day cook below 0
+   servings. Need to handle this with a modal prompt maybe? Not sure."*** Same
+   400, same cause. Zero servings now routes through the removal path, so it
+   inherits its rules and its confirm — which answers the "modal maybe?" without
+   inventing a second dialog. Underneath both, one guard:
+   `dissolveOrphanCookKeys` in `persistEntries`, because a batch that loses its
+   second day stops being a batch *whichever* edit did it, and no caller should
+   have to remember that (R-003).
+4. **The one he hadn't seen: a cook straddling today split in two.** With the
+   cook day in the past, any unrelated edit elsewhere in the week made the first
+   surviving leftover day render as "Cook · serves 4". `update_meal_plan` deletes
+   and rebuilds the forward batches, and a resent `cook_key` naming a *preserved*
+   batch was minting a second CookBatch for it. It re-attaches now. The residue —
+   a straddling batch left with a single forward day still loses its link,
+   because the client can't resend past entries and the server refuses a
+   one-member group — is **FU-863**, with the honest fix (move the dissolve rule
+   server-side) written down rather than half-done.
+
+**Two design complaints had real defects under them, which is this stream's
+pattern.** *"Don't like that you can see the minus button always for recipes that
+have no meals in the pool (disabled minus) when every other +/- button is hidden
+till hovered"* — because Quasar's `.q-btn--disable { opacity: .6 !important }`
+beat the `opacity: 0` that hides it, so the one state where the minus is disabled
+(an empty pool, i.e. most rows) was the one state where it showed. `visibility`
+carries the hiding now. And *"meal pool count input seems to be unclickable —
+possibly because the row is already clickable? Or is it intentional?"*: neither.
+The click landed, it just had nothing to do on a mouse — arming the steppers is a
+touch affordance. A number you can click and can't change is a broken control, so
+it's a real `<input>` now (and typing `6` beats six taps).
+
+**FU-852's fix became a rule, because the owner diagnosed it himself.** On the
+builder's review rows overlapping: *"seems better on mobile (no overlapping), so
+it seems an edit to make it better on mobile stuffed up desktop."* The row stacked
+under `@media (max-width: 599px)` while living in a `min(640px, 94vw)` dialog, so
+1280px kept a ~400px control cluster fighting a long name for a ~560px line. It
+stacks at every width now — there was no width at which one line worked — and the
+recipe name absorbed the swap button, per his own suggestion. Hence **R-078 /
+ADR-075**: *a component sized by its container never branches on the viewport*,
+which also names the two other instances the FU predicted (`RecipeRow`'s
+`compact`, the picker's old `65vh`). Measured after: every row `overlaps: false`,
+nothing past the card's 920px edge, with "Pizza dough (60% hydration)" in the
+proposal.
+
+**The rounding bug is R-003 wearing a decimal point.** *"Can see rounding is not
+happening — 'needs 31.333333333333332 tbsp'."* `formatQuantity` was the single
+authority for unit *spacing* (DEC-3) but stringified the number as-is, so
+precision had devolved to every call site: the builder's preview had grown a
+local `function round(n)`, the rail had nothing, and the two rendered the same
+aggregate differently. Rounding moved into the formatter and the local rounder is
+deleted — **R-079 / ADR-076**.
+
+**The rest, briefly.** The calendar opened on August for a week starting 31 Aug
+because it anchored on the Monday's month; it now takes today's month, else the
+majority of the week's days. Day squares stopped being shoved around by busy days
+(measured: 34×34 before and after going 2→5 pips, calendar card 300px either
+way), and the "+N" label is gone from both hosts. The right rail's one red
+sentence became two dot-led lines counting each stock level against *its own*
+total, and stopped blinking to "Calculating…" mid-recalculation. "Full ingredient
+demand" wrapped against the card edge even after the count moved to a badge —
+three words was one too many for a 300px rail, so it's "All ingredients". The
+phone gained the four week actions it never had (save/apply template, clear week)
+via the *same* overflow menu the desktop carries, and its bottom card stopped
+being a disclosure whose header restated its contents — it renders the desktop's
+own two components now, which is also how the missing ingredient breakdown
+arrived. The armed-slot banner became one 36px line with **Done** (not Cancel,
+which never undid anything) and the per-row "→ Breakfast" is gone. Auto-builder
+servings default to the household headcount. Money-off is now enforced
+server-side (R-058): `cost_total: null`, 0 of 12 entries priced, no `$` in the
+dialog — previously the figures travelled and were merely hidden.
+
+**Two removals, both answers to "what's the point of…".** *Clone* on a template:
+nothing in the app edits a template's contents, so a clone could only ever be a
+same-named duplicate — the way to get a variant is to apply, edit the week, and
+save it as a new template. `cloneAsync` and its endpoint stay (harmless, tested,
+and what an edit-a-template feature would build on) with a comment saying not to
+re-add the button without one. And the builder's *"I'll pick myself"*, which
+jumped to an empty review step when the planner's own rail does that job better;
+"Add a meal" inside the review step is untouched.
+
+**Engineering-standards close-gate:** checked. R-001 (four shared-component
+moves: `MealPlanIngredientRow` into the builder, `NumberStepper` into both meal
+menus, the mobile overflow menu matching the desktop's, the phone reusing the
+rail's two components), R-003 (one cook-verdict authority; the second fetch
+deleted rather than left), R-007 (the two remaining wand icons left to FU-864
+rather than swept into signed-off dashboard work), R-058 (money gated
+server-side), R-075 (three of this unit's defects were found only by measuring),
+R-076, D-002 (the target line uses `--accent-ink`, not `--brand-primary`, which
+FU-801 has failing the ink test), D-004, D-011, D-013 (pips never the only
+signal), D-023 (one list of week actions, not a phone-sized subset). One
+annotated leftover: `mealPlanStore.getShortfallAsync` now has no client consumer
+— commented in place, FU-862.
+
+**Next up:** nothing is queued on this surface. The largest open planner items
+are FU-802 (`.dora-list-row` extraction, with FU-791) and FU-863. Phase 1's last
+unbuilt item remains **meal-reconcile Chunk 6** (settings row/copy).
 
 ---
 

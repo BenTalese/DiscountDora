@@ -32,6 +32,14 @@ export type MealPlanEntry = {
      *  opted the meal-planner surface in. */
     inference_hint: 'at_risk' | 'maybe_cookable' | null;
     inference_stock_item_names: string[];
+    /** Owner feedback 2026-09-03 — *"if I have 3 meals of fried rice planned
+     *  and 2 in the pool, I'd expect the LAST of the 3 to highlight orange.
+     *  Currently they all light up."* The per-entry verdict from the server's
+     *  pool allocation (soonest-first, and batch-aware: a leftover day is
+     *  covered by its own cook). Replaces the client's old "is this entry's
+     *  RECIPE in the shortfall set?" test, which lit every entry of a short
+     *  recipe. Always false when the household's cook-style is "fresh". */
+    needs_cooking: boolean;
 };
 
 /** FU-637 — one day's planned calories: "a serving of each meal planned that
@@ -120,6 +128,10 @@ export type AutoBuildRequest = {
     /** Build one day's line-up and duplicate it to the other selected days. */
     repeat_same_day: boolean;
     budget_cap: boolean;
+    /** Servings every proposed meal is created at. The dialog seeds it from
+     *  the household headcount (Settings -> Cooking); the review step still
+     *  edits each row. */
+    default_servings: number;
 };
 
 export type ProposedEntry = {

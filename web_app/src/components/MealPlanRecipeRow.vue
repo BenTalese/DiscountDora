@@ -40,14 +40,16 @@
                  deleted 2026-09-01 (owner: "remove the extra row of info from
                  the recipe rows"). They are cookbook facts — you pick a meal
                  for a slot here, and the recipe page and the cookbook both
-                 carry them properly. Targeting names the destination, because
-                 with a slot armed the only question left is "does this go
-                 there"; suggesting carries Dora's reason. -->
-            <div v-if="mode === 'targeting'" class="mp-row__meta mp-row__meta--target">
-                <q-icon :name="ICONS.arrow_forward" size="14px" />
-                {{ targetSlot }}
-            </div>
-            <div v-else-if="mode === 'suggesting' && reasonText" class="mp-row__meta mp-row__meta--reason">
+                 carry them properly. Suggesting carries Dora's reason.
+
+                 Targeting used to name the destination on EVERY row ("→
+                 Breakfast"), which the owner asked for on 2026-09-03 to be
+                 removed: *"I don't like the '→ Breakfast' text on every
+                 recipe."* One armed slot has one destination, so repeating it
+                 down forty rows is the same fact forty times — it is named once
+                 now, in the picker's target line above the list (which the same
+                 batch made a single inline row rather than a banner). -->
+            <div v-if="mode === 'suggesting' && reasonText" class="mp-row__meta mp-row__meta--reason">
                 <q-icon :name="ICONS.dora_voice" size="14px" />
                 {{ reasonText }}
             </div>
@@ -66,12 +68,17 @@
              is gone with its dialog (owner: "log a cook on the left rail feels
              unnecessary; remove the button to get back horizontal space and
              delete the modal"). Nothing is lost: `+` logs one cooked meal,
-             which is the common case, and the recipe page owns a real cook. -->
+             which is the common case, and the recipe page owns a real cook.
+
+             The cluster stops both click and keydown: the row itself answers a
+             click, Enter and Space with "add this recipe to the armed slot", so
+             a key typed into the count must not reach it. -->
         <div
             v-if="batchEnabled"
             class="mp-row__pool"
             :class="{ 'mp-row__pool--armed': poolArmed }"
             @click.stop
+            @keydown.stop
         >
             <BaseButton
                 variant="icon"
@@ -84,15 +91,28 @@
             >
                 <q-tooltip>One fewer cooked</q-tooltip>
             </BaseButton>
-            <button
-                type="button"
+            <!-- Owner feedback 2026-09-03 - *"meal pool count input seems to
+                 be unclickable, possibly because the row is already clickable
+                 and that is interfering? Or is it intentionally designed this
+                 way?"* Neither: the click landed (the cluster stops propagation
+                 to the row), it just had nothing to do on a mouse - arming the
+                 steppers is a touch-only affordance, and on hover they are
+                 already there. A number you can click and cannot change is a
+                 broken control, so it is a real input now: type a count and
+                 Enter/blur commits it, which is also the quick way to record a
+                 batch of six without six taps. -->
+            <input
                 class="mp-row__tile"
-                :aria-label="`${recipe.available_meals} cooked and ready`"
-                @click="poolArmed = true"
+                type="number"
+                inputmode="numeric"
+                min="0"
+                :value="recipe.available_meals"
+                :aria-label="`Cooked meals ready to eat - ${recipe.name}`"
+                @focus="onTileFocus"
+                @keydown.enter.prevent="commitTile"
+                @keydown.esc.prevent="cancelTile"
+                @blur="commitTile"
             >
-                {{ recipe.available_meals }}
-                <q-tooltip>Cooked meals ready to eat</q-tooltip>
-            </button>
             <BaseButton
                 variant="icon"
                 size="sm"
@@ -120,7 +140,9 @@
              *  sniff or a container query (R-019 / ADR-014) — the rail's width
              *  has nothing to do with the window's. */
             mode?: 'browsing' | 'targeting' | 'suggesting' | undefined;
-            /** Destination slot name, shown in `targeting` mode. */
+            /** Destination slot name. Named only in this row's accessible
+             *  label now — the visible "→ Breakfast" line was removed
+             *  2026-09-03 (see the meta-line comment in the template). */
             targetSlot?: string | undefined;
             /** Dora's reason phrase, shown in `suggesting` mode. */
             reasonText?: string | undefined;
@@ -136,10 +158,36 @@
 
     /** The touch equivalent of hover for the pool stepper — CSS reveals the
      *  ± buttons on `:hover`/`:focus-within`, which a phone has neither of, so
-     *  tapping the count arms them. Same escape hatch, same reason, as
+     *  focusing the count arms them. Same escape hatch, same reason, as
      *  `ShoppingListPlanRow`'s `armed`. Per-row and never reset: an armed row
      *  that disarmed itself would move controls out from under a thumb. */
     const poolArmed = ref(false);
+
+    // ── The pool count as a typed value ───────────────────────────────────
+    // The API takes a DELTA (`adjustMealsAsync(id, delta)`), which is the right
+    // shape for the ± buttons and for concurrent edits; typing an absolute
+    // count is expressed against it rather than by adding a second endpoint
+    // that could disagree with the first (R-003).
+    function onTileFocus(event: FocusEvent) {
+        poolArmed.value = true;
+        (event.target as HTMLInputElement | null)?.select();
+    }
+    function commitTile(event: Event) {
+        const input = event.target as HTMLInputElement;
+        const next = Math.max(0, Math.floor(Number(input.value)));
+        if (!Number.isFinite(next) || next === props.recipe.available_meals) {
+            // Re-assert the truth: a blur after typing something unusable
+            // would otherwise leave the field showing it.
+            input.value = String(props.recipe.available_meals);
+            return;
+        }
+        emit('poolAdjust', props.recipe.recipe_id, next - props.recipe.available_meals);
+    }
+    function cancelTile(event: Event) {
+        const input = event.target as HTMLInputElement;
+        input.value = String(props.recipe.available_meals);
+        input.blur();
+    }
 
     const ariaLabel = computed(() => {
         if (props.mode === 'targeting' && props.targetSlot) {
@@ -219,10 +267,6 @@
         gap: var(--space-1);
         min-width: 0;
     }
-    .mp-row__meta--target {
-        color: var(--brand-primary);
-        font-weight: 500;
-    }
     .mp-row__meta--reason {
         color: var(--brand-primary);
     }
@@ -236,22 +280,35 @@
         align-items: center;
         gap: 2px;
     }
+    /* Owner feedback 2026-09-03 - *"don't like that you can see the minus
+       button always for recipes that have no meals in the pool (disabled minus)
+       when every other +/- button is hidden till the row is hovered."* A real
+       bug, not a styling choice: Quasar's `.q-btn--disable { opacity: .6
+       !important }` beat this rule's `opacity: 0`, so the ONE state where the
+       minus is disabled — an empty pool, i.e. most rows — was the one state
+       where it showed. `visibility` carries the hiding instead; nothing in
+       Quasar's disabled styling touches it, and it keeps the button's box in
+       the layout so revealing it still cannot reflow the row. */
     .mp-row__step {
+        visibility: hidden;
         opacity: 0;
         transition: opacity var(--motion-fast) var(--motion-ease);
     }
     @media (hover: hover) {
         .mp-row:hover .mp-row__step,
         .mp-row:focus-within .mp-row__step {
+            visibility: visible;
             opacity: 1;
         }
     }
     /* Touch has no hover, so the tile arms the row instead. */
     .mp-row__pool--armed .mp-row__step {
+        visibility: visible;
         opacity: 1;
     }
     @media (hover: none) {
         .mp-row__step {
+            visibility: visible;
             opacity: 1;
         }
     }
@@ -259,7 +316,7 @@
        number bigger maybe". It was a caption line reading "N free"; it is the
        row's one numeric figure, now wearing the shopping list's tile. */
     .mp-row__tile {
-        width: 30px;
+        width: 34px;
         height: 30px;
         flex: none;
         border: 1px solid transparent;
@@ -269,10 +326,18 @@
         font: inherit;
         font-weight: 700;
         font-variant-numeric: tabular-nums;
-        cursor: pointer;
-        display: grid;
-        place-items: center;
+        text-align: center;
+        cursor: text;
         padding: 0;
+        /* The browser's number spinners would not fit a 30px tile and would
+           duplicate the ± buttons beside it. */
+        appearance: textfield;
+        -moz-appearance: textfield;
+    }
+    .mp-row__tile::-webkit-outer-spin-button,
+    .mp-row__tile::-webkit-inner-spin-button {
+        appearance: none;
+        margin: 0;
     }
     .mp-row__tile:hover {
         border-color: var(--border-strong);
@@ -288,7 +353,7 @@
        exactly this reason. */
     @media (hover: none) {
         .mp-row__tile {
-            width: 44px;
+            width: 48px;
             height: 44px;
         }
         .mp-row__step :deep(.q-btn) {

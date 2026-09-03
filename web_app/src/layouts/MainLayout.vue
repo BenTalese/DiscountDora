@@ -322,9 +322,19 @@
        so themes with a yellow primary (Lemon Tart) don't render
        yellow-on-yellow Dora text or invisible active-nav links. Each
        theme controls --surface-toolbar in themes.scss. */
+    /* Owner feedback 2026-09-03: *"Just noticed lemon tart dark theme you
+       can't see any colour for the menu bar. Is this intentional or a
+       mistake?"* A mistake, in two parts — Lemon Tart Dark's own toolbar
+       value is fixed in themes.scss, and the header had nothing separating
+       it from the page in *any* theme whose bar sits close to its page
+       colour. The hairline is drawn from `--text-on-toolbar` at 14% rather
+       than from `--divider`, so it works out to a faint light line on a dark
+       or saturated bar and a faint dark one on a light bar (Salt & Pepper) —
+       one rule, no per-theme token. */
     .dora-toolbar-surface {
         background: var(--surface-toolbar);
         color: var(--text-on-toolbar);
+        border-bottom: 1px solid color-mix(in srgb, var(--text-on-toolbar) 14%, transparent);
     }
     .dora-titlebar {
         height: 64px;

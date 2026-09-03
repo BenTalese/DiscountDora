@@ -366,8 +366,23 @@ class AutoBuildRequest(BaseModel):
     # Build one day's line-up and duplicate it to every other selected day.
     repeat_same_day: bool = False
     budget_cap: bool = False
+    # Owner feedback 2026-09-03 — *"the auto builder should have affordance for
+    # setting default servings for each entry, and we default that to the
+    # how-many-people-we-cook-for number from settings"*. Every proposed meal
+    # is created at this many servings; the review step still edits each row.
+    # The household headcount lives on `AppSetting` (FU-615) and the client
+    # seeds the control from it, so the default here is the neutral 1 rather
+    # than a second copy of that lookup.
+    default_servings: int = Field(default=1, ge=1, le=99)
 
 
+
+
+def _money_enabled(repository: SqlAlchemyRepository) -> bool:
+    """The install-wide money gate (R-058). Read once per build and applied to
+    every figure that leaves this endpoint."""
+    settings = repository.get(AppSetting).all()
+    return bool(settings and settings[0].money_enabled)
 
 
 def _household_budget_amount(repository: SqlAlchemyRepository) -> Optional[float]:
@@ -527,6 +542,7 @@ def compute_auto_build(
     selected = select_recipes(candidates, emphasis, count, excluded, rng)
 
     swapped: set = set()
+    money_on = _money_enabled(repository)
     budget_remaining = _budget_remaining(repository)
     if request.budget_cap and budget_remaining is not None:
         selected_ids = {c.recipe_id for c in selected}
@@ -548,11 +564,16 @@ def compute_auto_build(
             recipe_name=c.name,
             scheduled_for=day,
             slot=slot,
-            servings=1,
+            servings=request.default_servings,
             reason_chip=reason_chip(c, emphasis, c.recipe_id in swapped),
             cookable=c.cookable,
             missing_stock_item_names=list(c.missing_stock_item_names),
-            estimated_cost=c.estimated_cost,
+            # R-058 — a dollar figure never leaves the server when money is
+            # off install-wide. It used to travel and be hidden by a client
+            # `v-if`, which is a render gate, not a feature gate (owner
+            # 2026-09-03: *"ensure the money text and budget setting in the
+            # auto builder respect feature gates"*).
+            estimated_cost=c.estimated_cost if money_on else None,
             cook_key=cook_key,
         )
         for (c, day, slot, cook_key) in placements

@@ -67,6 +67,17 @@ class MealPlanEntryDto:
     # an entry that's already been cooked.
     inference_hint: str | None = None
     inference_stock_item_names: List[str] = dataclasses.field(default_factory=list)
+    # Owner feedback 2026-09-03 — *"if I have 3 meals of fried rice planned and
+    # 2 in the pool, I'd expect the LAST of the 3 to highlight orange. Currently
+    # they all light up."* They did, because the client only knew which
+    # *recipes* were short and lit every entry of one. This is the per-entry
+    # verdict from the same pool allocation the shortfall report rolls up
+    # (`planned_meals.upcoming_planned_meals`) — soonest-first, batch-aware,
+    # server-owned so the highlight and the "N to cook" figure can't disagree
+    # (R-003 / state-ownership). False on a past or cooked entry, and on every
+    # entry when the household's cook-style is "fresh" (the pool doesn't exist,
+    # so nothing can be short of it).
+    needs_cooking: bool = False
 
     @classmethod
     def from_entity(cls, entry: MealPlanEntry) -> 'MealPlanEntryDto':
@@ -403,12 +414,61 @@ class GetMealPlansHandler:
             for plan in plans
         ]
 
+    def _hydrate_cook_coverage(self, plans: list[MealPlanDto]) -> list[MealPlanDto]:
+        """Stamp each forward entry with whether somebody still has to cook it.
+
+        Reads the one pool model (`planned_meals`) rather than re-deriving
+        coverage here, so the chef-hat on a meal, the week's "N to cook" line
+        and `/meal-plans/shortfall` are three readings of one allocation.
+
+        Skipped entirely for "fresh" households: without the cooked pool there
+        is no allocation to make and no shortfall UI to feed, so the endpoint
+        pays nothing for a feature the install isn't using — same trade
+        `_hydrate_nutrition` makes when nutrition is off.
+        """
+        from dora_api.features.app_settings.access import get_or_create_app_setting
+        from dora_api.features.meal_plans.planned_meals import upcoming_planned_meals
+
+        if not plans:
+            return plans
+        setting = get_or_create_app_setting(self.repository)
+        if not bool(getattr(setting, "batch_features_enabled", False)):
+            return plans
+
+        snapshot = upcoming_planned_meals(self.repository)
+        needs = {
+            meal.entry_id for meal in snapshot.meals if not meal.covered
+        }
+        if not needs:
+            return plans
+
+        def verdict(entry: MealPlanEntryDto) -> bool:
+            if entry.meal_plan_entry_id not in needs:
+                return False
+            # A leftovers day is never something anybody has to cook. The pool
+            # model agrees, but it can only see from today forward, so when a
+            # batch's COOK day has already been and gone the earliest day still
+            # in its window is a leftovers day — and the allocation treats that
+            # as the cook. Measured live 2026-09-03: a Wed-cooked Sunday Ragu
+            # showed a chef hat on its Thursday leftovers. `is_cook_day` here
+            # is computed over the plan's WHOLE entry list (past included) by
+            # `_apply_cook_batch_view`, so it is the reading that knows better.
+            return entry.cook_batch_id is None or entry.is_cook_day
+
+        return [
+            dataclasses.replace(plan, entries=[
+                dataclasses.replace(entry, needs_cooking=verdict(entry))
+                for entry in plan.entries
+            ])
+            for plan in plans
+        ]
+
     def handle(self, options) -> Page[MealPlanDto]:
         page = self._base_query().paginate(
             options, MealPlanDto.from_entity, field_map=_FIELD_MAP
         )
-        hydrated = self._hydrate_inference(self._hydrate_nutrition(
-            self._hydrate_entry_has_image(list(page.items))
+        hydrated = self._hydrate_cook_coverage(self._hydrate_inference(
+            self._hydrate_nutrition(self._hydrate_entry_has_image(list(page.items)))
         ))
         return Page(items=hydrated, total=page.total, page=page.page, limit=page.limit)
 
@@ -417,9 +477,9 @@ class GetMealPlansHandler:
         if not entity:
             return None
         dto = MealPlanDto.from_entity(entity)
-        return self._hydrate_inference(
+        return self._hydrate_cook_coverage(self._hydrate_inference(
             self._hydrate_nutrition(self._hydrate_entry_has_image([dto]))
-        )[0]
+        ))[0]
 
 
 @MEAL_PLAN_ROUTER.route("")

@@ -41,6 +41,82 @@ next.
 
 ---
 
+## 2026-09-04 — **Fresh cooking inside a batch household: a third pool state, plus two small planner items** *(HANDOVER — code complete, NOT yet driven live)*
+
+**Status: code complete, gates green, but the owner cut the session short before
+the running-app walk.** `vue-tsc` clean, `eslint src/` clean, **vitest 691 / 61
+files**; pytest was still running at handover — the meal-plan/reconcile/planned-
+demand slice (65 tests) passed earlier in the session, and `test_planned_demand`
+carries four new cases. **The next agent should re-run the full pytest gate
+first** and then walk the surfaces listed under "Owed" below. Nothing here has
+been seen in a browser.
+
+**Three owner items, all decided by him up front** (three-question board, all
+went the recommended way): the mark is a **per-entry toggle in the meal's ⋮
+menu**; a fresh meal is a **third state** (counted as a cook, excluded from the
+pool shortfall, its own marker rather than the amber chef hat); and the
+dashboard learns **the whole pool model**, not just the fresh flag.
+
+**1. `MealPlanEntry.cook_fresh` — migration `b8d2f4a6c091`.** Owner: *"I batch
+cook and freeze lunches for the week, but dinner with the parents on Saturday is
+fresh."* Cook-style was install-wide and binary (`batch_features_enabled`), so a
+batch household had no way to say "this one is cooked on the day". The new
+column is the exception, and it stands outside the pool **in both directions** —
+which is the whole of the owner's *"it should not take a meal, and it should also
+not demand a meal from the pool"*:
+- `planned_meals.allocate_pool` — a fresh meal is its own unit, never covered,
+  and **spends nothing**, so the portions it would have eaten stay available to
+  the next real batch meal.
+- `recipe_shortfalls` — fresh meals are skipped outright, so they never inflate
+  "how much do I have to batch-cook".
+- `reconcile_consumed_meals` — the auto-drain sweep still consumes the entry and
+  still writes its receipt, but **does not decrement the pool**. Draining one
+  would have silently destroyed a portion the household still has.
+- `reconcile.py` — every resolution verb is pool-neutral on a fresh entry
+  (`current_drained = target_drained = 0`, stated once rather than teaching both
+  drain helpers the flag).
+- Mutually exclusive with a cook batch — a batch *is* the pool. Enforced in
+  `validate_cook_groups` (both write paths), and the client hides the toggle on a
+  linked meal *and* strips `cook_fresh` when `setCookDays` reuses a fresh entry.
+- `needs_cooking` stays "the pool is short one of these" and is **never** true
+  alongside `cook_fresh`; the week strip gained a separate neutral "N fresh" cell
+  next to the amber "N to cook by".
+
+**2. "Cook now" opens at the plan's servings.** `?for=N` on the cook-mode route,
+outranking the household headcount (a caller who names a number knows something
+the page doesn't). The planner passes `cook_batch_total_servings ?? servings`, so
+the owner's *"Cook · serves 6"* chip now opens cook mode at 6. Still
+session-only and still adjustable there. The dashboard's Cook button does the
+same with the entry's own servings — **carve-out:** that payload has no batch
+view, so a linked cook opens at that day's share, noted in place.
+
+**3. The empty-week "Plan this week" card is gone** — it sat under a toolbar
+that already carries "Build my week", so an empty week rendered the same primary
+button twice. Its scoped `.empty-week-banner` style went with it.
+
+**The dashboard's "Next to cook" card knew nothing about the pool** — a
+pre-existing gap this surfaced rather than created: it offered "Cook" on meals
+already cooked and frozen. It now carries the same server-owned verdict the
+planner's chips read (new `_cook_verdicts` on the summary handler, including the
+straddling-batch correction `get_meal_plans` already makes), and each row says
+*to cook* / *fresh* / *already cooked*. Batch households only.
+
+**Owed (nothing of this has been walked):** the toggle on both the desktop chip
+and the mobile rich card; the week strip's new fresh cell; a fresh meal surviving
+a plan edit; the auto-drain sweep leaving the pool alone on a fresh meal's day;
+`?for=` landing on 6 from a linked cook; the dashboard card's three states; and
+375px on all of it. **These want `DORA_VERIFY.md` entries — not yet written.**
+Likewise **not yet done: `CHANGELOG.md`, `PROJECT_STATE.md` refresh, the
+follow-ups ledger, and the R-rule/ADR evaluation** (candidate: the "a per-entry
+exception to an install-wide policy must be neutral in both directions, not just
+one" shape, which is what made the sweep and the verbs part of this change
+rather than an afterthought).
+
+**Next up:** re-run the pytest gate, then the browser walk; then close the
+bookkeeping above.
+
+---
+
 ## 2026-09-03 (merge) — **Two machines reconciled: disjoint code, four colliding ids, and a dashboard neither side could see**
 
 **Status:** merge complete, gate green. **vitest 691 / 61 files**, `vue-tsc` clean,

@@ -40,6 +40,15 @@ export type MealPlanEntry = {
      *  RECIPE in the shortfall set?" test, which lit every entry of a short
      *  recipe. Always false when the household's cook-style is "fresh". */
     needs_cooking: boolean;
+    /** Owner feedback 2026-09-04 — *"I batch cook and freeze lunches for the
+     *  week, but dinner with the parents on Saturday is fresh."* This meal is
+     *  cooked on its day and stands outside the cooked-portion pool: it is
+     *  never allocated a portion from it and never adds to what has to be
+     *  batch-cooked. A third state alongside `needs_cooking`, never both —
+     *  "the pool is short one of these" is a question a fresh meal never asks.
+     *  Mirrors the stored flag, so it stays honest in a "fresh" household;
+     *  only the UI is conditional on cook-style. */
+    cook_fresh: boolean;
 };
 
 /** FU-637 — one day's planned calories: "a serving of each meal planned that

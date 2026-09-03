@@ -16,6 +16,14 @@
                 <q-icon :name="ICONS.link" size="12px" />
                 <span>{{ cookMarkerLabel }}</span>
             </div>
+            <!-- Owner 2026-09-04 — the fresh marker sits where the linked-cook
+                 eyebrow does, because it answers the same question ("how does
+                 this meal relate to the pool?") and the two can never both be
+                 true. Icon + word, not colour alone (D-014). -->
+            <div v-else-if="fresh" class="entry-chip__cook entry-chip__cook--fresh">
+                <q-icon :name="ICONS.cookFresh" size="12px" />
+                <span>Fresh</span>
+            </div>
             <div class="entry-chip__main">
                 <span class="entry-chip__name">{{ entry.recipe_name }}</span>
                 <!-- Owner feedback 2026-09-03 — *"put the needs-cook chef hat
@@ -109,7 +117,27 @@
                 </q-item>
                 <template v-if="batchEnabled">
                     <q-separator />
-                    <q-item clickable v-close-popup @click="emit('link')">
+                    <!-- Owner 2026-09-04 — *"When in batch mode, I should be
+                         able to mark a meal as being cooked fresh."* Hidden on
+                         a linked meal: a cook batch IS the pool, so the two are
+                         mutually exclusive (the server refuses the pairing
+                         too). The caption states the whole behaviour, because
+                         "fresh" alone doesn't say what it does to the pool. -->
+                    <q-item v-if="!linked" clickable v-close-popup @click="emit('fresh')">
+                        <q-item-section avatar>
+                            <q-icon :name="ICONS.cookFresh" :color="fresh ? 'primary' : undefined" />
+                        </q-item-section>
+                        <q-item-section>
+                            <q-item-label>{{ fresh ? 'Cooking fresh' : 'Cook fresh on the day' }}</q-item-label>
+                            <q-item-label caption>
+                                {{ fresh ? 'Tap to put it back on the pool' : 'Skips the cooked pool entirely' }}
+                            </q-item-label>
+                        </q-item-section>
+                        <q-item-section v-if="fresh" side>
+                            <q-icon :name="ICONS.check" color="primary" />
+                        </q-item-section>
+                    </q-item>
+                    <q-item v-if="!fresh" clickable v-close-popup @click="emit('link')">
                         <q-item-section avatar><q-icon :name="ICONS.link" /></q-item-section>
                         <q-item-section>{{ linked ? 'Change cook days…' : 'Cook once for more days…' }}</q-item-section>
                     </q-item>
@@ -155,6 +183,7 @@
         (e: 'link'): void;
         (e: 'unlink'): void;
         (e: 'lighter'): void;
+        (e: 'fresh'): void;
     }>();
 
     // Only offer the comparison when this meal's own figure can be compared —
@@ -175,6 +204,10 @@
     // PROPOSAL_MEAL_PLANS_PART_2 — a linked cook batch (one cook, several days).
     // Only surfaced for Batch-cooking households.
     const linked = computed(() => batchEnabled.value && !!props.entry.cook_batch_id);
+    // Owner 2026-09-04 — cooked on the day, outside the pool. Only meaningful
+    // for a batch household: where every meal is cooked fresh, saying so about
+    // one of them is noise.
+    const fresh = computed(() => batchEnabled.value && props.entry.cook_fresh);
     const cookMarkerLabel = computed(() =>
         props.entry.is_cook_day
             ? `Cook · serves ${props.entry.cook_batch_total_servings ?? props.entry.servings}`
@@ -186,9 +219,12 @@
     // separate spans. Shortfall is announced as a status, not a colour.
     const accessibleLabel = computed(() => {
         const base = `${props.entry.recipe_name}, ${props.entry.slot}, ${props.entry.servings} serving${props.entry.servings === 1 ? '' : 's'}`;
-        const withCook = linked.value
-            ? `${base}, ${props.entry.is_cook_day ? 'cook day of a batch' : 'leftovers from a batch cook'}`
-            : base;
+        let withCook = base;
+        if (linked.value) {
+            withCook = `${base}, ${props.entry.is_cook_day ? 'cook day of a batch' : 'leftovers from a batch cook'}`;
+        } else if (fresh.value) {
+            withCook = `${base}, cooked fresh on the day`;
+        }
         if (props.entry.consumed_at) return `${withCook}, cooked`;
         if (props.shortfall && batchEnabled.value) return `${withCook}, needs cooking`;
         return withCook;
@@ -265,6 +301,12 @@
     .entry-chip__cook--leftover {
         color: var(--text-muted);
         font-weight: 500;
+    }
+    /* Fresh is a deliberate state, not a shortage — it reads in the same
+       secondary ink as a leftovers day rather than borrowing the amber that
+       means "the pool is short one of these". */
+    .entry-chip__cook--fresh {
+        color: var(--text-secondary);
     }
     .entry-chip__main {
         display: flex;

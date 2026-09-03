@@ -66,6 +66,8 @@ def _sweep_auto_drain(_Conn, _Now: datetime, _Today) -> None:
     that clears `consumed_at` would trigger the next sweep to re-drain
     the pool + write a fresh `unresolved_auto` receipt on top of the
     user's `resolved_not_cooked` decision.
+
+    A `cook_fresh` entry is drained of nothing — see the `_Totals` loop.
     """
     _Consumed = _Conn.execute(
         text(
@@ -80,7 +82,7 @@ def _sweep_auto_drain(_Conn, _Now: datetime, _Today) -> None:
             "      WHERE r.meal_plan_entry_id = mpe.id"
             "    )"
             ") "
-            "RETURNING id, recipe_id, servings"
+            "RETURNING id, recipe_id, servings, cook_fresh"
         ),
         {"now": _Now, "today": _Today},
     ).all()
@@ -88,14 +90,20 @@ def _sweep_auto_drain(_Conn, _Now: datetime, _Today) -> None:
     if not _Consumed:
         return
 
-    for _EntryId, _RecipeId, _Servings in _Consumed:
+    for _EntryId, _RecipeId, _Servings, _CookFresh in _Consumed:
         _insert_receipt(
             _Conn, _EntryId, STATE_UNRESOLVED_AUTO,
             original_servings=int(_Servings or 0), created_at=_Now,
         )
 
+    # A meal marked cooked-fresh was cooked on its day and eaten off the stove,
+    # so nothing left the pool — draining one would silently destroy a portion
+    # the household still has (owner 2026-09-04). It is still consumed and
+    # still gets a receipt; only the pool arithmetic skips it.
     _Totals: dict = {}
-    for _EntryId, _RecipeId, _Servings in _Consumed:
+    for _EntryId, _RecipeId, _Servings, _CookFresh in _Consumed:
+        if bool(_CookFresh):
+            continue
         _Totals[_RecipeId] = _Totals.get(_RecipeId, 0) + int(_Servings or 0)
 
     for _RecipeId, _ToDecrement in _Totals.items():

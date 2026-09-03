@@ -132,6 +132,16 @@
     white-space: nowrap;
 }
 
+/* Owner 2026-09-04 — the meal's standing with the cooked pool, sharing the meta
+ * line's ink. Icon + word rather than colour (D-014): "already cooked" is good
+ * news, "to cook" is work, and neither is an error, so nothing here earns
+ * amber. */
+.dora-cook-state {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+}
+
 /* Spacing between a skeleton's placeholder lines, so a loading card reads with
  * the same rhythm as a populated one (D-007 / DR-8). Two consumers — the page's
  * whole-grid loading skeleton and the primary-list card's stat skeleton — which

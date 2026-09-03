@@ -163,12 +163,13 @@
                 :shortfall="entry.needs_cooking"
                 :highlight="false"
                 @view="emit('entryView', entry.recipe_id)"
-                @cook="emit('entryCook', entry.recipe_id)"
+                @cook="emit('entryCook', entry)"
                 @remove="emit('entryRemove', entry)"
                 @adjust="(d: number) => emit('entryAdjust', entry, d)"
                 @link="emit('entryLink', entry)"
                 @unlink="emit('entryUnlink', entry)"
                 @lighter="emit('entryLighter', entry)"
+                @fresh="emit('entryFresh', entry)"
             />
             <button
                 v-if="!isPastDay(focusedDayIso)"
@@ -260,12 +261,13 @@
 
     const emit = defineEmits<{
         (e: 'entryView', recipeId: string): void;
-        (e: 'entryCook', recipeId: string): void;
+        (e: 'entryCook', entry: MealPlanEntry): void;
         (e: 'entryRemove', entry: MealPlanEntry): void;
         (e: 'entryAdjust', entry: MealPlanEntry, delta: number): void;
         (e: 'entryLink', entry: MealPlanEntry): void;
         (e: 'entryUnlink', entry: MealPlanEntry): void;
         (e: 'entryLighter', entry: MealPlanEntry): void;
+        (e: 'entryFresh', entry: MealPlanEntry): void;
         (e: 'addToSlot', dayIso: string, slot: string): void;
         (e: 'goPrevWeek'): void;
         (e: 'goNextWeek'): void;

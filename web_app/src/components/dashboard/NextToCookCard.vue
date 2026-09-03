@@ -17,6 +17,15 @@
                 <span class="dora-cook-meta">
                     {{ whenLabel(entry) }}
                     <span v-if="entry.servings"> · serves {{ entry.servings }}</span>
+                    <!-- Owner 2026-09-04 — the pool state, in the card's own
+                         words. Before this the card offered "Cook" on a meal
+                         already cooked and frozen, because it had no idea the
+                         pool existed. Batch households only: with no pool,
+                         every meal is simply a meal. -->
+                    <span v-if="batchEnabled" class="dora-cook-state">
+                        · <q-icon :name="cookState(entry).icon" size="13px" />
+                        {{ cookState(entry).label }}
+                    </span>
                 </span>
                 <q-badge
                     :color="badgeColour(entry)"
@@ -29,7 +38,7 @@
                     size="sm"
                     :icon="ICONS.restaurant"
                     label="Cook"
-                    @click="emit('cook', entry.recipe_id)"
+                    @click="emit('cook', entry)"
                 />
             </li>
         </ul>
@@ -58,11 +67,29 @@
     import { formatRelativeDay } from 'src/composables/useDateFormat';
     import BaseButton from 'src/components/BaseButton.vue';
     import DashboardCard from 'src/components/dashboard/DashboardCard.vue';
+    import { useBatchEnabled } from 'src/composables/useBatchEnabled';
     import type { UpcomingMealPlanEntry } from 'src/models/dashboard';
 
     defineProps<{ entries: UpcomingMealPlanEntry[] }>();
 
-    const emit = defineEmits<{ (e: 'cook', recipeId: string): void }>();
+    const emit = defineEmits<{ (e: 'cook', entry: UpcomingMealPlanEntry): void }>();
+
+    const { batchEnabled } = useBatchEnabled();
+
+    /**
+     * Where this meal stands with the cooked pool — the third channel on the
+     * row, alongside the when/serves meta and the ingredient badge.
+     *
+     * Three states, and the one worth naming is the third: a meal the pool
+     * already covers. `needs_cooking` and `cook_fresh` are server-owned and
+     * never both true, so "neither" is a positive fact (it's cooked already, or
+     * it's a batch's leftover day) rather than an absence of information.
+     */
+    function cookState(entry: UpcomingMealPlanEntry): { icon: string; label: string } {
+        if (entry.cook_fresh) return { icon: ICONS.cookFresh, label: 'fresh' };
+        if (entry.needs_cooking) return { icon: ICONS.chef_hat, label: 'to cook' };
+        return { icon: ICONS.mealsPrepared, label: 'already cooked' };
+    }
 
     function whenLabel(entry: UpcomingMealPlanEntry): string {
         return `${formatRelativeDay(entry.scheduled_for)} ${entry.slot.toLowerCase()}`;

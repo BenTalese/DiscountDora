@@ -34,7 +34,8 @@ _RECIPE = UUID("11111111-1111-1111-1111-111111111111")
 
 
 def _meal(day_offset: int, servings: int = 2, recipe_id: UUID = _RECIPE,
-          name: str = "Fried Rice", cook_batch_id: UUID | None = None) -> PlannedMeal:
+          name: str = "Fried Rice", cook_batch_id: UUID | None = None,
+          cook_fresh: bool = False) -> PlannedMeal:
     return PlannedMeal(
         entry_id=uuid4(),
         recipe_id=recipe_id,
@@ -43,6 +44,7 @@ def _meal(day_offset: int, servings: int = 2, recipe_id: UUID = _RECIPE,
         servings=servings,
         covered=False,
         cook_batch_id=cook_batch_id,
+        cook_fresh=cook_fresh,
     )
 
 
@@ -147,6 +149,24 @@ def test__recipe_shortfalls__earliest_needed_is_a_batch_cook_day():
     assert row.committed_meals == 4
 
 
+# ── allocate_pool: fresh meals stand outside the pool (owner 2026-09-04) ──
+
+def test__allocate_pool__fresh_meal_is_never_covered_even_with_a_full_pool():
+    [meal] = allocate_pool([_meal(1, cook_fresh=True)], 10)
+    assert meal.covered is False
+    assert meal.is_cook_day is True
+
+
+def test__allocate_pool__fresh_meal_does_not_spend_the_pool():
+    # Owner: *"it should not take a meal, and it should also not demand a meal
+    # from the pool."* Without the carve-out the day-1 fresh meal would eat
+    # both portions and the day-3 batch meal would read as needing a cook.
+    meals = allocate_pool([_meal(1, cook_fresh=True), _meal(3)], 2)
+    by_day = {m.scheduled_for.day: m.covered for m in meals}
+    assert by_day[_TODAY.day + 1] is False
+    assert by_day[_TODAY.day + 3] is True
+
+
 # ── recipe_shortfalls ────────────────────────────────────────────────────
 
 def test__recipe_shortfalls__pool_covers_everything__recipe_absent():
@@ -169,6 +189,28 @@ def test__recipe_shortfalls__reports_the_servings_gap_and_first_uncovered_date()
     # Day 1 is covered by the pool, so the first date anything is actually
     # needed by is day 3 — not day 1, which the old SQL would have reported.
     assert row.earliest_needed == _TODAY + timedelta(days=3)
+
+
+def test__recipe_shortfalls__fresh_meals_are_not_committed_against_the_pool():
+    # Saturday's fresh roast is not two more portions the household has to
+    # batch-cook, so it contributes nothing to the shortfall — the same recipe
+    # planned normally on day 3 is the whole of it.
+    snapshot = PlannedMealSnapshot(
+        meals=allocate_pool([_meal(1, cook_fresh=True), _meal(3)], 0),
+        available_by_recipe={_RECIPE: 0},
+    )
+    [row] = recipe_shortfalls(snapshot)
+    assert row.committed_meals == 2
+    assert row.shortfall == 2
+    assert row.earliest_needed == _TODAY + timedelta(days=3)
+
+
+def test__recipe_shortfalls__only_fresh_meals__recipe_absent_entirely():
+    snapshot = PlannedMealSnapshot(
+        meals=allocate_pool([_meal(1, cook_fresh=True)], 0),
+        available_by_recipe={_RECIPE: 0},
+    )
+    assert recipe_shortfalls(snapshot) == []
 
 
 # ── urgency_for ──────────────────────────────────────────────────────────

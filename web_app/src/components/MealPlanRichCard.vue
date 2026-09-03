@@ -31,6 +31,13 @@
                     <q-icon :name="ICONS.link" size="12px" />
                     {{ cookMarkerLabel }}
                 </span>
+                <!-- Owner 2026-09-04 — the fresh marker takes the linked-cook
+                     slot: both answer "how does this meal relate to the pool?",
+                     and they can never both be true. -->
+                <span v-else-if="fresh" class="rich-card__cook rich-card__cook--fresh">
+                    <q-icon :name="ICONS.cookFresh" size="12px" />
+                    Fresh
+                </span>
                 <!-- Owner feedback 2026-09-03 — the sometimes-there glyph sits
                      LEFT of the always-there servings count, so the counts line
                      up down the day's cards. Same order as the desktop chip. -->
@@ -104,7 +111,24 @@
                 </q-item>
                 <template v-if="batchEnabled">
                     <q-separator />
-                    <q-item clickable v-close-popup @click="emit('link')">
+                    <!-- Owner 2026-09-04 — same control as the desktop chip's
+                         menu. Hidden on a linked meal: a cook batch IS the
+                         pool, so the two are mutually exclusive. -->
+                    <q-item v-if="!linked" clickable v-close-popup @click="emit('fresh')">
+                        <q-item-section avatar>
+                            <q-icon :name="ICONS.cookFresh" :color="fresh ? 'primary' : undefined" />
+                        </q-item-section>
+                        <q-item-section>
+                            <q-item-label>{{ fresh ? 'Cooking fresh' : 'Cook fresh on the day' }}</q-item-label>
+                            <q-item-label caption>
+                                {{ fresh ? 'Tap to put it back on the pool' : 'Skips the cooked pool entirely' }}
+                            </q-item-label>
+                        </q-item-section>
+                        <q-item-section v-if="fresh" side>
+                            <q-icon :name="ICONS.check" color="primary" />
+                        </q-item-section>
+                    </q-item>
+                    <q-item v-if="!fresh" clickable v-close-popup @click="emit('link')">
                         <q-item-section avatar><q-icon :name="ICONS.link" /></q-item-section>
                         <q-item-section>{{ linked ? 'Change cook days…' : 'Cook once for more days…' }}</q-item-section>
                     </q-item>
@@ -150,6 +174,7 @@
         (e: 'adjust', delta: number): void;
         (e: 'link'): void;
         (e: 'unlink'): void;
+        (e: 'fresh'): void;
     }>();
 
     // PROPOSAL_MEAL_PLANS_PART_2 — linked cook batch (Batch households only).
@@ -160,6 +185,9 @@
     );
 
     const linked = computed(() => batchEnabled.value && !!props.entry.cook_batch_id);
+    // Owner 2026-09-04 — cooked on the day, outside the pool. Batch households
+    // only: where every meal is fresh, saying so about one of them is noise.
+    const fresh = computed(() => batchEnabled.value && props.entry.cook_fresh);
     const cookMarkerLabel = computed(() =>
         props.entry.is_cook_day
             ? `Cook · serves ${props.entry.cook_batch_total_servings ?? props.entry.servings}`
@@ -176,9 +204,12 @@
     // separate text fragments. Status text alternative covers 1.4.1.
     const accessibleLabel = computed(() => {
         const base = `${props.entry.recipe_name}, ${props.entry.slot}, ${props.entry.servings} serving${props.entry.servings === 1 ? '' : 's'}`;
-        const withCook = linked.value
-            ? `${base}, ${props.entry.is_cook_day ? 'cook day of a batch' : 'leftovers from a batch cook'}`
-            : base;
+        let withCook = base;
+        if (linked.value) {
+            withCook = `${base}, ${props.entry.is_cook_day ? 'cook day of a batch' : 'leftovers from a batch cook'}`;
+        } else if (fresh.value) {
+            withCook = `${base}, cooked fresh on the day`;
+        }
         if (props.entry.consumed_at) return `${withCook}, cooked`;
         if (props.shortfall && batchEnabled.value) return `${withCook}, needs cooking`;
         return withCook;
@@ -298,6 +329,12 @@
     }
     .rich-card__cook--leftover {
         color: var(--text-muted);
+        font-weight: 500;
+    }
+    /* Fresh is a deliberate state, not a shortage — secondary ink, never the
+       amber that means "the pool is short one of these". */
+    .rich-card__cook--fresh {
+        color: var(--text-secondary);
         font-weight: 500;
     }
     .rich-card__cook-time {

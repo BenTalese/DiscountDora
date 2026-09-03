@@ -35,12 +35,18 @@ def validate_cook_groups(entry_requests) -> Optional[str]:
       * link at least two days (a one-day "batch" is just a normal meal);
       * use a single recipe (one cook produces one dish);
       * use a single meal slot (v1 links the same slot across days);
-      * never repeat a day (each day is one occasion of the cook).
+      * never repeat a day (each day is one occasion of the cook);
+      * never contain a meal marked `cook_fresh` — a batch IS the cooked pool,
+        and "cooked fresh on the day, outside the pool" is its negation. The
+        client hides the toggle on a linked meal, so this is a contract guard
+        rather than a reachable path (owner 2026-09-04).
 
     Past-date and recipe-existence checks stay in the handlers — they're not
     batch-specific.
     """
     for key, members in group_by_cook_key(entry_requests).items():
+        if any(getattr(m, "cook_fresh", False) for m in members):
+            return "A meal cooked fresh on the day can't also be part of a cook batch."
         if len(members) < 2:
             return "A cook batch must cover at least two days — otherwise it's just a single meal."
         if len({m.recipe_id for m in members}) > 1:

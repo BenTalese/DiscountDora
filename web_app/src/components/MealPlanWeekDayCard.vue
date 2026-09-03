@@ -80,12 +80,13 @@
                         :highlight="hoveredRecipeIds.has(entry.recipe_id)"
                         @click.stop
                         @view="emit('entryView', entry.recipe_id)"
-                        @cook="emit('entryCook', entry.recipe_id)"
+                        @cook="emit('entryCook', entry)"
                         @remove="emit('entryRemove', entry)"
                         @adjust="(d: number) => emit('entryAdjust', entry, d)"
                         @lighter="emit('entryLighter', entry)"
                         @link="emit('entryLink', entry)"
                         @unlink="emit('entryUnlink', entry)"
+                        @fresh="emit('entryFresh', entry)"
                     />
                     <span
                         v-if="!slotEntries(slot).length && !isPast"
@@ -109,12 +110,13 @@
                         :highlight="hoveredRecipeIds.has(entry.recipe_id)"
                         @click.stop
                         @view="emit('entryView', entry.recipe_id)"
-                        @cook="emit('entryCook', entry.recipe_id)"
+                        @cook="emit('entryCook', entry)"
                         @remove="emit('entryRemove', entry)"
                         @adjust="(d: number) => emit('entryAdjust', entry, d)"
                         @lighter="emit('entryLighter', entry)"
                         @link="emit('entryLink', entry)"
                         @unlink="emit('entryUnlink', entry)"
+                        @fresh="emit('entryFresh', entry)"
                     />
                 </div>
             </div>
@@ -249,12 +251,13 @@
     const emit = defineEmits<{
         (e: 'selectSlot', slot: string): void;
         (e: 'entryView', recipeId: string): void;
-        (e: 'entryCook', recipeId: string): void;
+        (e: 'entryCook', entry: MealPlanEntry): void;
         (e: 'entryRemove', entry: MealPlanEntry): void;
         (e: 'entryAdjust', entry: MealPlanEntry, delta: number): void;
         (e: 'entryLink', entry: MealPlanEntry): void;
         (e: 'entryUnlink', entry: MealPlanEntry): void;
         (e: 'entryLighter', entry: MealPlanEntry): void;
+        (e: 'entryFresh', entry: MealPlanEntry): void;
     }>();
 
     // Q2 — used slots default. When showAllSlots is on, every household slot

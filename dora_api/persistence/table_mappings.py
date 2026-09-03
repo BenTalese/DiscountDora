@@ -1044,6 +1044,8 @@ def configure_mappings(db: SQLAlchemy):
         # PROPOSAL_MEAL_PLANS_PART_2 — links this meal to a shared CookBatch.
         # SET NULL: deleting a batch un-links its meals rather than deleting them.
         Column("cook_batch_id", UUIDType, ForeignKey("CookBatch.id", ondelete="SET NULL"), nullable=True),
+        # Owner 2026-09-04 — this meal is cooked on the day, outside the pool.
+        Column("cook_fresh", Boolean, nullable=False, server_default=false()),
     )
 
     meal_plan_template_table = Table(

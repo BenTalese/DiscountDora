@@ -857,14 +857,28 @@
     // `servings`. Never writes back to the saved recipe — matches the
     // B8-substitute discipline of "this cook only".
     const { householdHeadcount, batchEnabled } = useCookingPolicy();
+    // Owner 2026-09-04 — *"When clicking cook now from a meal slot, auto adjust
+    // the servings based on what the meal plan says for that slot… I expect it
+    // to be adjusted to 6 when I get to cook mode."* `?for=N` is that request,
+    // and it outranks the household headcount: a caller who names a number
+    // knows something this page doesn't (the planner passes the slot's
+    // servings, or a linked batch's total yield). Still session-only and still
+    // freely adjustable here — it only decides what the pill opens at.
+    const requestedServings = computed<number | null>(() => {
+        const raw = Number(route.query.for);
+        return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : null;
+    });
     const cookingFor = ref<number>(
-        householdHeadcount.value && householdHeadcount.value > 0
+        requestedServings.value
+        ?? (householdHeadcount.value && householdHeadcount.value > 0
             ? householdHeadcount.value
-            : 1,
+            : 1),
     );
     watch(recipe, (next) => {
         const headcount = householdHeadcount.value;
-        if (headcount && headcount > 0) {
+        if (requestedServings.value) {
+            cookingFor.value = requestedServings.value;
+        } else if (headcount && headcount > 0) {
             cookingFor.value = headcount;
         } else if (next?.servings && next.servings > 0) {
             cookingFor.value = next.servings;

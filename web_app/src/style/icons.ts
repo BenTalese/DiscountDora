@@ -334,6 +334,12 @@ export const ICONS = {
     // `meal` is the recipe/dish itself and `chef_hat` is the act of cooking,
     // so neither carries the "already done, waiting for you" sense.
     mealsPrepared: 'mdi-fridge',
+    // Owner 2026-09-04 — a planned meal cooked on its own day, outside the
+    // cooked pool. Deliberately the opposite image to `mealsPrepared`: the
+    // fridge is "already done, waiting for you", the stove is "it happens on
+    // the night". `chef_hat` is taken — it means "the pool is short one of
+    // these, somebody has to batch it" — and these are different states.
+    cookFresh: 'mdi-stove',
     // 2026-08-26 — the recipe masthead's two half-times. `timer` already means
     // *total* time on the cookbook row, so prep and cook can't borrow it and
     // can't share one glyph either; they separate by the activity rather than

@@ -37,6 +37,9 @@ class UpdateMealPlanEntryRequest(BaseModel):
     # PROPOSAL_MEAL_PLANS_PART_2 — transient grouping token; entries sharing a
     # `cook_key` become one CookBatch. Not a DB id (see create_meal_plan).
     cook_key: str | None = Field(default = None, max_length = 64)
+    # Owner 2026-09-04 — cooked on the day, outside the cooked-portion pool.
+    # Mutually exclusive with `cook_key` (validated in `validate_cook_groups`).
+    cook_fresh: bool = False
 
 
 class UpdateMealPlanRequest(BaseModel):
@@ -212,6 +215,7 @@ class UpdateMealPlanHandler:
                     servings = _EntryRequest.servings,
                     slot = _EntryRequest.slot,
                     cook_batch_id = _Batch.id if _Batch else None,
+                    cook_fresh = _EntryRequest.cook_fresh,
                 ))
             for _Entry in _NewEntries:
                 self.repository.add(_Entry)

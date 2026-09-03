@@ -38,7 +38,8 @@ past history; write forward).
 
 **Pool math.** Uses `features/recipes/pool.py:bump_pool` (Chunk 2's
 one authority). No inline arithmetic; the floor-at-zero rule lives in
-one SQL CASE WHEN.
+one SQL CASE WHEN. A `cook_fresh` entry is pool-neutral under every
+verb — it was cooked on its day and never touched the pool.
 
 Rate-limited 60/min per authenticated user via the shared `subject`
 bucket introduced by FU-458 (matches `/assistant/act`). The queue GET
@@ -556,7 +557,7 @@ def _load_entry(entry_id: UUID) -> Optional[dict]:
     """Return the entry + its recipe id in one round-trip."""
     row = db.session.execute(
         text(
-            'SELECT id, recipe_id, servings, consumed_at '
+            'SELECT id, recipe_id, servings, consumed_at, cook_fresh '
             'FROM "MealPlanEntry" WHERE id = :eid'
         ),
         {"eid": _id_bytes(entry_id)},
@@ -702,6 +703,13 @@ def submit_verb(entry_id: UUID):
         target_drained = current_drained
     else:
         target_drained = _target_drained(verb, planned, req.actual_servings)
+    # Owner 2026-09-04 — a meal marked cooked-fresh never entered the pool and
+    # the sweep never drained it (`reconcile_consumed_meals`), so every verb is
+    # pool-neutral on it: nothing to reverse for "didn't cook", nothing to take
+    # for "cooked". Zeroing both sides here rather than teaching each helper the
+    # flag keeps the drain rules one story — this is the exception, stated once.
+    if bool(entry["cook_fresh"]):
+        current_drained = target_drained = 0
     pool_delta = current_drained - target_drained  # positive = pool goes UP
 
     if pool_delta != 0:

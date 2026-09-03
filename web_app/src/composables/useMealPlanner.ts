@@ -176,6 +176,13 @@ export function useMealPlanner() {
     const needsCookingEntries = computed(
         () => (focusedPlan.value?.entries ?? []).filter((e) => e.needs_cooking),
     );
+    // Owner 2026-09-04 — fresh meals are a third state, not a shortage: they
+    // are cooked on their day and the pool answers for none of them. They are
+    // still cooks, so the week says how many rather than hiding them behind the
+    // batch figure. Un-consumed only, same as the chef-hat set.
+    const freshEntries = computed(
+        () => (focusedPlan.value?.entries ?? []).filter((e) => e.cook_fresh && !e.consumed_at),
+    );
     const cookByLabel = computed(() => {
         const days = needsCookingEntries.value
             .map((e) => toIso(e.scheduled_for))
@@ -272,6 +279,7 @@ export function useMealPlanner() {
             servings: e.servings,
             slot: e.slot,
             ...(e.cook_batch_id ? { cook_key: e.cook_batch_id } : {}),
+            ...(e.cook_fresh ? { cook_fresh: true } : {}),
         };
     }
 
@@ -541,7 +549,17 @@ export function useMealPlanner() {
                 cmd = { recipe_id: entry.recipe_id, scheduled_for: iso, servings: entry.servings, slot: entry.slot };
                 cmds.push(cmd);
             }
-            if (newKey) cmd.cook_key = newKey; else delete cmd.cook_key;
+            if (newKey) {
+                cmd.cook_key = newKey;
+                // A cook batch IS the pool, so a member of one can't also be a
+                // fresh cook (the server refuses the pair). This is reachable
+                // without going through the fresh toggle: picking a day that
+                // already holds a fresh meal of the same recipe + slot reuses
+                // that entry rather than adding a second one.
+                delete cmd.cook_fresh;
+            } else {
+                delete cmd.cook_key;
+            }
         }
         await persistEntries(plan.meal_plan_id, cmds);
     }
@@ -558,6 +576,43 @@ export function useMealPlanner() {
                 .map((e) => toIso(e.scheduled_for))
             : [toIso(entry.scheduled_for)];
         await setCookDays(entry, days, 'separate');
+    }
+
+    /**
+     * Flip one meal between "cooked fresh on the day" and "on the pool".
+     *
+     * Owner, 2026-09-04: *"I batch cook and freeze lunches for the week, but
+     * dinner with the parents on Saturday is fresh."* A fresh meal is not
+     * allocated a cooked portion and doesn't add to what has to be batch-cooked
+     * — the whole rule is server-owned (`planned_meals.allocate_pool`), so this
+     * only writes the flag and re-reads the plan.
+     *
+     * The mark is meaningless outside a batch household (every meal is fresh
+     * there) and impossible inside a cook batch, so both are refused rather
+     * than silently written — the menu hides the control in both cases, but
+     * this is the one that has to hold.
+     */
+    async function toggleCookFresh(entry: MealPlanEntry) {
+        const plan = focusedPlan.value;
+        if (!plan || !batchEnabled.value || entry.cook_batch_id) return;
+        const next = !entry.cook_fresh;
+        const cmds = plan.entries
+            .filter(isForwardEditable)
+            .map((e) => {
+                const cmd = toCommand(e);
+                if (e.meal_plan_entry_id !== entry.meal_plan_entry_id) return cmd;
+                if (next) cmd.cook_fresh = true; else delete cmd.cook_fresh;
+                return cmd;
+            });
+        if (await persistEntries(plan.meal_plan_id, cmds)) {
+            $q.notify({
+                type: 'positive',
+                position: 'bottom-right',
+                message: next
+                    ? `${entry.recipe_name} is cooked fresh on the day.`
+                    : `${entry.recipe_name} is back on the cooked pool.`,
+            });
+        }
     }
 
     // ── Week navigation (carousel) ─────────────────────────────────────────
@@ -698,8 +753,24 @@ export function useMealPlanner() {
     function goToRecipe(recipeId: string) {
         void router.push(`/cookbook/${recipeId}`);
     }
-    function cookRecipe(recipeId: string) {
-        void router.push(`/cookbook/${recipeId}/cook`);
+    /**
+     * Open cook mode for a planned meal, cooking for what the plan says.
+     *
+     * Owner, 2026-09-04: *"When clicking cook now from a meal slot, auto adjust
+     * the servings based on what the meal plan says for that slot. Also account
+     * for linked days. For example I see now 'Cook - serves 6', so I expect it
+     * to be adjusted to 6 when I get to cook mode."*
+     *
+     * `cook_batch_total_servings` is the server's own figure for what one cook
+     * of a linked batch must produce — the same number the chip prints — so the
+     * page and cook mode can't disagree about it (R-003). Cook mode's headcount
+     * is session-only and still freely adjustable there; this only changes what
+     * it opens at.
+     */
+    function cookRecipe(entry: MealPlanEntry) {
+        const serves = entry.cook_batch_total_servings ?? entry.servings;
+        const query = serves > 0 ? `?for=${serves}` : '';
+        void router.push(`/cookbook/${entry.recipe_id}/cook${query}`);
     }
     // FU-308 (2026-07-07) — `goToManageTemplates` retired. The Templates
     // drawer now houses per-template CRUD; the drawer itself owns the
@@ -1059,6 +1130,7 @@ export function useMealPlanner() {
         currentDayIso,
         cookByLabel,
         needsCookingEntries,
+        freshEntries,
         needToBuy,
         needToBuyOnList,
         needToBuyOutstanding,
@@ -1105,6 +1177,7 @@ export function useMealPlanner() {
         goNextWeek,
         goToRecipe,
         cookRecipe,
+        toggleCookFresh,
         onKeydown,
         onTouchStart,
         onTouchEnd,

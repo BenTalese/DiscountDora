@@ -30,6 +30,13 @@ A **cook batch** (one cook, several days) is a single allocation unit, not one
 per day — see `allocate_pool`. Its leftover days are covered by their own
 cook, so they never read as needing one.
 
+A **fresh meal** (`MealPlanEntry.cook_fresh`) is outside the model entirely: it
+is cooked on its day, so the pool neither pays for it nor is paid by it. It
+never reads as covered, and `recipe_shortfalls` leaves it out of the committed
+total — asking a batch household to cook two extra portions of Saturday's
+roast, because Saturday's roast is on the plan, is the opposite of what the
+mark means.
+
 The queue is ordered by date, so the pool is spent on the *soonest* meals.
 That is both what happens in a real kitchen and the reading that makes the
 "earliest needed" date honest: if anything is uncovered, the earliest
@@ -66,6 +73,11 @@ class PlannedMeal:
     # earliest day), or when the meal is standalone. A leftover day is never
     # something anybody has to cook.
     is_cook_day: bool = True
+    # Owner 2026-09-04 — this meal is cooked on the day, outside the pool. It
+    # is never `covered` (no portion is spent on it) and it never contributes
+    # to a recipe's shortfall (it asks the pool for nothing). See
+    # `MealPlanEntry.cook_fresh`.
+    cook_fresh: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -119,6 +131,13 @@ def allocate_pool(meals: list[PlannedMeal], available_meals: int) -> list[Planne
 
     out: list[PlannedMeal] = []
     for rows in sorted(units.values(), key=unit_sort_key):
+        # A fresh meal is cooked on its own day and never touches the pool, so
+        # no portion is spent on it and it can never read as covered (owner
+        # 2026-09-04). `cook_fresh` is mutually exclusive with a cook batch, so
+        # this is always a one-entry unit.
+        if any(m.cook_fresh for m in rows):
+            out.extend(replace(meal, covered=False, is_cook_day=True) for meal in rows)
+            continue
         cook_day = min(rows, key=lambda m: (m.scheduled_for, str(m.entry_id)))
         yield_needed = sum(m.servings for m in rows)
         covered = yield_needed <= remaining
@@ -196,6 +215,7 @@ def upcoming_planned_meals(
             servings=int(entry.servings or 0),
             covered=False,
             cook_batch_id=entry.cook_batch_id,
+            cook_fresh=bool(getattr(entry, "cook_fresh", False)),
         ))
         available_by_recipe[recipe.id] = int(recipe.available_meals or 0)
 
@@ -212,9 +232,15 @@ def recipe_shortfalls(snapshot: PlannedMealSnapshot) -> list[RecipeShortfall]:
     *committed servings beyond the pool* — the number the planner has always
     shown — rather than "count of uncovered entries", which is a different
     (and, for a report about how much to cook, less useful) number.
+
+    Fresh meals are skipped outright (owner 2026-09-04): they neither draw on
+    the pool nor need one stocked for them, so counting them as committed would
+    inflate every figure this report produces.
     """
     grouped: dict[UUID, list[PlannedMeal]] = {}
     for meal in snapshot.meals:
+        if meal.cook_fresh:
+            continue
         grouped.setdefault(meal.recipe_id, []).append(meal)
 
     out: list[RecipeShortfall] = []

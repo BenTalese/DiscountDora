@@ -15,6 +15,9 @@ export type MealPlanEntryCommand = {
      *  `cook_key` become one CookBatch (cook once, eat several days). Carry the
      *  saved entry's `cook_batch_id` here to keep a link across edits. */
     cook_key?: string;
+    /** Owner 2026-09-04 — this meal is cooked on its day, outside the cooked
+     *  pool. Mutually exclusive with `cook_key`; the server refuses the pair. */
+    cook_fresh?: boolean;
 };
 
 export type CreateMealPlanCommand = {

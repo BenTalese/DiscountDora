@@ -83,6 +83,18 @@ class UpcomingMealPlanEntry:
     # ingredients that have no ``stock_item_id``. Non-zero ⇒ this entry
     # renders "N need linking" in the dashboard, not "No ingredients".
     unlinked_ingredient_count: int = 0
+    # Owner 2026-09-04 — *"I'd also want the dashboard to take that into
+    # account."* The card used to offer "Cook" on every upcoming meal, knowing
+    # nothing about the cooked-portion pool, so it asked you to cook meals
+    # already sitting in the freezer. These two are the same server-owned
+    # verdict the planner's chips read (`planned_meals`, R-003), so the two
+    # surfaces can't disagree:
+    #   needs_cooking — the pool is short one of these; somebody has to batch it
+    #   cook_fresh    — marked cooked-on-the-day, outside the pool entirely
+    # Both false ⇒ the pool already covers it (or it's a batch's leftover day).
+    # Both are false in a "fresh" household, where the pool doesn't exist.
+    needs_cooking: bool = False
+    cook_fresh: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -108,6 +120,63 @@ class DashboardSummaryDto:
 class GetDashboardSummaryHandler:
     def __init__(self, repository: Repository) -> None:
         self.repository = repository
+
+    def _cook_verdicts(
+        self, entries: List[MealPlanEntry],
+    ) -> dict[UUID, tuple[bool, bool]]:
+        """`{entry_id: (needs_cooking, cook_fresh)}` for the upcoming window.
+
+        Reads the one pool model (`planned_meals`) rather than re-deriving
+        coverage here, so the dashboard card, the planner's chips and
+        `/meal-plans/shortfall` are three readings of one allocation (R-003).
+        Skipped for a "fresh" household — there is no pool to allocate, so
+        every meal is simply a meal, exactly as this card read before.
+
+        The batch correction mirrors `get_meal_plans._hydrate_cook_coverage`:
+        the pool model only sees from today forward, so when a batch's cook day
+        is already past, the earliest day still in its window looks like the
+        cook. It isn't — it's a leftovers day, and nobody has to cook it. The
+        window here is seven days rather than a whole plan, so the batch's true
+        earliest day is fetched rather than derived from what's on screen.
+        """
+        from dora_api.features.app_settings.access import get_or_create_app_setting
+        from dora_api.features.meal_plans.planned_meals import upcoming_planned_meals
+
+        if not entries:
+            return {}
+        setting = get_or_create_app_setting(self.repository)
+        if not bool(getattr(setting, "batch_features_enabled", False)):
+            return {}
+
+        snapshot = upcoming_planned_meals(self.repository)
+        uncovered = {m.entry_id for m in snapshot.meals if not m.covered}
+
+        batch_ids = {e.cook_batch_id for e in entries if e.cook_batch_id is not None}
+        cook_day_by_batch: dict[UUID, date] = {}
+        if batch_ids:
+            for member in self.repository.get(MealPlanEntry).all(
+                EntityField(MealPlanEntry, MealPlanEntry.Fields.COOK_BATCH_ID)
+                .in_(list(batch_ids))
+            ):
+                current = cook_day_by_batch.get(member.cook_batch_id)
+                if current is None or member.scheduled_for < current:
+                    cook_day_by_batch[member.cook_batch_id] = member.scheduled_for
+
+        out: dict[UUID, tuple[bool, bool]] = {}
+        for entry in entries:
+            fresh = bool(getattr(entry, "cook_fresh", False))
+            is_cook_day = (
+                entry.cook_batch_id is None
+                or cook_day_by_batch.get(entry.cook_batch_id) == entry.scheduled_for
+            )
+            # `cook_fresh` and `needs_cooking` are the two halves of "somebody
+            # has to cook this", never both — a fresh meal asks the pool for
+            # nothing, so "the pool is short one" can't be true of it.
+            # (a consumed entry is never in `uncovered` — the pool model only
+            # queues un-consumed meals — so it needs no guard of its own.)
+            needs = not fresh and entry.id in uncovered and is_cook_day
+            out[entry.id] = (needs, fresh)
+        return out
 
     def handle(self) -> DashboardSummaryDto:
         # ── Stock items ───────────────────────────────────────────────────
@@ -167,6 +236,7 @@ class GetDashboardSummaryHandler:
         # missing_count as null (unknown) — the SPA renders the
         # calendar chip dimmed rather than "N missing", same neutral
         # state as RecipeCard.
+        cook_verdicts = self._cook_verdicts(upcoming_entries_entities)
         upcoming_entries_dto: List[UpcomingMealPlanEntry] = []
         for e in upcoming_entries_entities:
             missing, ingredient_count, unlinked = cookability.get(e.recipe.id, (0, 0, 0))
@@ -182,6 +252,8 @@ class GetDashboardSummaryHandler:
                 servings = e.servings,
                 missing_count = _missing_for_entry,
                 unlinked_ingredient_count = unlinked,
+                needs_cooking = cook_verdicts.get(e.id, (False, False))[0],
+                cook_fresh = cook_verdicts.get(e.id, (False, False))[1],
             ))
 
         return DashboardSummaryDto(

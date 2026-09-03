@@ -59,6 +59,7 @@
                     @entry-link="onEntryLink"
                     @entry-unlink="onEntryUnlink"
                     @entry-lighter="onEntryLighter"
+                    @entry-fresh="planner.toggleCookFresh"
                     @add-to-slot="onMobileAddToSlot"
                     @open-builder="builderOpen = true"
                     @go-prev-week="planner.goPrevWeek"
@@ -85,6 +86,7 @@
                     <MealPlanWeekStatus
                         :planned-count="plannedCount"
                         :shortfall-count="planner.needsCookingEntries.value.length"
+                        :fresh-count="planner.freshEntries.value.length"
                         :outstanding-count="planner.needToBuyOutstanding.value.length"
                         :on-list-count="planner.needToBuyOnList.value.length"
                         :cook-by-label="planner.cookByLabel.value"
@@ -362,6 +364,7 @@
                                 class="planner-toolbar__status"
                                 :planned-count="plannedCount"
                                 :shortfall-count="planner.needsCookingEntries.value.length"
+                                :fresh-count="planner.freshEntries.value.length"
                                 :outstanding-count="planner.needToBuyOutstanding.value.length"
                                 :on-list-count="planner.needToBuyOnList.value.length"
                                 :cook-by-label="planner.cookByLabel.value"
@@ -403,33 +406,14 @@
                          move and the slot just clicked stays under the cursor.
                          Make the week columnar and the rail's auto-open stops
                          being safe. (Also F46/F27, already implemented.) -->
+                    <!-- The "Plan this week" empty-week banner was removed on
+                         2026-09-04 (owner): it sat directly under a toolbar
+                         that already carries "Build my week", so an empty week
+                         showed the same primary button twice, one above the
+                         other. The toolbar's copy is always there — the
+                         banner's wasn't adding an affordance, only a second
+                         instance of one. -->
                     <div ref="weekScrollRef" class="planner-pane__scroll">
-                        <!-- Empty-week banner (recipes exist, this week is
-                            empty). Replaces 7 days of "tap to add" sprawl with
-                            one designed CTA. Calm empty state, distinct from
-                            R-029 hide-when-off. -->
-                        <q-card
-                            v-if="plannedCount === 0"
-                            flat bordered
-                            class="empty-week-banner q-mb-sm"
-                        >
-                            <q-card-section class="row items-center">
-                                <div>
-                                    <div class="text-subtitle2">Plan this week</div>
-                                    <div class="text-caption dora-text-muted">
-                                        Let Dora build it for you, or tap any day below to add a meal.
-                                    </div>
-                                </div>
-                                <q-space />
-                                <BaseButton
-                                    variant="primary"
-                                    :icon="ICONS.dora_voice"
-                                    label="Build my week"
-                                    @click="builderOpen = true"
-                                />
-                            </q-card-section>
-                        </q-card>
-
                         <transition :name="planner.weekTransition.value" mode="out-in">
                             <div
                                 :key="planner.focusedMonday.value"
@@ -461,6 +445,7 @@
                                     @entry-link="onEntryLink"
                                     @entry-unlink="onEntryUnlink"
                                     @entry-lighter="onEntryLighter"
+                                    @entry-fresh="planner.toggleCookFresh"
                                 />
                             </div>
                         </transition>
@@ -1190,10 +1175,6 @@
     .planner-toolbar__allslots {
         flex: 0 0 auto;
         white-space: nowrap;
-    }
-
-    .empty-week-banner {
-        background: var(--surface-sunken);
     }
 
     /* The phone's week consequences — the status strip then "This week's

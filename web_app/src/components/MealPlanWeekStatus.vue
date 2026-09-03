@@ -17,6 +17,20 @@
                     cooked-and-frozen portions to cover them.
                 </InfoTip>
             </span>
+            <!-- Owner 2026-09-04 — *"I batch cook and freeze lunches for the
+                 week, but dinner with the parents on Saturday is fresh."* A
+                 fresh meal is still a cook, so the week counts it — but it is a
+                 deliberate choice rather than a shortage, so it sits in its own
+                 neutral cell instead of inflating the amber "to cook by". -->
+            <span v-if="batchEnabled && freshCount > 0" class="week-status__cell">
+                <q-icon :name="ICONS.cookFresh" size="14px" class="q-mr-xs" />
+                {{ freshCount }} fresh
+                <InfoTip label="Fresh">
+                    Meals you've marked as cooked on the day. They don't take a
+                    portion from the cooked pool, and they don't add to what
+                    you have to batch-cook.
+                </InfoTip>
+            </span>
             <!-- Owner feedback 2026-08-27 — this used to count everything the
                  week needed that wasn't in the pantry, so it read "3 to buy"
                  forever, including after you'd put all three on a list. The
@@ -52,6 +66,9 @@
     const props = defineProps<{
         plannedCount: number;
         shortfallCount: number;
+        /** Meals marked "cooked fresh on the day" — outside the pool in both
+         *  directions, so counted separately from the shortfall. */
+        freshCount: number;
         /** Items the week needs that aren't in the pantry *and* aren't on a
          *  list yet — the count that actually moves when you shop-plan. */
         outstandingCount: number;

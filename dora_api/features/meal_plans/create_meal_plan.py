@@ -37,6 +37,9 @@ class CreateMealPlanEntryRequest(BaseModel):
     # sharing a `cook_key` become one CookBatch (cook once, eat several days).
     # It is NOT a DB id — the server materialises a fresh CookBatch per group.
     cook_key: str | None = Field(default = None, max_length = 64)
+    # Owner 2026-09-04 — cooked on the day, outside the cooked-portion pool.
+    # Mutually exclusive with `cook_key` (validated in `validate_cook_groups`).
+    cook_fresh: bool = False
 
 
 class CreateMealPlanRequest(BaseModel):
@@ -126,6 +129,7 @@ class CreateMealPlanHandler:
                 servings = _EntryRequest.servings,
                 slot = _EntryRequest.slot,
                 cook_batch_id = _Batch.id if _Batch else None,
+                cook_fresh = _EntryRequest.cook_fresh,
             )
             self.repository.add(_Entry)
             _Entries.append(_Entry)

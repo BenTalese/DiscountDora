@@ -46,6 +46,16 @@ export type UpcomingMealPlanEntry = {
      *  link. Non-zero ⇒ badge shows "N need linking" instead of the
      *  ambiguous "No ingredients". */
     unlinked_ingredient_count: number;
+    /** Owner 2026-09-04 — the card used to know nothing about the cooked pool,
+     *  so it offered "Cook" on meals already sitting in the freezer. These two
+     *  are the same server-owned verdict the planner's chips read (R-003):
+     *  `needs_cooking` = the pool is short one of these; `cook_fresh` = marked
+     *  cooked-on-the-day, outside the pool. Never both. Both false ⇒ the pool
+     *  already covers it — or the household cooks fresh, where there is no pool
+     *  and neither word means anything (which is why the card reads
+     *  `useBatchEnabled` before showing either). */
+    needs_cooking: boolean;
+    cook_fresh: boolean;
 };
 
 export type MealPlanSummary = {

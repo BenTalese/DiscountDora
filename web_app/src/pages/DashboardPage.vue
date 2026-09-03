@@ -332,7 +332,7 @@
             >
                 <NextToCookCard
                     :entries="nextToCook"
-                    @cook="(id: string) => goTo(`/cookbook/${id}/cook`)"
+                    @cook="cookPlannedMeal"
                 />
             </div>
 
@@ -1228,6 +1228,23 @@
 
     function goTo(path: string) {
         void router.push(path);
+    }
+
+    /**
+     * Owner 2026-09-04 — *"When clicking cook now from a meal slot, auto adjust
+     * the servings based on what the meal plan says for that slot."* The
+     * planner's chips do this too (`useMealPlanner.cookRecipe`); this card is
+     * the other place a planned meal opens cook mode, and opening it at the
+     * household headcount when the plan says six is the same surprise.
+     *
+     * The dashboard's payload carries the entry's own servings but not a
+     * batch's total yield, so a linked cook opens at this day's share. Living
+     * with that beats teaching the summary endpoint the batch view for one
+     * button — the pill is adjustable on the page it lands on.
+     */
+    function cookPlannedMeal(entry: UpcomingMealPlanEntry) {
+        const query = entry.servings > 0 ? `?for=${entry.servings}` : '';
+        goTo(`/cookbook/${entry.recipe_id}/cook${query}`);
     }
 
     // ── Needs your attention ────────────────────────────────────────────

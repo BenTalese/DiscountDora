@@ -78,6 +78,15 @@ class MealPlanEntryDto:
     # entry when the household's cook-style is "fresh" (the pool doesn't exist,
     # so nothing can be short of it).
     needs_cooking: bool = False
+    # Owner 2026-09-04 — *"I batch cook and freeze lunches for the week, but
+    # dinner with the parents on Saturday is fresh."* This meal is cooked on
+    # its day and stands outside the cooked-portion pool, so it is never
+    # allocated one and never adds to what has to be batch-cooked. It is a
+    # third state alongside `needs_cooking`, not a flavour of it: `needs_cooking`
+    # means "the pool is short one of these", which is a question a fresh meal
+    # never asks, so the two are never both true. Mirrors the stored column, so
+    # it is honest even in a "fresh" household — only the UI is conditional.
+    cook_fresh: bool = False
 
     @classmethod
     def from_entity(cls, entry: MealPlanEntry) -> 'MealPlanEntryDto':
@@ -93,6 +102,7 @@ class MealPlanEntryDto:
             category_name = entry.recipe.category.name if entry.recipe.category else None,
             cuisine_name = entry.recipe.cuisine.name if entry.recipe.cuisine else None,
             cook_batch_id = entry.cook_batch_id,
+            cook_fresh = bool(getattr(entry, "cook_fresh", False)),
         )
 
 
@@ -444,6 +454,12 @@ class GetMealPlansHandler:
 
         def verdict(entry: MealPlanEntryDto) -> bool:
             if entry.meal_plan_entry_id not in needs:
+                return False
+            # A fresh meal is never covered by the pool (it doesn't ask it for
+            # anything), so it arrives here in `needs` — but "the pool is short
+            # one of these" is not what is true about it. It carries
+            # `cook_fresh` instead, and the two never coincide.
+            if entry.cook_fresh:
                 return False
             # A leftovers day is never something anybody has to cook. The pool
             # model agrees, but it can only see from today forward, so when a

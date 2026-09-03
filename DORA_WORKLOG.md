@@ -28,6 +28,110 @@ next.
 
 ---
 
+## 2026-09-03 (later still ×4) — **Cook-mode voice + copy, and a theme brief that landed on a dead token**
+
+**Status:** all 7 owner items complete + green + driven live at 1280. New:
+**R-080 / ADR-077**, **D-024**, **FU-865**; **FU-709 resolved**. Gate: **vitest
+691 / 61 files**, `vue-tsc` + `eslint src/` clean. No backend change, so pytest
+was not re-run.
+
+**Cook mode, five items, all in `RecipeCookMode.vue`.** Four were copy and did
+what they said: the Sous Chef tooltip drops *"tap to turn it on/off"* (the state
+is already carried twice — filled-vs-outlined for the eye, `aria-pressed` for a
+screen reader — so saying it in words was a third copy of one fact), the commands
+popover loses FU-722's *"Voice: Piper (server)"* line (which engine spoke is a
+debugging fact, and this popover is a mid-cook reference; `lastEngine` still
+carries it), its intro is now *"With voice input enabled, say any of these to
+interact with your Sous Chef"*, and the headcount tooltip stops at *"Rescales
+quantities for this cook only."*
+
+**The fifth was three new voice commands, and one of them was a latent
+footgun.** *"Ingredients"* and *"Tools"* read the current step's, via the same
+`highlightedIngredientIds` / `highlightedToolIds` the panels highlight from — so
+the spoken answer is the highlighted rows, scaled by `displayQuantity` to the
+"Cooking for" headcount, and naming the **substitute** where a session swap is in
+place (mid-cook, what's going in the bowl is the answer to the question). A step
+with no links names the real condition (R-077): *"No ingredients are linked to
+this step"* when the recipe has some, *"This recipe doesn't list any tools"* when
+it has none. Both bypass the narration toggle deliberately — that toggle governs
+*unprompted* step reading, and a question asked out loud deserves an answer —
+with a toast fallback where no voice can produce sound at all.
+
+Then **"stop"**: it was grouped with `exit|quit`, so the one word you say to
+interrupt something that is talking at you **left cook mode and lost your
+place**. It now cancels the utterance, or pauses a running timer if she wasn't
+talking (speech first, so a second "stop" gets the timer); exiting needs "exit"
+or "quit". `stop timer` / `pause timer` still match earlier in the chain, so
+"stop the timer please" lands on the pause path either way — checked by running
+the ten branch regexes over twenty transcripts.
+
+**The misc half started as a theme complaint and ended in FU-709, which had been
+sitting open since 2026-08-21.** The owner: *"Not really taken with salt & pepper
+… I was thinking a modern OS look where you hardly see colour … Did we stop
+colouring everything in the app like the background? Could adjust the background
+with each theme to have a tint of the main colour of that theme."* That last
+sentence is FU-709's decision. Quasar styles `body.body--dark` from
+`--q-dark-page` — a **class** selector that out-specifies `app.scss`'s
+`body { background-color: var(--q-page) }` — and nothing ever set it, so for
+months **all seven dark themes painted Quasar's `#14171a`** and every theme
+block's authored page colour was dead code. `themeService` now syncs
+`--q-dark-page` from `--surface-page`; measured live, `body` went from `#14171a`
+in every dark theme to `#191c1f` / `#24221e` / `#051411` in Salt & Pepper Dark /
+Lemon Tart Dark / Pesto Dark. `StockOverview`'s `body.body--dark` peek-header
+fork existed only to match Quasar's grey and was deleted with it. Generalised as
+**R-080 / ADR-077**: where a framework paints from a variable it owns, feed that
+variable in the existing bridge — never out-specify its selector, and never
+trust an authored token you haven't watched paint (R-075).
+
+**And that is what made the owner's other bullet findable.** *"Lemon tart dark
+theme you can't see any colour for the menu bar. Is this intentional or a
+mistake?"* A mistake, twice over: its `--surface-toolbar` was the theme's own
+**sunken** value — its darkest surface — where every sibling dark family lifts
+its bar above the page, and the header had nothing separating it from the page in
+*any* theme whose bar sits close to its page colour. So the bar moved above the
+page, and `MainLayout` now draws one hairline from `color-mix(… var(--text-on-toolbar)
+14% …)`, which resolves to a faint light line on a dark or saturated bar and a
+faint dark one on a light one — one rule, no per-theme token. That is **D-024**
+(chrome is separable from the page it sits on), a rule D-002 can't catch because
+the *ink* was fine; the bar had simply stopped being an object. Lemon Tart Dark's
+surfaces also moved from hue 225 to the family's gold axis — it was the one dark
+theme whose page carried nothing of its own colour — with `--surface-elevated`
+pulled to 21% because warm hues read lighter at equal HSL lightness and
+`--text-muted` / `--accent-ink` were landing at 4.3:1 on the naive translation.
+
+**Salt & Pepper was rebuilt rather than tweaked**, because the first cut's
+reading of "neutral" — one warm hue everywhere, 28–40° with a clay accent — *is*
+the brown the owner objected to, just diluted. A modern desktop OS is achromatic
+chrome (greys with a hint of blue), exactly one accent, and a toolbar that is a
+**surface** rather than a coloured band. So: hue 210–214 at 8–16% for every
+surface and ink, one blue doing primary + accent + focus, `--brand-secondary` as
+a graphite so secondary controls read as chrome, and a light chrome header (which
+also needed the two `*-on-coloured` hover veils inverted — they are white by
+default and invisible on a light bar — and the Pesto-teal-tinted overlay/shadow
+defaults from `tokens.scss` replaced with neutral ones). Contrast computed for
+every ink × surface pair; tightest is muted-on-sunken at 4.67:1. Note for
+FU-674: the new pair's `--text-on-primary` is 6.1:1 light / 7.1:1 dark, so it
+adds nothing to that backlog.
+
+**Verified by driving the built SPA** (seeded throwaway backend on 5171, local
+Chrome via Playwright, per the standing note): the commands popover read back
+with all three new verbs and no engine line; Salt & Pepper light/dark, Lemon Tart
+Dark, Pesto Dark and Pesto light screenshotted on the dashboard and stock pages
+with `body` background, header background and header border-colour logged per
+theme. **FU-865** logged on the way past: Quasar's `setCssVar` writes the palette
+to `<body>`, so `app.scss`'s `html { scrollbar-color: var(--q-secondary)
+var(--q-page) }` has never seen a theme — it should read the semantic tokens
+(which *are* on `:root`) instead.
+
+**Not done / next up:** four dark themes (Blueberry, Cherry Cola, Sourdough,
+Dragonfruit) are showing their real page colour for the first time and were not
+walked — queued in `DORA_VERIFY.md` along with the mic-dependent voice commands
+and a 375px pass. The theme-decision cluster the owner still owns is unchanged:
+FU-621 (brand-secondary), FU-622 (colour options board), FU-674
+(`--text-on-primary` in three older themes).
+
+---
+
 ## 2026-09-03 (later still ×3) — **Meal planner, ~35 owner items: a shortfall that lit every meal of a recipe, and four ways to break a multi-day cook**
 
 **Status:** all items complete + green + driven live at 375 and 1280. New:

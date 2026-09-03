@@ -666,6 +666,36 @@ Quasar's raw defaults (casing, sizing, shadows) unstyled.
   elsewhere on the page in another mode.
 - **Established by:** shopping-list feedback batch 2, 2026-08-28.
 
+### D-024 — App chrome is separable from the page it sits on
+- **Rule:** a persistent chrome surface (the header, a sub-bar, a sticky footer)
+  must be distinguishable from the page behind it — by a **value step** in its
+  surface token, a **hairline**, or both. A chrome surface is never assigned the
+  page's own value, and never the theme's *sunken* value, which in a dark theme
+  puts the bar at or below the page and erases it.
+- **Why:** Lemon Tart Dark set `--surface-toolbar` to its `--surface-sunken`
+  value — the darkest surface in the theme — while every sibling dark family
+  lifts its bar above the page (Pesto Dark 18%, Blueberry 22%, Sourdough 16%).
+  Against the page it sat on, that was two near-identical near-blacks, and the
+  owner's report was exactly what it looks like: *"just noticed lemon tart dark
+  theme you can't see any colour for the menu bar. Is this intentional or a
+  mistake?"* (2026-09-03). It also can't be caught by contrast rules — D-002
+  governs ink on a surface, and the *ink* was fine; the bar had simply stopped
+  being an object. The hairline is what makes the rule cheap to satisfy in a
+  theme that deliberately wants a near-invisible bar (Salt & Pepper's
+  modern-OS look, where the header is one step off a light page).
+- **Apply:** draw the hairline once, app-wide, from the chrome's own ink token
+  (`MainLayout` uses `color-mix(in srgb, var(--text-on-toolbar) 14%,
+  transparent)`), so it resolves to a faint light line on a dark or saturated bar
+  and a faint dark one on a light bar — one rule, no per-theme token. When
+  authoring or reviewing a theme, look at page vs toolbar as a *pair*; and
+  remember an authored surface token proves nothing until it paints (R-080).
+- **Violation signal:** `--surface-toolbar` set to the same value as
+  `--surface-page` or `--surface-sunken`; a header that disappears in a
+  screenshot of one theme but not others; chrome that only reads as chrome
+  because of a shadow that a flat theme removes.
+- **Established by:** owner misc feedback, 2026-09-03 (with FU-709's dark-page
+  fix, which is what made the collision visible at all).
+
 ---
 
 ## Exemplars (the bar — protect these)

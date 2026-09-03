@@ -2897,6 +2897,37 @@ exceptions, which still must be commented) · **Source** (where it was establish
   place and a raw number in another; a rendered figure with more than a handful of
   decimal places anywhere in the UI.
 
+### R-080 — When the framework paints from its own variable, feed that variable
+- **Rule:** where a third-party framework applies a style from a variable it owns
+  (`--q-dark-page`, `--q-primary`, …), the fix is to **sync that variable from our
+  token**, in the one place that already bridges the two systems. Never out-specify
+  the framework's selector with a competing rule, and never leave our token
+  authored-but-unpainted next to the framework's default.
+- **Why:** `css/app.scss` set `body { background-color: var(--q-page) }`, but Quasar
+  ships `body.body--dark { background: var(--q-dark-page) }` — a *class* selector,
+  so it wins on specificity, and nothing ever set `--q-dark-page`. For months every
+  dark theme painted Quasar's `$dark-page` grey while each theme block's authored
+  `--surface-page` (Pesto Dark `#00120B`, Cherry Cola `#2E0014`, Lemon Tart Dark's
+  charcoal) was **dead code** — invisible until a sticky header happened to paint
+  the token directly and read as a deliberate green band (FU-709). The failure mode
+  is the dangerous kind: no error, no visual break, and a whole design dimension
+  silently inert. Escalating specificity instead (`body.body--dark { … }` of our
+  own, or `!important`) would have "fixed" the page while leaving every *other*
+  Quasar-owned paint of the same variable disagreeing with us — two sources of
+  truth for one colour, which is R-003 with a vendor prefix.
+- **Apply:** find the framework's own bridge (here `syncQuasarPaletteFromCssVars`
+  in `themeService`) and set the framework variable from the semantic token there,
+  so the token stays the single source (R-003). Then **delete the workarounds the
+  old behaviour spawned** — the `body.body--dark` fork in `StockOverview`'s peek
+  header existed only to match Quasar's grey, and would have become a second
+  divergence the moment the sync landed. When you author a token, check it actually
+  paints: `getComputedStyle(document.body).backgroundColor` in the running app, not
+  the value of the custom property (R-075).
+- **Violation signal:** a rule whose only job is to beat a vendor selector; a
+  `!important` on a colour; a `.body--dark` / `[data-theme]` fork in a component
+  that restates what a token should already say; a theme token that no screenshot
+  can be found to show.
+
 ## ADR process (evaluate every task)
 
 At the end of each work unit, ask: **did this task make or rely on a decision that
@@ -5259,3 +5290,34 @@ A non-binding cookbook of solutions to recurring problems. Not rules — just a
   This is R-003 applied to presentation: it says the shared formatter owns the
   *whole* convention, not the half that happened to be extracted first.
 - **Promotes rule:** R-079.
+
+### ADR-077 — A vendor's variable is the seam; sync it, don't out-specify it (promotes R-080)
+- **Date / task:** 2026-09-03 (owner misc batch — theme neutrality + the invisible menu bar; resolves FU-709)
+- **Status:** accepted
+- **Context:** every dark theme's authored `--surface-page` had never painted.
+  `app.scss` styles `body` from `--q-page`; Quasar styles `body.body--dark` from
+  `--q-dark-page`, a variable nothing in Dora set. The class selector wins, so all
+  seven dark variants rendered Quasar's `$dark-page` (#14171a) and their authored
+  page colours were dead code. It surfaced only sideways — a sticky header that
+  *did* read `--surface-page` looked like a deliberate dark-green band — and was
+  parked as FU-709 because honouring the colours changes the whole app in dark
+  mode: an owner-visible design call, not a bug fix to slip in. The owner made the
+  call in this batch: *"Did we stop colouring everything in the app like the
+  background? Could adjust the background with each theme to have a tint of the
+  main colour of that theme."*
+- **Decision:** `themeService.syncQuasarPaletteFromCssVars` now also sets
+  `--q-dark-page` from `--surface-page`, so the dark page paints the theme's own
+  colour and one token feeds both modes. Generalised as R-080: where a framework
+  paints from a variable it owns, sync that variable from our semantic token in the
+  existing bridge — never fight its selector. The workaround the old behaviour
+  spawned (`StockOverview`'s `body.body--dark` peek-header fork) was deleted in the
+  same change.
+- **Consequences:** commits us to checking, for any framework-owned paint, whether
+  the framework has a variable we should be feeding — and to verifying a new token
+  actually paints in the running app rather than trusting that it is declared.
+  Costs us the freedom to let Quasar's defaults quietly stand in for our tokens;
+  every dark theme's page colour is now a real design decision that has to hold up
+  against card and row contrast, which is the honest position. Two themes needed
+  work the moment the colours became visible (Lemon Tart Dark's page hue and its
+  toolbar), which is the evidence the tokens were never being reviewed.
+- **Promotes rule:** R-080.

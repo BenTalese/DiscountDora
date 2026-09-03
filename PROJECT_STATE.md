@@ -25,8 +25,9 @@ construction: 2026-09-03 alone closed four large batches (meal planner ~35 items
 Settings ~35, cookbook/recipe view 15, cook mode 5), each built, gated and driven
 live at 375 and 1280. The gate is green — **vitest 691 across 61 files**,
 `vue-tsc` + `eslint src/` clean, **pytest 2280 passed** with only the four known
-buy-verdict reds (FU-762) — and the engineering rubric has grown to **R-079 /
-ADR-076**, the last four rules all extracted from defects this week
+buy-verdict reds (FU-762) — and the engineering rubric has grown to **R-080 /
+ADR-077** (plus **D-024** in the design guide), the last five rules all
+extracted from defects this week
 (container-not-viewport sizing, one formatting authority, capability messages
 naming the real condition, derived figures never resting on unrecorded facts).
 The recurring pattern in these batches is that owner "design complaints" keep
@@ -55,7 +56,7 @@ orphan-code deletions — rather than unbuilt work.
 
 | Workstream | Status | Where it's at | Governing doc |
 |---|---|---|---|
-| Owner feedback sweeps (per surface) | 🟡 | Meal planner, Settings, cookbook/recipe, cook mode all swept 2026-09-03; **nothing queued** on any surface | `DORA_WORKLOG.md` top entries + `docs/02_feedback/` |
+| Owner feedback sweeps (per surface) | 🟡 | Meal planner, Settings, cookbook/recipe, cook mode (×2) and the theme/misc bullets all swept 2026-09-03; **nothing queued** on any surface | `DORA_WORKLOG.md` top entries + `docs/02_feedback/` |
 | Dashboard rebuild | ✅ | 6 chunks closed 2026-09-02 (17→14 cards, honest empty states, one scale) | `IMPL_PLAN_DASHBOARD_REBUILD.md` |
 | Reports | ✅ | 5 chunks closed 2026-09-02; 549 KB chart library removed, false-empty fixed | `DORA_WORKLOG.md` (chunks 1–5) |
 | Meal planner + auto builder | ➗ | Server-owned per-entry `needs_cooking`, multi-day cook QA (4 defects fixed); residue FU-863, FU-802/791 row extraction | `IMPL_PLAN_MEAL_PLANS_REBUILD.md` |
@@ -63,8 +64,8 @@ orphan-code deletions — rather than unbuilt work.
 | Products-as-overlay + companion | ➗ | Phases 0/A–E done, backend green; **F in progress** and gated on FU-214 with real data | `docs/04_proposals/PRODUCTS_OVERLAY_RUNBOOK.md` |
 | Finalisation (FST · help · senior review · test plan) | 🔵 | Designed, not started — four output tracks, per-chunk walk order defined | `docs/01_charter/FINALISATION_PLAN.md` (+ `FINALISATION_COVERAGE.md`) |
 | Design remediation (D-rules) | ➗ | Wave-1 contrast ramp done 2026-08-12; DR-1b component spots + FU-578's 54 findings still need owner triage | `DESIGN_REMEDIATION_PLAN.md` / `DESIGN_STYLE_GUIDE.md` |
-| Theming & colour tokens | 🔴 | 7 theme families now (Salt & Pepper, Dragonfruit added); blocked cluster: colour-options board, brand-secondary, dark `--surface-page`, `--text-on-primary` | FU-622 / 621 / 709 / 674 |
-| Engineering standards + ADR log | 🟡 | Living: R-001..R-079 / ADR-076, four rules added this week; close-gate run every unit | `ENGINEERING_STANDARDS.md` |
+| Theming & colour tokens | 🔴 | 7 families; **dark `--surface-page` now paints** (FU-709 resolved 2026-09-03 → R-080/ADR-077) and Salt & Pepper was rebuilt as the neutral modern-OS pair; still-blocked cluster: colour-options board, brand-secondary, `--text-on-primary` | FU-622 / 621 / 674 |
+| Engineering standards + ADR log | 🟡 | Living: R-001..R-080 / ADR-077 (+ D-024 in the design guide), five rules added this week; close-gate run every unit | `ENGINEERING_STANDARDS.md` |
 | Verification (manual-first) | 🟡 | Lean stance holds — drive the app once, delete the line; Playwright stays a boot/route/auth smoke layer only | `DORA_VERIFY.md` + `DORA_VERIFY_TRIAGE.md` |
 | Data portability / Postgres | ⚪ | Standard target named, SQLite still supported; migration not started | `RECONCILED_FINISHING_PLAN.md` §7.5, FU-045 |
 
@@ -77,8 +78,10 @@ check in the running app:
    FU-775, FU-776 and the whole verdict stream. *Blocking.*
 2. **FU-762 — four buy-verdict e2e tests fail against the money gate**; resolve
    before that work is committed (they're the only reds in the suite).
-3. **FU-709 — every dark theme's authored `--surface-page` never paints.** Needs
-   a decision: honour the authored value, or drop it from the theme files.
+3. **All seven dark themes changed background on 2026-09-03** (FU-709 resolved —
+   each now paints its own authored page colour instead of Quasar's grey).
+   Blueberry, Cherry Cola, Sourdough and Dragonfruit Dark have **not been looked
+   at** since; queued in `DORA_VERIFY.md`.
 4. **FU-674 — `--text-on-primary` fails the D-002 contrast floor in three
    themes**; one decision, then a one-line fix.
 5. **FU-777 — `ExpiringChip`'s neutral state uses a numbered Quasar palette

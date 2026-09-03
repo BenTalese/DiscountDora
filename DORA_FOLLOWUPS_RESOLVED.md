@@ -10,6 +10,29 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-709 — Every dark theme's authored `--surface-page` never actually paints
+- **Raised:** 2026-08-21 (stock-item detail feedback batch — chased the "odd dark green" header)
+- **Type:** finding.
+- **What:** `css/app.scss` sets `body { background-color: var(--q-page) }` and
+  `themeService` syncs `--q-page` from `--surface-page`. Quasar ships
+  `body.body--dark { background: var(--q-dark-page) }` — a **class** selector, so it
+  out-specifies ours, and nothing ever sets `--q-dark-page` (it stays
+  `quasar.variables.scss`'s `$dark-page: #14171a`). Result: in *every* dark theme the
+  page paints Quasar's grey, and each theme's hand-authored page colour (Pesto Dark
+  `#00120B`, Cherry Cola `#2E0014`, "dark crust", …) is dead code. It only became
+  visible because the peek's sticky header *did* paint `--surface-page` — reading as
+  a deliberate dark-green band (the reported complaint).
+- **Why deferred:** the fix is one line (`page`→`dark-page` in the palette sync, or a
+  `body.body--dark` override), but it changes the page background of the whole app in
+  all four dark themes. That's an owner-visible design call, not a bug fix to slip in
+  during a detail-page feedback batch — and the same owner just said he did *not* want
+  more dark green on screen.
+- **Recommended resolution:** **needs a decision.** Either (a) honour the authored
+  colours (sync `--q-dark-page` too) and re-check card/row contrast in all four dark
+  themes, or (b) declare Quasar's grey the intended dark page and delete the unused
+  `--surface-page` values from the dark theme blocks so the next reader isn't misled.
+- **Resolved 2026-09-03** (owner misc feedback batch): the owner made the call himself, asking *"did we stop colouring everything in the app like the background? Could adjust the background with each theme to have a tint of the main colour of that theme"* — i.e. **option (a)**, honour the authored colours. `themeService.syncQuasarPaletteFromCssVars` now also sets `--q-dark-page` from `--surface-page`, so every dark theme paints its own page colour and one token feeds both modes. Verified in the running app: `body` background reads `#191c1f` / `#24221e` / `#051411` in Salt & Pepper Dark / Lemon Tart Dark / Pesto Dark respectively (it read Quasar's `#14171a` in all three before). Card and row contrast re-checked in the walk; the `body.body--dark` fork in `StockOverview`'s peek header — which existed only to match Quasar's grey — was deleted with it. Generalised as **R-080 / ADR-077**. Two things the now-visible colours immediately exposed were fixed in the same batch: Lemon Tart Dark's page hue (a cool blue-grey under a gold-and-orange brand) and its toolbar, which was set to the theme's *sunken* value and so had no edge against the page at all (owner: *"you can't see any colour for the menu bar"*) — now **D-024**.
+
 ## [RESOLVED] FU-804 — reported "which day(s) the ingredient is needed" text was not found in the right rail
 - **Raised:** 2026-09-01 (meal-planner owner batch)
 - **Type:** finding

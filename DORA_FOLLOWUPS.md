@@ -39,6 +39,27 @@ long session summary. Distinct from the other logs:
 
 ---
 
+## [OPEN] FU-865 — Quasar palette vars are set on `<body>`, so the `html` scrollbar rule never gets the theme
+- **Raised:** 2026-09-03 (owner misc batch — found while fixing FU-709)
+- **Type:** finding
+- **What:** `css/app.scss` styles the browser scrollbar with
+  `html { scrollbar-color: var(--q-secondary) var(--q-page) }`, but Quasar's
+  `setCssVar` writes to **`document.body`** by default, which is where
+  `themeService.syncQuasarPaletteFromCssVars` puts the whole palette. A custom
+  property set on `body` does not inherit *upwards*, so the `html` rule resolves
+  against Quasar's own `:root` defaults and the scrollbar is the same colour in
+  every theme. Confirmed live during the FU-709 walk: reading
+  `--q-dark-page` off `document.documentElement` returned Quasar's `#14171a` in
+  all themes while `document.body`'s background painted the synced value.
+- **Why deferred:** out of scope for the batch that found it, and the fix has two
+  candidate shapes worth one moment's thought rather than a reflex: either point
+  the rule at the semantic tokens it should have used in the first place
+  (`html { scrollbar-color: var(--brand-secondary) var(--surface-page) }` —
+  those *are* on `:root`, and R-002 prefers them anyway), or move the rule to
+  `body`. The first is better and is probably a two-line change.
+- **Recommended resolution:** opportunistic — next time anything touches
+  `app.scss` or the theming layer. Cheap, cosmetic, low risk.
+
 ## [OPEN] FU-864 — Two "Dora does this for you" actions still wear the wand, not the burger
 - **Raised:** 2026-09-03 (meal-planner owner batch)
 - **Type:** follow-up
@@ -2379,28 +2400,6 @@ Resolved entries carry one extra line, and live in `DORA_FOLLOWUPS_RESOLVED.md`:
   and restarting the backend fixes it; (b) the Add-barcode dialog now names a route
   miss explicitly ("This server has no barcode endpoint at … — its API is older than
   this page"), so the next attempt self-diagnoses. Paired with FU-648.
-
-## [OPEN] FU-709 — Every dark theme's authored `--surface-page` never actually paints
-- **Raised:** 2026-08-21 (stock-item detail feedback batch — chased the "odd dark green" header)
-- **Type:** finding.
-- **What:** `css/app.scss` sets `body { background-color: var(--q-page) }` and
-  `themeService` syncs `--q-page` from `--surface-page`. Quasar ships
-  `body.body--dark { background: var(--q-dark-page) }` — a **class** selector, so it
-  out-specifies ours, and nothing ever sets `--q-dark-page` (it stays
-  `quasar.variables.scss`'s `$dark-page: #14171a`). Result: in *every* dark theme the
-  page paints Quasar's grey, and each theme's hand-authored page colour (Pesto Dark
-  `#00120B`, Cherry Cola `#2E0014`, "dark crust", …) is dead code. It only became
-  visible because the peek's sticky header *did* paint `--surface-page` — reading as
-  a deliberate dark-green band (the reported complaint).
-- **Why deferred:** the fix is one line (`page`→`dark-page` in the palette sync, or a
-  `body.body--dark` override), but it changes the page background of the whole app in
-  all four dark themes. That's an owner-visible design call, not a bug fix to slip in
-  during a detail-page feedback batch — and the same owner just said he did *not* want
-  more dark green on screen.
-- **Recommended resolution:** **needs a decision.** Either (a) honour the authored
-  colours (sync `--q-dark-page` too) and re-check card/row contrast in all four dark
-  themes, or (b) declare Quasar's grey the intended dark page and delete the unused
-  `--surface-page` values from the dark theme blocks so the next reader isn't misled.
 
 ## [OPEN] FU-703 — Decide the fate of the product price axis (`/price-history`, My Products)
 - **Raised:** 2026-08-21 (prices-surface UX investigation — `docs/05_investigations/PRICES_SURFACE_UX_ASSESSMENT.md`)

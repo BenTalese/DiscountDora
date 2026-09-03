@@ -22,6 +22,54 @@ top-to-bottom.
 
 ---
 
+## Sous Chef's new voice commands (2026-09-03)
+
+Three verbs were added — **"ingredients"**, **"tools"** and **"stop"** — and
+"stop" no longer exits cook mode (that needs "exit" / "quit" now). The command
+list in the help popover was verified live; the *dispatch* can't be driven
+headlessly because it needs a real microphone, so these are yours to say out
+loud. Recipe with structured steps + per-step links: **Sunday Ragu**.
+
+- [ ] Say **"ingredients"** on a step that has ingredient links — she should read
+      the quantities *as scaled to the "Cooking for" headcount*, and name the
+      substitute rather than the original where one is swapped in for this cook.
+- [ ] Say **"ingredients"** on a step with none — expect *"No ingredients are
+      linked to this step"*, not silence.
+- [ ] Say **"tools"** on a linked step, and on a free-text recipe — the second
+      should say *"This recipe doesn't list any tools"*.
+- [ ] Say **"stop"** while she is mid-sentence: she stops talking and **stays in
+      cook mode**. Say it again with a timer running: the timer pauses.
+- [ ] Turn Sous Chef **off**, leave the mic on, and ask for "ingredients" — the
+      answer should still be spoken (a direct question gets a direct answer;
+      narration-off only governs unprompted step reading).
+- [ ] Say **"exit"** — that, and only that, should leave cook mode.
+
+## Themes after the dark-page fix (2026-09-03)
+
+FU-709 landed: every dark theme now paints its own authored page colour instead
+of Quasar's grey, so **all seven dark variants changed background** at once.
+Salt & Pepper was rebuilt as a neutral modern-OS pair, and Lemon Tart Dark's
+surfaces were re-hued warm with a lifted toolbar. Salt & Pepper (both modes),
+Lemon Tart Dark and Pesto Dark were driven and screenshotted at 1280; contrast
+was computed for every ink × surface pair. What's left is taste, the four dark
+themes not walked, and phone width.
+
+- [ ] Wear the new **Salt & Pepper** light and dark for a session. The brief was
+      a modern OS look with one accent — check the blue is doing only
+      selected/primary work and nothing important went colourless (level
+      squares, essential stripe, attention outlines, alert kinds).
+- [ ] **Lemon Tart Dark**: the page is a warm charcoal now, not a blue-grey, and
+      the menu bar sits above it with a hairline. Confirm the bar reads as a bar
+      and the warmth doesn't tip into brown.
+- [ ] The **four dark themes not walked** — Blueberry, Cherry Cola, Sourdough,
+      Dragonfruit — are all showing their real page colour for the first time.
+      Check cards and rows still separate from the page in each.
+- [ ] All of the above at **375px**, where the header hairline and the page tint
+      are most of what you see.
+- [ ] The **header hairline** across a saturated bar (Pesto light) and a light
+      bar (Salt & Pepper light) — one rule draws both; it should be a whisper,
+      not a rule line.
+
 ## Settings — the 2026-09-03 owner batch
 
 Most of this batch was driven live at 375px and 1280px and those lines are not
@@ -90,12 +138,9 @@ the seed had no data for:
 
 Every token pair in Salt & Pepper and Dragonfruit (both modes) was measured
 against the contrast floor in the running app and passes. What a probe cannot
-judge is whether they look *good*.
+judge is whether they look *good*. (Salt & Pepper was rebuilt later the same
+day — its bullet moved to "Themes after the dark-page fix" above.)
 
-- [ ] Wear **Salt & Pepper** (light and dark) for a session. The brief was
-      "very minimal" — check nothing important has become invisible now that
-      hue isn't doing any work: the level squares, the essential stripe, the
-      attention outlines, the alert kinds.
 - [ ] Wear **Dragonfruit** (light and dark) for a session. The pink primary is
       the strongest colour in the app; check the toolbar, the primary buttons
       and the dashboard hero don't fight each other.

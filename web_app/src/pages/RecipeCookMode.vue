@@ -668,8 +668,6 @@
                             v-model="row.selectedLevelId"
                             :options="levelSegmentOptions"
                             :aria-label="`Stock level for ${row.targetName}`"
-                            pill
-                            flat
                             dense
                             class="finish-row__levels"
                         />

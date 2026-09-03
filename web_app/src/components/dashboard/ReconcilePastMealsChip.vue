@@ -52,7 +52,7 @@
         &:hover,
         &:focus-visible {
             background: color-mix(in srgb, var(--brand-primary) 6%, var(--surface-component));
-            border-color: var(--accent-ink);
+            border-color: var(--accent-mark);
         }
     }
 

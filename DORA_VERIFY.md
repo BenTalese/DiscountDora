@@ -22,6 +22,57 @@ top-to-bottom.
 
 ---
 
+## The two new themes (2026-09-03)
+
+Every token pair in Salt & Pepper and Dragonfruit (both modes) was measured
+against the contrast floor in the running app and passes. What a probe cannot
+judge is whether they look *good*.
+
+- [ ] Wear **Salt & Pepper** (light and dark) for a session. The brief was
+      "very minimal" — check nothing important has become invisible now that
+      hue isn't doing any work: the level squares, the essential stripe, the
+      attention outlines, the alert kinds.
+- [ ] Wear **Dragonfruit** (light and dark) for a session. The pink primary is
+      the strongest colour in the app; check the toolbar, the primary buttons
+      and the dashboard hero don't fight each other.
+- [ ] Check the **chart palettes** in both — Reports' spend bars and the cook
+      timeline — for six hues you can still tell apart.
+- [ ] Switch families with **System** mode selected and confirm the OS
+      light/dark flip picks up the new families' variants.
+
+## Segmented controls, after the pill convergence (2026-09-03)
+
+Every single-select row of buttons now wears the recipe step-style pill, and
+the settings ones grew from 32px to 44px rows with 14px labels. Verified live
+on Appearance (3), Reports (2) and the two admin pages; the rest were not
+walked.
+
+- [ ] Look at the segmented controls **on a phone**: the settings font-family
+      picker has five options and the Reports range has six, both now with a
+      bigger label and a taller row than before. Confirm they scroll rather
+      than overflow, and that the pill track's rounded ends aren't clipped.
+- [ ] The **stock filter panel's sort toggle** lost its hand-painted styling
+      (it used to pass `flat` and repaint the active fill itself). Confirm the
+      active segment is filled and readable there.
+- [ ] The **cook-mode finish dialog's** per-row level pickers also lost `flat`.
+      Confirm they still read as three distinct options in a narrow row.
+
+## Planned demand on the stock-item page (2026-09-03)
+
+The signal is unit- and e2e-tested and was confirmed against the dense seed
+through the API, but the **card itself has never been seen** — the stock-item
+detail route doesn't mount in the agent's browser pane.
+
+- [ ] Open a stock item the plan needs (on the dense seed: Extra Virgin Olive
+      Oil, Full Cream Milk, Celery, Parmesan — all "watch") and confirm the
+      card renders under "Dora thinks", collapses/expands, and reads sensibly.
+- [ ] Record one of them as **Out** and confirm the card turns to the negative
+      tone and its copy changes to "the meal can't be cooked until it's back".
+- [ ] Find one where a cooked batch covers some meals and check the headline
+      counts what's left to cook, not the total.
+- [ ] Confirm the card is **absent** on an item with nothing planned against
+      it, and on an install with the meal planner switched off.
+
 ## Segmented controls app-wide, after the label-size fix (2026-09-02) — origin FU-828
 
 `BaseSegmented.vue` now pins its label to `--font-size-sm`, because Quasar's

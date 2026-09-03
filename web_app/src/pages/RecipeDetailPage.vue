@@ -679,8 +679,6 @@
                             v-if="methodEditing"
                             v-model="form.steps_mode"
                             dense
-                            unelevated
-                            pill
                             class="rn__modes"
                             aria-label="Step style"
                             :options="[

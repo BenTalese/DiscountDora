@@ -5,6 +5,49 @@ semver — major bumps signal schema or breaking-config changes.
 
 ## [Unreleased]
 
+### Added
+- **Two new themes, and a neutral one at last (2026-09-03).** The picker had
+  five families and all five had opinions. Now there are seven:
+  - **Salt & Pepper** — the minimal one. A single warm grey hue carries the
+    whole family, light and dark: warm paper and graphite by day, cracked
+    pepper and bone by night, with one muted peppercorn accent so the active
+    tab still marks itself. The semantic colours (out of stock, on track) and
+    the six chart hues keep their meaning — a quiet theme, not a colourblind
+    one.
+  - **Dragonfruit** — the loud one, and the first pink in the app. Magenta
+    rind, green tips, pale flesh; at night, hot pink and lime on near-black.
+  Every text and surface pairing in both was measured against the contrast
+  floor before shipping, in the running app.
+- **The stock-item page now says what your plan is going to want.** A third
+  card, under "Dora thinks" and above the buy verdict: *"3 planned meals need
+  this — Sunday Ragu and Egg Fried Rice. First needed Fri 4 Sep."* It counts
+  only meals you still have to cook — if a cooked batch already covers two of
+  three, it says so and counts one. It turns red when you've recorded the item
+  as **out** (that meal can't be cooked), amber when **low** (it might not
+  stretch), and stays quiet otherwise.
+
+### Changed
+- **Every single-select row of buttons in the app now looks the same
+  (2026-09-03).** There were four looks for one control: a squared Quasar
+  block, a grey-and-white one on Reports, a hand-painted variant in the stock
+  filter panel, and a softer one on the settings pages. All of them are now the
+  rounded pill from the recipe method's step-style switch — the meal planner's
+  auto-builder emphasis, Appearance's theme mode / font / text size, the
+  Reports range and spend axis, the admin stocktake cadence and auto-add mode,
+  the dashboard and shopping-list toggles. The settings labels also grew from
+  13px to 14px and the rows from 32px to a proper 44px tap target.
+- **The accent colour is brighter again where it isn't text.** The 2026-09-01
+  correction that made accent-coloured text legible also darkened every accent
+  *underline, indicator, border and icon* to match, and the owner's read was
+  that it overshot. Measured, there is no middle value for text — but a tab
+  underline never owed text-grade contrast in the first place. Those now use a
+  second, visibly brighter tone; text is unchanged.
+- **The dev dataset's stocktake Review screen has four items instead of one.**
+  "Dora's fairly sure about these" is meant to be a column you scan and untick
+  from; one row read as a stray item. The four now say different things: one
+  agreeing, one Low from the calendar, one Low because you cooked with it, and
+  one where you restocked and never said so.
+
 ### Fixed
 - **Reports no longer tells you it has nothing while it's still looking
   (2026-09-02).** Its cards had no loading state, so for the whole time a

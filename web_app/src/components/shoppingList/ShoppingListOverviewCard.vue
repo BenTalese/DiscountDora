@@ -109,8 +109,6 @@
                              it should read as a control, not as a smudge. Also
                              keeps every segment past D-004's tap floor. -->
                         <BaseSegmented
-                            pill
-                            unelevated
                             class="sl-overview__seg"
                             :model-value="effectiveMode"
                             :options="sortOptions"

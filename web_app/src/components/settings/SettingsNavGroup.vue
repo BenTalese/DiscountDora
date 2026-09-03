@@ -147,7 +147,8 @@
         bottom: 6px;
         width: 3px;
         border-radius: 2px;
-        background: var(--accent-ink);
+        /* Indicator bar, not text: the 3:1 tier (`--accent-mark`). */
+        background: var(--accent-mark);
     }
     .settings-nav-group__icon { flex: 0 0 auto; }
     .settings-nav-group__label {

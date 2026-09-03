@@ -39,6 +39,85 @@ long session summary. Distinct from the other logs:
 
 ---
 
+## [OPEN] FU-851 — Planned demand goes stale after a plan edit anywhere but the stock detail page
+- **Raised:** 2026-09-03 (owner batch — planned-demand signal)
+- **Type:** finding
+- **What:** `usePlannedDemand` is a module-level cache, like `usePantryBeliefs`.
+  It is invalidated on a level change from `StockItemDetailPage`, because that
+  changes the urgency grade. It is **not** invalidated when the thing it is
+  actually derived from changes: adding, moving, deleting or consuming a meal
+  plan entry, or bumping a recipe's cooked pool. Within one SPA session, a user
+  who plans three meals and then opens a stock item sees the pre-edit counts.
+- **Why deferred:** the same exposure the belief cache has had since P8-07 (a
+  finished shop changes a belief and nothing invalidates it either), so it is a
+  pattern to fix once rather than a bug to patch here. The honest fix is
+  probably an invalidation bus the meal-plan and cook mutations publish to,
+  which both caches subscribe to — that is its own unit.
+- **Recommended resolution:** opportunistic, with any pass over the overlay
+  caches. Cross-ref: R-074, ADR-071.
+
+## [OPEN] FU-850 — `--accent-mark` adoption is limited to the sites this pass touched
+- **Raised:** 2026-09-03 (owner batch — accent ink too dark)
+- **Type:** follow-up
+- **What:** the ink/mark split gave the accent a second tier at D-002's 3:1
+  floor for non-text marks and icons. Eleven declarations moved (tab indicator,
+  settings nav indicator + mobile underline, settings page-header icons, theme
+  card border + badge, voice-card borders + check, dashboard hairlines, the
+  focused stock-row outline). The sweep was scoped to what the owner was
+  looking at; there are almost certainly other `--accent-ink` declarations
+  across the app painting borders, icons or indicators that are still one tier
+  darker than they need to be.
+- **How to find them:** `grep -rn "accent-ink" web_app/src` and read each
+  declaration's *property*, not its selector — `color` on a `.q-icon`, any
+  `border-color`, any `background` on a bar, and any text measured at >= 24px
+  or >= 18px bold all belong on `--accent-mark`.
+- **Why deferred:** the remaining sites are lower-visibility and the pass had
+  four other owner items in it. No defect either way — the ink tier is legal
+  everywhere, just darker than necessary.
+- **Recommended resolution:** opportunistic, whenever a surface is next
+  redesigned. Cross-ref: D-002, R-069.
+
+## [OPEN] FU-849 — Planned demand isn't on the shopping list yet
+- **Raised:** 2026-09-03 (owner batch — planned-demand signal)
+- **Type:** deferred job
+- **What:** D-10 (2026-08-19) says a derived signal belongs on *"the two
+  surfaces the user opens to ask"* — the stock-item detail card and the
+  shopping list. Planned demand shipped on the first. The second is arguably
+  where it pays off most: *"3 planned meals need this by Friday"* on a line you
+  are deciding whether to tick is a stronger argument than the same sentence on
+  a page you had to go looking for.
+- **Why deferred:** the shopping list has its own line model, its own gating
+  and its own crowded row, and the owner asked about the *belief metric*, not
+  about the list. Adding it there is a design call about that row, not a
+  mechanical extension — the signal, the endpoint and the client cache are all
+  already there.
+- **Recommended resolution:** later, when the shopping-list surface is next
+  open. Cross-ref: ADR-071, D-10.
+
+## [OPEN] FU-848 — Two segmented-control components draw one anatomy
+- **Raised:** 2026-09-03 (owner batch — inconsistent single-select rows)
+- **Type:** finding (D-015 / R-001)
+- **What:** the app has **two** implementations of the single-select row of
+  buttons. `BaseSegmented` wraps Quasar's `q-btn-toggle` (nineteen consumers);
+  `settings/DoraSegmented` is a hand-rolled radiogroup (seven, after this pass
+  converted the last two raw `q-btn-toggle`s onto it). As of 2026-09-03 they
+  render the **same** anatomy, and can't drift on colour or shape because both
+  read the shared `--seg-*` tokens — but they are still two components, and
+  nothing stops the next change landing on one of them.
+- **Which one should survive, and why it isn't obvious:** the hand-rolled one
+  has the better bones — real `radiogroup`/`radio` semantics, wraps on desktop
+  and scrolls horizontally on phones (which the five-option font-family picker
+  needs), and none of the `!important` fights `BaseSegmented`'s stylesheet
+  documents against Quasar's `.text-primary` utility. But it is the *minority*
+  by call sites, and the nineteen `BaseSegmented` consumers pass Quasar props
+  (`dense`, `size`, `spread`) that would become inert, plus one passes a
+  default slot. So the merge is a ~25-file change with real layout risk, not a
+  rename.
+- **Why deferred:** the owner's ask was visual consistency, which is delivered.
+  Doing the structural merge in the same pass would have meant 25 unverified
+  call sites inside a five-item batch.
+- **Recommended resolution:** later, as its own unit. Cross-ref: D-015, R-001.
+
 ## [OPEN] FU-847 — Four hosts now measure their own box to size the SVG chart
 - **Raised:** 2026-09-02 (FU-833 — dropping ECharts)
 - **Type:** finding (R-001)

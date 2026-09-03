@@ -85,8 +85,6 @@
                     v-model="range"
                     :options="rangeOptions"
                     dense
-                    flat
-                    color="grey"
                 />
                 <BaseButton
                     variant="ghost"

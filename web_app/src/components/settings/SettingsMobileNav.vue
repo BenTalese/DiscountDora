@@ -153,7 +153,7 @@
     }
     .settings-mnav__group--active {
         color: var(--text-primary);
-        border-bottom-color: var(--accent-ink);
+        border-bottom-color: var(--accent-mark);
     }
     .settings-mnav__chips {
         display: flex;

@@ -89,6 +89,12 @@
                     <!-- Feedback 2026-08-16: Dora's opinion sits above the buy
                          verdict, both as collapsed coloured cards. -->
                     <PantryBeliefCard :belief="belief" class="q-mb-md" />
+                    <!-- Owner, 2026-09-03 — "what will I need?", between
+                         "what does Dora think I have?" and "should I buy it?".
+                         Silent unless the upcoming plan actually wants this
+                         item; see the card for why it is here and not on the
+                         overview row. -->
+                    <PlannedDemandCard :demand="plannedDemand" class="q-mb-md" />
                     <BuyVerdictCard
                         v-if="buyVerdict"
                         :verdict="buyVerdict"
@@ -1368,6 +1374,8 @@
     import StockLevelDot from 'src/components/stock/StockLevelDot.vue';
     import PantryBeliefCard from 'src/components/stock/PantryBeliefCard.vue';
     import { usePantryBeliefs } from 'src/composables/usePantryBeliefs';
+    import PlannedDemandCard from 'src/components/stock/PlannedDemandCard.vue';
+    import { usePlannedDemand } from 'src/composables/usePlannedDemand';
     import { formatMoney } from 'src/composables/useMoney';
     import SubstituteMetadataDialog from 'src/components/stock/SubstituteMetadataDialog.vue';
     import DoraTabs, { type DoraTab } from 'src/components/DoraTabs.vue';
@@ -1454,6 +1462,11 @@
     const pantryBeliefs = usePantryBeliefs();
     const belief = computed(() =>
         detail.value ? pantryBeliefs.beliefFor(detail.value.stock_item_id) : null,
+    );
+    // What the upcoming plan wants of this item (shared cache, same shape).
+    const plannedDemandCache = usePlannedDemand();
+    const plannedDemand = computed(() =>
+        detail.value ? plannedDemandCache.demandFor(detail.value.stock_item_id) : null,
     );
     const locationStore = useLocationStore();
     const recipeStore = useRecipeStore();
@@ -1956,6 +1969,11 @@
         // belief so the chip reflects "override wins" immediately.
         pantryBeliefs.invalidate();
         void pantryBeliefs.loadAsync(true);
+        // The recorded level is what grades planned demand (Out outranks Low),
+        // so the same change can move this card's tone without moving a single
+        // count. Refetch rather than leave it showing the old grade.
+        plannedDemandCache.invalidate();
+        void plannedDemandCache.loadAsync(true);
     }
 
     // ── Expiry ───────────────────────────────────────────────────────────
@@ -2663,6 +2681,7 @@
             // load inferred beliefs (shared cache; idempotent when
             // the overview already loaded them).
             pantryBeliefs.loadAsync(),
+            plannedDemandCache.loadAsync(),
         ]);
         await loadDetail();
     });

@@ -57,12 +57,9 @@
                 </template>
 
                 <SettingsRow label="Cadence">
-                    <q-btn-toggle
+                    <DoraSegmented
                         :model-value="bandDraft"
                         :options="BAND_OPTIONS"
-                        toggle-color="primary"
-                        unelevated
-                        no-caps
                         @update:model-value="onBandChange"
                     />
                 </SettingsRow>
@@ -105,6 +102,7 @@
     import SettingsSection from 'src/components/settings/SettingsSection.vue';
     import SettingsRow from 'src/components/settings/SettingsRow.vue';
     import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
+    import DoraSegmented, { type DoraSegmentedOption } from 'src/components/settings/DoraSegmented.vue';
 
     /**
      * PROPOSAL_STOCKTAKE_MODE §8 — the two global stocktake dials.
@@ -113,10 +111,10 @@
      * eagerly on change; no explicit Save button needed (matches the
      * pattern the neighbouring Alert-thresholds page uses).
      */
-    // q-btn-toggle's `options` prop wants a mutable array; keeping the
-    // list mutable is fine here — nothing else in this component
-    // mutates it, and the CadenceBand type still constrains the value.
-    const BAND_OPTIONS: { label: string; value: CadenceBand }[] = [
+    // 2026-09-03: was a raw `q-btn-toggle`; now the shared `DoraSegmented`,
+    // so this page's cadence picker wears the same face as every other
+    // single-select row in the app.
+    const BAND_OPTIONS: DoraSegmentedOption<CadenceBand>[] = [
         { label: 'Weekly', value: 'weekly' },
         { label: 'Fortnightly', value: 'fortnightly' },
         { label: 'Monthly', value: 'monthly' },

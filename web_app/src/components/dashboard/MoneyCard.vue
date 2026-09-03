@@ -97,7 +97,6 @@
                     aria-label="Savings period"
                     dense
                     size="sm"
-                    pill
                     @update:model-value="(v: ReportRange) => emit('update:range', v)"
                 />
             </div>

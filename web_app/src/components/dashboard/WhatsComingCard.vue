@@ -14,7 +14,6 @@
                 aria-label="Days to show"
                 dense
                 size="sm"
-                pill
                 @update:model-value="(v: CalendarSpan) => emit('update:span', v)"
             />
         </template>
@@ -216,8 +215,8 @@
         transform: translateY(-1px);
     }
     .dora-cal-cell.is-today {
-        /* An accent-coloured hairline is `--accent-ink` (R-069). */
-        border-color: var(--accent-ink);
+        /* An accent-coloured hairline is `--accent-mark` (R-069). */
+        border-color: var(--accent-mark);
         font-weight: 700;
     }
     .dora-cal-cell.is-selected {

@@ -1,6 +1,7 @@
 import type { StockItem } from 'src/models/stockItem';
 import type { StockItemDetail } from 'src/models/stockItemDetail';
 import type { PantryBeliefsResponse } from 'src/models/pantryBelief';
+import type { PlannedDemandResponse } from 'src/models/plannedDemand';
 import type { StockItemPriceHistory } from './priceHistoryApiService';
 import type { CreatedResponse } from './axiosHttpClient';
 import AxiosHttpClient from './axiosHttpClient';
@@ -82,6 +83,14 @@ export default class StockItemApiService {
      *  `enabled: false` when the user has inference switched off. */
     getPantryBeliefsAsync = async (): Promise<PantryBeliefsResponse> =>
         await this.httpClient.get<PantryBeliefsResponse>('/stock-items/beliefs');
+
+    /** Planned demand — what the upcoming plan needs, keyed by stock item id.
+     *  Sibling to the beliefs call and deliberately the same shape; the two
+     *  answer different questions (what's on the shelf vs what the plan will
+     *  want), so they are separate endpoints rather than one fatter one.
+     *  `enabled: false` when the meal planner is switched off install-wide. */
+    getPlannedDemandAsync = async (): Promise<PlannedDemandResponse> =>
+        await this.httpClient.get<PlannedDemandResponse>('/stock-items/planned-demand');
 
     /** FU-315 — the server returns a 200 with `{ auto_added: { line_id,
      *  shopping_list_id } }` when a level transition to Low/Out fires the

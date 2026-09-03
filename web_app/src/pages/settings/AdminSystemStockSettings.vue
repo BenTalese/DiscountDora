@@ -22,12 +22,9 @@
                 </template>
 
                 <SettingsRow label="Fire for">
-                    <q-btn-toggle
+                    <DoraSegmented
                         :model-value="modeDraft"
                         :options="MODE_OPTIONS"
-                        toggle-color="primary"
-                        unelevated
-                        no-caps
                         @update:model-value="onModeChange"
                     />
                 </SettingsRow>
@@ -48,6 +45,7 @@
     import SettingsSection from 'src/components/settings/SettingsSection.vue';
     import SettingsRow from 'src/components/settings/SettingsRow.vue';
     import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
+    import DoraSegmented, { type DoraSegmentedOption } from 'src/components/settings/DoraSegmented.vue';
 
     /**
      * FU-511 — install-wide auto-add mode. Replaces the retired per-item
@@ -55,7 +53,10 @@
      * eagerly on change; no explicit Save button (matches the neighbouring
      * Stocktake page's pattern).
      */
-    const MODE_OPTIONS: { label: string; value: AutoAddMode }[] = [
+    // 2026-09-03: was a raw `q-btn-toggle`, the last squared-off segmented
+    // control on the settings pages. `DoraSegmented` is the same control with
+    // the app's one anatomy and proper radiogroup semantics.
+    const MODE_OPTIONS: DoraSegmentedOption<AutoAddMode>[] = [
         { label: 'Off', value: 'off' },
         { label: 'Essential only', value: 'essential_only' },
         { label: 'All items', value: 'all' },

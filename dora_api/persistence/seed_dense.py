@@ -1171,6 +1171,22 @@ def seed_dense_data(qa_fixtures: bool = False, money_on: bool = True):
     # session. None is inside the model's 3-day fresh-hard-signal window,
     # which would otherwise make the belief defer to the recorded level.
     #
+    # **Review carries four items, not one** (owner, 2026-09-03: the seed
+    # "needs something to make the initial 'Dora's pretty sure about these'
+    # screen"). One row is not a screen — it reads as a stray item rather than
+    # a desk pass — and the phase's whole argument is that you can *scan a
+    # column* of beliefs and untick the odd one. Four is enough for that, and
+    # each says something different: Weet-Bix (~Low from the calendar), Peanut
+    # Butter (~Low because a cook pushed it over), Rolled Oats (Stocked and
+    # agreeing — most of a real pass is agreement), Tinned Tomatoes (Stocked
+    # against a recorded Low: you restocked and never said so).
+    #
+    # Note the ceiling this phase has by construction: HIGH confidence needs
+    # `1.1 - 0.5*progress >= 0.66`, i.e. progress <= 0.88, so a *confident*
+    # belief can only ever be Stocked or Low. "Confidently Out" is unreachable
+    # — being deep past a cycle is exactly when an unlogged restock is likely.
+    # Don't try to seed one.
+    #
     # **The purchase history is a shared shop schedule, not one list per item.**
     # The load seed gives each fixture its own single-line "Weet-Bix shop 3"
     # list, which works but leaves twenty junk lists in the archive and makes
@@ -1195,6 +1211,27 @@ def seed_dense_data(qa_fixtures: bool = False, money_on: bool = True):
     weetbix = make_item(name="Weet-Bix", group=g_pantry, level=stocked,
                         location=top_shelf, updated_days_ago=30,
                         stocktake_alerts=True, usual_store_id=woolworths.id)
+    # Bought at 96/68/40/12 → cadence 28, 12 days in (0.43 on the calendar
+    # alone) plus one cook since → 0.77 → LOW against a recorded Stocked.
+    # n=4 → conf 1.00 * 0.72 = 0.72 → HIGH. Review, and the row that shows a
+    # *cook* pushing a confident belief over the line.
+    peanut_butter = make_item(name="Peanut Butter", group=g_pantry, level=stocked,
+                              location=top_shelf, updated_days_ago=28,
+                              stocktake_alerts=True)
+    # Bought at 82/54/26/5 → cadence 25.7, 5 days in. progress 0.19 → STOCKED,
+    # which is exactly what's recorded. n=4 → conf 0.95 (clamped) → HIGH.
+    # Review's *agreeing* row: the screen is mostly "yes, still fine", and
+    # without one of these it reads as a list of corrections.
+    oats = make_item(name="Rolled Oats", group=g_pantry, level=stocked,
+                     location=top_shelf, updated_days_ago=30,
+                     stocktake_alerts=True, usual_store_id=woolworths.id)
+    # Bought at 68/40/26/5 → cadence 21, 5 days in. progress 0.24 → STOCKED
+    # against a recorded **Low** that's a month stale. n=4 → conf 0.95 → HIGH.
+    # The confident *reassuring* disagreement — you restocked and never said
+    # so — which is a different row again from the other three.
+    tomatoes = make_item(name="Tinned Tomatoes", group=g_pantry, level=low,
+                         location=middle_shelf, updated_days_ago=30,
+                         stocktake_alerts=True)
     # Bought at 82/68/54/26 → cadence 18.7, 26 days in. progress 1.39 → OUT
     # against a recorded Stocked. n=4 → conf 1.00 * 0.40 = 0.40 → MEDIUM.
     tuna = make_item(name="Tuna Tins", group=g_pantry, level=stocked,
@@ -1236,6 +1273,7 @@ def seed_dense_data(qa_fixtures: bool = False, money_on: bool = True):
                       updated_days_ago=65)
     repo.save_changes()  # shop lines FK to these ids
 
+    cook_consume(peanut_butter, 6, 0, 0)
     cook_consume(coconut, 8, 0, 0)
     cook_consume(coconut, 4, 0, 1)
     cook_consume(stirfry_veg, 15, 1, 1)
@@ -1251,19 +1289,23 @@ def seed_dense_data(qa_fixtures: bool = False, money_on: bool = True):
     # hand-authored above (milk / olive oil / eggs / yoghurt / coffee are
     # deliberately absent so those stay exactly as designed).
     shop_history = [
-        (96, [(coconut, 2.00), (swept, 3.50), (rice, 4.20), (salt, 3.00)]),
-        (82, [(tuna, 1.20), (flour, 2.00), (sugar, 2.40)]),
+        (96, [(coconut, 2.00), (swept, 3.50), (rice, 4.20), (salt, 3.00),
+              (peanut_butter, 5.50)]),
+        (82, [(tuna, 1.20), (flour, 2.00), (sugar, 2.40), (oats, 4.00)]),
         (68, [(weetbix, 6.50), (tuna, 1.20), (coconut, 2.00), (swept, 3.50),
-              (onions, 2.50)]),
+              (onions, 2.50), (peanut_butter, 5.50), (tomatoes, 1.10)]),
         (54, [(weetbix, 6.50), (tuna, 1.10), (stirfry_veg, 7.00), (peas, 3.00),
-              (garlic, 1.20)]),
+              (garlic, 1.20), (oats, 4.20)]),
         (40, [(weetbix, 6.00), (coconut, 2.20), (orange_juice, 4.00),
-              (crackers, 3.00), (rice, 4.50), (soy, 3.20)]),
+              (crackers, 3.00), (rice, 4.50), (soy, 3.20),
+              (peanut_butter, 5.80), (tomatoes, 1.20)]),
         (26, [(weetbix, 6.00), (tuna, 1.20), (stirfry_veg, 7.50),
-              (crackers, 3.00), (carrots, 2.00), (flour, 2.20)]),
+              (crackers, 3.00), (carrots, 2.00), (flour, 2.20), (oats, 4.20),
+              (tomatoes, 1.20)]),
         (12, [(weetbix, 6.50), (coconut, 2.00), (crackers, 3.20), (sugar, 2.60),
-              (peas, 3.00)]),
-        (5, [(orange_juice, 4.20), (onions, 2.80), (garlic, 1.30)]),
+              (peas, 3.00), (peanut_butter, 5.80)]),
+        (5, [(orange_juice, 4.20), (onions, 2.80), (garlic, 1.30),
+             (oats, 4.50), (tomatoes, 1.30)]),
     ]
     history_lists = []
     for _days_ago, _contents in shop_history:

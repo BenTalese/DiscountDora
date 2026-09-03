@@ -941,7 +941,8 @@
         outline-offset: -2px;
     }
     .stock-row--focused {
-        outline: 2px dashed var(--accent-ink);
+        /* An outline is a UI boundary — D-002's 3:1 tier. */
+        outline: 2px dashed var(--accent-mark);
         outline-offset: -2px;
     }
     .stock-row--dim {

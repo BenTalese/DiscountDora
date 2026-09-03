@@ -168,6 +168,38 @@ export const THEMES: Record<string, ThemeOption> = {
         swatch: ['hsl(33,80%,60%)', 'hsl(28,30%,40%)', 'hsl(45,90%,65%)'],
         isDark: true,
     },
+
+    // ───────── Salt & Pepper family (the neutral pair) ────────────────────
+    // Owner, 2026-09-03: "one neutral light theme, one neutral dark theme —
+    // so those two would be very minimal with the colours they use". One hue
+    // (a warm graphite/paper axis) carries the whole family; the interest is
+    // value, not hue. See the block comment in css/themes.scss.
+    'salt-pepper': {
+        key: 'salt-pepper', label: 'Salt & Pepper',
+        blurb: 'Warm paper + graphite, one peppercorn accent. Minimal.',
+        swatch: ['hsl(30,6%,26%)', 'hsl(40,8%,90%)', 'hsl(28,28%,52%)'],
+        isDark: false,
+    },
+    'salt-pepper-dark': {
+        key: 'salt-pepper-dark', label: 'Salt & Pepper Dark',
+        blurb: 'Cracked black pepper + bone. The same hue from the other end.',
+        swatch: ['hsl(35,8%,72%)', 'hsl(30,6%,13%)', 'hsl(32,45%,62%)'],
+        isDark: true,
+    },
+
+    // ───────── Dragonfruit family (the colourful one) ─────────────────────
+    'dragonfruit': {
+        key: 'dragonfruit', label: 'Dragonfruit',
+        blurb: 'Magenta rind + green tips on pale flesh. The bright one.',
+        swatch: ['hsl(330,72%,50%)', 'hsl(168,55%,24%)', 'hsl(140,65%,52%)'],
+        isDark: false,
+    },
+    'dragonfruit-dark': {
+        key: 'dragonfruit-dark', label: 'Dragonfruit Dark',
+        blurb: 'Rind at night — hot pink and lime on near-black.',
+        swatch: ['hsl(330,70%,66%)', 'hsl(165,30%,32%)', 'hsl(145,60%,58%)'],
+        isDark: true,
+    },
 };
 
 /** Family groupings for the Preferences picker. Each card renders one
@@ -212,6 +244,18 @@ export const THEME_FAMILIES: readonly ThemeFamily[] = [
         label: 'Sourdough',
         blurb: 'Toasty amber + brown crust. Rustic any time of day.',
         light: 'sourdough', dark: 'sourdough-dark', system: 'system-sourdough',
+    },
+    {
+        key: 'salt-pepper',
+        label: 'Salt & Pepper',
+        blurb: 'The minimal one — one warm grey hue, paper by day, pepper by night.',
+        light: 'salt-pepper', dark: 'salt-pepper-dark', system: 'system-salt-pepper',
+    },
+    {
+        key: 'dragonfruit',
+        label: 'Dragonfruit',
+        blurb: 'Magenta rind + green tips. The bright one.',
+        light: 'dragonfruit', dark: 'dragonfruit-dark', system: 'system-dragonfruit',
     },
 ];
 

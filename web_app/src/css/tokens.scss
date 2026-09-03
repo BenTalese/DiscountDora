@@ -91,6 +91,26 @@
        Every theme overrides this; dark families whose accent already
        clears the floor point it straight back at --brand-accent. */
     --accent-ink: hsl(50 99% 24%);
+    /* Accent at *mark* strength — the same hue held to D-002's **3:1**
+       floor instead of 4.5:1, which is the floor that actually applies to
+       what most of these declarations paint.
+         Use --accent-mark for **non-text** accent marks (hairlines, borders,
+         active-state indicator bars, dashed outlines) and for **icons**,
+         which D-002 grades as graphics. Also legal for large display text
+         (>= 24px, or >= 18px bold) — but check the computed size first;
+         nothing in the app currently qualifies.
+         Use --accent-ink for anything read as body/secondary text, however
+         short. A link, a tab label, a caption: 4.5:1, no exceptions.
+       Why the split (owner, 2026-09-03): R-069 took every accent-coloured
+       thing to the 4.5:1 tone in one move, and the owner's read was that the
+       correction overshot — "somewhere between what it was and what it is
+       now". Measured, there is no such value for *text*: at hue 50 the
+       4.5:1 tone is hsl(50 99% 24-25%) and two points lighter is 4.1:1 on
+       the sunken ground, i.e. a fail. The room is not in the luminance, it
+       is in the fact that a tab underline was never owed 4.5:1 in the first
+       place. So the chrome brightens by ~7 lightness points and the text
+       does not move. */
+    --accent-mark: hsl(50 99% 30%);
 
     /* ────────────────────────────── Surface ladder ───────────────── */
     --surface-page: hsl(168 38% 94%);             /* #e8f6f3 */
@@ -249,6 +269,33 @@
     --radius-2xl: 22px;
     --radius-pill: 999px;
     --radius-full: 50%;
+
+    /* ─────────────────── Segmented control (single-select) ───────── */
+    /*
+     * One anatomy for every single-select row of buttons in the app: a
+     * pill-shaped sunken track with the active segment as a brand-primary
+     * pill inside it. The owner asked for the recipe method's step-style
+     * switch to become the pattern everywhere (2026-09-03) — before that,
+     * the app had at least four looks for the same control (a squared
+     * Quasar block, a rounded grey-and-white one on Reports, a
+     * hand-painted `flat` variant in the stock filter panel, and the
+     * settings pages' soft sunken fill).
+     *
+     * The tokens live here rather than in either component because there
+     * are still **two** implementations — `BaseSegmented` (a q-btn-toggle
+     * wrapper) and `settings/DoraSegmented` (a hand-rolled radiogroup) —
+     * and D-015 wants one anatomy even where there is more than one
+     * mechanism. Change the shape here and both move together. Merging the
+     * two components is FU-848.
+     */
+    --seg-track-bg: var(--surface-sunken);
+    --seg-track-border: var(--border-default);
+    --seg-radius: var(--radius-pill);
+    --seg-track-pad: 2px;
+    --seg-ink: var(--text-secondary);
+    --seg-ink-hover: var(--accent-ink);
+    --seg-active-bg: var(--brand-primary);
+    --seg-active-ink: var(--text-on-primary);
 
     /* ────────────────────────────── Font-size scale ──────────────── */
     /* Unitless ratios against --dora-base-font-size (set by

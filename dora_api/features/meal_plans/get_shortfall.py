@@ -1,27 +1,31 @@
+"""GET /api/meal-plans/shortfall — which recipes still have to be cooked.
+
+The pool-vs-commitments model this reports on lives in `planned_meals.py`
+(2026-09-03, R-003). This module used to own a raw-SQL copy of it —
+`SUM(e.servings) > r.available_meals`, grouped by recipe — which was correct
+but could only ever answer the recipe-level question. The per-entry reading
+("*which* of the three planned fried rices is already covered") was needed for
+the stock surfaces' planned-demand signal, and two implementations of one
+domain rule is the thing R-003 exists to prevent, so both now read the same
+allocation.
+
+Behaviour is unchanged: a recipe appears when its committed servings exceed
+its cooked pool, and `shortfall` is still that difference. `earliest_needed`
+is now the earliest *uncovered* entry rather than the earliest entry full
+stop — a strictly better answer, and the same one whenever the pool is empty,
+which is every household that doesn't batch-cook.
+"""
 import logging
 from dataclasses import dataclass
 from datetime import date
 from typing import List
 from uuid import UUID
 
-from sqlalchemy import text
-
-from dora_api.app import db
-from dora_api.features.app_settings.clock import household_today
+from dora_api.features.meal_plans.planned_meals import (recipe_shortfalls,
+                                                        upcoming_planned_meals)
 from dora_api.features.routers import MEAL_PLAN_ROUTER
 from dora_api.infrastructure.api_response import ok
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
-
-
-def _coerce_uuid(value) -> UUID:
-    """UUIDType columns are 16-byte BLOBs in SQLite; raw text() reads
-    return them as bytes. Normalise back to a UUID object so DTOs and
-    JSON serialisation behave."""
-    if isinstance(value, UUID):
-        return value
-    if isinstance(value, bytes):
-        return UUID(bytes=value)
-    return UUID(str(value))
 
 
 @dataclass(frozen=True, slots=True)
@@ -36,36 +40,19 @@ class ShortfallDto:
 
 class GetShortfallHandler:
     def handle(self) -> List[ShortfallDto]:
-        # For every recipe with at least one un-consumed future entry,
-        # compare its pool to the sum of committed servings. Anything
-        # where commitments outstrip the pool is a shortfall the user
-        # needs to cook before `earliest_needed`.
-        _Today = household_today(SqlAlchemyRepository())
-        _Rows = db.session.execute(
-            text(
-                "SELECT r.id, r.name, r.available_meals, "
-                "       SUM(e.servings) AS committed, "
-                "       MIN(e.scheduled_for) AS earliest "
-                'FROM "Recipe" r '
-                'JOIN "MealPlanEntry" e ON e.recipe_id = r.id '
-                "WHERE e.consumed_at IS NULL AND e.scheduled_for >= :today "
-                "GROUP BY r.id, r.name, r.available_meals "
-                "HAVING SUM(e.servings) > r.available_meals"
-            ),
-            {"today": _Today},
-        ).all()
-
-        _Out: List[ShortfallDto] = []
-        for _RecipeId, _Name, _Available, _Committed, _Earliest in _Rows:
-            _Out.append(ShortfallDto(
-                recipe_id = _coerce_uuid(_RecipeId),
-                recipe_name = _Name,
-                available_meals = _Available,
-                committed_meals = int(_Committed or 0),
-                shortfall = int(_Committed or 0) - int(_Available or 0),
-                earliest_needed = _Earliest,
-            ))
-        return _Out
+        repository = SqlAlchemyRepository()
+        snapshot = upcoming_planned_meals(repository)
+        return [
+            ShortfallDto(
+                recipe_id=row.recipe_id,
+                recipe_name=row.recipe_name,
+                available_meals=row.available_meals,
+                committed_meals=row.committed_meals,
+                shortfall=row.shortfall,
+                earliest_needed=row.earliest_needed,
+            )
+            for row in recipe_shortfalls(snapshot)
+        ]
 
 
 @MEAL_PLAN_ROUTER.route("shortfall")

@@ -284,14 +284,15 @@
         border-color: var(--border-strong);
     }
     .theme-card--active {
-        border-color: var(--accent-ink);
+        /* Border + badge glyph are both graphics — the 3:1 tier. */
+        border-color: var(--accent-mark);
         border-width: 2px;
     }
     .theme-card__badge {
         position: absolute;
         top: 6px;
         right: 6px;
-        color: var(--accent-ink);
+        color: var(--accent-mark);
         background: var(--surface-component);
         border-radius: 50%;
     }

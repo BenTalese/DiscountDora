@@ -42,7 +42,9 @@
         min-width: 0;
     }
     .settings-page-header__icon {
-        color: var(--accent-ink);
+        /* An icon is a graphic (D-002's 3:1 tier), so it takes the brighter
+           `--accent-mark` rather than the body-text `--accent-ink`. */
+        color: var(--accent-mark);
         margin-top: 2px;
         flex: 0 0 auto;
     }

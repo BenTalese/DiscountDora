@@ -16,6 +16,8 @@ export type ThemePreference =
     | 'system-blueberry'
     | 'system-cherry-cola'
     | 'system-sourdough'
+    | 'system-salt-pepper'
+    | 'system-dragonfruit'
     | 'pesto'
     | 'pesto-dark'
     | 'lemon-tart'
@@ -26,6 +28,10 @@ export type ThemePreference =
     | 'cherry-cola-dark'
     | 'sourdough'
     | 'sourdough-dark'
+    | 'salt-pepper'
+    | 'salt-pepper-dark'
+    | 'dragonfruit'
+    | 'dragonfruit-dark'
     // Legacy — themeService maps these forward at apply time.
     | 'pesto-noir'      // → pesto-dark
     | 'midnight-snack'  // → lemon-tart-dark

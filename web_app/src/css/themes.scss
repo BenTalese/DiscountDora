@@ -1,5 +1,5 @@
 /*
- * Themes — five families, each with paired light + dark variants.
+ * Themes — seven families, each with paired light + dark variants.
  *
  * Family pairing (key naming convention):
  *   pesto         /  pesto-dark
@@ -7,6 +7,8 @@
  *   blueberry     /  blueberry-dark
  *   cherry-cola   /  cherry-cola-dark
  *   sourdough     /  sourdough-dark
+ *   salt-pepper   /  salt-pepper-dark     (the neutral pair — owner, 2026-09-03)
+ *   dragonfruit   /  dragonfruit-dark     (the colourful one — ditto)
  *
  * Dark variants lean on a set of user-chosen palette inspirations:
  *   Group 1 (cool muted teals + lavender) → Blueberry Dark
@@ -44,6 +46,7 @@
     --brand-accent: hsl(50 99% 56%);
     --brand-accent-soft: hsl(50 95% 92%);
     --accent-ink: hsl(50 99% 24%);                   /* 5.7:1 on white, 4.7:1 on sunken */
+    --accent-mark: hsl(50 99% 30%);                  /* 3.2:1 min on the light ladder */
     --nav-slide-flash: hsl(330 90% 65%);
 
     --surface-page: hsl(168 38% 94%);
@@ -97,6 +100,7 @@
     --brand-accent: hsl(150 48% 40%);
     --brand-accent-soft: hsla(150, 48%, 40%, 0.22);
     --accent-ink: hsl(150 48% 45%);                  /* raw accent was 3.7:1 on elevated; lifted to 4.6:1 */
+    --accent-mark: var(--brand-accent);              /* 3.7:1 min on the dark ladder */
     --nav-slide-flash: hsl(95 85% 60%);
 
     --surface-page: hsl(165 60% 5%);              /* #00120B */
@@ -163,6 +167,7 @@
     --brand-accent: hsl(48 99% 56%);
     --brand-accent-soft: hsl(48 95% 92%);
     --accent-ink: hsl(48 99% 25%);                   /* 5.6:1 on white, 4.6:1 on sunken */
+    --accent-mark: hsl(48 99% 31%);                  /* 3.2:1 min on the light ladder */
     --nav-slide-flash: hsl(8 90% 62%);
 
     --surface-page: hsl(40 33% 96%);
@@ -214,6 +219,7 @@
     --brand-accent: hsl(23 100% 57%);             /* #FF8427 */
     --brand-accent-soft: hsla(23, 100%, 57%, 0.18);
     --accent-ink: hsl(23 100% 58%);                  /* raw accent was 4.49:1 on elevated; a hair lifted to 4.6:1 */
+    --accent-mark: var(--brand-accent);              /* 4.5:1 min on the dark ladder */
     --nav-slide-flash: hsl(320 95% 68%);
 
     --surface-page: hsl(225 16% 14%);             /* #1E212B */
@@ -280,6 +286,7 @@
     --brand-accent: hsl(195 90% 60%);
     --brand-accent-soft: hsl(195 80% 92%);
     --accent-ink: hsl(195 90% 29%);                  /* 5.7:1 on component, 4.7:1 on sunken */
+    --accent-mark: hsl(195 90% 37%);                 /* 3.1:1 min on the light ladder */
     --nav-slide-flash: hsl(30 95% 62%);
 
     --surface-page: hsl(218 35% 95%);
@@ -330,6 +337,7 @@
     --brand-accent: hsl(232 41% 75%);             /* #A7ACD9 */
     --brand-accent-soft: hsla(232, 41%, 75%, 0.18);
     --accent-ink: var(--brand-accent);               /* already 5.9:1 on elevated */
+    --accent-mark: var(--brand-accent);              /* 5.9:1 min on the dark ladder */
     --nav-slide-flash: hsl(340 80% 72%);
 
     --surface-page: hsl(220 18% 11%);
@@ -396,6 +404,7 @@
     --brand-accent: hsl(36 85% 56%);
     --brand-accent-soft: hsl(36 80% 92%);
     --accent-ink: hsl(36 85% 30%);                   /* 5.6:1 on component, 4.6:1 on sunken */
+    --accent-mark: hsl(36 85% 38%);                  /* 3.1:1 min on the light ladder */
     --nav-slide-flash: hsl(80 80% 55%);
 
     --surface-page: hsl(20 35% 95%);
@@ -450,6 +459,7 @@
     --brand-accent: hsl(74 36% 44%);              /* #809848 */
     --brand-accent-soft: hsla(74, 36%, 44%, 0.18);
     --accent-ink: hsl(74 36% 46%);                   /* raw accent was 4.2:1 on elevated; lifted to 4.6:1 */
+    --accent-mark: var(--brand-accent);              /* 4.2:1 min on the dark ladder */
     --nav-slide-flash: hsl(95 75% 68%);
 
     --surface-page: hsl(335 100% 9%);             /* #2E0014 */
@@ -516,6 +526,7 @@
     --brand-accent: hsl(45 88% 60%);
     --brand-accent-soft: hsl(45 80% 92%);
     --accent-ink: hsl(45 88% 26%);                   /* 5.6:1 on component, 4.5:1 on sunken */
+    --accent-mark: hsl(45 88% 32%);                  /* 3.2:1 min on the light ladder */
     --nav-slide-flash: hsl(195 85% 55%);
 
     --surface-page: hsl(36 36% 92%);
@@ -566,6 +577,7 @@
     --brand-accent: hsl(45 90% 65%);
     --brand-accent-soft: hsla(45, 90%, 65%, 0.18);
     --accent-ink: var(--brand-accent);               /* already 9.1:1 on elevated */
+    --accent-mark: var(--brand-accent);              /* 9.1:1 min on the dark ladder */
     --nav-slide-flash: hsl(195 90% 68%);
 
     --surface-page: hsl(28 35% 8%);               /* dark crust */
@@ -619,4 +631,270 @@
     --dora-disc-bg: hsl(33 70% 55%);
     --dora-halo: hsla(33, 80%, 60%, 0.22);
     --dora-halo-strong: hsla(33, 80%, 60%, 0.42);
+}
+
+/* ═══════════════════════════════════════════════════════════════════ */
+/* ─── Salt & Pepper (the neutral pair — light: salt) ──────────────── */
+/* ═══════════════════════════════════════════════════════════════════ */
+/*
+ * Owner brief (2026-09-03): "one neutral light theme, one neutral dark
+ * theme — so those two would be very minimal with the colours they use".
+ *
+ * Read literally: this family carries **one hue**. Surfaces, ink, brand and
+ * accent all sit between 28° and 40° — a warm graphite/paper axis — and all
+ * of the visual interest comes from *value* rather than hue contrast. The
+ * single concession is the accent, a muted peppercorn clay at 28°/28%:
+ * enough saturation to read as a deliberate mark on a tab underline,
+ * nowhere near enough to read as a colour scheme.
+ *
+ * The exceptions are the ones every theme makes. The **semantic** four
+ * (positive/warning/negative/info) keep their meaning — a neutral theme is
+ * an aesthetic choice, not a decision to stop distinguishing "out of stock"
+ * from "on track" — so this family inherits them from tokens.scss rather
+ * than restating them. The **chart** ramp keeps six separable hues, held to
+ * the low-chroma register the rest of the theme sets: a categorical series
+ * you can't tell apart isn't minimal, it's broken.
+ */
+[data-theme="salt-pepper"] {
+    --brand-primary: hsl(30 6% 26%);
+    --brand-primary-soft: hsl(30 8% 90%);
+    --brand-secondary: hsl(30 8% 16%);
+    --brand-secondary-soft: hsl(30 6% 88%);
+    --brand-accent: hsl(28 28% 52%);
+    --brand-accent-soft: hsl(28 30% 92%);
+    --accent-ink: hsl(28 28% 38%);                   /* 4.6:1 min on the light ladder */
+    --accent-mark: hsl(28 28% 48%);                  /* 3.1:1 min on the light ladder */
+    --nav-slide-flash: hsl(28 55% 55%);
+
+    --surface-page: hsl(40 8% 95%);
+    --surface-component: hsl(0 0% 100%);
+    --surface-elevated: hsl(40 10% 98%);
+    --surface-sunken: hsl(40 6% 90%);
+    --surface-toolbar: var(--brand-secondary);
+    --text-on-toolbar: hsl(0 0% 100%);
+
+    /* Three stops of the same paper, not three colours. A neutral theme
+       whose hero band is a rainbow is not a neutral theme. */
+    --hero-stop-1: hsl(40 12% 97%);
+    --hero-stop-2: hsl(35 12% 91%);
+    --hero-stop-3: hsl(28 12% 87%);
+    --hero-gradient: linear-gradient(135deg,
+        var(--hero-stop-1) 0%, var(--hero-stop-2) 50%, var(--hero-stop-3) 100%);
+
+    --text-primary: hsl(30 8% 12%);
+    --text-secondary: hsl(30 6% 32%);
+    --text-muted: hsl(30 5% 40%);            /* 4.6:1 on sunken — D-002 */
+    --text-on-primary: hsl(0 0% 100%);
+    --text-on-accent: hsl(30 20% 12%);       /* 4.7:1 on the accent fill */
+
+    --border-default: hsl(40 8% 85%);
+    --border-strong: hsl(40 8% 71%);
+    --divider: hsl(40 6% 88%);
+    --focus-ring: var(--brand-primary);
+    --ring-focus: color-mix(in srgb, var(--brand-primary) 35%, transparent);
+
+    --chart-1: hsl(28 32% 45%);
+    --chart-2: hsl(200 28% 45%);
+    --chart-3: hsl(150 24% 40%);
+    --chart-4: hsl(345 32% 52%);
+    --chart-5: hsl(45 40% 45%);
+    --chart-6: hsl(265 22% 52%);
+
+    color-scheme: light;
+    --dora-disc-bg: hsl(40 14% 94%);
+    --dora-halo: hsla(28, 28%, 52%, 0.26);
+    --dora-halo-strong: hsla(28, 28%, 52%, 0.46);
+}
+
+/* ─── Salt & Pepper Dark (pepper: cracked black + bone) ───────────── */
+[data-theme="salt-pepper-dark"] {
+    /* The pair inverts rather than re-hues: pepper is the same warm axis
+       read from the other end, bone-white where salt had graphite. */
+    --brand-primary: hsl(35 8% 72%);
+    --brand-primary-soft: hsla(35, 8%, 72%, 0.20);
+    --brand-secondary: hsl(30 6% 30%);
+    --brand-secondary-soft: hsla(30, 6%, 30%, 0.30);
+    --brand-secondary-strong: hsl(30 8% 55%);     /* indicator fill — see tokens.scss */
+    --brand-accent: hsl(32 45% 62%);
+    --brand-accent-soft: hsla(32, 45%, 62%, 0.18);
+    --accent-ink: var(--brand-accent);               /* 6.0:1 min on the dark ladder */
+    --accent-mark: var(--brand-accent);              /* 6.0:1 min on the dark ladder */
+    --nav-slide-flash: hsl(32 60% 66%);
+
+    --surface-page: hsl(30 6% 8%);
+    --surface-component: hsl(30 6% 13%);
+    --surface-elevated: hsl(30 5% 17%);
+    --surface-sunken: hsl(30 8% 5%);
+    --surface-toolbar: hsl(30 6% 15%);
+    --text-on-toolbar: hsl(40 14% 92%);
+
+    --hero-stop-1: hsl(30 8% 7%);
+    --hero-stop-2: hsl(30 6% 16%);
+    --hero-stop-3: hsl(28 12% 24%);
+    --hero-gradient: linear-gradient(135deg,
+        var(--hero-stop-1) 0%, var(--hero-stop-2) 50%, var(--hero-stop-3) 100%);
+
+    --text-primary: hsl(40 14% 92%);
+    --text-secondary: hsl(35 8% 76%);
+    --text-muted: hsl(35 6% 64%);            /* 5.7:1 on elevated — D-002 */
+    --text-on-primary: hsl(30 8% 8%);
+    --text-on-accent: hsl(30 20% 10%);
+
+    --border-default: hsl(30 6% 28%);
+    --border-strong: hsl(30 6% 42%);
+    --divider: hsl(30 6% 22%);
+    --focus-ring: var(--brand-primary);
+    --ring-focus: color-mix(in srgb, var(--brand-primary) 40%, transparent);
+
+    --semantic-positive: hsl(150 42% 55%);
+    --semantic-positive-soft: hsla(150, 42%, 55%, 0.16);
+    --semantic-warning: hsl(38 85% 63%);
+    --semantic-warning-soft: hsla(38, 85%, 63%, 0.16);
+    --semantic-negative: hsl(7 72% 64%);
+    --semantic-negative-soft: hsla(7, 72%, 64%, 0.16);
+    --semantic-info: hsl(205 55% 66%);
+    --semantic-info-soft: hsla(205, 55%, 66%, 0.16);
+
+    --chart-1: hsl(35 8% 78%);
+    --chart-2: hsl(32 45% 62%);
+    --chart-3: hsl(200 32% 62%);
+    --chart-4: hsl(150 30% 58%);
+    --chart-5: hsl(345 40% 66%);
+    --chart-6: hsl(265 28% 68%);
+
+    --overlay-hover: hsla(40, 14%, 92%, 0.06);
+    --overlay-active: hsla(40, 14%, 92%, 0.10);
+    --overlay-scrim: hsla(30, 10%, 3%, 0.7);
+    --elevation-card: 0 8px 22px -16px hsla(0, 0%, 0%, 0.7);
+    --elevation-card-hover: 0 14px 32px -16px hsla(0, 0%, 0%, 0.8);
+
+    color-scheme: dark;
+    --dora-disc-bg: hsl(32 45% 62%);
+    --dora-halo: hsla(32, 45%, 62%, 0.26);
+    --dora-halo-strong: hsla(32, 45%, 62%, 0.46);
+}
+
+/* ═══════════════════════════════════════════════════════════════════ */
+/* ─── Dragonfruit (magenta rind + green tips + pale flesh) ────────── */
+/* ═══════════════════════════════════════════════════════════════════ */
+/*
+ * The colourful one (owner, 2026-09-03). Picked because the existing five
+ * cover green, yellow, blue, red and amber and none of them is *pink* — and
+ * because the fruit hands us a real secondary for free: the rind is magenta
+ * with green tips, so the pink has something to sit against instead of a
+ * tinted grey standing in for a second brand colour.
+ */
+[data-theme="dragonfruit"] {
+    --brand-primary: hsl(330 72% 42%);
+    --brand-primary-soft: hsl(330 80% 94%);
+    --brand-secondary: hsl(168 55% 24%);
+    --brand-secondary-soft: hsl(168 30% 88%);
+    --brand-accent: hsl(140 65% 52%);
+    --brand-accent-soft: hsl(140 60% 91%);
+    --accent-ink: hsl(140 65% 27%);                  /* 4.7:1 min on the light ladder */
+    --accent-mark: hsl(140 65% 35%);                 /* 3.1:1 min on the light ladder */
+    --nav-slide-flash: hsl(330 85% 62%);
+
+    --surface-page: hsl(340 40% 96%);
+    --surface-component: hsl(0 0% 100%);
+    --surface-elevated: hsl(340 45% 98%);
+    --surface-sunken: hsl(340 30% 91%);
+    --surface-toolbar: var(--brand-secondary);
+    --text-on-toolbar: hsl(0 0% 100%);
+
+    --hero-stop-1: hsl(340 55% 95%);
+    --hero-stop-2: hsl(330 70% 88%);
+    --hero-stop-3: hsl(150 45% 88%);
+    --hero-gradient: linear-gradient(135deg,
+        var(--hero-stop-1) 0%, var(--hero-stop-2) 50%, var(--hero-stop-3) 100%);
+
+    --text-primary: hsl(335 25% 14%);
+    --text-secondary: hsl(335 14% 33%);
+    --text-muted: hsl(335 10% 41%);          /* 4.7:1 on sunken — D-002 */
+    --text-on-primary: hsl(0 0% 100%);
+    --text-on-accent: hsl(160 40% 10%);
+
+    --border-default: hsl(340 25% 86%);
+    --border-strong: hsl(340 25% 73%);
+    --divider: hsl(340 20% 89%);
+    --focus-ring: var(--brand-primary);
+    --ring-focus: color-mix(in srgb, var(--brand-primary) 35%, transparent);
+
+    --chart-1: hsl(330 72% 50%);
+    --chart-2: hsl(168 60% 32%);
+    --chart-3: hsl(140 55% 45%);
+    --chart-4: hsl(268 55% 58%);
+    --chart-5: hsl(35 88% 52%);
+    --chart-6: hsl(205 72% 50%);
+
+    color-scheme: light;
+    --dora-disc-bg: hsl(340 45% 95%);
+    --dora-halo: hsla(330, 72%, 50%, 0.28);
+    --dora-halo-strong: hsla(330, 72%, 50%, 0.50);
+}
+
+/* ─── Dragonfruit Dark (rind at night — magenta on near-black) ────── */
+[data-theme="dragonfruit-dark"] {
+    --brand-primary: hsl(330 70% 66%);
+    --brand-primary-soft: hsla(330, 70%, 66%, 0.20);
+    --brand-secondary: hsl(165 30% 32%);
+    --brand-secondary-soft: hsla(165, 30%, 32%, 0.28);
+    --brand-secondary-strong: hsl(165 34% 58%);   /* indicator fill — see tokens.scss */
+    --brand-accent: hsl(145 60% 58%);
+    --brand-accent-soft: hsla(145, 60%, 58%, 0.18);
+    --accent-ink: var(--brand-accent);               /* 7.1:1 min on the dark ladder */
+    --accent-mark: var(--brand-accent);              /* 7.1:1 min on the dark ladder */
+    --nav-slide-flash: hsl(330 85% 70%);
+
+    --surface-page: hsl(330 30% 7%);
+    --surface-component: hsl(330 20% 13%);
+    --surface-elevated: hsl(330 18% 17%);
+    --surface-sunken: hsl(330 35% 4%);
+    --surface-toolbar: hsl(330 22% 16%);
+    --text-on-toolbar: hsl(340 30% 93%);
+
+    --hero-stop-1: hsl(330 35% 6%);
+    --hero-stop-2: hsl(330 24% 18%);
+    --hero-stop-3: hsl(165 26% 22%);
+    --hero-gradient: linear-gradient(135deg,
+        var(--hero-stop-1) 0%, var(--hero-stop-2) 50%, var(--hero-stop-3) 100%);
+
+    --text-primary: hsl(340 30% 93%);
+    --text-secondary: hsl(335 14% 78%);
+    --text-muted: hsl(335 10% 66%);          /* 5.9:1 on elevated — D-002 */
+    --text-on-primary: hsl(330 40% 8%);
+    --text-on-accent: hsl(160 40% 8%);
+
+    --border-default: hsl(330 14% 28%);
+    --border-strong: hsl(330 14% 42%);
+    --divider: hsl(330 14% 23%);
+    --focus-ring: var(--brand-primary);
+    --ring-focus: color-mix(in srgb, var(--brand-primary) 40%, transparent);
+
+    --semantic-positive: hsl(145 55% 58%);
+    --semantic-positive-soft: hsla(145, 55%, 58%, 0.16);
+    --semantic-warning: hsl(38 90% 65%);
+    --semantic-warning-soft: hsla(38, 90%, 65%, 0.16);
+    --semantic-negative: hsl(4 80% 68%);
+    --semantic-negative-soft: hsla(4, 80%, 68%, 0.16);
+    --semantic-info: hsl(205 70% 68%);
+    --semantic-info-soft: hsla(205, 70%, 68%, 0.16);
+
+    --chart-1: hsl(330 70% 70%);
+    --chart-2: hsl(145 55% 60%);
+    --chart-3: hsl(205 70% 68%);
+    --chart-4: hsl(268 55% 72%);
+    --chart-5: hsl(38 90% 65%);
+    --chart-6: hsl(180 40% 60%);
+
+    --overlay-hover: hsla(340, 30%, 93%, 0.06);
+    --overlay-active: hsla(340, 30%, 93%, 0.10);
+    --overlay-scrim: hsla(330, 40%, 3%, 0.7);
+    --elevation-card: 0 8px 22px -16px hsla(0, 0%, 0%, 0.7);
+    --elevation-card-hover: 0 14px 32px -16px hsla(0, 0%, 0%, 0.8);
+
+    color-scheme: dark;
+    --dora-disc-bg: hsl(330 70% 66%);
+    --dora-halo: hsla(330, 70%, 66%, 0.28);
+    --dora-halo-strong: hsla(330, 70%, 66%, 0.50);
 }

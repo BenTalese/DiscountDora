@@ -28,7 +28,140 @@ next.
 
 ---
 
-## 2026-09-02 (latest) — **Reports chunk 5 closes the review: the page was telling you it had nothing while it was still looking**
+## 2026-09-03 (latest) — **A five-item owner batch: two new themes, one segmented anatomy, and the question that wasn't a belief**
+
+**Status:** all five items complete + green + driven live (except the one route
+the pane can't mount). New: **R-074 / ADR-071**, **FU-848..851**. Gate:
+**pytest 2265 passed** / 1 skipped / 1 xfailed with only the four pre-existing
+buy-verdict reds (FU-762), **vitest 685 / 61 files**, `vue-tsc` + `eslint src/`
+clean. 23 new backend tests (18 unit + 5 e2e). Note for the next runner on this
+machine: bare `pytest` throws ~56 spurious setup errors because the system temp
+dir does not exist — export a real `TMP`/`TEMP` first, or pass `--basetemp`.
+
+**The headline is item 4, because the owner's question had a wrong answer
+hiding inside a good idea.** *"Is one of the dora belief metrics based on how
+many planned meals a stock item is involved in?"* — read literally, that adds a
+term to `compute_belief`, whose entire job is estimating **what is on the shelf
+right now** from purchases, cooks and elapsed time. Planning to cook rice on
+Thursday is evidence about *demand*; it says nothing about the cupboard. Folding
+it in would have made a well-planned fortnight read as an emptier pantry, and
+every downstream consumer — the stocktake queue rank, the "Dora thinks" chip,
+the buy verdict's need axis — would have inherited the distortion with nothing
+throwing. So it shipped as a **sibling signal**:
+`features/stock_items/planned_demand.py` + `GET /stock-items/planned-demand`,
+shaped like the beliefs endpoint, cached by a composable shaped like
+`usePantryBeliefs`, rendered as a third card beside `PantryBeliefCard` and
+`BuyVerdictCard`. Promoted as **R-074 / ADR-071** — the boundary had already
+been drawn once from the other side (`inference_overlay.py`: *"the overlay never
+changes an answer, it only ever adds a remark"*), which makes two sightings.
+
+**The batch-cooking half of the ask deleted a duplicate rather than adding
+one.** The owner's second sentence — *"2 have been allocated a meal"* — is a
+per-entry allocation of the cooked-batch pool, and `get_shortfall.py` already
+owned the same pool-vs-commitments model as raw SQL
+(`SUM(e.servings) > r.available_meals`), at recipe granularity, which cannot
+answer the per-entry question. Rather than write it twice, the model moved to
+`meal_plans/planned_meals.py` and `get_shortfall` was rewritten onto it; the raw
+SQL is gone and the report got strictly better on the way (`earliest_needed` is
+now the first *uncovered* date, not the first date full stop). Coverage is
+deliberately all-or-nothing per entry: a 4-serving meal against a 3-serving pool
+still has to be cooked, so its ingredients are still demand — the generous
+reading would go quiet exactly when a batch is nearly out.
+
+**Both of the new module's repo walks would have silently returned nothing.**
+`MealPlanEntry.recipe` and `RecipeIngredient.stock_item` are *both*
+`lazy="noload"` — R-032, the codebase's most recurrent defect class — so the
+obvious `.include()` walk returns `None` per row and the endpoint answers
+"nothing planned" for a fully planned week. Caught before shipping only because
+`_level_access.py` documents the trap; both now read the private mapped FK. The
+e2e test exists specifically for this: a unit test over pure functions cannot
+see it, and a request that plans three meals and expects three back can.
+Confirmed against the dense seed: 23 items with demand, correct batch
+allocation ("1 already covered by a cooked batch"), correct Out-outranks-Low
+grading. Driving it also caught a copy bug of my own — two recipe names joined
+with a comma instead of an "and".
+
+**Item 5 was the one where the honest answer was "there is no middle".** The
+owner said the 2026-09-01 accent-ink correction *"didn't need to be so
+drastic… somewhere between what it was and what it is now"*. Measured: at hue 50
+the 4.5:1 tone is `hsl(50 99% 24%)` and **two lightness points brighter is
+4.1:1 on the sunken ground** — a fail. There is no halfway value for text. But
+the premise was wrong in a useful way: a **tab underline was never owed 4.5:1**.
+D-002 already grades icons, hairlines, borders and indicator bars at 3:1. So the
+token split: `--accent-ink` (unchanged, text) and `--accent-mark` (~7 lightness
+points brighter, marks). Eleven declarations moved; measured live, the settings
+header icons and theme-card borders went from `rgb(122,102,1)` to
+`rgb(152,127,1)`. The remaining sweep is FU-850.
+
+**Item 3 was two problems wearing one complaint.** The app had **four** looks
+for one control — a squared Quasar block, Reports' `color="grey"
+text-color="white"` pair (a hardcoded palette R-002 forbids), the stock filter
+panel's hand-painted `flat` variant, and the settings pages' soft sunken fill —
+plus **two components** drawing them (`BaseSegmented` over `q-btn-toggle`, and
+the hand-rolled `settings/DoraSegmented`). The pill had existed as an opt-in
+`pill` prop since 2026-08-31 and four of nineteen consumers had adopted it: *a
+shape prop with a clear winner is not a variant, it's a migration that never
+finished*. So the prop is gone and the pill is the anatomy; the conflicting
+per-call-site props went with it (dropping `flat` is what gives the active fill
+back natively, which is why two call sites had been repainting it by hand); the
+last two raw `q-btn-toggle`s in admin settings moved onto `DoraSegmented`; and
+the anatomy itself now lives in shared `--seg-*` tokens so the two components
+cannot drift on colour or shape. **Merging the components is FU-848 and is not
+a rename** — the hand-rolled one has the better bones (real radiogroup
+semantics, wraps and scrolls, no `!important` fights) but is the minority by
+call sites, and nineteen consumers pass Quasar props that would become inert.
+Doing it inside a five-item batch would have meant 25 unverified call sites.
+
+**Items 1 and 2 were the straightforward ones.** Two new families — **Salt &
+Pepper** (the owner's neutral pair: one warm graphite hue carries surfaces, ink,
+brand and accent, with the semantics and the six chart hues deliberately *not*
+overridden, because a neutral theme is an aesthetic choice and not a decision to
+stop distinguishing "out of stock" from "on track") and **Dragonfruit** (the
+first pink in the picker, and the fruit hands us a real secondary — magenta rind,
+green tips — instead of a tinted grey standing in for one). Every pairing
+measured in the running app: worst case across both families and both modes is
+**4.55:1** on muted text and **3.12:1** on the mark tier. And the dense seed's
+stocktake **Review** phase went from one item to four, each saying something
+different — one agreeing, one Low from the calendar, one Low because a cook
+pushed it over, one Stocked against a recorded Low. Worth recording: HIGH
+confidence requires `progress <= 0.88`, so a *confident* belief can only ever be
+Stocked or Low — **"confidently Out" is unreachable by construction**, and the
+seed comment now says so, so nobody tries to fixture one.
+
+**One self-inflicted wound worth logging.** Editing `themes.scss` with
+PowerShell 5.1's `Get-Content -Raw` mis-decoded the UTF-8 file and mangled every
+em dash — twice, across two writes. `git checkout` was blocked, so the file was
+rebuilt deterministically from `git show HEAD:` + re-applied edits in Python.
+The existing memory note said "never PS 5.1 `Set-Content`"; it now needs to say
+**never PS for these files at all, read or write** — `Get-Content -Raw` is the
+half that bit.
+
+**Standing-rules close-gate.** **R-003** (planned demand + the pool model
+server-owned; the raw-SQL duplicate deleted; the urgency grading computed once,
+not re-derived per caller), **R-032** (two `lazy="noload"` traps caught, both
+commented), **R-001** (`--seg-*` tokens as the single anatomy; `DoraSegmented`
+absorbing the last two raw toggles), **R-002** (`color="grey"` /
+`text-color="white"` removed from two call sites), **D-002** (every new theme
+pairing measured; the ink/mark split *is* the D-002 tiering), **D-004** (settings
+segments 32px → 44px), **D-003** (settings labels 13px → 14px), **D-015** (one
+anatomy — with the two-component residue logged as FU-848 rather than left
+silent), **D-10** (planned demand kept off the overview row, following the
+buy-verdict precedent). **ADR evaluation: R-074 / ADR-071 promoted.** The
+runner-up — *"a shape/variant prop with a clear winner is an unfinished
+migration"* — is one sighting, so it is recorded in `BaseSegmented.vue`'s own
+comment rather than promoted.
+
+**Next up:** the owner's verify walk (`DORA_VERIFY.md` has three new sections —
+the two themes, the segmented convergence, and the planned-demand card, which
+has never been *seen* because the stock-detail route won't mount in the agent's
+pane). Then **FU-848** (the segmented merge, its own unit), **FU-849** (planned
+demand on the shopping list — D-10's other "surface you open to ask", and
+arguably where it pays off most), **FU-850**, **FU-851**. Off this batch, the
+older stack is unchanged: **FU-845 #8**, **FU-843**, **FU-831**, **FU-832**.
+
+---
+
+## 2026-09-02 — **Reports chunk 5 closes the review: the page was telling you it had nothing while it was still looking**
 
 **Status:** complete + green + driven live. **`REPORTS_PAGE_REVIEW.md` §7 is
 closed — all five chunks.** FU-845 #2 done (#8 stays open). Gate: **pytest 2243

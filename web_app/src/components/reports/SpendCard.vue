@@ -4,11 +4,7 @@
             <BaseSegmented
                 v-model="axis"
                 :options="AXIS_OPTIONS"
-                rounded
                 dense
-                color="grey"
-                text-color="white"
-                toggle-text-color="white"
             />
         </template>
 

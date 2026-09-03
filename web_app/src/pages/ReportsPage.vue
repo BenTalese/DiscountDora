@@ -19,11 +19,7 @@
                 <BaseSegmented
                     v-model="range"
                     :options="RANGE_OPTIONS"
-                    rounded
                     dense
-                    color="grey"
-                    text-color="white"
-                    toggle-text-color="white"
                     @update:model-value="loadAll"
                 />
                 <span v-if="windowLabel" class="reports-window">{{ windowLabel }}</span>

@@ -2703,6 +2703,40 @@ exceptions, which still must be commented) · **Source** (where it was establish
   decision was made for `ProportionBar`. Two sightings, one week, two different
   primitives. See ADR-070.
 
+### R-074 — Two questions get two modules, even when they share a surface
+- **Rule:** when a request arrives as *"add X to the Y signal"*, first ask whether
+  X answers the **same question** Y does. If it doesn't, it is a **sibling signal**
+  — its own module, its own endpoint, its own client cache — rendered *beside* Y
+  rather than folded into it. Signals may be read together; they may not be
+  averaged together.
+- **Why:** folding a second question into an existing signal corrupts the first
+  one silently. Nothing throws, no test fails, and the signal keeps producing
+  numbers — they just stop meaning what the module's docstring says they mean.
+  Owner, 2026-09-03: *"is one of the dora belief metrics based on how many
+  planned meals a stock item is involved in?"* Read literally, that puts planned
+  meals into `compute_belief`, whose entire job is estimating **what is on the
+  shelf right now** from purchases, cooks and elapsed time. Planning to cook rice
+  on Thursday is evidence about *demand*, not about the cupboard — feeding it in
+  would have made a well-planned week read as an emptier pantry, and every
+  downstream consumer (the stocktake queue rank, the "Dora thinks" chip, the
+  buy verdict's need axis) would have inherited the distortion with no way to see
+  it. The same boundary was drawn once already, from the other side:
+  `inference_overlay.py` exists precisely so the belief can be *remarked* on
+  other surfaces without being merged into their answers — *"the overlay never
+  changes an answer, it only ever adds a remark"*.
+- **Apply:** name the question in the new module's first paragraph, and say
+  explicitly what it is **not**. Give it its own confidence/urgency vocabulary
+  rather than borrowing the neighbour's. Share the *inputs* aggressively — the
+  cooked-batch allocation is one function both `planned_demand` and
+  `get_shortfall` call (R-003) — and share the *outputs* never. On the client,
+  mirror the neighbour's composable and endpoint shape so two overlays are one
+  pattern to learn, but keep them two caches.
+- **Violation signal:** a new term appearing inside an existing scoring function
+  whose docstring doesn't mention it; a confidence number that now blends two
+  kinds of evidence; a field named for one question sitting in a DTO named for
+  another; "just add a weight for it" in a design discussion.
+- **Established by:** the planned-demand signal, 2026-09-03. See ADR-071.
+
 ## ADR process (evaluate every task)
 
 At the end of each work unit, ask: **did this task make or rely on a decision that
@@ -4892,3 +4926,40 @@ A non-binding cookbook of solutions to recurring problems. Not rules — just a
   `REPORTS_PAGE_REVIEW.md` §4.9's "charts with no accessible alternative"
   fixable: canvas could not carry one.
 - **Promotes rule:** R-073.
+
+### ADR-071 — Planned demand is a sibling of the pantry belief, not an input to it (promotes R-074)
+- **Context:** the owner asked whether the belief engine counted how many planned
+  meals a stock item appears in, noting it *"would be a good indicator if a stock
+  item is out or low"*, and described the batch-cooking variant: *"3 planned fried
+  rice in the coming week(s) and 2 have been allocated a meal"*. The literal
+  reading is a new term in `compute_belief`.
+- **Options:** (a) add a planned-meals term to the belief's `progress` — one
+  number, one chip, no new surface; (b) a separate signal computed beside the
+  belief and rendered next to it; (c) compute it in the client from the plan the
+  planner page already holds.
+- **Decision: (b).** (a) corrupts a well-specified estimator: belief answers
+  *what is on the shelf*, and a plan is evidence about the future, so the two are
+  not commensurable — a fortnight of planned dinners would have read as an emptier
+  cupboard. (c) fails R-003 twice over: the allocation rule and the urgency
+  grading would both live in TypeScript, and neither the stock pages nor the
+  shopping list holds a plan. So: `features/stock_items/planned_demand.py` +
+  `GET /stock-items/planned-demand`, shaped like the beliefs endpoint, cached by
+  a composable shaped like `usePantryBeliefs`, rendered as a third card in the
+  same column as `PantryBeliefCard` and `BuyVerdictCard`.
+- **Two things it shares rather than duplicates.** The cooked-batch allocation is
+  the *same* pool-and-queue walk the shortfall report needs, so it moved into
+  `meal_plans/planned_meals.py` and `get_shortfall.py` was rewritten onto it —
+  deleting a raw-SQL second copy of the rule. And the urgency grading (**Out
+  outranks Low**, the owner's *"Out would be higher confidence than low"*) is
+  computed server-side rather than left as `level + count` arithmetic for each
+  caller to redo.
+- **Consequences:** two overlay fetches on the stock surfaces rather than one —
+  accepted, both are cached module-level and shared across the overview and the
+  detail page. The card is on the stock-item detail page only, following D-10's
+  precedent that a derived signal belongs on *"the surfaces the user opens to
+  ask"* rather than on the overview row; the shopping list is the other such
+  surface and is [[FU-849]]. Coverage is all-or-nothing per entry, so a 4-serving
+  meal against a 3-serving pool still counts as demand — deliberately
+  conservative, because the alternative goes quiet exactly when a batch is nearly
+  out.
+- **Promotes rule:** R-074.

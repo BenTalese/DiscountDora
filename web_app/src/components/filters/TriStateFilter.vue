@@ -53,7 +53,6 @@
                 <BaseSegmented
                     v-model="activeSort"
                     :options="sortToggleOptions"
-                    flat
                     class="tri-state-filter__sort-toggle"
                 />
             </div>
@@ -266,33 +265,15 @@
         border-radius: var(--radius-md);
         margin: 0 8px 4px;
     }
-    // Segmented-button look. Quasar's q-btn-toggle in `flat` mode keeps the
-    // *background* transparent on the active button, so we paint the fill from
-    // `aria-pressed="true"` (which Quasar always sets on the selected toggle)
-    // and stay theme-token-aware (R-002). The matching *ink* is owned by
-    // BaseSegmented — see the D-002 note there for why it can't be set here.
-    .tri-state-filter__sort-toggle {
-        /* R-060: `--border-subtle` is undeclared (invalid ⇒ no border rendered).
-           A6: control outline is `--border-default`. */
-        border: 1px solid var(--border-default);
-        border-radius: var(--radius-md);
-        overflow: hidden;
-        /* R-060: was `--surface-card`, undeclared — the exact "looks like the
-           scale" mistake the rule names. The card surface is
-           `--surface-component`. Invalid `background` just inherits, so this
-           toggle has been picking up whatever sat behind it. */
-        background: var(--surface-component);
-    }
+    // The track, the segment shape and the active fill are all BaseSegmented's
+    // now (2026-09-03). This block used to redraw all three from scratch —
+    // squared segments, its own outline, its own `aria-pressed` fill — because
+    // the call site passed `flat`, which suppresses Quasar's active
+    // background. Dropping `flat` gives the fill back natively, and the shared
+    // anatomy gives the shape, so the only thing left worth saying here is how
+    // wide the segments sit inside this narrow filter panel.
     .tri-state-filter__sort-toggle :deep(.q-btn) {
         min-height: 28px;
         padding: 0 14px;
-        font-size: 0.85em;
-        font-weight: 500;
-        border-radius: 0;
-        color: var(--text-secondary);
-    }
-    .tri-state-filter__sort-toggle :deep(.q-btn[aria-pressed='true']) {
-        background: var(--brand-primary);
-        font-weight: 600;
     }
 </style>

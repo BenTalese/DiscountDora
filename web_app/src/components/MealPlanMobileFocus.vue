@@ -9,26 +9,84 @@
             <BaseButton variant="icon" :icon="ICONS.arrow_forward" @click="goNextWeek">
                 <q-tooltip>Next week</q-tooltip>
             </BaseButton>
-            <!-- in-context print. Parent wires this to
-                 `planner.printFocusedWeek` (opens the print-view route in a
-                 new tab, then the browser's "Save as PDF" is the export). -->
+            <!-- Owner feedback 2026-09-03 — *"mobile view is missing some
+                 functionality… no save as template, no browse/apply template,
+                 no clear week."* It was: the phone carried two of the desktop
+                 toolbar's six week actions as bare icon buttons, and the other
+                 four had no entry point at all below 1024px. This is the SAME
+                 overflow menu the desktop toolbar carries — same order, same
+                 disabled rules — so there is one list of week actions rather
+                 than a phone-sized subset of one (R-001 / D-023).
+
+                 Duplicate and print give up their promoted icon buttons to it:
+                 two of six promoted for no reason is what made the gap easy to
+                 miss in the first place. `planner.printFocusedWeek` still does
+                 the work (it opens the print-view route in a new tab, and the
+                 browser's "Save as PDF" is the export). -->
             <BaseButton
-                v-if="plannedCount > 0"
                 variant="icon"
-                :icon="ICONS.content_copy"
+                :icon="ICONS.more_vert"
                 class="q-ml-sm"
-                aria-label="Duplicate to next week"
-                @click="emit('duplicateWeek')"
+                aria-label="More week actions"
             >
-                <q-tooltip>Duplicate to next week</q-tooltip>
-            </BaseButton>
-            <BaseButton
-                v-if="plannedCount > 0"
-                variant="icon"
-                :icon="ICONS.print"
-                @click="emit('print')"
-            >
-                <q-tooltip>Print this week</q-tooltip>
+                <q-menu anchor="bottom right" self="top right">
+                    <q-list style="min-width: 220px">
+                        <q-item
+                            v-close-popup clickable
+                            :disable="plannedCount === 0"
+                            @click="emit('duplicateWeek')"
+                        >
+                            <q-item-section avatar>
+                                <q-icon :name="ICONS.content_copy" />
+                            </q-item-section>
+                            <q-item-section>Duplicate to next week</q-item-section>
+                        </q-item>
+                        <q-item
+                            v-close-popup clickable
+                            :disable="plannedCount === 0"
+                            @click="emit('print')"
+                        >
+                            <q-item-section avatar>
+                                <q-icon :name="ICONS.print" />
+                            </q-item-section>
+                            <q-item-section>Print this week</q-item-section>
+                        </q-item>
+
+                        <q-separator />
+
+                        <q-item
+                            v-close-popup clickable
+                            :disable="!canSaveCurrentWeek"
+                            @click="emit('saveTemplate')"
+                        >
+                            <q-item-section avatar>
+                                <q-icon :name="ICONS.save" />
+                            </q-item-section>
+                            <q-item-section>Save week as template…</q-item-section>
+                        </q-item>
+                        <q-item v-close-popup clickable @click="emit('openTemplates')">
+                            <q-item-section avatar>
+                                <q-icon :name="ICONS.event_repeat" />
+                            </q-item-section>
+                            <q-item-section>Apply template…</q-item-section>
+                        </q-item>
+
+                        <q-separator />
+
+                        <q-item
+                            v-close-popup clickable
+                            :disable="plannedCount === 0"
+                            class="text-negative"
+                            @click="emit('clearWeek')"
+                        >
+                            <q-item-section avatar>
+                                <q-icon :name="ICONS.delete_outline" color="negative" />
+                            </q-item-section>
+                            <q-item-section>Clear week</q-item-section>
+                        </q-item>
+                    </q-list>
+                </q-menu>
+                <q-tooltip>More week actions</q-tooltip>
             </BaseButton>
         </div>
 
@@ -38,7 +96,7 @@
         <BaseButton
             variant="primary"
             class="full-width q-mt-sm"
-            :icon="ICONS.auto_awesome"
+            :icon="ICONS.dora_voice"
             label="Build my week"
             @click="emit('openBuilder')"
         />
@@ -102,7 +160,7 @@
                 v-for="entry in entriesFor(focusedDayIso)"
                 :key="entry.meal_plan_entry_id"
                 :entry="entry"
-                :shortfall="shortfallRecipeIds.has(entry.recipe_id)"
+                :shortfall="entry.needs_cooking"
                 :highlight="false"
                 @view="emit('entryView', entry.recipe_id)"
                 @cook="emit('entryCook', entry.recipe_id)"
@@ -130,40 +188,19 @@
             </div>
         </div>
 
-        <!-- Week-wide consequences (collapsible). Stays on the page so the
-            mobile flow can act on shopping/cook signals without rotating
-            back to a desktop. -->
-        <q-expansion-item
-            v-if="plannedCount > 0"
-            class="mobile-focus__consequences q-mt-md"
-            :icon="ICONS.shopping_cart"
-            :label="`This week: ${plannedCount} planned`"
-            :caption="weekStatusCaption"
-            default-opened
-        >
-            <q-card flat>
-                <q-card-section class="q-pt-none">
-                    <MealPlanWeekStatus
-                        :planned-count="plannedCount"
-                        :shortfall-count="shortfallCount"
-                        :outstanding-count="outstandingCount"
-                        :on-list-count="onListCount"
-                        :cook-by-label="cookByLabel"
-                    />
-                    <!-- Owner feedback 2026-08-27 — opens the shared picker
-                         instead of generating a list behind your back. -->
-                    <BaseButton
-                        v-if="needToBuyCount > 0"
-                        variant="primary"
-                        class="full-width q-mt-sm"
-                        :icon="ICONS.add_shopping_cart"
-                        :label="addToListLabel"
-                        :loading="generating"
-                        @click="emit('addToList')"
-                    />
-                </q-card-section>
-            </q-card>
-        </q-expansion-item>
+        <!-- The week's consequences — the status strip and "This week's
+             shopping" with its per-ingredient breakdown — used to live here as
+             a collapsible card whose own header restated what was inside it.
+             Owner feedback 2026-09-03, twice over: *"the expandable card in
+             mobile view at the bottom is a bit odd. Don't like how it
+             duplicates information so much. Just make it a normal card with
+             the expanded contents shown"* and *"can't see the ingredient
+             breakdown properly on the shopping list"*. Both are answered by
+             giving the phone the SAME two components the desktop right rail
+             renders, plainly and un-collapsed, rather than a second
+             implementation behind a disclosure (R-001). The page owns that —
+             it owns the planner's data — so see `MealPlansOverview.vue`'s
+             mobile branch. -->
 
         <!-- Slot picker bottom-sheet — opened from the "Add a meal" tap.
             Picking a slot focuses that day+slot then opens the recipe sheet. -->
@@ -200,7 +237,6 @@
     import { formatDate as formatLocaleDate } from 'src/composables/useDateFormat';
     import MealPlanDayPips from 'src/components/MealPlanDayPips.vue';
     import MealPlanRichCard from 'src/components/MealPlanRichCard.vue';
-    import MealPlanWeekStatus from 'src/components/MealPlanWeekStatus.vue';
     import { ICONS } from 'src/style/icons';
     import type { MealPlanEntry } from 'src/models/mealPlan';
     import type { WeekDay } from 'src/composables/useMealPlanner';
@@ -214,16 +250,12 @@
         entriesFor: (dayIso: string) => MealPlanEntry[];
         isPastDay: (dayIso: string) => boolean;
         currentDayIso: string;
-        shortfallRecipeIds: Set<string>;
         weekRangeLabel: string;
         plannedCount: number;
-        shortfallCount: number;
-        /** Everything the week needs that isn't in the pantry. */
-        needToBuyCount: number;
-        /** …of those, the ones not yet on any open list. */
-        outstandingCount: number;
-        cookByLabel: string;
-        generating: boolean;
+        /** Gates "Save week as template…" on the same fact the desktop
+         *  toolbar's copy of that item gates on (R-003 — one predicate, owned
+         *  by the page). */
+        canSaveCurrentWeek: boolean;
     }>();
 
     const emit = defineEmits<{
@@ -235,18 +267,20 @@
         (e: 'entryUnlink', entry: MealPlanEntry): void;
         (e: 'entryLighter', entry: MealPlanEntry): void;
         (e: 'addToSlot', dayIso: string, slot: string): void;
-        (e: 'addToList'): void;
         (e: 'goPrevWeek'): void;
         (e: 'goNextWeek'): void;
         (e: 'print'): void;
         (e: 'duplicateWeek'): void;
+        (e: 'saveTemplate'): void;
+        (e: 'openTemplates'): void;
+        (e: 'clearWeek'): void;
         (e: 'openBuilder'): void;
     }>();
 
-    /** Same coding as the desktop month grid, from the same helper: the
-     *  server's shortfall set plus each entry's own `consumed_at` (R-003). */
+    /** Same coding as the desktop month grid, from the same helper: each
+     *  entry's own server-owned `consumed_at` + `needs_cooking` (R-003). */
     function pipsFor(dayIso: string) {
-        return dayPips(props.entriesFor(dayIso), props.shortfallRecipeIds);
+        return dayPips(props.entriesFor(dayIso));
     }
 
     /** The pips' text alternative. A chip reading "M 15" with three coloured
@@ -254,9 +288,7 @@
     function dayChipLabel(day: WeekDay): string {
         const entries = props.entriesFor(day.iso);
         if (!entries.length) return `${day.label} ${dayOfMonth(day.iso)} — no meals planned`;
-        const short = entries.filter(
-            (e) => !e.consumed_at && props.shortfallRecipeIds.has(e.recipe_id),
-        ).length;
+        const short = entries.filter((e) => !e.consumed_at && e.needs_cooking).length;
         const meals = `${entries.length} meal${entries.length === 1 ? '' : 's'}`;
         return short
             ? `${day.label} ${dayOfMonth(day.iso)} — ${meals}, ${short} short`
@@ -304,24 +336,12 @@
         return new Date(iso).getDate();
     }
 
-    const onListCount = computed(
-        () => props.needToBuyCount - props.outstandingCount,
-    );
-    // The collapsed header's one-line summary. Owner feedback 2026-08-27 —
-    // this is the "8 planned, 3 to buy" line that never moved; it now counts
-    // what's outstanding and says where the rest went.
-    const weekStatusCaption = computed(() => {
-        const parts: string[] = [];
-        if (props.shortfallCount) parts.push(`${props.shortfallCount} to cook`);
-        if (props.outstandingCount) parts.push(`${props.outstandingCount} to buy`);
-        if (onListCount.value) parts.push(`${onListCount.value} on a list`);
-        return parts.join(' · ');
-    });
-    const addToListLabel = computed(() => (
-        props.outstandingCount > 0
-            ? `Add ${props.outstandingCount} to a list`
-            : 'Add to a list'
-    ));
+    // `onListCount` / `weekStatusCaption` / `addToListLabel` lived here to feed
+    // the collapsible consequences card. All three went with it on 2026-09-03:
+    // the caption existed only to summarise a panel that was open by default,
+    // and the other two are `MealPlanWeekStatus`'s and
+    // `MealPlanShoppingSummary`'s own business now that the page renders those
+    // two directly.
 
     // ── Add-flow: slot picker → emit('addToSlot') (parent opens the recipe sheet) ──
     const slotSheetOpen = ref(false);
@@ -448,11 +468,6 @@
     .mobile-focus__add--empty {
         padding: 14px 16px;
         font-size: 0.9rem;
-    }
-    .mobile-focus__consequences {
-        background: var(--surface-elevated);
-        border: 1px solid var(--border-default);
-        border-radius: 8px;
     }
     .slot-sheet {
         width: 100vw;

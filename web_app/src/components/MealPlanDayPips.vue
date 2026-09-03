@@ -9,7 +9,14 @@
          day chip drew ONE undifferentiated dot meaning "something is planned"
          (owner 2026-09-01: "I expect the mobile view day picker to act the same
          as the full calendar in that it shows the same pip info at the bottom.
-         Currently they feel diverged"). Two call sites, one component. -->
+         Currently they feel diverged"). Two call sites, one component.
+
+         Owner feedback 2026-09-03 — the "+N" overflow label is gone from both
+         hosts ("remove the +X text"; "don't think the +X is needed on mobile
+         calendar — just show the dots"). The pips WRAP into rows of three
+         inside a fixed-size cell instead, and stop when the cell is full: the
+         old single row plus a text label grew the calendar's day square, which
+         is what pushed the grid askew on a busy week. -->
     <span class="mp-pips" :class="`mp-pips--${size}`">
         <span
             v-for="(pip, i) in pips"
@@ -17,7 +24,6 @@
             class="mp-pips__pip"
             :class="`mp-pips__pip--${pip}`"
         />
-        <span v-if="overflow > 0" class="mp-pips__more">+{{ overflow }}</span>
     </span>
 </template>
 
@@ -27,7 +33,6 @@
     withDefaults(
         defineProps<{
             pips: DayPip[];
-            overflow: number;
             /** `sm` is the phone's day chip, where the pip row shares a ~40px
              *  cell with a letter and a date. */
             size?: 'sm' | 'md';
@@ -37,9 +42,13 @@
 </script>
 
 <style scoped>
+    /* A fixed three-column grid rather than a flex row: the pips wrap to a
+       second row on a busy day without the cell ever getting wider, which is
+       the whole point (a day square that grows moves its neighbours). */
     .mp-pips {
-        display: flex;
-        align-items: center;
+        display: grid;
+        grid-template-columns: repeat(3, auto);
+        justify-content: center;
         gap: 2px;
     }
     .mp-pips--md { min-height: 5px; }
@@ -54,10 +63,4 @@
     .mp-pips__pip--planned { background: var(--semantic-positive); }
     .mp-pips__pip--short { background: var(--semantic-warning); }
     .mp-pips__pip--consumed { background: var(--text-muted); }
-
-    .mp-pips__more {
-        font-size: calc(var(--font-size-xs) * 1rem);
-        line-height: 1;
-        color: var(--text-secondary);
-    }
 </style>

@@ -172,12 +172,35 @@ class UpdateMealPlanHandler:
             self.repository.flush()
 
             # Rebuild the forward batches from the resent cook_keys.
+            #
+            # A key that names a batch we just PRESERVED is re-attached to that
+            # same batch rather than creating a second one. This matters for a
+            # cook batch that straddles today: its cook day is in the past (so
+            # it lives in `_PreservedExisting`, still pointing at the original
+            # batch) while its leftover days come back in the payload carrying
+            # that batch's id as their `cook_key`. Minting a new batch for them
+            # split one cook in two — and since the client's cook-batch view
+            # calls a batch's EARLIEST day the cook, the first surviving
+            # leftover day started rendering as a second cook that nobody was
+            # going to do. Measured live 2026-09-03: a Wednesday-cooked Sunday
+            # Ragu turned its Thursday leftovers into "Cook · serves 4" as soon
+            # as any unrelated meal elsewhere in the week was edited.
+            _PreservedBatchById = {
+                str(_Batch.id): _Batch for _Batch in _ExistingBatches
+                if _Batch.id in _PreservedBatchIds
+            }
             _BatchByKey: dict[str, CookBatch] = {}
+            _NewBatches = False
             for _Key, _Members in group_by_cook_key(request.entries).items():
+                _Existing = _PreservedBatchById.get(str(_Key))
+                if _Existing is not None:
+                    _BatchByKey[_Key] = _Existing
+                    continue
                 _Batch = CookBatch(meal_plan_id = meal_plan_id, recipe_id = _Members[0].recipe_id)
                 self.repository.add(_Batch)
                 _BatchByKey[_Key] = _Batch
-            if _BatchByKey:
+                _NewBatches = True
+            if _NewBatches:
                 self.repository.flush()
 
             _NewEntries: List[MealPlanEntry] = []

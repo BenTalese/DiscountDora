@@ -24,7 +24,7 @@
                 class="builder-stepper"
             >
                 <!-- ── Step 1 — Guide ─────────────────────────────────────── -->
-                <q-step :name="1" title="Guide" :icon="ICONS.auto_awesome" :done="step > 1">
+                <q-step :name="1" title="Guide" :icon="ICONS.dora_voice" :done="step > 1">
                     <div class="text-caption dora-text-muted q-mb-md">
                         Tell Dora what you're after and she'll build a plan. You can
                         tweak everything before it's saved.
@@ -62,6 +62,32 @@
                         <BaseSegmented v-model="emphasis" :options="emphasisOptions" dense />
                         <div class="text-caption dora-text-muted q-mt-xs">
                             {{ emphasisHint }}
+                        </div>
+                    </div>
+
+                    <!-- Owner feedback 2026-09-03 — *"the auto builder should
+                         have affordance for setting default servings for each
+                         entry, and we default that to the how-many-people-we-
+                         cook-for number from the settings page."* Every
+                         proposal used to arrive at one serving each, so a
+                         four-person household re-stepped every row in the
+                         review step. The seed is the install's household
+                         headcount (Settings → System → Cooking, server-owned
+                         via `useCookingPolicy`); with none set it falls back to
+                         1, which is what the builder always did. -->
+                    <div class="builder-field">
+                        <div class="builder-field__label">Servings per meal</div>
+                        <NumberStepper
+                            v-model="defaultServings"
+                            :min="1"
+                            :max="99"
+                            variant="pill"
+                            :icon="ICONS.people"
+                            decrement-label="One fewer serving per meal"
+                            increment-label="One more serving per meal"
+                        />
+                        <div class="text-caption dora-text-muted q-mt-xs">
+                            {{ servingsHint }}
                         </div>
                     </div>
 
@@ -110,13 +136,44 @@
                     <template v-for="group in groupedByDay" :key="group.iso">
                         <div v-if="group.entries.length" class="builder-day">
                             <div class="builder-day__label">{{ group.label }}</div>
+                            <!-- FU-852 / owner feedback 2026-09-03 — *"UI isn't
+                                 fitting in the auto planner modal, UI is
+                                 overlapping other UI… perhaps the recipe name
+                                 could replace the swap button? Update: seems
+                                 better on mobile, so an edit to make mobile
+                                 better stuffed up desktop."* Exactly the
+                                 diagnosis: the row stacked under
+                                 `@media (max-width: 599px)`, which keys off the
+                                 VIEWPORT while the row lives in a ~600px
+                                 dialog, so a 1280px desktop kept the ~400px
+                                 horizontal control cluster and left the name
+                                 column whatever remained — a long name then
+                                 painted straight through the selects.
+
+                                 The row is stacked at EVERY width now: the name
+                                 owns its own line, the controls own theirs. A
+                                 dialog is not a viewport and there is no width
+                                 at which cramming both onto one line was
+                                 working. That also frees the swap button, per
+                                 the owner's suggestion — the name IS the swap
+                                 control (a button, so it is focusable and
+                                 announced), which is one fewer 36px cell in the
+                                 cluster that was overflowing. -->
                             <div
                                 v-for="entry in group.entries"
                                 :key="entry._key"
                                 class="builder-row"
                             >
                                 <div class="builder-row__main">
-                                    <div class="builder-row__name">{{ entry.recipe_name }}</div>
+                                    <button
+                                        type="button"
+                                        class="builder-row__name"
+                                        @click="openSwap(entry)"
+                                    >
+                                        {{ entry.recipe_name }}
+                                        <q-icon :name="ICONS.swap_horiz" size="14px" />
+                                        <q-tooltip>Swap for another recipe</q-tooltip>
+                                    </button>
                                     <div class="builder-row__meta">
                                         <span
                                             v-if="cookMarker(entry)"
@@ -129,14 +186,31 @@
                                         <q-chip dense square class="builder-reason">
                                             {{ reasonLabel(entry.reason_chip) }}
                                         </q-chip>
+                                        <!-- The dollar figure is null unless the
+                                             install has money on — the server
+                                             stopped sending it otherwise
+                                             (R-058), so this is no longer a
+                                             render gate over data that arrived
+                                             anyway. `moneyEnabled` stays as the
+                                             belt to that braces. -->
                                         <span
                                             v-if="entry.estimated_cost != null && moneyEnabled"
                                             class="dora-text-muted text-caption"
                                         >
                                             ~{{ money(entry.estimated_cost) }}
                                         </span>
+                                        <!-- The no-price fallback, and only
+                                             when the reason chip beside it
+                                             isn't already saying the same
+                                             words: `cookable_now`'s label IS
+                                             "You have everything", so a
+                                             cookable meal with no price
+                                             estimate printed it twice in a row
+                                             (seen live 2026-09-03 on "Mum's
+                                             lemon slice"). -->
                                         <span
-                                            v-else-if="entry.cookable === true"
+                                            v-else-if="entry.cookable === true
+                                                && entry.reason_chip !== 'cookable_now'"
                                             class="dora-text-muted text-caption"
                                         >
                                             You have everything
@@ -172,13 +246,6 @@
                                     </NumberStepper>
                                     <BaseButton
                                         variant="icon" dense
-                                        :icon="ICONS.swap_horiz"
-                                        @click="openSwap(entry)"
-                                    >
-                                        <q-tooltip>Swap for another recipe</q-tooltip>
-                                    </BaseButton>
-                                    <BaseButton
-                                        variant="icon" dense
                                         :icon="ICONS.delete_outline"
                                         @click="removeEntry(entry)"
                                     >
@@ -201,9 +268,13 @@
                     <div class="text-subtitle2">What you'll need</div>
                     <div v-if="previewLoading" class="text-caption dora-text-muted">Calculating…</div>
                     <template v-else>
+                        <!-- Was "N to buy · M in stock". The second half is
+                             gone: every row below carries its own level dot, so
+                             counting the in-stock ones in words above them said
+                             the same thing twice (the same duplication the owner
+                             called out on the week status strip). -->
                         <div class="text-caption dora-text-muted q-mb-xs">
-                            {{ needToBuyCount }} to buy ·
-                            {{ Math.max(previewIngredients.length - needToBuyCount, 0) }} in stock
+                            {{ needToBuyCount }} to buy
                         </div>
                         <div v-if="previewUnlinked.length" class="builder-hint">
                             <q-icon :name="ICONS.info" size="18px" class="builder-hint__icon" />
@@ -217,31 +288,32 @@
                                 can't go on a shopping list.
                             </div>
                         </div>
-                        <q-list dense separator class="builder-list">
-                            <q-item v-for="ing in previewIngredients" :key="ing.stock_item_id">
-                                <q-item-section>
-                                    <q-item-label>{{ ing.stock_item_name }}</q-item-label>
-                                    <q-item-label caption v-if="ing.total_quantity !== null">
-                                        needs {{ formatQuantity(round(ing.total_quantity), ing.unit) }}
-                                    </q-item-label>
-                                </q-item-section>
-                                <q-item-section side>
-                                    <q-chip
-                                        dense
-                                        :color="stockStatusColour(ing.stock_item_id) ?? undefined"
-                                        :text-color="stockStatusColour(ing.stock_item_id) ? 'white' : undefined"
-                                        :class="{ 'dora-bg-sunken dora-text-secondary': !stockStatusColour(ing.stock_item_id) }"
-                                    >
-                                        {{ stockStatusLabel(ing.stock_item_id) }}
-                                    </q-chip>
-                                </q-item-section>
-                            </q-item>
-                            <q-item v-if="previewIngredients.length === 0">
-                                <q-item-section class="dora-text-muted text-center">
-                                    These meals don't list any ingredients.
-                                </q-item-section>
-                            </q-item>
-                        </q-list>
+                        <!-- FU-803 / owner feedback 2026-09-03 — *"'What you'll
+                             need' is inconsistently styled with the new right
+                             rail styling."* It was the shape `MealPlanIngredientRow`
+                             was extracted to replace: a `q-item` with a
+                             saturated status chip on the right, in colours the
+                             two rail lists stopped using on 2026-09-01. Same
+                             data, same question, so the same row (R-001) — the
+                             level reads as the app's standard left-hand dot,
+                             and the quantity is the caption.
+                             This was the last consumer of the
+                             `stockStatusLabel` / `stockStatusColour` pair here,
+                             so the builder no longer reaches for them. -->
+                        <div class="builder-list">
+                            <MealPlanIngredientRow
+                                v-for="ing in previewIngredients"
+                                :key="ing.stock_item_id"
+                                :ingredient="ing"
+                                :show-cart="false"
+                            />
+                            <div
+                                v-if="previewIngredients.length === 0"
+                                class="dora-text-muted text-center text-caption q-py-sm"
+                            >
+                                These meals don't list any ingredients.
+                            </div>
+                        </div>
                     </template>
                 </q-step>
 
@@ -278,16 +350,17 @@
             <BaseButton v-if="!doneState" variant="ghost" label="Cancel" v-close-popup />
             <q-space />
             <BaseButton v-if="step > 1 && !doneState" variant="ghost" label="Back" @click="step = step - 1" />
-            <!-- Step 1: primary generate, plus a manual "pick myself" escape. -->
+            <!-- "I'll pick myself" was removed 2026-09-03 (owner: *"I don't see
+                 the point of the 'pick myself' pathway in the auto builder.
+                 Remove?"*). It jumped to an empty review step, which is a
+                 worse way to hand-pick meals than the thing the user closed to
+                 get here: the planner's own rail, where you arm a slot and
+                 click a recipe. The escape it offered survives inside the
+                 review step as "Add a meal", which is where you actually want
+                 it — beside a proposal you are already editing. -->
             <BaseButton
                 v-if="step === 1"
-                variant="ghost"
-                label="I'll pick myself"
-                @click="startManual"
-            />
-            <BaseButton
-                v-if="step === 1"
-                :icon="ICONS.auto_awesome"
+                :icon="ICONS.dora_voice"
                 label="Build my week"
                 :loading="generatingProposal"
                 :disable="!canGenerate"
@@ -338,7 +411,9 @@
     import BaseDialog from 'src/components/BaseDialog.vue';
     import BaseSegmented from 'src/components/BaseSegmented.vue';
     import BaseToggleGroup, { type ToggleOption } from 'src/components/BaseToggleGroup.vue';
+    import MealPlanIngredientRow from 'src/components/MealPlanIngredientRow.vue';
     import MealPlanRecipePicker from 'src/components/MealPlanRecipePicker.vue';
+    import { useCookingPolicy } from 'src/composables/useCookingPolicy';
     import { useStockStatus } from 'src/composables/useStockStatus';
     import type {
         AutoBuildEmphasis, AutoBuildReason, MealPlanIngredient, ProposedEntry,
@@ -347,7 +422,6 @@
     import type { MealPlanEntryCommand } from 'src/services/api/mealPlanApiService';
     import type { Recipe } from 'src/models/recipe';
     import MealPlanApiService from 'src/services/api/mealPlanApiService';
-    import { formatQuantity } from 'src/helpers/formatQuantity';
     import { useQuasar } from 'quasar';
     import { computed, ref, watch } from 'vue';
 
@@ -374,7 +448,10 @@
 
     const api = new MealPlanApiService();
     const $q = useQuasar();
-    const { stockStatusLabel, stockStatusColour, needsBuying } = useStockStatus();
+    // Only the "N to buy" figure now — the preview rows code their own level
+    // through `MealPlanIngredientRow`, which reads the same composable.
+    const { needsBuying } = useStockStatus();
+    const { householdHeadcount } = useCookingPolicy();
 
     // ── Local editable copy of a proposed entry (adds a stable render key) ──
     type DraftEntry = ProposedEntry & { _key: string };
@@ -418,6 +495,9 @@
     const repeatSameDay = ref(false);
     const emphasis = ref<AutoBuildEmphasis>('use_up_stock');
     const budgetCap = ref(false);
+    /** Servings every proposed meal arrives at. Seeded from the household
+     *  headcount on each open (see the reset watcher). */
+    const defaultServings = ref(1);
 
     const emphasisOptions = [
         { label: 'Use up stock', value: 'use_up_stock' as AutoBuildEmphasis },
@@ -432,6 +512,12 @@
         surprise: 'A mixed bag — mostly things you haven’t had lately.',
     };
     const emphasisHint = computed(() => emphasisHints[emphasis.value]);
+
+    const servingsHint = computed(() => (
+        householdHeadcount.value === null
+            ? 'Set how many people you cook for in Settings to seed this automatically.'
+            : `Your household cooks for ${householdHeadcount.value}. Change it per meal in the next step.`
+    ));
 
     const upcomingDays = computed(() => props.weekDays.filter((d) => !props.isPastDay(d.iso)));
     // All seven weekdays always render in the same positions so the row never
@@ -520,9 +606,6 @@
     const needToBuyCount = computed(
         () => previewIngredients.value.filter((i) => needsBuying(i.stock_item_id)).length,
     );
-    function round(n: number): number {
-        return Math.round(n * 100) / 100;
-    }
     function money(n: number): string {
         return `$${n.toFixed(2)}`;
     }
@@ -576,6 +659,7 @@
                 slot_names: [...selectedSlots.value],
                 repeat_same_day: repeatSameDay.value,
                 budget_cap: budgetCap.value,
+                default_servings: defaultServings.value,
             });
             proposed.value = res.entries.map(toDraft);
             // Cells the toggles asked for vs. what the ranker could place (FU-611).
@@ -594,15 +678,6 @@
         } finally {
             generatingProposal.value = false;
         }
-    }
-
-    function startManual() {
-        proposed.value = [];
-        previewIngredients.value = [];
-        previewUnlinked.value = [];
-        lastBuildRequested.value = 0;
-        lastBuildPlaced.value = 0;
-        step.value = 2;
     }
 
     // ── Review-step editing ─────────────────────────────────────────────────
@@ -662,7 +737,7 @@
                 recipe_name: recipe.name,
                 scheduled_for: leastLoadedDay(),
                 slot: slotFor(recipe),
-                servings: 1,
+                servings: defaultServings.value,
                 reason_chip: 'picked',
                 cookable: recipe.cookable,
                 missing_stock_item_names: [],
@@ -736,6 +811,10 @@
         emphasis.value = 'use_up_stock';
         repeatSameDay.value = false;
         budgetCap.value = false;
+        // Re-read on every open rather than once at mount: the cooking policy
+        // arrives from `/api/health` asynchronously, and an admin can change
+        // the headcount mid-session (the settings page refreshes it).
+        defaultServings.value = householdHeadcount.value ?? 1;
         // Open on the obvious default: every day still ahead in this week, and
         // the dinner slot. One tap gets you a week; the rest is fine-tuning.
         selectedDays.value = upcomingDays.value.map((d) => d.iso);
@@ -785,19 +864,49 @@
         color: var(--text-secondary);
         margin-bottom: 0.25rem;
     }
+    /* FU-852 — stacked at every width. See the template comment: the previous
+       single-line layout was only ever un-broken below a 599px VIEWPORT, which
+       says nothing about the ~600px dialog the row actually lives in. */
     .builder-row {
         display: flex;
-        align-items: center;
-        gap: 0.5rem;
-        padding: 0.4rem 0;
+        flex-direction: column;
+        align-items: stretch;
+        gap: var(--space-2);
+        padding: var(--space-2) 0;
         border-bottom: 1px solid var(--divider);
     }
     .builder-row__main {
-        flex: 1 1 auto;
         min-width: 0;
     }
+    /* The name is the swap control, so it is a real button — but it reads as
+       the row's title, not as a button: no fill, no border, and the swap glyph
+       only says what clicking does. */
     .builder-row__name {
+        display: flex;
+        align-items: center;
+        gap: var(--space-1);
+        width: 100%;
+        padding: 0;
+        border: none;
+        background: none;
+        font: inherit;
         font-weight: 500;
+        color: var(--text-primary);
+        text-align: left;
+        cursor: pointer;
+    }
+    .builder-row__name:hover {
+        color: var(--accent-ink);
+    }
+    .builder-row__name:focus-visible {
+        outline: 2px solid var(--brand-primary);
+        outline-offset: 2px;
+        border-radius: var(--radius-sm);
+    }
+    /* The glyph is a hint, not a second signal competing with the name. */
+    .builder-row__name .q-icon {
+        flex: 0 0 auto;
+        color: var(--text-muted);
     }
     .builder-row__meta {
         display: flex;
@@ -822,17 +931,27 @@
         color: var(--text-secondary);
         font-weight: 500;
     }
+    /* Wraps rather than overflows: the two selects take a line of their own on
+       a narrow dialog, and the stepper + remove keep the right edge. */
     .builder-row__controls {
         display: flex;
+        flex-wrap: wrap;
         align-items: center;
-        gap: 0.25rem;
-        flex: 0 0 auto;
+        gap: var(--space-2);
     }
+    /* `flex-basis` rather than `min-width`: a floor is what put the cluster off
+       the row's right edge in the first place (same lesson as the dialog's own
+       `min-width: 0`). */
     .builder-slot-select {
-        min-width: 120px;
+        flex: 1 1 7rem;
+        min-width: 0;
     }
     .builder-day-select {
-        min-width: 130px;
+        flex: 1 1 9rem;
+        min-width: 0;
+    }
+    .builder-servings {
+        margin-left: auto;
     }
     .builder-picker {
         max-height: 55vh;
@@ -850,25 +969,11 @@
        full-width there; below them the servings stepper and the two actions
        sit on one line with the actions pushed to the right edge, which is
        where a thumb is. */
+    /* The viewport-keyed row-stacking block that used to live here is gone —
+       the row stacks unconditionally now (FU-852), so this media query was
+       re-stating the default on a phone. What remains is genuinely about the
+       viewport: a phone's scroll regions and its full-width action buttons. */
     @media (max-width: 599px) {
-        .builder-row {
-            flex-direction: column;
-            align-items: stretch;
-            gap: 0.4rem;
-            padding: 0.6rem 0;
-        }
-        .builder-row__controls {
-            flex-wrap: wrap;
-            gap: 0.4rem;
-        }
-        .builder-day-select,
-        .builder-slot-select {
-            flex: 1 1 8rem;
-            min-width: 0;
-        }
-        .builder-servings {
-            margin-left: auto;
-        }
         /* One scroll region, not three: nested max-heights inside a dialog
            that is itself scrolling turns the review step into a set of tiny
            windows on a phone. */

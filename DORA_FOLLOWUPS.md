@@ -39,6 +39,77 @@ long session summary. Distinct from the other logs:
 
 ---
 
+## [OPEN] FU-864 — Two "Dora does this for you" actions still wear the wand, not the burger
+- **Raised:** 2026-09-03 (meal-planner owner batch)
+- **Type:** follow-up
+- **What:** the owner asked for *"the consistent Dora burger icon"* on **Build my
+  week**, which revised the wand/burger split recorded in `style/icons.ts`
+  ("wand = an action she performs; burger = an opinion she holds"). The revised
+  rule — the burger is Dora's mark on anything the user reads as Dora doing or
+  thinking something — is now written into that file, and every meal-planner site
+  flipped (toolbar, empty-week banner, phone, the builder's step icon and its
+  primary button). Two sites did **not**, because they are outside this batch's
+  surface: `components/dashboard/DraftShopCard.vue` (*Draft my shop* — the
+  dashboard's exact counterpart to Build my week) and
+  `components/shoppingList/ShoppingListPlanRow.vue`'s 12px inline hint.
+  `auto_awesome` legitimately keeps the AI-mode marker (`DoraModeSlider`,
+  `DoraHelpPage`, `SetupAdminPage`), where it means "a model is involved", not
+  "Dora".
+- **Why deferred:** R-007. The dashboard is a surface the owner reviewed and
+  signed off visually across six chunks; changing its card icon now is an
+  unasked visual edit to signed-off work, and it is one line whenever he wants it.
+- **Recommended resolution:** now-ish — one line each, but it is the owner's call
+  whether *Draft my shop* should match *Build my week*. Ask before sweeping.
+
+## [OPEN] FU-863 — A cook batch straddling today loses its link when only one forward day is left
+- **Raised:** 2026-09-03 (meal-planner owner batch — found during the multi-day QA walk)
+- **Type:** finding
+- **What:** a cook batch whose **cook day is in the past** keeps its leftover days
+  linked, and this batch fixed the case where an unrelated edit split it in two
+  (the reattach in `update_meal_plan`). But if the batch is left with a *single*
+  forward leftover day, that day silently becomes a standalone meal. Walked live:
+  a Wed-cooked Sunday Ragu with Thu + Fri leftovers, Thursday stepped to zero
+  servings — Friday came back with its "Leftovers" marker gone.
+- **Why it happens, and why it isn't simply a bug in the new code:** past entries
+  are immutable and the client never resends them (FU-595), so a payload can only
+  ever carry the *forward* members of a straddling batch. When that is one entry,
+  the client's `dissolveOrphanCookKeys` strips the `cook_key` — because the server
+  refuses a one-member group (`validate_cook_groups`: "a cook batch must cover at
+  least two days"), and it is right to for a batch that is genuinely one day. The
+  two rules are individually correct and jointly wrong for this shape.
+- **Fix shape:** the server is the only party that can see both halves. Have the
+  update handler count a group's *preserved* members alongside the payload's
+  before validating, and let a one-member payload group survive when the same
+  batch has a preserved entry. That means the client must stop stripping the key
+  in that case, which it cannot detect — so the honest version is for the client
+  to always send the key and let the server decide, i.e. move the orphan-dissolve
+  rule server-side. That is a contract change to the write path, not a patch.
+- **Impact:** cosmetic and small — a leftovers day loses an eyebrow. Nothing is
+  double-cooked and no ingredient demand changes (the pool model already treats
+  a lone entry as its own cook).
+- **Recommended resolution:** later, with any pass over the meal-plan write path.
+
+## [OPEN] FU-862 — `mealPlanStore.getShortfallAsync` has no client consumer left
+- **Raised:** 2026-09-03 (meal-planner owner batch)
+- **Type:** leftover
+- **What:** the planner was the only client reader of `GET /meal-plans/shortfall`,
+  and it used those recipe-level rows to decide which meal chips needed a cook —
+  a recipe-level answer to a per-entry question, which is the defect the owner
+  reported ("3 fried rice planned, 2 in the pool, all three light up"). That
+  verdict is now per-entry on the plan (`MealPlanEntry.needs_cooking`), so the
+  composable stopped fetching it — on mount, after every mutation, after a pool
+  ±, and after a week clear (four fewer round trips). `mealPlanStore.shortfall`,
+  `getShortfallAsync` and `MealPlanApiService.getShortfallAsync` are therefore
+  written and read by nothing on the client. Annotated in place rather than
+  deleted.
+- **Why deferred:** the **endpoint** is live and answers a different question
+  (how many *servings* short each recipe is, not which meals to cook) — the
+  assistant's `meals_shortfall` tool reads it server-side, and it is plausibly
+  what a future "what should I batch-cook this weekend" surface wants. Deleting
+  the client plumbing is a two-minute job whenever it is clear nothing wants it.
+- **Recommended resolution:** opportunistic — delete the store ref + api method
+  if no client surface has claimed it by the next meal-plan unit.
+
 ## [OPEN] FU-861 — Technical details → Build has no real build number
 - **Raised:** 2026-09-03 (owner feedback batch — settings/About)
 - **Type:** follow-up
@@ -194,23 +265,6 @@ long session summary. Distinct from the other logs:
 - **Recommended resolution:** opportunistic — next time cook mode or the CSP is
   touched. Pair with a live listen, since a silent-by-config chime and a
   silent-by-bug chime look identical in the code.
-
-## [OPEN] FU-852 — The meal-plan builder's review rows overlap inside their own dialog
-- **Raised:** 2026-09-03 (cook-mode owner batch — observed in passing)
-- **Type:** finding
-- **What:** in "Build my week" → Review, a recipe with a long name ("Pizza dough
-  (60% hydration)") wraps to three lines and its text paints straight through
-  the day/slot selects beside it. Cause: `MealPlanBuilderDialog.vue`'s stacking
-  rule for the row is `@media (max-width: 599px)`, which keys off the
-  **viewport**, but the row lives in a ~560px dialog. On a 1280px desktop the
-  media query never fires, so a 560px container keeps the ~400px horizontal
-  control cluster and the name column gets whatever is left.
-- **Why deferred:** pre-existing and outside the reported batch; the honest fix
-  is a container query (or a width the dialog actually hands down), not another
-  viewport breakpoint, and it wants a pass over the other dialogs that stack on
-  viewport width for the same reason.
-- **Recommended resolution:** later, during the next meal-planner unit.
-
 
 ## [OPEN] FU-851 — Planned demand goes stale after a plan edit anywhere but the stock detail page
 - **Raised:** 2026-09-03 (owner batch — planned-demand signal)
@@ -766,49 +820,6 @@ long session summary. Distinct from the other logs:
 - **Recommended resolution:** now-ish — it is one line of copy and the owner is
   looking at this surface. Suggested: drop the clause entirely and let "~" do
   the work, or say "estimated from what you last paid".
-
-## [OPEN] FU-804 — reported "which day(s) the ingredient is needed" text was not found in the right rail
-- **Raised:** 2026-09-01 (meal-planner owner batch)
-- **Type:** finding
-- **What:** the owner asked, of "This week's shopping": *"We don't need the text
-  of which day(s) the ingredient is needed, this is bloat hiding the important
-  part — how much is needed."* No such text exists in a static read.
-  `MealPlanShoppingSummary`'s row caption was `needs <qty> · <listStatusLabel>`,
-  and `listStatusLabel` says "not on a list" / "on Weekly shop" — never a day.
-  `MealPlanIngredient` carries no day field at all (`stock_item_id`,
-  `stock_item_name`, `total_quantity`, `unit`, `used_in_recipe_ids`,
-  `is_optional`), and the add-to-list dialog's `sources` are **recipe** names,
-  not days.
-- **What was done anyway:** the batch acted on the most likely reading — that
-  this and the adjacent *"'Not on a list' text is redundant"* bullet are the same
-  caption — and reduced the row caption to the quantity alone. So if the owner
-  was describing `listStatusLabel`, it is fixed.
-- **Why open:** per the reported-defect rule, a static read is not proof. If the
-  owner was looking at a real day label, it is somewhere this batch did not
-  touch — most likely the mobile "Add to list" picker or a build-my-week preview.
-- **Recommended resolution:** confirm in browser — ask the owner to point at the
-  text if it is still there after this batch.
-
-## [OPEN] FU-803 — the build-my-week preview still wears the retired ingredient-row shape
-- **Raised:** 2026-09-01 (meal-planner owner batch)
-- **Type:** finding
-- **What:** `MealPlanIngredientRow.vue` was extracted so both right-rail lists
-  code an ingredient the same way — level as a left-hand dot, quantity-only
-  caption, cart button. `MealPlanBuilderDialog.vue:233-242` still renders the
-  shape that replaced: a `q-chip` on the right carrying `stockStatusLabel`, in
-  the same colours the two rail lists just stopped using. Same data, same
-  question, two answers again.
-- **Why deferred:** R-007. The owner's batch was the planner's rails and week;
-  the builder dialog is a separate surface with its own preview/cost layout, and
-  re-skinning it would have meant a visual change he did not ask for in a unit he
-  could not review it in. It is also the only remaining consumer of the
-  `stockStatusLabel` / `stockStatusColour` pair, which it gets from
-  `useStockStatus` directly (not from the planner), so nothing is broken.
-- **Fix shape:** swap the chip block for `<MealPlanIngredientRow>`; the dialog
-  already has `MealPlanIngredient` rows. Check the cart button is wanted there —
-  the preview is of a plan that does not exist yet.
-- **Recommended resolution:** opportunistic — next time the builder dialog is
-  open for other work.
 
 ## [OPEN] FU-802 — the planner's rail row is still the third copy of the list-row chrome (see FU-791)
 - **Raised:** 2026-09-01 (meal-planner owner batch)

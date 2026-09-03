@@ -28,6 +28,166 @@ next.
 
 ---
 
+## 2026-09-03 (later still ×3) — **Meal planner, ~35 owner items: a shortfall that lit every meal of a recipe, and four ways to break a multi-day cook**
+
+**Status:** all items complete + green + driven live at 375 and 1280. New:
+**R-078 / ADR-075**, **R-079 / ADR-076**, **FU-862..864**; **FU-852, FU-803 and
+FU-804 resolved**. Gate: **vitest 691 / 61 files**, `vue-tsc` + `eslint src/`
+clean, **pytest 2280 passed** / 1 skipped / 1 xfailed with only the four
+pre-existing buy-verdict reds (FU-762).
+
+**The headline is the shortfall, because the owner reasoned his way to the
+correct model from the outside.** He reported: *"if I have 3 meals of fried rice
+planned, and 2 meals in the pool, I'd expect the last of the 3 to highlight
+orange and needing to be cooked. Currently they all light up."* They did, and the
+reason is one line: the client asked *"is this entry's **recipe** in the shortfall
+set?"* — a recipe-level answer to a per-entry question. The pool allocation that
+answers it properly already existed and was written the same day
+(`planned_meals.allocate_pool`, R-074/ADR-071); it just wasn't exposed per entry.
+So `MealPlanEntry` gained a server-owned `needs_cooking`, hydrated from that one
+allocation, and `shortfallRecipeIds` is gone from the planner. The knock-ons are
+the rest of the item: the owner's *"X to cook by… should be the highlighted meal
+slots after auto-allocation"* is now literally `entries.filter(needs_cooking)`
+rather than a count of recipes (three short fried rices used to count 1), the
+calendar's day pips code from the same fact, and the planner stopped fetching
+`/meal-plans/shortfall` at all — four round trips saved, and more importantly one
+answer to one question instead of two (FU-862 notes the now-orphaned store
+plumbing).
+
+**Allocating that pool needed one thing the pure function didn't know: a cook
+batch is one cook.** Mon+Wed at two servings each is a single cook yielding four,
+so spending the pool per day would let a pool of 2 "cover" the Monday and leave
+Wednesday reading as a second cook that does not exist — and would put a chef hat
+on a leftovers day, which nobody cooks. `allocate_pool` now groups into
+allocation *units* (one per standalone meal, one per batch), queues each at its
+cook day, and marks leftovers covered by construction. Pinned with five new tests.
+
+**Then driving it found the case the pure function still couldn't see.** At 1280
+a Thursday chip reading "Leftovers · Sunday Ragu" wore a chef hat while the
+Friday one didn't. `upcoming_planned_meals` only looks from today forward, so for
+a batch whose **cook day is in the past** the earliest day still in its window is
+a leftovers day — and the allocation called that the cook. The DTO's own
+`_apply_cook_batch_view` computes `is_cook_day` over the plan's *whole* entry
+list, past included, so the hydration now defers to it. This is R-075 doing its
+job: the model was right and the window was wrong, and nothing but looking would
+have said so.
+
+**The multi-day QA the owner asked for ("feels like a feature that has great
+potential to break") found four defects, and he had already found two of them.**
+Walked live, each scenario driven and asserted:
+
+1. ***"Changing cook days leaves behind a copy of that meal… tue still has a copy
+   and it shows as not linked."*** Exactly right. `setCookDays` un-keyed every
+   member of the batch and then re-keyed only the picked days, so a dropped day
+   kept its entry and became an unlinked duplicate. It now removes the dropped
+   days' meals — and takes a `mode` parameter, because the owner named the
+   counter-case in the same breath: *"a copy SHOULD be left if the separate cook
+   days option is used."* `separateCook` is that mode, and the entry menu's
+   "Separate this cook" routes through it.
+2. ***"Cannot remove a multi-day cook from the plan."*** Removing the cook day
+   resent the remaining member with its `cook_key`, and the server refuses a
+   one-day batch — so the whole PATCH came back 400 as *"Could not update the
+   plan."* Removing the cook now asks (*"Carbonara is cooked once for 2 days.
+   Removing the cook removes its leftover day too."*) and takes the leftovers
+   with it; removing a *leftover* day just shortens the cook.
+3. ***"Error updating the plan when trying to drop a multi-day cook below 0
+   servings. Need to handle this with a modal prompt maybe? Not sure."*** Same
+   400, same cause. Zero servings now routes through the removal path, so it
+   inherits its rules and its confirm — which answers the "modal maybe?" without
+   inventing a second dialog. Underneath both, one guard:
+   `dissolveOrphanCookKeys` in `persistEntries`, because a batch that loses its
+   second day stops being a batch *whichever* edit did it, and no caller should
+   have to remember that (R-003).
+4. **The one he hadn't seen: a cook straddling today split in two.** With the
+   cook day in the past, any unrelated edit elsewhere in the week made the first
+   surviving leftover day render as "Cook · serves 4". `update_meal_plan` deletes
+   and rebuilds the forward batches, and a resent `cook_key` naming a *preserved*
+   batch was minting a second CookBatch for it. It re-attaches now. The residue —
+   a straddling batch left with a single forward day still loses its link,
+   because the client can't resend past entries and the server refuses a
+   one-member group — is **FU-863**, with the honest fix (move the dissolve rule
+   server-side) written down rather than half-done.
+
+**Two design complaints had real defects under them, which is this stream's
+pattern.** *"Don't like that you can see the minus button always for recipes that
+have no meals in the pool (disabled minus) when every other +/- button is hidden
+till hovered"* — because Quasar's `.q-btn--disable { opacity: .6 !important }`
+beat the `opacity: 0` that hides it, so the one state where the minus is disabled
+(an empty pool, i.e. most rows) was the one state where it showed. `visibility`
+carries the hiding now. And *"meal pool count input seems to be unclickable —
+possibly because the row is already clickable? Or is it intentional?"*: neither.
+The click landed, it just had nothing to do on a mouse — arming the steppers is a
+touch affordance. A number you can click and can't change is a broken control, so
+it's a real `<input>` now (and typing `6` beats six taps).
+
+**FU-852's fix became a rule, because the owner diagnosed it himself.** On the
+builder's review rows overlapping: *"seems better on mobile (no overlapping), so
+it seems an edit to make it better on mobile stuffed up desktop."* The row stacked
+under `@media (max-width: 599px)` while living in a `min(640px, 94vw)` dialog, so
+1280px kept a ~400px control cluster fighting a long name for a ~560px line. It
+stacks at every width now — there was no width at which one line worked — and the
+recipe name absorbed the swap button, per his own suggestion. Hence **R-078 /
+ADR-075**: *a component sized by its container never branches on the viewport*,
+which also names the two other instances the FU predicted (`RecipeRow`'s
+`compact`, the picker's old `65vh`). Measured after: every row `overlaps: false`,
+nothing past the card's 920px edge, with "Pizza dough (60% hydration)" in the
+proposal.
+
+**The rounding bug is R-003 wearing a decimal point.** *"Can see rounding is not
+happening — 'needs 31.333333333333332 tbsp'."* `formatQuantity` was the single
+authority for unit *spacing* (DEC-3) but stringified the number as-is, so
+precision had devolved to every call site: the builder's preview had grown a
+local `function round(n)`, the rail had nothing, and the two rendered the same
+aggregate differently. Rounding moved into the formatter and the local rounder is
+deleted — **R-079 / ADR-076**.
+
+**The rest, briefly.** The calendar opened on August for a week starting 31 Aug
+because it anchored on the Monday's month; it now takes today's month, else the
+majority of the week's days. Day squares stopped being shoved around by busy days
+(measured: 34×34 before and after going 2→5 pips, calendar card 300px either
+way), and the "+N" label is gone from both hosts. The right rail's one red
+sentence became two dot-led lines counting each stock level against *its own*
+total, and stopped blinking to "Calculating…" mid-recalculation. "Full ingredient
+demand" wrapped against the card edge even after the count moved to a badge —
+three words was one too many for a 300px rail, so it's "All ingredients". The
+phone gained the four week actions it never had (save/apply template, clear week)
+via the *same* overflow menu the desktop carries, and its bottom card stopped
+being a disclosure whose header restated its contents — it renders the desktop's
+own two components now, which is also how the missing ingredient breakdown
+arrived. The armed-slot banner became one 36px line with **Done** (not Cancel,
+which never undid anything) and the per-row "→ Breakfast" is gone. Auto-builder
+servings default to the household headcount. Money-off is now enforced
+server-side (R-058): `cost_total: null`, 0 of 12 entries priced, no `$` in the
+dialog — previously the figures travelled and were merely hidden.
+
+**Two removals, both answers to "what's the point of…".** *Clone* on a template:
+nothing in the app edits a template's contents, so a clone could only ever be a
+same-named duplicate — the way to get a variant is to apply, edit the week, and
+save it as a new template. `cloneAsync` and its endpoint stay (harmless, tested,
+and what an edit-a-template feature would build on) with a comment saying not to
+re-add the button without one. And the builder's *"I'll pick myself"*, which
+jumped to an empty review step when the planner's own rail does that job better;
+"Add a meal" inside the review step is untouched.
+
+**Engineering-standards close-gate:** checked. R-001 (four shared-component
+moves: `MealPlanIngredientRow` into the builder, `NumberStepper` into both meal
+menus, the mobile overflow menu matching the desktop's, the phone reusing the
+rail's two components), R-003 (one cook-verdict authority; the second fetch
+deleted rather than left), R-007 (the two remaining wand icons left to FU-864
+rather than swept into signed-off dashboard work), R-058 (money gated
+server-side), R-075 (three of this unit's defects were found only by measuring),
+R-076, D-002 (the target line uses `--accent-ink`, not `--brand-primary`, which
+FU-801 has failing the ink test), D-004, D-011, D-013 (pips never the only
+signal), D-023 (one list of week actions, not a phone-sized subset). One
+annotated leftover: `mealPlanStore.getShortfallAsync` now has no client consumer
+— commented in place, FU-862.
+
+**Next up:** nothing is queued on this surface. The largest open planner items
+are FU-802 (`.dora-list-row` extraction, with FU-791) and FU-863. Phase 1's last
+unbuilt item remains **meal-reconcile Chunk 6** (settings row/copy).
+
+---
+
 ## 2026-09-03 (later still ×2) — **Settings, ~35 owner items: a NameError nobody could have downloaded past, and a browser blamed for HTTP**
 
 **Status:** all items complete + green + driven live at 375 and 1280. New:

@@ -7,21 +7,31 @@
                  drawing a connector between them.
                  `role="status"` makes it a live region, so arming a slot is
                  *announced*, not only drawn — the pulse is visual-only and this
-                 is its screen-reader equivalent. -->
-            <q-banner
-                v-if="focusedTarget"
-                dense
-                role="status"
-                class="picker-target q-mb-sm rounded-borders"
-            >
-                <div class="text-caption">
-                    Adding to <strong>{{ focusedTarget.slot }}</strong>,
-                    {{ formatDate(focusedTarget.dayIso) }} — pick a recipe.
-                </div>
-                <template #action>
-                    <BaseButton variant="ghost" dense label="Cancel" @click="emit('cancelTarget')" />
-                </template>
-            </q-banner>
+                 is its screen-reader equivalent.
+
+                 Owner feedback 2026-09-03 — this was a filled `q-banner`, and
+                 two complaints landed on it at once: *"don't like the current
+                 big box that appears at the top shifting the UI so much"* and
+                 *"replace the box at the top with a simple Done button and '→
+                 <meal slot> <date>' text inline with each other"* — plus a
+                 preference for the styling the rows had been using: *"I do like
+                 the bold green text on the recipe cards for it, better styling
+                 than what's in the top box."* So: one line, the arrow-led
+                 destination in accent-bold beside its button, and the ~44px the
+                 banner used to insert above a scrolled list is now ~28px.
+
+                 The button says **Done**, not Cancel (owner, same batch:
+                 *"cancel makes you think you'll undo the meals you added to
+                 that slot"*). It never undid anything — it disarms the slot —
+                 and "Done" is what disarming means once you have added
+                 something. -->
+            <div v-if="focusedTarget" role="status" class="picker-target q-mb-sm">
+                <span class="picker-target__label">
+                    <q-icon :name="ICONS.arrow_forward" size="14px" />
+                    {{ focusedTarget.slot }} · {{ formatDate(focusedTarget.dayIso) }}
+                </span>
+                <BaseButton variant="ghost" dense label="Done" @click="emit('cancelTarget')" />
+            </div>
 
             <!-- L99 — "keep search filter separate to other filters". The search
                  box sits ABOVE the chips and narrows whatever the active chip
@@ -398,12 +408,26 @@
         min-width: 0;
     }
 
-    /* S3 — the target banner is a FILLED accent surface, not a sunken one. It
-       was `dora-bg-sunken`, which reads as an inert panel; this is the durable
-       signal that the rail is armed, and it has to survive `prefers-reduced-
-       motion` flattening every animation to 0.01ms (§4.7). */
+    /* S3 — the durable signal that the rail is armed, and it has to survive
+       `prefers-reduced-motion` flattening every animation to 0.01ms (§4.7).
+       It carries that signal in accent-weighted TEXT now rather than a filled
+       surface: the fill was a box whose arrival shoved the list down, and the
+       row it replaced already reads as armed because the destination is named
+       in the accent and nothing else in this card is. */
     .picker-target {
-        background: color-mix(in srgb, var(--brand-primary) 14%, var(--surface-component));
-        border-left: 3px solid var(--brand-primary);
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+        min-height: 28px;
+    }
+    .picker-target__label {
+        flex: 1 1 auto;
+        min-width: 0;
+        display: flex;
+        align-items: center;
+        gap: var(--space-1);
+        font-size: calc(var(--font-size-sm) * 1rem);
+        font-weight: 600;
+        color: var(--accent-ink);
     }
 </style>

@@ -14,8 +14,8 @@
          carried more than the visual), and only each Monday showed a number, so
          six rows read as a barcode.
 
-         Kept deliberately: `dayStatus` still derives from the server's
-         shortfall set rather than re-judging cookability (R-003), and
+         Kept deliberately: `dayStatus` still derives from the server's own
+         verdict rather than re-judging cookability (R-003), and
          `STATUS_LABEL` / the accessible labels are ported to day cells rather
          than rewritten — they were good work against 1.4.1. -->
     <q-card flat bordered class="cal">
@@ -88,7 +88,7 @@
                                  D-013: a coloured pip is never the only signal
                                  — the tooltip below names the meals, and
                                  `aria-label` spells the day's status out. -->
-                            <MealPlanDayPips :pips="cell.pips" :overflow="cell.overflow" />
+                            <MealPlanDayPips :pips="cell.pips" />
                             <q-tooltip v-if="cell.tooltip" anchor="top middle" self="bottom middle">
                                 {{ cell.tooltip }}
                             </q-tooltip>
@@ -137,9 +137,12 @@
     ];
 
     const mealPlanStore = useMealPlanStore();
-    const { mealPlans, shortfall, today } = storeToRefs(mealPlanStore);
+    const { mealPlans, today } = storeToRefs(mealPlanStore);
 
-    const shortfallRecipeIds = computed(() => new Set(shortfall.value.map((s) => s.recipe_id)));
+    // Declared up here, not beside the month state below: `monthForWeek` reads
+    // it during setup to seed `viewMonth`, so a later `const` would be in its
+    // temporal dead zone.
+    const todayIso = computed(() => today.value ?? localTodayIso());
 
     // Entries for every plan, keyed by day — the calendar spans many weeks, so
     // it reads across all plans (not just the focused one).
@@ -160,9 +163,12 @@
     function dayStatus(dayIso: string): DayStatus {
         const entries = entriesByDay.value.get(dayIso);
         if (!entries || entries.length === 0) return 'empty';
-        // Status is derived from the server's shortfall set (R-003) — the
-        // client never re-judges cookability here.
-        if (entries.some((e) => !e.consumed_at && shortfallRecipeIds.value.has(e.recipe_id))) return 'short';
+        // Status is derived from the server's PER-ENTRY cook verdict (R-003)
+        // — the client never re-judges cookability here. It used to test the
+        // entry's recipe against the shortfall set, which called a day short
+        // whenever any meal of a short recipe fell on it, even one the pool
+        // covered.
+        if (entries.some((e) => !e.consumed_at && e.needs_cooking)) return 'short';
         if (entries.every((e) => e.consumed_at)) return 'consumed';
         return 'planned';
     }
@@ -176,13 +182,39 @@
     // Anchored on the 1st of a month. Follows the focused week when that week
     // leaves the visible month, so toolbar nav and the calendar stay two views
     // of one `focusedMonday` (F17).
-    const viewMonth = ref(firstOfMonth(focusedMonday.value));
+    const viewMonth = ref(monthForWeek(focusedMonday.value));
     const monthSlide = ref<'cal-next' | 'cal-prev'>('cal-next');
     const monthTransition = computed(() => monthSlide.value);
     const viewMonthKey = computed(() => viewMonth.value);
 
     function firstOfMonth(iso: string): string {
         return `${iso.slice(0, 7)}-01`;
+    }
+    /**
+     * Which month a week belongs to — NOT simply its Monday's month.
+     *
+     * Owner feedback 2026-09-03: *"why does the calendar start on the previous
+     * month if today is in the next month? Monday is the 31st and today is the
+     * 2nd… the only reason I can think of is that the week started in that
+     * month."* That was exactly it. A week straddling a month boundary is
+     * mostly in one of the two, and that is the month a reader means: Mon 31
+     * Aug – Sun 6 Sep is a September week (six days of seven), so opening it on
+     * AUGUST showed the user a month they had already left.
+     *
+     * Today wins outright when it is inside the week, because "the month I am
+     * in" beats any counting argument. Otherwise the majority of the week's
+     * seven days decides — never a tie, since seven is odd.
+     */
+    function monthForWeek(mondayIso: string): string {
+        const days = Array.from({ length: 7 }, (_, i) => shiftDays(mondayIso, i));
+        const todayInWeek = days.find((iso) => iso === todayIso.value);
+        if (todayInWeek) return firstOfMonth(todayInWeek);
+        const tally = new Map<string, number>();
+        for (const iso of days) {
+            const month = firstOfMonth(iso);
+            tally.set(month, (tally.get(month) ?? 0) + 1);
+        }
+        return [...tally.entries()].reduce((a, b) => (b[1] > a[1] ? b : a))[0];
     }
     function addMonths(firstIso: string, delta: number): string {
         const [y, m] = firstIso.split('-').map(Number);
@@ -195,7 +227,7 @@
     }
 
     watch(focusedMonday, (next, prev) => {
-        const wanted = firstOfMonth(next);
+        const wanted = monthForWeek(next);
         if (wanted === viewMonth.value) return;
         // Only re-anchor when the focused week genuinely leaves the month on
         // screen; direction keeps the slide honest.
@@ -203,7 +235,6 @@
         viewMonth.value = wanted;
     });
 
-    const todayIso = computed(() => today.value ?? localTodayIso());
 
     type CalCell = {
         iso: string;
@@ -212,7 +243,6 @@
         isToday: boolean;
         status: DayStatus;
         pips: DayPip[];
-        overflow: number;
         tooltip: string;
     };
 
@@ -232,7 +262,7 @@
                     inMonth: iso.slice(0, 7) === month,
                     isToday: iso === todayIso.value,
                     status: dayStatus(iso),
-                    ...dayPips(entries, shortfallRecipeIds.value),
+                    ...dayPips(entries),
                     tooltip: dayTooltip(iso, entries),
                 });
             }
@@ -357,9 +387,7 @@
     function dayTooltip(iso: string, entries: MealPlanEntry[]): string {
         if (!entries.length) return `${formatDate(iso)} — no meals planned`;
         const lines = entries.map((e) => {
-            const short = !e.consumed_at && shortfallRecipeIds.value.has(e.recipe_id)
-                ? ' — short'
-                : '';
+            const short = !e.consumed_at && e.needs_cooking ? ' — needs cooking' : '';
             const cooked = e.consumed_at ? ' — cooked' : '';
             return `${e.slot} · ${e.recipe_name}${short}${cooked}`;
         });
@@ -400,10 +428,17 @@
         box-shadow: 0 0 0 1px color-mix(in srgb, var(--brand-primary) 35%, transparent);
     }
 
+    /* Owner feedback 2026-09-03 — *"after putting enough meals on the planner
+       the calendar days go askew; keep the day squares where they are"*. The
+       square was `aspect-ratio` with no ceiling, so a day whose pip row grew
+       (a second row of pips, or the old "+N" label) pushed its own cell taller
+       and dragged the whole week row with it. The cell is now a fixed square
+       that clips: the pips wrap inside it and stop when it is full. */
     .cal-day {
         position: relative;
         aspect-ratio: 1 / 1;
         min-height: 34px;
+        overflow: hidden;
         display: flex;
         flex-direction: column;
         align-items: center;

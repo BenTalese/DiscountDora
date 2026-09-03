@@ -1,7 +1,7 @@
 <template>
     <q-card
         bordered
-        class="day-card q-mb-sm"
+        class="day-card"
         :class="{ 'day-card--past': isPast, 'day-card--has-target': hasTargetedSlot }"
     >
         <!-- The header is a real <button> only when there is something to
@@ -76,7 +76,7 @@
                         :key="entry.meal_plan_entry_id"
                         :entry="entry"
                         :show-slot="false"
-                        :shortfall="shortfallRecipeIds.has(entry.recipe_id)"
+                        :shortfall="entry.needs_cooking"
                         :highlight="hoveredRecipeIds.has(entry.recipe_id)"
                         @click.stop
                         @view="emit('entryView', entry.recipe_id)"
@@ -105,7 +105,7 @@
                         :key="entry.meal_plan_entry_id"
                         :entry="entry"
                         :show-slot="true"
-                        :shortfall="shortfallRecipeIds.has(entry.recipe_id)"
+                        :shortfall="entry.needs_cooking"
                         :highlight="hoveredRecipeIds.has(entry.recipe_id)"
                         @click.stop
                         @view="emit('entryView', entry.recipe_id)"
@@ -181,7 +181,6 @@
         slotEntries: (slot: string) => MealPlanEntry[];
         otherEntries: MealPlanEntry[];
         isTargetedSlot: (slot: string) => boolean;
-        shortfallRecipeIds: Set<string>;
         hoveredRecipeIds: Set<string>;
         formatDate: (iso: string) => string;
         showAllSlots: boolean;
@@ -285,6 +284,14 @@
 </script>
 
 <style scoped>
+    /* Owner feedback 2026-09-03 — *"a bit more margin between the days would
+       be good on the middle section of the meal planner page. A tad, not a
+       lot."* Was Quasar's `q-mb-sm` (8px); `--space-3` is 12px, the next step
+       on the spacing scale, and it lives here on the component rather than as
+       a utility class at the call site so the gap travels with the card. */
+    .day-card {
+        margin-bottom: var(--space-3);
+    }
     .day-card--past {
         opacity: 0.6;
     }

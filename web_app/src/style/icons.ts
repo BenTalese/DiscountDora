@@ -80,9 +80,18 @@ export const ICONS = {
     //   magic wand (`auto_awesome`) on "Dora suggests" and a
     //   lightbulb-with-a-question (`inferred_hunch`) on "Dora thinks" — which
     //   read as two different systems talking.
-    //   `auto_awesome` is NOT retired: it keeps the "Dora, do this for me"
-    //   generate actions (Build my week, Draft my shop, the AI-mode marker).
-    //   Wand = an action she performs; burger = an opinion she holds.
+    //   `auto_awesome` is NOT retired, but its territory shrank on 2026-09-03:
+    //   the owner asked for *"the consistent Dora burger icon"* on **Build my
+    //   week**, which the wand/burger split had assigned to the wand ("wand =
+    //   an action she performs; burger = an opinion she holds"). The revised
+    //   rule: the burger is Dora's MARK — it goes on anything the user reads as
+    //   Dora doing or thinking something, action or opinion. The wand is left
+    //   with the AI-mode marker, where it means "a model is involved", not
+    //   "Dora".
+    //   Still on the wand and NOT changed here, because they are surfaces this
+    //   batch had no mandate over: `DraftShopCard` (dashboard) and
+    //   `ShoppingListPlanRow`'s inline hint. Logged as a follow-up rather than
+    //   swept — see DORA_FOLLOWUPS.
     // Not to be confused with `menu` (mdi-menu) — MDI's hamburger is a drawn
     // sesame-bun burger, not three bars, and the two never appear together.
     dora_voice: 'mdi-hamburger',

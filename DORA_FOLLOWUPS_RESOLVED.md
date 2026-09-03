@@ -10,6 +10,89 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-804 — reported "which day(s) the ingredient is needed" text was not found in the right rail
+- **Raised:** 2026-09-01 (meal-planner owner batch)
+- **Type:** finding
+- **What:** the owner asked, of "This week's shopping": *"We don't need the text
+  of which day(s) the ingredient is needed, this is bloat hiding the important
+  part — how much is needed."* No such text exists in a static read.
+  `MealPlanShoppingSummary`'s row caption was `needs <qty> · <listStatusLabel>`,
+  and `listStatusLabel` says "not on a list" / "on Weekly shop" — never a day.
+  `MealPlanIngredient` carries no day field at all (`stock_item_id`,
+  `stock_item_name`, `total_quantity`, `unit`, `used_in_recipe_ids`,
+  `is_optional`), and the add-to-list dialog's `sources` are **recipe** names,
+  not days.
+- **What was done anyway:** the batch acted on the most likely reading — that
+  this and the adjacent *"'Not on a list' text is redundant"* bullet are the same
+  caption — and reduced the row caption to the quantity alone. So if the owner
+  was describing `listStatusLabel`, it is fixed.
+- **Why open:** per the reported-defect rule, a static read is not proof. If the
+  owner was looking at a real day label, it is somewhere this batch did not
+  touch — most likely the mobile "Add to list" picker or a build-my-week preview.
+- **Recommended resolution:** confirm in browser — ask the owner to point at the
+  text if it is still there after this batch.
+- **Resolved:** 2026-09-03 — **confirmed in the browser**, which is what this
+  FU was waiting for. The whole right rail was walked live at 1280 (and the
+  phone's copy of it at 375) after this batch rewrote both ingredient lists:
+  there is no day label on any ingredient row, in "This week's shopping", in
+  "All ingredients", or in the add-to-list picker. The 2026-09-01 batch's
+  reading was right — the owner was describing `listStatusLabel`, which is
+  gone.
+
+## [RESOLVED] FU-803 — the build-my-week preview still wears the retired ingredient-row shape
+- **Raised:** 2026-09-01 (meal-planner owner batch)
+- **Type:** finding
+- **What:** `MealPlanIngredientRow.vue` was extracted so both right-rail lists
+  code an ingredient the same way — level as a left-hand dot, quantity-only
+  caption, cart button. `MealPlanBuilderDialog.vue:233-242` still renders the
+  shape that replaced: a `q-chip` on the right carrying `stockStatusLabel`, in
+  the same colours the two rail lists just stopped using. Same data, same
+  question, two answers again.
+- **Why deferred:** R-007. The owner's batch was the planner's rails and week;
+  the builder dialog is a separate surface with its own preview/cost layout, and
+  re-skinning it would have meant a visual change he did not ask for in a unit he
+  could not review it in. It is also the only remaining consumer of the
+  `stockStatusLabel` / `stockStatusColour` pair, which it gets from
+  `useStockStatus` directly (not from the planner), so nothing is broken.
+- **Fix shape:** swap the chip block for `<MealPlanIngredientRow>`; the dialog
+  already has `MealPlanIngredient` rows. Check the cart button is wanted there —
+  the preview is of a plan that does not exist yet.
+- **Recommended resolution:** opportunistic — next time the builder dialog is
+  open for other work.
+- **Resolved:** 2026-09-03. The builder's preview list is
+  `MealPlanIngredientRow` — the `q-chip` carrying `stockStatusLabel` is gone,
+  and with it the builder's last use of the `stockStatusLabel` /
+  `stockStatusColour` pair. The open question in the FU ("check the cart button
+  is wanted there — the preview is of a plan that does not exist yet") was
+  answered **no**: the row gained a `showCart` prop, off in the builder, because
+  the builder already ends on "Add to a shopping list" for the whole saved week.
+  Verified live: 15 preview rows, 0 cart buttons.
+
+## [RESOLVED] FU-852 — The meal-plan builder's review rows overlap inside their own dialog
+- **Raised:** 2026-09-03 (cook-mode owner batch — observed in passing)
+- **Type:** finding
+- **What:** in "Build my week" → Review, a recipe with a long name ("Pizza dough
+  (60% hydration)") wraps to three lines and its text paints straight through
+  the day/slot selects beside it. Cause: `MealPlanBuilderDialog.vue`'s stacking
+  rule for the row is `@media (max-width: 599px)`, which keys off the
+  **viewport**, but the row lives in a ~560px dialog. On a 1280px desktop the
+  media query never fires, so a 560px container keeps the ~400px horizontal
+  control cluster and the name column gets whatever is left.
+- **Why deferred:** pre-existing and outside the reported batch; the honest fix
+  is a container query (or a width the dialog actually hands down), not another
+  viewport breakpoint, and it wants a pass over the other dialogs that stack on
+  viewport width for the same reason.
+- **Recommended resolution:** later, during the next meal-planner unit.
+- **Resolved:** 2026-09-03 (meal-planner owner batch — driven live at 1280 and
+  375). The row is stacked at **every** width; the viewport media query that
+  only ever fired below 599px is gone, and with it the swap button (the recipe
+  name is the swap control now, per the owner's own suggestion). Measured in the
+  running app: with "Pizza dough (60% hydration)" in the proposal, every review
+  row reports `overlaps: false` and `overflowsCard: false` against the dialog's
+  920px right edge. The wider lesson — a dialog is not a viewport — is now
+  **R-078 / ADR-075**, which also names the two other instances this FU
+  predicted (`RecipeRow`'s `compact`, the picker's old `65vh`).
+
 ## [RESOLVED] FU-833 — Drop ECharts; promote `PriceHistoryChart` to the app's chart component
 - **Resolved:** 2026-09-02 (driven live on all four chart surfaces). `echarts`
   and `vue-echarts` are out of `package.json`, and **the Reports route chunk went

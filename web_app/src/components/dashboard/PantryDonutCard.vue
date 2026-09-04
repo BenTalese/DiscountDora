@@ -3,7 +3,11 @@
          and donut segments deep-link to the *filtered* stock view
          (`?level_id=…`), while the header's "View →" keeps the unfiltered pantry
          link for the show-me-everything case (FU-299). -->
-    <DashboardCard icon="inventory_2" title="Pantry">
+    <!-- "My stock", not "Pantry" (owner, 2026-09-04). The app's noun for these
+         things is *stock* everywhere else — the route is `/stock`, the entity is
+         `StockItem`, the nav item says Stock — and this card was the last place
+         calling them the pantry. -->
+    <DashboardCard :icon="ICONS.inventory_2" title="My stock">
         <template #action>
             <router-link class="dora-card-action dora-card-link" to="/stock">
                 View →
@@ -69,7 +73,8 @@
 
 <script lang="ts" setup>
     /**
-     * The pantry donut: how the stock is split between in-stock, low and out.
+     * The "My stock" donut: how the stock is split between in-stock, low
+     * and out.
      *
      * The segment colours are resolved by the page through
      * `useThemePalette.paletteToken`, not here — an SVG `stroke` can't take a
@@ -81,6 +86,7 @@
      *
      * Extracted from `DashboardPage.vue` (FU-829).
      */
+    import { ICONS } from 'src/style/icons';
     import DashboardCard from 'src/components/dashboard/DashboardCard.vue';
 
     export type DonutSegment = {
@@ -114,10 +120,25 @@
         align-items: center;
         gap: var(--space-5);
     }
+    /* Owner 2026-09-04 — *"it looks a bit sparse on desktop width (very empty).
+       Could we … make the graph that is there expand to take up the space."*
+       The donut was pinned at 132px, so in a half-width column on a wide screen
+       the card was a small circle, three short legend rows, and a lot of nothing.
+
+       It now grows with the card and stops at 220px. Both bounds matter: the
+       floor keeps the centre figure legible when the card is a phone-width
+       column, and the ceiling stops a 1920px dashboard rendering a dinner
+       plate. `flex-shrink` had to go with the fixed width — with it, the donut
+       would refuse to give the legend room as the card narrows.
+
+       R-078: sized from the *card's* width via flex, not from the viewport. A
+       container-sized component never branches on the screen. */
     .dora-donut {
-        width: 132px;
-        height: 132px;
-        flex-shrink: 0;
+        flex: 0 1 auto;
+        width: clamp(132px, 42%, 220px);
+        height: auto;
+        aspect-ratio: 1;
+        min-width: 132px;
         transform: rotate(-90deg);
     }
     .dora-donut-track {

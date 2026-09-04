@@ -4,10 +4,11 @@
     <q-page class="reports-page">
         <header class="reports-header">
             <div class="reports-title-block">
-                <h1 class="reports-title">Reports</h1>
                 <!-- §4.10.1 — the page opens with the answer, not the caveat.
                      The "estimates pulled from…" disclaimer that used to sit
-                     here is now an info icon beside the range control. -->
+                     here is now an info icon beside the range control. The
+                     "Reports" <h1> was dropped (owner, 2026-09-04): the nav
+                     already says where you are. -->
                 <ReportsLede
                     v-if="moneyEnabled"
                     :range="range"
@@ -26,7 +27,7 @@
                 <q-icon :name="ICONS.info" size="18px" class="reports-caveat">
                     <q-tooltip>
                         Built from your archived shopping lists, stock history and
-                        tracked store prices. Estimates, not accounting.
+                        tracked store prices.
                     </q-tooltip>
                 </q-icon>
             </div>
@@ -536,11 +537,6 @@
         margin-bottom: var(--space-6);
     }
     .reports-title-block { flex: 1; min-width: 280px; }
-    .reports-title {
-        margin: 0;
-        font-size: calc(var(--font-size-2xl) * 1rem);
-        font-weight: 700;
-    }
     .reports-range {
         display: flex;
         align-items: center;

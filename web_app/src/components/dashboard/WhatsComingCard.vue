@@ -264,8 +264,19 @@
     .dora-cal-dot.dot-expiry {
         background: var(--semantic-negative);
     }
+    /* Owner 2026-09-04 — *"meals and shopping are too similar in colour"*. He
+       is right, and it was theme-dependent rather than an oversight: meals take
+       `--semantic-positive` (a green), shopping took `--brand-primary`, and on
+       the themes whose brand tone is itself green the two dots were nearly the
+       same swatch. Three categories on one cell need three *categorical*
+       colours, not two semantics and a brand.
+
+       `--semantic-info` is the fix: a blue in every theme, defined right beside
+       the positive and negative these sit with, so the trio stays separable
+       under any palette. Not a `--chart-*` ramp entry — those are for series in
+       a chart, and these three are a fixed legend (D-001). */
     .dora-cal-dot.dot-shopping {
-        background: var(--brand-primary);
+        background: var(--semantic-info);
     }
     .dora-cal-hint {
         margin-top: var(--space-3);

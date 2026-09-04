@@ -10,6 +10,54 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-835 — Kitchen health's "Stocktake" component scores an activity, not a health signal
+- **Raised:** 2026-09-02 (dashboard chunk 1 — split out of [[FU-823]])
+- **Type:** finding (scoring semantics; owner-flavoured)
+- **What:** the stocktake component is *% of stock items whose `last_checked_at`
+  falls in the last 30 days* (`get_dora_score.py:186-191`). A household that did
+  a full stocktake 40 days ago and has changed nothing since scores **0** on that
+  component and drags the composite down by a fifth — for having a stable,
+  accurate pantry. The reason string says it out loud: *"Nothing has been checked
+  in the last 30 days."* The other four components all measure **events that went
+  wrong** (waste logged, items expired, unplanned run-outs, over budget); this one
+  measures **an activity not performed**. It is the only component that is a nag
+  rather than a signal, and it is the one most likely to make a careful user
+  distrust the score.
+- **Why it isn't the threshold swap the review assumed:** `DASHBOARD_PAGE_REVIEW.md`
+  §8 D5 folded this into FU-823 as "score against the install's configured
+  cadence rather than a hard 30 days". Reading the settings shows why that is
+  wrong: cadence is **per-item**, not install-wide —
+  `stocktake_default_cadence_band` is only the default band, and
+  `stocktake_auto_tuning_enabled` moves individual items between bands from their
+  own history. So the honest version is *"% of items checked within **their own**
+  cadence window"*, which needs the per-item band resolved inside the score
+  handler. That is a scoring-semantics change to a champion-plan feature
+  (P8-08), not a constant edit.
+- **Also worth deciding while in there:** whether a *never-stocktaked* install
+  should score 0 or be **dormant** on this component. Today a household that has
+  never opted into stocktake still gets scored on it, which is the R-029
+  "respect the off-state" question in miniature — and `stocktake_enabled` exists
+  to answer it.
+- **Recommended resolution:** opportunistic, or whenever the Dora Score is next
+  open. Not urgent — the score is honest about what it measured, it is just
+  measuring the wrong thing for one component out of five. Cross-ref:
+  `DASHBOARD_PAGE_REVIEW.md` §3.7.2 + §8 D5, [[FU-823]] (resolved), R-029.
+
+- **RESOLVED 2026-09-04 (dashboard feedback batch):** cut, not retuned.
+  The owner asked the broader question this FU was a special case of —
+  *"Run-outs seems like an odd metric to base kitchen health on. Are we sure
+  we have the best set of metrics for this score? We want it to be useful,
+  not fluff/bloat."* — and the answer applied to both: `stocktake` scored an
+  activity, and `runouts` only fired for households that log consumption, so
+  it graded logging too. Both keys are gone from
+  `DoraScoreComponentKey`; `plan_adherence` and `plan_coverage` replaced them
+  (outcomes, not diligence). The per-item-cadence version this FU scoped is
+  therefore **not** wanted — the component it would have fixed no longer
+  exists, and reintroducing it would re-open the same objection.
+  `test_dora_score.py::TestRetiredComponents` pins both keys as gone.
+
+---
+
 ## [RESOLVED] FU-709 — Every dark theme's authored `--surface-page` never actually paints
 - **Raised:** 2026-08-21 (stock-item detail feedback batch — chased the "odd dark green" header)
 - **Type:** finding.

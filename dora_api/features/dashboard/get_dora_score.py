@@ -19,7 +19,7 @@ if it ever wants to answer "how's the kitchen doing?" honestly.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from flask import session
@@ -33,18 +33,21 @@ from dora_api.domain.dora_score import (
     lagged_window_start,
     window_start,
 )
-from dora_api.domain.entities.consumption_event import ConsumptionEvent
-from dora_api.domain.entities.shopping_list import (
-    ShoppingList,
-    ShoppingListLine,
-    SHOPPING_LIST_STATUS_DONE,
-)
+from dora_api.domain.entities.meal_plan_entry import MealPlanEntry
+from dora_api.domain.entities.meal_plan_reconcile_receipt import \
+    MealPlanReconcileReceipt
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.entities.stock_item_waste_event import StockItemWasteEvent
 from dora_api.domain.entities.user import User
-from dora_api.domain.stock_status import OUT_OF_STOCK_SEQUENCE
 from dora_api.features.app_settings.access import money_features_enabled
+from dora_api.features.app_settings.clock import household_today
 from dora_api.features.budget.budget import GetBudgetStatusHandler
+# The reconcile feature owns what "still pending" means and whether the
+# household reconciles by hand; plan adherence reads both rather than
+# re-deriving either.
+from dora_api.features.meal_plans.reconcile import (_auto_drain_enabled,
+                                                    _pending_states)
+from dora_api.features.recipes.get_recipes import load_recipe_cookability
 from dora_api.features.routers import DASHBOARD_ROUTER
 from dora_api.infrastructure.api_response import ok, unauthorized
 from dora_api.persistence.field import EntityField
@@ -91,6 +94,58 @@ class GetDoraScoreHandler:
         else:
             start = window_start(now)
             end = now
+
+        # ── Plan coverage ─────────────────────────────────────────
+        # Of the meals planned for the next 7 days, how many the pantry can
+        # cook right now. Deliberately forward-looking and therefore identical
+        # in both windows — see `_score_plan_coverage` for why that is the
+        # accepted trade.
+        #
+        # ⚠️ **This runs first, and it has to.** `load_recipe_cookability`
+        # eager-loads `RecipeIngredient → StockItem → StockLevel`, and
+        # `StockItem.stock_level` is `lazy="noload"`. If anything has already
+        # pulled those StockItem rows into the session — and the Freshness
+        # block below does exactly that, with a bare `get(StockItem).all()` —
+        # the identity map hands back the cached instances and the eager load
+        # silently does not populate `stock_level`. Every linked ingredient
+        # then looks unstocked, so `missing_count` is non-zero for every
+        # recipe and coverage scores 0.
+        #
+        # That is the same trap `_level_access.py` was written for (R-032), and
+        # it is invisible: the endpoint returns 200 and the card renders a
+        # confident, wrong number. Found in the 2026-09-04 browser walk, where
+        # the card claimed "None of your 6 planned meals can be cooked right
+        # now" beside a Next-to-cook card offering to cook five of them.
+        #
+        # Cookability comes from the shared map (R-003), the same one the
+        # dashboard summary's per-entry `missing_count` reads. An entry whose
+        # recipe has unlinked ingredients or no ingredients at all is excluded
+        # from both counts: its cookability is genuinely unknown, and scoring
+        # "unknown" as "can't" would mark a household down for not having
+        # linked its recipes yet.
+        upcoming_planned_meals = 0
+        upcoming_cookable_meals = 0
+        if not lagged:
+            cookability = load_recipe_cookability(self.repository)
+            today = household_today(self.repository)
+            week_ahead = today + timedelta(days=7)
+            mpe_scheduled = EntityField(
+                MealPlanEntry, MealPlanEntry.Fields.SCHEDULED_FOR,
+            )
+            upcoming: list[MealPlanEntry] = (
+                self.repository.get(MealPlanEntry)
+                .include(MealPlanEntry.Fields.RECIPE)
+                .all(mpe_scheduled.between(today, week_ahead))
+            )
+            for entry in upcoming:
+                missing, ingredient_count, unlinked = cookability.get(
+                    entry.recipe.id, (0, 0, 0)
+                )
+                if ingredient_count == 0 or unlinked > 0:
+                    continue
+                upcoming_planned_meals += 1
+                if missing == 0:
+                    upcoming_cookable_meals += 1
 
         # ── Waste ──────────────────────────────────────────────────
         waste_field = EntityField(
@@ -143,65 +198,39 @@ class GetDoraScoreHandler:
             if s.expiry_date is not None and s.expiry_date <= as_of
         )
 
-        # ── Unplanned run-outs ────────────────────────────────────
-        # Every ConsumptionEvent in the window that landed the item
-        # AT OUT_OF_STOCK (to_sequence == 2). "Unplanned" = no
-        # ShoppingListLine on an *active* (not-done) list for that
-        # stock_item at the moment the event happened.
-        ce_occurred_at = EntityField(
-            ConsumptionEvent, ConsumptionEvent.Fields.OCCURRED_AT,
-        )
-        ce_to_seq = EntityField(
-            ConsumptionEvent, ConsumptionEvent.Fields.TO_SEQUENCE,
-        )
-        runout_events: list[ConsumptionEvent] = self.repository.get(ConsumptionEvent).all(
-            ce_occurred_at.gte(start)
-            & ce_occurred_at.lt(end)
-            & ce_to_seq.eq(OUT_OF_STOCK_SEQUENCE)
-        )
-        unplanned_runout_count = 0
-        if runout_events:
-            # Bulk-fetch the active-list line coverage set: every
-            # (stock_item_id) that has a line on any non-done list.
-            # Simpler than a per-event date-scoped query and honest
-            # enough — if you have the item on any active list, that
-            # counts as "planned". The false-positive rate (an item
-            # on a done list from months ago) is captured by the
-            # list-status filter.
-            active_lists: list[ShoppingList] = self.repository.get(ShoppingList).all(
-                EntityField(ShoppingList, ShoppingList.Fields.STATUS)
-                .ne(SHOPPING_LIST_STATUS_DONE)
-            )
-            active_list_ids = [l.id for l in active_lists]
-            planned_stock_item_ids: set[UUID] = set()
-            if active_list_ids:
-                lines: list[ShoppingListLine] = self.repository.get(ShoppingListLine).all(
-                    EntityField(
-                        ShoppingListLine,
-                        ShoppingListLine.Fields.SHOPPING_LIST_ID,
-                    ).in_(active_list_ids)
-                )
-                planned_stock_item_ids = {
-                    l.stock_item_id for l in lines if l.stock_item_id is not None
-                }
-            for event in runout_events:
-                if event.stock_item_id is None:
-                    # Denormalised event whose FK went away (SET NULL
-                    # on stock-item delete). Count as unplanned — the
-                    # user did run out, we just can't check coverage.
-                    unplanned_runout_count += 1
-                elif event.stock_item_id not in planned_stock_item_ids:
-                    unplanned_runout_count += 1
+        # The unplanned-run-out and stocktake gathers were removed with their
+        # components (owner review, 2026-09-04 — see the note on
+        # `DoraScoreComponentKey`). Both cost a query and a scan on every
+        # dashboard load for a signal that graded how diligently the app was
+        # used rather than how the kitchen was doing. `ConsumptionEvent` keeps
+        # its other readers (pantry belief, the stock-item history); nothing is
+        # orphaned by this.
 
-        # ── Stocktake ─────────────────────────────────────────────
-        # % of stock items whose last_checked_at falls inside the
-        # window. Fresh installs (total==0) → excluded upstream.
-        total_stock_items = len(stock_items)
-        items_checked_in_window = sum(
-            1 for s in stock_items
-            if s.last_checked_at is not None
-            and start <= s.last_checked_at < end
-        )
+        # ── Plan adherence ────────────────────────────────────────
+        # Of the meals planned inside the window whose day has passed, how many
+        # are still unresolved on the reconcile queue.
+        #
+        # Both counts are window-scoped so the ratio compares like with like —
+        # `reconcile_overdue_signal` counts the whole backlog, which is the
+        # right number for an overdue *nudge* and the wrong one for a rate. The
+        # definition of "pending" is not re-invented here: `_pending_states` +
+        # `_auto_drain_enabled` are imported from the reconcile feature, so a
+        # change to what counts as settled moves this score with it (R-003).
+        manual_reconcile = not _auto_drain_enabled()
+        past_planned_meals = 0
+        unresolved_past_meals = 0
+        if manual_reconcile:
+            mpe_scheduled = EntityField(
+                MealPlanEntry, MealPlanEntry.Fields.SCHEDULED_FOR,
+            )
+            past_entries: list[MealPlanEntry] = self.repository.get(MealPlanEntry).all(
+                mpe_scheduled.gte(start.date()) & mpe_scheduled.lt(end.date())
+            )
+            past_planned_meals = len(past_entries)
+            if past_entries:
+                unresolved_past_meals = self._unresolved_among(
+                    [e.id for e in past_entries]
+                )
 
         return DoraScoreInputs(
             now=now,
@@ -210,11 +239,44 @@ class GetDoraScoreHandler:
             budget_over_pct=budget_over_pct,
             expired_item_count=expired_item_count,
             total_items_with_expiry=total_items_with_expiry,
-            unplanned_runout_count=unplanned_runout_count,
-            items_checked_in_window=items_checked_in_window,
-            total_stock_items=total_stock_items,
+            past_planned_meals=past_planned_meals,
+            unresolved_past_meals=unresolved_past_meals,
+            manual_reconcile=manual_reconcile,
+            upcoming_planned_meals=upcoming_planned_meals,
+            upcoming_cookable_meals=upcoming_cookable_meals,
             money_enabled=money_enabled,
         )
+
+    def _unresolved_among(self, entry_ids: list[UUID]) -> int:
+        """How many of these entries' *latest* receipts are still pending.
+
+        Latest-per-entry, not any-receipt: an entry that was disputed and then
+        settled has two receipts, and counting the old one would keep it
+        unresolved forever. The `(created_at, id)` ordering matches
+        `_latest_receipt` in the reconcile feature (FU-529), so both surfaces
+        agree on which receipt is current.
+
+        An entry with **no** receipt at all is not counted: the sweep writes
+        one when the day passes, so no receipt means the sweep hasn't run for
+        that day yet — Dora's lag, not the household's.
+        """
+        pending = set(_pending_states(_auto_drain_enabled()))
+        receipts: list[MealPlanReconcileReceipt] = self.repository.get(
+            MealPlanReconcileReceipt
+        ).all(
+            EntityField(
+                MealPlanReconcileReceipt,
+                MealPlanReconcileReceipt.Fields.MEAL_PLAN_ENTRY_ID,
+            ).in_(entry_ids)
+        )
+        latest: dict[UUID, MealPlanReconcileReceipt] = {}
+        for receipt in receipts:
+            current = latest.get(receipt.meal_plan_entry_id)
+            if current is None or (receipt.created_at, str(receipt.id)) > (
+                current.created_at, str(current.id)
+            ):
+                latest[receipt.meal_plan_entry_id] = receipt
+        return sum(1 for r in latest.values() if r.state in pending)
 
 
 def _current_user_id() -> UUID | None:

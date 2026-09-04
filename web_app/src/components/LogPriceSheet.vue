@@ -1,9 +1,10 @@
 <template>
     <!--
         FU-300 — dashboard quick-action "Log a price" surface. Two-step:
-          1. Pick a stock item (same shortlist ordering as QuickAddSheet —
-             frequently-added first, then low/out — so the muscle memory
-             carries over).
+          1. Pick a stock item. Shortlist = most-recently-priced first, then
+             low/out as the top-up (owner, 2026-09-04). It reads like
+             QuickAddSheet's shortlist but keys off the right history: what you
+             last *priced*, not what you most often add to a list.
           2. Log the price via the shared PriceEntry component (shelf mode,
              prefilled from the item's last observation).
         Mounted once in MainLayout; any screen pops it via
@@ -100,7 +101,9 @@
     import { storeToRefs } from 'pinia';
     import type { PriceEntryPrefill } from 'src/models/stockItemDetail';
     import type { StockItem } from 'src/models/stockItem';
-    import StockItemApiService from 'src/services/api/stockItemApiService';
+    import StockItemApiService, {
+        type RecentlyPricedItem,
+    } from 'src/services/api/stockItemApiService';
     import { useLogPrice } from 'src/composables/useLogPrice';
     import { useStockItemStore } from 'src/stores/stockItemStore';
     import { useStockLevelStore } from 'src/stores/stockLevelStore';
@@ -140,17 +143,36 @@
         return stockLevels.value.find((l) => l.stock_level_id === id)?.name ?? 'No level set';
     }
 
+    // Cached on each sheet-open: the items you logged a price for most
+    // recently, server-ordered (`/stock-items/recently-priced`). Price logging
+    // is bursty and repetitive, so "what did I price last?" beats stock level
+    // as the opening guess (owner, 2026-09-04). Best-effort — an empty list
+    // just leaves the old low/out ordering in charge.
+    const recentlyPriced = ref<RecentlyPricedItem[]>([]);
+
     const results = computed(() => {
         const q = query.value?.trim().toLowerCase() ?? '';
         const items = [...stockItems.value];
         if (q) {
             return items.filter((i) => i.name.toLowerCase().includes(q)).slice(0, 30);
         }
-        // No query: lead with the most-restock-relevant (low/out first) so
-        // "the thing I just bought that was running low" is one tap away.
-        return items
-            .sort((a, b) => levelSequence(b.stock_level_id) - levelSequence(a.stock_level_id))
-            .slice(0, 12);
+        // No query: lead with most-recently-priced, then top up with the
+        // most-restock-relevant (low/out first) so a household that has never
+        // logged a price still gets a useful shortlist.
+        const lookup = new Map(items.map((i) => [i.stock_item_id, i]));
+        const seen = new Set<string>();
+        const ordered: StockItem[] = [];
+        for (const r of recentlyPriced.value) {
+            const item = lookup.get(r.stock_item_id);
+            if (item && !seen.has(item.stock_item_id)) {
+                ordered.push(item);
+                seen.add(item.stock_item_id);
+            }
+        }
+        const remaining = items
+            .filter((i) => !seen.has(i.stock_item_id))
+            .sort((a, b) => levelSequence(b.stock_level_id) - levelSequence(a.stock_level_id));
+        return [...ordered, ...remaining].slice(0, 12);
     });
 
     async function selectItem(item: StockItem) {
@@ -215,6 +237,16 @@
             stockItemStore.ensureLoadedAsync(),
             stockLevelStore.ensureLoadedAsync(),
             storesStore.ensureLoadedAsync(),
+            // Best-effort: failure shouldn't block the sheet, so swallow it and
+            // fall back to the low/out ordering.
+            stockItemApi
+                .getRecentlyPricedAsync(12)
+                .then((items) => {
+                    recentlyPriced.value = items;
+                })
+                .catch(() => {
+                    recentlyPriced.value = [];
+                }),
         ]);
         if (presetStockItemId.value) {
             const preset = stockItems.value.find(

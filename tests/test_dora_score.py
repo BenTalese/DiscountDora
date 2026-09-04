@@ -23,7 +23,13 @@ NOW = datetime(2026, 7, 4, 12, 0, 0)
 
 def _healthy_inputs(**overrides) -> DoraScoreInputs:
     """A fully-scored, healthy household — all five signals apply and
-    all five are at 100. Override individual fields per test."""
+    all five are at 100. Override individual fields per test.
+
+    `manual_reconcile=True` so plan adherence *is* scored by default: the
+    fixture's job is a household where every component applies, and in
+    auto-drain mode adherence is deliberately excluded (see
+    `TestPlanAdherence`).
+    """
     base = dict(
         now=NOW,
         waste_event_count=0,
@@ -31,9 +37,11 @@ def _healthy_inputs(**overrides) -> DoraScoreInputs:
         budget_over_pct=-0.10,  # 10% UNDER budget
         expired_item_count=0,
         total_items_with_expiry=15,
-        unplanned_runout_count=0,
-        items_checked_in_window=30,
-        total_stock_items=30,
+        past_planned_meals=20,
+        unresolved_past_meals=0,
+        manual_reconcile=True,
+        upcoming_planned_meals=10,
+        upcoming_cookable_meals=10,
     )
     base.update(overrides)
     return DoraScoreInputs(**base)
@@ -72,8 +80,8 @@ class TestMoneyGate:
         assert _keys(dto) == {
             DoraScoreComponentKey.WASTE,
             DoraScoreComponentKey.FRESHNESS,
-            DoraScoreComponentKey.RUNOUTS,
-            DoraScoreComponentKey.STOCKTAKE,
+            DoraScoreComponentKey.PLAN_ADHERENCE,
+            DoraScoreComponentKey.PLAN_COVERAGE,
         }
         assert dto.composite == 100
 
@@ -121,19 +129,22 @@ class TestComposite:
         assert _component(dto, DoraScoreComponentKey.BUDGET).score is None
 
     def test__brand_new_install_returns_None_composite(self):
-        # No budget, no expiry, no stock items → nothing to score.
+        # No budget, no expiry dates, nothing planned either way → only waste
+        # has anything to say.
         dto = compute_score(_healthy_inputs(
             has_budget=False, budget_over_pct=None,
             total_items_with_expiry=0, expired_item_count=0,
-            total_stock_items=0, items_checked_in_window=0,
-            waste_event_count=0, unplanned_runout_count=0,
+            past_planned_meals=0, unresolved_past_meals=0,
+            upcoming_planned_meals=0, upcoming_cookable_meals=0,
+            waste_event_count=0,
         ))
-        # Waste (0 events → 100) and run-outs (0 → 100) still apply
-        # because they always do (no data ≠ excluded — the absence of
-        # events IS the signal). Composite is 100 from those two.
+        # Waste (0 events → 100) still applies because it always does: no data
+        # ≠ excluded — the absence of waste events IS the signal. Composite is
+        # 100 from that one.
         assert dto.composite == 100
         assert _component(dto, DoraScoreComponentKey.FRESHNESS).score is None
-        assert _component(dto, DoraScoreComponentKey.STOCKTAKE).score is None
+        assert _component(dto, DoraScoreComponentKey.PLAN_ADHERENCE).score is None
+        assert _component(dto, DoraScoreComponentKey.PLAN_COVERAGE).score is None
         assert _component(dto, DoraScoreComponentKey.BUDGET).score is None
 
     def test__all_dormant_returns_None_composite(self):
@@ -231,45 +242,108 @@ class TestFreshness:
 # ── Run-outs ─────────────────────────────────────────────────────────
 
 @pytest.mark.unit
-class TestRunouts:
-    def test__zero_unplanned_scores_100(self):
-        dto = compute_score(_healthy_inputs(unplanned_runout_count=0))
-        assert _component(dto, DoraScoreComponentKey.RUNOUTS).score == 100
+class TestPlanAdherence:
+    """Of the planned meals that came due in the window, how many are settled.
 
-    def test__three_unplanned_scores_70(self):
-        dto = compute_score(_healthy_inputs(unplanned_runout_count=3))
-        assert _component(dto, DoraScoreComponentKey.RUNOUTS).score == 70
+    Replaced `TestRunouts` (owner review, 2026-09-04). Run-outs scored "you ran
+    out of something that wasn't on a list", which only fires for households
+    that log consumption — it graded logging, not the kitchen.
+    """
 
-    def test__ten_unplanned_scores_0(self):
-        dto = compute_score(_healthy_inputs(unplanned_runout_count=10))
-        assert _component(dto, DoraScoreComponentKey.RUNOUTS).score == 0
+    def test__auto_drain_excludes_component(self):
+        """Dora settles past meals herself in auto mode, so there is no
+        adherence to grade. Excluded, not 100 — a component that reads perfect
+        for everyone is exactly the fluff this review was cutting."""
+        dto = compute_score(_healthy_inputs(manual_reconcile=False))
+        component = _component(dto, DoraScoreComponentKey.PLAN_ADHERENCE)
+        assert component.score is None
+        assert "settles past meals for you" in component.reason
 
+    def test__no_meals_came_due_excludes_component(self):
+        dto = compute_score(_healthy_inputs(past_planned_meals=0))
+        assert _component(dto, DoraScoreComponentKey.PLAN_ADHERENCE).score is None
 
-# ── Stocktake ────────────────────────────────────────────────────────
+    def test__everything_settled_scores_100(self):
+        dto = compute_score(_healthy_inputs(
+            past_planned_meals=12, unresolved_past_meals=0,
+        ))
+        assert _component(dto, DoraScoreComponentKey.PLAN_ADHERENCE).score == 100
+
+    def test__half_unresolved_scores_50(self):
+        dto = compute_score(_healthy_inputs(
+            past_planned_meals=10, unresolved_past_meals=5,
+        ))
+        assert _component(dto, DoraScoreComponentKey.PLAN_ADHERENCE).score == 50
+
+    def test__nothing_settled_scores_0(self):
+        dto = compute_score(_healthy_inputs(
+            past_planned_meals=8, unresolved_past_meals=8,
+        ))
+        assert _component(dto, DoraScoreComponentKey.PLAN_ADHERENCE).score == 0
+
+    def test__more_unresolved_than_due_clamps_at_0(self):
+        """Defensive: the two counts come from separate queries, so a race
+        (the sweep writing a receipt mid-gather) could in principle make the
+        numerator exceed the denominator. It must not produce a negative."""
+        dto = compute_score(_healthy_inputs(
+            past_planned_meals=3, unresolved_past_meals=9,
+        ))
+        assert _component(dto, DoraScoreComponentKey.PLAN_ADHERENCE).score == 0
+
 
 @pytest.mark.unit
-class TestStocktake:
-    def test__no_stock_items_excludes_component(self):
-        dto = compute_score(_healthy_inputs(total_stock_items=0, items_checked_in_window=0))
-        c = _component(dto, DoraScoreComponentKey.STOCKTAKE)
-        assert c.score is None
+class TestPlanCoverage:
+    """Of the meals planned for the week ahead, how many the pantry can cook.
 
-    def test__all_checked_scores_100(self):
-        dto = compute_score(_healthy_inputs(total_stock_items=20, items_checked_in_window=20))
-        assert _component(dto, DoraScoreComponentKey.STOCKTAKE).score == 100
+    Replaced `TestStocktake`, which scored "% of items checked in 30 days" —
+    an activity metric, and the substance of FU-835.
+    """
 
-    def test__half_checked_scores_50(self):
-        dto = compute_score(_healthy_inputs(total_stock_items=20, items_checked_in_window=10))
-        assert _component(dto, DoraScoreComponentKey.STOCKTAKE).score == 50
+    def test__nothing_planned_excludes_component(self):
+        dto = compute_score(_healthy_inputs(upcoming_planned_meals=0))
+        component = _component(dto, DoraScoreComponentKey.PLAN_COVERAGE)
+        assert component.score is None
+        assert "Nothing planned" in component.reason
 
-    def test__nothing_checked_scores_0(self):
-        dto = compute_score(_healthy_inputs(total_stock_items=20, items_checked_in_window=0))
-        c = _component(dto, DoraScoreComponentKey.STOCKTAKE)
-        assert c.score == 0
-        assert "nothing has been checked" in c.reason.lower()
+    def test__all_cookable_scores_100(self):
+        dto = compute_score(_healthy_inputs(
+            upcoming_planned_meals=7, upcoming_cookable_meals=7,
+        ))
+        assert _component(dto, DoraScoreComponentKey.PLAN_COVERAGE).score == 100
+
+    def test__half_cookable_scores_50(self):
+        dto = compute_score(_healthy_inputs(
+            upcoming_planned_meals=8, upcoming_cookable_meals=4,
+        ))
+        assert _component(dto, DoraScoreComponentKey.PLAN_COVERAGE).score == 50
+
+    def test__none_cookable_scores_0(self):
+        dto = compute_score(_healthy_inputs(
+            upcoming_planned_meals=6, upcoming_cookable_meals=0,
+        ))
+        component = _component(dto, DoraScoreComponentKey.PLAN_COVERAGE)
+        assert component.score == 0
+        assert "None of your 6 planned meals" in component.reason
 
 
-# ── Trend ────────────────────────────────────────────────────────────
+@pytest.mark.unit
+class TestRetiredComponents:
+    """The two cut signals must not come back by accident.
+
+    A registry of scored things drifts silently — that is the lesson the
+    dashboard's own `DEFAULT_VISIBLE_COUNT` had to learn — so the closed set is
+    asserted rather than assumed.
+    """
+
+    def test__runouts_and_stocktake_are_gone(self):
+        assert not hasattr(DoraScoreComponentKey, "RUNOUTS")
+        assert not hasattr(DoraScoreComponentKey, "STOCKTAKE")
+
+    def test__exactly_five_keys(self):
+        assert {k.value for k in DoraScoreComponentKey} == {
+            "waste", "budget", "freshness", "plan_adherence", "plan_coverage",
+        }
+
 
 @pytest.mark.unit
 class TestTrend:
@@ -293,7 +367,7 @@ class TestTrend:
 
     def test__tiny_drift_is_flat(self):
         # A 1-point delta is inside the ±2 hysteresis band — noise.
-        current = self._score(unplanned_runout_count=0)
+        current = self._score(waste_event_count=0)
         # Approximate a small delta by contriving a mostly-identical input;
         # we can't get exactly 1-point unless the mean lands there, so
         # test the boundary condition directly: if delta is 0 → flat.

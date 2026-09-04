@@ -1,7 +1,7 @@
 """P8-08 — The Dora Score.
 
 A single, honest, explainable kitchen-health metric derived from five
-signals over a rolling 30-day window (§P8-08 in
+signals — four over a rolling 30-day window, one over the week ahead (§P8-08 in
 ``docs/01_charter/DASHY_DORA_CHAMPION_PLAN.md``). Renders on the
 dashboard as one composite number + a per-component breakdown + a
 trend arrow (score vs. same score computed 7 days ago).
@@ -50,12 +50,38 @@ DORA_SCORE_TREND_LAG_DAYS = 7
 
 class DoraScoreComponentKey(str, Enum):
     """R-010 closed set. Same keys are used on the wire and by the SPA
-    to route each component to a remediating action."""
+    to route each component to a remediating action.
+
+    **Owner review, 2026-09-04.** He asked whether these were the right
+    signals: *"Run-outs seems like an odd metric to base kitchen health on.
+    Are we sure we have the best set of metrics for this score? We want it to
+    be useful, not fluff/bloat."* Two were cut, two added, on one test — does
+    the component measure a **kitchen outcome**, or does it measure **how
+    diligently you use the app**?
+
+      RUNOUTS (cut)    scored "you ran out of something that wasn't on a
+                       list". Defensible in principle — a well-run kitchen
+                       isn't surprised — but it only fires for households
+                       that log consumption, so it graded logging, and it
+                       punished a household for running a pantry deliberately
+                       tight. FU-835 had already made the same case about its
+                       neighbour.
+      STOCKTAKE (cut)  scored "% of items you checked in the last 30 days",
+                       which is entirely an activity metric: doing a stocktake
+                       does not make the kitchen healthier, it makes Dora's
+                       picture of it more accurate. That is FU-835 verbatim,
+                       and cutting it resolves that follow-up.
+      PLAN_ADHERENCE   did what you planned actually get cooked? Only scored
+      (new)            in manual reconcile mode — see `_score_plan_adherence`.
+      PLAN_COVERAGE    can your pantry actually cook the week you planned?
+      (new)            The one forward-looking signal: every other component
+                       grades the last 30 days, this one grades the next 7.
+    """
     WASTE = "waste"
     BUDGET = "budget"
     FRESHNESS = "freshness"
-    RUNOUTS = "runouts"
-    STOCKTAKE = "stocktake"
+    PLAN_ADHERENCE = "plan_adherence"
+    PLAN_COVERAGE = "plan_coverage"
 
 
 @dataclass(frozen=True, slots=True)
@@ -120,16 +146,24 @@ class DoraScoreInputs:
     # signal is dormant and excluded.
     expired_item_count: int
     total_items_with_expiry: int
-    # Unplanned run-outs — ConsumptionEvents in the window where the
-    # to_sequence hit OUT_OF_STOCK, filtered to items that had NO
-    # ShoppingListLine on any active list at that moment. The
-    # gathering happens in the handler; the core just uses the count.
-    unplanned_runout_count: int
-    # Stocktake — items with ``last_checked_at`` within the window,
-    # over total tracked items. If total_items==0 the signal is
-    # excluded (brand-new install).
-    items_checked_in_window: int
-    total_stock_items: int
+    # Plan adherence — of the planned meals whose day has passed inside the
+    # window, how many are still sitting unresolved on the reconcile queue.
+    # Both counts are window-scoped by the handler, so the ratio is a
+    # like-for-like "of what came due, how much did you settle".
+    past_planned_meals: int
+    unresolved_past_meals: int
+    # Whether the household reconciles by hand. In auto-drain mode Dora
+    # settles past meals herself, so there is no adherence to grade and the
+    # component is excluded — the owner's own framing: count it *"if in manual
+    # mode"*.
+    manual_reconcile: bool
+    # Plan coverage — of the meals planned for the next 7 days, how many the
+    # pantry can currently cook (no missing ingredients). Entries whose
+    # cookability is unknown (unlinked ingredients, empty recipe) are excluded
+    # from BOTH counts by the handler rather than being scored as failures:
+    # "I can't tell" is not "you can't cook it".
+    upcoming_planned_meals: int
+    upcoming_cookable_meals: int
     # FU-823 / R-058 — whether this install has money features on.
     #
     # The budget signal reasons entirely in money, so on a money-off install it
@@ -159,8 +193,8 @@ def compute_score(inputs: DoraScoreInputs) -> DoraScoreDto:
         components.append(_score_budget(inputs))
     components.extend([
         _score_freshness(inputs),
-        _score_runouts(inputs),
-        _score_stocktake(inputs),
+        _score_plan_adherence(inputs),
+        _score_plan_coverage(inputs),
     ])
     composite = _composite_of(components)
     return DoraScoreDto(
@@ -278,48 +312,83 @@ def _score_freshness(inputs: DoraScoreInputs) -> DoraScoreComponent:
     )
 
 
-def _score_runouts(inputs: DoraScoreInputs) -> DoraScoreComponent:
-    # "Unplanned" = item hit Out with no ShoppingListLine active for
-    # it at the time. The gathering lives server-side (handler); we
-    # score the count. Zero = 100; each unplanned costs 10 points.
-    # Same 10-point step as waste for symmetry.
-    count = inputs.unplanned_runout_count
-    score = max(0, 100 - count * 10)
-    if count == 0:
-        reason = "No unplanned run-outs in the last 30 days."
-    elif count == 1:
-        reason = "1 item ran out without being on a list."
+def _score_plan_adherence(inputs: DoraScoreInputs) -> DoraScoreComponent:
+    """Did the meals you planned actually get settled?
+
+    Scored only in **manual** reconcile mode. With auto-drain on, Dora marks
+    past meals consumed herself and the queue is empty by construction — a
+    component that reads 100 for everyone is fluff, which is exactly what this
+    review was cutting. Excluded rather than perfect (P3 Honest).
+
+    This is also the card's route to the reconcile page: the owner cut the
+    standalone "Reconcile past meals" chip card and asked for *"that metric as
+    the link to go do meal reconciliation"*, so the SPA hangs the action off
+    this component's key.
+    """
+    if not inputs.manual_reconcile:
+        return DoraScoreComponent(
+            key=DoraScoreComponentKey.PLAN_ADHERENCE,
+            label="Plan adherence",
+            score=None,
+            reason="Dora settles past meals for you — nothing to reconcile.",
+        )
+    total = inputs.past_planned_meals
+    if total <= 0:
+        return DoraScoreComponent(
+            key=DoraScoreComponentKey.PLAN_ADHERENCE,
+            label="Plan adherence",
+            score=None,
+            reason="No planned meals have come due in the last 30 days.",
+        )
+    unresolved = max(0, min(inputs.unresolved_past_meals, total))
+    score = int(round(100 - (unresolved / total) * 100))
+    score = max(0, min(100, score))
+    if unresolved == 0:
+        reason = "Every planned meal that came due is settled."
+    elif unresolved == 1:
+        reason = f"1 of {total} planned meals is still waiting to be reconciled."
     else:
-        reason = f"{count} items ran out without being on a list."
+        reason = f"{unresolved} of {total} planned meals are waiting to be reconciled."
     return DoraScoreComponent(
-        key=DoraScoreComponentKey.RUNOUTS,
-        label="Run-outs",
+        key=DoraScoreComponentKey.PLAN_ADHERENCE,
+        label="Plan adherence",
         score=score,
         reason=reason,
     )
 
 
-def _score_stocktake(inputs: DoraScoreInputs) -> DoraScoreComponent:
-    total = inputs.total_stock_items
+def _score_plan_coverage(inputs: DoraScoreInputs) -> DoraScoreComponent:
+    """Can the pantry cook the week you planned?
+
+    The one **forward**-looking component. Every other signal grades the
+    trailing 30 days; this one grades the next 7, which means it contributes
+    nothing to the trend arrow — the lagged recompute sees the same future and
+    returns the same number, so it cancels in the delta. That is a real
+    limitation and it is the right trade: the arrow is a secondary flourish,
+    and "your plan is half-uncookable" is the single most actionable thing this
+    card can say. Anyone re-tuning the trend should know it moves on four
+    signals, not five.
+    """
+    total = inputs.upcoming_planned_meals
     if total <= 0:
         return DoraScoreComponent(
-            key=DoraScoreComponentKey.STOCKTAKE,
-            label="Stocktake",
+            key=DoraScoreComponentKey.PLAN_COVERAGE,
+            label="Plan coverage",
             score=None,
-            reason="No stock items tracked yet.",
+            reason="Nothing planned for the week ahead.",
         )
-    checked = inputs.items_checked_in_window
-    score = int(round((checked / total) * 100))
+    cookable = max(0, min(inputs.upcoming_cookable_meals, total))
+    score = int(round((cookable / total) * 100))
     score = max(0, min(100, score))
-    if checked == total:
-        reason = "Every item was checked in the last 30 days."
-    elif checked == 0:
-        reason = "Nothing has been checked in the last 30 days."
+    if cookable == total:
+        reason = "You can cook everything you've planned this week."
+    elif cookable == 0:
+        reason = f"None of your {total} planned meals can be cooked right now."
     else:
-        reason = f"{checked} of {total} items checked in the last 30 days."
+        reason = f"{cookable} of {total} planned meals can be cooked right now."
     return DoraScoreComponent(
-        key=DoraScoreComponentKey.STOCKTAKE,
-        label="Stocktake",
+        key=DoraScoreComponentKey.PLAN_COVERAGE,
+        label="Plan coverage",
         score=score,
         reason=reason,
     )

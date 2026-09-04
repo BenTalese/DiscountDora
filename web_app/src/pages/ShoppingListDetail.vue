@@ -1570,7 +1570,8 @@
             await api.updateLineAsync(listId.value, lineId, {
                 deferred_by_budget: false,
             });
-            await load();
+            // Quiet — see `onRemoveLine`; the line moves section, the page stays.
+            await refreshAllQuietly();
         } catch (err) {
             $q.notify({
                 type: 'negative',
@@ -1704,7 +1705,8 @@
             trimState.savedApplied = result.trimmed.reduce((s, t) => s + t.saved, 0);
             trimState.state = 'applied';
             trimState.previewLines = [];
-            await load();
+            // Quiet — see `onRemoveLine`; trimming edits the list in place.
+            await refreshDetailQuietly();
             // After apply the list has fewer active lines and totals shift;
             // re-check whether we still overshoot so the banner updates
             // ("still over" fallback vs. done).
@@ -2148,7 +2150,9 @@
             await api.addLineAsync(listId.value, {
                 stock_item_id: suggestion.stock_item_id,
             });
-            await refreshAll();
+            // Quiet — see `onRemoveLine`; adding a suggested line is an in-place
+            // edit, not a navigation.
+            await refreshAllQuietly();
             $q.notify({
                 type: 'positive',
                 position: 'bottom-right',
@@ -2613,7 +2617,11 @@
                     alsoRemoveStockItemId,
                 );
             }
-            await refreshAll();
+            // Quiet, not `refreshAll()`: removing a line is an edit to the list
+            // you are already looking at, not a navigation, so blanking `detail`
+            // flashed the whole page through the skeleton on every remove
+            // (owner, 2026-09-04 — same defect as the 08-29 shop-date report).
+            await refreshAllQuietly();
             // UX-v2 §12 Q4: no undo toast — re-adding is one quick-add away,
             // and the app-wide undo posture is under review (FU-163).
             if (before) {
@@ -2717,7 +2725,8 @@
         if (!ok) return;
         try {
             const result = await api.clearListAsync(listId.value);
-            await refreshAll();
+            // Quiet — see `onRemoveLine`. The list stays; only its lines go.
+            await refreshAllQuietly();
             $q.notify({
                 type: 'positive',
                 position: 'bottom-right',

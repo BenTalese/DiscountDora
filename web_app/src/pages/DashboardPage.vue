@@ -3,6 +3,20 @@
          Document-scroll page (the window scrolls the dashboard); no :style-fn. -->
     <q-page class="dora-dash">
         <!-- ───── Hero band ─────────────────────────────────────────────── -->
+        <!-- Owner 2026-09-04 — "Dora says" was a separate dismissible band
+             directly under this one, with its own 40px mascot. Two problems,
+             both his: the band repeated the mascot standing right beside it
+             ("Dora is literally right there. Seeing double feels a bit odd"),
+             and it was a second card saying a softer version of what the hero
+             already said. So the message moved *into* the hero and the band is
+             gone — which also retires the per-day dismissal (`dashboard_welcome_
+             dismissed_day` + `epochDay`): you can't dismiss half a header, and a
+             message that rotates daily never needed a hide button.
+
+             The factual line under the greeting went with it. It read
+             "N items are out of stock", which the owner called out as pretty
+             useless text to read — the alerts bell and the stock card both
+             already answer that, better. Dora's message is the line now. -->
         <section class="dora-hero">
             <q-avatar size="72px" square class="dora-hero-mascot">
                 <img src="../assets/logo-mascot.png" alt="Dashy Dora" />
@@ -11,7 +25,8 @@
                 <div class="dora-hero-greeting">
                     {{ greeting }}<span v-if="firstName">, {{ firstName }}</span>
                 </div>
-                <div class="dora-hero-line">{{ heroLine }}</div>
+                <div class="dora-hero-line">{{ welcomeMessage }}</div>
+                <div class="dora-hero-hint">{{ welcomeHint }}</div>
             </div>
 
             <q-space />
@@ -25,101 +40,80 @@
                     <q-menu anchor="bottom right" self="top right" transition-show="jump-down" transition-hide="jump-up">
                         <q-list dense style="min-width: 300px">
                             <q-item-label header>Show & order cards</q-item-label>
-                            <!-- Grouped by zone; reorder is within a zone via the
-                                 up/down buttons (C13 tap alternative — works on
-                                 mobile, keyboard-accessible). -->
-                            <template v-for="group in cardsByZone" :key="group.zone.id">
-                                <q-item-label header class="dora-cards-menu-zone">
-                                    {{ group.zone.label }}
-                                </q-item-label>
-                                <q-item
-                                    v-for="card in group.cards"
-                                    :key="card.id"
-                                    :class="cardDnd.bind(card.id).rowClass"
-                                    v-bind="cardDnd.bind(card.id).rowProps"
+                            <!-- One flat list since the owner cut the zones
+                                 (2026-09-04): reorder now spans every card
+                                 rather than being trapped inside a band. The
+                                 up/down buttons are C13's tap-mandatory
+                                 alternative — they work on mobile and from the
+                                 keyboard; drag is the desktop extra. -->
+                            <q-item
+                                v-for="card in menuCards"
+                                :key="card.id"
+                                :class="cardDnd.bind(card.id).rowClass"
+                                v-bind="cardDnd.bind(card.id).rowProps"
+                            >
+                                <!-- desktop-only drag handle. The
+                                     up/down buttons remain (C13's
+                                     tap-mandatory alternative); drag is
+                                     the power-user extra. The handle's
+                                     `draggable` attribute is gated by
+                                     `$q.platform.is.mobile` so touch
+                                     devices keep tap-only. -->
+                                <q-item-section
+                                    v-if="cardDragEnabled"
+                                    avatar
+                                    class="dora-dnd-handle"
+                                    v-bind="cardDnd.bind(card.id).handleProps"
                                 >
-                                    <!-- desktop-only drag handle. The
-                                         up/down buttons remain (C13's
-                                         tap-mandatory alternative); drag is
-                                         the power-user extra. The handle's
-                                         `draggable` attribute is gated by
-                                         `$q.platform.is.mobile` so touch
-                                         devices keep tap-only. -->
-                                    <q-item-section
-                                        v-if="cardDragEnabled"
-                                        avatar
-                                        class="dora-dnd-handle"
-                                        v-bind="cardDnd.bind(card.id).handleProps"
-                                    >
-                                        <q-icon :name="ICONS.drag_indicator" />
-                                        <q-tooltip>Drag to reorder within {{ ZONE_LABEL[card.zone] }}</q-tooltip>
-                                    </q-item-section>
-                                    <q-item-section avatar>
-                                        <q-icon :name="card.icon" />
-                                    </q-item-section>
-                                    <q-item-section>{{ card.label }}</q-item-section>
-                                    <q-item-section side>
-                                        <div class="row items-center no-wrap">
-                                            <BaseButton
-                                                variant="icon"
-                                                size="sm"
-                                                :icon="ICONS.arrow_upward"
-                                                :disable="!canMove(card.id, 'up')"
-                                                @click="moveCard(card.id, 'up')"
-                                            >
-                                                <q-tooltip>Move up</q-tooltip>
-                                            </BaseButton>
-                                            <BaseButton
-                                                variant="icon"
-                                                size="sm"
-                                                :icon="ICONS.arrow_downward"
-                                                :disable="!canMove(card.id, 'down')"
-                                                @click="moveCard(card.id, 'down')"
-                                            >
-                                                <q-tooltip>Move down</q-tooltip>
-                                            </BaseButton>
-                                            <q-toggle
-                                                :model-value="isCardVisible(card.id)"
-                                                @update:model-value="toggleCard(card.id)"
-                                            />
-                                        </div>
-                                    </q-item-section>
-                                </q-item>
-                            </template>
+                                    <q-icon :name="ICONS.drag_indicator" />
+                                    <q-tooltip>Drag to reorder</q-tooltip>
+                                </q-item-section>
+                                <q-item-section avatar>
+                                    <q-icon :name="card.icon" />
+                                </q-item-section>
+                                <q-item-section>{{ card.label }}</q-item-section>
+                                <q-item-section side>
+                                    <div class="row items-center no-wrap">
+                                        <BaseButton
+                                            variant="icon"
+                                            size="sm"
+                                            :icon="ICONS.arrow_upward"
+                                            :disable="!canMove(card.id, 'up')"
+                                            @click="moveCard(card.id, 'up')"
+                                        >
+                                            <q-tooltip>Move up</q-tooltip>
+                                        </BaseButton>
+                                        <BaseButton
+                                            variant="icon"
+                                            size="sm"
+                                            :icon="ICONS.arrow_downward"
+                                            :disable="!canMove(card.id, 'down')"
+                                            @click="moveCard(card.id, 'down')"
+                                        >
+                                            <q-tooltip>Move down</q-tooltip>
+                                        </BaseButton>
+                                        <q-toggle
+                                            :model-value="isCardVisible(card.id)"
+                                            @update:model-value="toggleCard(card.id)"
+                                        />
+                                    </div>
+                                </q-item-section>
+                            </q-item>
                         </q-list>
                     </q-menu>
                 </BaseButton>
             </div>
         </section>
 
-        <!-- Phase 5 quick actions (decision §9): the home screen *does*, not just
-             routes. Lightweight inline dialogs — Add item opens the shared
-             CreateStockItemDialog; Add to list pops the global QuickAddSheet;
-             Log price (FU-300) pops the global LogPriceSheet which picks a
-             stock item first, then hands off to the shared PriceEntry form.
-             Log price is money-gated to match the row-level "Log a price"
-             button (ADR-005). -->
-        <div class="dora-quick-actions">
-            <BaseButton
-                variant="secondary"
-                :icon="ICONS.add"
-                label="Add item"
-                @click="showCreateStockItem = true"
-            />
-            <BaseButton
-                variant="secondary"
-                :icon="ICONS.shopping_cart"
-                label="Add to list"
-                @click="openQuickAdd()"
-            />
-            <BaseButton
-                v-if="moneyEnabled"
-                variant="secondary"
-                :icon="ICONS.cash_plus"
-                label="Log price"
-                @click="openLogPrice()"
-            />
-        </div>
+        <!-- The Phase 5 quick-action bar (Add item · Add to list · Log price)
+             was removed on the owner's call, 2026-09-04. §9's "the home screen
+             *does*, not just routes" is still right, but these three were not
+             how it does it: each opened a dialog reachable from the surface
+             that actually owns the object, and none of them was the thing you
+             came to the dashboard to do. The cards below all carry their own
+             verbs (Cook, Add to list, Use it up), which is doing-not-routing
+             attached to a reason. The dialogs themselves are untouched — the
+             global QuickAddSheet and LogPriceSheet keep every other caller. -->
 
         <!-- FU-840 / §3.13 — the banner carries its own Retry. Its copy used to
              say "Try refreshing", which pointed at the manual refresh button that
@@ -140,12 +134,15 @@
             </template>
         </q-banner>
 
-        <!-- D1: the 24h skip-reminder and the day's welcome share one warm
-             "Dora says" treatment. The skip-reminder (F1) owns the
-             not-yet-finished-onboarding window — its Continue/Hide buttons are
-             now inline (D1b), not on their own row. Once that window lapses or
-             is hidden, the rotating welcome (D1c/d/e) takes over; it replaces
-             the old bottom-right "Dora says" bubble but keeps its look. -->
+        <!-- D1's second band — the rotating "Dora says" welcome — merged into
+             the hero above (see the note there). What survives here is the
+             *first* band: the 24h skip-reminder (F1), which owns the
+             not-yet-finished-onboarding window. It stays because it is not a
+             greeting — it's a one-off state with two verbs, and it genuinely
+             disappears once you finish or hide it.
+
+             Its 40px mascot went the way of the welcome band's, for the same
+             reason: the 72px one is ~60px above it. -->
         <transition name="fade">
             <aside
                 v-if="showSkipReminder"
@@ -153,9 +150,6 @@
                 role="note"
                 aria-label="Finish setup"
             >
-                <q-avatar size="40px" square class="dora-welcome-mascot">
-                    <img src="../assets/logo-mascot.png" alt="" />
-                </q-avatar>
                 <div class="dora-welcome-body">
                     <div class="dora-welcome-line">
                         <strong>Welcome —</strong> you skipped the setup wizard.
@@ -179,34 +173,6 @@
                         />
                     </div>
                 </div>
-            </aside>
-        </transition>
-
-        <transition name="fade">
-            <aside
-                v-if="showWelcome"
-                class="dora-welcome q-mb-md"
-                role="note"
-                aria-label="A note from Dora"
-            >
-                <q-avatar size="40px" square class="dora-welcome-mascot">
-                    <img src="../assets/logo-mascot.png" alt="" />
-                </q-avatar>
-                <div class="dora-welcome-body">
-                    <div class="dora-welcome-line">
-                        <strong>Dora says</strong> · {{ welcomeMessage }}
-                    </div>
-                    <div class="dora-welcome-hint">{{ welcomeHint }}</div>
-                </div>
-                <BaseButton
-                    variant="icon"
-                    size="sm"
-                    :icon="ICONS.close"
-                    aria-label="Hide Dora's note for today"
-                    @click="dismissWelcome"
-                >
-                    <q-tooltip>Hide for today</q-tooltip>
-                </BaseButton>
             </aside>
         </transition>
 
@@ -241,98 +207,89 @@
         <!-- `q-col-gutter-lg` is 24px = `--space-6`, which is what B4 specifies
              between sibling cards; this grid was on `-md` (16px). -->
         <div v-else-if="summary" key="dash-content" class="row q-col-gutter-lg dora-cards">
-            <!-- Zone band headers (Phase 2). Full-width flex items whose CSS
-                 `order` places each just before its zone's cards, forcing a
-                 line break so the cards below read as a labelled band. Shown
-                 only when the zone has at least one visible card. -->
-            <div
-                v-for="z in ZONES"
-                v-show="zoneHasVisibleCards(z.id)"
-                :key="z.id"
-                class="col-12 dora-zone-label"
-                :style="{ order: zoneHeaderOrder(z.id) }"
-            >
-                {{ z.label }}
-            </div>
+            <!-- The zone band headers (Phase 2) are gone with the zones
+                 themselves — owner, 2026-09-04. They were full-width flex items
+                 whose CSS `order` forced a line break before each band; with one
+                 flat user-owned order there is no band to label, and the grid is
+                 a plain run of cards whose parity is computed once. -->
 
-            <!-- ───── Needs your attention (P12) ─────────────────────────── -->
-            <!-- Calm empty-state: renders whenever the card is visible —
-                 an "all clear" state instead of vanishing, so the dashboard
-                 looks best (not emptiest) when nothing's wrong. This is a
-                 different pattern from R-029 (hide-when-off) — a happy zero
-                 isn't an off-state, so the card stays. -->
+            <!-- ───── Next to cook (FU-298; batch-aware since 2026-09-04) ─── -->
             <div
-                v-if="cardRendered('attention')"
-                :class="cardCol('attention')"
-                :style="{ order: cardCssOrder('attention') }"
-            >
-                <AttentionCard
-                    :alerts="alerts"
-                    :failed="slotFailed('alerts')"
-                    @retry="loadAlerts"
-                    @action="applyAlertAction"
-                />
-            </div>
-
-            <!-- ───── Draft my shop (FU-351 / P6-10) ──────────────────────── -->
-            <!-- One-click "Draft my shop" entry point on top of the existing
-                 /auto-generate engine (meal plan + low/out + flagged as
-                 sensible defaults). Lands the user in a fresh DRAFT list
-                 ready to edit before they head out. Component owns its own
-                 fetch + navigate + toast branches. -->
-            <div
-                v-if="cardRendered('draft_shop')"
-                :class="cardCol('draft_shop')"
-                :style="{ order: cardCssOrder('draft_shop') }"
-            >
-                <DraftShopCard />
-            </div>
-
-            <!-- ───── Primary shopping list (P12) ─────────────────────────── -->
-            <div
-                v-if="cardRendered('primary_list')"
-                :class="cardCol('primary_list')"
-                :style="{ order: cardCssOrder('primary_list') }"
-            >
-                <PrimaryListCard
-                    :list="quickAddTargetSummary"
-                    :stats="primaryListStats"
-                    :other-active-count="otherActiveListCount"
-                    :failed="slotFailed('primary_list')"
-                    @retry="loadPrimaryListDetail"
-                />
-            </div>
-
-            <!-- ───── Dora suggests (P2-04) ───────────────────────────────── -->
-            <!-- Calm empty state instead of vanishing when Dora has
-                 nothing to suggest — separate pattern from R-029. -->
-            <div
-                v-if="cardRendered('suggestions')"
-                :class="cardCol('suggestions')"
-                :style="{ order: cardCssOrder('suggestions') }"
-            >
-                <SuggestionsCard
-                    :suggestions="suggestionStore.suggestions"
-                    :count="suggestionStore.count"
-                    @accept="acceptSuggestion"
-                    @dismiss="dismissSuggestion"
-                />
-            </div>
-
-            <!-- C-waste W5 — the standalone "Use soon" card was removed
-                 (PROPOSAL_WASTE_MINIMISATION §4.5). Near-expiry items
-                 surface via the existing "Needs your attention" card's
-                 `expired` / `expiring_soon` alert kinds. -->
-
-            <!-- ───── Next to cook (FU-298: meal-plan-driven, ready/missing) ─ -->
-            <div
-                v-if="cardRendered('cookable')"
-                :class="cardCol('cookable')"
-                :style="{ order: cardCssOrder('cookable') }"
+                v-if="cardRendered('next_to_cook')"
+                :class="cardCol('next_to_cook')"
+                :style="{ order: cardCssOrder('next_to_cook') }"
             >
                 <NextToCookCard
                     :entries="nextToCook"
+                    :has-planned-meals="hasPlannedMeals"
                     @cook="cookPlannedMeal"
+                />
+            </div>
+
+            <!-- ───── Use it up (owner 2026-09-04) ────────────────────────── -->
+            <!-- One of the two cards that replaced "Needs your attention" and
+                 "Dora suggests". Answers "what's about to go off, and what can
+                 I cook with it *right now*" by joining near-expiry stock to the
+                 recipes that use it — a question neither the alerts bell (which
+                 states the expiry and stops) nor the chat (which has to be
+                 asked) answers on its own.
+
+                 C-waste W5 note: this is also where the retired "Use soon" card
+                 landed. PROPOSAL_WASTE_MINIMISATION §4.5 cut it and sent
+                 near-expiry items to the attention card's `expired` /
+                 `expiring_soon` alert kinds; that card is now gone too, and this
+                 one carries the signal with the cook action §4.5 never had. -->
+            <div
+                v-if="cardRendered('use_it_up')"
+                :class="cardCol('use_it_up')"
+                :style="{ order: cardCssOrder('use_it_up') }"
+            >
+                <UseItUpCard
+                    :items="useItUp?.items ?? []"
+                    :recipes="useItUp?.recipes ?? []"
+                    :failed="slotFailed('use_it_up')"
+                    @retry="loadUseItUp"
+                />
+            </div>
+
+            <!-- ───── Before you shop (owner 2026-09-04) ──────────────────── -->
+            <!-- The other replacement card. Two forward-looking signals the
+                 rest of the app never puts together: items whose own
+                 consumption rate says they run out before the household's next
+                 shop, and what the coming week's plan needs that the pantry
+                 can't cover. Both end in the same verb — add it to a list. -->
+            <div
+                v-if="cardRendered('before_you_shop')"
+                :class="cardCol('before_you_shop')"
+                :style="{ order: cardCssOrder('before_you_shop') }"
+            >
+                <BeforeYouShopCard
+                    :running-out="beforeYouShop?.running_out ?? []"
+                    :plan-gaps="beforeYouShop?.plan_gaps ?? []"
+                    :shop-in-days="beforeYouShop?.shop_in_days ?? null"
+                    :failed="slotFailed('before_you_shop')"
+                    @retry="loadBeforeYouShop"
+                />
+            </div>
+
+            <!-- ───── Shopping lists (owner 2026-09-04) ───────────────────── -->
+            <!-- Was "Primary shopping list", which showed one list and labelled
+                 it *primary* — a word from the era when the cart button's target
+                 was the point. The owner's question ("why would I need to see my
+                 shopping list?") has an answer, but it isn't one list: it's
+                 quick nav to the three that matter, each with the totals that
+                 tell you which one you want. -->
+            <div
+                v-if="cardRendered('shopping_lists')"
+                :class="cardCol('shopping_lists')"
+                :style="{ order: cardCssOrder('shopping_lists') }"
+            >
+                <ShoppingListsCard
+                    :current="shoppingListCards.current"
+                    :next="shoppingListCards.next"
+                    :finished="shoppingListCards.finished"
+                    :failed="slotFailed('shopping_lists')"
+                    @retry="loadShoppingListCards"
                 />
             </div>
 
@@ -345,18 +302,13 @@
                 <DoraScoreCard />
             </div>
 
-            <!-- ───── FU-317 — reconcile past meals ─────────────────────
-                 Chip-shaped, not a full card. Hide-when-empty is done
-                 inside the component itself; the wrapper still renders
-                 an empty div when isCardVisible is true, so we double-
-                 guard on the composable's `total` for the wrapper too. -->
-            <div
-                v-if="cardRendered('reconcile_pending')"
-                :class="cardCol('reconcile_pending')"
-                :style="{ order: cardCssOrder('reconcile_pending') }"
-            >
-                <ReconcilePastMealsChip />
-            </div>
+            <!-- FU-317's "Reconcile past meals" chip card is gone (owner,
+                 2026-09-04): *"that's quite odd … instead put that metric as the
+                 link to go do meal reconciliation"*. A card whose whole body was
+                 one button had to assert its own importance; the same queue is
+                 now the `plan_adherence` component of Kitchen health below, and
+                 that row links to `/meal-plans/reconcile`. The nudge on the
+                 meal-plans header is untouched — it's in context there. -->
 
             <!-- ───── Stock card (with donut) ────────────────────────────── -->
             <div
@@ -418,10 +370,10 @@
                 :style="{ order: cardCssOrder('restock') }"
             >
                 <RestockRadarCard
-                    :items="restockItems"
+                    :recently-out="restockRadar?.recently_out ?? []"
+                    :recently-low="restockRadar?.recently_low ?? []"
                     :failed="slotFailed('restock')"
-                    @retry="loadKeepsRunningOut"
-                    @add="addRestockToList"
+                    @retry="loadRestockRadar"
                 />
             </div>
 
@@ -447,37 +399,14 @@
                 />
             </div>
 
-            <!-- ───── Spend by store (Phase 4 — opt-in) ───────────────────── -->
-            <div
-                v-if="cardRendered('spend_trend')"
-                :class="cardCol('spend_trend')"
-                :style="{ order: cardCssOrder('spend_trend') }"
-            >
-                <SpendByStoreCard
-                    :top="topSpendStores"
-                    :total="spendTotal"
-                    :store-count="spendStoreCount"
-                    :failed="slotFailed('spend')"
-                    @retry="loadSpendByStore"
-                />
-            </div>
+            <!-- "Spend by store" and "Pantry value" were cut here (owner,
+                 2026-09-04). Spend-by-store is a report and Reports has it —
+                 *"there shouldn't be overlap between the dashboard and the
+                 report page"* — and pantry value is the same call the reports
+                 review already made about stock valuation. Both endpoints stay;
+                 the reports page is their caller. -->
 
-            <!-- ───── Pantry value (Phase 4 — opt-in) ─────────────────────── -->
-            <div
-                v-if="cardRendered('pantry_value')"
-                :class="cardCol('pantry_value')"
-                :style="{ order: cardCssOrder('pantry_value') }"
-            >
-                <PantryValueCard
-                    :latest="pantryValueLatest"
-                    :delta="pantryValueDelta"
-                    :estimate-note="pantryValue?.estimate_note"
-                    :failed="slotFailed('pantry_value')"
-                    @retry="loadPantryValue"
-                />
-            </div>
-
-            <!-- ───── Price drops (Phase 4 — Money zone, product-gated) ──── -->
+            <!-- ───── Price drops (Phase 4 — products-gated) ─────────────── -->
             <div
                 v-if="cardRendered('price_drops')"
                 :class="cardCol('price_drops')"
@@ -504,13 +433,6 @@
             </div>
         </div>
         </FadeTransition>
-
-        <!-- Phase 5 "Add item" quick action — the shared create dialog; refreshes
-             the summary/restock on success so the new item shows immediately. -->
-        <CreateStockItemDialog
-            v-model="showCreateStockItem"
-            @created="onStockItemCreated"
-        />
     </q-page>
 </template>
 
@@ -530,59 +452,49 @@
     // (the parallel load, the per-slot error tracking and the post-action
     // refresh are page concerns); each card takes what it renders and emits what
     // it wants doing.
-    import AttentionCard from 'src/components/dashboard/AttentionCard.vue';
     import MoneyCard from 'src/components/dashboard/MoneyCard.vue';
     import PriceDropsCard from 'src/components/dashboard/PriceDropsCard.vue';
-    import SpendByStoreCard from 'src/components/dashboard/SpendByStoreCard.vue';
-    import PantryValueCard from 'src/components/dashboard/PantryValueCard.vue';
     import RestockRadarCard from 'src/components/dashboard/RestockRadarCard.vue';
     import PantryDonutCard, {
         type DonutSegment,
     } from 'src/components/dashboard/PantryDonutCard.vue';
     import NextToCookCard from 'src/components/dashboard/NextToCookCard.vue';
-    import SuggestionsCard from 'src/components/dashboard/SuggestionsCard.vue';
-    import PrimaryListCard from 'src/components/dashboard/PrimaryListCard.vue';
+    import ShoppingListsCard from 'src/components/dashboard/ShoppingListsCard.vue';
+    import UseItUpCard from 'src/components/dashboard/UseItUpCard.vue';
+    import BeforeYouShopCard from 'src/components/dashboard/BeforeYouShopCard.vue';
     import WhatsComingCard, {
         type CalendarCell,
         type CalendarSpan,
     } from 'src/components/dashboard/WhatsComingCard.vue';
     import DoraScoreCard from 'src/components/dashboard/DoraScoreCard.vue';
-    import ReconcilePastMealsChip from 'src/components/dashboard/ReconcilePastMealsChip.vue';
-    import DraftShopCard from 'src/components/dashboard/DraftShopCard.vue';
     import { storeToRefs } from 'pinia';
-    // The alert *presentation* helpers (icon / colour / kind label / deep link)
-    // moved into `AttentionCard.vue` with the card. What the page still needs is
-    // the Alert shape it fetches, the action type it forwards, and the upcoming
-    // types the merged calendar reads.
+    // `AttentionCard` and its alert presentation helpers went with the card
+    // (owner, 2026-09-04 — the alerts bell says the same thing one row above).
+    // The `Upcoming` types stay: the merged calendar still reads
+    // `/alerts/upcoming`, which is a dated-events feed, not the alert list.
     import {
-        type Alert,
-        type AlertAction,
         type Upcoming,
         type UpcomingDay,
     } from 'src/models/alert';
     import type { DashboardSummary, UpcomingMealPlanEntry } from 'src/models/dashboard';
-    import { epochDay, pickWelcome, pickHint } from 'src/helpers/dashboardMessages';
-    import type { ShoppingListDetail } from 'src/models/shoppingList';
+    import { pickWelcome, pickHint } from 'src/helpers/dashboardMessages';
     import AlertApiService from 'src/services/api/alertApiService';
-    import { useAlertActions } from 'src/composables/useAlertActions';
     import BudgetApiService, {
         type BudgetStatus,
     } from 'src/services/api/budgetApiService';
     import MealPlanApiService from 'src/services/api/mealPlanApiService';
-    import { useSuggestionStore } from 'src/stores/suggestionStore';
-    import type { DoraSuggestion } from 'src/services/api/suggestionsApiService';
-    import DashboardApiService from 'src/services/api/dashboardApiService';
+    import DashboardApiService, {
+        type UseItUpResponse,
+        type BeforeYouShopResponse,
+        type DashboardListsResponse,
+        type RestockRadarResponse,
+    } from 'src/services/api/dashboardApiService';
     import OnboardingApiService from 'src/services/api/onboardingApiService';
-    import ShoppingListApiService from 'src/services/api/shoppingListApiService';
     import ReportsApiService, {
         type ReportRange,
         type SavingsCapturedResponse,
-        type StoreSpendResponse,
-        type StockValueResponse,
-        type KeepsRunningOutResponse,
         type PriceDropsResponse,
     } from 'src/services/api/reportsApiService';
-    import CreateStockItemDialog from 'src/components/stock/CreateStockItemDialog.vue';
     import { useAuthStore } from 'src/stores/authStore';
     import { useShoppingListStore } from 'src/stores/shoppingListStore';
     import { useStockLevelStore } from 'src/stores/stockLevelStore';
@@ -592,11 +504,8 @@
         findLevelBySequence,
     } from 'src/helpers/stockStatus';
     import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
+    import { useBatchEnabled } from 'src/composables/useBatchEnabled';
     import { useFeatureFlags } from 'src/composables/useFeatureFlags';
-    import { useReconcileQueue } from 'src/composables/useReconcileQueue';
-    import { useStockItemActions } from 'src/composables/useStockItemActions';
-    import { useQuickAdd } from 'src/composables/useQuickAdd';
-    import { useLogPrice } from 'src/composables/useLogPrice';
     import { useDragDropList } from 'src/composables/useDragDropList';
     import { computed, onMounted, ref, watch } from 'vue';
     import { useQuasar } from 'quasar';
@@ -609,9 +518,7 @@
     // decision §2.2 owns) can be held by a test rather than by nothing.
     import {
         CARD_DEFS,
-        ZONES,
         type CardId,
-        type ZoneId,
     } from 'src/helpers/dashboardCards';
 
     // FU-821 — every money render goes through `formatMoney`, including the
@@ -634,27 +541,19 @@
 
     // Feature gates for the Money/Products cards (Phase 4). `moneyEnabled`
     // layers install + per-user money opt-in (ADR-005); `productsEnabled` is the
-    // product data-presence flag (§2.4). Read by `cardAvailable`.
+    // install-wide products feature flag — which is what the owner asked Price
+    // drops to be gated on (2026-09-04), and what it was already reading; the
+    // registry comment calling it "data-presence" was simply wrong. Read by
+    // `cardAvailable`.
     const { moneyEnabled } = useMoneyEnabled();
     const { products: productsEnabled } = useFeatureFlags();
-    // FU-317 Chunk 5 — reconcile queue count (drives the dashboard chip's
-    // visibility + the meal-plans header nudge). Server-owned total.
-    const { total: reconcileTotal } = useReconcileQueue();
-    // Phase 5 — quick actions reuse the shared cross-feature actions so add-to-
-    // list / create behave identically to the rest of the app (R-011).
-    const { addToList } = useStockItemActions();
-    const { openQuickAdd } = useQuickAdd();
-    const { openLogPrice } = useLogPrice();
-
+    // Cook style — the install-wide batch switch. "Next to cook" selects
+    // different rows under it (see `nextToCook`), and the card labels them.
+    const { batchEnabled } = useBatchEnabled();
     const dashboardApiService = new DashboardApiService();
     const alertApi = new AlertApiService();
-    const { applyAction } = useAlertActions();
     const budgetApi = new BudgetApiService();
     const reportsApi = new ReportsApiService();
-    // suggestion store shared with the Dora launcher badge and
-    // the chat panel so dismiss/snooze here propagates everywhere.
-    const suggestionStore = useSuggestionStore();
-    const shoppingListApi = new ShoppingListApiService();
 
     const shoppingListStore = useShoppingListStore();
     // donut segments deep-link to /stock?level_id=<id>. The stock
@@ -667,36 +566,11 @@
     const loading = ref(false);
     const loadError = ref<string | null>(null);
 
-    // ── "Dora says" welcome band, dismissible for the day (FU-825) ───────
-    // The button's tooltip says "Hide for today", and it used to set a plain
-    // `ref(false)` that was recreated on every mount — so the band came back on
-    // the next navigation to the dashboard. Persist the epoch-day it was
-    // dismissed on, keyed off the SAME `epochDay` the message rotation uses
-    // (R-003), so "today" means one thing: the band stays hidden until the
-    // message itself changes at local midnight.
-    const WELCOME_DISMISSED_KEY = 'dora.dashboard.welcome_dismissed_day';
-    const welcomeDismissedDay = ref<number | null>(readWelcomeDismissedDay());
-    function readWelcomeDismissedDay(): number | null {
-        try {
-            const raw = localStorage.getItem(WELCOME_DISMISSED_KEY);
-            if (!raw) return null;
-            const day = Number(raw);
-            return Number.isFinite(day) ? day : null;
-        } catch {
-            // Private mode / storage disabled — the band just isn't dismissible
-            // across navigations, which is the old behaviour and no worse.
-            return null;
-        }
-    }
-    function dismissWelcome() {
-        const today = epochDay(new Date());
-        welcomeDismissedDay.value = today;
-        try {
-            localStorage.setItem(WELCOME_DISMISSED_KEY, String(today));
-        } catch {
-            // Ignore — the in-memory ref still hides it for this visit.
-        }
-    }
+    // FU-825's per-day dismissal (`dora.dashboard.welcome_dismissed_day` +
+    // `epochDay`) is gone with the welcome band: the message lives in the hero
+    // now, and a header is not dismissible. The `localStorage` key is simply
+    // abandoned — it was only ever read by the code above, so a stale value on
+    // an existing install has nothing left to hide.
 
     // ── 24h "you skipped the wizard" reminder (F1) ───────────────────
     // The wizard writes `dora.onboarding.skipped_at` on Skip-everything;
@@ -762,13 +636,12 @@
     // "did *this* slot fail" and the banner needs "did *anything* fail", and one
     // structure answers both without eleven more refs to keep in step (R-003).
     type SlotId =
-        | 'alerts'
-        | 'primary_list'
+        | 'shopping_lists'
+        | 'use_it_up'
+        | 'before_you_shop'
         | 'budget'
         | 'swaps'
         | 'savings'
-        | 'spend'
-        | 'pantry_value'
         | 'price_drops'
         | 'restock'
         | 'upcoming';
@@ -804,10 +677,18 @@
 
     // Independent slot loaders. Each card surfaces a small chunk of data
     // beyond what the bulk dashboard summary endpoint returns. They live
-    // in parallel and never block each other — a slow alerts response
-    // shouldn't gate the rest of the dashboard.
-    const alerts = ref<Alert[]>([]);
-    const primaryListDetail = ref<ShoppingListDetail | null>(null);
+    // in parallel and never block each other — one slow response shouldn't
+    // gate the rest of the dashboard.
+    //
+    // The three lists worth quick nav to (current · next · most recently
+    // finished), server-picked. See `dashboardApiService.getListsAsync`.
+    const dashboardLists = ref<DashboardListsResponse | null>(null);
+    // The two replacement insight cards (owner, 2026-09-04). Both are
+    // server-computed joins — the client renders rows and emits verbs (R-003);
+    // it does not decide what is expiring, what a recipe covers, or when the
+    // household next shops.
+    const useItUp = ref<UseItUpResponse | null>(null);
+    const beforeYouShop = ref<BeforeYouShopResponse | null>(null);
     // Feeds the budget half of the merged Money card. Always loads (so the
     // passive "spent this period" figure works for users who haven't set a
     // target), and the block is `v-if`'d out when the loader errors so a failed
@@ -818,19 +699,18 @@
     // the week isn't projected over budget.
     const mealPlanApi = new MealPlanApiService();
     const swapSummary = ref<{ saved: number; count: number } | null>(null);
-    // Phase 4 — Money zone widgets, each backed by an existing reports endpoint.
-    // Only loaded when money is enabled (the cards are gated on it anyway). The
-    // savings widget carries its own range toggle; spend/pantry use a sensible
-    // default window.
+    // Phase 4 — money widgets backed by the reports API. Only loaded when money
+    // is enabled (the cards are gated on it anyway). `spendByStore` and
+    // `pantryValue` went with their cards on 2026-09-04 — both were reports on
+    // the dashboard, and Reports is where they live.
     const savings = ref<SavingsCapturedResponse | null>(null);
     const savingsRange = ref<ReportRange>('30d');
-    const spendByStore = ref<StoreSpendResponse | null>(null);
-    const pantryValue = ref<StockValueResponse | null>(null);
     const priceDrops = ref<PriceDropsResponse | null>(null);
-    // Phase 5 — restock radar (items the user keeps running out of) + the
-    // "Add item" quick-action dialog state.
-    const keepsRunningOut = ref<KeepsRunningOutResponse | null>(null);
-    const showCreateStockItem = ref(false);
+    // Restock radar — what just ran out and what just went low. Reworked on
+    // the owner's ask (2026-09-04) off `/dashboard/restock-radar`; the old
+    // `/reports/keeps-running-out` lifetime ranking stays on the reports page,
+    // which still calls it.
+    const restockRadar = ref<RestockRadarResponse | null>(null);
     // Phase 6 — the fortnight calendar's server-aggregated dated events + the
     // currently-expanded day.
     const upcoming = ref<Upcoming | null>(null);
@@ -855,12 +735,17 @@
     // Card order + hidden set live on the user (`dashboard_layout` JSON) so the
     // layout survives a cache clear and follows the user across devices. We
     // render with CSS `order` rather than moving markup — each card keeps its
-    // template position and flexbox sorts them, with full-width zone headers
-    // forcing the visual bands (see `cardCssOrder` / the `.dora-zone-label`s).
+    // template position and flexbox sorts them (see `cardCssOrder`).
+    //
+    // The stored `order` array is filtered to known ids on read, which is what
+    // makes the 09-04 card cull a non-event for existing users: a layout naming
+    // `attention` / `draft_shop` / `suggestions` / `spend_trend` /
+    // `pantry_value` / `reconcile_pending` — or the renamed `cookable` and
+    // `primary_list` — simply drops those entries and appends the new cards at
+    // their registry positions.
     type DashLayout = { order: CardId[]; hidden: CardId[] };
 
     const KNOWN_CARD_IDS = new Set<CardId>(CARD_DEFS.map((c) => c.id));
-    const ZONE_OF = new Map<CardId, ZoneId>(CARD_DEFS.map((c) => [c.id, c.zone]));
 
     function defaultOrder(): CardId[] {
         return CARD_DEFS.map((c) => c.id);
@@ -947,20 +832,19 @@
     );
 
     // ── Does this card actually render? (FU-631 #3) ──────────────────────
-    // `isCardVisible` answers "is it registered, gated on, and un-hidden".
-    // `reconcile_pending` additionally vanishes on its own *data* — it is
-    // hide-when-empty (R-029). This predicate folds that in, and is the ONE
-    // thing both the template's `v-if` and the column-width maths below consult:
-    // if they disagreed, the grid would pair a card that isn't there and leave
-    // the gap it was meant to fill (R-003).
+    // `isCardVisible` answers "is it registered, gated on, and un-hidden", and
+    // since 2026-09-04 that is the whole answer: `reconcile_pending` was the
+    // only card that additionally vanished on its own *data* (hide-when-empty,
+    // R-029), and it was deleted with the rest of the cull.
     //
-    // The merged Money card (`savings`) needs no data guard — it always has
-    // something to say, since the budget block is `v-if`'d inside it and the
-    // savings half carries its own empty state.
+    // The predicate stays rather than collapsing into `isCardVisible`, because
+    // it is the ONE thing both the template's `v-if` and the column-width maths
+    // consult: if those two ever disagreed, the grid would pair a card that
+    // isn't there and leave the gap it was meant to fill (R-003). The next
+    // hide-when-empty card belongs here, not in a second `v-if` condition at
+    // its call site.
     function cardRendered(id: CardId): boolean {
-        if (!isCardVisible(id)) return false;
-        if (id === 'reconcile_pending') return reconcileTotal.value > 0;
-        return true;
+        return isCardVisible(id);
     }
 
     // Cards that are full-width by design rather than by parity.
@@ -973,67 +857,55 @@
     // which is how the mixed widths that caused the dead regions got in.
     const FULL_WIDTH_CARDS: ReadonlySet<CardId> = new Set<CardId>();
 
-    // Column classes per card, computed per zone so no card is left in a
-    // half-width column beside dead air (D-011 / B4) — see
-    // `helpers/dashboardGrid` for the measured counts and why the parity is per
-    // run of consecutive half-width cards rather than per zone.
-    const cardColClasses = computed<Record<string, string>>(() => {
-        const out: Record<string, string> = {};
-        for (const zone of ZONES) {
-            const rendered = cardOrder.value.filter(
-                (id) => ZONE_OF.get(id) === zone.id && cardRendered(id),
-            );
-            Object.assign(out, zoneColClasses(rendered, FULL_WIDTH_CARDS));
-        }
-        return out;
-    });
+    // Column classes per card, so no card is left in a half-width column beside
+    // dead air (D-011 / B4) — see `helpers/dashboardGrid` for the measured
+    // counts and why the parity is per run of consecutive half-width cards.
+    //
+    // One call, not one per zone: with the bands gone (owner, 2026-09-04) the
+    // rendered cards are a single run, which is the case `zoneColClasses` was
+    // always written for — a run is a run whether or not it has a label above
+    // it. The parity fix is now *global*, which is strictly better: an odd
+    // card count used to strand one card per band (up to four gaps on a
+    // default desktop), and can now strand at most one on the whole page.
+    const cardColClasses = computed<Record<string, string>>(() =>
+        zoneColClasses(cardOrder.value.filter(cardRendered), FULL_WIDTH_CARDS),
+    );
     function cardCol(id: CardId): string {
         // A card that isn't rendered has no entry; the half default keeps the
         // binding total rather than resolving to `undefined`.
         return cardColClasses.value[id] ?? CARD_COL_HALF;
     }
 
-    // CSS `order` per card: a fixed per-zone base (so a card never visually
-    // leaves its zone) plus its index in the user's order array (so reorder
-    // within a zone sticks). The base spacing (100) ≫ the card indices (17 and
-    // counting), so zones never interleave. Zone headers sit just before their
-    // band.
-    const ZONE_BASE = 100;
-    function orderIndexOf(id: CardId): number {
+    // CSS `order` per card = its index in the user's order array. The zone base
+    // (`zoneIndex * 100`) that used to be added here is gone with the zones: a
+    // card no longer belongs to a band it can't leave, so the user's own order
+    // is the whole answer.
+    function cardCssOrder(id: CardId): number {
         const i = cardOrder.value.indexOf(id);
         return i === -1 ? CARD_DEFS.findIndex((c) => c.id === id) : i;
     }
-    function cardCssOrder(id: CardId): number {
-        const zi = ZONES.findIndex((z) => z.id === ZONE_OF.get(id));
-        return zi * ZONE_BASE + orderIndexOf(id);
-    }
-    function zoneHeaderOrder(zone: ZoneId): number {
-        return ZONES.findIndex((z) => z.id === zone) * ZONE_BASE - 1;
-    }
-    function zoneHasVisibleCards(zone: ZoneId): boolean {
-        // `cardRendered`, not `isCardVisible` — otherwise a Money zone whose
-        // only visible card is `budget` with an unloaded status, or a Kitchen
-        // zone holding just an empty `reconcile_pending`, draws its band header
-        // above nothing.
-        return CARD_DEFS.some((c) => c.zone === zone && cardRendered(c.id));
-    }
 
-    // Reorder within a zone — the tap alternative to drag (C13: drag is the
-    // power-user extra, the tap control is always present + works on mobile).
-    function zonePeers(id: CardId): CardId[] {
-        const zone = ZONE_OF.get(id);
-        return cardOrder.value.filter((c) => ZONE_OF.get(c) === zone);
+    // Reorder — the tap alternative to drag (C13: drag is the power-user extra,
+    // the tap control is always present + works on mobile). The peer list is now
+    // simply every available card, so a card can be moved anywhere on the page
+    // rather than shuffled inside its band.
+    //
+    // Gated-off cards are excluded, which matters: with money off, `savings` is
+    // still in `cardOrder` but renders nowhere, and including it would make one
+    // press of Move-up look like it did nothing.
+    function orderedAvailableCards(): CardId[] {
+        return cardOrder.value.filter(cardAvailable);
     }
     function canMove(id: CardId, dir: 'up' | 'down'): boolean {
-        const peers = zonePeers(id);
+        const peers = orderedAvailableCards();
         const i = peers.indexOf(id);
-        return dir === 'up' ? i > 0 : i < peers.length - 1;
+        return dir === 'up' ? i > 0 : i >= 0 && i < peers.length - 1;
     }
     function moveCard(id: CardId, dir: 'up' | 'down') {
-        const peers = zonePeers(id);
+        const peers = orderedAvailableCards();
         const i = peers.indexOf(id);
         const j = dir === 'up' ? i - 1 : i + 1;
-        if (j < 0 || j >= peers.length) return;
+        if (i < 0 || j < 0 || j >= peers.length) return;
         const other = peers[j]!;
         const next = [...cardOrder.value];
         const oi = next.indexOf(id);
@@ -1043,20 +915,18 @@
         persistLayout();
     }
 
-    // drag-handle reorder for the Cards menu. Sits on top of the
-    // existing tap up/down: drag is the desktop power-user extra; tap is the
-    // mobile/keyboard mandate (C13). Same-zone-only via `canDropOn`.
+    // drag-handle reorder for the Cards menu. Sits on top of the existing tap
+    // up/down: drag is the desktop power-user extra; tap is the mobile/keyboard
+    // mandate (C13). `canDropOn` used to refuse a cross-zone drop; with the
+    // zones gone every card may land anywhere, so the only rejection left is
+    // dropping a card on itself (handled in `onDrop`).
     // `cardDragEnabled` gates the handle on non-touch — `$q.platform.is.mobile`
     // includes tablets so touch-first surfaces keep the tap path uncluttered.
-    const ZONE_LABEL: Record<ZoneId, string> = Object.fromEntries(
-        ZONES.map((z) => [z.id, z.label]),
-    ) as Record<ZoneId, string>;
     const cardDragEnabled = computed(() => !$q.platform.is.mobile);
     const cardDnd = useDragDropList<CardId>({
         mime: 'application/x-dora-dashboard-card',
         getId: (id) => id,
         canDragStart: () => cardDragEnabled.value,
-        canDropOn: (source, target) => ZONE_OF.get(source) === ZONE_OF.get(target),
         onDrop: ({ id: sourceId }, { id: targetId }) => {
             if (sourceId === targetId) return;
             const next = [...cardOrder.value];
@@ -1073,16 +943,10 @@
         },
     });
 
-    // Cards grouped by zone for the toggle menu (display order). Gated-off cards
-    // are dropped (so the menu never offers an unavailable card), and zones with
-    // nothing left collapse.
-    const cardsByZone = computed(() =>
-        ZONES.map((z) => ({
-            zone: z,
-            cards: cardOrder.value
-                .filter((id) => ZONE_OF.get(id) === z.id && cardAvailable(id))
-                .map((id) => CARD_DEFS.find((c) => c.id === id)!),
-        })).filter((g) => g.cards.length > 0)
+    // The toggle menu's rows, in display order. Gated-off cards are dropped so
+    // the menu never offers an unavailable one. Flat since the zones went.
+    const menuCards = computed(() =>
+        orderedAvailableCards().map((id) => CARD_DEFS.find((c) => c.id === id)!),
     );
 
     // ── Derived data for stock donut ─────────────────────────────────────
@@ -1157,41 +1021,25 @@
     // spans from `calendarCells`, i.e. from `/alerts/upcoming` alone — which
     // also gives the week view the expiry and shopping dots it never had.
     //
-    // `nextEntry` survives because the hero line reads it (and that sentence is
-    // now the *only* place the next meal is stated in prose — the card's old
-    // "Next up" callout repeated it verbatim).
-    const nextEntry = computed<UpcomingMealPlanEntry | null>(
-        () => summary.value?.meal_plan.upcoming_entries[0] ?? null
-    );
-
-    // ── Hero "right now" line. Pick the single most useful thing. ───────
-    const heroLine = computed(() => {
-        if (!summary.value) return 'Loading the pantry…';
-        const s = summary.value;
-        if (s.stock_items.out_of_stock > 0) {
-            return `${s.stock_items.out_of_stock} ${plural(s.stock_items.out_of_stock, 'item is', 'items are')} out of stock.`;
-        }
-        if (nextEntry.value) {
-            const when = formatRelativeDay(nextEntry.value.scheduled_for).toLowerCase();
-            return `${capitalise(when)}: ${nextEntry.value.recipe_name} for ${nextEntry.value.servings}.`;
-        }
-        if (s.stock_items.low_stock > 0) {
-            return `${s.stock_items.low_stock} ${plural(s.stock_items.low_stock, 'item is', 'items are')} running low.`;
-        }
-        if (s.recipes.total === 0) {
-            return "Your recipe book's empty — add one when you have a minute.";
-        }
-        return "Everything's stocked, planned, and quietly humming along.";
-    });
+    // `nextEntry` went with the hero's factual line on 2026-09-04 — that
+    // sentence was its only reader. The next meal is still stated, in the one
+    // place that also says whether you can cook it: the "Next to cook" card.
 
     // ── Welcome + hint of the day (D1c/d/e) ──────────────────────────────
     // A day-of-week-flavoured welcome plus a day-agnostic hint, both stable
-    // per calendar day (see helpers/dashboardMessages). This replaces the old
-    // bottom-right "Dora says" tip bubble — the warm "Dora says" treatment is
-    // kept, but it now lives inline near the top of the dashboard and only
-    // shows once onboarding is actually complete (the skip-reminder banner
-    // owns the not-yet-finished case). Recomputed cheaply on each render; the
-    // underlying pick is deterministic so it doesn't flicker.
+    // per calendar day (see helpers/dashboardMessages).
+    //
+    // These are the hero's two lines now (owner, 2026-09-04). They used to sit
+    // in a dismissible band below it, under a second mascot, beneath a factual
+    // "N items are out of stock" line — three separate things saying hello. The
+    // factual line is gone (the owner: *"that feels like pretty useless text to
+    // read"*), and with it `heroLine`, `plural` and `capitalise`, which nothing
+    // else on the page used.
+    //
+    // The old `showWelcome` gate is gone too. It suppressed the greeting while
+    // the skip-reminder banner was up, on the reasoning that the banner *was*
+    // the message; that only made sense while both were bands competing for the
+    // same slot. A header does not compete with a banner underneath it.
     const welcomeMessage = computed(() => pickWelcome());
     // FU-823 — the hint pool is filtered by the install's feature gates, so a
     // money-off household is never told to set a grocery budget and a
@@ -1199,25 +1047,8 @@
     const welcomeHint = computed(() =>
         pickHint({ money: moneyEnabled.value, products: productsEnabled.value })
     );
-    // Only greet once the user has finished (or skipped past) onboarding —
-    // while the skip-reminder is showing, that banner is the message.
-    // Dismissal is per-day (FU-825): hidden only while the stored day is still
-    // today, so tomorrow's message arrives on its own.
-    const showWelcome = computed(
-        () =>
-            welcomeDismissedDay.value !== epochDay(new Date()) &&
-            !showSkipReminder.value
-    );
 
     // ── Helpers ──────────────────────────────────────────────────────────
-    function plural(n: number, one: string, many: string): string {
-        return n === 1 ? one : many;
-    }
-
-    function capitalise(s: string): string {
-        return s.length === 0 ? s : s.charAt(0).toUpperCase() + s.slice(1);
-    }
-
     function isoOf(d: Date): string {
         // Local date (not UTC) — matches the meal plan's `scheduled_for`.
         const y = d.getFullYear();
@@ -1247,46 +1078,45 @@
         goTo(`/cookbook/${entry.recipe_id}/cook${query}`);
     }
 
-    // ── Needs your attention ────────────────────────────────────────────
-    // The card is `components/dashboard/AttentionCard.vue` now (FU-829); the
-    // severity sort, the by-kind grouping and the peek slice moved with it,
-    // since they are presentation of the already-fetched list. What stays here
-    // is the fetch, the slot-error flag and the action handler — the action
-    // refreshes BOTH the alerts and the summary, which is a page-level concern.
-    async function loadAlerts() {
-        await loadSlot('alerts', async () => {
-            const result = await alertApi.getAlertsAsync();
-            alerts.value = result.items;
-        });
-    }
+    // The alerts fetch and the alert-action handler went with `AttentionCard`
+    // (owner, 2026-09-04). `alertApi` stays — the merged calendar below still
+    // reads `/alerts/upcoming`, which is a different endpoint answering a
+    // different question (dated events, not the alert list). The alert list
+    // itself has one consumer now: the bell in the app header, which owns it.
 
-    // Routed through the shared useAlertActions composable (FU-521); the
-    // dashboard passes its own refresh because it also reloads the summary/score
-    // cards, not just the alert store.
-    async function applyAlertAction(alert: Alert, action: AlertAction) {
-        await applyAction(alert, action, {
-            refresh: async () => {
-                await Promise.all([loadAlerts(), loadSummary()]);
-            },
-        });
-    }
-
-    // ── Cookable tonight ────────────────────────────────────────────────
-    // Cookability is server-owned (§3.2): recipes carry `cookable`. A recipe
-    // with no ingredients is `cookable` server-side, but "cook tonight" should
-    // only suggest real recipes, so require at least one ingredient.
-    // Favourites bubble up first within the cookable subset so your usuals
-    // show up before the long tail.
-    // "Next to cook" is meal-plan-driven now (feedback L272):
-    // upcoming entries from `summary.meal_plan.upcoming_entries`, deduped by
-    // recipe so the same recipe scheduled twice in the week only shows once
-    // (earliest slot wins), capped at 3, each tagged with a ready / missing-N
-    // badge from the server-derived `missing_count`.
+    // ── Next to cook ────────────────────────────────────────────────────
+    // Meal-plan-driven (feedback L272): upcoming entries from
+    // `summary.meal_plan.upcoming_entries`, deduped by recipe so the same
+    // recipe scheduled twice in the week only shows once (earliest slot wins),
+    // capped at 3, each tagged with a ready / missing-N badge from the
+    // server-derived `missing_count`.
+    //
+    // **Two selection strategies, keyed on cook style** (owner, 2026-09-04).
+    // The 09-04 batch taught this card the pool model, but only as *labels* —
+    // it still listed the next few days in order, which is the wrong question
+    // for a household that batch-cooks. There, the plan is not a cook schedule:
+    // one batch covers many planned days, so most of what's coming needs
+    // nobody to cook it, and listing it is noise.
+    //
+    //   fresh household → the next planned meals, chronologically. Plan day is
+    //                     cook day, so the calendar *is* the answer.
+    //   batch household → the meals somebody actually has to cook: the ones the
+    //                     pool is short of (`needs_cooking`), plus fresh-marked
+    //                     entries (`cook_fresh`), which stand outside the pool
+    //                     in both directions and are cooked on their own day.
+    //
+    // Both flags are server-owned and never both true (`_cook_verdicts` in
+    // `get_dashboard_summary.py`) — this filters on the server's verdict, it
+    // doesn't re-derive coverage (R-003). Chronological order is already "when
+    // the shortfall bites", since the entries arrive sorted by date.
     const nextToCook = computed<UpcomingMealPlanEntry[]>(() => {
         const entries = summary.value?.meal_plan.upcoming_entries ?? [];
+        const worthCooking = batchEnabled.value
+            ? entries.filter((e) => e.needs_cooking || e.cook_fresh)
+            : entries;
         const seen = new Set<string>();
         const picks: UpcomingMealPlanEntry[] = [];
-        for (const e of entries) {
+        for (const e of worthCooking) {
             if (seen.has(e.recipe_id)) continue;
             seen.add(e.recipe_id);
             picks.push(e);
@@ -1294,6 +1124,13 @@
         }
         return picks;
     });
+
+    // Whether the week holds any planned meal at all — the card needs to tell
+    // "nothing planned" apart from "planned, and the freezer already covers it",
+    // which are the same empty list but opposite messages.
+    const hasPlannedMeals = computed(
+        () => (summary.value?.meal_plan.upcoming_entries.length ?? 0) > 0,
+    );
 
     // The when-label and the ready/missing/to-link badge moved into
     // `NextToCookCard.vue` with the card (FU-829) — they are presentation of the
@@ -1307,52 +1144,60 @@
     // rather than deleted here: R-057 is explicit that a replaced surface's
     // contracts are an inventory to check, not a casualty list.
 
-    // ── Primary shopping list ────────────────────────────────────────────
-    const quickAddTargetListId = computed(() => shoppingListStore.quickAddTargetListId);
-    const quickAddTargetSummary = computed(() => shoppingListStore.quickAddTargetSummary);
+    // ── Shopping lists (current · next · last finished) ──────────────────
+    // Was one card showing the *primary* list's totals, which the owner read —
+    // correctly — as a leftover from when the cart button's target was the
+    // interesting fact about a list. It also fetched a whole `ShoppingListDetail`
+    // (every line, every price) to render three numbers.
+    //
+    // The server now picks the three lists and returns their totals
+    // (`/api/dashboard/lists`), which is both the smaller payload and the
+    // right owner: "which list am I shopping, which is next, which did I just
+    // finish" is a cross-entity question about status and dates (R-003).
+    const shoppingListCards = computed(() => ({
+        current: dashboardLists.value?.current ?? null,
+        next: dashboardLists.value?.next ?? null,
+        finished: dashboardLists.value?.finished ?? null,
+    }));
 
-    // Totals are server-owned (state-ownership Type B) — read them off the
-    // detail's `totals` instead of summing `priceOfLine`/`savingsOfLine` here.
-    // Shape kept identical so the template bindings are unchanged.
-    const primaryListStats = computed(() => {
-        const t = primaryListDetail.value?.totals;
-        if (!t) return null;
-        return {
-            remaining: t.remaining_price,
-            full: t.total_price,
-            savings: t.total_savings,
-            unticked: t.unticked_count,
-            ticked: t.ticked_count,
-            total: t.line_count,
-        };
-    });
-
-    // Count of *other* active lists, surfaced as a footer link on the primary
-    // card (the standalone "Shopping" counter card was merged in here, §2.6).
-    // The summary counts active (non-done) lists; the primary is one of them.
-    const otherActiveListCount = computed(() => {
-        const total = summary.value?.shopping_lists.total ?? 0;
-        return quickAddTargetSummary.value ? Math.max(0, total - 1) : total;
-    });
-
-    async function loadPrimaryListDetail() {
-        const id = quickAddTargetListId.value;
-        if (!id) {
-            // No primary list set is a real state, not a failure — the card has
-            // its own "pick one" empty state for it.
-            primaryListDetail.value = null;
-            return;
-        }
-        await loadSlot('primary_list', async () => {
-            primaryListDetail.value = await shoppingListApi.getDetailAsync(id);
+    async function loadShoppingListCards() {
+        await loadSlot('shopping_lists', async () => {
+            dashboardLists.value = await dashboardApiService.getListsAsync();
         });
     }
 
-    // Re-fetch detail when the primary list changes (e.g. set-primary from
-    // another tab) so the card stays honest.
-    watch(quickAddTargetListId, () => {
-        void loadPrimaryListDetail();
+    // The card's picks depend on which list is in flight, so re-fetch when the
+    // store's quick-add target changes (e.g. set-primary from another tab).
+    watch(() => shoppingListStore.quickAddTargetListId, () => {
+        void loadShoppingListCards();
     });
+
+    // ── Use it up / Before you shop (owner, 2026-09-04) ──────────────────
+    // Both are server-computed joins. `use-it-up` walks near-expiry stock and
+    // the recipes that use it; `before-you-shop` puts consumption rate against
+    // the household's own shop cadence, and the coming week's plan against what
+    // the pantry holds. Neither could be assembled client-side without the SPA
+    // re-implementing expiry windows, per-item burn rates and plan demand — the
+    // exact "client computing a cross-entity rule" smell the state-ownership
+    // principle names.
+    async function loadUseItUp() {
+        await loadSlot('use_it_up', async () => {
+            useItUp.value = await dashboardApiService.getUseItUpAsync();
+        });
+    }
+
+    async function loadBeforeYouShop() {
+        await loadSlot('before_you_shop', async () => {
+            beforeYouShop.value = await dashboardApiService.getBeforeYouShopAsync();
+        });
+    }
+
+    // No page-level add wrapper: both row-bearing cards render the shared
+    // `AddToListButton` themselves, which is what the owner asked for — *"should
+    // use the same shopping cart button from the stock overview rows"* — and is
+    // the R-011 answer anyway. That component owns the target-list decision, the
+    // already-on-a-list toggle and the toast, none of which the dashboard should
+    // be re-deciding on the way past.
 
     async function loadSummary() {
         loading.value = true;
@@ -1441,21 +1286,11 @@
     // Re-fetch when the user flips the savings range toggle.
     watch(savingsRange, () => { void loadSavings(); });
 
-    async function loadSpendByStore() {
-        if (!moneyEnabled.value) { spendByStore.value = null; return; }
-        await loadSlot('spend', async () => {
-            spendByStore.value = await reportsApi.getSpendByStoreAsync('30d');
-        });
-    }
+    // `loadSpendByStore` and `loadPantryValue` went with their cards (owner,
+    // 2026-09-04). `reportsApi.getSpendByStoreAsync` / `getStockValueAsync` keep
+    // their callers on the reports page, so nothing is orphaned here.
 
-    async function loadPantryValue() {
-        if (!moneyEnabled.value) { pantryValue.value = null; return; }
-        await loadSlot('pantry_value', async () => {
-            pantryValue.value = await reportsApi.getStockValueAsync('90d');
-        });
-    }
-
-    // price-drops is product-gated (not money-gated); still cheap to
+    // price-drops is products-gated (not money-gated); still cheap to
     // load, hides itself when empty.
     async function loadPriceDrops() {
         if (!productsEnabled.value) { priceDrops.value = null; return; }
@@ -1465,27 +1300,16 @@
     }
     const priceDropRows = computed(() => priceDrops.value?.rows ?? []);
 
-    // ── Restock radar (Phase 5) ──────────────────────────────────────────
-    async function loadKeepsRunningOut() {
+    // ── Restock radar ────────────────────────────────────────────────────
+    async function loadRestockRadar() {
         await loadSlot('restock', async () => {
-            keepsRunningOut.value = await reportsApi.getKeepsRunningOutAsync(5);
+            restockRadar.value = await dashboardApiService.getRestockRadarAsync();
         });
     }
-    const restockItems = computed(() => keepsRunningOut.value?.rows ?? []);
 
-    // One-tap "Add to list" from a restock row — routes through the shared
-    // cross-feature action (handles the no-draft / multiple-draft cases +
-    // toast), so it behaves exactly like the cart button elsewhere.
-    function addRestockToList(stockItemId: string) {
-        void addToList(stockItemId);
-    }
-
-    // After creating a stock item via the quick-action dialog, refresh the
-    // summary/restock so the new item is reflected.
-    function onStockItemCreated() {
-        void loadSummary();
-        void loadKeepsRunningOut();
-    }
+    // `onStockItemCreated` went with the quick-action "Add item" dialog. The
+    // dialog itself is untouched; every other caller opens it from the surface
+    // that owns stock items.
 
     // ── Fortnight calendar (Phase 6 / D7) ────────────────────────────────
     // The server aggregates dated events (C-9.6 /alerts/upcoming); the client
@@ -1565,73 +1389,34 @@
     // else — who in exchange get expiry and shopping dots on their week view,
     // and one card instead of two rendering the same days.
 
-    // Top stores by spend for the spend-trend card (display slice of the
-    // server-aggregated rows).
-    const topSpendStores = computed(() => spendByStore.value?.rows.slice(0, 3) ?? []);
-    // R-041 / state-ownership — the total and its coverage come from the server
-    // now. This used to be a client-side `reduce` over every fetched row while
-    // the card displayed only the top 3, which is both a cross-collection
-    // aggregate computed in the browser and a total rendered without the count
-    // it was built from.
-    const spendTotal = computed(() => spendByStore.value?.total_spend ?? 0);
-    const spendStoreCount = computed(() => spendByStore.value?.store_count ?? 0);
-
-    // Latest pantry value + the delta since the window's first point.
-    const pantryValueLatest = computed(() => {
-        const pts = pantryValue.value?.points ?? [];
-        return pts.length > 0 ? pts[pts.length - 1]!.value : null;
-    });
-    const pantryValueDelta = computed(() => {
-        const pts = pantryValue.value?.points ?? [];
-        if (pts.length < 2) return null;
-        return pts[pts.length - 1]!.value - pts[0]!.value;
-    });
-
-    async function acceptSuggestion(suggestion: DoraSuggestion) {
-        if (!suggestion.primary_action) return;
-        try {
-            await suggestionStore.snoozeAsync(suggestion, 1);
-        } catch {
-            // Non-fatal — navigate anyway.
-        }
-        void router.push(suggestion.primary_action.path);
-    }
-
-    async function dismissSuggestion(suggestion: DoraSuggestion) {
-        try {
-            await suggestionStore.dismissAsync(suggestion);
-        } catch (err) {
-            console.error('Failed to dismiss suggestion', err);
-        }
-    }
+    // The spend-by-store and pantry-value display slices went with their cards
+    // (owner, 2026-09-04), as did `acceptSuggestion` / `dismissSuggestion` and
+    // the `suggestionStore` refresh — the suggestion store keeps its other
+    // consumers (the Dora launcher badge and the chat panel), which is where
+    // the owner said this content belongs: *"we're keeping the Dora chat"*.
 
     async function loadAll() {
         // Fire everything in parallel — the hero/card shells render off the
-        // bulk summary, the four P12 cards each have their own slot loader.
-        // Stores are deduped, so calling getX() when already populated is
-        // ~free (they return the cached array).
+        // bulk summary, each card has its own slot loader. Stores are deduped,
+        // so calling getX() when already populated is ~free.
         await Promise.all([
             loadSummary(),
-            loadAlerts(),
+            loadShoppingListCards(),
+            loadUseItUp(),
+            loadBeforeYouShop(),
             loadBudget(),
             loadSwapSummary(),
             loadSavings(),
-            loadSpendByStore(),
-            loadPantryValue(),
             loadPriceDrops(),
-            loadKeepsRunningOut(),
+            loadRestockRadar(),
             // FU-818 — the merged "What's coming" card is default-on and this is
             // its only source, so it is no longer conditional.
             loadUpcoming(),
-            suggestionStore.refreshAsync(),
             shoppingListStore.ensureLoadedAsync(),
             // the donut's low/out segments deep-link to
             // /stock?level_id=<id>; the store hydrates those ids.
             stockLevelStore.ensureLoadedAsync(),
         ]);
-        // Primary list detail depends on the shoppingListStore refresh
-        // having landed, so it runs after.
-        await loadPrimaryListDetail();
     }
 
     // FU-586: the money/products cards gate on the once-per-document
@@ -1648,8 +1433,6 @@
         void loadBudget();
         void loadSwapSummary();
         void loadSavings();
-        void loadSpendByStore();
-        void loadPantryValue();
     });
     watch(productsEnabled, (on) => {
         if (!on) return;
@@ -1716,15 +1499,41 @@
     .dora-hero-text {
         min-width: 0;
     }
+    /* Owner 2026-09-04 — the greeting is brand voice, not a heading: one token
+       step down (2xl → xl), the Cute Dino face, and the theme's accent colour.
+       Same treatment `PageTitle` gives a page name, which is the "title" the
+       owner pointed at.
+
+       `--accent-ink`, not `--brand-primary`: R-069 — the brand tone is a *fill*
+       and misses the contrast floor as text; `--accent-ink` is its ink-strength
+       sibling and is what every other accent-coloured string on this page uses.
+
+       The font stack is spelled out rather than reusing `DoraBrand` — that
+       component renders the literal words "Dashy Dora" and centralises the
+       *mark*, not the face. Wrapping a greeting in it would be borrowing a
+       component for its stylesheet (R-001). If a third caller ever wants the
+       face on arbitrary text, that's the moment for a token. */
     .dora-hero-greeting {
-        font-size: calc(var(--font-size-2xl) * 1rem);
+        font-family: 'Cute Dino', 'Nunito Variable', 'Nunito', sans-serif;
+        font-size: calc(var(--font-size-xl) * 1rem);
         font-weight: 600;
         line-height: 1.2;
+        color: var(--accent-ink);
     }
+    /* Dora's message of the day — the hero's main line since the "Dora says"
+       band merged in. `--text-primary`, not the old `--text-secondary`: it is
+       the sentence you actually read here now, not a caption under a heading. */
     .dora-hero-line {
         margin-top: var(--space-1);
-        color: var(--text-secondary);
+        color: var(--text-primary);
         font-size: calc(var(--font-size-md) * 1rem);
+        line-height: 1.35;
+    }
+    /* The hint that used to be `.dora-welcome-hint` in the merged band. */
+    .dora-hero-hint {
+        margin-top: var(--space-1);
+        color: var(--text-secondary);
+        font-size: calc(var(--font-size-sm) * 1rem);
     }
     .dora-hero-actions {
         display: flex;
@@ -1732,52 +1541,14 @@
         gap: var(--space-1);
     }
 
-    /* Phase 5 quick-action bar — sits between the hero and the cards. */
-    .dora-quick-actions {
-        display: flex;
-        flex-wrap: wrap;
-        gap: var(--space-2);
-        margin-bottom: var(--space-4);
-    }
-
     /* ───── Cards ────────────────────────────────────────────────────── */
     .dora-cards {
         animation: dora-fade-up 0.4s ease-out both;
     }
-    /* Zone band header — a full-width flex item; CSS `order` (set inline)
-       places it just before its zone's cards, and being full-width it forces
-       the cards onto the next line so each zone reads as a labelled band. */
-    .dora-zone-label {
-        /* Was 0.72rem (11.5px) — under D-003's 12px hard floor, and the
-           smallest text on a page whose zones ARE its information
-           architecture (§4.3). Owner decision 2026-09-02: keep the uppercase
-           eyebrow treatment, raise it to `--font-size-sm`, rather than take
-           A2's full 20px section-header row (which would restructure the
-           page's vertical rhythm). The `opacity: 0.8` went with it — dimming
-           an already-muted token is the contrast compounding D-002 warns
-           about, and it was doing the work the size should have done. */
-        font-size: calc(var(--font-size-sm) * 1rem);
-        font-weight: 700;
-        letter-spacing: 0.1em;
-        text-transform: uppercase;
-        color: var(--text-secondary);
-        margin-top: var(--space-2);
-    }
-    /* Zone sub-header inside the Cards toggle menu. NB: q-menu teleports to
-       <body>, outside `.dora-dash`, so this cannot rely on any page-scoped
-       custom property — one of the reasons the `--c-*` alias layer was
-       retired (FU-747). */
-    .dora-cards-menu-zone {
-        font-size: calc(var(--font-size-xs) * 1rem);
-        font-weight: 700;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        /* R-069: `--brand-primary` is a *fill* tone and fails the contrast
-           floor as text; `--accent-ink` is its ink-strength sibling. The
-           `opacity: 0.9` that used to sit here was compounding that. */
-        color: var(--accent-ink);
-        padding-top: var(--space-2);
-    }
+    /* The zone band header and the Cards-menu zone sub-header are gone with
+       the zones (owner, 2026-09-04). Their §4.3 rationale — "the zones ARE the
+       page's information architecture" — was true of seventeen cards and isn't
+       of nine; the order the user chooses is the architecture now. */
     /* The card shell (`.dora-card`, head, icon, title, action, link, clickable
        + hover) lives in `components/dashboard/DashboardCard.vue`.
 
@@ -1789,8 +1560,9 @@
          · used by exactly one card → that card's own scoped block (R-027)
 
        What remains below is the page's own chrome: the root, the hero, the
-       quick-action bar, the zone band labels, the "Dora says" welcome band, and
-       the grid's fade transition. All of it on global tokens — chunk 6 retired
+       onboarding skip-reminder band, and the grid's fade transition. The
+       quick-action bar, the zone band labels and the "Dora says" welcome band
+       were all removed on 2026-09-04. All of it on global tokens — chunk 6 retired
        the `--c-*` alias layer this block used to declare (FU-747). */
 
     /* The deal-row styles (`.dora-deal-*`) and their mobile reflow moved into
@@ -1818,14 +1590,10 @@
         border-left-color: var(--semantic-warning);
         background: var(--semantic-warning-soft);
     }
-    .dora-welcome-mascot {
-        border-radius: var(--radius-lg);
-        background: var(--brand-primary-soft);
-        /* Optical, hand-tuned — see the carve-out note on `.dora-hero-mascot`.
-           This one is a 40px square rather than 72px, so it takes 1px, and the
-           same sweep had quadrupled it. */
-        padding: 1px;
-    }
+    /* `.dora-welcome-mascot` went with the second mascot itself. The radius
+       cross-reference on `.dora-hero-mascot` above is kept as written — it
+       records *why* both were `--radius-lg`, which is still the reason the
+       surviving one is. */
     .dora-welcome-body {
         min-width: 0;
         flex: 1;
@@ -1904,15 +1672,9 @@
         .dora-dash {
             padding: var(--space-4) var(--space-4) calc(var(--space-12) * 2);
         }
-        /* Phase 7 mobile pass. The zone grid already stacks (cards are
-           col-12 below sm); these tidy the new Phase 4/5 bits for touch. */
-        /* Quick-action buttons span the row so they're easy thumb targets. */
-        .dora-quick-actions {
-            gap: var(--space-2);
-        }
-        .dora-quick-actions :deep(.q-btn) {
-            flex: 1 1 auto;
-        }
+        /* Phase 7 mobile pass. The card grid already stacks (cards are
+           col-12 below sm). The quick-action bar's thumb-target rules went
+           with the bar itself (owner, 2026-09-04). */
         /* The savings range toggle's mobile tap-height rule is gone with the
            hand-rolled chips — `BaseSegmented` carries its own sizing (FU-830).
            Whether its `dense size="sm"` clears the D-004 44px floor on touch is

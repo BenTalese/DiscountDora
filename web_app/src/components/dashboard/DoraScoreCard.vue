@@ -8,10 +8,11 @@
         <template #title>
             Kitchen health
             <InfoTip label="Kitchen health">
-                A 0–100 score of how your kitchen's tracking right now — waste,
-                on-budget, freshness, unplanned run-outs, and stocktake staleness,
-                averaged. Only signals with real data count; missing signals
-                don't drag the score down.
+                A 0–100 score of how your kitchen's doing right now — waste,
+                on-budget, freshness, whether planned meals got settled, and
+                whether you can actually cook the week ahead, averaged. Only
+                signals with real data count; missing signals don't drag the
+                score down.
             </InfoTip>
         </template>
         <template #action>
@@ -80,11 +81,11 @@
                     <div class="dora-score-component__foot">
                         <span class="dora-score-component__reason">{{ c.reason }}</span>
                         <router-link
-                            v-if="actionLinkFor(c.key)"
-                            :to="actionLinkFor(c.key)!.to"
+                            v-if="actionLinkFor(c)"
+                            :to="actionLinkFor(c)!.to"
                             class="dora-score-component__action"
                         >
-                            {{ actionLinkFor(c.key)!.label }} →
+                            {{ actionLinkFor(c)!.label }} →
                         </router-link>
                     </div>
                 </li>
@@ -107,9 +108,15 @@
      * assigned because the routes are SPA-owned identifiers, not
      * kitchen-health facts. If the routes ever move, this is the one
      * place to touch. Charter P1 Effortless: every weak component
-     * points at the feature that improves it (waste → waste page,
-     * budget → preferences, freshness → filtered stock view,
-     * run-outs → shopping lists, stocktake → filtered stock view).
+     * points at the feature that improves it.
+     *
+     * Owner review 2026-09-04 swapped two components (see
+     * `DoraScoreComponentKey` server-side for the reasoning). One of the
+     * replacements is why the dashboard's "Reconcile past meals" chip card
+     * could be deleted: *"remove the dedicated button card for that (because
+     * that's quite odd) and instead put that metric as the link to go do meal
+     * reconciliation"*. `plan_adherence`'s action link below **is** that card,
+     * now attached to a number that says why it's worth doing.
      */
     import { computed } from 'vue';
     import DashboardCard from 'src/components/dashboard/DashboardCard.vue';
@@ -118,7 +125,7 @@
     import { useDoraScore } from 'src/composables/useDoraScore';
     import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
     import type {
-        DoraScoreComponentKey,
+        DoraScoreComponent,
     } from 'src/models/doraScore';
 
     const { doraScore: score, loading } = useDoraScore();
@@ -151,7 +158,28 @@
     }
 
     type ActionLink = { to: string; label: string };
-    function actionLinkFor(key: DoraScoreComponentKey): ActionLink | null {
+
+    /**
+     * Takes the whole component, not just its key, because two of the five
+     * links depend on *why* the component is dormant.
+     *
+     * A dormant component is not automatically a dead link — `budget`'s
+     * "Set a budget →" on a `score: null` row is deliberate discoverability:
+     * the feature exists and you haven't set it up. But the two plan signals
+     * go dormant for the opposite reason — there is nothing to do — and
+     * "Reconcile meals →" pointing at a queue that is empty by construction is
+     * worse than no link at all (caught in the 2026-09-04 browser walk, where
+     * an auto-drain install rendered exactly that).
+     */
+    function actionLinkFor(component: DoraScoreComponent): ActionLink | null {
+        const key = component.key;
+        // The plan signals link only when they have something to say.
+        if (
+            component.score === null
+            && (key === 'plan_adherence' || key === 'plan_coverage')
+        ) {
+            return null;
+        }
         switch (key) {
             // FU-823 / R-058 — belt and braces on the money gate. The server no
             // longer emits a budget component at all when money features are
@@ -177,16 +205,17 @@
                 // Filter stock to expiring / expired items so the user
                 // can act. The stock overview reads ?expiring=1.
                 return { to: '/stock?expiring=1', label: 'Expiring items' };
-            case 'runouts':
-                // The primary shopping-list overview is where planned
-                // buys land — the answer to "fewer surprise run-outs".
+            case 'plan_adherence':
+                // The retired "Reconcile past meals" card's job, reattached to
+                // the metric that motivates it. Only ever emitted with a score
+                // in manual reconcile mode, so this link can't send an
+                // auto-drain household to an empty queue.
+                return { to: '/meal-plans/reconcile', label: 'Reconcile meals' };
+            case 'plan_coverage':
+                // A short week is short of *ingredients*, so the useful next
+                // step is the list you'd fix it with, not the plan you'd stare
+                // at. Matches where "Before you shop" sends the same problem.
                 return { to: '/shopping-lists', label: 'Shopping lists' };
-            case 'stocktake':
-                // The stocktake page IS the queue. This used to deep-link to
-                // the stock overview's "Needs check" chip (?stocktake=1);
-                // that chip was retired 2026-08-21, and pointing straight at
-                // /stocktake was always the shorter path to the same work.
-                return { to: '/stocktake', label: 'Do a stocktake' };
             default:
                 return null;
         }

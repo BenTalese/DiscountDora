@@ -86,29 +86,89 @@ export type Hint = { text: string; gate?: HintGate };
 /** Which gated hints the current install may show. */
 export type HintGates = { money: boolean; products: boolean };
 
-// Helpful hints, day-agnostic. The first eight are the original "Dora says"
-// tips; the rest are new (feedback D1d asked for a larger hint pool too).
+// Helpful hints, day-agnostic.
+//
+// **Curated + fact-checked 2026-09-04** on the owner's ask: *"Have a review of
+// the hints tips and tricks shown on the 'Dora says' card. Fact check the
+// existing ones, and curate them to add/remove so we have a useful list where
+// dora can point out things that are not so obvious in the app. Basically the
+// most valuable bits that would be found in a help or guides section."*
+//
+// The bar every line here has to clear, and the two ways a line failed it:
+//
+//   1. **It has to be true.** Each claim below was checked against the code
+//      this session, not against memory. Two didn't survive contact:
+//        · "Your saved products power the deals card" — the Best deals card was
+//          CUT by FU-819. Rewritten to name Price drops, which is the card that
+//          actually exists and the one products data actually feeds.
+//        · The dashboard-cards line said reorder happened inside a group.
+//          The zones were removed the same day, so it now says what the control
+//          does.
+//      A hint that names a surface is a hostage to that surface. If you retire
+//      a card, an axis or a page, **grep this file**.
+//
+//   2. **It has to be non-obvious.** "I quietly judge anyone who lets the
+//      salmon hit six months in the freezer" was the first hint in the pool and
+//      it teaches nothing — charming, but the slot under the greeting is the
+//      only place Dora gets to say "you know you can…", and there is no help
+//      section competing for the job. The welcomes carry the personality; these
+//      carry the manual. Cut, along with nothing else — the rest were all real
+//      tips, and eight new ones were added for features that are genuinely
+//      hidden: cook-mode substitutions, the essential flag, batch cook style,
+//      per-meal fresh cooking, the keyboard cheatsheet, planned demand,
+//      stock locations, and what the alerts bell is for.
+//
+// Order is not significance — `pickHint` rotates by day — but related hints sit
+// together so a reader scanning this file sees the shape of what's covered.
 export const HINTS: Hint[] = [
-    { text: "I quietly judge anyone who lets the salmon hit six months in the freezer." },
+    // ── Stock ────────────────────────────────────────────────────────────
     { text: "Mark a stock item as 'open' and the opened-on date is recorded automatically." },
-    { text: "Recipes greyed out on the list? At least one ingredient is fully out." },
-    { text: "Cook mode auto-detects 'X minutes' in your steps and offers a timer." },
-    { text: "Setting your default shopping list makes the cart button one-tap." },
-    { text: "Logging a cook on a recipe also bumps its last-cooked date." },
-    { text: "Filter recipes by 'all ingredients in stock' to decide what's actually cookable now." },
-    { text: "A meal plan entry's servings can exceed the recipe's; quantities scale." },
     { text: "Tap a stock item's level chip to change it without opening the full editor." },
     { text: "Sort the stock list by 'Expires soonest' to see what to cook first." },
-    { text: "Linking a product to a stock item lets me track its price over time.", gate: 'products' },
-    { text: "Your saved products power the deals card — save the ones you actually buy.", gate: 'products' },
-    { text: "Set a grocery budget and I'll quietly track spend against it for you.", gate: 'money' },
-    // Ungated (no `gate` key — `exactOptionalPropertyTypes` forbids writing it
-    // as `undefined`). Reworded: it used to say "drag the ones you check most to
-    // the top", but drag is the desktop power-user extra — `cardDragEnabled`
-    // switches the handle off on touch — so the hint now names the control every
-    // platform actually has.
-    { text: "Show, hide and reorder your dashboard cards from the Cards menu." },
     { text: "Stock groups are tags: one item can live in several, handy for filtering." },
+    // Locations are a tree, deliberately — not a spatial map. Worth saying,
+    // because "Freezer → Top drawer" is not discoverable from a flat list.
+    { text: "Locations nest: put 'Top drawer' inside 'Freezer' and filter by either." },
+    // The essential flag drives the essential-low alert kind and ranks items in
+    // Before you shop — neither of which is visible from the toggle itself.
+    { text: "Flag an item 'essential' and I'll treat running low on it as urgent." },
+
+    // ── Recipes & cooking ────────────────────────────────────────────────
+    { text: "Recipes greyed out on the list? At least one ingredient is fully out." },
+    { text: "Filter recipes by 'all ingredients in stock' to decide what's actually cookable now." },
+    { text: "Logging a cook bumps the recipe's last-made date, even if you log zero meals." },
+    // True as written: a structured step can declare `timer_minutes`, and the
+    // free-text and photo faces fall back to sniffing the step text.
+    { text: "Cook mode spots 'X minutes' in a step and offers you a timer for it." },
+    // Cook-session-only substitution is the single most hidden thing in cook
+    // mode — the swap doesn't touch the recipe, which is exactly why people
+    // don't try it.
+    { text: "Out of something mid-cook? Swap in a substitute — it only applies to this cook." },
+
+    // ── Meal plans ───────────────────────────────────────────────────────
+    { text: "A meal plan entry's servings can exceed the recipe's; quantities scale." },
+    // Batch cook style is install-wide and changes what half the app means, so
+    // a household that never found the switch never finds the feature.
+    { text: "Batch cooker? Turn on batch cooking and I'll track the portions you've frozen." },
+    // The per-entry exception to that install-wide setting (2026-09-04).
+    { text: "Cooking one meal fresh in a batch week? Mark it fresh in the meal's ⋮ menu." },
+
+    // ── Shopping ─────────────────────────────────────────────────────────
+    { text: "Setting your default shopping list makes the cart button one-tap." },
+    { text: "Linking a product to a stock item lets me track its price over time.", gate: 'products' },
+    // Was "Your saved products power the deals card" — that card is gone.
+    { text: "Saved products feed the Price drops card — save the ones you actually buy.", gate: 'products' },
+    { text: "Set a grocery budget and I'll quietly track spend against it for you.", gate: 'money' },
+
+    // ── Getting around ───────────────────────────────────────────────────
+    // Reworded 2026-09-04: reorder is no longer trapped inside a zone.
+    { text: "Show, hide and reorder your dashboard cards from the Cards menu." },
+    // The cheatsheet is the discoverability surface for the whole keyboard
+    // layer, and nothing on screen points at it.
+    { text: "Press ? anywhere for the keyboard shortcuts — 'g s' for stock, 'g l' for lists." },
+    // The bell and the dashboard cards answer different questions; people
+    // assume the bell is the only place things surface.
+    { text: "The bell is your alerts; the cards below are what to do about them." },
 ];
 
 // Days since the Unix epoch — the stable "which day is it" key both pickers

@@ -1,5 +1,5 @@
-// The dashboard's card registry: which cards exist, what zone each lives in,
-// what gates it, and whether it starts visible.
+// The dashboard's card registry: which cards exist, what gates each one, and
+// whether it starts visible.
 //
 // Extracted from `DashboardPage.vue` (FU-830) for one concrete reason: the
 // default-visible count is a *resolved decision* and it needs a mechanism that
@@ -10,43 +10,75 @@
 // of `DASHBOARD_PAGE_REVIEW.md` §3.1, and a registry buried in a 3200-line SFC
 // cannot be asserted against. Now it can (`test/unit/dashboardCards.spec.ts`).
 //
+// ## Zones were removed (owner, 2026-09-04)
+//
+// Cards used to be grouped into four fixed purpose-bands (`act` / `today` /
+// `money` / `kitchen`) with reorder allowed only *within* a band. The same
+// feedback batch that cut six cards killed the grouping: *"with how many widgets
+// we're axing, I don't think we need the groupings. Allow the user to reorder
+// the cards however they want."* Ten cards do not need a triage gradient — the
+// gradient was carrying six that no longer exist. So the order is now one flat
+// list the user owns end to end, and the grid parity maths runs once over the
+// whole list rather than per band.
+//
 // Pure data + types only. No component logic, no reactivity — the page still
-// owns visibility state, ordering, persistence and rendering. This is the first
-// slice of the R-001 extraction that FU-829 finishes.
+// owns visibility state, ordering, persistence and rendering.
 
 import { ICONS } from 'src/style/icons';
 
-export type ZoneId = 'act' | 'today' | 'money' | 'kitchen';
-
 export type CardId =
-    | 'attention'
-    | 'primary_list'
-    // 'act' zone — the "draft this week's shop" card. It's a real, registered,
-    // rendered card, but its id was once missing from this union — an R-010
-    // closed-set gap that broke `vue-tsc` and hard-failed `quasar build`
-    // (FU-550).
-    | 'draft_shop'
-    | 'suggestions'
-    | 'cookable'
+    // The next meals worth cooking. Renamed from `cookable` in the 09-04 batch:
+    // the id said "cookable tonight" and the card has rendered "Next to cook"
+    // since FU-298, and it now switches selection strategy on the household's
+    // cook style, which "cookable" actively misdescribes.
+    | 'next_to_cook'
+    // The two cards that replaced `attention` + `suggestions` (owner, 09-04).
+    // Each answers one cross-entity question the alerts bell and the chat can't:
+    // "what's about to go off that I could cook now" and "what won't survive
+    // until my next shop".
+    | 'use_it_up'
+    | 'before_you_shop'
+    // Renamed from `primary_list`: the card stopped being about *the primary*
+    // and became the three lists that matter (current · next · last finished).
+    | 'shopping_lists'
     | 'stock_items'
     // FU-818 — "What's coming": the 7-day strip and the 14-day fortnight
     // calendar merged into this one id. The retired `calendar` id is dropped by
     // the page's `parseLayout`, which filters a stored layout to known ids.
     | 'meal_plan'
     // Phase 4 — Money zone widgets backed by the reports API. FU-830 folded the
-    // old `budget` id into `savings` and cut `best_deals`; both are gone from
-    // this union, so a stored layout naming them is filtered out.
+    // old `budget` id into `savings` and cut `best_deals`; the 09-04 batch cut
+    // `spend_trend` and `pantry_value` (see the deletion note below).
     | 'savings'
-    | 'spend_trend'
-    | 'pantry_value'
     | 'price_drops'
     // Phase 5 — predictive restock.
     | 'restock'
-    // Kitchen-health score (top of the Your-kitchen zone).
-    | 'dora_score'
-    // FU-317 Chunk 5 — reconcile past meals nudge. Hide-when-empty (R-029): the
-    // component renders nothing when the queue is empty.
-    | 'reconcile_pending';
+    // Kitchen-health score.
+    | 'dora_score';
+
+// ── Cards deleted in the 2026-09-04 owner batch ──────────────────────────
+//
+// Recorded here rather than silently dropped, because R-057 treats a replaced
+// surface's contracts as an inventory to check, not a casualty list. A stored
+// layout naming any of these is filtered out by the page's `parseLayout`.
+//
+//   `attention`          Needs your attention   — same content as the alerts
+//                        bell, one nav row above it.
+//   `suggestions`        Dora suggests          — same content as the Dora chat,
+//                        which is on the same screen.
+//                        Both replaced by `use_it_up` + `before_you_shop`.
+//   `draft_shop`         Draft this week's shop — a single button whose whole
+//                        job the shopping-list page does better, with the user
+//                        able to see what the list is being built from.
+//   `spend_trend`        Spend by store         — a report, and Reports has it.
+//                        The dashboard and the reports page shouldn't overlap.
+//   `pantry_value`       Pantry value           — the same judgement the reports
+//                        review already reached about stock valuation.
+//   `reconcile_pending`  Reconcile past meals   — a bare button card. Meal
+//                        reconciliation is now the `plan_adherence` component
+//                        of Kitchen health, and *that* row is the link to go and
+//                        do it: a metric that explains why you'd bother, instead
+//                        of a nag that doesn't.
 
 export type CardGate = 'money' | 'products';
 
@@ -54,92 +86,60 @@ export type CardDef = {
     id: CardId;
     label: string;
     icon: string;
-    zone: ZoneId;
-    /** Opt-in-by-default cards (Anti-creep, §2.2) start hidden — e.g. the
-     *  secondary Money-zone glance widgets (spend trend, pantry value). */
+    /** Opt-in-by-default cards (Anti-creep, §2.2) start hidden. */
     defaultHidden?: boolean;
     /** Feature gate: the card is unavailable (hidden from the dashboard AND the
      *  Cards menu) unless its gate is on. `money` → `useMoneyEnabled` (any
-     *  dollar surface, ADR-005); `products` → product data-presence (§2.4 —
-     *  don't offer product widgets to users with no products). */
+     *  dollar surface, ADR-005); `products` → the products feature flag (§2.4 —
+     *  don't offer product widgets to an install that has products off). */
     gate?: CardGate;
 };
 
-/** Zones group cards into purpose-bands so the eye gets a triage gradient
- *  (Phase 2). They're fixed — a card belongs to one zone; the user reorders
- *  *within* a zone and toggles visibility. Render order = zone order, then the
- *  user's order within each zone. */
-export const ZONES: { id: ZoneId; label: string }[] = [
-    { id: 'act', label: 'Act now' },
-    { id: 'today', label: 'Today' },
-    { id: 'money', label: 'Money' },
-    { id: 'kitchen', label: 'Your kitchen' },
-];
-
 /**
- * The default order within each zone (and the Cards-menu order). A user's saved
- * order overrides it.
+ * The default order (and the Cards-menu order). A user's saved order overrides
+ * it, and — since zones went — that saved order spans the whole list.
  *
  * ⚠️ **The default-visible count is a resolved decision, not a free choice.**
- * §2.2 set it so the dashboard "looks focused out of the box"; the owner amended
- * it on 2026-09-02 to *merges only, no demotions*, which lands it at **11**
- * (10 in practice — `reconcile_pending` is hide-when-empty).
+ * §2.2 set it so the dashboard "looks focused out of the box"; adding a card
+ * without `defaultHidden` reopens that decision. Either mark the new card
+ * `defaultHidden: true`, or get the count re-agreed and update
+ * `DEFAULT_VISIBLE_COUNT` deliberately. The spec asserts it.
  *
- * So **adding a card without `defaultHidden` reopens that decision.** Either
- * mark the new card `defaultHidden: true`, or get the count re-agreed and update
- * `DEFAULT_VISIBLE_COUNT` deliberately. The spec asserts it, which is the
- * mechanism §2.2 never had.
+ * Ordering intent: the two things to *do today* (cook, use up), then the two
+ * that shape the next shop, then the week, then the standing kitchen view, then
+ * money. No band labels — the order itself is the gradient now.
  */
 export const CARD_DEFS: CardDef[] = [
-    { id: 'attention', label: 'Needs your attention', icon: ICONS.notifications_active, zone: 'act' },
-    // FU-351 — P6-10 one-click "Draft my shop" entry point. Sits in the `act`
-    // zone (the home screen *does*) between Attention and Suggestions. Reuses
-    // the /auto-generate engine with sensible defaults.
-    { id: 'draft_shop', label: 'Draft this week\'s shop', icon: ICONS.playlist_add_check, zone: 'act' },
-    { id: 'suggestions', label: 'Dora suggests', icon: ICONS.dora_voice, zone: 'act' },
-    { id: 'cookable', label: 'Cookable tonight', icon: ICONS.restaurant_menu, zone: 'today' },
-    // FU-818 — absorbed the opt-in `calendar` card. Keeps the `meal_plan` id so
-    // a saved layout keeps its slot in the user's order.
-    { id: 'meal_plan', label: 'What\'s coming', icon: ICONS.calendar_month, zone: 'today' },
-    { id: 'primary_list', label: 'Primary shopping list', icon: ICONS.shopping_cart, zone: 'today' },
-    { id: 'restock', label: 'Restock radar', icon: ICONS.replay, zone: 'today' },
-    // Money zone. FU-810/830 — one spend-led card: the budget bar when a target
-    // exists, kept-vs-RRP as the supporting line. It absorbed the separate
-    // `budget` card, which was the other half of the same sentence (budget knew
-    // the target; savings recomputed spend from a second endpoint, and the two
-    // could show different windows side by side). Money-gated (FU-297) — even
-    // the no-target body states dollars.
-    { id: 'savings', label: 'Grocery spend', icon: ICONS.savings, zone: 'money', gate: 'money' },
-    // Product-data-gated (FU-296) — surfaces only genuine new lows so the claim
-    // "price drop" is honest (§2.4). Opt-in like the other secondary money
-    // widgets.
-    //
-    // FU-819 — `best_deals` was CUT. It rendered the identical `.dora-deal-row`
-    // anatomy behind the same gate, differing only in ranking (biggest % off RRP
-    // vs. a server-verified new low), so a user with both on saw two visually
-    // identical lists with no explanation of why there were two. Price drops is
-    // the claim Dora can stand behind. `discountPercent` survives as a per-offer
-    // display helper — one offer's % off its own ticket is a shelf-price
-    // question and stays legitimate (ADR-068).
-    { id: 'price_drops', label: 'Price drops', icon: ICONS.trending_down, zone: 'money', gate: 'products', defaultHidden: true },
-    { id: 'spend_trend', label: 'Spend by store', icon: ICONS.storefront, zone: 'money', gate: 'money', defaultHidden: true },
-    { id: 'pantry_value', label: 'Pantry value', icon: ICONS.inventory, zone: 'money', gate: 'money', defaultHidden: true },
-    // Sits above 'Pantry' in the Kitchen zone by default: the composite score is
-    // the summary, the pantry donut the detail underneath. `favorite` (♥) reads
-    // as "health" and isn't used elsewhere on the dashboard.
-    { id: 'dora_score', label: 'Kitchen health', icon: ICONS.favorite, zone: 'kitchen' },
-    // FU-317 Chunk 5 — dashboard nudge for the meal-plan reconcile queue. The
-    // component renders nothing when the queue is empty (R-029), so no
-    // `defaultHidden` — the component itself is the gate.
-    { id: 'reconcile_pending', label: 'Reconcile past meals', icon: ICONS.event_note, zone: 'kitchen' },
-    { id: 'stock_items', label: 'Pantry', icon: 'inventory_2', zone: 'kitchen' },
+    { id: 'next_to_cook', label: 'Next to cook', icon: ICONS.restaurant_menu },
+    { id: 'use_it_up', label: 'Use it up', icon: ICONS.expiry },
+    { id: 'before_you_shop', label: 'Before you shop', icon: ICONS.shopping_cart },
+    { id: 'shopping_lists', label: 'Shopping lists', icon: ICONS.list_alt },
+    { id: 'meal_plan', label: 'What\'s coming', icon: ICONS.calendar_month },
+    { id: 'restock', label: 'Restock radar', icon: ICONS.replay },
+    { id: 'dora_score', label: 'Kitchen health', icon: ICONS.favorite },
+    // `ICONS.inventory_2`, not the bare string 'inventory_2'. The app's icon set
+    // is MDI; a raw Material Icons ligature name doesn't resolve and Quasar
+    // renders it as literal text — "inventory_2 My stock" was showing on the
+    // card header and in the Cards menu. Caught in the 2026-09-04 browser walk;
+    // it predates this batch (the card was "Pantry" then).
+    { id: 'stock_items', label: 'My stock', icon: ICONS.inventory_2 },
+    // FU-810/830 — one spend-led card: the budget bar when a target exists,
+    // kept-vs-RRP as the supporting line. Money-gated (FU-297) — even the
+    // no-target body states dollars.
+    { id: 'savings', label: 'Grocery spend', icon: ICONS.savings, gate: 'money' },
+    // Products-gated (owner 09-04: *"ensure it's gated behind products feature
+    // enabled"*). Surfaces only genuine new lows so the claim "price drop" is
+    // honest (§2.4). Opt-in like the other secondary money widgets.
+    { id: 'price_drops', label: 'Price drops', icon: ICONS.trending_down, gate: 'products', defaultHidden: true },
 ];
 
 /**
  * How many cards a fresh install shows with every gate satisfied — the number
  * §2.2 owns. Asserted in the spec so it can only change on purpose.
  *
- * 11 registered-and-visible; **10 in practice**, because `reconcile_pending`
- * additionally hides itself when the queue is empty.
+ * Nine: the ten registered cards less `price_drops`, which is opt-in. Every one
+ * of the nine renders unconditionally now — the 09-04 batch removed the last
+ * hide-when-empty card (`reconcile_pending`), so "registered and visible" and
+ * "actually on screen" are finally the same number.
  */
-export const DEFAULT_VISIBLE_COUNT = 11;
+export const DEFAULT_VISIBLE_COUNT = 9;

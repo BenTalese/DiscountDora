@@ -6,6 +6,95 @@ semver — major bumps signal schema or breaking-config changes.
 ## [Unreleased]
 
 ### Added
+- **The "log a price" picker opens on what you priced last (2026-09-04).** It
+  used to open on whatever was lowest in the pantry, which is the right guess
+  for the *shopping* picker and the wrong one here — pricing is bursty and
+  repetitive, so the thing you logged yesterday is very often the thing you're
+  logging now. Anything low or out still fills the rest of the shortlist, so a
+  household that has never logged a price sees exactly what it saw before.
+- **The dashboard answers two new questions (2026-09-04).** "Needs your
+  attention" and "Dora suggests" are gone — between them, the alerts bell and
+  the Dora chat, four things on one screen were saying the same sentence. In
+  their place: **Use it up**, which puts what's about to go off next to the
+  recipes that would actually use it ("Ricotta expired 3 days ago · cook Sunday
+  Ragu"), and **Before you shop**, which shows what's low *and not already on a
+  list*, plus what next week's plan needs that you haven't got. That
+  already-on-a-list check is the difference between a card and a nag: once you
+  add it, it stops asking.
+- **Shopping lists shows the three that matter** — the one you're shopping, the
+  next one, and the last one you finished — each with what's left to grab and
+  what it'll cost. It replaces a card that showed one list and called it
+  "primary", a word from when a list's interesting property was being the cart
+  button's target.
+- **Restock radar swept.** It used to rank by how often you'd ever run out of
+  something, so it looked identical week after week and said nothing at all on a
+  young install. It now shows what *just* ran out and what *just* went low, side
+  by side, each with the same cart button the stock page uses.
+
+### Changed
+- **Removing an item no longer flashes the whole shopping list (2026-09-04).**
+  Every line-level edit — remove, clear, trim to budget, add a suggestion, put a
+  deferred line back — re-read the list by first emptying it, so a one-row change
+  blinked the entire page through its loading skeleton. Only moving to a
+  *different* list does that now.
+- **Reports drops its title and its disclaimer.** The page opened with the word
+  "Reports" (the nav already says so) and closed the sentence with "Estimates,
+  not accounting" — a caveat on a page whose whole job is to estimate. Both gone;
+  the page now opens on what you spent.
+- **Salt & Pepper's blue, adjusted.** A little deeper and less saturated in
+  light, and lifted toward a sky blue in dark — the single accent in both, just
+  sitting more quietly against all that grey.
+- **Nine cards, no groupings, reorder anything anywhere.** The four fixed bands
+  (Act now · Today · Money · Your kitchen) are gone with the cards that filled
+  them — you can now drag or tap any card to any position. Cut outright: Draft
+  this week's shop (the shopping-list page does it better, and shows you what
+  it's building from), Spend by store and Pantry value (both reports, and
+  Reports has them), and the Reconcile past meals button-card.
+- **Dora's greeting merged into the header.** The "Dora says" band underneath it
+  — with its own second mascot next to the one already standing there — is gone;
+  the message and the day's tip are the header's own lines now, so there is
+  nothing left to dismiss. The line that used to read "3 items are out of stock"
+  went with it.
+- **The greeting is in Dora's own font**, a size smaller, in your theme's accent
+  colour.
+- **Kitchen health measures the kitchen, not your diligence.** *Unplanned
+  run-outs* and *Stocktake* are out: the first only worked if you logged
+  consumption, the second scored how recently you'd counted things, which makes
+  Dora's picture more accurate without making your kitchen any healthier. In:
+  **Plan adherence** (did the meals you planned actually get settled — scored
+  only if you reconcile by hand, since Dora does it for you otherwise) and
+  **Plan coverage** (can your pantry cook the week you've planned). Plan
+  adherence is also where the deleted Reconcile card went: the metric now links
+  to the reconcile page, so the nudge comes with a reason.
+- **"Next to cook" knows how you cook.** If you batch cook, it no longer lists
+  the calendar — one batch covers many planned days, so most of what's coming
+  needs nobody to cook it. It shows what the freezer is actually short of, plus
+  any meal you've marked cook-fresh. Fresh cooks see the next planned meals, as
+  before.
+- **The pantry card is called "My stock"**, and its chart grows to fill the card
+  instead of sitting small in a half-empty box.
+- **Dora's tips were fact-checked and rewritten.** One was advertising a card
+  that had been deleted; one was a joke about freezer-burnt salmon that taught
+  nothing. Eight new ones cover the genuinely hidden things — swapping an
+  ingredient mid-cook, marking one meal fresh in a batch week, the `?` shortcut
+  cheatsheet, what the essential flag actually does.
+- **The dashboard's meal and shopping dots are no longer the same colour** —
+  shopping moved off the brand tone, which was a near-match for the meals green
+  in several themes.
+- **Price drops is gated on the products feature**, and the Add item / Add to
+  list / Log price buttons above the cards are gone (every card carries its own
+  verb now, attached to a reason).
+
+### Fixed
+- **"My stock" was showing `inventory_2` as literal text** next to its title —
+  a Material Icons name in an app that uses MDI, so it never resolved.
+- **Kitchen health could claim you couldn't cook any of your planned meals**
+  while "Next to cook" offered to cook five of them. The coverage figure was
+  computed after the freshness scan had already loaded every stock item without
+  its level, so every ingredient looked unstocked.
+- **The dashboard scrolled sideways on a phone.** The Next-to-cook row's Cook
+  button ran ~11px past the right edge at 375px once the cook-state labels were
+  added.
 - **Sous Chef answers two more questions, and "stop" now means stop
   (2026-09-03).** Say **"ingredients"** or **"tools"** in cook mode and she
   reads the current step's — quantities scaled to who you're cooking for, and

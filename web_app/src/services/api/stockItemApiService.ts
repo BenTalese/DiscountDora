@@ -19,6 +19,14 @@ export interface SubstituteMetadataInput {
     ratio_unit_out?: string | null;
 }
 
+/** One row of `/stock-items/recently-priced` — a stock item you have logged a
+ *  price for, with when you last did. Ordering is the server's. */
+export type RecentlyPricedItem = {
+    stock_item_id: string;
+    name: string;
+    last_priced_at: string;
+};
+
 export default class StockItemApiService {
     private httpClient: AxiosHttpClient;
 
@@ -213,6 +221,15 @@ export default class StockItemApiService {
     ): Promise<void> =>
         await this.httpClient.post<void>(
             `/stock-items/${stockItemID}/price-observations`, observation,
+        );
+
+    /** Stock items with the most recent price observation, newest first —
+     *  the log-price picker's shortlist (owner, 2026-09-04). Server-ordered
+     *  (`recently_priced.py`); the client never re-sorts. Best-effort at the
+     *  call site: on failure the picker falls back to its level ordering. */
+    getRecentlyPricedAsync = async (limit = 12): Promise<RecentlyPricedItem[]> =>
+        await this.httpClient.get<RecentlyPricedItem[]>(
+            `/stock-items/recently-priced?limit=${limit}`,
         );
 
     deletePriceObservationAsync = async (stockItemID: string, observationID: string): Promise<void> =>

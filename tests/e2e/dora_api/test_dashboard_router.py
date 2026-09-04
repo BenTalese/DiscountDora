@@ -244,7 +244,11 @@ def test__dora_score__AuthenticatedRequest__ReturnsCompositeAndComponentBreakdow
     assert _Body["composite"] is None or 0 <= _Body["composite"] <= 100
     assert isinstance(_Body["window_days"], int) and _Body["window_days"] > 0
     assert isinstance(_Body["components"], list)
-    _ValidKeys = {"waste", "budget", "freshness", "runouts", "stocktake"}
+    # Owner review 2026-09-04 — `runouts` and `stocktake` were cut (both scored
+    # app diligence, not kitchen health); `plan_adherence` and `plan_coverage`
+    # replaced them. The closed set itself is pinned in `test_dora_score.py`;
+    # here we only check the wire never carries a key outside it.
+    _ValidKeys = {"waste", "budget", "freshness", "plan_adherence", "plan_coverage"}
     for _Component in _Body["components"]:
         assert {"key", "label", "score", "reason"} <= _Component.keys()
         assert _Component["key"] in _ValidKeys

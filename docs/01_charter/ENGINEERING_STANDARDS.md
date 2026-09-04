@@ -2986,6 +2986,85 @@ one-off, or purely product/UX decisions (those go to the Charter check + worklog
 
 ## ADR Log
 
+### R-082 — An eager `include()` cannot be trusted to populate a `lazy="noload"` relationship
+- **Rule:** when a helper's answer depends on a relationship declared
+  `lazy="noload"` (`StockItem.stock_level` and friends), resolve it **explicitly**
+  — the shared `resolve_levels_by_item` / `_level_access.py` idiom, or a direct
+  read of the mapped FK — rather than relying on an `.include().then_include()`
+  chain to have filled it in. A helper whose correctness depends on *what else
+  the session has already loaded* is not a helper; it is a trap with a return
+  value. If you must depend on load order, the ordering constraint goes in a
+  comment at both ends, and the finding goes in the ledger.
+- **Why:** SQLAlchemy's identity map returns the instance it already has. An
+  eager include issued *after* something has pulled the same rows in plainly
+  does not backfill the noload relationship — and nothing raises. The read
+  returns `None`, which every one of these relationships spells as a legitimate
+  domain answer: "this item has no recorded level". So the failure is a **200
+  with a confident wrong number**, not an error.
+  This has now bitten three times in the same codebase. It produced
+  "unsure" for every buy verdict (the reason `_level_access.py` exists at all);
+  it read as "this item has no level" in the pantry-belief overlay; and on
+  2026-09-04 it made Kitchen health's new `plan_coverage` component announce
+  *"None of your 6 planned meals can be cooked right now"* on a dashboard whose
+  neighbouring card was offering to cook five of them — because the freshness
+  block above it had already loaded every `StockItem` with a bare
+  `get(StockItem).all()`, so `load_recipe_cookability`'s eager
+  `RecipeIngredient → StockItem → StockLevel` chain populated nothing and every
+  linked ingredient read as unstocked.
+- **How to comply:** prefer the explicit resolver. Where a hoist is the
+  pragmatic fix (as it was for `get_dora_score._gather_inputs`), say *why the
+  order matters* in a comment a reordering edit cannot miss, and log the proper
+  fix — here, [[FU-872]].
+- **Established:** 2026-09-04 (dashboard feedback batch). See ADR-079.
+
+### R-083 — A per-entry exception to an install-wide policy must be neutral in both directions
+- **Rule:** when a per-row flag exempts one entity from a household-wide policy,
+  work out what the policy does *to* the entity **and** what the entity does *to*
+  the shared pool, and neutralise both. Then walk every verb that touches the
+  pool — including the background sweeps — and state the exemption once, in the
+  place that owns the resolution, rather than teaching each helper the flag.
+- **Why:** an exception implemented in one direction only is worse than no
+  exception, because it silently destroys shared state. `MealPlanEntry.cook_fresh`
+  is the case: a meal cooked fresh in a batch household must not *demand* a
+  portion from the cooked pool (or the shortfall inflates and you batch-cook food
+  you don't need) **and** must not *spend* one (or the auto-drain sweep quietly
+  consumes a portion the household still has in the freezer). Only the first half
+  is obvious from the feature request; the owner had to say both —
+  *"it should not take a meal, and it should also not demand a meal from the
+  pool"* — and the second half is the one that loses data.
+- **How to comply:** enumerate the pool's readers and writers before writing the
+  flag. For `cook_fresh` that was `allocate_pool`, `recipe_shortfalls`,
+  `reconcile_consumed_meals` and every resolution verb in `reconcile.py`, plus a
+  mutual-exclusion check against cook batches on both write paths.
+- **Established:** 2026-09-04 (carried over from the 09-04 fresh-cooking unit,
+  which flagged the shape and did not promote it). See ADR-080.
+
+
+### R-084 — Only a navigation may blank the page; an in-place edit refreshes quietly
+- **Rule:** a loader that nulls the page's data before re-fetching belongs to
+  *navigation* — arriving at a different record. Any mutation of the record the
+  user is already looking at (add a line, remove a line, clear, trim, toggle a
+  field) re-reads through a **quiet** refresh that assigns the new payload over
+  the old one and never passes through the empty state. When both are needed,
+  the two paths are separate named functions and the difference is documented on
+  the quiet one.
+- **Why:** blanking re-renders the page through its skeleton branch, so a
+  one-row edit flashes the whole screen. It reads as a bug even when the data is
+  correct, and it costs the user their scroll position and any expanded
+  section. This is now the third report of the same defect on the same page —
+  the shop-date save (2026-08-29) and then *"hate that the shopping list flashes
+  every time you remove an item"* (owner, 2026-09-04), which the 08-29 fix had
+  already built the quiet path for but only wired to the list-level edits.
+- **How to comply:** when you add a mutation handler, look at what its refresh
+  call does *before* its first `await` — if it sets the page's data to `null`,
+  it is the navigation loader and you want the quiet sibling instead. Adding the
+  quiet path without sweeping the sibling handlers on the same page is what left
+  this open for a week; sweep them.
+- **Established:** 2026-09-04 (`ShoppingListDetail.vue` — `onRemoveLine`,
+  `onAddSuggestion`, `onClearAll`, `addLineBackToActive`, `applyTrim`). See
+  ADR-081.
+
+
 ### ADR-001 — Adopt engineering standards + mandatory explain-or-flag gate
 - **Date / task:** 2026-06-06 (user request after repeated theme/component regressions)
 - **Status:** accepted
@@ -5380,3 +5459,77 @@ A non-binding cookbook of solutions to recurring problems. Not rules — just a
   rather than by one page that lists everything; the nav's three groups carry
   that.
 - **Promotes rule:** R-081.
+### ADR-079 — Explicit level resolution beats an eager include (promotes R-082)
+- **Date / task:** 2026-09-04 (owner feedback batch — dashboard)
+- **Status:** accepted
+- **Context:** Kitchen health gained a `plan_coverage` component: of the meals
+  planned for the next 7 days, how many the pantry can cook. It read the shared
+  `load_recipe_cookability` map, which is the same authority the dashboard
+  summary's per-entry `missing_count` uses — the correct, R-003 choice. It
+  nevertheless returned 0 cookable out of 6, on a dataset where the summary
+  endpoint simultaneously reported 5 of those 6 as `missing_count: 0`. Same
+  request, same session, same map, opposite answers. The cause was position:
+  `_gather_inputs` computes freshness with `get(StockItem).all()`, and the
+  cookability map was being built *after* that, so its eager
+  `StockItem → StockLevel` include hit an identity map already holding those
+  rows with `stock_level` unloaded.
+- **Decision:** treat "did an eager include actually populate this noload
+  relationship?" as an unanswerable question at the call site, and resolve such
+  relationships explicitly. The immediate fix hoists the cookability load to the
+  top of `_gather_inputs` with a comment stating the constraint; the durable fix
+  — making `load_recipe_cookability` order-independent via `_level_access` — is
+  [[FU-872]], because it changes a rule four recipe surfaces read and wants its
+  own unit.
+- **Consequences:** one more ordering constraint recorded in a comment, which is
+  a fix a reordering edit can undo — hence the rule and the FU rather than
+  calling the hoist done. On the other side: the third occurrence of this trap
+  is now written down as a *class* rather than a third one-off, and
+  `_level_access.py`'s existence finally has a rule pointing at it.
+- **Rule promoted:** R-082.
+
+### ADR-080 — A per-entry exemption is neutralised in both directions (promotes R-083)
+- **Date / task:** 2026-09-04 (carried from the fresh-cooking unit of the same day)
+- **Status:** accepted
+- **Context:** `batch_features_enabled` was install-wide and binary, so a
+  household that batch-cooks had no way to say "this one meal is cooked on the
+  day". `MealPlanEntry.cook_fresh` (migration `b8d2f4a6c091`) is that exception.
+  The naive implementation — skip fresh entries when computing the shortfall —
+  is half a feature: the entry would still be *drained* from the cooked pool by
+  the reconcile sweep when its day passed, silently consuming a portion the
+  household still had frozen.
+- **Decision:** an exemption is specified as a pair of neutralities, not a
+  filter. `cook_fresh` stands outside the pool in both directions: it is never
+  covered by the pool and never spends from it. Stated once per resolution point
+  (`allocate_pool`, `recipe_shortfalls`, `reconcile_consumed_meals`, and
+  `reconcile.py`'s verbs via `current_drained = target_drained = 0`) rather than
+  teaching both drain helpers the flag, and made mutually exclusive with a cook
+  batch — a batch *is* the pool — on both write paths.
+- **Consequences:** more places to touch when the pool model changes, and a
+  mutual-exclusion rule the client has to mirror (the toggle hides on a linked
+  meal; `setCookDays` strips `cook_fresh` when reusing a fresh entry). Accepted:
+  the alternative loses food.
+- **Rule promoted:** R-083.
+
+### ADR-081 — The blanking loader is the navigation path, and only that (promotes R-084)
+- **Date / task:** 2026-09-04 (owner feedback: the shopping list flashes on every
+  item removal)
+- **Status:** accepted
+- **Context:** `ShoppingListDetail.load()` nulls `detail` before re-fetching so a
+  *navigation* between lists shows a skeleton rather than the previous list's
+  rows. Every mutation handler on the page reused it, so editing the list you
+  were already looking at flashed the entire page through the skeleton. The
+  2026-08-29 shop-date report produced the right fix — `refreshDetailQuietly()` /
+  `refreshAllQuietly()` — but wired it only to the list-level edits, leaving the
+  line-level ones (the far more frequent action) on the blanking path.
+- **Decision:** classify the refresh by what changed, not by how much. The
+  blanking loader is reserved for navigation; every in-place edit goes through the
+  quiet pair. Applied here to `onRemoveLine`, `onAddSuggestion`, `onClearAll`,
+  `addLineBackToActive` and `applyTrim`. The remaining `load()` calls are either
+  the route watcher or paths where the page's identity really does change.
+- **Consequences:** a quiet refresh doesn't re-prime the shared buy-verdict cache
+  (`primeVerdicts` runs only in `load()`), so a line added by the suggestions
+  strip fetches its own verdict rather than riding the list's batched one — one
+  extra request, versus re-priming the whole list and flashing every badge back
+  through its spinner. Accepted.
+- **Rule promoted:** R-084.
+

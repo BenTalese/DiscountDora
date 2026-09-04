@@ -108,9 +108,27 @@
     border-radius: var(--radius-md);
 }
 /* Next-to-cook rows carry an extra badge column between meta and the Cook
-   button (FU-298). Restock rows are unchanged. */
+   button (FU-298). Restock rows are unchanged.
+
+   Four columns is one more than 375px comfortably holds, and the 2026-09-04
+   pool labels made it worse by adding "· to cook" to the meta: measured at
+   375px, the Cook button's right edge landed at 386px and the whole page
+   scrolled sideways. The name column already shrinks (`minmax(0, 1fr)`), so
+   the culprit was `.dora-cook-meta`'s `white-space: nowrap` holding the second
+   column at its full text width.
+
+   Letting the meta wrap inside this row costs nothing above ~500px — the text
+   is short enough to stay on one line wherever there is room — and on a phone
+   it takes two lines instead of pushing a button off-canvas. Scoped to the
+   with-badge row rather than lifted into `.dora-cook-meta`, because the
+   three-column rows (Restock radar) have the space and read better on one
+   line. R-078: a width, not a breakpoint — nothing here asks the viewport. */
 .dora-cook-row--with-badge {
     grid-template-columns: minmax(0, 1fr) auto auto auto;
+}
+.dora-cook-row--with-badge .dora-cook-meta {
+    white-space: normal;
+    min-width: 0;
 }
 .dora-cook-badge {
     font-weight: 600;

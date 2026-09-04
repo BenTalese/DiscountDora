@@ -22,6 +22,26 @@ top-to-bottom.
 
 ---
 
+## Salt & Pepper's re-tuned blue (2026-09-04)
+
+The token values were confirmed live and every contrast pair recomputed; what's
+left is the judgement call the owner asked for.
+
+- [ ] Salt & Pepper (light): the blue reads a shade deeper and calmer against the
+      grey — primary buttons, the focus ring, selected states, Dora's halo.
+- [ ] Salt & Pepper Dark: the same accent now sits toward sky blue and paler.
+      Check it on a filled primary button (the dark ink on it) and on the theme
+      picker's own swatch.
+
+## Reports header at 375 (2026-09-04)
+
+Verified at desktop width: no "Reports" heading, and the caveat tooltip no
+longer ends "Estimates, not accounting."
+
+- [ ] Reports at 375, **money off**: with the lede gone too, the header is just
+      the range control + the info icon, and it doesn't leave a dead gap where
+      the title block was.
+
 ## Admin settings — after the group restructure (2026-09-03)
 
 Driven live at 375 and 1280 (nav, both new pages, redirects, save-on-change,
@@ -210,6 +230,47 @@ than the component's authors sized them for.
       grouping switch, the recipe method's step-style switch (the pill one),
       cookbook filter sorts, price history, cook mode — for labels that now
       **wrap or overflow** their segment at 14px where 10px used to fit.
+
+## Dashboard — the 2026-09-04 feedback batch: what the walk couldn't reach
+
+The batch **was** driven live at 1280 and 375 on the dense seed (money ON,
+products ON, batch cooking OFF, auto-drain reconcile ON), and everything
+observable under those settings is already confirmed — nine cards, the flat
+Cards menu, the merged hero, Kitchen health's five components, no horizontal
+overflow at 375. What follows is only what that one configuration could not
+show. See the worklog entry for what was verified.
+
+- [ ] **Batch household — "Next to cook" shows shortfalls, not the calendar.**
+      Turn batch cooking on, cook a batch that covers several planned days, and
+      confirm the card lists only the meals the pool is short of — not the next
+      few days in order. This is the owner's own item and the seed can't show it
+      (batch is off there).
+- [ ] **Batch household — a meal marked cook-fresh still appears** in that card
+      even when the pool covers its day, labelled `fresh`.
+- [ ] **Batch household — the empty state reads "the pool covers what's
+      planned"**, not "Nothing planned for the next week", when the week is full
+      but nothing needs cooking.
+- [ ] **Manual reconcile mode — Kitchen health scores Plan adherence.** Switch
+      reconcile to manual, let a planned day pass, and confirm the component
+      shows a score (not "Dora settles past meals for you") with a working
+      **Reconcile meals →** link. Under auto-drain it is correctly dormant and
+      link-less, which is what the walk saw.
+- [ ] **Money OFF — the Shopping lists card drops its dollars** and shows counts
+      only ("2 to grab", no price), on all three rows. — origin FU-868
+- [ ] **Products OFF — Price drops disappears from the Cards menu**, not just
+      from the grid. — origin FU-868
+- [ ] **Use it up with an empty cookbook** — the items list still stands on its
+      own with no "Cook one of these" block, rather than looking broken.
+- [ ] **Before you shop — add an item from the card and watch it leave.** The
+      card's premise is "not already on a list", so pressing its cart button
+      should remove that row on the next load. Worth one eyes-on because it is
+      the behaviour that distinguishes the card from the alerts bell.
+- [ ] **A card reordered across the whole list survives a reload** — drag one
+      from the bottom to the top and reload. Reorder used to be trapped inside a
+      zone; the persisted layout now spans everything.
+- [ ] **The greeting's Cute Dino font renders on a cold load** (no FOUT leaving
+      it in Nunito) — it is a `@font-face` file, and this is the first surface to
+      use it outside the login/title screens.
 
 ## Dashboard — after the chunk 6 sweep (2026-09-02) — origin FU-828
 

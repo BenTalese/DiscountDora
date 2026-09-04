@@ -29,6 +29,110 @@ long session summary. Distinct from the other logs:
 ## Entry template
 
 ```
+## [OPEN] FU-873 — `frequently_added.py` reads a `lazy="noload"` relationship and reports `None`
+- **Raised:** 2026-09-04 (log-price picker ordering)
+- **Type:** finding (R-082 trap, currently harmless)
+- **What:** `GetFrequentlyAddedHandler` builds each row with
+  `item.stock_level.id if item.stock_level else None`. Its query doesn't
+  `.include(STOCK_LEVEL)`, and that relationship is mapped `lazy="noload"`, so
+  the guard always takes the `None` branch: `/shopping-lists/frequently-added`
+  has been returning `stock_level_id: null` for every row since it was written.
+- **Why it's harmless today:** the only consumer, `QuickAddSheet`, uses the
+  response for *ordering* and for `isFrequent()`, and reads each item's level
+  from its own store — so nothing renders the null. The new
+  `/stock-items/recently-priced` was deliberately shaped without the field for
+  the same reason.
+- **Recommended resolution:** opportunistic — either add the `include` (and
+  resolve through `_level_access.py`, per R-082) or drop the field from the DTO
+  so it can't be trusted by a future caller. The second is probably right.
+
+## [OPEN] FU-872 — `load_recipe_cookability` silently returns wrong answers if StockItems are already in the session
+- **Raised:** 2026-09-04 (dashboard feedback batch — browser walk)
+- **Type:** finding (data-access trap; R-032 family)
+- **What:** the helper eager-loads `RecipeIngredient → StockItem → StockLevel`,
+  but `StockItem.stock_level` is `lazy="noload"`. If anything earlier in the same
+  request has already pulled those StockItem rows in — a bare
+  `repository.get(StockItem).all()` will do it — the identity map returns the
+  cached instances and the eager load **does not populate `stock_level`**. Every
+  linked ingredient then reads as unstocked, so `missing_count` is non-zero for
+  every recipe. No error, no warning: a 200 and a confidently wrong number.
+- **How it surfaced:** Kitchen health's new `plan_coverage` component rendered
+  *"None of your 6 planned meals can be cooked right now"* beside a Next-to-cook
+  card offering to cook five of them, because the freshness block above it loads
+  every StockItem. Fixed **locally** by hoisting the cookability load to the top
+  of `get_dora_score._gather_inputs`, with a comment saying why it must stay
+  there — which is a fix that a future edit can silently undo by reordering.
+- **Why it isn't fixed properly here:** the real fix is to make the helper
+  independent of session state — resolve levels through the shared
+  `resolve_levels_by_item` idiom (`_level_access.py`) rather than relying on an
+  eager include, exactly as that module was written to do for the same trap. That
+  touches the cookability rule every recipe surface reads (`?cookable`, the
+  recipe DTO, the dashboard summary, this score), so it wants its own unit and
+  its own test rather than a ride-along.
+- **Worth checking while in there:** whether any *other* caller of
+  `load_recipe_cookability` runs after a StockItem load in the same request. The
+  dashboard summary computes it early and is fine; `GetRecipesHandler` uses its
+  own `_base_query`. Neither was verified for ordering here.
+- **Recommended resolution:** later — before any further use of
+  `load_recipe_cookability`, and certainly before a fifth caller appears.
+
+## [OPEN] FU-871 — Six retired dashboard card ids are still sitting in every user's saved layout
+- **Raised:** 2026-09-04 (dashboard feedback batch)
+- **Type:** follow-up (data hygiene, low urgency)
+- **What:** `User.dashboard_layout` stores `{order, hidden}` as JSON. The cull
+  retired `attention`, `draft_shop`, `suggestions`, `spend_trend`,
+  `pantry_value`, `reconcile_pending` and renamed `cookable` → `next_to_cook`,
+  `primary_list` → `shopping_lists`. Nothing rewrites the stored JSON: it is
+  filtered to known ids on read (`parseLayout`), so behaviour is correct, but the
+  dead ids persist in the row until the user next reorders something.
+- **Why deferred:** harmless — `parseLayout` is the guard, and
+  `dashboardCards.spec.ts` pins the retired ids as absent so one can't be
+  resurrected for a different card and inherit somebody's hidden flag. A
+  migration to scrub them is cosmetic.
+- **Recommended resolution:** opportunistic — fold into the next migration that
+  touches `User`, or never.
+
+## [OPEN] FU-870 — Kitchen health's trend arrow now moves on four signals, not five
+- **Raised:** 2026-09-04 (dashboard feedback batch)
+- **Type:** finding (accepted trade, recorded so it isn't rediscovered)
+- **What:** `plan_coverage` is deliberately forward-looking — it grades the next
+  7 days — so the lagged recompute sees the same future and returns the same
+  number, and it cancels out of `trend_delta` entirely. The arrow is therefore a
+  mean over the other four components while the card presents five.
+- **Why it's accepted:** the arrow is a secondary flourish; *"your plan is
+  half-uncookable"* is the most actionable thing the card can say, and making it
+  trend-comparable would mean grading a *past* week's coverage, which nobody can
+  act on. Stated in `_score_plan_coverage`'s docstring.
+- **Recommended resolution:** when the trend arrow is next revisited — decide
+  whether to (a) leave it, (b) exclude forward-looking components from the trend
+  explicitly rather than incidentally, or (c) drop the arrow.
+
+## [OPEN] FU-869 — `/reports/keeps-running-out` lost its dashboard caller
+- **Raised:** 2026-09-04 (dashboard feedback batch)
+- **Type:** leftover (R-057 contract inventory)
+- **What:** Restock radar was rebuilt on the new `/dashboard/restock-radar`, so
+  `reportsApi.getKeepsRunningOutAsync` no longer has a dashboard caller. **The
+  endpoint is NOT orphaned** — the reports page still calls it with its own range
+  — so this is an inventory note, not a deletion candidate. Logged because R-057
+  is explicit that a replaced surface's contracts get checked rather than
+  assumed, and because the reports page is now its *only* consumer, which changes
+  who owns its shape.
+- **Recommended resolution:** opportunistic — confirm at the next reports-page
+  visit that the range-passing behaviour is still what that page wants.
+
+## [OPEN] FU-868 — Two dashboard cards were never seen with their feature gate OFF
+- **Raised:** 2026-09-04 (dashboard feedback batch — browser walk)
+- **Type:** finding (verification gap)
+- **What:** the 09-04 walk ran on the dense seed, which has **both** money and
+  products **on**. So: the Shopping-lists card's money-off body (counts only, no
+  dollars) and the Price-drops card's products-off disappearance from both the
+  grid and the Cards menu were reasoned about but not observed. The registry
+  spec asserts the *gates*; it can't assert the rendered result.
+- **Why deferred:** needs a second backend on a money-off / products-off seed,
+  which is a whole verify pairing rather than a step in this one.
+- **Recommended resolution:** when a money-off verify run next happens — the
+  corresponding eyes-on steps are in `DORA_VERIFY.md` under Dashboard.
+
 ## [OPEN] FU-NNN — short title
 - **Raised:** YYYY-MM-DD (prompt id / task)
 - **Type:** follow-up | deferred job | leftover | finding
@@ -812,39 +916,6 @@ long session summary. Distinct from the other logs:
 - **Recommended resolution:** opportunistic — a two-minute A8 edit next time
   anyone is in `DESIGN_STYLE_GUIDE.md`. Cross-ref: A8, `DASHBOARD_PAGE_REVIEW.md`
   §4.6 correction.
-
-## [OPEN] FU-835 — Kitchen health's "Stocktake" component scores an activity, not a health signal
-- **Raised:** 2026-09-02 (dashboard chunk 1 — split out of [[FU-823]])
-- **Type:** finding (scoring semantics; owner-flavoured)
-- **What:** the stocktake component is *% of stock items whose `last_checked_at`
-  falls in the last 30 days* (`get_dora_score.py:186-191`). A household that did
-  a full stocktake 40 days ago and has changed nothing since scores **0** on that
-  component and drags the composite down by a fifth — for having a stable,
-  accurate pantry. The reason string says it out loud: *"Nothing has been checked
-  in the last 30 days."* The other four components all measure **events that went
-  wrong** (waste logged, items expired, unplanned run-outs, over budget); this one
-  measures **an activity not performed**. It is the only component that is a nag
-  rather than a signal, and it is the one most likely to make a careful user
-  distrust the score.
-- **Why it isn't the threshold swap the review assumed:** `DASHBOARD_PAGE_REVIEW.md`
-  §8 D5 folded this into FU-823 as "score against the install's configured
-  cadence rather than a hard 30 days". Reading the settings shows why that is
-  wrong: cadence is **per-item**, not install-wide —
-  `stocktake_default_cadence_band` is only the default band, and
-  `stocktake_auto_tuning_enabled` moves individual items between bands from their
-  own history. So the honest version is *"% of items checked within **their own**
-  cadence window"*, which needs the per-item band resolved inside the score
-  handler. That is a scoring-semantics change to a champion-plan feature
-  (P8-08), not a constant edit.
-- **Also worth deciding while in there:** whether a *never-stocktaked* install
-  should score 0 or be **dormant** on this component. Today a household that has
-  never opted into stocktake still gets scored on it, which is the R-029
-  "respect the off-state" question in miniature — and `stocktake_enabled` exists
-  to answer it.
-- **Recommended resolution:** opportunistic, or whenever the Dora Score is next
-  open. Not urgent — the score is honest about what it measured, it is just
-  measuring the wrong thing for one component out of five. Cross-ref:
-  `DASHBOARD_PAGE_REVIEW.md` §3.7.2 + §8 D5, [[FU-823]] (resolved), R-029.
 
 ## [OPEN] FU-808 — `space` and `u` are advertised in the shortcut cheatsheet on faces where they do nothing
 - **Raised:** 2026-09-01 (v4 chunk 4 — cutover audit)

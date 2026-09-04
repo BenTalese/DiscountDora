@@ -41,6 +41,182 @@ next.
 
 ---
 
+## 2026-09-04 (later still) — **Four small owner items: the flash, the heading, the caveat, the blue — plus a picker that finally opens on the right guess**
+
+**Status: complete and driven live.** Gates: **vitest 698 / 61 files**,
+`vue-tsc` clean, `eslint` clean on the touched files, and the three new
+backend cases green (`tests/e2e/dora_api/test_recently_priced.py`). The full
+pytest gate was **not** re-run — this unit adds one read-only endpoint and
+touches no existing handler; the next unit should fold it in.
+
+**The items, and what each actually was.**
+
+1. **"Remove the *Reports* heading. We know where we are."** Dropped the `<h1>`
+   and its rule; the page now opens on the lede. No D-rule mandates a page
+   `<h1>` (only a type-scale row for one), and most pages already have none.
+2. **"Remove *estimates, not accounting*."** It lived in the range control's
+   info tooltip. The rest of that sentence — what the numbers are built from —
+   stays, because it's information; the caveat was just hedging.
+3. **"Hate that the shopping list flashes every time you remove an item."** This
+   is the **2026-08-29 shop-date defect a second time.** That report produced the
+   right fix — `refreshDetailQuietly()` / `refreshAllQuietly()`, which reassign
+   `detail` instead of nulling it first — but wired it only to the *list-level*
+   edits. Every line-level handler still called `refreshAll()` → `load()`, which
+   blanks `detail` synchronously so a one-row change re-renders the page through
+   its skeleton. Swept all five: `onRemoveLine`, `onAddSuggestion`, `onClearAll`,
+   `addLineBackToActive`, `applyTrim`. Promoted to **R-084 / ADR-081** — the
+   blanking loader is the navigation path and only that — because the fix
+   existing but not being applied is exactly the failure a rule prevents.
+   `onStartShopping` was left alone deliberately: it flips the page's whole mode.
+4. **"Order the log-price picker's top suggestions by most recent price
+   recording."** The picker was ordering by stock level, borrowed wholesale from
+   `QuickAddSheet` — right history, wrong question. New read-only endpoint
+   `GET /api/stock-items/recently-priced` (`recently_priced.py`, shaped after
+   `frequently_added.py`), server-ordered per R-003; the sheet leads with it and
+   still tops up with low/out so a household with no price history is unchanged.
+   The DTO deliberately carries **no** `stock_level_id`: `StockItem.stock_level`
+   is `lazy="noload"` (R-082) and `frequently_added.py`'s guarded read of it
+   silently returns `None` — the picker looks the item up in its own store
+   instead, which is where its level dot already came from. (That silent `None`
+   in `frequently_added.py` is harmless today — nothing reads the field — but
+   it's the R-082 trap sitting armed; **FU-873**.)
+5. **The Salt & Pepper blue** — deeper and less saturated in light
+   (`hsl(212 90% 40%)` → `hsl(212 78% 36%)`), lifted toward sky in dark
+   (`hsl(210 90% 66%)` → `hsl(204 88% 74%)`), with `--accent-ink`,
+   `--accent-mark`, the soft pair, the nav flash, the Dora halo and the theme
+   picker's swatch moved with it. Every contrast pair recomputed against the full
+   surface ladder — the theme's tightest pair is now `--text-muted` at 4.67:1;
+   the accent went **up** in both variants (light 5.7:1 min, dark 8.1:1 min).
+
+**Verified live** (dense money seed on :5170 + SPA :5174, form login): reports
+header carries no `<h1>` and no "Estimates, not accounting"; both salt-pepper
+variants compute the new tokens; `/stock-items/recently-priced` returns
+newest-first and the sheet renders in exactly that order. The flash was pinned
+the only way the pane allows — `load()` sets `detail` to null *before* its first
+await, `onRemoveLine` never does at any point across the operation, and the line
+is gone from the list afterwards.
+
+**Next up:** re-run the full pytest gate; then FU-873 if it's cheap.
+
+---
+
+## 2026-09-04 (later) — **The dashboard stops repeating itself: 19 owner items, six cards deleted, two built, and a score that measures the kitchen**
+
+**Status: complete and driven live.** Gates: **pytest 2303 passed** (only the
+four known buy-verdict reds, FU-762), **vitest 698 / 61 files**, `vue-tsc`
+clean, `eslint src/` clean. Walked at 1280 and 375 on the dense seed via the
+isolated scratch pairing (backend :5171 on `data/scratch-verify.db`, SPA :5174).
+
+**The 09-04 handover above is closed by this entry.** Its owed pytest gate ran
+green; its `cook_fresh` work is covered by the CHANGELOG entry and by R-083 /
+ADR-080 below (the rule that session flagged and didn't promote); its "Next to
+cook learns the pool" item was *superseded* mid-flight — see item 7. Its browser
+walk is folded into this one, with the batch-household half moved to
+`DORA_VERIFY.md` because the dense seed has batch cooking off.
+
+**Four design decisions were put to the owner up front** and all four went the
+recommended way: two purpose-built insight cards rather than a ranked feed;
+swap both weak kitchen-health signals for outcomes; no factual line in the hero
+at all; and the donut expands rather than gaining a second chart.
+
+**What the batch actually was.** Nineteen items, of which twelve were
+deletions or tidy-ups and the rest wanted design. The through-line the owner
+found is worth recording, because it is the same finding four times: *"I don't
+think we need the overlap of 'needs attention', 'Dora suggestions', the actual
+Dora chat, and the alerts bell. These are all saying the exact same thing."*
+The dashboard had accumulated surfaces that restated each other, and the fix was
+not to reword them but to ask what question each could answer that no neighbour
+already did.
+
+1. **Two cards replaced two cards.** `use_it_up` joins near-expiry stock to the
+   recipes that require it — the bell states an expiry and stops; this says what
+   to cook tonight. `before_you_shop` shows what is low **and not already on a
+   list**, plus the coming plan's uncovered demand (`gather_planned_demand`,
+   unmodified). That list-membership join is the whole card: it is the one thing
+   the bell and the stock page can't know, and it is why the empty state is a
+   real "you're done" rather than "no data".
+2. **`shopping_lists` replaced `primary_list`** — current · next · last
+   finished, server-picked, each with the totals from `compute_list_totals` (the
+   same authority the list page uses, so the two can't disagree). The old card
+   fetched a whole `ShoppingListDetail` to render three numbers.
+3. **Restock radar moved to the present tense.** It ranked on a lifetime count,
+   so it looked identical every week and said nothing on a young install; it now
+   shows what *just* went out / low, two columns, each row ending in the stock
+   page's own `AddToListButton` (the owner asked for exactly that component).
+4. **Six cards deleted**, each with the reason recorded in
+   `helpers/dashboardCards.ts`: attention, suggestions, draft_shop, spend_trend,
+   pantry_value, reconcile_pending.
+5. **Zones removed.** Four fixed bands with reorder trapped inside them made
+   sense for seventeen cards and not for nine. The grid parity maths now runs
+   once over the whole list, which is strictly better — an odd count used to
+   strand one card *per band*.
+6. **The hero absorbed "Dora says"**, its second mascot, its dismiss button and
+   the per-day dismissal state; the "N items are out of stock" line is gone. The
+   greeting is Cute Dino, one size down, `--accent-ink`.
+7. **"Next to cook" selects differently per cook style.** The 09-04 unit above
+   taught it the pool's *labels* while it still listed the calendar — which
+   answers the question by apologising for the list. It now filters to
+   `needs_cooking || cook_fresh` in a batch household and leaves fresh
+   households alone.
+8. **Kitchen health lost `runouts` and `stocktake`, gained `plan_adherence` and
+   `plan_coverage`.** The owner asked whether these were the right five; the
+   test that separated them is *does this measure a kitchen outcome, or how
+   diligently you use the app*. Run-outs only fired for households that log
+   consumption; stocktake scored how recently you'd counted things. **This
+   resolves FU-835**, which had scoped a per-item-cadence rework of the
+   component that no longer exists.
+9. **The tips were fact-checked, not just curated.** One advertised the Best
+   deals card, cut by FU-819; one was a salmon joke that taught nothing. Eight
+   new ones cover genuinely hidden features. A hint that names a surface is a
+   hostage to that surface — noted in the file, because this is the second time
+   the pool has gone stale under a deletion.
+
+**Three real defects came out of the browser walk** — all three invisible to the
+gates, which is the argument for walking it:
+
+- **`plan_coverage` announced "None of your 6 planned meals can be cooked right
+  now"** beside a card offering to cook five of them. `load_recipe_cookability`
+  eager-loads `StockItem → StockLevel`, which is `lazy="noload"`; the freshness
+  block above it had already pulled every StockItem into the session, so the
+  eager load populated nothing and every ingredient read as unstocked. 200, no
+  warning, confident wrong number. Third occurrence of this trap in this
+  codebase → **R-082 / ADR-079**, with [[FU-872]] for the durable fix (make the
+  helper order-independent via `_level_access`, which touches four recipe
+  surfaces and wants its own unit).
+- **"My stock" rendered `inventory_2` as literal text** — a Material Icons
+  ligature in an MDI app. Pre-existing; the card was called "Pantry" then.
+- **The page scrolled sideways at 375px** — the Next-to-cook row's Cook button
+  ran ~11px past the edge once the cook-state labels were added. The meta was
+  `white-space: nowrap`; it wraps now, scoped to the four-column row only.
+
+Also fixed in passing: a dormant Kitchen-health component was still rendering
+its action link, so an auto-drain household got "Reconcile meals →" pointing at
+a queue that is empty by construction. `budget`'s dormant "Set a budget →" is
+deliberate discoverability and stays; the two plan signals go dormant because
+there is nothing to do, so they lose the link.
+
+**New endpoints** (all `DASHBOARD_ROUTER`, auto-registered): `/lists`,
+`/use-it-up`, `/before-you-shop`, `/restock-radar`. **14 e2e tests** in
+`test_dashboard_insight_cards.py` — deliberately not layout tests. Under the
+manual-first stance they pin only the four rules that are invisible in a browser
+and expensive to set up by hand (the optional-ingredient exclusion, the
+already-on-a-list filter, shopping-beats-draft, and currently-in-band-only). The
+file's header notes the trap that cost the most time writing them: every one of
+these cards is a top-N slice of a seed that already fills it, so a planted row
+is only observable if it out-ranks the seed.
+
+**Bookkeeping done:** CHANGELOG, this entry, `DORA_FOLLOWUPS.md`
+(**FU-868..872** opened, **FU-835** resolved and moved), `DORA_VERIFY.md`
+(what the walk couldn't reach), **R-082/R-083 + ADR-079/ADR-080**.
+`PROJECT_STATE.md` refreshed.
+
+**Next up:** the DORA_VERIFY items above — the batch-household and
+manual-reconcile paths in particular, since those are the two behaviours the
+owner specified and the dense seed cannot show. Then [[FU-872]] before anything
+else reads `load_recipe_cookability`.
+
+---
+
 ## 2026-09-04 — **Fresh cooking inside a batch household: a third pool state, plus two small planner items** *(HANDOVER — code complete, NOT yet driven live)*
 
 **Status: code complete, gates green, but the owner cut the session short before

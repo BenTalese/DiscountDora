@@ -680,7 +680,7 @@
  *     window's title bar is part of the window.
  *
  * So: hue 210–214 at 8–16% saturation for every surface and every ink, and a
- * single blue (`hsl(212 90% 40%)` light / `hsl(210 90% 66%)` dark) doing all
+ * single blue (`hsl(212 78% 36%)` light / `hsl(204 88% 74%)` dark) doing all
  * three brand jobs — primary, accent, focus. `--brand-secondary` is a
  * *graphite*, not a second colour, so an outlined/secondary control reads as
  * chrome. The page carries the faintest wash of that same blue, which is the
@@ -697,24 +697,29 @@
  *
  * Contrast (D-002) was computed for every ink × surface pair; the tightest
  * are `--text-muted` on `--surface-sunken` at 4.67:1 and `--accent-mark` on
- * the same at 4.84:1.
+ * the same at 5.6:1 (was 4.84:1 — the 2026-09-04 blue is darker, so the
+ * tightest pair in the theme is now the muted grey, not the accent).
  */
 [data-theme="salt-pepper"] {
     /* One accent, three jobs. Primary and accent are deliberately the *same*
        blue rather than two related ones - "there should only be maybe one
        accent colour" is easiest to keep true if there is only one value. */
-    --brand-primary: hsl(212 90% 40%);               /* 6.1:1 with white */
-    --brand-primary-soft: hsl(212 80% 93%);
+    /* Owner, 2026-09-04: the blue was a shade too bright and too saturated
+       against all this paper — pulled down two stops of lightness and back off
+       the chroma, which also buys contrast (7.2:1 with white, was 6.1:1). The
+       dark variant moves the other way; see the pair below. */
+    --brand-primary: hsl(212 78% 36%);               /* 7.2:1 with white */
+    --brand-primary-soft: hsl(212 66% 93%);
     /* Graphite, not a second hue - secondary controls are chrome here. */
     --brand-secondary: hsl(214 12% 30%);
     --brand-secondary-soft: hsl(214 14% 89%);
-    --brand-accent: hsl(212 90% 40%);
-    --brand-accent-soft: hsl(212 80% 93%);
-    --accent-ink: hsl(212 90% 34%);                  /* 6.1:1 min on the light ladder */
-    --accent-mark: hsl(212 85% 40%);                 /* 4.8:1 min on the light ladder */
+    --brand-accent: hsl(212 78% 36%);
+    --brand-accent-soft: hsl(212 66% 93%);
+    --accent-ink: hsl(212 80% 31%);                  /* 6.9:1 min on the light ladder */
+    --accent-mark: hsl(212 74% 36%);                 /* 5.6:1 min on the light ladder */
     /* The nav slide flash is a magenta by default; in a theme whose whole
        premise is one colour, it borrows the accent. */
-    --nav-slide-flash: hsl(206 92% 58%);
+    --nav-slide-flash: hsl(208 80% 52%);
 
     --surface-page: hsl(214 16% 95%);
     --surface-component: hsl(0 0% 100%);
@@ -769,8 +774,8 @@
 
     color-scheme: light;
     --dora-disc-bg: hsl(214 30% 96%);
-    --dora-halo: hsla(212, 90%, 40%, 0.20);
-    --dora-halo-strong: hsla(212, 90%, 40%, 0.38);
+    --dora-halo: hsla(212, 78%, 36%, 0.20);
+    --dora-halo-strong: hsla(212, 78%, 36%, 0.38);
 }
 
 /* ─── Salt & Pepper Dark (the same greys read from the other end) ── */
@@ -778,16 +783,20 @@
     /* The pair inverts rather than re-hues: the same near-achromatic
        blue-grey axis lit from the other end, with the one accent raised to
        clear the dark ladder. */
-    --brand-primary: hsl(210 90% 66%);               /* 7.1:1 with its own ink */
-    --brand-primary-soft: hsla(210, 90%, 66%, 0.18);
+    /* Owner, 2026-09-04: lifted and moved a few degrees toward sky — the same
+       single accent read from the dark end, but pale enough to sit on hsl(214
+       12% 11%) without looking like a saturated primary. Lighter is also safer
+       on the dark ladder, so the stated floors go up, not down. */
+    --brand-primary: hsl(204 88% 74%);               /* 9.8:1 with its own ink */
+    --brand-primary-soft: hsla(204, 88%, 74%, 0.18);
     --brand-secondary: hsl(214 10% 30%);
     --brand-secondary-soft: hsla(214, 10%, 30%, 0.30);
     --brand-secondary-strong: hsl(214 12% 58%);   /* indicator fill - see tokens.scss */
-    --brand-accent: hsl(210 90% 66%);
-    --brand-accent-soft: hsla(210, 90%, 66%, 0.18);
-    --accent-ink: hsl(210 90% 72%);                  /* 6.3:1 min on the dark ladder */
-    --accent-mark: hsl(210 90% 72%);                 /* 6.3:1 min on the dark ladder */
-    --nav-slide-flash: hsl(206 92% 72%);
+    --brand-accent: hsl(204 88% 74%);
+    --brand-accent-soft: hsla(204, 88%, 74%, 0.18);
+    --accent-ink: hsl(204 88% 78%);                  /* 8.1:1 min on the dark ladder */
+    --accent-mark: hsl(204 88% 78%);                 /* 8.1:1 min on the dark ladder */
+    --nav-slide-flash: hsl(204 90% 78%);
 
     --surface-page: hsl(214 12% 11%);
     --surface-component: hsl(214 10% 15%);
@@ -839,9 +848,9 @@
     --elevation-card-hover: 0 14px 32px -16px hsla(0, 0%, 0%, 0.8);
 
     color-scheme: dark;
-    --dora-disc-bg: hsl(210 90% 66%);
-    --dora-halo: hsla(210, 90%, 66%, 0.26);
-    --dora-halo-strong: hsla(210, 90%, 66%, 0.46);
+    --dora-disc-bg: hsl(204 88% 74%);
+    --dora-halo: hsla(204, 88%, 74%, 0.26);
+    --dora-halo-strong: hsla(204, 88%, 74%, 0.46);
 }
 
 /* ═══════════════════════════════════════════════════════════════════ */

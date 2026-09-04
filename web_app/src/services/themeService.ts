@@ -179,13 +179,13 @@ export const THEMES: Record<string, ThemeOption> = {
     'salt-pepper': {
         key: 'salt-pepper', label: 'Salt & Pepper',
         blurb: 'Desktop-plain greys, one blue accent. Barely a colour.',
-        swatch: ['hsl(214,16%,95%)', 'hsl(214,12%,30%)', 'hsl(212,90%,40%)'],
+        swatch: ['hsl(214,16%,95%)', 'hsl(214,12%,30%)', 'hsl(212,78%,36%)'],
         isDark: false,
     },
     'salt-pepper-dark': {
         key: 'salt-pepper-dark', label: 'Salt & Pepper Dark',
         blurb: 'The same greys after dark, same single blue accent.',
-        swatch: ['hsl(214,10%,15%)', 'hsl(210,16%,94%)', 'hsl(210,90%,66%)'],
+        swatch: ['hsl(214,10%,15%)', 'hsl(210,16%,94%)', 'hsl(204,88%,74%)'],
         isDark: true,
     },
 

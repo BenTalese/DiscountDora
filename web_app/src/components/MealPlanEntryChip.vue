@@ -66,99 +66,26 @@
             </div>
         </div>
 
-        <q-menu v-if="!entry.consumed_at" transition-show="jump-down" transition-hide="jump-up">
-            <q-list dense style="min-width: 220px">
-                <q-item-label header>{{ entry.recipe_name }}</q-item-label>
-                <!-- Inline servings adjuster — stays open for rapid ± taps.
-                     The shared `NumberStepper` rather than a fourth hand-rolled
-                     − value + (R-001): owner feedback 2026-09-03 on the auto
-                     builder was that *"the +/- servings buttons are
-                     inconsistent with elsewhere"*, and the builder was already
-                     on the primitive — this chip's menu was the odd one out.
-                     `min="0"` because stepping the last serving away is how you
-                     take a meal off the plan; the host asks before it does
-                     anything a whole cook batch would notice. -->
-                <q-item>
-                    <q-item-section>Servings</q-item-section>
-                    <q-item-section side>
-                        <NumberStepper
-                            :model-value="entry.servings"
-                            :min="0"
-                            decrement-label="One fewer serving"
-                            increment-label="One more serving"
-                            @click.stop
-                            @update:model-value="(v: number) => emit('adjust', v - entry.servings)"
-                        >
-                            <q-tooltip>Servings — removes the meal at 0</q-tooltip>
-                        </NumberStepper>
-                    </q-item-section>
-                </q-item>
-                <q-separator />
-                <q-item clickable v-close-popup @click="emit('view')">
-                    <q-item-section avatar><q-icon :name="ICONS.open_in_new" /></q-item-section>
-                    <q-item-section>View recipe</q-item-section>
-                </q-item>
-                <q-item clickable v-close-popup @click="emit('cook')">
-                    <q-item-section avatar><q-icon :name="ICONS.restaurant" /></q-item-section>
-                    <q-item-section>Cook now</q-item-section>
-                </q-item>
-                <!-- FU-637 — asked for, never volunteered: Dora holds no
-                     calorie target, so she has no threshold at which she'd
-                     start suggesting you eat less. Hidden unless this meal has
-                     a figure solid enough to compare against (R-041). -->
-                <q-item
-                    v-if="canGoLighter"
-                    clickable
-                    v-close-popup
-                    @click="emit('lighter')"
-                >
-                    <q-item-section avatar><q-icon :name="ICONS.monitor_heart" /></q-item-section>
-                    <q-item-section>Find a lighter option…</q-item-section>
-                </q-item>
-                <template v-if="batchEnabled">
-                    <q-separator />
-                    <!-- Owner 2026-09-04 — *"When in batch mode, I should be
-                         able to mark a meal as being cooked fresh."* Hidden on
-                         a linked meal: a cook batch IS the pool, so the two are
-                         mutually exclusive (the server refuses the pairing
-                         too). The caption states the whole behaviour, because
-                         "fresh" alone doesn't say what it does to the pool. -->
-                    <q-item v-if="!linked" clickable v-close-popup @click="emit('fresh')">
-                        <q-item-section avatar>
-                            <q-icon :name="ICONS.cookFresh" :color="fresh ? 'primary' : undefined" />
-                        </q-item-section>
-                        <q-item-section>
-                            <q-item-label>{{ fresh ? 'Cooking fresh' : 'Cook fresh on the day' }}</q-item-label>
-                            <q-item-label caption>
-                                {{ fresh ? 'Tap to put it back on the pool' : 'Skips the cooked pool entirely' }}
-                            </q-item-label>
-                        </q-item-section>
-                        <q-item-section v-if="fresh" side>
-                            <q-icon :name="ICONS.check" color="primary" />
-                        </q-item-section>
-                    </q-item>
-                    <q-item v-if="!fresh" clickable v-close-popup @click="emit('link')">
-                        <q-item-section avatar><q-icon :name="ICONS.link" /></q-item-section>
-                        <q-item-section>{{ linked ? 'Change cook days…' : 'Cook once for more days…' }}</q-item-section>
-                    </q-item>
-                    <q-item v-if="linked" clickable v-close-popup @click="emit('unlink')">
-                        <q-item-section avatar><q-icon :name="ICONS.link_off" /></q-item-section>
-                        <q-item-section>Separate this cook</q-item-section>
-                    </q-item>
-                </template>
-                <q-separator />
-                <q-item clickable v-close-popup @click="emit('remove')">
-                    <q-item-section avatar><q-icon :name="ICONS.close" color="negative" /></q-item-section>
-                    <q-item-section>Remove from plan</q-item-section>
-                </q-item>
-            </q-list>
-        </q-menu>
+        <!-- The menu is shared with `MealPlanRichCard` (R-001) — see
+             `MealPlanEntryMenu.vue`. -->
+        <MealPlanEntryMenu
+            v-if="!entry.consumed_at"
+            :entry="entry"
+            @view="emit('view')"
+            @cook="emit('cook')"
+            @lighter="emit('lighter')"
+            @remove="emit('remove')"
+            @adjust="(d: number) => emit('adjust', d)"
+            @link="emit('link')"
+            @unlink="emit('unlink')"
+            @fresh="emit('fresh')"
+        />
     </button>
 </template>
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
-    import NumberStepper from 'src/components/NumberStepper.vue';
+    import MealPlanEntryMenu from 'src/components/MealPlanEntryMenu.vue';
     import { useBatchEnabled } from 'src/composables/useBatchEnabled';
     import type { MealPlanEntry } from 'src/models/mealPlan';
     import { computed } from 'vue';
@@ -185,12 +112,6 @@
         (e: 'lighter'): void;
         (e: 'fresh'): void;
     }>();
-
-    // Only offer the comparison when this meal's own figure can be compared —
-    // "lighter than an estimate we don't trust" isn't an answer.
-    const canGoLighter = computed(
-        () => props.entry.kcal_per_serving !== null && props.entry.kcal_is_reliable,
-    );
 
     // FU-653 — the belief glyph's explanation. Names the items and says the
     // plan is unchanged, so it reads as a heads-up rather than an error.

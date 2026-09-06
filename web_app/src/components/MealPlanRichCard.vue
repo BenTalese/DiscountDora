@@ -22,7 +22,15 @@
         <div class="rich-card__body">
             <div class="rich-card__name">{{ entry.recipe_name }}</div>
             <div class="rich-card__meta">
-                <span class="rich-card__tag">{{ entry.slot }}</span>
+                <!-- Owner 2026-09-05 — the slot tag is gone. It was the card's
+                     only statement of which meal this was, and the owner's read
+                     of it was that *"a chip on the meal row is not very obvious
+                     or easy to read for groupings of meals (based on slot)"*.
+                     Its one caller now groups the day under slot headings
+                     (`MealPlanMobileFocus`), so the tag was restating the
+                     heading two lines above it in 0.68rem uppercase. The slot
+                     is still in `accessibleLabel`, where a screen reader has no
+                     heading to have just passed. -->
                 <span
                     v-if="linked"
                     class="rich-card__cook"
@@ -62,100 +70,45 @@
                     <q-icon :name="ICONS.timer" size="12px" />
                     {{ entry.cook_time_minutes }}m
                 </span>
+                <!-- Owner 2026-09-05 — what this meal costs at the servings
+                     it's planned for, so the week's total has visible parts.
+                     Money-gated install-wide: with money off the server sends
+                     no figure, so there is nothing to hide. -->
+                <span v-if="moneyEnabled && entry.estimated_cost !== null">
+                    {{ formatMoney(entry.estimated_cost) }}
+                </span>
             </div>
         </div>
 
-        <q-menu
+        <!-- The menu is shared with `MealPlanEntryChip` (R-001) — see
+             `MealPlanEntryMenu.vue`. -->
+        <MealPlanEntryMenu
             v-if="!entry.consumed_at"
-            transition-show="jump-down"
-            transition-hide="jump-up"
-        >
-            <q-list dense style="min-width: 220px">
-                <q-item-label header>{{ entry.recipe_name }}</q-item-label>
-                <!-- Shared `NumberStepper`, same as the desktop chip's menu
-                     and the auto builder's review row (R-001). -->
-                <q-item>
-                    <q-item-section>Servings</q-item-section>
-                    <q-item-section side>
-                        <NumberStepper
-                            :model-value="entry.servings"
-                            :min="0"
-                            decrement-label="One fewer serving"
-                            increment-label="One more serving"
-                            @click.stop
-                            @update:model-value="(v: number) => emit('adjust', v - entry.servings)"
-                        >
-                            <q-tooltip>Servings — removes the meal at 0</q-tooltip>
-                        </NumberStepper>
-                    </q-item-section>
-                </q-item>
-                <q-separator />
-                <q-item clickable v-close-popup @click="emit('view')">
-                    <q-item-section avatar><q-icon :name="ICONS.open_in_new" /></q-item-section>
-                    <q-item-section>View recipe</q-item-section>
-                </q-item>
-                <q-item clickable v-close-popup @click="emit('cook')">
-                    <q-item-section avatar><q-icon :name="ICONS.restaurant" /></q-item-section>
-                    <q-item-section>Cook now</q-item-section>
-                </q-item>
-                <!-- FU-637 — same action as the desktop chip's menu. Hidden
-                     unless this meal's figure is solid enough to compare. -->
-                <q-item
-                    v-if="canGoLighter"
-                    clickable
-                    v-close-popup
-                    @click="emit('lighter')"
-                >
-                    <q-item-section avatar><q-icon :name="ICONS.monitor_heart" /></q-item-section>
-                    <q-item-section>Find a lighter option…</q-item-section>
-                </q-item>
-                <template v-if="batchEnabled">
-                    <q-separator />
-                    <!-- Owner 2026-09-04 — same control as the desktop chip's
-                         menu. Hidden on a linked meal: a cook batch IS the
-                         pool, so the two are mutually exclusive. -->
-                    <q-item v-if="!linked" clickable v-close-popup @click="emit('fresh')">
-                        <q-item-section avatar>
-                            <q-icon :name="ICONS.cookFresh" :color="fresh ? 'primary' : undefined" />
-                        </q-item-section>
-                        <q-item-section>
-                            <q-item-label>{{ fresh ? 'Cooking fresh' : 'Cook fresh on the day' }}</q-item-label>
-                            <q-item-label caption>
-                                {{ fresh ? 'Tap to put it back on the pool' : 'Skips the cooked pool entirely' }}
-                            </q-item-label>
-                        </q-item-section>
-                        <q-item-section v-if="fresh" side>
-                            <q-icon :name="ICONS.check" color="primary" />
-                        </q-item-section>
-                    </q-item>
-                    <q-item v-if="!fresh" clickable v-close-popup @click="emit('link')">
-                        <q-item-section avatar><q-icon :name="ICONS.link" /></q-item-section>
-                        <q-item-section>{{ linked ? 'Change cook days…' : 'Cook once for more days…' }}</q-item-section>
-                    </q-item>
-                    <q-item v-if="linked" clickable v-close-popup @click="emit('unlink')">
-                        <q-item-section avatar><q-icon :name="ICONS.link_off" /></q-item-section>
-                        <q-item-section>Separate this cook</q-item-section>
-                    </q-item>
-                </template>
-                <q-separator />
-                <q-item clickable v-close-popup @click="emit('remove')">
-                    <q-item-section avatar><q-icon :name="ICONS.close" color="negative" /></q-item-section>
-                    <q-item-section>Remove from plan</q-item-section>
-                </q-item>
-            </q-list>
-        </q-menu>
+            :entry="entry"
+            @view="emit('view')"
+            @cook="emit('cook')"
+            @lighter="emit('lighter')"
+            @remove="emit('remove')"
+            @adjust="(d: number) => emit('adjust', d)"
+            @link="emit('link')"
+            @unlink="emit('unlink')"
+            @fresh="emit('fresh')"
+        />
     </button>
 </template>
 
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
-    import NumberStepper from 'src/components/NumberStepper.vue';
+    import MealPlanEntryMenu from 'src/components/MealPlanEntryMenu.vue';
     import { recipeImageUrl } from 'src/services/api/recipeApiService';
+    import { formatMoney } from 'src/composables/useMoney';
     import { useBatchEnabled } from 'src/composables/useBatchEnabled';
+    import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
     import type { MealPlanEntry } from 'src/models/mealPlan';
     import { computed } from 'vue';
 
     const { batchEnabled } = useBatchEnabled();
+    const { moneyEnabled } = useMoneyEnabled();
 
     const props = withDefaults(
         defineProps<{
@@ -178,12 +131,6 @@
     }>();
 
     // PROPOSAL_MEAL_PLANS_PART_2 — linked cook batch (Batch households only).
-    // Only offer the comparison when this meal's own figure can be compared —
-    // "lighter than an estimate we don't trust" isn't an answer.
-    const canGoLighter = computed(
-        () => props.entry.kcal_per_serving !== null && props.entry.kcal_is_reliable,
-    );
-
     const linked = computed(() => batchEnabled.value && !!props.entry.cook_batch_id);
     // Owner 2026-09-04 — cooked on the day, outside the pool. Batch households
     // only: where every meal is fresh, saying so about one of them is noise.
@@ -305,16 +252,6 @@
         gap: 6px 8px;
         font-size: 0.72rem;
         color: var(--text-muted);
-    }
-    .rich-card__tag {
-        background: var(--surface-sunken);
-        color: var(--text-secondary);
-        padding: 1px 6px;
-        border-radius: 4px;
-        font-weight: 600;
-        font-size: 0.68rem;
-        text-transform: uppercase;
-        letter-spacing: 0.02em;
     }
     .rich-card__servings {
         font-weight: 600;

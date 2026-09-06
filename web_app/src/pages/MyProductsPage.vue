@@ -1,116 +1,227 @@
 <template>
-    <q-page padding>
-        <!-- ── Header ─────────────────────────────────────────────── -->
-        <!-- Feedback 2026-06-18: search + filter toggle merged into the
-             header row so the FilterBar doesn't sit on its own line. -->
-        <div class="row items-center q-mb-md q-gutter-sm">
-            <BaseButton
-                variant="secondary"
-                :icon="ICONS.link_off"
-                :label="`Stock items without products (${stockItemsMissingProducts.length})`"
-                :disable="stockItemsMissingProducts.length === 0"
-                @click="orphansOpen = true"
-            />
-            <BaseButton
-                variant="secondary"
-                :icon="ICONS.refresh"
-                label="Refresh"
-                :loading="loading"
-                @click="loadAll"
-            />
-            <q-space />
-            <FilterToggleButton
-                v-model="filtersExpanded"
-                :active-count="activeFilterCount"
-                @clear="clearFilters"
-            />
-            <q-input
-                v-model="searchText"
-                dense
-                outlined
-                clearable
-                debounce="200"
-                placeholder="Search products"
-                style="min-width: 240px"
-            >
-                <template #prepend><q-icon :name="ICONS.search" /></template>
-            </q-input>
+    <!-- `q-pa-md`, not `padding`: `PageCountsFooter` outdents a hardcoded
+         -16px to sit flush with the page edges, which assumes a 16px parent.
+         Quasar's `padding` prop is responsive (8px at xs), so the footer
+         over-outdented by 16px and the page scrolled sideways 8px at 375
+         (D-011). Pre-existing — this page was the only one of the four using
+         the footer that didn't already say `q-pa-md`; found by driving it. -->
+    <q-page class="q-pa-md">
+        <!-- ── Toolbar ──────────────────────────────────────────────────
+             Adopts the standard list-page shape (StockOverview /
+             RecipesOverview): a sideways-scrolling action band, then the
+             filter toggle + search, which wrap to their own full-width line
+             on phones. My Products had never taken it — it was one ad-hoc row
+             with full-width labels that crushed at 375px. Feedback said little
+             about this toolbar in June because the standard didn't exist yet;
+             MP-20 ("bulk select button should be part of the toolbar") is the
+             bullet that does point here. -->
+        <div class="row items-center q-gutter-sm products-toolbar">
+            <div class="row items-center no-wrap products-toolbar__actions">
+                <!-- MP-18: "could be more obvious when there's more than zero.
+                     Should grab attention, not be obscured." `attention` (the
+                     glow BaseButton gained after this feedback) fires only
+                     when there IS something to fix, which is the condition
+                     that keeps a glow from becoming wallpaper (D-14 as amended
+                     2026-08-20). -->
+                <BaseButton
+                    variant="secondary"
+                    :icon="ICONS.link_off"
+                    :label="compactToolbar ? undefined : orphansLabel"
+                    :aria-label="orphansLabel"
+                    :disable="stockItemsMissingProducts.length === 0"
+                    :attention="stockItemsMissingProducts.length > 0"
+                    @click="orphansOpen = true"
+                >
+                    <q-badge
+                        v-if="compactToolbar && stockItemsMissingProducts.length > 0"
+                        color="primary"
+                        class="q-ml-xs"
+                    >
+                        {{ stockItemsMissingProducts.length }}
+                    </q-badge>
+                    <q-tooltip v-if="compactToolbar">{{ orphansLabel }}</q-tooltip>
+                </BaseButton>
+
+                <BaseButton
+                    v-if="!bulkMode"
+                    variant="secondary"
+                    :icon="ICONS.checklist"
+                    :label="compactToolbar ? undefined : 'Bulk select'"
+                    aria-label="Bulk select"
+                    @click="enterBulkMode"
+                >
+                    <q-tooltip v-if="compactToolbar">Bulk select</q-tooltip>
+                </BaseButton>
+                <BaseButton
+                    v-else
+                    variant="secondary"
+                    :icon="ICONS.close"
+                    :label="compactToolbar ? undefined : 'Cancel'"
+                    aria-label="Cancel bulk select"
+                    @click="exitBulkMode"
+                >
+                    <q-tooltip v-if="compactToolbar">Cancel bulk select</q-tooltip>
+                </BaseButton>
+
+                <!-- D-10 — the two view modes, on the cookbook's existing
+                     toggle machinery rather than a second implementation. -->
+                <BaseButton
+                    variant="secondary"
+                    :icon="viewMode === 'grid' ? ICONS.view_list : ICONS.view_module"
+                    :label="compactToolbar ? undefined : (viewMode === 'grid' ? 'Compact' : 'Cards')"
+                    :aria-label="viewMode === 'grid'
+                        ? 'Switch to compact rows'
+                        : 'Switch to cards, with photos'"
+                    @click="toggleViewMode"
+                >
+                    <q-tooltip>
+                        {{ viewMode === 'grid' ? 'Compact rows, no photos' : 'Card grid with photos' }}
+                    </q-tooltip>
+                </BaseButton>
+
+                <!-- MP-19 / C16: the Refresh button is gone. "I can't think of
+                     anywhere in the app I'd need a refresh button. This isn't
+                     the type of app to be kept open in long sessions." The
+                     store already refetches on mount and after every mutation. -->
+            </div>
+
+            <q-space class="gt-xs" />
+            <div class="row items-center q-gutter-sm no-wrap products-toolbar__find">
+                <FilterToggleButton
+                    v-model="filtersExpanded"
+                    :active-count="activeFilterCount"
+                    :compact="compactToolbar"
+                    @clear="clearFilters"
+                />
+                <q-input
+                    v-model="searchText"
+                    class="col"
+                    dense
+                    outlined
+                    clearable
+                    debounce="200"
+                    placeholder="Search products"
+                >
+                    <template #prepend><q-icon :name="ICONS.search" /></template>
+                </q-input>
+            </div>
         </div>
 
-        <!-- ── Bulk-select banner ─────────────────────────────────── -->
-        <q-banner
-            v-if="filteredProducts.length > 0"
-            class="q-mb-sm bulk-bar"
-            :class="{ 'bulk-bar-active': bulkMode }"
-            dense
-            rounded
-        >
-            <template #avatar>
-                <q-icon :name="bulkMode ? 'checklist' : 'list_alt'" />
-            </template>
-            <span v-if="!bulkMode">
-                Select products to add them to a list, unlink, or mark inactive.
-            </span>
-            <span v-else>
-                {{ selectedIds.size }} selected
-            </span>
-            <template #action>
-                <template v-if="!bulkMode">
-                    <BaseButton
-                        variant="ghost"
-                        :icon="ICONS.checklist"
-                        label="Select"
-                        @click="enterBulkMode"
-                    />
-                </template>
-                <template v-else>
-                    <BaseButton
-                        variant="ghost"
-                        label="Select all visible"
-                        @click="selectAllVisible"
-                    />
-                    <BaseButton
-                        variant="ghost"
-                        label="Select on-deal"
-                        @click="selectOnDealVisible"
-                    >
-                        <q-tooltip>
-                            Selects every visible product that's currently on
-                            special — a shortcut for bulk actions like adding all
-                            deals to your primary list.
-                        </q-tooltip>
-                    </BaseButton>
-                    <BaseButton
-                        variant="ghost"
-                        color="primary"
-                        :icon="ICONS.add_shopping_cart"
-                        :label="`Add ${onDealSelectedCount} on-deal to list`"
-                        :disable="onDealSelectedCount === 0"
-                        :loading="bulkBusy"
-                        @click="onBulkAddOnDeal"
-                    />
-                    <BaseButton
-                        variant="ghost"
-                        :icon="ICONS.link_off"
-                        label="Unlink"
-                        :disable="selectedIds.size === 0"
-                        :loading="bulkBusy"
-                        @click="onBulkUnlink"
-                    />
-                    <BaseButton
-                        variant="ghost"
-                        :icon="ICONS.visibility_off"
-                        label="Mark inactive"
-                        :disable="selectedIds.size === 0"
-                        :loading="bulkBusy"
-                        @click="onBulkInactive"
-                    />
-                    <BaseButton variant="ghost" label="Done" @click="exitBulkMode" />
-                </template>
-            </template>
-        </q-banner>
+        <!-- ── Bulk-select bar ──────────────────────────────────────────
+             Was a `q-banner` carrying a sentence of instructions; now the
+             shared `dora-subbar` that stock and the shopping list already use
+             (MP-13: "bulk select button and area is different in styling to
+             other screens. Should be consistent."). The explanatory prose is
+             gone with it — MP-20's point was that it's "info that is learnt
+             then not needed to be shown again". -->
+        <div class="bulk-bar q-py-xs">
+            <q-slide-transition>
+                <div v-if="bulkMode" class="dora-subbar">
+                    <div class="dora-subbar__inner">
+                        <div class="row items-center q-gutter-sm no-wrap products-bulk">
+                            <q-icon :name="ICONS.checklist" />
+                            <span class="text-weight-medium no-wrap">
+                                {{ selectedIds.size }} selected
+                            </span>
 
-        <!-- ── Filters ─ standardised via FilterBar (A4) ──────────── -->
+                            <!-- The owner asked for four more select-helpers
+                                 (MP-14..MP-17) and then "Are my buttons making
+                                 sense? Better way to do it?" — six select
+                                 buttons plus four actions is a bar nobody can
+                                 scan. They collapse into one menu; the
+                                 *actions* stay inline, because those are what
+                                 the mode exists to do. -->
+                            <BaseButton
+                                variant="ghost"
+                                dense
+                                :icon="ICONS.checklist"
+                                label="Select…"
+                            >
+                                <q-menu auto-close>
+                                    <q-list dense style="min-width: 240px">
+                                        <q-item clickable @click="selectAllVisible">
+                                            <q-item-section>All visible</q-item-section>
+                                        </q-item>
+                                        <q-item clickable @click="selectWhere(onSpecial)">
+                                            <q-item-section>On deal</q-item-section>
+                                        </q-item>
+                                        <q-item clickable @click="selectWhere((p) => !p.is_active)">
+                                            <q-item-section>Inactive</q-item-section>
+                                        </q-item>
+                                        <q-separator />
+                                        <!-- MP-15/16/17. These cross product
+                                             state with *stock* state, so they
+                                             read the server-owned
+                                             `is_low_stock` / `is_out_of_stock`
+                                             / `is_essential` rather than
+                                             re-deriving from level names or
+                                             sequences (R-003). -->
+                                        <q-item clickable @click="selectWhere(isLowStockOnDeal)">
+                                            <q-item-section>Low stock, on deal</q-item-section>
+                                        </q-item>
+                                        <q-item clickable @click="selectWhere(isOutOfStockOnDeal)">
+                                            <q-item-section>Out of stock, on deal</q-item-section>
+                                        </q-item>
+                                        <q-item clickable @click="selectWhere(isEssentialLowOnDeal)">
+                                            <q-item-section>Essential, low, on deal</q-item-section>
+                                        </q-item>
+                                        <q-separator />
+                                        <!-- MP-12: "No way to deselect all in
+                                             bulk select mode." -->
+                                        <q-item clickable @click="selectedIds = new Set()">
+                                            <q-item-section>Deselect all</q-item-section>
+                                        </q-item>
+                                    </q-list>
+                                </q-menu>
+                            </BaseButton>
+
+                            <q-separator vertical />
+
+                            <BaseButton
+                                variant="ghost"
+                                dense
+                                :icon="ICONS.add_shopping_cart"
+                                :label="`Add ${onDealSelectedCount} on-deal to list`"
+                                :disable="onDealSelectedCount === 0"
+                                :loading="bulkBusy"
+                                @click="onBulkAddOnDeal"
+                            />
+                            <BaseButton
+                                variant="ghost"
+                                dense
+                                :icon="ICONS.link_off"
+                                label="Unlink"
+                                :disable="selectedIds.size === 0"
+                                :loading="bulkBusy"
+                                @click="onBulkUnlink"
+                            />
+                            <BaseButton
+                                variant="ghost"
+                                dense
+                                :icon="ICONS.visibility_off"
+                                label="Stop tracking"
+                                :disable="selectedIds.size === 0"
+                                :loading="bulkBusy"
+                                @click="onBulkInactive"
+                            />
+                            <q-space />
+                            <BaseButton
+                                variant="danger-ghost"
+                                dense
+                                :icon="ICONS.delete"
+                                label="Delete"
+                                :disable="selectedIds.size === 0"
+                                :loading="bulkBusy"
+                                @click="onBulkDelete"
+                            />
+                            <BaseButton variant="ghost" dense label="Done" @click="exitBulkMode" />
+                        </div>
+                    </div>
+                </div>
+            </q-slide-transition>
+        </div>
+
+        <!-- ── Filters ──────────────────────────────────────────────────── -->
         <FilterBar
             v-model="filtersExpanded"
             :toolbar="false"
@@ -118,351 +229,163 @@
             @clear="clearFilters"
         >
             <template #filters>
-            <div class="row q-gutter-sm items-center">
-            <q-toggle v-model="onDealOnly" label="On deal now" dense />
-            <q-select
-                v-model="storeFilter"
-                outlined
-                dense
-                emit-value
-                map-options
-                clearable
-                :options="storeOptions"
-                label="Store"
-                style="min-width: 180px"
-            />
-            <q-select
-                v-model="linkedStockItemFilter"
-                outlined
-                dense
-                emit-value
-                map-options
-                clearable
-                use-input
-                input-debounce="150"
-                :options="linkedStockItemOptions"
-                @filter="onLinkedFilter"
-                label="Linked stock item"
-                style="min-width: 240px"
-            />
-            <q-toggle v-model="includeInactive" label="Show inactive" dense />
-            </div>
-            </template>
-        </FilterBar>
-
-        <!-- ── Grid ───────────────────────────────────────────────── -->
-        <FadeTransition mode="out-in">
-        <div
-            v-if="loading && products.length === 0"
-            key="prod-loading"
-            class="text-center q-py-xl"
-        >
-            <AppSpinner size="48px" />
-        </div>
-
-        <q-banner v-else-if="loadError" key="prod-error" class="dora-bg-negative-soft text-negative" dense rounded>
-            {{ loadError }}
-        </q-banner>
-
-        <div
-            v-else-if="filteredProducts.length === 0"
-            key="prod-empty"
-            class="text-center dora-text-muted q-py-xl"
-        >
-            <q-icon :name="ICONS.shopping_bag" size="60px" class="q-mb-sm" />
-            <div v-if="products.length === 0">
-                You haven't saved any products yet. Use Product Search to find and
-                save deals.
-            </div>
-            <div v-else>No products match the current filters.</div>
-            <BaseButton
-                v-if="products.length === 0"
-                variant="primary"
-                :icon="ICONS.search"
-                label="Open Product Search"
-                class="q-mt-md"
-                @click="openProductSearch(router)"
-            />
-            <BaseButton
-                v-else-if="hasAnyFilter"
-                variant="ghost"
-                color="primary"
-                label="Clear filters"
-                class="q-mt-md"
-                @click="clearFilters"
-            />
-        </div>
-
-        <div v-else key="prod-content" class="row q-col-gutter-md">
-            <div
-                v-for="product in filteredProducts"
-                :key="product.product_id"
-                class="col-12 col-sm-6 col-md-4 col-lg-3"
-            >
-                <q-card
-                    flat
-                    bordered
-                    class="my-product-card"
-                    :class="{
-                        'my-product-card--selected': selectedIds.has(product.product_id),
-                        'my-product-card--inactive': !product.is_active,
-                    }"
-                    @click="onCardClick(product.product_id)"
-                >
-                    <q-card-section class="row items-start q-pb-sm q-gutter-xs">
-                        <q-checkbox
-                            v-if="bulkMode"
-                            :model-value="selectedIds.has(product.product_id)"
-                            dense
-                            @click.stop
-                            @update:model-value="toggleSelect(product.product_id)"
-                        />
-                        <!-- FU-827 / R-045: fetched through the authenticated
-                             client, not a bare `<img src="/api/…">`. -->
-                        <ProductThumb
-                            v-else
-                            :product-id="product.product_id"
-                            :has-image="product.has_image"
-                            :alt="product.name"
-                            size="40px"
-                            icon-size="20px"
-                        />
-                        <div class="col">
-                            <div class="text-subtitle2 ellipsis-2-lines">
-                                {{ product.name }}
-                            </div>
-                            <div class="text-caption dora-text-muted">
-                                <span v-if="product.brand">{{ product.brand }}</span>
-                                <span v-if="product.brand && product.size"> · </span>
-                                <span v-if="product.size">{{ product.size }}</span>
-                            </div>
-                        </div>
-                        <q-badge
-                            v-if="discountPct(product) !== null"
-                            color="negative"
-                            text-color="white"
-                        >
-                            {{ discountPct(product) }}% off
-                        </q-badge>
-                    </q-card-section>
-
-                    <q-card-section class="q-pt-none">
-                        <div class="row items-baseline q-gutter-xs">
-                            <span class="text-h6">
-                                {{ formatMoney(product.price_now ?? 0) }}
-                            </span>
-                            <span
-                                v-if="onSpecial(product)"
-                                class="text-caption dora-text-muted strike"
-                            >
-                                {{ formatMoney(product.price_was ?? 0) }}
-                            </span>
-                        </div>
-                        <div class="text-caption dora-text-muted">
-                            <StoreLogo
-                                v-if="product.store_name"
-                                :name="product.store_name"
-                                :store-id="product.store_id"
-                                :has-image="false"
-                                :height="14"
-                                :width="24"
-                                class="q-mr-xs"
-                            />
-                            {{ product.store_name || '—' }}
-                        </div>
-                    </q-card-section>
-
-                    <q-separator />
-                    <q-card-section class="q-py-sm">
-                        <div v-if="product.linked_stock_item_id" class="row items-center q-gutter-xs">
-                            <q-chip
-                                dense
-                                clickable
-                                color="primary"
-                                text-color="white"
-                                :icon="ICONS.link"
-                                @click.stop="goToStockItem(product.linked_stock_item_id!)"
-                            >
-                                {{ product.linked_stock_item_name ?? 'Stock item' }}
-                                <q-tooltip>Open stock item</q-tooltip>
-                            </q-chip>
-                        </div>
-                        <div v-else class="text-caption dora-text-muted">
-                            <q-icon :name="ICONS.link_off" size="14px" />
-                            Not linked to any stock item.
-                            <a
-                                href="#"
-                                class="text-primary"
-                                @click.stop.prevent="openLinkDialog(product)"
-                            >
-                                Link…
-                            </a>
-                        </div>
-                        <q-badge
-                            v-if="!product.is_active"
-                            color="grey"
-                            text-color="white"
-                            class="q-mt-xs"
-                        >
-                            Inactive
-                        </q-badge>
-                        <q-badge
-                            v-if="!product.is_available"
-                            color="warning"
-                            text-color="white"
-                            class="q-mt-xs q-ml-xs"
-                        >
-                            Out of stock
-                        </q-badge>
-                    </q-card-section>
-
-                    <q-separator />
-                    <q-card-actions align="right" class="q-py-sm">
-                        <BaseButton
-                            v-if="product.web_url"
-                            variant="ghost"
-                            dense
-                            :icon="ICONS.open_in_new"
-                            :href="product.web_url"
-                            target="_blank"
-                            rel="noopener"
-                            @click.stop
-                        >
-                            <q-tooltip>Open at store</q-tooltip>
-                        </BaseButton>
-                        <!-- adopted AddToListButton row variant with
-                             `selected-product-id` so this carries the same
-                             cart-state UX (popover on 2+ lists, smart-remove
-                             on exactly one) the rest of the app uses. The
-                             product is pre-decided here, so the line records
-                             `selected_product_id`. -->
-                        <AddToListButton
-                            v-if="product.linked_stock_item_id"
-                            variant="row"
-                            :stock-item-id="product.linked_stock_item_id"
-                            :selected-product-id="product.product_id"
-                            @click.stop
-                        />
-                        <!-- unlinked products add as a
-                             product-only line (L191 standalone). -->
-                        <AddToListButton
-                            v-else
-                            variant="inline-product"
-                            :product-id="product.product_id"
-                            @click.stop
-                        />
-
-                        <BaseButton variant="icon" :icon="ICONS.more_vert" @click.stop>
-                            <q-menu auto-close transition-show="jump-down" transition-hide="jump-up">
-                                <q-list dense style="min-width: 200px">
-                                    <q-item
-                                        v-if="product.linked_stock_item_id"
-                                        clickable
-                                        @click="goToStockItem(product.linked_stock_item_id!)"
-                                    >
-                                        <q-item-section avatar>
-                                            <q-icon name="inventory_2" />
-                                        </q-item-section>
-                                        <q-item-section>Open stock item</q-item-section>
-                                    </q-item>
-                                    <q-item
-                                        v-if="product.linked_stock_item_id"
-                                        clickable
-                                        @click="onUnlinkSingle(product)"
-                                    >
-                                        <q-item-section avatar>
-                                            <q-icon :name="ICONS.link_off" />
-                                        </q-item-section>
-                                        <q-item-section>Unlink</q-item-section>
-                                    </q-item>
-                                    <q-item
-                                        v-else
-                                        clickable
-                                        @click="openLinkDialog(product)"
-                                    >
-                                        <q-item-section avatar>
-                                            <q-icon :name="ICONS.link" />
-                                        </q-item-section>
-                                        <q-item-section>Link to stock item…</q-item-section>
-                                    </q-item>
-                                    <q-separator />
-                                    <q-item clickable @click="onToggleActive(product)">
-                                        <q-item-section avatar>
-                                            <q-icon
-                                                :name="product.is_active ? 'visibility_off' : 'visibility'"
-                                            />
-                                        </q-item-section>
-                                        <q-item-section>
-                                            {{ product.is_active ? 'Mark inactive' : 'Mark active' }}
-                                        </q-item-section>
-                                    </q-item>
-                                    <q-separator />
-                                    <q-item
-                                        clickable
-                                        @click="onViewPriceHistory(product.product_id)"
-                                    >
-                                        <q-item-section avatar>
-                                            <q-icon :name="ICONS.show_chart" />
-                                        </q-item-section>
-                                        <q-item-section>View price history</q-item-section>
-                                    </q-item>
-                                    <!-- FU-373 — register a real EAN/UPC against this
-                                         product. Gated on the install-wide scanning flag
-                                         (§3 / R-029: the whole barcode surface hides when
-                                         scanning is off). -->
-                                    <template v-if="scanningEnabled">
-                                        <q-separator />
-                                        <q-item clickable @click="openBarcodeDialog(product)">
-                                            <q-item-section avatar>
-                                                <q-icon :name="ICONS.barcode" />
-                                            </q-item-section>
-                                            <q-item-section>Register barcode…</q-item-section>
-                                        </q-item>
-                                    </template>
-                                </q-list>
-                            </q-menu>
-                        </BaseButton>
-                    </q-card-actions>
-                </q-card>
-            </div>
-        </div>
-        </FadeTransition>
-
-        <PageCountsFooter v-if="products.length > 0" :counts="footerCounts" />
-
-        <!-- ── Bulk-add target-list picker ────────────────────────── -->
-        <BaseDialog v-model="bulkAddOpen" title="Add to which list?" closable card-style="min-width: 380px">
-                <q-card-section>
-                    <div class="text-caption dora-text-muted">
-                        {{ bulkAddCandidates.length }} stock item{{
-                            bulkAddCandidates.length === 1 ? '' : 's'
-                        }} from on-deal products in your selection.
-                    </div>
-                </q-card-section>
-                <q-card-section class="q-pt-none">
+                <FilterRow variant="fields">
+                    <q-toggle v-model="onDealOnly" label="On deal now" dense />
+                    <BaseSelect
+                        v-model="storeFilter"
+                        :options="storeOptions"
+                        emit-value
+                        map-options
+                        clearable
+                        label="Store"
+                        empty-text="Any store"
+                        dialog-title="Store"
+                    />
                     <q-select
-                        v-model="bulkAddTargetListId"
+                        v-model="linkedStockItemFilter"
                         outlined
                         dense
                         emit-value
                         map-options
-                        :options="activeListOptions"
-                        label="Active list"
+                        clearable
+                        use-input
+                        input-debounce="150"
+                        :options="linkedStockItemOptions"
+                        label="Linked stock item"
+                        style="min-width: 240px"
+                        @filter="onLinkedFilter"
                     />
-                </q-card-section>
-                <template #actions>
-                    <BaseButton variant="ghost" label="Cancel" v-close-popup />
-                    <BaseButton
-                        variant="primary"
-                        label="Add"
-                        :loading="bulkBusy"
-                        :disable="!bulkAddTargetListId"
-                        @click="confirmBulkAdd"
+                    <q-toggle v-model="includeInactive" label="Show untracked" dense />
+                </FilterRow>
+            </template>
+        </FilterBar>
+
+        <!-- ── Results ──────────────────────────────────────────────────── -->
+        <FadeTransition mode="out-in">
+            <div
+                v-if="loading && products.length === 0"
+                key="prod-loading"
+                class="text-center q-py-xl"
+            >
+                <AppSpinner size="48px" />
+            </div>
+
+            <q-banner
+                v-else-if="loadError"
+                key="prod-error"
+                class="dora-bg-negative-soft text-negative"
+                dense
+                rounded
+            >
+                {{ loadError }}
+            </q-banner>
+
+            <div
+                v-else-if="filteredProducts.length === 0"
+                key="prod-empty"
+                class="text-center dora-text-muted q-py-xl"
+            >
+                <q-icon :name="ICONS.shopping_bag" size="60px" class="q-mb-sm" />
+                <div v-if="products.length === 0">
+                    You haven't saved any products yet. Use Product Search to find and
+                    save deals.
+                </div>
+                <div v-else>No products match the current filters.</div>
+                <BaseButton
+                    v-if="products.length === 0"
+                    variant="primary"
+                    :icon="ICONS.search"
+                    label="Open Product Search"
+                    class="q-mt-md"
+                    @click="openProductSearch(router)"
+                />
+                <BaseButton
+                    v-else-if="hasAnyFilter"
+                    variant="ghost"
+                    color="primary"
+                    label="Clear filters"
+                    class="q-mt-md"
+                    @click="clearFilters"
+                />
+            </div>
+
+            <!-- Two shapes, one data path — the compact branch is the same
+                 `filteredProducts` the grid renders (the cookbook's shape). -->
+            <div v-else-if="viewMode === 'grid'" key="prod-grid" class="row q-col-gutter-md">
+                <div
+                    v-for="product in filteredProducts"
+                    :key="product.product_id"
+                    class="col-12 col-sm-6 col-md-4 col-lg-3"
+                >
+                    <ProductCard
+                        :product="product"
+                        :bulk-mode="bulkMode"
+                        :selected="selectedIds.has(product.product_id)"
+                        @toggle-select="toggleSelect(product.product_id)"
+                        @open-stock-item="goToStockItem"
+                        @link="openLinkDialog(product)"
+                        @unlink="onUnlinkSingle(product)"
+                        @toggle-active="onToggleActive(product)"
+                        @price-history="onViewPriceHistory(product.product_id)"
+                        @delete="onDeleteSingle(product)"
                     />
-                </template>
+                </div>
+            </div>
+
+            <div v-else key="prod-rows" class="column q-gutter-sm">
+                <ProductRow
+                    v-for="product in filteredProducts"
+                    :key="product.product_id"
+                    :product="product"
+                    :bulk-mode="bulkMode"
+                    :selected="selectedIds.has(product.product_id)"
+                    @toggle-select="toggleSelect(product.product_id)"
+                    @link="openLinkDialog(product)"
+                    @unlink="onUnlinkSingle(product)"
+                />
+            </div>
+        </FadeTransition>
+
+        <PageCountsFooter v-if="products.length > 0" :counts="footerCounts" />
+
+        <!-- ── Bulk-add target-list picker ──────────────────────────────── -->
+        <BaseDialog
+            v-model="bulkAddOpen"
+            title="Add to which list?"
+            closable
+            card-style="min-width: 380px"
+        >
+            <q-card-section>
+                <div class="text-caption dora-text-muted">
+                    {{ bulkAddCandidates.length }} stock item{{
+                        bulkAddCandidates.length === 1 ? '' : 's'
+                    }} from on-deal products in your selection.
+                </div>
+            </q-card-section>
+            <q-card-section class="q-pt-none">
+                <q-select
+                    v-model="bulkAddTargetListId"
+                    outlined
+                    dense
+                    emit-value
+                    map-options
+                    :options="activeListOptions"
+                    label="Active list"
+                />
+            </q-card-section>
+            <template #actions>
+                <BaseButton variant="ghost" label="Cancel" v-close-popup />
+                <BaseButton
+                    variant="primary"
+                    label="Add"
+                    :loading="bulkBusy"
+                    :disable="!bulkAddTargetListId"
+                    @click="confirmBulkAdd"
+                />
+            </template>
         </BaseDialog>
 
-        <!-- ── Stock items without products dialog ────────────────── -->
+        <!-- ── Stock items without products ─────────────────────────────── -->
         <BaseDialog
             v-model="orphansOpen"
             title="Stock items without products"
@@ -471,177 +394,138 @@
             card-style="width: 560px; max-width: 100vw; height: 90vh"
             card-class="column"
         >
-                <q-card-section class="q-pb-sm">
-                    <div class="text-caption dora-text-muted">
-                        {{ stockItemsMissingProducts.length }} item{{
-                            stockItemsMissingProducts.length === 1 ? '' : 's'
-                        }} that no product in My Products is linked to.
-                        Hop into Product Search to find one.
-                    </div>
-                </q-card-section>
-                <q-card-section class="col scroll">
-                    <q-list separator>
-                        <q-item
-                            v-for="item in stockItemsMissingProducts"
-                            :key="item.stock_item_id"
-                        >
-                            <q-item-section avatar>
-                                <q-avatar
-                                    :color="levelColourFor(item) ?? undefined"
-                                    :text-color="levelColourFor(item) ? 'white' : undefined"
-                                    :class="{ 'dora-bg-sunken dora-text-secondary': !levelColourFor(item) }"
-                                    size="32px"
+            <q-card-section class="q-pb-sm">
+                <div class="text-caption dora-text-muted">
+                    {{ stockItemsMissingProducts.length }} item{{
+                        stockItemsMissingProducts.length === 1 ? '' : 's'
+                    }} that no product in My Products is linked to.
+                    Hop into Product Search to find one.
+                </div>
+            </q-card-section>
+            <q-card-section class="col scroll">
+                <q-list separator>
+                    <q-item
+                        v-for="item in stockItemsMissingProducts"
+                        :key="item.stock_item_id"
+                    >
+                        <q-item-section avatar>
+                            <q-avatar
+                                :color="levelColourFor(item) ?? undefined"
+                                :text-color="levelColourFor(item) ? 'white' : undefined"
+                                :class="{ 'dora-bg-sunken dora-text-secondary': !levelColourFor(item) }"
+                                size="32px"
+                            >
+                                <q-icon name="inventory_2" size="16px" />
+                            </q-avatar>
+                        </q-item-section>
+                        <q-item-section>
+                            <q-item-label>{{ item.name }}</q-item-label>
+                            <q-item-label caption>
+                                {{ levelNameFor(item) ?? 'No level' }}
+                            </q-item-label>
+                        </q-item-section>
+                        <q-item-section side>
+                            <div class="row q-gutter-xs">
+                                <BaseButton
+                                    variant="icon"
+                                    color="primary"
+                                    :icon="ICONS.search"
+                                    aria-label="Find a product"
+                                    @click="searchForOrphan()"
                                 >
-                                    <q-icon name="inventory_2" size="16px" />
-                                </q-avatar>
-                            </q-item-section>
-                            <q-item-section>
-                                <q-item-label>{{ item.name }}</q-item-label>
-                                <q-item-label caption>
-                                    {{ levelNameFor(item) ?? 'No level' }}
-                                </q-item-label>
-                            </q-item-section>
-                            <q-item-section side>
-                                <div class="row q-gutter-xs">
-                                    <BaseButton
-                                        variant="icon"
-                                        color="primary"
-                                        :icon="ICONS.search"
-                                        @click="searchForOrphan(item)"
-                                    >
-                                        <q-tooltip>Find a product</q-tooltip>
-                                    </BaseButton>
-                                    <BaseButton
-                                        variant="icon"
-                                        :icon="ICONS.open_in_new"
-                                        @click="goToStockItem(item.stock_item_id)"
-                                    >
-                                        <q-tooltip>Open stock item</q-tooltip>
-                                    </BaseButton>
-                                </div>
-                            </q-item-section>
-                        </q-item>
-                    </q-list>
-                </q-card-section>
+                                    <q-tooltip>Find a product</q-tooltip>
+                                </BaseButton>
+                                <BaseButton
+                                    variant="icon"
+                                    :icon="ICONS.open_in_new"
+                                    aria-label="Open stock item"
+                                    @click="goToStockItem(item.stock_item_id)"
+                                >
+                                    <q-tooltip>Open stock item</q-tooltip>
+                                </BaseButton>
+                            </div>
+                        </q-item-section>
+                    </q-item>
+                </q-list>
+            </q-card-section>
         </BaseDialog>
 
-        <!-- ── Link-to-stock-item dialog ──────────────────────────── -->
-        <BaseDialog v-model="linkOpen" title="Link to a stock item" closable card-style="min-width: 420px">
-                <q-card-section>
-                    <div class="text-caption dora-text-muted">
-                        {{ linkTarget?.name }}
-                    </div>
-                </q-card-section>
-                <q-card-section class="q-pt-none">
-                    <q-select
-                        v-model="linkChoiceStockItemId"
-                        outlined
-                        dense
-                        use-input
-                        input-debounce="150"
-                        :options="linkStockItemOptions"
-                        emit-value
-                        map-options
-                        clearable
-                        @filter="onLinkPickerFilter"
-                        label="Stock item"
-                    />
-                </q-card-section>
-                <template #actions>
-                    <BaseButton variant="ghost" label="Cancel" v-close-popup />
-                    <BaseButton
-                        variant="primary"
-                        label="Link"
-                        :loading="linkBusy"
-                        :disable="!linkChoiceStockItemId"
-                        @click="confirmLink"
-                    />
-                </template>
-        </BaseDialog>
-
-        <!-- ── Register-barcode dialog (FU-373) ───────────────────── -->
-        <!-- Registers a real EAN/UPC against a Product (the catalogue SKU),
-             not a stock item. Mirrors the stock-item detail "Add barcode"
-             dialog. The backend enforces one barcode per product, so a
-             product that already has one surfaces a friendly conflict here. -->
+        <!-- ── Link-to-stock-item dialog ────────────────────────────────── -->
         <BaseDialog
-            v-model="barcodeOpen"
-            title="Register a barcode"
+            v-model="linkOpen"
+            title="Link to a stock item"
             closable
-            card-style="min-width: 320px; max-width: 420px"
+            card-style="min-width: 420px"
         >
-                <q-card-section>
-                    <div class="text-caption dora-text-muted q-mb-sm">
-                        Scanning this code will resolve to
-                        <strong>{{ barcodeTarget?.name }}</strong> (and its linked
-                        stock item, if any).
-                    </div>
-                    <q-input
-                        v-model="barcodeValue"
-                        outlined
-                        dense
-                        autofocus
-                        placeholder="e.g. 9300675001120"
-                        label="Barcode (EAN / UPC)"
-                        :error="!!barcodeError"
-                        :error-message="barcodeError ?? undefined"
-                        @keydown.enter.prevent="confirmBarcode"
-                    />
-                </q-card-section>
-                <template #actions>
-                    <BaseButton variant="ghost" label="Cancel" v-close-popup />
-                    <BaseButton
-                        variant="primary"
-                        label="Register"
-                        :loading="barcodeBusy"
-                        :disable="barcodeValue.trim().length === 0"
-                        @click="confirmBarcode"
-                    />
-                </template>
+            <q-card-section>
+                <div class="text-caption dora-text-muted">{{ linkTarget?.name }}</div>
+            </q-card-section>
+            <q-card-section class="q-pt-none">
+                <q-select
+                    v-model="linkChoiceStockItemId"
+                    outlined
+                    dense
+                    use-input
+                    input-debounce="150"
+                    :options="linkStockItemOptions"
+                    emit-value
+                    map-options
+                    clearable
+                    label="Stock item"
+                    @filter="onLinkPickerFilter"
+                />
+            </q-card-section>
+            <template #actions>
+                <BaseButton variant="ghost" label="Cancel" v-close-popup />
+                <BaseButton
+                    variant="primary"
+                    label="Link"
+                    :loading="linkBusy"
+                    :disable="!linkChoiceStockItemId"
+                    @click="confirmLink"
+                />
+            </template>
         </BaseDialog>
     </q-page>
 </template>
 
 <script lang="ts" setup>
-    import { ICONS } from 'src/style/icons';
-    import AddToListButton from 'src/components/AddToListButton.vue';
     import AppSpinner from 'src/components/AppSpinner.vue';
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
+    import BaseSelect from 'src/components/BaseSelect.vue';
     import FilterBar from 'src/components/FilterBar.vue';
+    import FilterRow from 'src/components/filters/FilterRow.vue';
     import FilterToggleButton from 'src/components/FilterToggleButton.vue';
     import PageCountsFooter from 'src/components/PageCountsFooter.vue';
-    import ProductThumb from 'src/components/products/ProductThumb.vue';
-    import { formatMoney } from 'src/composables/useMoney';
+    import ProductCard from 'src/components/products/ProductCard.vue';
+    import ProductRow from 'src/components/products/ProductRow.vue';
     import FadeTransition from 'src/components/transitions/FadeTransition.vue';
-    import { storeToRefs } from 'pinia';
-    import { useQuasar } from 'quasar';
-    import StoreLogo from 'src/components/StoreLogo.vue';
     import { useFilterPanelExpanded } from 'src/composables/useFilterPanelExpanded';
     import { useListState } from 'src/composables/useListState';
+    import { useListViewMode } from 'src/composables/useListViewMode';
+    import { openProductSearch } from 'src/composables/useProductSearchUrl';
     import { useShoppingListActions } from 'src/composables/useShoppingListActions';
     import { colourForSequence } from 'src/helpers/stockLevelLogic';
     import type { Product } from 'src/models/product';
     import type { StockItem } from 'src/models/stockItem';
-    import BarcodeApiService from 'src/services/api/barcodeApiService';
     import ProductApiService from 'src/services/api/productApiService';
     import StockItemApiService from 'src/services/api/stockItemApiService';
-    import { useScanningEnabled } from 'src/composables/useScanningEnabled';
-    import { openProductSearch } from 'src/composables/useProductSearchUrl';
+    import { describeApiError, toastCaption } from 'src/services/errorHandling/apiErrorHandler';
     import { useProductStore } from 'src/stores/productStore';
     import { useShoppingListStore } from 'src/stores/shoppingListStore';
     import { useStockItemStore } from 'src/stores/stockItemStore';
     import { useStockLevelStore } from 'src/stores/stockLevelStore';
+    import { ICONS } from 'src/style/icons';
+    import { storeToRefs } from 'pinia';
+    import { useQuasar } from 'quasar';
     import { computed, onMounted, ref } from 'vue';
     import { useRouter } from 'vue-router';
-    import { describeApiError, toastCaption } from 'src/services/errorHandling/apiErrorHandler';
 
     const $q = useQuasar();
     const router = useRouter();
     const productApi = new ProductApiService();
     const stockItemApi = new StockItemApiService();
-    const barcodeApi = new BarcodeApiService();
-    const { scanningEnabled } = useScanningEnabled();
     const productStore = useProductStore();
     const shoppingListStore = useShoppingListStore();
     const stockItemStore = useStockItemStore();
@@ -655,11 +539,19 @@
     const loading = ref(false);
     const loadError = ref<string | null>(null);
 
+    const compactToolbar = computed(() => $q.screen.lt.sm);
+    // D-10 — remembered across visits, same machinery as the cookbook.
+    const viewMode = useListViewMode('my-products');
+    function toggleViewMode() {
+        viewMode.value = viewMode.value === 'grid' ? 'compact' : 'grid';
+    }
+
+    const orphansLabel = computed(
+        () => `Stock items without products (${stockItemsMissingProducts.value.length})`,
+    );
+
     // products comes via the store (R-003) so a save on the
-    // product-search surface (which goes through `productStore.createProductAsync`)
-    // is immediately visible here without a hard refresh. `getProductsAsync`
-    // is the force-refetch path the page uses on mount, on retry, and after
-    // bulk mutations below.
+    // product-search surface is immediately visible here.
     async function loadAll() {
         loading.value = true;
         loadError.value = null;
@@ -677,11 +569,7 @@
         }
     }
 
-    // ── Filters ─────────────────────────────────────────────────────
-    // (the filter panel's expanded state is declared below, once
-    // `activeFilterCount` exists — it's what decides whether the panel opens.)
-    // A8 §3 nav-state — filters/search survive navigation within the
-    // session and reset on full reload.
+    // ── Filters ─────────────────────────────────────────────────────────
     const myProductsState = useListState('my-products', () => ({
         searchText: ref(''),
         onDealOnly: ref(false),
@@ -696,18 +584,13 @@
     } = myProductsState;
 
     function onLinkedFilter(value: string, update: (cb: () => void) => void) {
-        update(() => {
-            linkedStockItemPickerText.value = value;
-        });
+        update(() => { linkedStockItemPickerText.value = value; });
     }
 
-    function discountPct(product: Product): number | null {
-        if (!product.price_was || !product.price_now) return null;
-        if (product.price_was <= product.price_now) return null;
-        return Math.round(((product.price_was - product.price_now) / product.price_was) * 100);
-    }
     function onSpecial(product: Product): boolean {
-        return discountPct(product) !== null;
+        const now = product.price_now;
+        const was = product.price_was;
+        return now != null && was != null && was > now;
     }
 
     const storeOptions = computed(() => {
@@ -716,8 +599,6 @@
     });
 
     const linkedStockItemOptions = computed(() => {
-        // List of stock items that are linked to *some* product in this set
-        // — so users can filter the grid down to one specific item.
         const linkedIds = new Set(
             products.value
                 .map((p) => p.linked_stock_item_id)
@@ -735,32 +616,22 @@
             if (!includeInactive.value && !p.is_active) return false;
             if (onDealOnly.value && !onSpecial(p)) return false;
             // A4: explicit "empty = off" — a null selection skips the predicate.
-            if (storeFilter.value !== null && p.store_name !== storeFilter.value)
-                return false;
+            if (storeFilter.value !== null && p.store_name !== storeFilter.value) return false;
             if (
                 linkedStockItemFilter.value !== null
                 && p.linked_stock_item_id !== linkedStockItemFilter.value
-            )
-                return false;
+            ) return false;
             if (searchText.value) {
                 const q = searchText.value.toLowerCase();
                 const haystack = [
-                    p.name,
-                    p.brand,
-                    p.store_name,
-                    p.linked_stock_item_name ?? '',
-                    p.size,
-                ]
-                    .filter(Boolean)
-                    .join(' ')
-                    .toLowerCase();
+                    p.name, p.brand, p.store_name, p.linked_stock_item_name ?? '', p.size,
+                ].filter(Boolean).join(' ').toLowerCase();
                 if (!haystack.includes(q)) return false;
             }
             return true;
         }),
     );
 
-    // A7 — sticky footer counts over the FILTERED view.
     const footerCounts = computed(() => [
         { label: 'Shown', value: filteredProducts.value.length },
         {
@@ -776,14 +647,12 @@
     ]);
 
     const hasAnyFilter = computed(
-        () =>
-            searchText.value !== ''
+        () => searchText.value !== ''
             || onDealOnly.value
             || includeInactive.value
             || storeFilter.value !== null
             || linkedStockItemFilter.value !== null,
     );
-    // Active-filter count for the FilterBar badge (excludes the search box).
     const activeFilterCount = computed(() => {
         let n = 0;
         if (onDealOnly.value) n++;
@@ -792,8 +661,6 @@
         if (linkedStockItemFilter.value !== null) n++;
         return n;
     });
-    // 2026-08-20 owner call — open iff something is filtered; not remembered
-    // across visits. See `useFilterPanelExpanded`.
     const filtersExpanded = useFilterPanelExpanded(
         'my-products',
         () => activeFilterCount.value > 0,
@@ -806,7 +673,7 @@
         linkedStockItemFilter.value = null;
     }
 
-    // ── Bulk-select ─────────────────────────────────────────────────
+    // ── Bulk-select ─────────────────────────────────────────────────────
     const bulkMode = ref(false);
     const selectedIds = ref<Set<string>>(new Set());
     const bulkBusy = ref(false);
@@ -825,42 +692,79 @@
         else next.add(productId);
         selectedIds.value = next;
     }
-    function onCardClick(productId: string) {
-        if (bulkMode.value) toggleSelect(productId);
-    }
     function selectAllVisible() {
         selectedIds.value = new Set(filteredProducts.value.map((p) => p.product_id));
     }
-    function selectOnDealVisible() {
+    /** Every select-helper is this one function with a different predicate —
+     *  six near-identical bodies is how they'd drift. */
+    function selectWhere(predicate: (product: Product) => boolean) {
         selectedIds.value = new Set(
-            filteredProducts.value.filter(onSpecial).map((p) => p.product_id),
+            filteredProducts.value.filter(predicate).map((p) => p.product_id),
         );
     }
 
+    // MP-15/16/17 cross product state with stock state. `is_low_stock`,
+    // `is_out_of_stock` and `is_essential` are server-derived (R-003) — the
+    // client must not re-decide what "low" means from a level name or
+    // sequence, which is the trap `useStockFilters.hasAlert` fell into.
+    const stockItemsById = computed(
+        () => new Map(stockItems.value.map((s) => [s.stock_item_id, s])),
+    );
+    function linkedItem(product: Product): StockItem | undefined {
+        return product.linked_stock_item_id
+            ? stockItemsById.value.get(product.linked_stock_item_id)
+            : undefined;
+    }
+    function isLowStockOnDeal(product: Product): boolean {
+        return onSpecial(product) && !!linkedItem(product)?.is_low_stock;
+    }
+    function isOutOfStockOnDeal(product: Product): boolean {
+        return onSpecial(product) && !!linkedItem(product)?.is_out_of_stock;
+    }
+    function isEssentialLowOnDeal(product: Product): boolean {
+        const item = linkedItem(product);
+        return onSpecial(product) && !!item?.is_essential && !!item?.is_low_stock;
+    }
+
     const onDealSelectedCount = computed(
-        () =>
-            products.value.filter(
-                (p) => selectedIds.value.has(p.product_id) && onSpecial(p),
-            ).length,
+        () => products.value.filter(
+            (p) => selectedIds.value.has(p.product_id) && onSpecial(p),
+        ).length,
     );
 
-    // ── Bulk add on-deal to a list ──────────────────────────────────
+    function selectedProducts(): Product[] {
+        return products.value.filter((p) => selectedIds.value.has(p.product_id));
+    }
+
+    /** One confirm shape for every destructive path here. Red OK button, and
+     *  never default-focused (D-008). */
+    function confirmDestructive(title: string, message: string, okLabel: string) {
+        return new Promise<boolean>((resolve) => {
+            $q.dialog({
+                title,
+                message,
+                ok: { label: okLabel, color: 'negative', noCaps: true },
+                cancel: { noCaps: true, flat: true },
+            })
+                .onOk(() => resolve(true))
+                .onCancel(() => resolve(false))
+                .onDismiss(() => resolve(false));
+        });
+    }
+
+    // ── Bulk add on-deal to a list ──────────────────────────────────────
     const bulkAddOpen = ref(false);
     const bulkAddTargetListId = ref<string | null>(null);
 
     const activeListOptions = computed(() =>
         shoppingListStore.summaries
             .filter((s) => s.status !== 'done')
-            .map((s) => ({
-                label: s.name,
-                value: s.shopping_list_id,
-            })),
+            .map((s) => ({ label: s.name, value: s.shopping_list_id })),
     );
 
     const bulkAddCandidates = computed(() =>
         products.value.filter(
-            (p) =>
-                selectedIds.value.has(p.product_id)
+            (p) => selectedIds.value.has(p.product_id)
                 && onSpecial(p)
                 && Boolean(p.linked_stock_item_id),
         ),
@@ -871,8 +775,7 @@
             $q.notify({
                 type: 'info',
                 position: 'bottom-right',
-                message:
-                    'Nothing to add — selected on-deal products need a linked stock item.',
+                message: 'Nothing to add — selected on-deal products need a linked stock item.',
             });
             return;
         }
@@ -894,8 +797,6 @@
         if (!bulkAddTargetListId.value) return;
         bulkBusy.value = true;
         try {
-            // Each candidate carries the merchant-product to pre-select so
-            // the line opens with the deal already picked, not "cheapest".
             await addItems(
                 bulkAddTargetListId.value,
                 bulkAddCandidates.value.map((p) => ({
@@ -910,11 +811,9 @@
         }
     }
 
-    // ── Bulk unlink ─────────────────────────────────────────────────
+    // ── Bulk unlink ─────────────────────────────────────────────────────
     async function onBulkUnlink() {
-        const targets = products.value.filter(
-            (p) => selectedIds.value.has(p.product_id) && p.linked_stock_item_id,
-        );
+        const targets = selectedProducts().filter((p) => p.linked_stock_item_id);
         if (targets.length === 0) {
             $q.notify({
                 type: 'info',
@@ -923,26 +822,17 @@
             });
             return;
         }
-        const ok = await new Promise<boolean>((resolve) => {
-            $q.dialog({
-                title: `Unlink ${targets.length} product${targets.length === 1 ? '' : 's'}?`,
-                message:
-                    'They stay in My Products, but stop showing on the stock items they were linked to.',
-                ok: { label: 'Unlink', color: 'primary', noCaps: true },
-                cancel: { noCaps: true },
-            })
-                .onOk(() => resolve(true))
-                .onCancel(() => resolve(false))
-                .onDismiss(() => resolve(false));
-        });
+        const ok = await confirmDestructive(
+            `Unlink ${targets.length} product${targets.length === 1 ? '' : 's'}?`,
+            'They stay in My Products, but stop showing on the stock items they were linked to.',
+            'Unlink',
+        );
         if (!ok) return;
         bulkBusy.value = true;
         try {
             for (const product of targets) {
-                if (!product.linked_stock_item_id) continue;
                 await stockItemApi.unlinkProductAsync(
-                    product.linked_stock_item_id,
-                    product.product_id,
+                    product.linked_stock_item_id!, product.product_id,
                 );
             }
             await loadAll();
@@ -964,16 +854,14 @@
         }
     }
 
-    // ── Bulk mark inactive ──────────────────────────────────────────
+    // ── Bulk stop tracking ──────────────────────────────────────────────
     async function onBulkInactive() {
-        const targets = products.value.filter(
-            (p) => selectedIds.value.has(p.product_id) && p.is_active,
-        );
+        const targets = selectedProducts().filter((p) => p.is_active);
         if (targets.length === 0) {
             $q.notify({
                 type: 'info',
                 position: 'bottom-right',
-                message: 'Nothing to mark inactive — all selected are already inactive.',
+                message: 'Nothing to change — none of those are being tracked.',
             });
             return;
         }
@@ -981,15 +869,14 @@
         try {
             for (const product of targets) {
                 await productApi.updateAsync({
-                    product_id: product.product_id,
-                    is_active: false,
+                    product_id: product.product_id, is_active: false,
                 });
             }
             await loadAll();
             $q.notify({
                 type: 'positive',
                 position: 'bottom-right',
-                message: `Marked ${targets.length} inactive.`,
+                message: `Stopped tracking ${targets.length} product${targets.length === 1 ? '' : 's'}.`,
             });
             exitBulkMode();
         } catch (err) {
@@ -1004,20 +891,76 @@
         }
     }
 
-    // ── Per-product actions ─────────────────────────────────────────
-    async function onUnlinkSingle(product: Product) {
-        if (!product.linked_stock_item_id) return;
+    // ── Delete (L197 / batch C) ─────────────────────────────────────────
+    // Names what goes with it, because the endpoint really does take the
+    // price history: a confirm that only says "are you sure?" is not consent.
+    const DELETE_CONSEQUENCE =
+        'This also removes its price history and any price alerts on it. '
+        + 'Finished shopping lists keep their record of it.';
+
+    async function onDeleteSingle(product: Product) {
+        const ok = await confirmDestructive(
+            `Delete ${product.name}?`, DELETE_CONSEQUENCE, 'Delete',
+        );
+        if (!ok) return;
         try {
-            await stockItemApi.unlinkProductAsync(
-                product.linked_stock_item_id,
-                product.product_id,
-            );
+            await productApi.deleteAsync(product.product_id);
+            await loadAll();
+            $q.notify({
+                type: 'positive', position: 'bottom-right', message: 'Product deleted.',
+            });
+        } catch (err) {
+            $q.notify({
+                type: 'negative',
+                position: 'bottom-right',
+                message: 'Could not delete the product.',
+                caption: toastCaption(err),
+            });
+        }
+    }
+
+    async function onBulkDelete() {
+        const targets = selectedProducts();
+        if (targets.length === 0) return;
+        const ok = await confirmDestructive(
+            `Delete ${targets.length} product${targets.length === 1 ? '' : 's'}?`,
+            DELETE_CONSEQUENCE,
+            'Delete',
+        );
+        if (!ok) return;
+        bulkBusy.value = true;
+        try {
+            for (const product of targets) {
+                await productApi.deleteAsync(product.product_id);
+            }
             await loadAll();
             $q.notify({
                 type: 'positive',
                 position: 'bottom-right',
-                message: 'Unlinked.',
+                message: `Deleted ${targets.length} product${targets.length === 1 ? '' : 's'}.`,
             });
+            exitBulkMode();
+        } catch (err) {
+            $q.notify({
+                type: 'negative',
+                position: 'bottom-right',
+                message: 'Could not delete everything.',
+                caption: toastCaption(err),
+            });
+        } finally {
+            bulkBusy.value = false;
+        }
+    }
+
+    // ── Per-product actions ─────────────────────────────────────────────
+    async function onUnlinkSingle(product: Product) {
+        if (!product.linked_stock_item_id) return;
+        try {
+            await stockItemApi.unlinkProductAsync(
+                product.linked_stock_item_id, product.product_id,
+            );
+            await loadAll();
+            $q.notify({ type: 'positive', position: 'bottom-right', message: 'Unlinked.' });
         } catch (err) {
             $q.notify({
                 type: 'negative',
@@ -1031,8 +974,7 @@
     async function onToggleActive(product: Product) {
         try {
             await productApi.updateAsync({
-                product_id: product.product_id,
-                is_active: !product.is_active,
+                product_id: product.product_id, is_active: !product.is_active,
             });
             await loadAll();
         } catch (err) {
@@ -1053,11 +995,7 @@
         void router.push({ path: '/price-history', query: { product_id: productId } });
     }
 
-    // ── Link-to-stock-item dialog ───────────────────────────────────
-    // links the product in place via the stock-item m2m endpoint
-    // (`POST /stock-items/{id}/products`). Previously this bounced to the
-    // detail page with a `link_product_id` query hint that nothing consumed
-    // (the picker was removed in C-1b.3) — a silent dead-end.
+    // ── Link-to-stock-item dialog ───────────────────────────────────────
     const linkOpen = ref(false);
     const linkTarget = ref<Product | null>(null);
     const linkChoiceStockItemId = ref<string | null>(null);
@@ -1065,9 +1003,7 @@
     const linkBusy = ref(false);
 
     function onLinkPickerFilter(value: string, update: (cb: () => void) => void) {
-        update(() => {
-            linkPickerText.value = value;
-        });
+        update(() => { linkPickerText.value = value; });
     }
 
     const linkStockItemOptions = computed(() => {
@@ -1091,15 +1027,12 @@
         try {
             // The stock item owns the product m2m — link directly there.
             await stockItemApi.linkProductAsync(
-                linkChoiceStockItemId.value,
-                linkTarget.value.product_id,
+                linkChoiceStockItemId.value, linkTarget.value.product_id,
             );
             linkOpen.value = false;
             await loadAll();
             $q.notify({
-                type: 'positive',
-                position: 'bottom-right',
-                message: 'Product linked.',
+                type: 'positive', position: 'bottom-right', message: 'Product linked.',
             });
         } catch (err) {
             $q.notify({
@@ -1113,53 +1046,7 @@
         }
     }
 
-    // ── Register-barcode dialog (FU-373) ────────────────────────────
-    // Registers a real EAN/UPC against a Product via the shared
-    // `POST /data/barcodes` endpoint ({barcode, product_id}). The Product
-    // is the correct owner of a real barcode (a SKU identifies a sellable
-    // product, not a personal pantry slot); scanning it later resolves
-    // Product → linked stock item. Text-entry only, mirroring the
-    // stock-item detail "Add barcode" dialog.
-    const barcodeOpen = ref(false);
-    const barcodeTarget = ref<Product | null>(null);
-    const barcodeValue = ref('');
-    const barcodeError = ref<string | null>(null);
-    const barcodeBusy = ref(false);
-
-    function openBarcodeDialog(product: Product) {
-        barcodeTarget.value = product;
-        barcodeValue.value = '';
-        barcodeError.value = null;
-        barcodeOpen.value = true;
-    }
-
-    async function confirmBarcode() {
-        const raw = barcodeValue.value.trim();
-        if (!raw || !barcodeTarget.value) return;
-        barcodeError.value = null;
-        barcodeBusy.value = true;
-        try {
-            await barcodeApi.registerAsync({
-                barcode: raw,
-                product_id: barcodeTarget.value.product_id,
-            });
-            barcodeOpen.value = false;
-            $q.notify({
-                type: 'positive',
-                position: 'bottom-right',
-                message: 'Barcode registered.',
-            });
-        } catch (err) {
-            // Inline the message (incl. the 409 "already registered" /
-            // "product already has a barcode" conflicts) so the user can
-            // correct without losing the dialog.
-            barcodeError.value = describeApiError(err) || 'Could not register the barcode.';
-        } finally {
-            barcodeBusy.value = false;
-        }
-    }
-
-    // ── Stock items without products ────────────────────────────────
+    // ── Stock items without products ────────────────────────────────────
     const orphansOpen = ref(false);
 
     const stockItemsMissingProducts = computed<StockItem[]>(() => {
@@ -1172,22 +1059,22 @@
     });
 
     function levelNameFor(item: StockItem): string | null {
-        return (
-            stockLevels.value.find((l) => l.stock_level_id === item.stock_level_id)?.name
-            ?? null
-        );
+        return stockLevels.value.find(
+            (l) => l.stock_level_id === item.stock_level_id,
+        )?.name ?? null;
     }
     function levelColourFor(item: StockItem): string | null {
         // sequence-keyed, not name-keyed (R-003).
-        const seq = stockLevels.value.find((l) => l.stock_level_id === item.stock_level_id)?.sequence;
+        const seq = stockLevels.value.find(
+            (l) => l.stock_level_id === item.stock_level_id,
+        )?.sequence;
         return typeof seq === 'number' ? colourForSequence(seq) : null;
     }
 
-    function searchForOrphan(_item: StockItem) {
-        // FU-186/FU-581 — the in-app `/product-search` route (which consumed
-        // the stock_item_id/q seeding to auto-link) is gone; open the external
-        // Product Search companion instead. Products found there are linked
-        // back via the per-product "Link to stock item…" dialog on this page.
+    function searchForOrphan() {
+        // FU-186/FU-581 — the in-app `/product-search` route is gone; open the
+        // external companion instead. Products found there are linked back via
+        // the per-product link button on this page.
         orphansOpen.value = false;
         openProductSearch(router);
     }
@@ -1196,35 +1083,49 @@
 </script>
 
 <style scoped>
-    .my-product-card {
-        height: 100%;
-        transition: outline-color 120ms ease, box-shadow 120ms ease;
-        outline: 2px solid transparent;
-        outline-offset: -2px;
+    /* Same toolbar rules as StockOverview/RecipesOverview: the action band
+       scrolls sideways rather than wrapping (the buttons running off the edge
+       IS the affordance), and `__find` takes its own full-width line on
+       phones so the search box isn't a sliver. `gap` rather than
+       `q-gutter-sm` because the gutter's negative margins fight overflow-x. */
+    .products-toolbar {
+        margin-bottom: var(--space-4);
     }
-    .my-product-card:hover {
-        box-shadow: 0 4px 14px var(--overlay-active);
+    .products-toolbar__actions {
+        gap: var(--space-2);
+        overflow-x: auto;
+        overflow-y: hidden;
+        min-width: 0;
+        padding-bottom: 2px;
+        scrollbar-width: none;
     }
-    .my-product-card--selected {
-        outline-color: var(--q-primary);
+    .products-toolbar__actions::-webkit-scrollbar {
+        display: none;
     }
-    .my-product-card--inactive {
-        opacity: 0.6;
+    .products-toolbar__actions > * {
+        flex: 0 0 auto;
     }
-    .strike {
-        text-decoration: line-through;
+    .products-toolbar__find {
+        flex: 1 1 auto;
+        min-width: 280px;
     }
-    .bulk-bar {
-        background: var(--overlay-hover);
+    @media (max-width: 599px) {
+        .products-toolbar__find {
+            flex-basis: 100%;
+            min-width: 0;
+        }
     }
-    .bulk-bar-active {
-        background: var(--brand-primary-soft);
+
+    /* The bulk bar scrolls for the same reason the action band does — it now
+       carries four actions plus a select menu. */
+    .products-bulk {
+        overflow-x: auto;
+        scrollbar-width: none;
     }
-    .ellipsis-2-lines {
-        display: -webkit-box;
-        -webkit-line-clamp: 2;
-        line-clamp: 2;
-        -webkit-box-orient: vertical;
-        overflow: hidden;
+    .products-bulk::-webkit-scrollbar {
+        display: none;
+    }
+    .products-bulk > * {
+        flex: 0 0 auto;
     }
 </style>

@@ -95,6 +95,14 @@ class UpcomingMealPlanEntry:
     # Both are false in a "fresh" household, where the pool doesn't exist.
     needs_cooking: bool = False
     cook_fresh: bool = False
+    # Owner 2026-09-05 — *"hope it has the same behaviour as the meal planner
+    # where it automatically adjusts the recipe servings when clicking cook
+    # now."* The planner opens cook mode at `cook_batch_total_servings` — what
+    # one cook of a linked batch must yield — falling back to the entry's own
+    # servings. Same figure, derived the same way, so the two surfaces can't
+    # disagree about how many the same meal cooks for (R-003). NULL for a
+    # standalone meal.
+    cook_batch_total_servings: Optional[int] = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -121,8 +129,34 @@ class GetDashboardSummaryHandler:
     def __init__(self, repository: Repository) -> None:
         self.repository = repository
 
-    def _cook_verdicts(
+    def _cook_batches(
         self, entries: List[MealPlanEntry],
+    ) -> dict[UUID, tuple[date, int]]:
+        """`{cook_batch_id: (earliest day, Σ servings)}` for the entries' batches.
+
+        Fetched rather than folded out of `entries`: this window is seven days,
+        so a batch can begin before it or run past it, and both halves of the
+        answer — which day is the cook, and how much that one cook must yield —
+        come out wrong if only the members on screen are counted. Mirrors
+        `get_meal_plans._apply_cook_batch_view`, which has the whole plan in
+        hand and so can fold.
+        """
+        batch_ids = {e.cook_batch_id for e in entries if e.cook_batch_id is not None}
+        if not batch_ids:
+            return {}
+        out: dict[UUID, tuple[date, int]] = {}
+        for member in self.repository.get(MealPlanEntry).all(
+            EntityField(MealPlanEntry, MealPlanEntry.Fields.COOK_BATCH_ID)
+            .in_(list(batch_ids))
+        ):
+            day, total = out.get(member.cook_batch_id, (member.scheduled_for, 0))
+            out[member.cook_batch_id] = (
+                min(day, member.scheduled_for), total + member.servings,
+            )
+        return out
+
+    def _cook_verdicts(
+        self, entries: List[MealPlanEntry], batches: dict[UUID, tuple[date, int]],
     ) -> dict[UUID, tuple[bool, bool]]:
         """`{entry_id: (needs_cooking, cook_fresh)}` for the upcoming window.
 
@@ -136,8 +170,8 @@ class GetDashboardSummaryHandler:
         the pool model only sees from today forward, so when a batch's cook day
         is already past, the earliest day still in its window looks like the
         cook. It isn't — it's a leftovers day, and nobody has to cook it. The
-        window here is seven days rather than a whole plan, so the batch's true
-        earliest day is fetched rather than derived from what's on screen.
+        batch's true earliest day comes from `_cook_batches`, which fetches
+        the whole batch rather than reading what's on screen.
         """
         from dora_api.features.app_settings.access import get_or_create_app_setting
         from dora_api.features.meal_plans.planned_meals import upcoming_planned_meals
@@ -151,24 +185,11 @@ class GetDashboardSummaryHandler:
         snapshot = upcoming_planned_meals(self.repository)
         uncovered = {m.entry_id for m in snapshot.meals if not m.covered}
 
-        batch_ids = {e.cook_batch_id for e in entries if e.cook_batch_id is not None}
-        cook_day_by_batch: dict[UUID, date] = {}
-        if batch_ids:
-            for member in self.repository.get(MealPlanEntry).all(
-                EntityField(MealPlanEntry, MealPlanEntry.Fields.COOK_BATCH_ID)
-                .in_(list(batch_ids))
-            ):
-                current = cook_day_by_batch.get(member.cook_batch_id)
-                if current is None or member.scheduled_for < current:
-                    cook_day_by_batch[member.cook_batch_id] = member.scheduled_for
-
         out: dict[UUID, tuple[bool, bool]] = {}
         for entry in entries:
             fresh = bool(getattr(entry, "cook_fresh", False))
-            is_cook_day = (
-                entry.cook_batch_id is None
-                or cook_day_by_batch.get(entry.cook_batch_id) == entry.scheduled_for
-            )
+            batch = batches.get(entry.cook_batch_id) if entry.cook_batch_id else None
+            is_cook_day = batch is None or batch[0] == entry.scheduled_for
             # `cook_fresh` and `needs_cooking` are the two halves of "somebody
             # has to cook this", never both — a fresh meal asks the pool for
             # nothing, so "the pool is short one" can't be true of it.
@@ -236,7 +257,8 @@ class GetDashboardSummaryHandler:
         # missing_count as null (unknown) — the SPA renders the
         # calendar chip dimmed rather than "N missing", same neutral
         # state as RecipeCard.
-        cook_verdicts = self._cook_verdicts(upcoming_entries_entities)
+        cook_batches = self._cook_batches(upcoming_entries_entities)
+        cook_verdicts = self._cook_verdicts(upcoming_entries_entities, cook_batches)
         upcoming_entries_dto: List[UpcomingMealPlanEntry] = []
         for e in upcoming_entries_entities:
             missing, ingredient_count, unlinked = cookability.get(e.recipe.id, (0, 0, 0))
@@ -254,6 +276,10 @@ class GetDashboardSummaryHandler:
                 unlinked_ingredient_count = unlinked,
                 needs_cooking = cook_verdicts.get(e.id, (False, False))[0],
                 cook_fresh = cook_verdicts.get(e.id, (False, False))[1],
+                cook_batch_total_servings = (
+                    cook_batches[e.cook_batch_id][1]
+                    if e.cook_batch_id in cook_batches else None
+                ),
             ))
 
         return DashboardSummaryDto(

@@ -136,16 +136,12 @@
                         <q-card-section v-if="s.current" class="q-pt-none">
                             <div class="text-h6">
                                 {{ s.current.unit_price != null ? formatMoney(s.current.unit_price) : '—' }}
-                                <q-chip
-                                    v-if="s.current.deal_pct"
-                                    dense
-                                    size="sm"
-                                    color="positive"
-                                    text-color="white"
-                                    class="q-ml-xs"
-                                >
-                                    -{{ s.current.deal_pct }}%
-                                </q-chip>
+                                <!-- PH-5/PH-6 — was a `size="sm"` chip reading
+                                     "-12%", which is both the smallest and the
+                                     only differently-worded spelling of the
+                                     badge in the app. Now the shared chip, at
+                                     the default size. -->
+                                <DiscountChip class="q-ml-xs" :pct="s.current.deal_pct" />
                             </div>
                             <div v-if="s.all_time_low" class="text-caption dora-text-muted-7">
                                 All-time low:
@@ -261,6 +257,7 @@
     import SearchInput from 'src/components/SearchInput.vue';
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseSegmented from 'src/components/BaseSegmented.vue';
+    import DiscountChip from 'src/components/chips/DiscountChip.vue';
     import { useMoney, formatMoney } from 'src/composables/useMoney';
     // money renders + input labels read the install-currency
     // symbol from the shared money policy.

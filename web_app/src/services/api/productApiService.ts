@@ -39,6 +39,13 @@ export default class ProductApiService {
     getPriceHistoryAsync = async (productId: string): Promise<PriceHistory> =>
         await this.httpClient.get<PriceHistory>(`/products/${productId}/price-history`);
 
+    /** Hard delete (feedback L197). Takes the product's offers, price history,
+     *  alerts, barcode and stock-item link with it; lines on *finished*
+     *  shopping lists survive, naming the product from the snapshot frozen
+     *  when the list was finished (FU-883). */
+    deleteAsync = async (productId: string): Promise<void> =>
+        await this.httpClient.delete(`/products/${productId}`);
+
     updateAsync = async (productToUpdate: UpdateProductCommand): Promise<Product> => {
         const { product_id, ...payload } = productToUpdate;
         return await this.httpClient.patch<Product>(`/products/${product_id}`, payload);

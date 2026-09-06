@@ -5,7 +5,189 @@ semver — major bumps signal schema or breaking-config changes.
 
 ## [Unreleased]
 
+### Changed
+- **My Products rebuilt (2026-09-06).** The page now has **two views** — a card
+  grid with product photos, and compact rows — switched from the toolbar and
+  remembered between visits, the same way the cookbook works. The cards took
+  their shape from the companion's own search results: a square image with the
+  discount badge on it, the price with the old price struck through, and the
+  store's logo. **Tapping the top of a card (or a compact row) opens that
+  product on the store's own site**, which is why the separate "open at store"
+  button is gone.
+  Each card carries five controls and no hidden "⋮" menu: link/unlink (a grey
+  broken link or a green connected one), a tracking toggle, add-to-list, price
+  history, and delete — delete kept apart from the rest, in red, and always
+  asking first. The toolbar matches Stock and the Cookbook now, including on
+  phones, and **the Refresh button is gone**. "Stock items without products"
+  glows only when there actually are some.
+  **Bulk select** moved into the toolbar and onto the same bar the rest of the
+  app uses, and grew the selections that were missing: on deal, untracked,
+  and — new — *low stock on deal*, *out of stock on deal* and *essential, low,
+  on deal*, plus **deselect all**. Rather than eleven buttons, the selections
+  live behind one "Select…" menu and the actions stay in view.
+  The **"% off" badge is now one component everywhere** (My Products, the
+  stock-item Products tab, Price History), bigger, and **green rather than
+  red** — red is this app's colour for out-of-stock and for destructive things,
+  so a saving wearing it was working against the rest of the interface.
+
+### Fixed
+- **A stray "Oops, something went wrong" on resize (2026-09-06).** Resizing the
+  window — or rotating a phone — could pop an error toast that referred to
+  nothing, because the browser's own harmless "ResizeObserver loop" notice was
+  being treated as an application crash. Worse, that path also rolled back any
+  optimistic change still in flight. It's now recognised as the non-event it is.
+
 ### Added
+- **Saved products can refresh themselves on a schedule (2026-09-06).** Keeping
+  prices current meant re-searching for each product by hand. The companion can
+  now ask Dora what it holds, re-check each product's price at its store, and
+  send the results back — on a cadence you set (`MAPI_SYNC_INTERVAL_HOURS`,
+  daily by default, `0` to turn it off), or on demand. It looks each product up
+  by its own store code rather than searching its name again, so a refresh can't
+  quietly swap in a different product. **Marking a product inactive now means
+  "don't scrape this"**, not just "hide it" — deselected products are skipped by
+  the refresh entirely, so they stop costing anything. Dora still doesn't know
+  the companion exists: it publishes the list and waits to be asked, and the
+  weekly deals email keeps working off whatever is currently in Dora.
+- **You can delete a saved product for good (2026-09-06).** Since June the only
+  way to prune the products layer was to unlink or deactivate — there was
+  deliberately no delete, because the companion pushed whole scrape results and
+  anything removed came back on the next sync. That reasoning no longer holds
+  now the companion only sends what you explicitly save, so Dora owns what is
+  saved and deleting means something. Removing a product takes its offers,
+  price history, price alerts, registered barcode and stock-item link with it —
+  but **not** the stock item, which is yours, and **not** your finished shopping
+  lists, which keep their record of having bought it. Removing it from the
+  companion's search results ("Unsave") deletes it in Dora through exactly the
+  same path, so there is one behaviour rather than two that can drift.
+  The delete affordance on Dora's own My Products page arrives with that page's
+  rebuild; today it is reachable from the companion. Answers feedback L197.
+
+### Fixed
+- **Deleting a stock item no longer erases it from your past shopping lists
+  (2026-09-06).** Every line a stock item had ever appeared on was deleted with
+  it — including lines on **completed** lists. A finished list is meant to be a
+  receipt, so this was silently rewriting your purchase history: delete "Milk"
+  today and last month's shop would no longer show that you bought it. Product
+  lines behaved the same way. Both now survive: the line stays on the finished
+  list, keeps its quantity and what you paid, and still says what it was,
+  because a list freezes each line's name when you finish it (the same moment
+  it already freezes prices). Lines on **draft and shopping** lists are still
+  removed with the item — a line you can no longer buy is only clutter on a
+  list you're about to shop. Existing finished lists are backfilled by the
+  migration, so history already on your install is protected too. Closes
+  FU-883.
+- **Saving a product in the companion now saves the product you clicked
+  (2026-09-06).** *Landed in the sibling `dora-companion` repo; recorded here
+  because it changes what ends up in Dora's product layer.* The companion's
+  per-product **Save** button did not send the offer on screen — it re-ran a
+  fresh scrape for that product's *name*, took the first result, and pushed
+  that. On any search where several products share wording, clicking Save on
+  the fourth result could save a different product than the one you were
+  looking at. **Push all / push selected** had the matching defect: the rows
+  you ticked were used only to work out which stores to re-scrape, then up to
+  50 records were pushed regardless — ticking two products could push fifty.
+  Both came from one root cause: the companion's `POST /api/push` took a
+  *search query* rather than the offers already in hand, so the user's choice
+  was thrown away at the boundary and re-derived server-side. The endpoint now
+  takes the concrete offers, and what you pick is exactly what reaches Dora's
+  `/api/ingest` — nothing is re-scraped, re-queried or re-guessed. This is the
+  rule the products program calls PF-1/PF-3 ("Dora is the source of truth for
+  what is saved"), and it is what makes deleting a product meaningful: a
+  product you remove can no longer be resurrected by the next bulk scrape.
+  The Dora Target settings page's connectivity check also stopped being a
+  push — it now does a read-only check against `/api/ingest/link-status`,
+  because with the new contract there is no longer any such thing as a
+  harmless push. No Dora-side change: `/api/ingest` already accepted this
+  shape. Closes FU-881 and FU-882.
+
+### Added
+- **The meal planner shows what your week costs (2026-09-05).** Money was
+  effectively invisible on the planner: the only thing that knew about it was
+  the auto-builder's budget toggle, and even that didn't say what it counted.
+  Every planned meal now carries an estimated cost — at the servings it's
+  planned for, so a dinner for six costs twice a dinner for three — and those
+  add up to a per-day figure on each day card and a total for the week beside
+  the "to buy" count. When some meals can't be priced the figure says so
+  ("$42.87 (5/7)") rather than quietly reading as a cheap week. The recipe rail
+  gained a **Cheapest** ordering, ranked by cost per serving off the same
+  comparator the cookbook uses, showing each recipe's per-serving price while
+  that ordering is on. All of it is money opt-in: with money off the server
+  computes none of it and none of it appears.
+- **The auto-builder says what "under budget" means (2026-09-05).** It counts
+  what the meals cost to make — the value of every ingredient they use, pantry
+  or not — which is what it always did, unstated.
+- **The cookbook shows what a recipe costs per serving (2026-09-05).** Cost
+  used to exist only once you'd opened a recipe, which is the wrong place to
+  answer "what's cheap tonight". It now sits on every row and card, with a
+  **Cost per serving** sort beside it. Per *serving* deliberately: a tray bake
+  that costs $18 and feeds eight beats a $9 dish for two, and a total-cost
+  column would have ranked them the other way round. A recipe priced from only
+  some of its ingredients still shows its figure, marked with an asterisk that
+  says how many — the same convention kcal already uses. Money opt-in only, and
+  with money off the server doesn't compute it at all.
+- **About tells you how you've used Dora (2026-09-05).** The "at a glance"
+  block was reading the dashboard's own numbers, so it showed what's running low
+  and what's out of stock — a to-do list, on a page nobody visits to be given
+  chores. It now counts what you've built up: recipes curated, meals planned,
+  cooks logged, shopping lists, shops finished, and (with money on) total spend
+  tracked and prices recorded. The spend figure is computed off the same rule as
+  the Reports page, so the two can't quote you different totals.
+- **Barcode count on the stock item's Scanning tab**, matching its four sibling
+  tabs.
+
+### Changed
+- **A day on a phone is laid out by meal slot (2026-09-05).** The mobile planner
+  listed a day's meals as one flat run in whatever order they were saved, with
+  each card's slot printed as a small uppercase tag. So an empty slot didn't
+  exist there at all, breakfast could appear below dinner, and the tag was doing
+  a grouping job that a tag can't do. Every slot in your household's vocabulary
+  now gets its own heading, in your order, with its own Add — which also
+  retires the "Which slot?" sheet that used to open after a single Add button,
+  since the slots are on screen to be tapped directly.
+- **"This week's shopping" is now "Missing this week" (2026-09-05).** The card
+  had a title, then two lines of counts, then a button, then a second heading
+  saying "What's needed (4)" — four pieces of chrome for one list. It is one row
+  now: cart, name, an out-of-stock and a low-stock count as coloured circles,
+  and the chevron. The "Add to a list" button keeps its place between that row
+  and the list it fills, and the counts' tooltips are gone.
+- **Adjusting servings from a meal's menu no longer closes it (2026-09-05).**
+  Each tap saved the week, and saving the week replaced the row underneath the
+  menu — so putting a meal up by three took six taps, opening the menu again
+  between each. The menu now survives the save.
+- **The meal menu drops the repeated recipe name**, wears the cookbook icon for
+  "View recipe" (it opens the recipe, it doesn't open a new tab), and takes full
+  height rows on a phone.
+- **The dashboard header reads as a header on a phone (2026-09-05).** The
+  greeting and Dora's message now sit beside the mascot at every width — they
+  used to drop underneath it on a phone, and the Cards button took its own
+  full-width row below that. Cards is icon-only below `sm`, and the tip of the
+  day moved to its own line under the greeting, where it wraps at the Cards
+  button instead of squeezing everything above it.
+- **Next to cook says less, and shows more (2026-09-05).** A meal that's ready
+  to cook no longer carries a "Ready" chip: every row on that card is something
+  somebody has to cook, so the chip was the row's own premise repeated back at
+  you, in the space a phone could least spare. "Missing 3" and "2 to link"
+  still show — those change what you do next — and the recipe name no longer
+  gets crushed to an ellipsis to make room for them.
+- **Cook now from the dashboard opens at the batch's yield (2026-09-05).** It
+  already used the plan's servings rather than the recipe's default, but on a
+  meal cooked once across linked days it opened at that day's share instead of
+  the whole cook. It now reads the same server-derived figure the meal
+  planner's chips do, so the row's "serves 6" and what cook mode opens at
+  can't disagree.
+- **Bigger tap targets on phones, unchanged on desktop (2026-09-05).** Buttons,
+  icon buttons and dropdown rows were sized for a mouse everywhere — 36px
+  buttons, 32px menu rows, and 30px action buttons on the stock and cookbook
+  lists. On touch they now meet the 44px floor the design guide has always
+  specified, and the stock-level menu widens with them. With a mouse nothing
+  changes: the sizing keys off *how you're pointing*, not how wide the window
+  is, so a desktop window dragged narrow keeps its compact toolbars and a tablet
+  gets the bigger targets.
+- **One icon for cooking.** Starting a cook wore three different glyphs
+  depending on where you found it — the cookbook row, the recipe page's Cook
+  mode button, and the meal planner's "Cook now". All three are the chef hat
+  now, as is the onboarding tour's "Cook" step.
 - **The "log a price" picker opens on what you priced last (2026-09-04).** It
   used to open on whatever was lowest in the pantry, which is the right guess
   for the *shopping* picker and the wrong one here — pricing is bursty and

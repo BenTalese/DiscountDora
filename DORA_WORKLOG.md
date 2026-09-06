@@ -41,6 +41,778 @@ next.
 
 ---
 
+## 2026-09-06 (×6) — **Batch F: My Products rebuilt — the original ask**
+
+**Status: complete.** Gates: `vue-tsc` clean · `eslint src/` clean · **vitest
+717 / 64 files** (12 new) · `quasar build` green. **Driven live** on the
+isolated scratch backend (:5171 dense seed, SPA :5174 — never the :5170 dev DB)
+at 1440 and 375 with a throwaway Playwright script, deleted in-session.
+
+Batch F of [`IMPL_PLAN_PRODUCTS_PROGRAM.md`](docs/04_proposals/IMPL_PLAN_PRODUCTS_PROGRAM.md) —
+the batch the owner originally asked for, unblocked by settling **OD-1** first.
+
+**OD-1, settled by the owner:** card top half opens the *store's* page (which
+retired the "Open at store" icon as redundant); *Open stock item* and *Register
+barcode* removed outright; **fully flattened, no ⋮**. My earlier objection to
+flattening was arithmetic — it assumed six targets — and the removals left
+five, which fit. I said so rather than re-arguing it. The half of the objection
+that survived (delete beside add-to-list) is handled by construction: delete
+sits past a `q-space`, renders `danger-icon`, always confirms in red, and is
+**absent from the compact row** entirely.
+
+**Built:** `ProductCard` (companion-shaped) + `ProductRow` (cookbook-shaped) on
+the cookbook's existing `useListViewMode`; `ProductLinkButton` (MP-5 grey/green)
+and `ProductActiveButton` (MP-8 grey/blue — and the owner's June guess at a
+*search* icon turned out literally right, since batch D made `is_active` decide
+whether a product is scraped at all); the standard toolbar; bulk-select on
+`dora-subbar` with the three stock-crossed selections (MP-15/16/17) reading
+**server-owned** `is_low_stock`/`is_out_of_stock`/`is_essential` rather than
+re-deriving (R-003). Refresh deleted (MP-19). **Resolved [[FU-885]]** — one
+`DiscountChip` for all four surfaces, `ProductChip.vue` deleted.
+
+**The owner asked "are my buttons making sense? Better way to do it?"** — six
+select-helpers plus four actions is a bar nobody can scan, so the *selections*
+collapsed into one "Select…" menu and the *actions* stayed in view.
+
+**Three defects the browser found that no gate would have.** All three passed
+typecheck, lint, unit tests and build:
+1. **8px of horizontal page scroll at 375** (D-011). `PageCountsFooter`
+   outdents a hardcoded `-16px` to cancel a `q-pa-md` parent, but this page used
+   `<q-page padding>`, which is **8px at xs** — so it over-outdented. My Products
+   was the only one of the four footer pages not already saying `q-pa-md`.
+   Pre-existing; fixed by matching the others.
+2. **The card's placeholder glyph sat tiny in the top-left corner.** `q-avatar`
+   sizes via *font-size*, so `size="100%"` cannot fill a box. Added a `fill`
+   mode to `ProductThumb` rather than hand-rolling an `<img>` and losing R-045's
+   authenticated fetch.
+3. **An "Oops, something went wrong" toast on every viewport change** →
+   the real find, below.
+
+**The one worth reading.** That toast came from the browser's benign
+*"ResizeObserver loop completed with undelivered notifications"*, which Chrome
+reports through `window.onerror` — and Dora's handler toasts **and calls
+`executeRollbacks()`** for anything it receives. So a non-event could revert a
+user's in-flight optimistic change. Filtered at the handler.
+**Process note worth keeping:** I chased this for four wrong iterations
+(aspect-ratio, flex-wrap, absolute fill, `flex: 0 0 auto`), each time writing a
+confident CSS comment blaming my own layout. Instrumenting `ResizeObserver`
+took one attempt and showed **none of my elements were churning** — only
+Quasar's layout observers, twice. The wrong explanations are removed from those
+comments; a plausible-but-false "why" left in code is worse than none. The
+general shape (a global handler entitled to roll back state) is **[[FU-889]]**.
+
+**Engineering-standards close-gate.** R-001/R-002 (componentisation-first): four
+`discountPct` copies → one; the two state buttons are components, not inline
+markup. R-003: the stock-crossed selections and the server's `deal_pct` both
+read server-owned facts. D-001 decided the chip colour and exposed the inverted
+escalation on the old card (discount red, out-of-stock amber) — both now
+correct. D-004: the bare `<a href="#">Link…</a>` became a 44px control. D-008:
+one `confirmDestructive` helper, red, for every destructive path.
+**ADR evaluation:** no new rule. The closest candidate — "a control band
+scrolls, it never wraps" — is already `FilterRow`'s established practice; this
+is a third adopter, not a new decision.
+
+**Owed:** the seed products carry no images, so the square media well renders
+as a large empty placeholder here; that is the seed, not the design (real
+products arrive with images through ingest), but it is worth one look on an
+install with real photos. In `DORA_VERIFY.md`.
+
+**Next up:** **G** (Price History + the stock-item Products tab) is the natural
+follow-on — `DiscountChip` already landed on both, so what's left there is the
+toolbar shape, the money-formatted notify input, and the four browser-confirms
+under FU-214. **A** (companion key UI) is small. **E** still needs **OD-3**.
+
+---
+
+## 2026-09-06 (×5) — **Batch D: the products layer keeps itself current**
+
+**Status: complete.** Gates: **pytest 2340 on SQLite, 2339 on Postgres** (the PG
+delta is [[FU-888]], pre-existing); only the four known FU-762 reds otherwise.
+Companion **47 passed** (10 new). 7 new Dora tests. Verified end to end over
+real HTTP against a stub Dora.
+
+Batch D of [`IMPL_PLAN_PRODUCTS_PROGRAM.md`](docs/04_proposals/IMPL_PLAN_PRODUCTS_PROGRAM.md).
+**With this the Dora↔companion data path is complete end to end** — save what
+you picked (B), keep receipts when it goes (C2), unsave (C), refresh on a
+schedule (D). What's left in the program is scraper quality (E) and Dora's own
+UI (A/F/G).
+
+**Dora side:** `GET /api/ingest/products`, bearer-authed and paged. Two things
+worth knowing about its shape:
+- It honours **PF-8** — inactive products are excluded. That is what turns
+  `is_active` from a display filter into a real switch: deselect a product and
+  it stops costing scrape budget. It also raises the stakes on F making the
+  inactive state legible, since the flag now does something invisible.
+- The `store` it returns is the **external name that source pushed**, reversed
+  through `IngestionStoreMapping` — the inverse of what the write side resolves.
+  Read and write must agree, or a pulled product can't be pushed back. Products
+  whose store the source has no mapping for are omitted rather than returned
+  with a name the caller can't act on.
+
+**Companion side:** `fetch_saved_products()` (paged pull),
+`features/sync_saved_products.py`, `POST /api/sync` for an on-demand run, and an
+APScheduler job on `MAPI_SYNC_INTERVAL_HOURS` (default 24, **0 disables**).
+
+**This is the first use of `MerchantDataProvider.get_product()`** — the
+"refresh a product I already know" method that has existed unused since the
+beginning, next to `search_by_term`'s "find me candidates". Using it means a
+refresh looks a product up by *its own stockcode* rather than re-searching its
+name. That distinction is not cosmetic: re-searching by name is precisely the
+FU-881 defect in a different costume, and a scheduled job making that mistake
+would corrupt prices silently, forever.
+
+**Failure modes a scheduled job has that a request doesn't**, all pinned:
+one product that raises, or that the scraper can't find, must not end the run —
+otherwise a single delisted item stops the whole refresh and nobody notices
+until they read the logs. `scheduled_sync` never raises, because an exception
+out of an APScheduler job kills the job and the next tick never fires. A
+product from a store this companion doesn't scrape counts *unsupported*, not
+*failed* — it isn't an error, it just isn't ours.
+
+**ADR written — the one I deferred twice.** The bearer-door pattern hit its
+third instance (`ingest_link_status` read · `ingest_delete_product` write ·
+`ingest_list_products` list), so it is now **R-087 + ADR-084**: *an external
+client gets its own authenticated door onto the same handler, never a parallel
+implementation.* The rejected alternative worth remembering is duplicating the
+delete logic behind the bearer route — its cascade decides the fate of finished
+shopping lists and price alerts, so two copies drift, and that drift is silent
+loss of somebody's purchase history. I held off at instances one and two
+deliberately; three showed the shape (read/write/list all take it).
+
+**Next up:** **A** is small (move the companion's Dora key from env-only into
+its settings UI). **E** is the scraper batch — Aldi rewrite ([[FU-884]]) plus
+robustness, and it needs **OD-3** (which new sources, if any) answered first.
+**F** remains the owner's original ask and is still gated on **OD-1** — and D
+has just made its inactive-state work more important, since inactive now
+controls scraping.
+
+---
+
+## 2026-09-06 (×4) — **Batch C: products can finally be deleted**
+
+**Status: complete.** Gates: **pytest 2333 passed on SQLite, 2332 on Postgres**
+(the PG delta is [[FU-888]], pre-existing); only the four known FU-762 reds
+otherwise. Companion **37 passed**. `vue-tsc` + `eslint src/` clean on **both**
+SPAs; **vitest 705 / 63 files**. 9 new Dora tests + 7 new companion tests.
+
+Batch C of [`IMPL_PLAN_PRODUCTS_PROGRAM.md`](docs/04_proposals/IMPL_PLAN_PRODUCTS_PROGRAM.md).
+Answers feedback **L197**, open since June.
+
+**Almost no schema work was needed, which is worth knowing.** D-2's cascade list
+was already the schema: `ProductOffer`, `ProductHistoricOffer`, `PriceAlert`,
+`Barcode` and `StockItemProduct` were all `CASCADE` on `Product.id` already, and
+C2 had just made the shopping-line anchors `SET NULL`. I verified each rather
+than assuming. So C is a handler, two routes, and the companion wiring —
+`prepare_lines_for_anchor_delete(repository, product_id=…)` dropped straight in,
+which is the reuse C2's module was written for.
+
+**The design question this raised.** PF-4 said unsave goes "through the same
+**endpoint** Dora's own UI uses". It can't: Dora's product routes are
+session-cookie authenticated and the companion holds a bearer key (PF-9), so it
+has no session to present. Rather than loosen either, the resolution is **one
+behaviour, two front doors** — `ingestion/delete_ingested_product.py` is a thin
+bearer-authed route onto the same `DeleteProductHandler`. That is the shape
+already used on the read side (`/api/ingest/link-status`), so it follows
+precedent. **PF-4 has been reworded in the plan to say "same behaviour", not
+"same endpoint"** — the rule was right, its wording was imprecise.
+
+**An existing test was inverted on purpose.**
+`test__delete_product__no_delete_endpoint_exists__404` *pinned the absence* of
+this endpoint. That was a correct pin under the old bulk-push model; D-1
+replaces it. Rewritten as `test__delete_product__hard_deletes` with the
+reasoning inline, so this reads as a changed decision rather than a deleted
+test.
+
+**Deliberately not done: the delete button on My Products.** That card is being
+rebuilt in batch F and its action set is **OD-1, still undecided** — a button
+added now would be thrown away. The capability, the API and
+`productApiService.deleteAsync` all exist; F surfaces it. Until then the
+user-facing route is the companion's Unsave. Flagging it because "L197 is done"
+is only true from the companion today.
+
+**My own process error, recorded so the next agent doesn't repeat it:** I
+started a second Postgres suite while one was already running, and both use the
+same `dora_test` database. Result was a nonsense **1308 errors** that looked
+like a catastrophic regression and was purely self-inflicted. A clean single run
+gave 2332 passed. **The e2e Postgres suite is not safe to run concurrently with
+itself.**
+
+**Engineering-standards close-gate.** R-002/R-003: one handler owns delete
+behaviour; the second route adds auth, not logic. R-005 (distribution posture):
+the bearer door is source-agnostic — it grants an ingestion source nothing the
+SPA lacks. Migrations: none needed. **ADR evaluation:** the "one behaviour, two
+authenticated front doors" split now has **two** instances (link-status for
+read, delete for write). That is the threshold I said I'd watch for in the
+previous entry — **the next agent to touch the ingest seam should promote it to
+an ADR + `R-0NN`**, phrased as *external clients get bearer-authed doors onto
+the same handlers the SPA reaches by session; never a parallel implementation*.
+I have not written it yet because a third instance would settle the wording
+(read/write/list), and D will produce exactly that.
+
+**Next up:** **D** (scheduled sync) is the natural continuation and will add the
+third instance of the pattern above — it needs a bearer-authed *list* endpoint
+for Dora's saved products, plus the companion job honouring PF-8 (inactive means
+do-not-scrape). Otherwise **A** is small, and **F** is the owner's original ask
+but still needs **OD-1** settled first.
+
+---
+
+## 2026-09-06 (later still) — **Batch C2: receipts stop losing lines**
+
+**Status: complete.** Gates: **pytest 2324 passed on SQLite, 2323 on Postgres**
+(`DORA_TEST_DB=postgres`), in both cases only the four known FU-762 buy-verdict
+reds — plus, on Postgres only, one pre-existing unrelated red logged as
+[[FU-888]]. Migration up → down → up clean; all 5 migration tests green
+including `test__migrations__migrated_schema_matches_orm_metadata`, which is the
+one that checks **FK ondelete drift** between `table_mappings.py` and the chain.
+7 new tests. Backend-only — no SPA change (the DTO field kept its shape).
+
+Batch C2 of [`IMPL_PLAN_PRODUCTS_PROGRAM.md`](docs/04_proposals/IMPL_PLAN_PRODUCTS_PROGRAM.md),
+chosen because it was a **live data-loss bug** and it blocked C. **Resolved
+[[FU-883]]; C is now unblocked.**
+
+**What shipped.** Migration `d4f9b2e7a318`: `ShoppingListLine.stock_item_id` and
+`product_id` flip CASCADE → SET NULL, a new `display_name_snapshot` column, and
+`ck_shopping_list_line_anchor` reworked to "anchor OR snapshot". New module
+`shopping_lists/_line_retention.py` owns the behaviour and takes **either**
+anchor, so batch C's product delete calls the same function — that reuse was
+the point of putting it in its own module rather than inside the stock-item
+handler.
+
+**The plan was wrong in one place, and the tests caught it.** "Snapshot at
+finish" is not sufficient: a list can reach `done` **without passing through
+`POST /finish`** — the dev seed writes finished lists directly, and so does a
+restore. Those lines have no snapshot, so nulling their anchor left them with
+neither and violated the new CHECK, turning a delete into a 500. It surfaced as
+a genuine regression in the existing
+`test__delete_stock_item__DeletingStockItem__StockItemDeleted` against seeded
+data. Fix: `prepare_lines_for_anchor_delete` **also backfills a missing
+snapshot** at delete time — the last moment the name is reachable. Finish-time
+stamping still earns its keep (it captures the name *at purchase*, per D-5);
+delete-time is the backstop that holds the invariant whoever wrote the row.
+Both paths are pinned, including a regression test for the seeded case.
+**Lesson worth carrying: an invariant enforced by a DB constraint must be
+established on every write path, not just the one the feature knows about.**
+
+**Two incidental finds:**
+1. **The CHECK constraint's name had accreted its prefix four times** —
+   `ck_ShoppingListLine_ck_ShoppingListLine_ck_ShoppingListLine_ck_ShoppingListLine_ck_shopping_list_line_anchor`.
+   The `ck_%(table_name)s_%(constraint_name)s` convention is re-applied to the
+   already-prefixed name on every `batch_alter_table` rebuild. So the real name
+   **differs between a migrated DB and a `create_all` one**, and hardcoding
+   either spelling breaks the other. The migration reflects the name instead of
+   assuming it (`_anchor_check_name()`) and normalises it back to one prefix.
+   **The re-prefixing bug itself is untouched and will recur** on the next batch
+   rebuild of any table with a named CHECK — worth a proper fix in the naming
+   convention or `env.py` when someone is next in there.
+2. [[FU-888]] — `GET /api/nutrition/lookup` 500s on a **NUL byte** in `q`,
+   Postgres only (PG rejects NULs in text, SQLite accepts them). Found only
+   because this batch ran the suite on both backends. Unrelated to this work.
+
+**A trap I fell into and want recorded:** the first version of the product-only
+test deleted the row with raw `text('DELETE FROM "Product" WHERE id = :pid')`
+binding a **string** UUID. `UUIDType` is 16-byte binary on SQLite, so it matched
+zero rows and the "delete" silently did nothing — the test failed with a
+confusing "product_id is not None". Same dialect trap as the 2026-07-14
+`text()`-bind bugs. The test deletes through the ORM now.
+
+**Engineering-standards close-gate.** R-003 (server owns derived facts): the
+display name is resolved server-side and the client still receives one
+`stock_item_name` string, unchanged in shape. R-019/ADR-014 (no magic): the
+retention rule is one named function with the reasoning in its docstring rather
+than a clever FK trick — deliberately, since the DB *cannot* express the
+status-conditional half. Migration follows the clean-migrations rule (real
+downgrade, batch mode, backfill). **ADR evaluation:** a candidate is forming —
+"historic/immutable records snapshot their display identity rather than
+referencing it" — but this is its first instance. If batch C's product delete or
+any other receipt-shaped surface needs the same treatment, promote it then.
+Noted so the next agent has the trigger.
+
+**Next up:** **C (product hard-delete)** is the natural follow-on — it is
+unblocked, and `prepare_lines_for_anchor_delete` already accepts `product_id`.
+F remains the owner's original ask with **OD-1 still to settle at its start**.
+
+---
+
+## 2026-09-06 (later) — **Batch B: the companion pushes what you picked**
+
+**Status: complete.** Gates: companion **pytest 30 passed** (16 new in
+`tests/test_push_contract.py`); `npx vue-tsc --noEmit` clean. `npm run lint`
+**could not run** — the companion has no eslint config at all ([[FU-887]]).
+Verified end-to-end over real HTTP against a stub Dora, not in a browser.
+
+Batch B of [`IMPL_PLAN_PRODUCTS_PROGRAM.md`](docs/04_proposals/IMPL_PLAN_PRODUCTS_PROGRAM.md),
+picked first because it's the keystone: PF-1/PF-3 and the hard-delete decision
+(D-1) all rest on it. **All changes are in the sibling `dora-companion` repo**
+except the ledgers/CHANGELOG here.
+
+**What changed.** `POST /api/push` took a *search query* and re-scraped. It now
+takes `{offers: [...]}` — the concrete records the caller is holding — and
+forwards them through the untouched `push_offers`. `PushOffer` declares exactly
+the fields `dora_ingest._OfferLike` requires, so a validated instance is
+structurally passable to `push_offers`; `extra="forbid"` means the SPA maps
+explicitly rather than spreading a whole `ScrapedProductOffer` (whose `image`,
+`price_difference` and `linked_*` fields would 400). SPA: `onSinglePush` sends
+the on-screen offer, `onBatchPush` sends the ticked rows (or all displayed when
+none are ticked, matching the button label). Dora needed no change.
+
+**The unplanned bit worth reading.** The Dora Target page's connectivity probe
+worked by *pushing a search query that matched nothing* — harmless only because
+a query that scraped nothing wrote nothing. Under the new contract there is no
+harmless push, so a probe that still pushed would have written junk products
+into the user's catalogue. Replaced with a read: `check_target` posts an **empty
+batch to `/api/ingest/link-status`**, which authenticates the key before doing
+any work and accepts an empty `items` list (no minimum), so it exercises URL +
+credential and returns `{"items": []}`. Exposed as `GET /api/push/target`,
+keeping the 503/502/200 codes the SPA already interpreted. **Generalisable
+lesson: when a write contract gets stricter, audit anything that was abusing the
+write as a health check.**
+
+**Evidence, since "it pushes the right thing" is the whole point.** A scratch
+script stood up a stub Dora on a real socket and drove the real route: four
+same-named offers on screen, Save clicked on the 4th → the stub received exactly
+one product, `sku-3`, `Milk variant 3`. Ticking 2 of 4 → exactly those two. Both
+are the old failure modes, now closed. **Resolved [[FU-881]] and [[FU-882]].**
+
+**Two findings raised, neither a regression:**
+- [[FU-886]] — the companion has **no global `ValidationError` handler**, so a
+  malformed body 500s instead of 4xx. Pre-existing (the old model was equally
+  strict), but it bites harder now: a stale SPA bundle sending the retired shape
+  gets an opaque 500. Pinned as current behaviour in the test rather than
+  asserted as desirable.
+- [[FU-887]] — no eslint config, so the SPA has never been linted; and
+  `test_integration_dora_roundtrip.py` fails in setup three different ways
+  (missing Dora deps in the companion venv → Postgres `drop_all` FK-ordering
+  error → 403 minting the ingestion source on SQLite). It calls `push_offers`
+  directly, not the route that changed, so it's orthogonal to B rather than a
+  hole in it. **Contains a possible Dora bug worth its own look:** if
+  `startup()`'s destructive reset can't `drop_all` against Postgres
+  (`fk_ProductBarcode_product_id_Product`), that affects Dora's own dev resets.
+
+**Engineering-standards close-gate.** R-003 (single source of truth) is the rule
+this batch *restores* — the user's selection was being discarded and re-derived
+server-side, which is the same class of defect as a client re-computing a server
+fact, just inverted. No new violations introduced. **ADR evaluation:** still not
+warranted. The offer-shaped push is currently one producer talking to one
+consumer; if batch D's scheduled sync reuses the same shape (it should), *that*
+is the second instance that justifies promoting it to an ADR + `R-0NN`. Noted
+here so the next agent has the trigger rather than a vague "consider it".
+
+**Next up:** owner picks. C2 (the receipt data-loss fix) blocks C; B is now done
+so D is unblocked. Batch F remains the owner's original ask, with **OD-1 (card
+action set) still to settle at its start**.
+
+---
+
+## 2026-09-06 — **Products program: planning only, no code**
+
+**Status: planning complete, nothing built.** No code was written this session —
+it was entirely read-only investigation plus the plan of record. No gates run
+(nothing to gate); the tree is unchanged apart from docs.
+
+**Why this session happened.** The owner asked what became of the June "My
+Products" review feedback. Answer: it was dispositioned in
+`PROPOSAL_PRODUCTS_AS_OVERLAY.md` and then parked wholesale as **FU-214**
+pending a browser session with real product data, and nothing on the page has
+been touched since the overlay pivot. The owner then widened scope substantially
+— companion scraper robustness, an Aldi rewrite, an explicit Dora↔companion
+data-flow contract, product hard-delete, and a two-mode card/row redesign — so
+the unit became "plan and record", not "build".
+
+**Output:** [`docs/04_proposals/IMPL_PLAN_PRODUCTS_PROGRAM.md`](docs/04_proposals/IMPL_PLAN_PRODUCTS_PROGRAM.md)
+— the governing doc. It carries the durable data-flow contract (**PF-1..PF-9**),
+a "what already exists, do not rebuild" table, seven batches (**A..G** plus
+**C2**), eleven owner decisions (**D-1..D-11**), the findings, an original-spec
+section, and the mandatory feedback-coverage table (MP-1..MP-23, PH-1..PH-10).
+**Read that doc first** — this entry is only the narrative around it.
+
+**The five findings, in order of how much they matter:**
+
+1. **[[FU-881]] — the companion can save the wrong product.** `onSinglePush`
+   doesn't push the offer the user clicked; it re-scrapes by
+   `search_term = offer.name, result_limit = 1` and pushes the first hit. Root
+   cause is that `POST /api/push` takes a *search query*, not offers. This is the
+   keystone: the owner's whole "Dora is the source of truth" model (PF-1/PF-3) is
+   unenforceable until it's fixed, and the hard-delete decision depends on it —
+   a bulk-scraping companion would resurrect deleted rows.
+2. **[[FU-883]] — live data-loss bug, unrelated to products.** `ShoppingListLine`
+   has `CASCADE` on both `stock_item_id` and `product_id`, so deleting a stock
+   item erases its lines from *completed* lists. The same table already does the
+   opposite for stores (`SET NULL`, commented "losing a store must not take the
+   line with it"). Fix is batch C2, which blocks C.
+3. **[[FU-882]]** — companion batch push ignores the ticked selection.
+4. **[[FU-884]]** — four Aldi provider defects independent of the site redesign,
+   incl. `rstrip(offer.amount)` mangling names (character-set vs suffix) and
+   `get_product` raising `StopIteration` despite a `| None` signature.
+5. **[[FU-885]]** — `discountPct` implemented 4×, rendered 3 ways, plus a dead
+   `ProductChip.vue`. This is feedback bullet PH-6 confirmed real.
+
+**Things that turned out to already exist** (the §2 table in the plan doc is the
+full list — check it before building anything): admin-minted bearer keys for
+ingestion, `POST /api/ingest/link-status` *and* the companion UI that renders
+"already in Dora", a self-contained weekly deals email (so PF-6 holds today),
+APScheduler already running in the companion, an unused `get_product(DoraProduct)`
+provider hook that is exactly what the scheduled sync wants, and the cookbook's
+`useListViewMode` card⇄row toggle that batch F should reuse rather than reinvent.
+
+**The design argument worth not re-litigating.** The owner pushed back on
+storing an ID *and* a name snapshot on shopping-list lines — "what do we gain?".
+Correct answer: the IDs are load-bearing across ~20 features while the referent
+lives (`get_membership` drives every cart button's state, `_observation_sync` is
+the receipt→price-history harvest, plus the `group_by` aggregations), so free
+text can't replace them; but after deletion `SET NULL` removes the ID, so the two
+never redundantly coexist. That reframing moved the snapshot write-point from
+add-time to **`POST /finish`** (D-5), which is already the snapshotting step and
+is architecturally enforced as the sole path to `done`.
+
+**Trap recorded for whoever builds C2:** `ck_shopping_list_line_anchor` demands
+an anchor be present, so nulling one violates it — **loudly on Postgres, silently
+on SQLite**. Rework the constraint in the same migration and test both backends.
+
+**Housekeeping:** `DORA_FOLLOWUPS.md` had a **malformed code fence** — the
+"Entry template" block opened at line 31 and didn't close until line 259, so
+twelve real entries (FU-868..FU-879) were trapped inside it and rendering as a
+code block. Fixed by moving the abstract template into its own fence; entry order
+is unchanged and fences are now balanced.
+
+**Not done, deliberately:** no `CHANGELOG.md` entry (no product change), no
+`DORA_VERIFY.md` additions (nothing shipped to verify), no `PROJECT_STATE.md`
+dashboard regeneration beyond the affected rows (no workstream moved).
+
+**Engineering-standards close-gate:** no code changed, so no R-rule could be
+violated. **ADR evaluation:** none warranted yet — PF-1..PF-9 are a
+*product-surface* data-flow contract living in the plan doc, not a code
+architecture rule. If batch B's offer-shaped push contract proves to be the
+general shape for future ingestion producers, that is the moment to promote it
+to an ADR + `R-0NN`, not now.
+
+**Next up:** owner picks a batch. No sequencing constraint was set ("not fussed
+with sequence… this is prerelease code"). Only technical dependency worth
+respecting: **C2 blocks C**, and **B should precede D**. Batch F is the owner's
+original ask and is self-contained apart from its delete affordance. **OD-1 (the
+card's action set) must be settled with the owner at the start of batch F** — the
+owner explicitly deferred it wanting to remove actions before deciding whether to
+flatten the overflow menu.
+
+---
+
+## 2026-09-05 (later still) — **Thirteen meal-planner items, one of which was a `:key`**
+
+**Status: complete.** Gates: **pytest 2317 passed**, the same four known
+buy-verdict reds (FU-762, pre-existing); **vitest 705 / 63 files**; `vue-tsc`
+clean; `eslint src/` clean; `quasar build` succeeds. Driven live at 1440 and
+375 against the seeded e2e backend (never the dev DB) with a throwaway
+Playwright script, deleted in-session per the DORA_VERIFY_TRIAGE stance.
+
+**Two decisions were the owner's, taken before building.** The auto-builder's
+budget cap keeps its existing basis — the **full cost of the meals**, pantry or
+not — and now says so in a caption under the toggle; and money was scoped as
+**display + a rail cost ordering**, not a design doc.
+
+**The thirteen, and what each turned out to be.**
+
+- **Items 1-4, 9 — the rail's shopping card.** "This week's shopping" is now
+  *Missing this week*, and it moved out of a card title into the disclosure
+  header where "What's needed (4)" used to be, with the cart beside it and the
+  out/low counts as tinted circles left of the chevron. The two level *lines*
+  and their tooltips are gone ("useless. Delete."). The add-to-list button had
+  to sit between the header and the rows and stay visible when they collapse,
+  which `q-expansion-item` structurally can't do — so both rail disclosures are
+  now one hand-rolled `MealPlanRailDisclosure` with an `#actions` slot, which is
+  also what made "a tad thicker" a single 44px rule rather than two.
+- **Items 11-13 — the meal menu.** All three landed on **two identical menus**
+  (`MealPlanEntryChip` and `MealPlanRichCard` carried the same nine items, the
+  same emits and the same comments, copied), so the first move was extracting
+  `MealPlanEntryMenu` (R-001). Then: the recipe-name header is gone, `dense` is
+  now a desktop-only affordance so phone rows take Quasar's full height, and
+  View recipe wears `menu_book` — `open_in_new` was claiming a new tab opens.
+- **Items 7-8 — the phone's day.** One flat list in save order with the slot as
+  a 0.68rem uppercase tag. Now a section per slot in the household's own order,
+  every slot present whether or not it holds anything, each with its own Add —
+  which retired the "Which slot?" bottom sheet (asking which slot is only
+  necessary when the slots aren't on screen). The card's slot tag went with it;
+  the slot stays in `accessibleLabel`, where a screen reader has no heading to
+  have just passed.
+- **Item 6 — the servings stepper closing the menu.** Not a Quasar quirk. The
+  `v-for` keyed on `meal_plan_entry_id`, and `PATCH /meal-plans` **replaces**
+  every forward entry — it deletes them and inserts new rows — so each tap
+  minted a new id, remounted the card and destroyed the menu inside it. Fixed
+  at the rendering layer with content-identity keys (`mealPlanEntryKey.ts`,
+  shared by the desktop week card and the phone). Promoted to **R-086/ADR-083**.
+- **Items 5, 10 — money.** New `_hydrate_cost` on the plan endpoint, shaped like
+  the nutrition hydrator beside it and gated the same way: per-entry cost
+  (`per-serving x the entry's servings`, so a cook batch's days sum to the
+  cook), a per-day rollup, a week total, and coverage counts on both. Surfaced
+  on the week-status strip, each day card's header beside its kcal, the phone's
+  day caption, and the phone card's meta. The rail took an **A-Z / Cheapest**
+  segmented (money-gated), sharing the cookbook's comparator, newly extracted to
+  `recipeCostSort.ts`.
+
+**Decisions made:**
+- The rail's cost control is a **sort, not a filter**, though the owner asked
+  for a filter. Bands need a threshold, and "under $3 a serving" is a domain
+  constant neither the client nor (without a product call) the server owns.
+  Logged honestly as **FU-880** rather than quietly substituted — and closed
+  the same session: owner, *"i meant sort."* The ordering is what was wanted;
+  there is no bands question to settle.
+- Per-meal cost shows on the phone card but **not** the desktop chip: the chip
+  is a name, two status glyphs and a servings pill in a week-grid column, and
+  the day header directly above it already carries the day's total.
+- The count circles reuse `tintClassForSequence`, including its D-002 carve-out
+  (digits at `--text-primary` on a soft ground, tone via the hairline), so the
+  planner invents no colour. They carry an `aria-label` — the deleted tooltips
+  were the visual channel, not the accessible one (D-013).
+- Cost on a rail row appears **only while the cost ordering is active**. The
+  meta line was emptied on 2026-09-01 by owner request; a cheapest-first list
+  with no figure on it asks you to take the order on trust, and "what the rail
+  is doing" is what that line is reserved for.
+- The entry-id churn itself was **not** fixed server-side (FU-878). The
+  replace-the-week write shape is load-bearing for the cook-batch rebuild and
+  carries its own defect history; converting it to match-and-update is a real
+  refactor, not a side effect of a UI batch.
+
+**Files touched:** `web_app/src/components/` — new `MealPlanEntryMenu.vue`,
+`MealPlanRailDisclosure.vue`, `MealPlanRailCount.vue`; changed
+`MealPlanShoppingSummary.vue`, `MealPlanEntryChip.vue`, `MealPlanRichCard.vue`,
+`MealPlanMobileFocus.vue`, `MealPlanWeekDayCard.vue`, `MealPlanWeekStatus.vue`,
+`MealPlanRecipePicker.vue`, `MealPlanRecipeRow.vue`, `MealPlanBuilderDialog.vue`;
+new helpers `mealPlanEntryKey.ts`, `recipeCostSort.ts`;
+`useMealPlanner.ts`, `models/mealPlan.ts`, `pages/MealPlansOverview.vue`,
+`pages/RecipesOverview.vue` (adopts the extracted comparator);
+`dora_api/features/meal_plans/get_meal_plans.py`;
+new `tests/e2e/dora_api/test_meal_plan_cost.py`,
+`web_app/test/unit/mealPlanEntryKey.spec.ts`,
+`web_app/test/unit/recipeCostSort.spec.ts`; `tests/e2e/dora_api/dto_snapshots.json`;
+`CHANGELOG.md`, `DORA_FOLLOWUPS.md`, `docs/01_charter/ENGINEERING_STANDARDS.md`.
+
+**Verification:** the gates above, plus five new backend tests pinning the cost
+contract (scaled by planned servings not the recipe's own; day and week totals
+agreeing with their entries; an unpriceable meal reported in the coverage
+rather than dropped; a recipe with no servings carrying no figure at all; and
+everything absent with money off) and seven Vitest cases on the two new pure
+helpers. The live drive confirmed item 6 directly: the menu was opened, `+`
+tapped twice, and asserted still visible after each — servings went 2 -> 4 with
+the week total updating underneath it.
+
+**Next up:** nothing blocking from this unit. Open from it: **FU-878** (the
+entry-id churn) and **FU-879** (the plan endpoint's duplicate recipe load when
+nutrition and money are both on). **FU-880** was raised and resolved in-session
+— the owner meant a sort, so the shipped ordering is the answer.
+
+---
+
+## 2026-09-05 (later) — **Five dashboard items, and a grid that finally states what the hero actually claims**
+
+**Status: complete.** Gates: **pytest 2312 passed**, the same four known
+buy-verdict reds as the batch above (FU-762, pre-existing — this unit touches
+neither money nor lists); **vitest 698 / 61 files**; `vue-tsc` clean; `eslint
+src/` clean; `quasar build` succeeds; **Playwright smoke 9/9**. The two visual
+items were driven live at 1280 and 375 against the seeded e2e backend (:5171,
+never the dev DB) and screenshotted.
+
+**The owner's five, and what each turned out to be.**
+
+1. **"Greeting and random day phrase right of the mascot, also on mobile; the
+   app fact below, left aligned, wrapping before the Cards button."** The hero
+   was a flex row with a `<q-space/>`, and its mobile rule wrapped the actions
+   onto their own full-width line — which, because flex wraps *items*, also
+   dropped the whole text column under the mascot. The two things the owner
+   described are positional claims flex can't state, so the hero is a **3×2
+   grid** now: mascot · text · actions on row 1, the hint on row 2 spanning
+   only the first two columns. The hint stopping short of column 3 is what
+   makes it "wrap before it gets to the Cards button" — a fact about the
+   layout rather than a `max-width` guess.
+2. **Cards button follows the mobile rules.** Icon-only below `sm` with an
+   `aria-label` + tooltip, the same shape `SettingsShell`'s sign-out uses
+   (D-005). With that, the mobile hero needs no reflow at all — which is what
+   let item 1's grid be identical at every width.
+   *Also, unasked but load-bearing:* the mascot drops 72px → 56px below `sm`.
+   At 72px the text column measured ~160px and "Good afternoon, Ben" took three
+   lines, so "beside the mascot" was technically true and practically unreadable.
+3. **"If Next to cook is genuinely next to cook, drop the Ready / Missing chip."**
+   Asked, since the chip carries four states and only one of them is "Ready".
+   Owner picked: **hide the badge only when the meal is cookable**. `Missing 3`
+   and `2 to link` survive — they change what you do next — and the badge
+   column is now bound per row rather than always-on.
+   That exposed a real defect underneath: at 375px the row's `auto` tracks sit
+   at min-content and the name's `minmax(0, 1fr)` therefore resolves to **zero**,
+   so the recipe name vanished entirely while its meta stayed. Screenshot showed
+   `W…` / `S` for two rows and *no name at all* on the third. The name now has a
+   `7ch` floor, and the meta-wrap rule moved off `--with-badge` (which comes and
+   goes now) onto a stable `--meal` modifier.
+4. **"Hope Next to cook shows planned servings, and adjusts like the planner
+   does."** Half true already: the DTO carried `e.servings` (the plan's, not the
+   recipe's) and the Cook button passed `?for=`. The missing half was linked
+   days — the planner opens at `cook_batch_total_servings`, the dashboard didn't
+   have the field. Added it, derived by **fetching the whole batch** rather than
+   folding the entries on screen: this window is seven days, so a batch can run
+   past it and summing what's visible is the easy wrong answer. The cook-day
+   lookup `_cook_verdicts` already did was folded into the same
+   `_cook_batches` pass, so it's still one query.
+5. **"Cook now uses the chef hat. Always."** Already true everywhere the
+   2026-09-05 batch above swept (cookbook row + card, recipe page, both planner
+   menus, this card). The one survivor was the **onboarding tour's "Cook" loop
+   step**, still on `restaurant`.
+
+**Decisions made:**
+- The hint spans columns 1–2 rather than getting a `max-width`. Same visual
+  result today, but it stays correct when the actions column changes width.
+- `serves()` reads `cook_batch_total_servings ?? servings` — the identical
+  expression `useMealPlanner.cookRecipe` evaluates, deliberately, so the label
+  and what cook mode opens at are one figure (R-003).
+- The `--meal` modifier lives beside the primitive in `dashboardCards.scss`,
+  not in the card's scoped block: it modifies a shared row, which is where
+  `--with-badge` already sat.
+
+**Files touched:** `web_app/src/pages/DashboardPage.vue`,
+`web_app/src/components/dashboard/NextToCookCard.vue`,
+`web_app/src/css/dashboardCards.scss`, `web_app/src/models/dashboard.ts`,
+`web_app/src/pages/onboarding/onboardingContent.ts`,
+`dora_api/features/dashboard/get_dashboard_summary.py`,
+`tests/e2e/dora_api/test_dashboard_router.py`, `CHANGELOG.md`,
+`DORA_VERIFY.md`.
+
+**Verification:** the gates above, plus two new backend tests pinning
+`cook_batch_total_servings` (a batch with a member *past* the seven-day window
+still reports its true yield; a standalone meal reports null, which is what the
+SPA's `??` fallback depends on). The symmetric case — a member scheduled
+*before* today — can't be built: the write path rejects past entries, and that's
+noted in the test. Visually confirmed at 1280 and 375: greeting beside the
+mascot, icon-only Cards, hint on its own line stopping at the actions column, no
+badge on ready rows, `Missing 1` on the one that isn't, recipe names legible,
+and zero horizontal overflow at 375 (asserted, not eyeballed).
+
+**Engineering-standards close-gate:** checked. R-002 (tokens only — the one
+raw number added is the 56px mascot, a sprite size like the 2px optical padding
+beside it, not spacing), R-003 (the batch yield is server-derived), R-078 (the
+row's fix is a width floor, not a breakpoint), D-005 (icon-only Cards ships both
+its name and a tooltip). No new rule earned — every decision here applies an
+existing one. No violations introduced or found.
+
+**Next up:** the owner's remaining dashboard feedback, if any. Otherwise the
+open items in `DORA_FOLLOWUPS.md`.
+
+**Open questions for user:** none. One verify item was added (batch household:
+the card's `serves N` and cook mode's opening count agreeing) — the seed has
+batch cooking off, so no configuration available here could show it.
+
+---
+
+## 2026-09-05 — **A seven-item owner batch across five surfaces, and a tap-target rule that had been deferred twice for the wrong reason**
+
+**Status: complete.** Gates: **pytest 2310 passed** with only the four known
+buy-verdict reds (FU-762 — confirmed pre-existing by re-running them against a
+stashed tree, since this unit touches money gating), **vitest 698 / 61 files**,
+`vue-tsc` clean, `eslint src/` clean, `quasar build` succeeds, and the
+**Playwright smoke suite 9/9**. The tap-target work was additionally measured in
+a real browser under both a touch and a mouse context.
+
+**The owner's batch, and what each turned out to be.**
+
+1. **Cookbook: "can't see or filter on estimated cost."** `estimated_cost` was
+   *deliberately* detail-only — the per-recipe pricing path is two queries, so
+   costing a page one recipe at a time is the N+1 that
+   `test_recipes_query_count` exists to catch. But `recipe_cost.estimate_costs_for`
+   already solved that for the FU-451 swap ranker: two queries for the whole
+   page. New `_hydrate_estimated_cost` uses it, **skipped entirely when money is
+   off** (which is the default install — a gate on doing the work, not just on
+   rendering it). Shown **per serving** on the owner's call ("it would be per
+   serving cost I think? do what's logical") — which is right, because the list
+   is a comparison and yields differ. Added a second query-count test with money
+   **on**: the existing one passes vacuously, since the hydrator returns early
+   with money off and the whole new path was unguarded.
+   - *Caught in passing:* the batch path's `_cost_one` counts only **linked**
+     ingredients while the detail path overrides `total_count` with
+     `len(ingredients)`. Taking the batch number would have made one recipe read
+     "2 of 3" on its card and "2 of 5" on its own page. The detail definition wins.
+   - Also flattened `handle()`'s ten-deep nest of hydrator calls into a flat
+     sequence rather than making it eleven.
+2. **"Chef hat should be the icon used for cook now."** Three glyphs meant
+   "cook": `chef_hat` on the cookbook row/card, `restaurant_menu` on the recipe
+   page's Cook mode, `restaurant` on both meal-plan "Cook now" items and the
+   dashboard's Cook button. All → `chef_hat`, with the rule written into
+   `icons.ts`. Deliberately **not** flattened: the `cookState` triad
+   (`cookFresh` / `chef_hat` / `mealsPrepared`), which is a state axis and
+   already documented as such.
+3. **Scanning tab count.** A count was *declined* on 2026-08-24 on the grounds
+   that the tab also holds the QR label, so a barcode count "counts half of
+   what's in there". Overridden — the other half is always exactly one label,
+   for every item, forever, and a constant isn't information. Stale comment
+   replaced rather than left contradicting the code.
+4. **About's "your kitchen" should be usage, not a dashboard repeat.** It was
+   literally calling `getSummaryAsync()`. New `GET /api/dashboard/usage-stats`
+   with cumulative counts. `total_spend` reuses the **exact** `spend-by-store`
+   rule (ticked lines on completed lists, actual-then-picked, × quantity) — and
+   there is now a test asserting the two agree, because two screens quoting
+   different lifetime totals is how a user learns to distrust every number in
+   the app. Verified live at $119.70 both ways. Money fields are `None`, never
+   `0`.
+5. **The units question — investigated, not built** (owner: option 1, "but my
+   actual db is just invented seed data, need to do online research"). Written up
+   as `docs/05_investigations/RECIPE_PRICE_UNIT_MISMATCH.md`.
+   **The finding is that Dora already owns the fix and doesn't call it.**
+   `units.convert()` bridges mass↔volume given an `ingredient=` name against a
+   77-entry density table; `recipe_cost._line_cost` calls it without that
+   argument, so the branch is dead code on the pricing path. Demonstrated:
+   `convert(200,'g','L')` → `None`, `convert(200,'g','L',ingredient='cream')` →
+   `0.2`. The owner's ice-cream case fails **twice** — the argument isn't passed
+   *and* `'ice cream'` isn't in the table. External research confirmed the case
+   is a real regulated class (ice cream is labelled by volume by trade custom
+   while most solids are labelled by weight) and that per-ingredient conversion
+   tables are the industry answer, not a heuristic. Recommendation: bridge what
+   is knowable, split the explanation, **never guess** — ADR-073's honest-gap
+   stance is upheld, not relaxed. Spawned **FU-874** (the dead argument),
+   **FU-875** (split `unit_mismatch`), and **FU-876**, a separate finding: an
+   item's price baseline takes the dimension of its *most recent* observation
+   and discards every other, so one stray entry can reset an item's history.
+6. **Tap targets — scoped up to app-wide on the owner's call.** Two reported
+   symptoms (32px menu rows, 30px stock-row buttons) sat on top of **FU-678** and
+   **FU-641**, both open since August, both deferred with the same reasoning:
+   raising the floor "re-flows every toolbar, table row and card action in the
+   app". That was sound but rested on an unexamined assumption — that the fix had
+   to apply everywhere. **D-004 is a rule about fingers, not about buttons**, and
+   B1 grants 36px explicitly for desktop-dense chrome. Under
+   `@media (pointer: coarse)` the floor lifts in `BaseButton` (all variants) and
+   `app.scss` (`.q-menu .q-item` + the padding `dense` also strips) — which fixes
+   38 menus across 26 files and every `.dora-btn` in two places instead of 60+
+   edits. Call sites pinning their own size at higher specificity
+   (`StockItemRow`, `RecipeRow`) were swept individually. Promoted to
+   **R-085 / ADR-082**; **resolves FU-678 and FU-641**.
+
+**Measured, not assumed.** A throwaway Playwright harness (written, run,
+deleted — the verify stance keeps Playwright a smoke-only layer) measured both
+contexts against the built bundle:
+
+| | touch (390px) | desktop (1280px, mouse) |
+|---|---|---|
+| level picker | **44×44** | 32×32 unchanged |
+| row icon button | **44×44** | 36×36 unchanged |
+| menu item | **260×44** | 200×32 unchanged |
+
+That desktop column is the point: it is what the deferrals were protecting and
+what the owner asked for in the same breath ("Good for desktop, bit
+thicker/bigger for mobile"). Also fixed the level menu's inline
+`style="min-width: 200px"` — an inline style outranks a media query, so
+"narrow" couldn't have been fixed without moving it to a class.
+
+**Deliberately not done.** A second tier of controls sits at 36–40px
+(`DoraTabs`, `BaseSelect`, `SortControl`, `DoraSegmented`, `SettingsNavGroup`)
+plus ~28px chip-shaped ones. Each is a deliberate documented size on a surface
+the owner has signed off, none is a menu or an icon button, and changing nine
+components blind inside a batch whose reported symptom was two specific 30px
+controls is the over-correction the standards warn about. **FU-877**.
+
+**Owed:** the whole batch is browser-verify debt — see the two new
+`DORA_VERIFY.md` sections. The one item genuinely wanting the owner's eye rather
+than a pass/fail is the level chip: it is the only change that alters *visual
+weight* rather than just hit area, because it is a colour block.
+
+**Next up:** FU-874 if the owner approves D3 — it is one keyword argument plus
+table rows, and it is the half of the cost story that turns gaps back into
+numbers.
+
+---
+
 ## 2026-09-04 (later still) — **Four small owner items: the flash, the heading, the caveat, the blue — plus a picker that finally opens on the right guess**
 
 **Status: complete and driven live.** Gates: **vitest 698 / 61 files**,

@@ -49,6 +49,23 @@ export type MealPlanEntry = {
      *  Mirrors the stored flag, so it stays honest in a "fresh" household;
      *  only the UI is conditional on cook-style. */
     cook_fresh: boolean;
+    /** Owner 2026-09-05 — what this planned meal costs at the servings it is
+     *  planned for (the recipe's per-serving estimate x `servings`), not the
+     *  recipe's own total. Server-owned off the same pricing ladder the
+     *  cookbook and the week builder use. Null when money features are off,
+     *  when the recipe couldn't be priced, or when it records no servings. */
+    estimated_cost: number | null;
+};
+
+/** Owner 2026-09-05 — one day's planned cost, with the coverage that keeps it
+ *  honest: a day that could only price two of its three meals says so rather
+ *  than quoting a confident total (R-041). Null cost means nothing on the day
+ *  could be priced — never 0, which would read as a free day. */
+export type MealPlanDayCost = {
+    scheduled_for: string;
+    estimated_cost: number | null;
+    counted_meals: number;
+    total_meals: number;
 };
 
 /** FU-637 — one day's planned calories: "a serving of each meal planned that
@@ -71,6 +88,13 @@ export type MealPlan = {
     /** FU-637 — per-day rollup over `entries`, summed server-side. Empty when
      *  nutrition is off. */
     day_nutrition: MealPlanDayNutrition[];
+    /** Owner 2026-09-05 — the money rollups, summed server-side for the same
+     *  reason. Empty / null when money features are off. `estimated_cost` is
+     *  the whole plan's, which for the planner is the week's. */
+    day_cost: MealPlanDayCost[];
+    estimated_cost: number | null;
+    cost_counted_meals: number;
+    cost_total_meals: number;
 };
 
 export type MealPlanIngredient = {

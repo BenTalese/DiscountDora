@@ -32,7 +32,11 @@
             </template>
         </q-tooltip>
         <q-menu auto-close transition-show="jump-down" transition-hide="jump-up">
-            <q-list dense style="min-width: 200px">
+            <!-- Width lives in the stylesheet, not an inline `min-width:
+                 200px`: the owner's report was that these options read
+                 *narrow* on a phone, and an inline style can't be widened by a
+                 media query (it outranks one). -->
+            <q-list dense class="stock-level-picker__menu">
                 <!-- Consumers with something to say about *why* the level
                      might be wrong (the overview row's belief / stocktake
                      hints) fill this; everyone else gets the plain caption. -->
@@ -152,6 +156,42 @@
         border-radius: var(--radius-sm, 4px);
         padding: 0;
         position: relative;
+    }
+
+    /* Owner 2026-09-05 — *"Good for desktop, bit thicker/bigger for mobile
+       would be better"*, said of this control. 32px is under the D-004 floor
+       and this is a primary control on the app's primary mobile surface, so
+       the chip grows with the pointer rather than staying a desktop size on a
+       phone. Desktop is explicitly left alone, per the same sentence.
+
+       This is the one change in the tap-target sweep that alters *visual
+       weight* rather than just hit area — the chip is a colour block, so a
+       bigger target is a bigger block. Flagged in DORA_VERIFY for the owner's
+       eye rather than assumed: the alternative (hold 32px visually and expand
+       the target with a pseudo-element) is unavailable here, because `::after`
+       carries the uncertainty ring and Quasar's QBtn owns `::before`. */
+    @media (pointer: coarse) {
+        .stock-level-picker {
+            width: 44px;
+            height: 44px;
+            min-width: 44px;
+            min-height: 44px;
+        }
+    }
+
+    /* The menu's own width. 200px is the desktop figure this list has always
+       used and it stays there; on touch it widens, which is the "narrow" half
+       of the owner's report (the row *height* half is handled globally in
+       `app.scss`). 260px keeps a level name like "Getting low" on one line
+       with the colour dot beside it, and still leaves margin either side of a
+       360px phone. */
+    .stock-level-picker__menu {
+        min-width: 200px;
+    }
+    @media (pointer: coarse) {
+        .stock-level-picker__menu {
+            min-width: 260px;
+        }
     }
 
     /* ── One uncertainty marker (D-5) ───────────────────────────────────────

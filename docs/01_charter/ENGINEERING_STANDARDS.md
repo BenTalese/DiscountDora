@@ -3065,6 +3065,90 @@ one-off, or purely product/UX decisions (those go to the Charter check + worklog
   ADR-081.
 
 
+### R-085 — Touch affordances key off the pointer, never off the viewport width
+- **Rule:** any style whose purpose is *"a finger is using this"* — tap-target
+  floors, hit areas, menu row heights, drag handles, hover-only reveals — is
+  written under `@media (pointer: coarse)` (or `hover: none`), never under a
+  `max-width` breakpoint. Width breakpoints stay for what they actually
+  describe: how much room the layout has. When one element needs both, the two
+  queries are written separately and each is commented with which question it
+  answers.
+- **Why:** they are different questions with different answers, and the app has
+  already been bitten by conflating them. A desktop window dragged to 375px is
+  still a mouse; a tablet at 1024px is still a finger. `ShoppingListPlanRow`
+  produced a 375px overlap by keying the grip's hiding to `hover: none` while
+  the column count keyed to `max-width` — at that width the two disagreed and
+  the row collapsed onto itself. The same conflation is why the D-004 tap-target
+  gap sat open from August (FU-678, FU-641): both were scoped as *"raise every
+  button in the app"*, which re-flows desktop toolbars and is correctly scary,
+  when D-004 was only ever a rule about touch surfaces and says so.
+- **How to comply:** before writing the query, ask what the rule is *for*. If
+  the answer contains the word "finger", "tap", "thumb" or "touch", it is
+  `pointer: coarse`. If it contains "fits", "wraps", "columns" or "room", it is
+  a width breakpoint. Scoping a touch rule to the pointer also means it does not
+  need to be justified against the desktop layout at all, which is usually what
+  makes the change shippable.
+- **Established:** 2026-09-05 (the app-wide tap-target sweep — `BaseButton`'s
+  44px touch floor, `app.scss`'s menu-row floor, `StockLevelPicker`,
+  `StockItemRow`, `RecipeRow`). Prior art it now generalises:
+  `ImageSourcePicker`, `NutritionFoodPicker`, `LocationAddChip`,
+  `LocationSectionChip`. See ADR-082.
+
+
+### R-086 — A list row that hosts a popup is keyed on content identity, not a churning server id
+- **Rule:** when a `v-for` row owns something with its own lifetime — an open
+  `q-menu`, an inline editor, a focused field, an expansion — its `:key` must be
+  derived from the fields that identify *the thing*, not from a database id the
+  write path re-mints. Where the natural content key can legitimately repeat,
+  disambiguate with an occurrence suffix rather than falling back to the id.
+- **Why:** a remount destroys whatever the row was hosting, and the user reads
+  that as the control closing under them. Dora has at least one write path that
+  replaces rather than updates — `PATCH /meal-plans/{id}` deletes every forward
+  entry and inserts new rows, deliberately, because the cook-batch rebuild is
+  written on top of that shape — so every planned meal's
+  `meal_plan_entry_id` changes on *any* edit to the week, including one to a
+  different meal on a different day. Keyed on it, the entry menu's servings
+  stepper closed itself after each tap: owner report 2026-09-05, *"to increase
+  by 3 you have to tap 6 times."* Nothing about the row looked wrong, which is
+  what makes this expensive to find — the defect lives in the key, one line
+  away from the symptom.
+- **How to comply:** before keying a list, ask whether the endpoint that writes
+  it *updates* rows or *replaces* them. If it replaces (a whole-collection PUT/
+  PATCH is the tell), the id is a rendering hazard. Keep using the id for
+  writes, membership and navigation — this is a rendering concern only, and
+  saying so in the key helper is what stops someone "fixing" it back.
+- **Established:** 2026-09-05 (`mealPlanEntryKey.ts`, consumed by
+  `MealPlanWeekDayCard` and `MealPlanMobileFocus`). See ADR-083.
+
+### R-087 — An external client gets its own authenticated door onto the *same* handler, never a parallel implementation
+- **Rule:** when a capability the SPA already has must also be reachable by a
+  non-session caller (an ingestion source, a future CLI, any bearer-key client),
+  add a thin route that authenticates differently and calls **the same handler**.
+  The new route may do auth, argument parsing and logging; it must not contain
+  behaviour. Two doors, one room.
+- **Why:** the two callers differ only in how they prove who they are — the SPA
+  presents a `dora_session` cookie, an external client presents
+  `Authorization: Bearer <key>` against `IngestionSource`. Nothing about the
+  *work* differs, so duplicating it means two cascade policies, two sets of
+  edge cases, and a guarantee that a fix lands on one and not the other. Dora's
+  product delete is the sharp example: its cascade decides what happens to
+  finished shopping lists, price alerts and barcodes. A second implementation
+  for the companion would inevitably drift, and the drift would be silent data
+  loss on somebody's receipt.
+- **How to comply:** put the behaviour in a handler class that takes a
+  repository and knows nothing about auth (`DeleteProductHandler`,
+  `GetIngestableProductsHandler`). Session routes live under their feature's
+  router; bearer routes live under `INGEST_ROUTER` and must be listed in
+  `middleware.PUBLIC_ENDPOINTS` (which exempts them from the *session* gate —
+  they still authenticate, just in the handler). Keep the response
+  **source-agnostic**: never echo the caller's identity back (R-005). If you
+  find yourself copying a handler body to change its auth, stop.
+- **Established:** 2026-09-06, on the third instance — `ingest_link_status`
+  (read), `ingest_delete_product` (write, sharing `DeleteProductHandler` with
+  the SPA's `DELETE /api/products/<id>`), and `ingest_list_products` (list).
+  Deliberately not promoted at the first or second. See ADR-084.
+
+
 ### ADR-001 — Adopt engineering standards + mandatory explain-or-flag gate
 - **Date / task:** 2026-06-06 (user request after repeated theme/component regressions)
 - **Status:** accepted
@@ -5533,3 +5617,113 @@ A non-binding cookbook of solutions to recurring problems. Not rules — just a
   through its spinner. Accepted.
 - **Rule promoted:** R-084.
 
+
+### ADR-082 — Touch sizing is a pointer question, not a width question (promotes R-085)
+- **Date / task:** 2026-09-05 (owner feedback: *"on mobile the dropdown options
+  are a bit narrow for the stock level picker. Good for desktop, bit
+  thicker/bigger for mobile would be better"* + *"the row buttons need to be
+  slightly bigger on mobile"*, flagged by the owner as *"could be a more
+  widespread UX issue"* — it was)
+- **Status:** accepted
+- **Context:** D-004 (44×44 tap targets) and B8 (44px menu rows) had been
+  violated app-wide since the beginning: `BaseButton` ran every variant at 36px,
+  38 `q-list dense` menus across 26 files ran 32px rows, and the stock and
+  recipe rows shrank their icon buttons to 30px to win back width. Two
+  follow-ups — **FU-678** and **FU-641** — had diagnosed this correctly in
+  August and both deferred it for the same stated reason: raising the floor
+  "re-flows every toolbar, table row and card action in the app". That reasoning
+  was sound but rested on an unexamined assumption, that the fix had to apply
+  everywhere.
+- **Decision:** scope touch affordances to the pointer. D-004's own text is
+  "on any surface a finger uses" and B1 grants 36px explicitly for
+  "desktop-dense chrome", so the rule was never app-wide to begin with — it was
+  device-wide, and the codebase had no way to say that. Under
+  `@media (pointer: coarse)` the floor lifts in `BaseButton` (all variants) and
+  in `app.scss` (`.q-menu .q-item`, plus the horizontal padding `dense` also
+  strips), which fixes the 38 menus and every `.dora-btn` in one place rather
+  than 60+ edits (R-001). Call sites that pin their own size at higher
+  specificity — `StockItemRow`, `RecipeRow` — were swept individually, since a
+  global rule cannot reach them.
+- **Consequences:**
+  - Desktop is provably unchanged, which is what made this shippable and is also
+    exactly what the owner asked for. Measured under Playwright in both
+    contexts: touch 44/44/260×44, mouse 32/36/200×32.
+  - `StockLevelPicker` is the one control whose *visual weight* changes, not
+    just its hit area — it is a colour chip, so a bigger target is a bigger
+    block. It could not use the invisible-hit-area trick because `::after`
+    carries the uncertainty ring and Quasar's QBtn owns `::before`. Flagged for
+    the owner's eye in `DORA_VERIFY.md` rather than assumed.
+  - Rows pay ~42px of width for three 44px buttons; the row gap tightened 8→6px
+    and the name (which already truncates) absorbs the rest. A clipped word is
+    recoverable by tapping the row; a missed target isn't.
+  - Controls that are neither menus nor icon buttons and sit at 38–40px
+    (`DoraTabs`, `BaseSelect`, `SortControl`, `DoraSegmented`) were **not**
+    swept — each is a deliberate documented size and wants an eye on the result.
+    Logged as FU-877 rather than changed blind.
+- **Rule promoted:** R-085. **Resolves:** FU-678, FU-641.
+
+
+### ADR-083 — Rendering identity is not database identity (promotes R-086)
+- **Date / task:** 2026-09-05 (owner meal-planner batch — *"tapping increase or
+  decrease servings on mobile once hides the dropdown for a meal slot"*)
+- **Status:** accepted
+- **Context:** the planner's servings stepper lives inside the entry menu, and
+  every tap saves the week. `update_meal_plan.py` replaces the whole forward
+  portion of a plan on each save — it deletes the future entries and inserts new
+  rows — so the ids the client had just rendered were gone by the time the
+  refresh landed. Vue saw a list of entirely new keys and remounted every card,
+  taking the open menu with it. The same trap sits under the desktop chip; the
+  owner met it on mobile first because a phone makes you tap more.
+- **Decision:** key those lists on `scheduled_for | slot | recipe_id` (plus an
+  occurrence suffix for a genuine duplicate), in one shared helper both call
+  sites import, with the reasoning written at the helper rather than at the
+  call sites.
+- **Alternatives considered:**
+  - *Make the endpoint preserve entry ids.* The honest fix, and rejected for
+    this batch on risk: the replace-the-forward-week shape is load-bearing for
+    the cook-batch rebuild (which deletes and re-attaches batches around
+    preserved past entries, and carries its own 2026-09-03 defect history).
+    Changing it to match-and-update is a real refactor with a blast radius
+    across reconcile, batches and the past-entry guard — worth doing on its own
+    terms, not as a side effect of a UI fix. Logged as FU-878.
+  - *Move the stepper out of the menu.* Fixes the symptom for one control and
+    leaves the trap armed for the next thing put inside a row.
+- **Rule promoted:** R-086.
+
+
+### ADR-084 — External clients get an authenticated door onto the same handler (promotes R-087)
+- **Date / task:** 2026-09-06 (products program, batches B–D)
+- **Status:** accepted
+- **Context:** The standalone companion has to reach capabilities Dora's own SPA
+  reaches, but it cannot present a `dora_session` cookie — it authenticates as an
+  `IngestionSource` with a bearer key (products program PF-9). Three of these
+  arrived in one day: reading which products Dora already holds
+  (`ingest_link_status`, 2026-07-12), deleting a product the user unsaved
+  (`ingest_delete_product`), and listing the saved products to refresh
+  (`ingest_list_products`). Batch C is where the tension became explicit: the
+  program's own rule PF-4 said unsave must use "the same **endpoint**" as the
+  SPA, which is impossible across two auth schemes. The rule's intent was right
+  and its wording wasn't.
+- **Decision:** one *behaviour*, N authenticated front doors. The behaviour lives
+  in an auth-ignorant handler; each route does auth + parsing + logging and
+  delegates. Bearer routes sit on `INGEST_ROUTER` and are listed in
+  `middleware.PUBLIC_ENDPOINTS` — which exempts them from the session gate, not
+  from authentication. Responses stay source-agnostic per R-005. PF-4 reworded to
+  "same behaviour".
+- **Alternatives considered:**
+  - *Let the companion hold a user session.* Rejected: it would make the
+    companion a privileged insider rather than an ordinary external client,
+    contradicting PF-9, and would hand a scraper a human's credentials.
+  - *Duplicate the logic behind the bearer route.* Rejected on the concrete
+    risk, not on principle: product delete's cascade decides the fate of
+    finished shopping lists, price alerts and barcodes. Two copies drift, and
+    this drift is silent loss of somebody's purchase history.
+  - *Wait for a fourth instance before promoting.* Considered — the first two
+    instances were deliberately left unpromoted. Three is enough to see the
+    shape (read / write / list all take it), and D was about to add a fourth
+    without the rule written down.
+- **Consequences:** a small amount of route boilerplate per capability, in
+  exchange for the guarantee that the SPA and any external client can never
+  diverge in behaviour. The pattern also gives a natural home for future
+  non-session callers (a CLI, a second companion) without re-litigating auth.
+- **Rule promoted:** R-087.

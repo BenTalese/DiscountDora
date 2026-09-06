@@ -147,3 +147,49 @@ body {
     width: 100%;
     max-width: 100%;
 }
+
+// ── Touch tap targets in menus and dropdowns (D-004 / B8) ────────────────
+//
+// Owner 2026-09-05, on the stock overview's level picker: *"on mobile the
+// dropdown options are a bit narrow … Good for desktop, bit thicker/bigger for
+// mobile would be better"*, with the note that it is *"could be a more
+// widespread UX issue"*. It is: 38 `q-list dense` menus across 26 files, every
+// one of them 32px rows on a phone.
+//
+// The style guide already says this — B8 ("items min height 44px touch") and
+// D-004 ("≥ 44×44px effective target on touch") — so `dense` inside a menu was
+// never compliant on a phone; it was compliant on the desktop those menus were
+// designed against.
+//
+// **Global, not 38 edits** (R-001). Every one of those call sites wants the
+// same thing for the same reason, and patching them individually would leave
+// the 39th menu to rediscover the bug. `dense` is kept in the markup because it
+// is still correct with a mouse — this restores the floor only where the
+// pointer can't be precise.
+//
+// `pointer: coarse` rather than a width breakpoint, matching the convention
+// already in `ImageSourcePicker`, `NutritionFoodPicker` and the two settings
+// chips: this is about how the user is *pointing*, not how wide the window is.
+// A desktop window dragged narrow keeps its dense menus; a tablet at 1024px
+// gets the bigger ones. Sizing touch affordances off width is what produced the
+// 375px overlap recorded in `ShoppingListPlanRow` — the two queries disagree,
+// so pick the one that means what you want and use it consistently.
+//
+// Menus are `--radius-md` slabs positioned by Quasar, so growing a row pushes
+// the menu taller without reflowing the page behind it.
+@media (pointer: coarse) {
+    .q-menu {
+        .q-item {
+            min-height: 44px;
+        }
+        // `dense` also tightens horizontal padding, which is the other half of
+        // the owner's "narrow": a 44px-tall row with 8px side padding still
+        // reads cramped and still hands you a small horizontal target.
+        .q-item--dense {
+            padding-top: var(--space-2, 8px);
+            padding-bottom: var(--space-2, 8px);
+            padding-left: var(--space-3, 12px);
+            padding-right: var(--space-3, 12px);
+        }
+    }
+}

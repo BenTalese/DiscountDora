@@ -29,6 +29,264 @@ long session summary. Distinct from the other logs:
 ## Entry template
 
 ```
+## [OPEN] FU-NNN — short title
+- **Raised:** YYYY-MM-DD (prompt id / task)
+- **Type:** follow-up | deferred job | leftover | finding
+- **What:** one or two lines.
+- **Why deferred:** the reason it wasn't done in-line.
+- **Recommended resolution:** now | later during <Phase/Prompt X> | when <trigger> | opportunistic
+```
+
+---
+
+## [OPEN] FU-889 — `window.onerror` runs `executeRollbacks()` for anything, including non-errors
+- **Raised:** 2026-09-06 (products program, batch F — found by driving the page)
+- **Type:** finding
+- **What:** `boot/globalErrorHandler.ts`'s `window.onerror` unconditionally
+  toasts *"Oops, something went wrong"* **and calls `executeRollbacks()`**,
+  which reverts pending optimistic UI. `window.onerror` receives things that
+  are not application errors — browser notices, and script errors from any
+  source — so a stray non-event can silently undo a user's in-flight change.
+  Batch F fixed the one instance that reproduces reliably (the browser's
+  benign *"ResizeObserver loop completed with undelivered notifications"*, which
+  My Products' card grid triggers on every viewport change) by filtering it out
+  ahead of the handler. **The general shape is unaddressed:** the filter is an
+  allow-list of one, and the deeper question — whether a global error handler
+  should be entitled to roll back state at all, versus only reporting — is
+  untouched.
+- **Why deferred:** rollback-on-crash is a deliberate design
+  (`rollbackRegistry`), so narrowing it needs a decision about which error
+  classes should trigger it, not a quick edit. Out of scope for a UI batch.
+- **Recommended resolution:** opportunistic — next time the error-handling or
+  rollback layer is touched. Cross-ref `IMPL_PLAN_ERROR_HANDLING.md`.
+
+## [OPEN] FU-888 — `GET /api/nutrition/lookup` 500s on a NUL byte in `q` — Postgres only
+- **Raised:** 2026-09-06 (products program, batch C2 — found by running the full suite on Postgres)
+- **Type:** finding
+- **What:** `tests/e2e/dora_api/test_api_fuzz.py::test__garbage_query_params_on_every_get_route__never_500s`
+  fails **only under `DORA_TEST_DB=postgres`**, on one route:
+  `GET /api/nutrition/lookup?…&q=%00%27%22&…` → 500. The fuzz case sends a
+  literal NUL (`\x00`) in `q`. `search_foods` (`features/nutrition/lookup.py:145`)
+  passes the raw text into `_search_local`'s LIKE query; **Postgres rejects NUL
+  bytes in text values while SQLite accepts them**, so the same input is a 500
+  on one backend and a clean 200 on the other. Note `limit` is a red herring —
+  `search_foods` ignores every param except `q`.
+- **Why it matters:** Postgres is the standard datastore target (RECONCILED
+  §7 Decision 5), and the fuzz test exists precisely to assert no GET route
+  500s on garbage. It is currently only telling the truth on SQLite.
+- **Why deferred:** unrelated to the batch that found it (C2 touched shopping
+  lists, not nutrition); fixing it means deciding where to strip/reject NULs —
+  ideally once, centrally, for all query params rather than per-route.
+- **Recommended resolution:** opportunistic — next time the nutrition surface
+  or the request-validation layer is touched. Same divergence family as the
+  dialect bugs found on 2026-07-14 (raw-`text()` UUID binds, over-length
+  `alert_key`); a central sanitiser would close the class rather than the
+  instance. Cross-ref [[FU-405]] (a Postgres CI matrix would have caught this).
+
+## [OPEN] FU-887 — companion has no eslint config and its cross-repo roundtrip test can't run (companion repo)
+- **Raised:** 2026-09-06 (products program, batch B)
+- **Type:** finding — gates
+- **Repo:** `../dora-companion/`
+- **What:** two gaps found while gating batch B.
+  1. **`npm run lint` fails outright**: the script is
+     `eslint "src/**/*.{ts,vue}"` but there is no eslint config anywhere in
+     `web_app/` or its ancestors, so ESLint 8.57 exits with "couldn't find a
+     configuration file". The companion SPA has therefore never been linted.
+     `npx vue-tsc --noEmit` **is** clean, so typechecking is the only frontend
+     gate that currently exists.
+  2. **`tests/test_integration_dora_roundtrip.py` cannot run in this
+     environment.** It imports Dora's app from the sibling checkout, so it needs
+     Dora's dependencies in the companion venv (`flask_migrate` is missing).
+     Running it with Dora's venv gets further but then fails in DB setup:
+     against the dev Postgres `drop_all` errors (`cannot drop table "Product"
+     because other objects depend on it` — `fk_ProductBarcode_product_id_Product`),
+     and against a throwaway SQLite it gets a **403 minting the ingestion
+     source**, so the admin fixture isn't granting admin. Three distinct
+     failures, all in setup, none reaching a push.
+- **Why deferred:** batch B's own contract is covered by
+  `tests/test_push_contract.py` (16 tests) plus a real-HTTP end-to-end against a
+  stub Dora, and the roundtrip test exercises `push_offers` directly rather than
+  the route that changed — so it is orthogonal to B, not a gap in it. Fixing it
+  means either vendoring Dora's deps into the companion venv or reworking the
+  fixture's admin bootstrap, which is test-infra work in its own right.
+- **Recommended resolution:** opportunistic, and a natural fit for **batch E**
+  (which is the batch that wants reliable companion gates for scraper fixture
+  tests anyway). Note the Postgres `drop_all` ordering failure may be a **Dora**
+  bug worth confirming separately — if `startup()`'s destructive reset can't drop
+  a schema it created, that affects Dora's own dev resets too.
+
+## [OPEN] FU-886 — companion 500s on a malformed request body instead of returning a 4xx (companion repo)
+- **Raised:** 2026-09-06 (products program, batch B)
+- **Type:** finding
+- **Repo:** `../dora-companion/`
+- **What:** the companion registers **no global pydantic `ValidationError`
+  handler** (nothing in `merchant_api/infrastructure/middleware.py` or the app
+  factory). Feature routes call `Model.model_validate(request.get_json())`
+  directly, so any request that fails validation raises out of the view and
+  Flask returns a **500**. Pinned as current behaviour in
+  `tests/test_push_contract.py::test__push_route__rejects_the_retired_search_query_shape`.
+- **Why it matters now:** batch B changed `/api/push`'s contract, so a **stale
+  SPA bundle** (cached in a browser, or a companion frontend deployed ahead of
+  its backend) sends the retired search-query shape and gets an opaque 500 with
+  no indication that the client is out of date. The rejection itself is correct
+  and deliberate — the status code and message are what's poor.
+- **Why deferred:** pre-existing, not a regression (the previous
+  `PushToDoraRequest` was equally strict — `extra="forbid"` plus a `min_length`
+  — so a malformed body already 500'd). Adding an app-wide error handler is a
+  cross-cutting change to the companion's Flask setup, not part of B's scope.
+  Dora solved the same problem with a shared `api_response` layer; the companion
+  has no equivalent.
+- **Recommended resolution:** opportunistic — fold into **batch A** (which is
+  already touching companion configuration/plumbing) or batch E. Cross-ref
+  [[FU-887]].
+
+## [OPEN] FU-884 — Aldi provider has four defects independent of the site redesign (companion repo)
+- **Raised:** 2026-09-06 (products program planning)
+- **Type:** finding
+- **Repo:** `../dora-companion/` — **not this repo.** The companion has no
+  ledger of its own, so it is tracked here.
+- **What:** in
+  `merchant_api/infrastructure/merchant_data_providers/aldi_provider.py`:
+  1. **Product names are being mangled today.**
+     `name = offer.description.rstrip(offer.amount)` — `str.rstrip` takes a
+     *character set*, not a suffix, so `"Milk 2L".rstrip("2L")` strips any
+     trailing `2`/`L` characters.
+  2. **`get_product` can raise instead of returning `None`.** Two bare
+     `next(...)` calls with no default raise `StopIteration` when the product is
+     in no category or absent from the cache, despite the
+     `-> ScrapedProductOffer | None` signature.
+  3. **Shared mutable class state.** `_cached_offers_by_category` and
+     `_cached_offers_last_updated_by_category` are declared as class attributes,
+     so every instance shares one cache, while `_aldi_product_names_by_category`
+     is per-instance.
+  4. **Fragile price parsing** — `.lstrip('$').rstrip('c')` on price strings.
+  Separately, Aldi is *architecturally* the odd provider out: Coles hits a real
+  JSON search API (`_next/data/{buildId}/en/search.json`), whereas Aldi has no
+  search at all and scrapes category pages, fuzzy-matching against a curated
+  `aldi_products_by_category.json` cached for 7 days. The owner reports the Aldi
+  site has since been redesigned, so the BeautifulSoup selectors
+  (`box--wrapper`, `box--amount`, `box--decimal`, `box--former-price`) are stale.
+- **Why deferred:** it is a rewrite, scheduled as its own batch.
+- **Recommended resolution:** batch E of
+  [`IMPL_PLAN_PRODUCTS_PROGRAM.md`](docs/04_proposals/IMPL_PLAN_PRODUCTS_PROGRAM.md).
+
+## [OPEN] FU-879 — the plan endpoint loads the same recipes twice when nutrition *and* money are both on
+- **Raised:** 2026-09-05 (owner meal-planner batch, item 5)
+- **Type:** finding
+- **What:** `GetMealPlansHandler._hydrate_nutrition` and the new
+  `_hydrate_cost` each run their own `Recipe` + `INGREDIENTS` +
+  `then_include(STOCK_ITEM)` load over the same distinct recipe ids. Each is
+  constant-cost in the number of *entries* (which is the property
+  `test_meal_plan_nutrition`'s query-count test pins, and it still holds), but
+  an install with both features on pays the identical load twice per request.
+- **Why not fixed here:** hoisting the load into `handle`/`handle_by_id` and
+  passing it down changes the shape of four hydrators that are currently
+  independent and individually skippable — each returns early when its own
+  feature is off, which is what keeps an install that uses neither paying
+  nothing. Worth doing as a deliberate small refactor rather than folded into a
+  UI batch.
+- **Recommended resolution:** opportunistic — next time either hydrator is
+  touched. Cross-ref: R-003, `get_recipes._hydrate_estimated_cost` (which solved
+  the same problem for the cookbook list in two queries).
+
+## [OPEN] FU-878 — `PATCH /meal-plans` re-mints every forward entry id on every save
+- **Raised:** 2026-09-05 (owner meal-planner batch, item 6 / ADR-083)
+- **Type:** finding
+- **What:** the update handler replaces the whole forward portion of a plan —
+  it keeps past/consumed entries, deletes the rest, and inserts brand-new
+  `MealPlanEntry` rows. So an entry's id changes whenever *anything* in the week
+  is saved, including an edit to a different meal on a different day. The
+  client-visible symptom (a `q-menu` closing on every servings tap) is fixed at
+  the rendering layer by R-086's content-identity keys, but the churn itself is
+  still there and is a latent hazard for anything that holds an entry id across
+  an edit.
+- **Why deferred:** the replace-the-week shape is load-bearing for the
+  cook-batch rebuild, which deletes and re-attaches batches around preserved
+  past entries and carries its own defect history (the 2026-09-03 straddling-
+  batch fix). Converting to match-and-update touches that, the past-entry guard
+  and reconcile — a real refactor, not a side effect of a UI fix.
+- **Recommended resolution:** later, as its own unit, ideally next time the
+  cook-batch write path is opened anyway. Cross-ref: R-086, ADR-083,
+  `mealPlanEntryKey.ts`.
+
+## [OPEN] FU-877 — the 38–40px controls the tap-target sweep deliberately didn't touch
+- **Raised:** 2026-09-05 (tap-target sweep, ADR-082)
+- **Type:** deferred job
+- **What:** the sweep's scope was the owner's words — "every menu and icon
+  button" — and that is what R-085 + the `pointer: coarse` rules now cover. A
+  second tier sits at 38–40px, under D-004's floor but nowhere near the 30px the
+  owner reported: `DoraTabs` (40px tab rows), `BaseSelect` (40px `--chips`
+  control), `SortControl` (`--filter-control-h` minus 6px ≈ 38px direction
+  toggle), `DoraSegmented` (36px), `SettingsNavGroup` (36px). Below those again
+  are the ~28px chip-shaped controls (`TriStateFilter`, `MealPlanEntryChip`,
+  `MealPlanRecipePicker`, `MealPlanWeekDayCard`) and `DoraModeSlider` at 24px,
+  which is already **FU-663**.
+- **Why deferred:** each of these is a deliberate size with a comment explaining
+  it, and several are shared controls whose proportions were tuned against a
+  specific row. Bumping them to 44px on touch is one line each, but the *result*
+  needs an eye — a segmented control that grows changes the balance of the
+  filter strip it sits in, which is a surface the owner has signed off (R-007).
+  Changing nine components blind, inside a batch whose reported symptom was two
+  specific 30px controls, is the over-correction the standards warn about.
+- **Recommended resolution:** later, as its own unit, with a phone in hand — now
+  cheap, because R-085 settled the mechanism and each fix is a `pointer: coarse`
+  block. Cross-ref: FU-663, D-004, B1, ADR-082.
+
+## [OPEN] FU-876 — an item's price baseline is decided by its *most recent* observation's dimension, not its majority
+- **Raised:** 2026-09-05 (recipe price-unit investigation, §5)
+- **Type:** finding
+- **What:** `your_prices.py` sets `active_dim = latest_def.dimension` and then
+  skips every observation outside it. So an item with nine observations in `kg`
+  and one stray in `ea` computes its baseline from the **one**, if the stray
+  happened to be logged last — the other nine are silently discarded, and the
+  median that drives "above usual" comes off a single row.
+- **Why it matters:** recency is a defensible tiebreak (it tracks how you buy
+  the thing *now*, e.g. switching from loose to packs), so this is not
+  self-evidently wrong. But it is not what the owner assumed was happening when
+  he asked about odd-unit observations, and one mis-keyed entry can reset an
+  item's whole price history with no warning. Majority-with-recency-tiebreak
+  would be the safer rule.
+- **Recommended resolution:** opportunistic — next time the pricing substrate is
+  open. Not urgent; needs a decision on the rule before any code.
+  Cross-ref: `docs/05_investigations/RECIPE_PRICE_UNIT_MISMATCH.md` §5.
+
+## [OPEN] FU-875 — split `unit_mismatch` into reasons the user can act on
+- **Raised:** 2026-09-05 (recipe price-unit investigation, §6 tier 2)
+- **Type:** deferred job (owner decision D4)
+- **What:** the cost breakdown renders one message — "Units don't match the
+  price" — for three unrelated situations: a density we could have looked up
+  (FU-874), a product with no recorded size, and a counted item against a
+  measured pack (FU-855/856). Only the last two have a user action, and the user
+  can't tell which they're looking at. Proposed split:
+  `unit_unknown_density` / `unit_no_pack_size` / `unit_no_pack_count`.
+- **Why deferred:** worth little until FU-874 lands — today most of what lands
+  in this bucket is the fixable case, so splitting first would mostly produce a
+  more precise description of a bug.
+- **Recommended resolution:** after FU-874. Owner call (investigation D4,
+  recommended yes).
+
+## [OPEN] FU-874 — recipe costing never passes the ingredient name, so the density bridge is dead code
+- **Raised:** 2026-09-05 (owner feedback: the ice-cream 1 L vs 200 g case)
+- **Type:** finding (owner decision D3)
+- **What:** `domain/units.convert()` bridges mass↔volume when given an
+  `ingredient=` name to look up in `INGREDIENT_DENSITY_G_PER_ML` (77 entries).
+  `recipe_cost._line_cost` calls it as `units.convert(qty, ing_unit, price.unit)`
+  — **no `ingredient=`** — so the density branch can never fire on the pricing
+  path, and every mass-vs-volume ingredient is reported unpriced. Verified
+  against the live table:
+  `convert(200,'g','L')` → `None`, `convert(200,'g','L',ingredient='cream')` → `0.2`.
+  The owner's reported case fails twice over: the argument isn't passed, and
+  `'ice cream'` isn't in the table either.
+- **Why it matters:** this is the single largest class of "Units don't match the
+  price", and it is not a guess — a density lookup for a *named* ingredient is
+  the same species of fact as a unit factor, and is what commercial recipe
+  costing does (the trade reference is a book of exactly these figures). Fixing
+  it does not weaken ADR-073's honest-gap stance: unknown ingredients still
+  report unpriced, because there is still no default density.
+- **Recommended resolution:** **now-ish** — one keyword argument plus table
+  rows. Owner call (investigation D3, recommended yes). Cross-ref: FU-855,
+  FU-856, ADR-073, `docs/05_investigations/RECIPE_PRICE_UNIT_MISMATCH.md` §4.
+
 ## [OPEN] FU-873 — `frequently_added.py` reads a `lazy="noload"` relationship and reports `None`
 - **Raised:** 2026-09-04 (log-price picker ordering)
 - **Type:** finding (R-082 trap, currently harmless)
@@ -132,16 +390,6 @@ long session summary. Distinct from the other logs:
   which is a whole verify pairing rather than a step in this one.
 - **Recommended resolution:** when a money-off verify run next happens — the
   corresponding eyes-on steps are in `DORA_VERIFY.md` under Dashboard.
-
-## [OPEN] FU-NNN — short title
-- **Raised:** YYYY-MM-DD (prompt id / task)
-- **Type:** follow-up | deferred job | leftover | finding
-- **What:** one or two lines.
-- **Why deferred:** the reason it wasn't done in-line.
-- **Recommended resolution:** now | later during <Phase/Prompt X> | when <trigger> | opportunistic
-```
-
----
 
 ## [OPEN] FU-867 — Add-user dialog still changes height when "Generate password" flips
 - **Raised:** 2026-09-03 (owner feedback batch — admin settings)
@@ -3061,25 +3309,6 @@ Resolved entries carry one extra line, and live in `DORA_FOLLOWUPS_RESOLVED.md`:
 - **Recommended resolution:** when the cost card next comes up, or if the owner
   reports "it says it can't price something it obviously can".
 
-## [OPEN] FU-678 — every `.dora-btn` is 36px tall, under D-004's 44px touch floor
-- **Raised:** 2026-08-19 (cookbook feedback batch 2)
-- **Type:** finding
-- **What:** `BaseButton`'s base rule is `min-height: 36px` for every variant, and
-  the icon variants are 36×36. B1 says "min height **44px** on touch (36px
-  desktop-dense chrome only)" and D-004 sets a 44×44 effective floor "on any
-  surface a finger uses". Dora is a pantry/mobile app, so almost no button
-  qualifies for the desktop-dense allowance. This came up because the filter row's
-  controls **were** raised to 44px this session (in the new shared `FilterRow`,
-  where it's one number), which makes the 36px buttons beside them the outlier.
-- **Why deferred:** it resizes **every button in the app** — toolbars, dialogs,
-  bulk bars, list-row actions — and several of those rows are width-constrained on
-  a phone already. That's a design pass with a real-device walk, not a side effect
-  of a filter-row fix. The new `subtle` variant deliberately matches its siblings
-  at 36px rather than becoming a lone 44px exception (commented in place naming
-  the rule).
-- **Recommended resolution:** later, as its own unit — pairs naturally with the
-  next mobile-UX pass, and with [[FU-675]] since both want a real phone.
-
 ## [OPEN] FU-677 — adopt the new `subtle` BaseButton variant at the remaining small-action sites
 - **Raised:** 2026-08-19 (cookbook feedback batch 2)
 - **Type:** deferred job
@@ -3584,26 +3813,6 @@ Resolved entries carry one extra line, and live in `DORA_FOLLOWUPS_RESOLVED.md`:
   owns the current `StockLevelDot` colour semantics, and D-001 governs it).
 - **Recommended resolution:** now — it's a red suite, and whoever is mid-flight on
   the stock-row rework can settle it in a minute.
-
-## [OPEN] FU-641 — Header icon buttons sit at 36px, under the D-004 44px touch floor
-- **Raised:** 2026-08-15 (mobile-header task).
-- **Type:** finding.
-- **What:** `BaseButton`'s `icon` / `danger-icon` / `filled-icon` variants set
-  `min-height: 36px; min-width: 36px` (`web_app/src/components/BaseButton.vue`), so
-  the mobile toolbar's hamburger, alerts bell and account avatar are 36×36 effective —
-  below the **D-004** 44×44 floor. `DonateButton` next to them is 44px, so the row is
-  also inconsistent. Not introduced here: the mobile shrink deliberately touched only
-  glyph/avatar font-size and left the hit boxes alone, so nothing regressed.
-- **Why deferred:** `dora-btn--icon` is app-wide — raising it to 44px re-flows every
-  toolbar, table row and card action in the app, which is its own unit with its own
-  browser pass. Way outside a header tweak.
-- **Also in scope (2026-08-17):** the Users page's new per-row `⋮` actions menu is the
-  same `icon` variant, so on a phone it's a 36px target carrying that row's Edit /
-  Change-password / Delete. Not a new fault — it inherits the app-wide floor and will be
-  fixed by the same one-line change to `dora-btn--icon`. Called out so the sweep knows to
-  re-check row-level (not just toolbar) icon buttons.
-- **Recommended resolution:** later — fold into the next design-remediation pass, or
-  whenever the FU-578 UX/UI review is triaged into fix units.
 
 ## [OPEN] FU-640 — A user-visible failure produced an empty log bundle: 4xx responses aren't logged
 - **Raised:** 2026-08-15 (FU-639 investigation — the owner's log bundle contained nothing useful).
@@ -4286,6 +4495,26 @@ Resolved entries carry one extra line, and live in `DORA_FOLLOWUPS_RESOLVED.md`:
   - **PH residuals (folded in from FU-431, 2026-07-16 — no redesign brief):** (a) **PH-2** "can select products but no change occurs on the Price History page" — behaviour verify with real product data (reported-defect, confirm in browser). (b) **PH-10 optional** — the desktop bottom-sheet the feedback asked for already exists (`PriceHistoryBottomSheet.vue`, built for FU-227) but is wired to the stock-item "your prices" widget; My Products currently *navigates* to the full `/price-history` page instead. Reusing the bottom sheet for the My-Products→product flow is a small **opportunistic** enhancement — evaluate it with real data on-screen during this pass; don't build blind. (c) **PH-1** discoverability is **decided** (see FU-431 in `_RESOLVED`): contextual entry is the right model, so just confirm during verify that My-Products / Subscriptions / onboarding entry points feel adequate — no nav tab.
 - **Why deferred:** every item needs a running browser session; bulk-select is real UI work; L197 is a design call.
 - **Recommended resolution:** when the next browser-verify session opens **and** the products layer has real data — knock out L223/L225 as bugs, do the browser-verify checklist, then split L197 (design call) and L205/206 (build) into their own FUs if this one gets too heavy. **This FU is the runbook's Phase F blocker** ([`PRODUCTS_OVERLAY_RUNBOOK.md`](docs/04_proposals/PRODUCTS_OVERLAY_RUNBOOK.md) §Status row F). Related: [[FU-227]] (resolved), [[FU-212]] (resolved), [[FU-210]] (resolved).
+- **2026-09-06 update — build scope moved out; this FU is now browser-verify only.**
+  The owner reopened the whole products area, and the work is planned as batches in
+  [`IMPL_PLAN_PRODUCTS_PROGRAM.md`](docs/04_proposals/IMPL_PLAN_PRODUCTS_PROGRAM.md).
+  Reassignments: **L197** hard-delete is **BUILT** (owner call D-1; batch C shipped
+  2026-09-06 — `DELETE /api/products/<id>` plus the companion's bearer-authed
+  door and Unsave button). Note the affordance on the My Products page itself is
+  still owed and rides batch F, so today L197 is only reachable from the
+  companion; **L205/L206** bulk-select variants →
+  batch F; **L223/L225** → the static read says both are already fixed (the chart
+  tooltip now uses `--surface-component`/`--text-secondary`; a `ResizeObserver`
+  measures the card), so they join the confirm-in-browser set rather than the bug
+  set. **What remains on this FU is the browser pass only**, over four bullets that
+  look fixed but are unproven per the mandatory reported-defect rule: PH-2
+  (selection changes nothing — appears fixed by [[FU-605]]), PH-7 (dark-mode hover
+  bubble), PH-9 (graph box-fit), PH-8 (central alerts page exists). Do **not**
+  re-plan the build items here; the plan doc owns them. Note the dev seed
+  (`persistence/seed.py`) does build products with offer history, so the "waits for
+  real product data" blocker no longer applies — a scratch backend can drive this.
+  New findings from the same session: [[FU-881]], [[FU-882]], [[FU-883]],
+  [[FU-884]], [[FU-885]].
 
 ## [OPEN] FU-406 — Open-source release readiness (was: self-host launch; de-commercialized 2026-07-31)
 - **Raised:** 2026-07-01 (legacy prompt-plan audit). **Narrowed 2026-07-14 (self-host-first). Reframed 2026-07-31 (donation / open-source pivot).**

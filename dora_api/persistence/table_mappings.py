@@ -436,10 +436,26 @@ def configure_mappings(db: SQLAlchemy):
         # `product_id` (or both, when a product is nested under a
         # stock item). Both columns are nullable individually; a
         # CHECK enforces that at least one is set.
-        Column("stock_item_id", UUIDType, ForeignKey("StockItem.id", ondelete="CASCADE"), nullable=True),
-        Column("product_id", UUIDType, ForeignKey("Product.id", ondelete="CASCADE"), nullable=True),
+        # Both anchors are SET NULL, not CASCADE (FU-883). A finished list is
+        # a receipt: deleting a stock item or product must not reach back and
+        # erase what you bought, for the same reason `purchased_store_id`
+        # below has always been SET NULL. Lines on *draft/shopping* lists are
+        # still removed when their anchor goes — that's done in the delete
+        # handlers (`shopping_lists._line_retention`), because a FK rule can't
+        # be conditional on the parent list's status.
+        Column("stock_item_id", UUIDType, ForeignKey("StockItem.id", ondelete="SET NULL"), nullable=True),
+        Column("product_id", UUIDType, ForeignKey("Product.id", ondelete="SET NULL"), nullable=True),
+        # The display name frozen at finish. Lets an orphaned historic line
+        # still say what it was.
+        Column("display_name_snapshot", String(255), nullable=True),
+        # A live line needs an anchor; a finished one may instead carry only
+        # its snapshot. Without the third clause, nulling the last anchor of a
+        # product-only line would violate this and the delete would fail —
+        # loudly on Postgres, silently on SQLite (which doesn't enforce FKs
+        # by default).
         CheckConstraint(
-            "stock_item_id IS NOT NULL OR product_id IS NOT NULL",
+            "stock_item_id IS NOT NULL OR product_id IS NOT NULL "
+            "OR display_name_snapshot IS NOT NULL",
             name="ck_shopping_list_line_anchor",
         ),
         Column("quantity", Integer, nullable=True),

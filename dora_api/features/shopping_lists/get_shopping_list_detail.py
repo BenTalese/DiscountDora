@@ -554,12 +554,17 @@ class GetShoppingListDetailHandler:
                     o.price_now if o.price_now is not None else float("inf"),
                     o.store_name.lower(),
                 ))
-            # fall back to the product name for
-            # product-only lines (no anchor stock item to ask).
+            # Live anchor first, then the product name for product-only
+            # lines, then the name frozen at finish (FU-883) for a historic
+            # line whose anchor has since been deleted. "(missing item)"
+            # stays as the last resort — a line can only reach it if it was
+            # orphaned without ever being finished.
             _line_display_name = (
                 item.name if item
-                else (_ProductNames.get(line.product_id, "(missing item)")
-                      if line.product_id else "(missing item)")
+                else (_ProductNames.get(line.product_id)
+                      if line.product_id else None)
+                or line.display_name_snapshot
+                or "(missing item)"
             )
             _prior = (
                 _PriorPurchaseByItem.get(line.stock_item_id)

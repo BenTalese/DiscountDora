@@ -82,7 +82,9 @@ export const LOOP_STAGES: readonly LoopStage[] = [
     {
         key: 'cook',
         label: 'Cook',
-        icon: ICONS.restaurant,
+        // `chef_hat` is the app's one glyph for the act of cooking (see
+        // icons.ts) — this loop step is that act, so it wears it too.
+        icon: ICONS.chef_hat,
         sell: 'Cook mode walks each step and counts your ingredients back down.',
     },
 ] as const;

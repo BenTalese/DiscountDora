@@ -873,14 +873,10 @@
                                     >
                                         Cheapest
                                     </q-chip>
-                                    <q-chip
-                                        v-if="discountPct(prod) !== null"
-                                        dense
-                                        color="negative"
-                                        text-color="white"
-                                    >
-                                        {{ discountPct(prod) }}% off
-                                    </q-chip>
+                                    <DiscountChip
+                                        :price-now="prod.price_now"
+                                        :price-was="prod.price_was"
+                                    />
                                 </q-card-section>
 
                                 <q-card-section class="row items-center q-py-xs">
@@ -1382,6 +1378,7 @@
     import FadeTransition from 'src/components/transitions/FadeTransition.vue';
     import { storeToRefs } from 'pinia';
     import { QPage, useQuasar } from 'quasar';
+    import DiscountChip from 'src/components/chips/DiscountChip.vue';
     import StoreLogo from 'src/components/StoreLogo.vue';
     import NutritionFoodPicker from 'src/components/stock/NutritionFoodPicker.vue';
     import NutritionFactsList from 'src/components/stock/NutritionFactsList.vue';
@@ -1996,11 +1993,8 @@
     // ── Linked products ──────────────────────────────────────────────────
     const priceHistory = ref<Map<string, number[]>>(new Map());
 
-    function discountPct(p: LinkedProduct): number | null {
-        if (p.price_now == null || p.price_was == null || p.price_was <= 0 || p.price_now >= p.price_was)
-            return null;
-        return Math.round(((p.price_was - p.price_now) / p.price_was) * 100);
-    }
+    // `discountPct` moved into `DiscountChip` (FU-885) — it was one of four
+    // copies of the same rule, rendered three different ways.
 
     // Cheapest first, then by name.
     const sortedProducts = computed(() =>
@@ -2319,10 +2313,21 @@
         // Substitutes tab. Own tab, same install-wide gate as the rest of the
         // scanning surface.
         // Feedback 2026-08-24: renamed "Scanning" — it now holds this item's QR
-        // label as well as its barcodes, so a barcode count in the label would
-        // be counting half of what's in there.
+        // label as well as its barcodes.
+        //
+        // Owner 2026-09-05: it carries a barcode count anyway. The 08-24 call
+        // was that a barcode count would be "counting half of what's in
+        // there" — but the other half is the QR label, of which there is
+        // always exactly one, for every item, forever. A constant is not
+        // information, so counting it adds nothing and the barcodes are the
+        // only part of this tab whose size actually varies. Consistency with
+        // the four sibling tabs wins.
         if (scanningEnabled.value) {
-            out.push({ name: 'scanning', label: 'Scanning', icon: ICONS.barcode });
+            out.push({
+                name: 'scanning',
+                label: `Scanning (${d?.barcodes.length ?? 0})`,
+                icon: ICONS.barcode,
+            });
         }
         out.push({ name: 'lists', label: `Lists (${onLists.value.length})`, icon: ICONS.shopping_cart });
         out.push({ name: 'history', label: 'History', icon: ICONS.history });

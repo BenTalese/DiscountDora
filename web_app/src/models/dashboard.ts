@@ -56,6 +56,12 @@ export type UpcomingMealPlanEntry = {
      *  `useBatchEnabled` before showing either). */
     needs_cooking: boolean;
     cook_fresh: boolean;
+    /** Owner 2026-09-05 — what one cook of this meal's linked batch must yield,
+     *  server-derived across the whole batch (not just the days inside the
+     *  dashboard's week). `null` for a standalone meal. This is the figure the
+     *  card prints and opens cook mode at, the same as the planner's chips —
+     *  `useMealPlanner.cookRecipe` reads the identically-named field. */
+    cook_batch_total_servings: number | null;
 };
 
 export type MealPlanSummary = {

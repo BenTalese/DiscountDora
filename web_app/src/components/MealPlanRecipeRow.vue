@@ -53,6 +53,14 @@
                 <q-icon :name="ICONS.dora_voice" size="14px" />
                 {{ reasonText }}
             </div>
+            <!-- Owner 2026-09-05 — cost appears ONLY while the rail is ranked
+                 by it. The meta line was emptied on 2026-09-01 ("remove the
+                 extra row of info from the recipe rows") because time and
+                 calories are cookbook facts you don't pick a slot on; that
+                 stands. But a list ordered cheapest-first with no figure on it
+                 asks you to take the order on trust, and "what the rail is
+                 doing" is exactly what this line is reserved for. -->
+            <div v-else-if="costText" class="mp-row__meta">{{ costText }}</div>
         </div>
 
         <!-- F26 / F42 / FU-088 — the cooked-pool controls for batch households,
@@ -147,6 +155,10 @@
             /** Dora's reason phrase, shown in `suggesting` mode. */
             reasonText?: string | undefined;
             batchEnabled?: boolean | undefined;
+            /** Cost per serving, already formatted, shown only when the rail is
+             *  sorted by cost (the host decides — this row renders what it's
+             *  handed). Empty for every other ordering. */
+            costText?: string | undefined;
         }>(),
         { mode: 'browsing', batchEnabled: false },
     );

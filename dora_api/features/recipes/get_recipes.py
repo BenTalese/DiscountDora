@@ -455,6 +455,16 @@ class RecipeDto:
     # as an estimate, not a quote.
     estimated_cost_priced_count: int = 0
     estimated_cost_total_count: int = 0
+    # Owner 2026-09-05 — the cookbook wanted to see and sort on cost, and the
+    # comparable number across a list is per-serving, not per-recipe: a tray
+    # bake that costs $18 and feeds eight is cheaper than a $9 dish for two,
+    # and a total-cost column would rank them the other way round. Server-owned
+    # (R-003) rather than an `estimated_cost / servings` division on the client
+    # — the null rules are the interesting part and they belong in one place.
+    # NULL when the recipe is unpriced OR has no servings typed in; both mean
+    # "we can't put a per-serving figure on this", and the card says so instead
+    # of dividing by a guess.
+    estimated_cost_per_serving: float | None = None
     # Feedback 2026-08-19 — the per-ingredient working behind the estimate,
     # for the recipe page's expandable cost card. Detail endpoint only; the
     # collapsed card still reads only the three fields above.
@@ -588,6 +598,20 @@ _FIELD_MAP: dict[str, EntityField] = {
     # directly; this entry lets API consumers do the same server-side.
     "created_at": EntityField(Recipe, Recipe.Fields.CREATED_AT),
 }
+
+
+def _per_serving(cost: float | None, servings: int | None) -> float | None:
+    """Cost per serving, or None when that isn't a number we can stand behind.
+
+    Two ways it isn't: the recipe didn't price at all, or it has no servings
+    typed in. The second is the one worth being strict about — a recipe with a
+    blank servings field is not a one-serving recipe, and treating it as one
+    would put a $14 dinner-for-four at the expensive end of a per-serving sort.
+    Better a card that says nothing than a card that says something wrong.
+    """
+    if cost is None or not servings or servings <= 0:
+        return None
+    return cost / float(servings)
 
 
 @dataclass(frozen=True, slots=True)
@@ -955,6 +979,7 @@ class GetRecipesHandler:
         return dataclasses.replace(
             dto,
             estimated_cost=est.estimated_cost,
+            estimated_cost_per_serving=_per_serving(est.estimated_cost, dto.servings),
             estimated_cost_priced_count=est.priced_count,
             estimated_cost_total_count=est.total_count,
             estimated_cost_lines=[
@@ -970,6 +995,59 @@ class GetRecipesHandler:
                 for line in est.lines
             ],
         )
+
+    def _hydrate_estimated_cost(self, dtos: list[RecipeDto]) -> list[RecipeDto]:
+        """Owner 2026-09-05 — cost on the cookbook list, in two queries total.
+
+        `estimated_cost` used to be detail-only, deliberately: the per-recipe
+        path is two queries and doing that per card is the N+1 that
+        `test_recipes_query_count` exists to catch. `recipe_cost.estimate_costs_for`
+        already solves that for the FU-451 swap ranker — one offer lookup and
+        one observation lookup for the whole page — so the list can have the
+        number at the same cost as the nutrition rollup beside it.
+
+        **Skipped entirely when money is off**, which is the *default* install
+        (`money_enabled` server-defaults to False). This is a gate on doing the
+        work, not just on rendering it: an install that has opted out of money
+        should not pay two joins per cookbook page to compute dollar figures
+        nothing will draw. R-058 — a money feature refuses server-side rather
+        than shipping numbers the client is expected to hide.
+
+        `estimated_cost_lines` stays detail-only. The breakdown dialog is a
+        detail-page surface and the lines are per-ingredient, so putting them
+        on a 50-card page would balloon the payload for something nothing on
+        the list reads.
+        """
+        import dataclasses
+        from dora_api.features.app_settings.access import money_features_enabled
+        from dora_api.features.recipes.recipe_cost import estimate_costs_for
+
+        if not dtos or not money_features_enabled(self.repository):
+            return dtos
+
+        estimates = estimate_costs_for(self.repository, dtos)
+
+        def _with_cost(dto: RecipeDto) -> RecipeDto:
+            est = estimates.get(dto.recipe_id)
+            if est is None:
+                return dto
+            return dataclasses.replace(
+                dto,
+                estimated_cost=est.estimated_cost,
+                estimated_cost_per_serving=_per_serving(est.estimated_cost, dto.servings),
+                estimated_cost_priced_count=est.priced_count,
+                # NOT `est.total_count`. The batch path's `_cost_one` counts
+                # only *linked* ingredients, while the detail path overrides it
+                # with `len(ingredients)` to preserve its original contract.
+                # Taking the batch number here would make one recipe read
+                # "2 of 3" on its card and "2 of 5" on its own page — the same
+                # coverage ratio disagreeing with itself one click apart.
+                # The detail page's definition wins because it is the one the
+                # user reads the explanation against.
+                estimated_cost_total_count=len(dto.ingredients),
+            )
+
+        return [_with_cost(dto) for dto in dtos]
 
     def _nutrition_mode(self) -> str:
         """The install's nutrition mode. The rollup runs only in complex (off /
@@ -1474,22 +1552,23 @@ class GetRecipesHandler:
             options, RecipeDto.from_entity, field_map=_FIELD_MAP
         )
         import dataclasses
-        _Hydrated = self._hydrate_inference(self._hydrate_nutrition(self._hydrate_unallocated(
-            self._hydrate_has_image(
-                self._hydrate_section_count(
-                    self._hydrate_structured_steps_flag(
-                        self._hydrate_has_step_images(
-                            self._hydrate_expiring_ingredients(
-                                self._hydrate_expiring_count(
-                                    self._hydrate_tags(page.items)
-                                )
-                            )
-                        )
-                    )
-                )
-            )
-        )))
-        return dataclasses.replace(page, items=_Hydrated)
+        # Each step takes the page's DTOs and returns them with one more field
+        # populated; they are independent and run in listed order. This was a
+        # ten-deep nest of calls read inside-out — adding cost to it would have
+        # made it eleven. A flat list is the same work and says what it does.
+        items = page.items
+        items = self._hydrate_tags(items)
+        items = self._hydrate_expiring_count(items)
+        items = self._hydrate_expiring_ingredients(items)
+        items = self._hydrate_has_step_images(items)
+        items = self._hydrate_structured_steps_flag(items)
+        items = self._hydrate_section_count(items)
+        items = self._hydrate_has_image(items)
+        items = self._hydrate_unallocated(items)
+        items = self._hydrate_nutrition(items)
+        items = self._hydrate_inference(items)
+        items = self._hydrate_estimated_cost(items)
+        return dataclasses.replace(page, items=items)
 
     def handle_by_id(self, recipe_id: UUID) -> RecipeDto | None:
         entity = self._base_query().by_id(recipe_id)

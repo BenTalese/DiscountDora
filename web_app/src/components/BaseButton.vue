@@ -142,11 +142,11 @@
         color: var(--text-primary);
         font-size: 0.8125rem;
         padding: 0 var(--space-3);
-        /* Deliberately shorter than the 44px B1/D-004 floor: it matches the
-           36px every other `.dora-btn` runs at, and pinning one variant taller
-           than its siblings would look like a mistake. The app-wide 44px-on-
-           touch gap is logged as its own follow-up rather than fixed by
-           inventing an exception here. */
+        /* Matches the 36px every other `.dora-btn` runs at — pinning one
+           variant taller than its siblings would look like a mistake. The
+           app-wide 44px-on-touch gap this comment used to defer (FU-678) is
+           now closed by the `pointer: coarse` block at the end of this file,
+           which lifts every variant together. */
         min-height: 36px;
     }
     .dora-btn--subtle:hover {
@@ -211,6 +211,53 @@
         .dora-btn--attention::before {
             animation: none;
             background-color: color-mix(in srgb, var(--brand-accent) 22%, transparent);
+        }
+    }
+
+    /* ── The 44px touch floor (D-004 / B1) — closes FU-678 + FU-641 ──────
+       Owner 2026-09-05, reporting the stock row: *"I think the row buttons
+       need to be slightly bigger on mobile"*, and of the level picker,
+       *"Good for desktop, bit thicker/bigger for mobile would be better"*.
+
+       That second sentence is the whole design of this rule. FU-678 and
+       FU-641 both diagnosed this correctly in August and both deferred it for
+       the same reason: raising `.dora-btn` to 44px "re-flows every toolbar,
+       table row and card action in the app". True — if you raise it
+       everywhere. But D-004 was never a rule about buttons; it is a rule about
+       *fingers* ("≥ 44×44px effective target on any surface a finger uses"),
+       and B1 says so out loud with its "36px desktop-dense chrome only"
+       allowance. So the correct scope was always the pointer, not the app.
+
+       Under `pointer: coarse` a phone and a tablet get the floor; a mouse
+       keeps the 36px toolbars the desktop layouts were built around, and
+       nothing re-flows on the surface the deferral was worried about. That is
+       also exactly what the owner asked for, unprompted, in the same breath.
+
+       Consistent with the existing convention (`ImageSourcePicker`,
+       `NutritionFoodPicker`, both settings chips) rather than a width
+       breakpoint — a desktop window dragged to 375px is still a mouse, and
+       mixing the two query families is what produced the 375px overlap
+       recorded in `ShoppingListPlanRow`.
+
+       NOTE — this does not reach call sites that pin their own size with
+       higher specificity (`.some-row .dora-btn--icon { width: 30px }`). Those
+       have to be fixed where they are written; `StockItemRow` and `RecipeRow`
+       were both swept in this batch. Any future one is a new violation, not a
+       gap in this rule. */
+    @media (pointer: coarse) {
+        .dora-btn {
+            min-height: 44px;
+        }
+        .dora-btn--icon,
+        .dora-btn--danger-icon,
+        .dora-btn--filled-icon {
+            min-height: 44px;
+            min-width: 44px;
+        }
+        /* The `subtle` variant rides along, keeping it level with its
+           siblings — the reason it was pinned to 36px in the first place. */
+        .dora-btn--subtle {
+            min-height: 44px;
         }
     }
 </style>

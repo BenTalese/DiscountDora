@@ -261,6 +261,18 @@ class FinishShoppingListHandler:
         # save_changes transaction below.
         sync_line_observations(self.repository, ticked_lines)
 
+        # FU-883 — freeze each line's display name as the list becomes a
+        # receipt, so a later stock-item/product delete leaves a readable
+        # historic line instead of a nameless row (which is why those FKs
+        # used to CASCADE the line away entirely). Every line on the list,
+        # not just the ticked ones: unticked lines stay on a done list.
+        from dora_api.features.shopping_lists._line_retention import \
+            snapshot_line_display_names
+        all_lines = self.repository.get(ShoppingListLine).all(
+            EntityField(ShoppingListLine, "shopping_list_id").eq(shopping_list_id)
+        )
+        snapshot_line_display_names(self.repository, all_lines)
+
         lst.status = SHOPPING_LIST_STATUS_DONE
         lst.completed_at = datetime.now(timezone.utc)
 

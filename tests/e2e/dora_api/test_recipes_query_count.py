@@ -13,6 +13,7 @@ SELECTs (a few extra IN-list shards), but must not add ≈N.
 import requests
 
 from tests.e2e.dora_api._query_counter import SelectCounter
+from tests.support import set_money_enabled
 
 
 BASE = "http://localhost:5170/api"
@@ -78,3 +79,50 @@ def test__get_recipes__select_count_does_not_scale_with_recipe_count(api):
     finally:
         for recipe_id in created_ids:
             requests.delete(f"{RECIPES}/{recipe_id}")
+
+
+def test__get_recipes__cost_hydration_does_not_scale_with_recipe_count(api):
+    """Same guard, with money ON — the cost hydrator only runs then.
+
+    Owner 2026-09-05 put `estimated_cost` on the cookbook list, where it had
+    deliberately never been: the per-recipe pricing path is two queries, so
+    costing a 50-card page one recipe at a time is a 100-query page. The list
+    goes through `recipe_cost.estimate_costs_for`, which is two queries for the
+    *whole* page regardless of size.
+
+    The test above cannot catch a regression here, because `money_enabled`
+    server-defaults to False and the hydrator returns early — so without this
+    case the entire new code path is unguarded. If someone swaps the batch call
+    for a loop over `estimate_cost_for_ingredients`, this is what fails.
+    """
+    original = requests.get(f"{BASE}/app-settings").json()["money_enabled"]
+    set_money_enabled(True)
+
+    created_ids: list[str] = []
+    try:
+        baseline_selects, baseline_items = _count_list_selects()
+
+        for i in range(EXTRA_RECIPES):
+            response = requests.post(RECIPES, json={
+                "name": f"_cost_probe_{i}",
+                "ingredients": [],
+            })
+            assert response.status_code in (200, 201), response.text
+            created_ids.append(response.json()["recipe_id"])
+
+        loaded_selects, _ = _count_list_selects()
+
+        delta = loaded_selects - baseline_selects
+        budget = EXTRA_RECIPES * PER_RECIPE_BUDGET
+        assert delta < budget, (
+            f"GET /recipes looks N+1 with money on: adding {EXTRA_RECIPES} "
+            f"recipes grew the SELECT count by {delta} (baseline "
+            f"{baseline_selects} → {loaded_selects}, budget {budget}). "
+            f"Check `_hydrate_estimated_cost` in "
+            f"dora_api/features/recipes/get_recipes.py — it must call "
+            f"`estimate_costs_for` once for the page, not once per recipe."
+        )
+    finally:
+        for recipe_id in created_ids:
+            requests.delete(f"{RECIPES}/{recipe_id}")
+        set_money_enabled(original)

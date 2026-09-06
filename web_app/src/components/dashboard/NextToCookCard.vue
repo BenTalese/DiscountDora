@@ -9,14 +9,15 @@
             <li
                 v-for="entry in entries"
                 :key="`${entry.recipe_id}-${entry.scheduled_for}-${entry.slot}`"
-                class="dora-cook-row dora-cook-row--with-badge"
+                class="dora-cook-row dora-cook-row--meal"
+                :class="{ 'dora-cook-row--with-badge': badgeLabel(entry) !== null }"
             >
                 <router-link class="dora-cook-name" :to="`/cookbook/${entry.recipe_id}`">
                     {{ entry.recipe_name }}
                 </router-link>
                 <span class="dora-cook-meta">
                     {{ whenLabel(entry) }}
-                    <span v-if="entry.servings"> · serves {{ entry.servings }}</span>
+                    <span v-if="serves(entry)"> · serves {{ serves(entry) }}</span>
                     <!-- Owner 2026-09-04 — the pool state, in the card's own
                          words. Before this the card offered "Cook" on a meal
                          already cooked and frozen, because it had no idea the
@@ -28,15 +29,16 @@
                     </span>
                 </span>
                 <q-badge
+                    v-if="badgeLabel(entry) !== null"
                     :color="badgeColour(entry)"
-                    :label="badgeLabel(entry)"
+                    :label="badgeLabel(entry) ?? undefined"
                     class="dora-cook-badge"
                 />
                 <BaseButton
                     variant="ghost"
                     dense
                     size="sm"
-                    :icon="ICONS.restaurant"
+                    :icon="ICONS.chef_hat"
                     label="Cook"
                     @click="emit('cook', entry)"
                 />
@@ -60,8 +62,8 @@
 
 <script lang="ts" setup>
     /**
-     * The next few meals worth cooking, each flagged ready / missing-N
-     * (feedback L272, FU-298).
+     * The next few meals worth cooking, each flagged missing-N when it isn't
+     * cookable (feedback L272, FU-298).
      *
      * **Which meals those are depends on how the household cooks** (owner,
      * 2026-09-04). The page selects; this renders. In a fresh household plan
@@ -79,8 +81,10 @@
      * `REPORTS_PAGE_REVIEW`-adjacent note: of the four surfaces that render the
      * meal plan, this is the one FU-818 kept, because it is the only one that
      * answers a *question* — "what do I cook, and can I?" — rather than
-     * restating the calendar. The badge is what makes it answer that, so the
-     * tri-state below matters.
+     * restating the calendar. The badge answers the second half, and since
+     * 2026-09-05 only when the answer is "not yet": a listed meal is one
+     * somebody has to cook, so "Ready" was the row's own premise printed back
+     * at it, in the column a phone could least spare.
      *
      * Extracted from `DashboardPage.vue` (FU-829). The row anatomy comes from
      * `css/dashboardCards.scss`, shared with Restock radar.
@@ -124,6 +128,19 @@
         return { icon: ICONS.mealsPrepared, label: 'already cooked' };
     }
 
+    /**
+     * How many this cook is for — the plan's number, never the recipe's default.
+     *
+     * Owner 2026-09-05. `cook_batch_total_servings` first, matching the
+     * planner's chip ("Cook — serves 6" on a linked batch is the whole batch's
+     * yield, not one day's share) and matching what `cookPlannedMeal` opens
+     * cook mode at, so the row can't promise a number the next screen
+     * contradicts. Null for a standalone meal, which is most of them.
+     */
+    function serves(entry: UpcomingMealPlanEntry): number {
+        return entry.cook_batch_total_servings ?? entry.servings;
+    }
+
     function whenLabel(entry: UpcomingMealPlanEntry): string {
         return `${formatRelativeDay(entry.scheduled_for)} ${entry.slot.toLowerCase()}`;
     }
@@ -136,17 +153,23 @@
      * second is actionable — link them and the answer appears — so it gets its
      * own label rather than the ambiguous "No ingredients".
      */
-    function badgeLabel(entry: UpcomingMealPlanEntry): string {
+    function badgeLabel(entry: UpcomingMealPlanEntry): string | null {
         if (entry.unlinked_ingredient_count > 0) {
             return `${entry.unlinked_ingredient_count} to link`;
         }
         if (entry.missing_count === null) return 'No ingredients';
-        if (entry.missing_count === 0) return 'Ready';
+        // Owner 2026-09-05 — no "Ready" badge. A row on this card is already a
+        // meal somebody has to cook, so the cookable case is the expected one
+        // and printing it costs a phone the horizontal space the name and the
+        // Cook button need. The badge survives only for the states that change
+        // what you do next: shop for N, or link N.
+        if (entry.missing_count === 0) return null;
         return `Missing ${entry.missing_count}`;
     }
 
     function badgeColour(entry: UpcomingMealPlanEntry): string {
-        if (entry.missing_count === 0) return 'positive';
+        // No `positive` arm — a cookable meal renders no badge at all now, so
+        // the only colours left are "unknown" and "work to do".
         // `neutral-muted` (a real registered colour, see colours.scss) rather
         // than Quasar's `grey-6`, which R-002 forbids: "no signal yet / not
         // applicable" must be theme-aware, and D-001 reserves grey for exactly

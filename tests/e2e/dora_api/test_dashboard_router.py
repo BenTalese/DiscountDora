@@ -230,6 +230,66 @@ def test__dashboard_summary__UpcomingEntryWithUnlinkedIngredient__ReportsCountAn
     assert _Entry["unlinked_ingredient_count"] == 1
     assert _Entry["missing_count"] is None
 
+
+def test__dashboard_summary__UpcomingEntryInCookBatch__CarriesWholeBatchYield(api):
+    # Owner 2026-09-05 — the "Next to cook" card prints this figure and opens
+    # cook mode at it, the same as the planner's chips. The summing happens
+    # over the whole batch, so a batch that starts before the dashboard's
+    # window or runs past it still reports its true yield; the window is what
+    # this pins, since folding only the days on screen is the easy wrong answer.
+    _Today = _household_today()
+    _Recipe = _make_recipe("Dashboard Batch Upcoming")
+    _Slot = requests.get(f"{BASE}/meal-slots").json()[0]["name"]
+
+    # Days 0, 1 and 8 — the last one past the summary's seven-day window. (The
+    # symmetric case, a member *before* today, can't be built: the write path
+    # rejects entries scheduled in the past.)
+    _CreateResponse = requests.post(MEAL_PLANS, json={
+        "start_date": _Today.isoformat(),
+        "entries": [{
+            "recipe_id": _Recipe["recipe_id"],
+            "scheduled_for": (_Today + timedelta(days=d)).isoformat(),
+            "servings": 2,
+            "slot": _Slot,
+            "cook_key": "dash-batch",
+        } for d in (0, 1, 8)],
+    })
+    assert _CreateResponse.status_code == 201, _CreateResponse.text
+
+    _Entry = next(
+        e for e in _summary()["meal_plan"]["upcoming_entries"]
+        if e["recipe_id"] == _Recipe["recipe_id"]
+    )
+    assert _Entry["servings"] == 2, "the entry's own share is untouched"
+    assert _Entry["cook_batch_total_servings"] == 6, "3 linked days x 2 servings"
+
+
+def test__dashboard_summary__StandaloneUpcomingEntry__HasNoBatchYield(api):
+    # The common case, and the reason the SPA's `?? entry.servings` fallback
+    # exists: a meal that isn't linked to anything reports null, not its own
+    # servings dressed up as a batch.
+    _Today = _household_today()
+    _Recipe = _make_recipe("Dashboard Standalone Upcoming")
+    _Slot = requests.get(f"{BASE}/meal-slots").json()[0]["name"]
+
+    _CreateResponse = requests.post(MEAL_PLANS, json={
+        "start_date": _Today.isoformat(),
+        "entries": [{
+            "recipe_id": _Recipe["recipe_id"],
+            "scheduled_for": _Today.isoformat(),
+            "servings": 4,
+            "slot": _Slot,
+        }],
+    })
+    assert _CreateResponse.status_code == 201, _CreateResponse.text
+
+    _Entry = next(
+        e for e in _summary()["meal_plan"]["upcoming_entries"]
+        if e["recipe_id"] == _Recipe["recipe_id"]
+    )
+    assert _Entry["servings"] == 4
+    assert _Entry["cook_batch_total_servings"] is None
+
 #endregion meal-plan card
 
 #region ---------------- dora score ----------------

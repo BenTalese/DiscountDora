@@ -143,7 +143,14 @@
         <div class="mobile-focus__day-header">
             <div>
                 <div class="text-h6 q-mb-none">{{ focusedDayLongLabel }}</div>
-                <div class="text-caption dora-text-muted">{{ focusedDayHumanCount }}</div>
+                <!-- Owner 2026-09-05 — the day's cost joins the day's count.
+                     The desktop week card carries it in its own header cell;
+                     the phone has one caption line, so it rides there. Money-
+                     gated install-wide. -->
+                <div class="text-caption dora-text-muted">
+                    {{ focusedDayHumanCount }}<template v-if="focusedDayCostLabel">
+                        · {{ focusedDayCostLabel }}</template>
+                </div>
             </div>
             <q-badge
                 v-if="focusedDayIso === currentDayIso"
@@ -153,36 +160,70 @@
             />
         </div>
 
-        <!-- Focused-day entries (rich cards, slot-as-tag — same content
-            model as Direction B). -->
+        <!-- Focused-day entries, grouped by meal slot. Owner feedback
+             2026-09-05, two halves of one problem: *"no way to show all slots
+             for a day on mobile"* and *"a chip on the meal row is not very
+             obvious or easy to read for groupings of meals (based on slot)"* —
+             plus *"mobile does not respect the order of the meal slots, it just
+             appends."*
+
+             All three came from the same shape: the phone rendered ONE flat
+             list of the day's entries in the order the server returned them,
+             with each card's slot printed as a small tag. So a slot with
+             nothing in it did not exist here (the desktop week card renders
+             every slot as a row), the day's meals read in save order rather
+             than breakfast→dinner, and the only thing carrying the slot was a
+             0.68rem uppercase chip.
+
+             A heading per slot answers all three at once, and it is the same
+             model the desktop day card uses (R-001 in spirit — the phone stops
+             being a different arrangement of the same day). The order is
+             `slotNames`, which is the household's own vocabulary order; the
+             card's slot tag is gone, because the heading above it says it. -->
         <div class="mobile-focus__entries">
-            <MealPlanRichCard
-                v-for="entry in entriesFor(focusedDayIso)"
-                :key="entry.meal_plan_entry_id"
-                :entry="entry"
-                :shortfall="entry.needs_cooking"
-                :highlight="false"
-                @view="emit('entryView', entry.recipe_id)"
-                @cook="emit('entryCook', entry)"
-                @remove="emit('entryRemove', entry)"
-                @adjust="(d: number) => emit('entryAdjust', entry, d)"
-                @link="emit('entryLink', entry)"
-                @unlink="emit('entryUnlink', entry)"
-                @lighter="emit('entryLighter', entry)"
-                @fresh="emit('entryFresh', entry)"
-            />
-            <button
-                v-if="!isPastDay(focusedDayIso)"
-                type="button"
-                class="mobile-focus__add"
-                :class="{ 'mobile-focus__add--empty': !entriesFor(focusedDayIso).length }"
-                @click="onAddTapped"
+            <section
+                v-for="group in slotGroups"
+                :key="group.slot"
+                class="mobile-focus__slot"
             >
-                <q-icon :name="ICONS.add" size="16px" class="q-mr-xs" />
-                <span>{{ entriesFor(focusedDayIso).length ? 'Add a meal' : `Plan ${focusedDayShortLabel}` }}</span>
-            </button>
+                <h3 class="mobile-focus__slot-head">
+                    <span class="mobile-focus__slot-name">{{ group.slot }}</span>
+                    <span v-if="group.entries.length" class="mobile-focus__slot-count">
+                        {{ group.entries.length }}
+                    </span>
+                </h3>
+                <MealPlanRichCard
+                    v-for="{ key, entry } in group.entries"
+                    :key="key"
+                    :entry="entry"
+                    :shortfall="entry.needs_cooking"
+                    :highlight="false"
+                    @view="emit('entryView', entry.recipe_id)"
+                    @cook="emit('entryCook', entry)"
+                    @remove="emit('entryRemove', entry)"
+                    @adjust="(d: number) => emit('entryAdjust', entry, d)"
+                    @link="emit('entryLink', entry)"
+                    @unlink="emit('entryUnlink', entry)"
+                    @lighter="emit('entryLighter', entry)"
+                    @fresh="emit('entryFresh', entry)"
+                />
+                <!-- The add lands straight in this slot. The "Which slot?"
+                     bottom sheet the old single button opened is gone with it:
+                     asking which slot is only necessary when the slots aren't
+                     on screen, and now they always are. -->
+                <button
+                    v-if="!isPastDay(focusedDayIso) && group.addable"
+                    type="button"
+                    class="mobile-focus__add"
+                    :aria-label="`Add a meal to ${group.slot}`"
+                    @click="emit('addToSlot', focusedDayIso, group.slot)"
+                >
+                    <q-icon :name="ICONS.add" size="16px" class="q-mr-xs" />
+                    <span>Add</span>
+                </button>
+            </section>
             <div
-                v-else-if="!entriesFor(focusedDayIso).length"
+                v-if="isPastDay(focusedDayIso) && !entriesFor(focusedDayIso).length"
                 class="dora-text-muted text-center q-py-md text-caption"
             >
                 Past day — read-only.
@@ -203,33 +244,6 @@
              it owns the planner's data — so see `MealPlansOverview.vue`'s
              mobile branch. -->
 
-        <!-- Slot picker bottom-sheet — opened from the "Add a meal" tap.
-            Picking a slot focuses that day+slot then opens the recipe sheet. -->
-        <q-dialog
-            v-model="slotSheetOpen"
-            position="bottom"
-            transition-show="slide-up"
-            transition-hide="slide-down"
-        >
-            <q-card class="slot-sheet">
-                <q-card-section class="row items-center q-py-sm">
-                    <div class="text-subtitle1">Which slot?</div>
-                    <q-space />
-                    <BaseButton variant="icon" :icon="ICONS.close" @click="slotSheetOpen = false" />
-                </q-card-section>
-                <q-separator />
-                <q-list separator>
-                    <q-item
-                        v-for="slot in slotNames"
-                        :key="slot"
-                        clickable v-close-popup
-                        @click="onSlotChosen(slot)"
-                    >
-                        <q-item-section>{{ slot }}</q-item-section>
-                    </q-item>
-                </q-list>
-            </q-card>
-        </q-dialog>
     </div>
 </template>
 
@@ -239,9 +253,12 @@
     import MealPlanDayPips from 'src/components/MealPlanDayPips.vue';
     import MealPlanRichCard from 'src/components/MealPlanRichCard.vue';
     import { ICONS } from 'src/style/icons';
-    import type { MealPlanEntry } from 'src/models/mealPlan';
+    import { formatMoney } from 'src/composables/useMoney';
+    import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
+    import type { MealPlanDayCost, MealPlanEntry } from 'src/models/mealPlan';
     import type { WeekDay } from 'src/composables/useMealPlanner';
     import { dayPips } from 'src/helpers/mealPlanDayPips';
+    import { keyedEntries } from 'src/helpers/mealPlanEntryKey';
     import { localTodayIso } from 'src/helpers/weekDates';
     import { computed, ref, watch } from 'vue';
 
@@ -249,6 +266,9 @@
         weekDays: WeekDay[];
         slotNames: readonly string[];
         entriesFor: (dayIso: string) => MealPlanEntry[];
+        /** Owner 2026-09-05 — that day's server-summed cost, looked up by the
+         *  page the same way `entriesFor` is. */
+        dayCost: (dayIso: string) => MealPlanDayCost | null;
         isPastDay: (dayIso: string) => boolean;
         currentDayIso: string;
         weekRangeLabel: string;
@@ -258,6 +278,8 @@
          *  by the page). */
         canSaveCurrentWeek: boolean;
     }>();
+
+    const { moneyEnabled } = useMoneyEnabled();
 
     const emit = defineEmits<{
         (e: 'entryView', recipeId: string): void;
@@ -325,13 +347,23 @@
             month: 'long',
         });
     });
-    const focusedDayShortLabel = computed(
-        () => props.weekDays.find((d) => d.iso === focusedDayIso.value)?.label ?? '',
-    );
     const focusedDayHumanCount = computed(() => {
         const n = props.entriesFor(focusedDayIso.value).length;
         if (n === 0) return 'No meals planned';
         return `${n} meal${n === 1 ? '' : 's'} planned`;
+    });
+
+    /** The day's estimated cost, with its coverage when some meals couldn't be
+     *  priced — a day costed from one of three meals must not read as a cheap
+     *  day. Empty string when there is nothing honest to say. */
+    const focusedDayCostLabel = computed(() => {
+        if (!moneyEnabled.value) return '';
+        const cost = props.dayCost(focusedDayIso.value);
+        if (!cost || cost.estimated_cost === null) return '';
+        const coverage = cost.counted_meals < cost.total_meals
+            ? ` (${cost.counted_meals}/${cost.total_meals})`
+            : '';
+        return `${formatMoney(cost.estimated_cost)}${coverage}`;
     });
 
     function dayOfMonth(iso: string): number {
@@ -345,15 +377,39 @@
     // `MealPlanShoppingSummary`'s own business now that the page renders those
     // two directly.
 
-    // ── Add-flow: slot picker → emit('addToSlot') (parent opens the recipe sheet) ──
-    const slotSheetOpen = ref(false);
-    function onAddTapped() {
-        slotSheetOpen.value = true;
-    }
-    function onSlotChosen(slot: string) {
-        emit('addToSlot', focusedDayIso.value, slot);
-        slotSheetOpen.value = false;
-    }
+    /**
+     * The focused day as one section per meal slot.
+     *
+     * Every household slot appears, in the household's own order, whether or
+     * not the day has anything in it — that is the "show all slots" half of the
+     * owner's report, and it is also what makes the order deterministic
+     * (`entriesFor` returns the server's order, which is save order).
+     *
+     * A slot the vocabulary no longer holds still shows if the day has entries
+     * in it: deleting a slot deliberately doesn't cascade (see
+     * `update_meal_plan.py`), so those meals are real and hiding them would
+     * lose them. They can't be *added* to, though — the picker only offers live
+     * slots — so those sections carry no Add.
+     */
+    const slotGroups = computed(() => {
+        const entries = props.entriesFor(focusedDayIso.value);
+        const known = new Set(props.slotNames);
+        const legacy = [...new Set(
+            entries.map((e) => e.slot).filter((slot) => !known.has(slot)),
+        )];
+        const past = props.isPastDay(focusedDayIso.value);
+        return [
+            ...props.slotNames.map((slot) => ({ slot, addable: true })),
+            ...legacy.map((slot) => ({ slot, addable: false })),
+        ]
+            .map((group) => ({
+                ...group,
+                entries: keyedEntries(entries.filter((e) => e.slot === group.slot)),
+            }))
+            // A past day is read-only, so an empty slot on one is a heading
+            // over nothing you can do anything about.
+            .filter((group) => !past || group.entries.length > 0);
+    });
 
     function goPrevWeek() {
         emit('goPrevWeek');
@@ -443,7 +499,34 @@
     .mobile-focus__entries {
         display: flex;
         flex-direction: column;
-        gap: 8px;
+        gap: 14px;
+    }
+    .mobile-focus__slot {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+    /* The heading is what the card's slot tag used to be, promoted: the owner
+       couldn't read a 0.68rem uppercase chip as a grouping, and a grouping is
+       what it was doing. Same eyebrow language as the rest of the app — small,
+       secondary ink, letter-spaced — but on its own line where it can be
+       scanned down the day. */
+    .mobile-focus__slot-head {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin: 0;
+        padding: 0 2px;
+        font-size: 0.72rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--text-secondary);
+    }
+    .mobile-focus__slot-count {
+        font-weight: 600;
+        color: var(--text-muted);
+        font-variant-numeric: tabular-nums;
     }
     .mobile-focus__add {
         display: inline-flex;
@@ -466,16 +549,5 @@
         border-color: var(--q-primary);
         background: var(--surface-sunken);
         outline: none;
-    }
-    .mobile-focus__add--empty {
-        padding: 14px 16px;
-        font-size: 0.9rem;
-    }
-    .slot-sheet {
-        width: 100vw;
-        max-width: 100vw;
-        border-top-left-radius: 16px;
-        border-top-right-radius: 16px;
-        margin: 0 !important;
     }
 </style>

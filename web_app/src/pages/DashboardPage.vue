@@ -21,22 +21,37 @@
             <q-avatar size="72px" square class="dora-hero-mascot">
                 <img src="../assets/logo-mascot.png" alt="Dashy Dora" />
             </q-avatar>
+            <!-- Owner 2026-09-05 — greeting + message sit beside the mascot at
+                 every width (the old flex hero wrapped the whole text column
+                 under it on mobile), and the hint drops to its own row that
+                 stops at the actions column, so it wraps before the Cards
+                 button rather than running under it. That's a grid, not a
+                 flex row: the two claims are "same row as the mascot" and
+                 "spans only the first two columns", which flex can't state. -->
             <div class="dora-hero-text">
                 <div class="dora-hero-greeting">
                     {{ greeting }}<span v-if="firstName">, {{ firstName }}</span>
                 </div>
                 <div class="dora-hero-line">{{ welcomeMessage }}</div>
-                <div class="dora-hero-hint">{{ welcomeHint }}</div>
             </div>
-
-            <q-space />
 
             <div class="dora-hero-actions">
                 <!-- D3 / feedback C16: the manual refresh button was removed —
                      `onMounted(loadAll)` already refreshes on every navigation
                      to the dashboard, so the button earned nothing. `loadAll`
                      itself stays (alert actions re-fetch through it). -->
-                <BaseButton variant="ghost" dense :icon="ICONS.tune" label="Cards">
+                <!-- Icon-only below `sm`, the same rule Settings' sign-out
+                     follows — the label is what pushed the greeting's line
+                     into an early wrap on a phone. D-005: an icon-only
+                     control keeps its accessible name and a tooltip. -->
+                <BaseButton
+                    variant="ghost"
+                    dense
+                    :icon="ICONS.tune"
+                    :label="$q.screen.lt.sm ? undefined : 'Cards'"
+                    aria-label="Cards"
+                >
+                    <q-tooltip v-if="$q.screen.lt.sm">Show &amp; order cards</q-tooltip>
                     <q-menu anchor="bottom right" self="top right" transition-show="jump-down" transition-hide="jump-up">
                         <q-list dense style="min-width: 300px">
                             <q-item-label header>Show & order cards</q-item-label>
@@ -103,6 +118,8 @@
                     </q-menu>
                 </BaseButton>
             </div>
+
+            <div class="dora-hero-hint">{{ welcomeHint }}</div>
         </section>
 
         <!-- The Phase 5 quick-action bar (Add item · Add to list · Log price)
@@ -1068,13 +1085,14 @@
      * the other place a planned meal opens cook mode, and opening it at the
      * household headcount when the plan says six is the same surprise.
      *
-     * The dashboard's payload carries the entry's own servings but not a
-     * batch's total yield, so a linked cook opens at this day's share. Living
-     * with that beats teaching the summary endpoint the batch view for one
-     * button — the pill is adjustable on the page it lands on.
+     * Owner 2026-09-05 — and it opens at the *batch's* yield where there is
+     * one, which is the half this was missing: the summary endpoint now
+     * carries `cook_batch_total_servings`, so the expression below is the same
+     * one `useMealPlanner.cookRecipe` evaluates. Two surfaces, one figure.
      */
     function cookPlannedMeal(entry: UpcomingMealPlanEntry) {
-        const query = entry.servings > 0 ? `?for=${entry.servings}` : '';
+        const serves = entry.cook_batch_total_servings ?? entry.servings;
+        const query = serves > 0 ? `?for=${serves}` : '';
         goTo(`/cookbook/${entry.recipe_id}/cook${query}`);
     }
 
@@ -1465,10 +1483,17 @@
     }
 
     /* ───── Hero ─────────────────────────────────────────────────────── */
+    /* Three columns — mascot · text · actions — and two rows, the second one
+       stopping short of the actions column so the hint wraps before the Cards
+       button instead of sliding under it (owner, 2026-09-05). Identical at
+       every width: the greeting stays beside the mascot on a phone too, which
+       is what the old `flex-wrap` mobile rule broke. */
     .dora-hero {
-        display: flex;
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto;
         align-items: center;
-        gap: var(--space-4);
+        column-gap: var(--space-4);
+        row-gap: var(--space-2);
         padding: var(--space-6);
         margin-bottom: var(--space-6);
         background: var(--surface-component);
@@ -1494,9 +1519,10 @@
            off centre again. A token here would be wrong for the same reason a
            token is wrong inside an SVG viewBox — the number isn't spacing. */
         padding: 2px;
-        flex-shrink: 0;
+        grid-area: 1 / 1;
     }
     .dora-hero-text {
+        grid-area: 1 / 2;
         min-width: 0;
     }
     /* Owner 2026-09-04 — the greeting is brand voice, not a heading: one token
@@ -1529,13 +1555,16 @@
         font-size: calc(var(--font-size-md) * 1rem);
         line-height: 1.35;
     }
-    /* The hint that used to be `.dora-welcome-hint` in the merged band. */
+    /* The hint that used to be `.dora-welcome-hint` in the merged band. Its own
+       row now, left-aligned to the hero's edge (column 1, under the mascot)
+       and ending at the actions column. */
     .dora-hero-hint {
-        margin-top: var(--space-1);
+        grid-area: 2 / 1 / 3 / 3;
         color: var(--text-secondary);
         font-size: calc(var(--font-size-sm) * 1rem);
     }
     .dora-hero-actions {
+        grid-area: 1 / 3;
         display: flex;
         align-items: center;
         gap: var(--space-1);
@@ -1659,15 +1688,25 @@
         }
     }
 
-    /* Stack the hero on narrow screens so the buttons don't push the
-       greeting off-canvas. */
     @media (max-width: 600px) {
+        /* The hero's old mobile rule wrapped the actions onto their own
+           full-width row, which also pushed the text column under the mascot.
+           The grid keeps all three side by side; what buys back the width is
+           the Cards button going icon-only below `sm`, not a reflow. Only the
+           column gap tightens. */
         .dora-hero {
-            flex-wrap: wrap;
+            padding: var(--space-4);
+            column-gap: var(--space-3);
         }
-        .dora-hero-actions {
-            flex-basis: 100%;
-            justify-content: flex-end;
+        /* Keeping the greeting beside the mascot at 375px only works if the
+           mascot gives some width back — at 72px the text column is ~160px and
+           "Good afternoon, Ben" wraps to three lines. 56px is the same square,
+           read smaller; the 2px optical padding above is unaffected because it
+           was tuned to the artwork's offset, not to the box. */
+        .dora-hero-mascot {
+            width: 56px;
+            height: 56px;
+            font-size: 56px;
         }
         .dora-dash {
             padding: var(--space-4) var(--space-4) calc(var(--space-12) * 2);

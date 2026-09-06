@@ -9,7 +9,7 @@ import { useStockStatus } from 'src/composables/useStockStatus';
 import { DEFAULT_MEAL_SLOTS } from 'src/helpers/recipeVocabulary';
 import { isoDate as toIso, localTodayIso, mondayOf, shiftDays } from 'src/helpers/weekDates';
 import type {
-    MealPlan, MealPlanDayNutrition, MealPlanEntry, MealPlanIngredient,
+    MealPlan, MealPlanDayCost, MealPlanDayNutrition, MealPlanEntry, MealPlanIngredient,
     MealPlanSuggestion, UnlinkedIngredient,
 } from 'src/models/mealPlan';
 import type { AddToListConfirm } from 'src/components/shoppingList/addToListTypes';
@@ -160,6 +160,14 @@ export function useMealPlanner() {
     // aggregate belongs to the server).
     function dayNutrition(dayIso: string): MealPlanDayNutrition | null {
         return (focusedPlan.value?.day_nutrition ?? []).find(
+            (d) => toIso(d.scheduled_for) === dayIso,
+        ) ?? null;
+    }
+
+    // Owner 2026-09-05 — the money twin of the line above, and the same
+    // division of labour: the server sums the day, this looks it up by date.
+    function dayCost(dayIso: string): MealPlanDayCost | null {
+        return (focusedPlan.value?.day_cost ?? []).find(
             (d) => toIso(d.scheduled_for) === dayIso,
         ) ?? null;
     }
@@ -1120,6 +1128,7 @@ export function useMealPlanner() {
         focusedPlan,
         weekDays,
         dayNutrition,
+        dayCost,
         weekRangeLabel,
         weekRelativeLabel,
         suggestions,

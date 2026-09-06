@@ -44,6 +44,33 @@
                 <q-icon :name="ICONS.shopping_cart" size="14px" class="q-mr-xs" />
                 {{ statusLabel }}
             </span>
+            <!-- Owner 2026-09-05 — *"can't see much in the way of budget and
+                 money… no display of estimated weekly cost for meals."* This is
+                 the week's, summed server-side across every planned meal at the
+                 servings it's planned for. Gated on the install-wide money
+                 opt-in: with money off the server sends no figure at all, so
+                 there is nothing to hide-when-empty (R-029) — it simply isn't
+                 there. Coverage rides along when some meals couldn't be priced,
+                 the same rule the kcal cell follows: a week costed from half
+                 its meals must not look like a cheap week. -->
+            <span
+                v-if="moneyEnabled && estimatedCost !== null"
+                class="week-status__cell"
+            >
+                <q-icon :name="ICONS.payments" size="14px" class="q-mr-xs" />
+                {{ formatMoney(estimatedCost) }}
+                <span v-if="costCountedMeals < costTotalMeals" class="q-ml-xs dora-text-muted">
+                    ({{ costCountedMeals }}/{{ costTotalMeals }})
+                </span>
+                <InfoTip label="Estimated cost">
+                    What this week's meals would cost to make, at the servings
+                    they're planned for — the value of the ingredients they use,
+                    whether or not you already have them.<template
+                        v-if="costCountedMeals < costTotalMeals"
+                    > Counting {{ costCountedMeals }} of {{ costTotalMeals }}
+                    meals; the rest have nothing priced yet.</template>
+                </InfoTip>
+            </span>
             <!-- Owner feedback 2026-09-03 - *"X to buy, X already on list is
                  duplicated information"*. It was: the right rail now says both
                  halves per stock level ("2 of 3 to buy"), so repeating the
@@ -60,7 +87,9 @@
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
     import InfoTip from 'src/components/help/InfoTip.vue';
+    import { formatMoney } from 'src/composables/useMoney';
     import { useBatchEnabled } from 'src/composables/useBatchEnabled';
+    import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
     import { computed } from 'vue';
 
     const props = defineProps<{
@@ -75,9 +104,15 @@
         /** Items the week needs that are already sitting on an open list. */
         onListCount: number;
         cookByLabel: string;
+        /** Owner 2026-09-05 — the week's estimated cost, summed server-side.
+         *  Null when money features are off or nothing could be priced. */
+        estimatedCost: number | null;
+        costCountedMeals: number;
+        costTotalMeals: number;
     }>();
 
     const { batchEnabled } = useBatchEnabled();
+    const { moneyEnabled } = useMoneyEnabled();
 
     // Three states, because "fully stocked" and "nothing left to do" are
     // different facts and saying the first when the second is true would be a

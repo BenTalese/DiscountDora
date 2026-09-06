@@ -88,6 +88,27 @@
                     aria-label="Filter by difficulty"
                 />
             </div>
+
+            <!-- Owner 2026-09-05 — *"no way to filter recipes on estimated
+                 cost."* This is a ranking rather than a filter, deliberately: a
+                 cost *filter* needs bands, and a band boundary ("under $3 a
+                 serving") is a domain constant this client doesn't own and
+                 shouldn't invent. Cheapest-first answers the same question —
+                 "what can I plan that's cheap?" — out of figures the server
+                 already ships, and it is the same ordering the cookbook's
+                 Cost-per-serving sort produces (one comparator, R-001).
+
+                 Two options, so `BaseSegmented` is the right primitive (B2a
+                 sanctions it at 2-4). Money-gated install-wide: with money off
+                 the server sends no cost at all, so the control would sort
+                 every recipe by null. -->
+            <BaseSegmented
+                v-if="moneyEnabled"
+                v-model="sortBy"
+                class="q-mt-sm"
+                :options="sortOptions"
+                aria-label="Order recipes"
+            />
         </q-card-section>
         <q-separator />
 
@@ -115,6 +136,7 @@
                             :mode="rowMode"
                             :target-slot="focusedTarget?.slot"
                             :reason-text="reasonFor(item.recipe_id)"
+                            :cost-text="costTextFor(item)"
                             :batch-enabled="batchEnabled && !isMultiSelect"
                             @pick="onRowPick"
                             @pool-adjust="(id, delta) => emit('paletteMealAdjust', id, delta)"
@@ -139,6 +161,7 @@
                         :mode="rowMode"
                         :target-slot="focusedTarget?.slot"
                         :reason-text="reasonFor(recipe.recipe_id)"
+                        :cost-text="costTextFor(recipe)"
                         :batch-enabled="batchEnabled && !isMultiSelect"
                         @pick="onRowPick"
                         @pool-adjust="(id, delta) => emit('paletteMealAdjust', id, delta)"
@@ -163,7 +186,11 @@
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
     import BaseButton from 'src/components/BaseButton.vue';
+    import BaseSegmented from 'src/components/BaseSegmented.vue';
     import BaseSelect from 'src/components/BaseSelect.vue';
+    import { compareByCostPerServing } from 'src/helpers/recipeCostSort';
+    import { formatMoney } from 'src/composables/useMoney';
+    import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
     import MealPlanRailFilterChips from 'src/components/MealPlanRailFilterChips.vue';
     import MealPlanRecipeRow from 'src/components/MealPlanRecipeRow.vue';
     import { storeToRefs } from 'pinia';
@@ -242,6 +269,16 @@
     ));
     const difficultyOptions = [...DIFFICULTY_VALUES];
 
+    // Owner 2026-09-05 — the rail's ordering. `name` is the resting order every
+    // chip but `regulars` already produced, so picking it changes nothing about
+    // the list you knew; `cost` re-ranks it cheapest-first.
+    const { moneyEnabled } = useMoneyEnabled();
+    const sortBy = ref<'name' | 'cost'>('name');
+    const sortOptions = [
+        { label: 'A-Z', value: 'name' as const },
+        { label: 'Cheapest', value: 'cost' as const },
+    ];
+
     const chips = computed(() => buildFilterChips(props.recipes, axes.value));
 
     function onFilterChange(key: RecipeFilterKey) {
@@ -260,6 +297,25 @@
      * it by name would throw away what was computed.
      */
     const visibleRecipes = computed<Recipe[]>(() => {
+        const ordered = orderByCost(rawVisibleRecipes.value);
+        return ordered;
+    });
+
+    /**
+     * Cheapest-first, when the user asked for it.
+     *
+     * Applied AFTER the chip has produced its list, including `suggests`:
+     * Dora's ranking is the whole value of that chip, so re-ordering it is
+     * something the user has to have asked for — which, having moved this
+     * control, they have. `regulars`' most-planned-first order gives way for
+     * the same reason.
+     */
+    function orderByCost(recipes: Recipe[]): Recipe[] {
+        if (!moneyEnabled.value || sortBy.value !== 'cost') return recipes;
+        return [...recipes].sort((a, b) => compareByCostPerServing(a, b));
+    }
+
+    const rawVisibleRecipes = computed<Recipe[]>(() => {
         if (activeFilter.value !== 'suggests') {
             return filterRecipes(
                 props.recipes, activeFilter.value, props.recipeSearch, axes.value,
@@ -285,6 +341,18 @@
         if (props.focusedTarget) return 'targeting';
         return isSuggesting.value ? 'suggesting' : 'browsing';
     });
+
+    /** The per-serving figure, shown only while the list is ranked by it. An
+     *  unpriced recipe says so rather than showing a blank where every other
+     *  row has a number — it is at the bottom of a cheapest-first list, and
+     *  "we don't know" is why. */
+    function costTextFor(recipe: Recipe): string {
+        if (!moneyEnabled.value || sortBy.value !== 'cost') return '';
+        const value = recipe.estimated_cost_per_serving;
+        return value === null || value === undefined
+            ? 'No price yet'
+            : `${formatMoney(value)} a serving`;
+    }
 
     function reasonFor(recipeId: string): string {
         if (!isSuggesting.value) return '';

@@ -47,6 +47,7 @@
                     :week-days="planner.weekDays.value"
                     :slot-names="planner.slotNames.value"
                     :entries-for="planner.dayEntries"
+                    :day-cost="planner.dayCost"
                     :is-past-day="planner.isPastDay"
                     :current-day-iso="planner.currentDayIso.value"
                     :week-range-label="planner.weekRangeLabel.value"
@@ -90,6 +91,9 @@
                         :outstanding-count="planner.needToBuyOutstanding.value.length"
                         :on-list-count="planner.needToBuyOnList.value.length"
                         :cook-by-label="planner.cookByLabel.value"
+                        :estimated-cost="planner.focusedPlan.value?.estimated_cost ?? null"
+                        :cost-counted-meals="planner.focusedPlan.value?.cost_counted_meals ?? 0"
+                        :cost-total-meals="planner.focusedPlan.value?.cost_total_meals ?? 0"
                     />
                     <MealPlanShoppingSummary
                         :focused-plan="planner.focusedPlan.value"
@@ -368,6 +372,9 @@
                                 :outstanding-count="planner.needToBuyOutstanding.value.length"
                                 :on-list-count="planner.needToBuyOnList.value.length"
                                 :cook-by-label="planner.cookByLabel.value"
+                                :estimated-cost="planner.focusedPlan.value?.estimated_cost ?? null"
+                                :cost-counted-meals="planner.focusedPlan.value?.cost_counted_meals ?? 0"
+                                :cost-total-meals="planner.focusedPlan.value?.cost_total_meals ?? 0"
                             />
                             <!-- Owner feedback 2026-09-01 — "show all meal
                                  slots feels like it should be always visible
@@ -437,6 +444,7 @@
                                     :format-date="planner.formatDate"
                                     :show-all-slots="showAllSlots"
                                     :nutrition="planner.dayNutrition(day.iso)"
+                                    :cost="planner.dayCost(day.iso)"
                                     @select-slot="(slot: string) => planner.selectSlot(day.iso, slot)"
                                     @entry-view="planner.goToRecipe"
                                     @entry-cook="planner.cookRecipe"

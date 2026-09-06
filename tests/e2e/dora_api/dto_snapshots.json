@@ -164,8 +164,12 @@
       "total"
     ],
     "item_keys": [
+      "cost_counted_meals",
+      "cost_total_meals",
+      "day_cost",
       "day_nutrition",
       "entries",
+      "estimated_cost",
       "meal_plan_id",
       "name",
       "start_date"
@@ -247,6 +251,7 @@
       "difficulty",
       "estimated_cost",
       "estimated_cost_lines",
+      "estimated_cost_per_serving",
       "estimated_cost_priced_count",
       "estimated_cost_total_count",
       "expiring_ingredient_count",

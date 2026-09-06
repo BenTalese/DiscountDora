@@ -87,6 +87,18 @@ class MealPlanEntryDto:
     # never asks, so the two are never both true. Mirrors the stored column, so
     # it is honest even in a "fresh" household — only the UI is conditional.
     cook_fresh: bool = False
+    # Owner 2026-09-05 — *"can't see much in the way of budget and money… no
+    # display of estimated weekly cost for meals."* What THIS planned meal
+    # costs at the servings it's planned for: the recipe's per-serving estimate
+    # times `servings`, so a meal planned for six costs twice a meal planned
+    # for three, and a cook batch's days sum to the cook. Server-owned (R-003)
+    # off the same `recipe_cost` ladder the cookbook and the week builder use,
+    # so the planner can't quote a different number for the same recipe.
+    #
+    # NULL when money features are off install-wide, when nothing in the recipe
+    # could be priced, or when the recipe has no servings recorded (there is no
+    # per-serving figure to scale, and inventing one would be a guess).
+    estimated_cost: float | None = None
 
     @classmethod
     def from_entity(cls, entry: MealPlanEntry) -> 'MealPlanEntryDto':
@@ -128,6 +140,57 @@ class MealPlanDayNutritionDto:
 
 
 @dataclass(frozen=True, slots=True)
+class _CostIngredient:
+    """One ingredient in the shape `recipe_cost` reads: the pricing ladder was
+    written against `RecipeDto.ingredients`, which carries a flat
+    `stock_item_id`, while the entity carries the `stock_item` relationship."""
+    stock_item_id: UUID | None
+    quantity: float | None
+    unit: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class _CostInput:
+    """Adapter for `recipe_cost.estimate_costs_for`, which asks for
+    `.recipe_id` + `.ingredients` (it was written against `RecipeDto`). The
+    plan endpoint has `Recipe` entities, whose id field is `.id`."""
+    recipe_id: UUID
+    ingredients: list
+
+    @classmethod
+    def from_entity(cls, recipe) -> '_CostInput':
+        return _CostInput(
+            recipe_id = recipe.id,
+            ingredients = [
+                _CostIngredient(
+                    stock_item_id = ing.stock_item.id if ing.stock_item else None,
+                    quantity = ing.quantity,
+                    unit = ing.unit,
+                )
+                for ing in (recipe.ingredients or [])
+            ],
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class MealPlanDayCostDto:
+    """Owner 2026-09-05 — one day's planned cost, and how much of the day it
+    covers.
+
+    Deliberately the same shape as `MealPlanDayNutritionDto` beside it, because
+    it answers the same kind of question under the same honesty rule (R-041):
+    a day whose meals can't all be priced reports the sum of the ones that can
+    PLUS the coverage, rather than a confident total that quietly omits two
+    meals. `estimated_cost` is None when nothing on the day could be priced —
+    never 0.0, which would read as a free day.
+    """
+    scheduled_for: date
+    estimated_cost: float | None
+    counted_meals: int
+    total_meals: int
+
+
+@dataclass(frozen=True, slots=True)
 class MealPlanDto:
     meal_plan_id: UUID
     name: str | None
@@ -137,6 +200,13 @@ class MealPlanDto:
     # fetched collection is exactly the cross-entity aggregate the
     # state-ownership rule keeps out of the client.
     day_nutrition: List['MealPlanDayNutritionDto'] = dataclasses.field(default_factory=list)
+    # Owner 2026-09-05 — the money rollups, same reasoning as the nutrition one
+    # above: the client must not sum a fetched collection. `estimated_cost` is
+    # the whole plan's, which for the planner is the week's.
+    day_cost: List['MealPlanDayCostDto'] = dataclasses.field(default_factory=list)
+    estimated_cost: float | None = None
+    cost_counted_meals: int = 0
+    cost_total_meals: int = 0
 
     @classmethod
     def from_entity(cls, plan: MealPlan) -> 'MealPlanDto':
@@ -335,6 +405,104 @@ class GetMealPlansHandler:
             ))
         return hydrated
 
+    def _hydrate_cost(self, plans: list[MealPlanDto]) -> list[MealPlanDto]:
+        """Owner 2026-09-05 — per-meal, per-day and per-week cost estimates.
+
+        Same shape as `_hydrate_nutrition` above, for the same reasons: one
+        load of the distinct recipes with their ingredients, then the pricing
+        ladder's own two queries, and the whole pass is skipped when money
+        features are off so an install that doesn't use them pays nothing.
+
+        The figure is `estimated_cost_per_serving * entry.servings`, not the
+        recipe's own total. A meal plan schedules servings, and the recipe's
+        estimate is for the servings the RECIPE yields — quoting that for an
+        entry planned at three servings would price the pot, not the plan. It
+        also makes a cook batch add up: its days each carry their own share and
+        sum to the one cook.
+
+        R-003 — `estimate_costs_for` is the same batch pricing path the
+        cookbook list and the auto builder use, so three surfaces cannot quote
+        three different costs for one recipe.
+        """
+        from collections import defaultdict
+
+        from dora_api.domain.entities.recipe import Recipe
+        from dora_api.domain.entities.recipe_ingredient import RecipeIngredient
+        from dora_api.features.app_settings.access import money_features_enabled
+        from dora_api.features.recipes.recipe_cost import estimate_costs_for
+
+        if not plans or not money_features_enabled(self.repository):
+            return plans
+
+        recipe_ids = list({
+            entry.recipe_id for plan in plans for entry in plan.entries
+        })
+        if not recipe_ids:
+            return plans
+
+        recipes = (
+            self.repository.get(Recipe)
+            .include(Recipe.Fields.INGREDIENTS)
+                .then_include(RecipeIngredient.Fields.STOCK_ITEM)
+            .all(EntityField(Recipe, "id").in_(recipe_ids))
+        )
+        estimates = estimate_costs_for(
+            self.repository, [_CostInput.from_entity(recipe) for recipe in recipes],
+        )
+        # A recipe with no servings recorded has no per-serving figure, so a
+        # planned entry of it can't be priced — see the DTO note.
+        per_serving_by_recipe: dict[UUID, float | None] = {}
+        for recipe in recipes:
+            estimate = estimates.get(recipe.id)
+            cost = estimate.estimated_cost if estimate else None
+            servings = recipe.servings
+            per_serving_by_recipe[recipe.id] = (
+                None if cost is None or not servings or servings <= 0
+                else cost / float(servings)
+            )
+
+        def _entry_cost(entry: MealPlanEntryDto) -> float | None:
+            per_serving = per_serving_by_recipe.get(entry.recipe_id)
+            if per_serving is None:
+                return None
+            return round(per_serving * entry.servings, 2)
+
+        def _day_rows(entries: list[MealPlanEntryDto]) -> list[MealPlanDayCostDto]:
+            by_day: dict = defaultdict(list)
+            for entry in entries:
+                by_day[entry.scheduled_for].append(entry)
+            rows = []
+            for day, day_entries in sorted(by_day.items()):
+                priced = [e for e in day_entries if e.estimated_cost is not None]
+                rows.append(MealPlanDayCostDto(
+                    scheduled_for = day,
+                    estimated_cost = (
+                        round(sum(e.estimated_cost for e in priced), 2) if priced else None
+                    ),
+                    counted_meals = len(priced),
+                    total_meals = len(day_entries),
+                ))
+            return rows
+
+        hydrated = []
+        for plan in plans:
+            entries = [
+                dataclasses.replace(entry, estimated_cost = _entry_cost(entry))
+                for entry in plan.entries
+            ]
+            priced = [e for e in entries if e.estimated_cost is not None]
+            hydrated.append(dataclasses.replace(
+                plan,
+                entries = entries,
+                day_cost = _day_rows(entries),
+                estimated_cost = (
+                    round(sum(e.estimated_cost for e in priced), 2) if priced else None
+                ),
+                cost_counted_meals = len(priced),
+                cost_total_meals = len(entries),
+            ))
+        return hydrated
+
     def _hydrate_inference(self, plans: list[MealPlanDto]) -> list[MealPlanDto]:
         """FU-653 — stamp the Zero-Input belief remark on each planned meal.
 
@@ -484,7 +652,9 @@ class GetMealPlansHandler:
             options, MealPlanDto.from_entity, field_map=_FIELD_MAP
         )
         hydrated = self._hydrate_cook_coverage(self._hydrate_inference(
-            self._hydrate_nutrition(self._hydrate_entry_has_image(list(page.items)))
+            self._hydrate_cost(
+                self._hydrate_nutrition(self._hydrate_entry_has_image(list(page.items)))
+            )
         ))
         return Page(items=hydrated, total=page.total, page=page.page, limit=page.limit)
 
@@ -494,7 +664,7 @@ class GetMealPlansHandler:
             return None
         dto = MealPlanDto.from_entity(entity)
         return self._hydrate_cook_coverage(self._hydrate_inference(
-            self._hydrate_nutrition(self._hydrate_entry_has_image([dto]))
+            self._hydrate_cost(self._hydrate_nutrition(self._hydrate_entry_has_image([dto])))
         ))[0]
 
 

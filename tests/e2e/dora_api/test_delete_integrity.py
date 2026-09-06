@@ -489,14 +489,18 @@ def test__delete_stock_location__legacy_router__items_unassigned_via_fk(api):
 #region ---------------- 5. product ----------------
 
 
-def test__delete_product__no_delete_endpoint_exists__404(api):
+def test__delete_product__hard_deletes(api):
     _StoreId = _make_store("DelIntProdStore")
     _ProductId = _make_product(store_name=_store_name(_StoreId))
 
-    # Pinned actual behaviour: products have NO delete endpoint (only
-    # PATCH exists on /api/products/<id>) — the overlay is prunable only
-    # by unlinking / deactivating. The middleware maps any request with
-    # no matched endpoint to 404 (not Flask's default 405) — never a 500.
+    # Was pinned as "no delete endpoint exists — 404": the overlay used to be
+    # prunable only by unlinking or deactivating, because the companion pushed
+    # bulk scrape results and anything deleted came straight back. The
+    # companion now pushes only what the user saved (products program
+    # PF-1/PF-3), so Dora owns what is saved and feedback L197 ("no way to
+    # remove a saved product") is answered with a real delete — owner decision
+    # D-1. Cascade + shopping-line retention live in `test_delete_product.py`.
+    assert requests.delete(f"{PRODUCTS}/{_ProductId}").status_code == 204
     assert requests.delete(f"{PRODUCTS}/{_ProductId}").status_code == 404
 
 

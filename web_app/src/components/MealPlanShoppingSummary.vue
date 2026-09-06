@@ -1,106 +1,93 @@
 <template>
     <div class="mp-shop">
-        <q-card flat bordered>
-            <q-card-section class="q-pb-sm">
-                <!-- Owner feedback 2026-09-01 — the heading takes an icon, so
-                     it reads as a titled section rather than a bare line of
-                     bold text beside the icon-led "Full ingredient demand"
-                     expansion below it. -->
-                <div class="mp-shop__heading">
-                    <q-icon :name="ICONS.shopping_cart" size="18px" />
-                    <span class="text-subtitle1">This week's shopping</span>
-                </div>
+        <!-- Owner feedback 2026-09-05 — *"rename 'this week's shopping' to
+             'missing this week' and put that text in place of the 'what's
+             needed (X)'… same size as the all ingredients text… put the
+             shopping cart there to match the look."* So the card's own title
+             row is gone: its words, its icon and its job all moved down onto
+             the disclosure header, which is now the only heading here. The
+             card had been announcing a section whose contents already
+             announced themselves. -->
+        <MealPlanRailDisclosure
+            v-if="focusedPlan && needToBuy.length"
+            :icon="ICONS.shopping_cart"
+            label="Missing this week"
+            :class="{ 'mp-shop--stale': ingredientsLoading }"
+        >
+            <!-- Owner feedback 2026-09-05 — the two level LINES became two
+                 circles on the header row. They previously sat above the CTA
+                 as "2 of 3 to buy" per level with a tooltip each; the owner
+                 deleted the tooltips ("useless") and asked for the counts to
+                 read as badges beside the chevron. The number is the week's
+                 demand at that level — what's *missing* — which is what the
+                 heading beside it now says. How much of it is still yours to
+                 do is the CTA's job, one row below. -->
+            <template #badges>
+                <MealPlanRailCount
+                    v-for="band in levelBadges"
+                    :key="band.key"
+                    :count="band.count"
+                    :sequence="band.sequence"
+                    :label="band.label"
+                />
+            </template>
 
-                <template v-if="focusedPlan">
-                    <!-- Owner feedback 2026-09-03 — *"don't like how the 'x of
-                         x still to buy' text flashes to Calculating. Just
-                         transition smoothly between x of x."* The recalculation
-                         after a plan edit is fast, so swapping the answer for
-                         the word "Calculating…" was a flicker rather than
-                         information. The lines below stay on the last answer
-                         while a new one is on its way — only a first load with
-                         nothing to show yet says so. -->
-                    <div v-if="showFirstLoad" class="text-caption dora-text-muted">
-                        Calculating…
-                    </div>
-                    <!-- Owner feedback 2026-09-03 — one red sentence became two
-                         level-led lines: *"replace with two lines, one starting
-                         with a red stock-level indicator dot followed by the
-                         number of ingredients not on a list that are out of
-                         stock… the 'of X' number should be the total of THAT
-                         level missing, not the total missing."* Which is the
-                         honest split — "3 of 8" mixed two different jobs (buy
-                         the things you have none of; top up the things running
-                         low) — and the dot is the same signal every other stock
-                         surface in the app uses for them. -->
-                    <div
-                        v-else-if="levelLines.length"
-                        class="mp-shop__lines"
-                        :class="{ 'mp-shop__lines--stale': ingredientsLoading }"
-                    >
-                        <div
-                            v-for="line in levelLines"
-                            :key="line.key"
-                            class="mp-shop__line"
-                        >
-                            <StockLevelDot
-                                :sequence="line.sequence"
-                                size="10px"
-                                dot-class="mp-shop__dot"
-                            />
-                            <span :class="line.textClass">{{ line.text }}</span>
-                            <q-tooltip>{{ line.tooltip }}</q-tooltip>
-                        </div>
-                    </div>
-                    <div v-else class="mp-shop__headline text-positive">
-                        Fully stocked for this week
-                    </div>
-                </template>
-                <div v-else class="text-caption dora-text-muted q-py-sm">
-                    No meals planned for this week yet — tap a day's slot, then a recipe.
-                </div>
-            </q-card-section>
-
-            <!-- The CTA sits above the list and outside the disclosure, so
-                 collapsing the rows never hides the action they exist for
-                 (owner: "collapsed by default… with the 'add x to list'
-                 always visible"). -->
-            <q-card-actions v-if="focusedPlan" class="q-pt-none">
+            <!-- The CTA sits above the rows and outside the disclosure, so
+                 collapsing them never hides the action they exist for (owner:
+                 "collapsed by default… with the 'add x to list' always
+                 visible", restated 2026-09-05 as "below the row that is icon,
+                 text, circles, chevron, but above the low/out list"). -->
+            <template #actions>
                 <!-- Owner feedback 2026-08-27 — was "Generate shopping list for
                      this week", which swept the week server-side and dropped
                      you on a new list with no say in it. Now it opens the same
-                     picker the recipe page opens (R-001). Still enabled when
-                     everything is already handled, because the picker is also
-                     how you deliberately add a second line or an optional
-                     ingredient. -->
+                     picker the recipe page opens (R-001). -->
                 <BaseButton
                     class="full-width"
                     :icon="ICONS.add_shopping_cart"
                     :label="addToListLabel"
                     :loading="generating"
-                    :disable="needToBuy.length === 0"
                     @click="emit('addToList')"
                 />
-            </q-card-actions>
+            </template>
 
             <!-- Still lists everything the week needs, handled or not: the
                  rail is the "what does this week want" view, and hiding rows
                  the moment they land on a list would make it lie by omission.
                  Each row's cart button says which of the two it is. -->
-            <q-expansion-item
-                v-if="focusedPlan && needToBuy.length"
-                :label="`What's needed (${needToBuy.length})`"
-                dense
-                class="mp-shop__rows"
-            >
-                <MealPlanIngredientRow
-                    v-for="ing in needToBuy"
-                    :key="ing.stock_item_id"
-                    :ingredient="ing"
-                    @hover="emit('hoverIngredient', ing)"
-                    @clear-hover="emit('clearHover')"
-                />
-            </q-expansion-item>
+            <MealPlanIngredientRow
+                v-for="ing in needToBuy"
+                :key="ing.stock_item_id"
+                :ingredient="ing"
+                @hover="emit('hoverIngredient', ing)"
+                @clear-hover="emit('clearHover')"
+            />
+        </MealPlanRailDisclosure>
+
+        <!-- Nothing to disclose — the three states that have no rows behind
+             them keep the bordered card they always had, so the rail doesn't
+             collapse to bare text when the week is handled. -->
+        <q-card v-else flat bordered>
+            <q-card-section class="mp-shop__note">
+                <template v-if="!focusedPlan">
+                    <span class="text-caption dora-text-muted">
+                        No meals planned for this week yet — tap a day's slot, then a recipe.
+                    </span>
+                </template>
+                <!-- Owner feedback 2026-09-03 — *"don't like how the 'x of x
+                     still to buy' text flashes to Calculating."* Only a first
+                     load with nothing to show yet says so; after that the
+                     previous answer stays put, dimmed. -->
+                <template v-else-if="showFirstLoad">
+                    <span class="text-caption dora-text-muted">Calculating…</span>
+                </template>
+                <template v-else>
+                    <q-icon :name="ICONS.shopping_cart" size="18px" class="text-positive" />
+                    <span class="mp-shop__headline text-positive">
+                        Fully stocked for this week
+                    </span>
+                </template>
+            </q-card-section>
         </q-card>
 
         <!-- Owner feedback 2026-09-03 — *"full ingredient demand could be
@@ -112,51 +99,48 @@
              card edge. It now sits in the same bordered card language as its
              neighbour, the count moves out of the label into its own badge (so
              the label is short enough not to wrap), and the header keeps the
-             card's own gutter. -->
-        <q-card
+             card's own gutter. Owner 2026-09-05 asked for that header to sit
+             thicker; it is now the shared `MealPlanRailDisclosure`, which is
+             also what the card above it wears — same shape by construction
+             rather than by two stylesheets agreeing.
+
+             "Full ingredient demand" wrapped to two lines even after the count
+             moved out of the label — measured live at the rail's 300px. Three
+             words was one too many for the space between an avatar and a
+             chevron, and the fix is fewer words: "All ingredients" is what the
+             disclosure actually holds (this week's demand INCLUDING what you
+             already have, as against "Missing this week" above it). -->
+        <MealPlanRailDisclosure
             v-if="focusedPlan && ingredients.length"
-            flat bordered
-            class="mp-shop__demand q-mt-sm"
+            :icon="ICONS.receipt_long"
+            label="All ingredients"
+            class="q-mt-sm"
         >
-            <q-expansion-item dense>
-                <template #header>
-                    <q-item-section avatar class="mp-shop__demand-avatar">
-                        <q-icon :name="ICONS.receipt_long" size="18px" />
-                    </q-item-section>
-                    <!-- "Full ingredient demand" wrapped to two lines even after
-                         the count moved out of the label — measured live at the
-                         rail's 300px. Three words was one too many for the
-                         space between an avatar and a chevron, and the fix for
-                         "the text of it is wrapped" is fewer words, not a
-                         smaller font: "All ingredients" is what the disclosure
-                         actually holds (this week's demand INCLUDING what you
-                         already have, as against "What's needed" above it). -->
-                    <q-item-section class="mp-shop__demand-label">
-                        All ingredients
-                    </q-item-section>
-                    <q-item-section side>
-                        <span class="mp-shop__demand-count">{{ ingredients.length }}</span>
-                    </q-item-section>
-                </template>
-                <!-- Same row component as the list above, so hover-to-highlight
-                     works here too — it used to be an inert name-and-chip
-                     list. -->
-                <MealPlanIngredientRow
-                    v-for="ing in ingredients"
-                    :key="ing.stock_item_id"
-                    :ingredient="ing"
-                    @hover="emit('hoverIngredient', ing)"
-                    @clear-hover="emit('clearHover')"
+            <template #badges>
+                <MealPlanRailCount
+                    :count="ingredients.length"
+                    :label="`${ingredients.length} ingredients this week`"
                 />
-            </q-expansion-item>
-        </q-card>
+            </template>
+            <!-- Same row component as the list above, so hover-to-highlight
+                 works here too — it used to be an inert name-and-chip
+                 list. -->
+            <MealPlanIngredientRow
+                v-for="ing in ingredients"
+                :key="ing.stock_item_id"
+                :ingredient="ing"
+                @hover="emit('hoverIngredient', ing)"
+                @clear-hover="emit('clearHover')"
+            />
+        </MealPlanRailDisclosure>
     </div>
 </template>
 
 <script lang="ts" setup>
     import BaseButton from 'src/components/BaseButton.vue';
     import MealPlanIngredientRow from 'src/components/MealPlanIngredientRow.vue';
-    import StockLevelDot from 'src/components/stock/StockLevelDot.vue';
+    import MealPlanRailCount from 'src/components/MealPlanRailCount.vue';
+    import MealPlanRailDisclosure from 'src/components/MealPlanRailDisclosure.vue';
     import { ICONS } from 'src/style/icons';
     import { LOW_STOCK_SEQUENCE, OUT_OF_STOCK_SEQUENCE } from 'src/helpers/stockStatus';
     import { useStockStatus } from 'src/composables/useStockStatus';
@@ -191,12 +175,11 @@
         () => props.ingredientsLoading && props.ingredients.length === 0,
     );
 
-    type LevelLine = {
+    type LevelBadge = {
         key: string;
         sequence: number;
-        text: string;
-        textClass: string;
-        tooltip: string;
+        count: number;
+        label: string;
     };
 
     function countAtLevel(
@@ -205,22 +188,20 @@
         return rows.filter((row) => atLevel(row.stock_item_id)).length;
     }
 
-    const levelLines = computed<LevelLine[]>(() => {
+    const levelBadges = computed<LevelBadge[]>(() => {
         const bands: {
-            key: string; sequence: number; textClass: string; noun: string;
+            key: string; sequence: number; noun: string;
             atLevel: (id: string) => boolean;
         }[] = [
             {
                 key: 'out',
                 sequence: OUT_OF_STOCK_SEQUENCE,
-                textClass: 'text-negative',
                 noun: 'out of stock',
                 atLevel: isMissing,
             },
             {
                 key: 'low',
                 sequence: LOW_STOCK_SEQUENCE,
-                textClass: 'text-warning',
                 noun: 'running low',
                 atLevel: isLowStock,
             },
@@ -229,20 +210,16 @@
             const total = countAtLevel(props.needToBuy, band.atLevel);
             if (total === 0) return [];
             const left = countAtLevel(props.outstanding, band.atLevel);
-            // A level with nothing left to do still earns its line: the week's
-            // demand at that level is a fact, and dropping the line would make
-            // the remaining one look like the whole story.
+            // The badge counts the week's demand at that level; the CTA below
+            // counts what's still yours to do. The accessible name carries
+            // both, because the digit alone can't say which of the two it is.
             return [{
                 key: band.key,
                 sequence: band.sequence,
-                text: left > 0 ? `${left} of ${total} to buy` : `all ${total} on a list`,
-                textClass: left > 0 ? band.textClass : 'dora-text-muted',
-                tooltip: left > 0
-                    ? `${left} of the ${total} ingredient${total === 1 ? '' : 's'} `
-                        + `this week needs that ${total === 1 ? 'is' : 'are'} ${band.noun} `
-                        + 'are not on a shopping list yet.'
-                    : `All ${total} ${band.noun} ingredient${total === 1 ? '' : 's'} `
-                        + 'this week needs are on a list.',
+                count: total,
+                label: left > 0
+                    ? `${total} ${band.noun}, ${left} not on a list yet`
+                    : `${total} ${band.noun}, all on a list`,
             }];
         });
     });
@@ -257,12 +234,12 @@
 </script>
 
 <style scoped>
-    .mp-shop__heading {
+    .mp-shop__note {
         display: flex;
         align-items: center;
         gap: var(--space-2);
-        color: var(--text-primary);
-        margin-bottom: var(--space-1);
+        padding: var(--space-2);
+        min-height: 44px;
     }
     /* One line at body weight — the figure it replaced was `text-h5`, which
        made a sidebar count the loudest thing on the page. */
@@ -270,53 +247,11 @@
         font-size: calc(var(--font-size-md) * 1rem);
         font-weight: 600;
     }
-    .mp-shop__lines {
-        display: flex;
-        flex-direction: column;
-        gap: 2px;
-        font-size: calc(var(--font-size-md) * 1rem);
-        font-weight: 600;
-        transition: opacity var(--motion-fast) var(--motion-ease);
-    }
     /* Mid-recalculation the previous answer stays, very slightly dimmed — the
-       one honest way to say "this is a moment out of date" without a flicker. */
-    .mp-shop__lines--stale {
+       one honest way to say "this is a moment out of date" without a flicker.
+       It dims the whole card now that the counts live on its header. */
+    .mp-shop--stale {
         opacity: 0.6;
-    }
-    .mp-shop__line {
-        display: flex;
-        align-items: center;
-        gap: var(--space-2);
-    }
-    .mp-shop__dot {
-        flex: 0 0 auto;
-    }
-    /* Both disclosures pull their body padding in so the shared rows sit at
-       the card's own gutter rather than Quasar's default indent. */
-    .mp-shop :deep(.q-expansion-item__content) {
-        padding: 0 var(--space-2) var(--space-2);
-    }
-    /* The demand header wears the card's gutter, and its label is free to use
-       the full width because the count sits in its own side section. */
-    .mp-shop__demand :deep(.q-item) {
-        padding-left: var(--space-2);
-        padding-right: var(--space-2);
-    }
-    .mp-shop__demand-avatar {
-        min-width: 0;
-        padding-right: var(--space-2);
-    }
-    .mp-shop__demand-label {
-        font-size: calc(var(--font-size-md) * 1rem);
-        font-weight: 500;
-        line-height: 1.3;
-    }
-    .mp-shop__demand-count {
-        font-size: calc(var(--font-size-sm) * 1rem);
-        font-variant-numeric: tabular-nums;
-        color: var(--text-secondary);
-        background: var(--surface-sunken);
-        border-radius: var(--radius-pill);
-        padding: 1px var(--space-2);
+        transition: opacity var(--motion-fast) var(--motion-ease);
     }
 </style>

@@ -543,11 +543,13 @@
     import TriStateFilter from 'src/components/filters/TriStateFilter.vue';
     import BaseSelect from 'src/components/BaseSelect.vue';
     import SortControl, { type SortAxisFor } from 'src/components/filters/SortControl.vue';
+    import { compareByCostPerServing } from 'src/helpers/recipeCostSort';
     import type {
         TriStateOption,
         TriStateSort,
     } from 'src/components/filters/triStateFilterTypes';
     import { useBatchEnabled } from 'src/composables/useBatchEnabled';
+    import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
     import { useFilterPanelExpanded } from 'src/composables/useFilterPanelExpanded';
     import { useListState } from 'src/composables/useListState';
     import { useListViewMode } from 'src/composables/useListViewMode';
@@ -614,6 +616,7 @@
     // so every meals-prepared affordance (chip, minimum-count input, sort axis)
     // is hidden rather than left to always match nothing.
     const { batchEnabled } = useBatchEnabled();
+    const { moneyEnabled } = useMoneyEnabled();
     const kcalOf = (recipe: Recipe) => ({ value: recipe.kcal_per_serving ?? null });
     // Front-of-pack rating axis (owner ask 2026-08-27). Gated on the install's
     // chosen scheme *and* complex nutrition — see `useNutritionRating`. The
@@ -642,6 +645,16 @@
             options.push({
                 label: 'Kcal', value: 'kcal',
                 ascLabel: 'Lowest first', descLabel: 'Highest first', defaultDir: 'asc',
+            });
+        }
+        // Owner 2026-09-05 — "can't see or filter on estimated cost". Gated on
+        // the money opt-in exactly as Kcal is on nutrition: with money off the
+        // server sends no cost at all, so the axis would sort every recipe by
+        // null.
+        if (moneyEnabled.value) {
+            options.push({
+                label: 'Cost per serving', value: 'cost',
+                ascLabel: 'Cheapest first', descLabel: 'Priciest first', defaultDir: 'asc',
             });
         }
         if (ratingAvailable.value) {
@@ -720,6 +733,7 @@
         | 'meal_count'
         | 'total_time'
         | 'kcal'
+        | 'cost'
         | 'rating'
         | 'ingredient_count'
         | 'difficulty';
@@ -1148,6 +1162,12 @@
                     if (av === bv) return a.name.localeCompare(b.name);
                     return (av - bv) * dirSign;
                 }
+                case 'cost':
+                    // Shared with the meal planner's rail since 2026-09-05 —
+                    // the tie-break and the nulls-sink rule live in
+                    // `recipeCostSort` so the two lists can't rank the same
+                    // cookbook differently (R-001).
+                    return compareByCostPerServing(a, b, dirSign);
                 case 'rating': {
                     // Same rule as the kcal axis: rank on what was shown.
                     // Only an unrated recipe sinks.
@@ -1265,6 +1285,16 @@
     watch(kcalAxisAvailable, (on) => {
         if (!on && sortBy.value === 'kcal') sortBy.value = 'name';
     });
+
+    // Same guard for the cost axis. Cookbook sort state is persisted, so an
+    // install that had money on can come back with a cost sort stored after an
+    // admin turns it off — which would show an empty Sort-by select and order
+    // the page by a field the server no longer sends. `immediate` because
+    // `moneyEnabled` resolves from /api/health after mount, so a stale stored
+    // value would otherwise survive until the flag next changed.
+    watch(moneyEnabled, (on) => {
+        if (!on && sortBy.value === 'cost') sortBy.value = 'name';
+    }, { immediate: true });
 
     // C-waste W4 — merge the server-fetched expiring count back onto
     // recipes from the store before passing them to the card. The

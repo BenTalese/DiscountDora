@@ -22,6 +22,118 @@ top-to-bottom.
 
 ---
 
+## My Products — the rebuild (2026-09-06)
+
+Driven live at 1440 and 375 on the dense seed, so layout, both view modes, the
+bulk bar and the five card actions are confirmed. What the seed can't show:
+
+- [ ] An install with **real product images** — the seed has none, so the card's
+      square media well renders as a big placeholder glyph. Confirm a real photo
+      fills it sensibly (contain, not stretched) and the discount badge still
+      reads over it.
+- [ ] **Delete a product** for real: the red confirm names the consequences, the
+      card goes, and a *finished* shopping list that used it still shows the line.
+- [ ] The three new bulk selections pick the right things on your data —
+      *low stock on deal*, *out of stock on deal*, *essential, low, on deal*.
+- [ ] The active toggle round-trips: switch a product off, and confirm the
+      companion's next sync skips it (pairs with the Companion section below).
+
+## Companion — scheduled refresh (2026-09-06)
+
+Loop is covered by tests and driven end-to-end against a stub Dora; what's owed
+is one run against real stores.
+
+- [ ] `POST /api/sync` on the companion with a few products saved: the response
+      counts look right, and Dora's price history gains a point for each.
+- [ ] Mark a product inactive in Dora, sync again: it is **not** re-scraped
+      (counts drop by one; no new history point for it).
+- [ ] Set `MAPI_SYNC_INTERVAL_HOURS=0`, restart: boot log says sync is disabled
+      and no job runs. Non-zero: log states the interval.
+
+## Companion — unsave deletes in Dora (2026-09-06)
+
+Backend covered by tests on both DB backends; the card toggle needs the
+companion running against live merchant sites.
+
+- [ ] A result already in Dora shows **Unsave** (red) instead of Save; one not
+      in Dora shows **Save**. Confirm the card flips state after each without
+      needing a re-search.
+- [ ] Unsave asks first, and after confirming the product is gone from Dora's
+      My Products.
+- [ ] A finished shopping list that contained that product still lists it, by
+      name, afterwards.
+
+## Companion — push takes offers now (2026-09-06)
+
+Backend contract is pinned by tests and was driven end-to-end over real HTTP
+against a stub Dora. The SPA half needs the companion running against live
+merchant sites, which the agent can't drive — these are yours.
+
+- [ ] Search, then **Save** one product from a set of similar-named results:
+      Dora's My Products gets *that* product (check the store + size match the
+      card you clicked), not a near neighbour.
+- [ ] Tick 2 of many results, **Push selected**: exactly 2 arrive in Dora.
+- [ ] Push with nothing ticked: the count that arrives matches the button's
+      "Push all N".
+- [ ] Dora Target settings → the connectivity check still reports correctly for
+      all three states (unset env vars, wrong key, working) — it's a read now,
+      so confirm it does **not** create any product in Dora.
+
+## Meal planner — the 2026-09-05 thirteen-item batch
+
+Driven live at 1440 and 375 with money ON, so the layout and the servings-menu
+fix are confirmed. What's left is the states that drive couldn't reach.
+
+- [ ] Planner with money **OFF**: no week/day/meal cost anywhere, and the rail's
+      A-Z / Cheapest control is absent (not disabled).
+- [ ] Rail sorted **Cheapest** on a big cookbook (past the virtual-scroll
+      threshold): order holds while scrolling, unpriced recipes sit last saying
+      "No price yet".
+- [ ] The out/low circles on "Missing this week" in a dark theme — soft ground
+      with the digit at primary ink; confirm both read at a glance and against
+      each other.
+- [ ] Phone: a day whose household vocabulary has 5+ slots — every slot heading
+      present, in your order, and the per-slot Add reaches the right slot.
+- [ ] Phone: a past day — slot headings with no meals should not render.
+
+## Tap targets on a real phone (2026-09-05) — origin ADR-082
+
+Sizes were measured under Playwright touch emulation (44/44/260×44) and desktop
+confirmed unchanged (32/36/200×32), so the mechanism works. What's left is
+whether it *looks* right on glass — one of these changes visual weight.
+
+- [ ] Stock overview at 375: the level chip is now 44×44 on touch (was 32). It's
+      a colour block, so it got visually heavier, not just easier to hit — say
+      whether that reads as balanced against the name and image or too loud.
+- [ ] Stock row's trailing buttons at 44px: the row gap tightened 8→6px to pay
+      for the width. Confirm the name still gets enough room and isn't
+      truncating words it used to show.
+- [ ] Any stock-level menu: rows are taller and the menu widened 200→260px on
+      touch. Confirm it doesn't run to the screen edge on your phone.
+- [ ] Cookbook rows at 375 — same 30→44px button change, applied for
+      consistency with the stock row. Same question about width.
+- [ ] Desktop sanity: nothing above should have changed with a mouse. If a
+      toolbar looks taller than you remember, the pointer query is matching
+      when it shouldn't.
+
+## Cookbook cost + the About rebuild (2026-09-05)
+
+- [ ] Cookbook with money ON: cost per serving on rows and cards, and
+      "Cost per serving" in the Sort-by list. A recipe priced from only some of
+      its ingredients carries an asterisk — hover says how many.
+- [ ] Cookbook with money OFF: no cost anywhere, and the sort axis is gone from
+      the dropdown (not present-but-empty).
+- [ ] Sort by cost, then have an admin turn money off: the sort should snap back
+      to Name rather than leaving an orphaned value in the select.
+- [ ] Settings → About: "How you've used Dora" shows cumulative counts (recipes
+      curated, meals planned, cooks logged, shops finished), not the dashboard's
+      low/out-of-stock numbers. With money off the spend and prices tiles
+      disappear entirely rather than showing 0.
+- [ ] Recipe page's Cook mode button and both meal-plan "Cook now" menu items
+      now wear the chef hat. Confirm nothing else in those menus lost its icon.
+- [ ] Stock item → Scanning tab shows a barcode count in the label, matching its
+      sibling tabs.
+
 ## Salt & Pepper's re-tuned blue (2026-09-04)
 
 The token values were confirmed live and every contrast pair recomputed; what's
@@ -250,6 +362,12 @@ show. See the worklog entry for what was verified.
 - [ ] **Batch household — the empty state reads "the pool covers what's
       planned"**, not "Nothing planned for the next week", when the week is full
       but nothing needs cooking.
+- [ ] **Batch household — "Next to cook" quotes the whole batch's yield.** A
+      meal linked across three days at 2 servings should read `serves 6`, and
+      **Cook** should open cook mode already set to 6 — the same figure the
+      planner's chip shows. (The API side is pinned by
+      `test_dashboard_router.py`; what's unseen is the two surfaces agreeing in
+      a real batch household.)
 - [ ] **Manual reconcile mode — Kitchen health scores Plan adherence.** Switch
       reconcile to manual, let a planned day pass, and confirm the component
       shows a score (not "Dora settles past meals for you") with a working

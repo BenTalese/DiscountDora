@@ -71,6 +71,26 @@
                         </span>
                         <q-tooltip v-if="!kcal.judgeable">{{ kcalTooltip }}</q-tooltip>
                     </span>
+                    <!-- Owner 2026-09-05: cost joins the fact line for the
+                         same reason kcal did — it's a plain fact about the
+                         dish, not an opinion, so it belongs here rather than
+                         in the chip cluster. Per-serving, because that's the
+                         figure that compares across a list of recipes with
+                         different yields. Money-gated: with the opt-in off
+                         the server sends no figure at all, so this is the
+                         render half of a gate the API already applied. -->
+                    <span v-if="moneyEnabled && cost.value !== null" class="recipe-row__fact">
+                        <q-icon :name="ICONS.savings" size="14px" />
+                        <span>
+                            {{ formatMoney(cost.value) }}<span
+                                v-if="!cost.judgeable"
+                                aria-hidden="true"
+                            >*</span>
+                        </span>
+                        <q-tooltip>
+                            {{ cost.judgeable ? 'Estimated cost per serving.' : costTooltip }}
+                        </q-tooltip>
+                    </span>
                 </div>
             </div>
 
@@ -146,6 +166,8 @@
     import BaseButton from 'src/components/BaseButton.vue';
     import type { Recipe } from 'src/models/recipe';
     import { useRecipeDisplay } from 'src/composables/useRecipeDisplay';
+    import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
+    import { formatMoney } from 'src/composables/useMoney';
     import { computed } from 'vue';
 
     const props = withDefaults(
@@ -172,15 +194,20 @@
     // `metaLine` deliberately not destructured — the compact row renders its
     // own two-or-three-fact second line rather than the card's prose one.
     const {
-        totalTime, ingredientCount, kcal, kcalTooltip, missingIds, cookable,
+        totalTime, ingredientCount, kcal, kcalTooltip, cost, costTooltip,
+        missingIds, cookable,
         cookButtonColor, cookButtonTooltip, addListTooltip,
     } = useRecipeDisplay(() => props.recipe);
+    const { moneyEnabled } = useMoneyEnabled();
 
     /** Whether the line under the name has anything on it. Computed rather
      *  than spelled out in the `v-if` so the three facts can't drift out of
      *  sync with the three `v-if`s inside it. */
     const metaFacts = computed(
-        () => totalTime.value !== null || ingredientCount.value > 0 || kcal.value.value !== null);
+        () => totalTime.value !== null
+            || ingredientCount.value > 0
+            || kcal.value.value !== null
+            || (moneyEnabled.value && cost.value.value !== null));
 
     function onAddToList() {
         if (cookable.value) emit('add-all-to-list', props.recipe.recipe_id);
@@ -260,18 +287,24 @@
         gap: 3px;
         white-space: nowrap;
     }
-    /* Phones: same squeeze StockItemRow applies — tighter gap and smaller
-       icon buttons, so the trailing cluster doesn't eat half the row. */
+    /* Phones: tighter gap so the trailing cluster doesn't eat half the row.
+       Owner 2026-09-05 raised the buttons to the D-004 floor on the *stock*
+       row; this row carried a copy of the same 30px squeeze ("same squeeze
+       StockItemRow applies", which is why it is here at all), so it moves with
+       it — the two lists are deliberately the same control in two places and
+       leaving one at 30px would just be the inconsistency the owner keeps
+       reporting. Full reasoning in `StockItemRow`'s matching block and in
+       `BaseButton`'s `pointer: coarse` rule. */
     @media (max-width: 599px) {
         .recipe-row__body {
             padding: 4px 8px;
-            gap: 8px;
+            gap: 6px;
         }
         .recipe-row__body :deep(.dora-btn--icon) {
-            min-width: 30px;
-            min-height: 30px;
-            width: 30px;
-            height: 30px;
+            min-width: 44px;
+            min-height: 44px;
+            width: 44px;
+            height: 44px;
         }
         .recipe-row__body :deep(.dora-btn--icon .q-icon) {
             font-size: 19px;

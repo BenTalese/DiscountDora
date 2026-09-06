@@ -53,6 +53,13 @@ PUBLIC_ENDPOINTS = frozenset({
     # C-10.5 / FU-422: read-side link-status lookup. Same bearer auth
     # as the batch endpoint; session cookie is not involved.
     "ingest_link_status",
+    # The companion's "unsave" (products program PF-4). Bearer-authed front
+    # door onto the same DeleteProductHandler the SPA's session-authed
+    # DELETE /api/products/<id> uses — one behaviour, two auth schemes.
+    "ingest_delete_product",
+    # PF-7: the saved-product list a source pulls before refreshing offers.
+    # Bearer-authed like its siblings.
+    "ingest_list_products",
 })
 
 

@@ -10,6 +10,192 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-885 — `discountPct` is implemented four times and rendered three ways, plus a dead `ProductChip.vue`
+- **Raised:** 2026-09-06 (products program planning)
+- **Type:** finding
+- **What:** the "% off" calculation is duplicated in `pages/MyProductsPage.vue:704`,
+  `pages/StockItemDetailPage.vue:1999` and `components/chips/ProductChip.vue:109`
+  (the dashboard's `PriceDropsCard` uses a server-supplied `drop_percent` instead).
+  The three client copies render differently: a `q-badge color="negative"` on My
+  Products and the stock detail, a `q-chip size="sm" color="positive"` on Price
+  History. **`ProductChip.vue` has zero importers** — dead code carrying a fourth
+  copy of the rule. This is the concrete form of feedback bullet PH-6 ("why is
+  %off chip colouring feeling different… componentise and standardise") — it was
+  not imagination.
+- **Why deferred:** it is scheduled work, not a loose end — batch F builds one
+  `DiscountChip` and deletes `ProductChip.vue` (owner approved the deletion);
+  batch G adopts it on the remaining surfaces.
+- **Recommended resolution:** batch F of
+  [`IMPL_PLAN_PRODUCTS_PROGRAM.md`](docs/04_proposals/IMPL_PLAN_PRODUCTS_PROGRAM.md).
+  Cross-ref R-002 (componentisation-first), [[FU-214]].
+- **RESOLVED 2026-09-06 (batch F):** one `DiscountChip` now backs all four
+  surfaces; the dead `ProductChip.vue` is deleted and `StockItemDetailPage`'s
+  local `discountPct` with it. **Green, not red** — the two spellings disagreed
+  and D-001 broke the tie: red is reserved for escalation (out of stock,
+  destructive, error), and the My Products card was the proof, rendering the
+  *discount* red while its *out of stock* badge was amber, exactly inverting the
+  escalation. The chip also takes a server-computed `pct` (Price History's
+  `deal_pct`) so the client never produces a second answer where the server
+  already has one (R-003). Pinned by `web_app/test/unit/discountChip.spec.ts`
+  (12 tests, mostly the edge cases the four copies disagreed on: equal prices,
+  a price *rise*, a zero 'was'). Verified live — chip background reads
+  `rgb(57, 172, 96)`.
+
+## [RESOLVED] FU-883 — deleting a stock item erases its lines from completed shopping lists (live data-loss bug)
+- **Raised:** 2026-09-06 (products program planning)
+- **Type:** finding — **data loss, live today**, independent of the products work
+- **What:** on `ShoppingListLine` (`persistence/table_mappings.py:439`),
+  `stock_item_id` and `product_id` are both `ondelete="CASCADE"`. Deleting a
+  stock item therefore deletes its lines from **every** list it ever appeared
+  on, including `done` lists — i.e. purchase history is destroyed. Note the same
+  table already applies the opposite rule to stores: `purchased_store_id` and
+  `planned_store_id` are `SET NULL`, with the comment *"losing a store must not
+  take the line with it."* Stock items and products never got that treatment.
+  Adding product hard-delete (batch C) would extend the same loss to
+  product-anchored lines.
+  There is no free text to fall back on — `LineDto.stock_item_name` is
+  non-optional and join-derived (`get_shopping_list_detail.py:65`), which is
+  probably *why* CASCADE was chosen: a nulled anchor leaves a nameless row.
+- **Why deferred:** needs a migration plus a rework of the
+  `ck_shopping_list_line_anchor` CHECK constraint, which currently demands an
+  anchor be present — nulling one on a product-only line would violate it.
+  ⚠️ That failure is **loud on Postgres and silent on SQLite**; test both via
+  `DORA_TEST_DB=postgres`.
+- **Recommended resolution:** batch C2 of
+  [`IMPL_PLAN_PRODUCTS_PROGRAM.md`](docs/04_proposals/IMPL_PLAN_PRODUCTS_PROGRAM.md),
+  which blocks batch C. Owner decisions D-4/D-5/D-6 there settle the design:
+  snapshot the display name **at `POST /finish`** (already the snapshotting step
+  and the enforced sole path to `done`), flip the anchors to `SET NULL`, delete
+  lines on draft/shopping lists but preserve them on done lists. Reports already
+  tolerate a null anchor (`reports.py:1438`, `:1558`).
+- **RESOLVED 2026-09-06 (batch C2):** both anchors flipped CASCADE → SET NULL;
+  new `ShoppingListLine.display_name_snapshot`, written at `POST /finish` (already
+  the snapshotting step and the enforced sole path to `done`) for **every** line on
+  the list, ticked or not; `ck_shopping_list_line_anchor` reworked to accept
+  "anchor OR snapshot"; migration `d4f9b2e7a318` backfills existing rows. Deletion
+  by list status lives in `shopping_lists/_line_retention.prepare_lines_for_anchor_delete`
+  (a FK can't branch on parent status): draft/shopping lines are deleted, done-list
+  lines survive. **That helper also backfills a missing snapshot as a backstop** —
+  the first cut trusted finish-time stamping alone and broke on seeded done lists,
+  which never pass through `/finish`; regression-pinned. `LineDto.stock_item_name`
+  resolves join → product → snapshot → "(missing item)". Reused by product delete
+  in batch C. Gates: **pytest 2324 passed on SQLite and 2323 on Postgres**, only the
+  known FU-762 reds (+[[FU-888]], pre-existing, PG-only); migration up/down/up clean
+  and `test__migrations__migrated_schema_matches_orm_metadata` (which checks FK
+  ondelete drift) green. 7 new tests in
+  `tests/e2e/dora_api/test_shopping_line_survives_delete.py`. Batch C2 of
+  [`IMPL_PLAN_PRODUCTS_PROGRAM.md`](docs/04_proposals/IMPL_PLAN_PRODUCTS_PROGRAM.md).
+
+## [RESOLVED] FU-881 — companion "save this product" re-scrapes by name and can save a different product (companion repo)
+- **Raised:** 2026-09-06 (products program planning)
+- **Type:** finding
+- **Repo:** `../dora-companion/`
+- **What:** `onSinglePush` (`web_app/src/pages/ProductSearchPage.vue:578`) does
+  **not** push the offer the user clicked. It calls `pushAsync` with
+  `{merchants_to_search: [offer.merchant_name], result_limit: 1,
+  search_term: offer.name}` — a *fresh scrape* whose first result is then pushed.
+  Clicking Save on the 4th search result can therefore save a different product
+  than the one on screen. Root cause: `POST /api/push`
+  (`merchant_api/features/push_to_dora.py:29`) takes a search query
+  (`merchants_to_search` / `search_term` / `result_limit`) instead of concrete
+  offers, so the caller has no way to say "this one".
+- **Why deferred:** the fix is a contract change to `/api/push`, scheduled as
+  its own batch.
+- **Recommended resolution:** batch B of
+  [`IMPL_PLAN_PRODUCTS_PROGRAM.md`](docs/04_proposals/IMPL_PLAN_PRODUCTS_PROGRAM.md).
+  **This is the keystone finding of the program** — rules PF-1 and PF-3 ("Dora is
+  the source of truth"; "saving pushes the offer already in hand") are
+  unenforceable until it lands, and owner decision D-1 (hard delete for products)
+  depends on it, since a bulk-scraping companion would resurrect deleted rows.
+- **RESOLVED 2026-09-06:** `POST /api/push` now takes concrete offers instead of a
+  search query, so the offer the user clicked is the offer forwarded to Dora — no
+  re-scrape, nothing re-derived. `onSinglePush` sends the on-screen offer;
+  `PushOffer`/`PushToDoraRequest` pin the shape with `extra="forbid"`. Verified end
+  to end over real HTTP against a stub Dora: clicking Save on the 4th of 4
+  same-named results pushes that product's own stockcode. 16 new tests in
+  `tests/test_push_contract.py` (companion), suite 30 passed. Batch B of
+  [`IMPL_PLAN_PRODUCTS_PROGRAM.md`](docs/04_proposals/IMPL_PLAN_PRODUCTS_PROGRAM.md).
+
+## [RESOLVED] FU-882 — companion batch push ignores the user's selection and pushes up to `result_limit` (companion repo)
+- **Raised:** 2026-09-06 (products program planning)
+- **Type:** finding
+- **Repo:** `../dora-companion/`
+- **What:** `onBatchPush` (`web_app/src/pages/ProductSearchPage.vue:594`) uses the
+  ticked rows **only to derive the distinct merchant list**, then calls
+  `pushAsync` with the original search term and `result_limit` up to 50. The
+  selection never reaches Dora, so ticking two products can push fifty. Same
+  root cause as [[FU-881]]: `POST /api/push` accepts a search query rather than
+  offers.
+- **Why deferred:** fixed as part of the push-contract rewrite, not piecemeal.
+- **Recommended resolution:** batch B of
+  [`IMPL_PLAN_PRODUCTS_PROGRAM.md`](docs/04_proposals/IMPL_PLAN_PRODUCTS_PROGRAM.md).
+- **RESOLVED 2026-09-06:** same contract change as [[FU-881]]. `onBatchPush` now
+  maps the ticked rows (or everything displayed when nothing is ticked, matching the
+  button label) straight into the `offers` payload; `result_limit` no longer
+  participates in pushing at all. Verified: ticking 2 of 4 pushes exactly those 2.
+
+## [RESOLVED] FU-880 — cost on the planner rail shipped as a *sort*, not the filter the owner asked for
+- **Raised:** 2026-09-05 (owner meal-planner batch, item 5)
+- **Type:** design question
+- **What:** the ask was *"no way to filter recipes on estimated cost."* What
+  shipped is a money-gated **A-Z / Cheapest** segmented control on the rail
+  (`MealPlanRecipePicker`), sharing the cookbook's comparator, with the
+  per-serving figure appearing on each row only while that ordering is active.
+- **Why not a filter:** a cost filter needs bands, and a band boundary ("under
+  $3 a serving") is a domain constant the client doesn't own — inventing one on
+  the client is the exact state-ownership smell R-003 exists for, and inventing
+  one on the *server* means deciding what "cheap" means for a household, which
+  is a product call rather than an implementation one. Cheapest-first answers
+  the same practical question out of figures that already exist.
+- **Resolved:** 2026-09-05, same session it was raised — owner: *"i meant
+  sort."* The word "filter" in the original feedback was loose; the shipped A-Z
+  / Cheapest ordering is the thing that was wanted, so there is no gap and no
+  bands question to settle. Nothing changed in the code. Kept for the trail
+  because the *reasoning* still applies if cost bands are ever proposed:
+  a threshold is a product call, not an implementation one.
+  Cross-ref: FU-732, the cookbook's Cost-per-serving axis.
+
+## [RESOLVED] FU-678 — every `.dora-btn` is 36px tall, under D-004's 44px touch floor
+- **Raised:** 2026-08-19 (cookbook feedback batch 2)
+- **Type:** finding
+- **What:** `BaseButton`'s base rule is `min-height: 36px` for every variant, and
+  the icon variants are 36×36. B1 says "min height **44px** on touch (36px
+  desktop-dense chrome only)" and D-004 sets a 44×44 effective floor "on any
+  surface a finger uses". Dora is a pantry/mobile app, so almost no button
+  qualifies for the desktop-dense allowance. This came up because the filter row's
+  controls **were** raised to 44px this session (in the new shared `FilterRow`,
+  where it's one number), which makes the 36px buttons beside them the outlier.
+- **Why deferred:** it resizes **every button in the app** — toolbars, dialogs,
+  bulk bars, list-row actions — and several of those rows are width-constrained on
+  a phone already. That's a design pass with a real-device walk, not a side effect
+  of a filter-row fix. The new `subtle` variant deliberately matches its siblings
+  at 36px rather than becoming a lone 44px exception (commented in place naming
+  the rule).
+- **Recommended resolution:** later, as its own unit — pairs naturally with the
+  next mobile-UX pass, and with [[FU-675]] since both want a real phone.
+- **RESOLVED 2026-09-05:** closed by the app-wide tap-target sweep. Rather than raising `.dora-btn` everywhere (the re-flow this entry deferred for), the floor lifts under `@media (pointer: coarse)` in `BaseButton` — every variant including `subtle`, whose in-place comment deferring this is now updated. Desktop measured unchanged at 36px, touch at 44px. Promoted to **R-085 / ADR-082**.
+
+## [RESOLVED] FU-641 — Header icon buttons sit at 36px, under the D-004 44px touch floor
+- **Raised:** 2026-08-15 (mobile-header task).
+- **Type:** finding.
+- **What:** `BaseButton`'s `icon` / `danger-icon` / `filled-icon` variants set
+  `min-height: 36px; min-width: 36px` (`web_app/src/components/BaseButton.vue`), so
+  the mobile toolbar's hamburger, alerts bell and account avatar are 36×36 effective —
+  below the **D-004** 44×44 floor. `DonateButton` next to them is 44px, so the row is
+  also inconsistent. Not introduced here: the mobile shrink deliberately touched only
+  glyph/avatar font-size and left the hit boxes alone, so nothing regressed.
+- **Why deferred:** `dora-btn--icon` is app-wide — raising it to 44px re-flows every
+  toolbar, table row and card action in the app, which is its own unit with its own
+  browser pass. Way outside a header tweak.
+- **Also in scope (2026-08-17):** the Users page's new per-row `⋮` actions menu is the
+  same `icon` variant, so on a phone it's a 36px target carrying that row's Edit /
+  Change-password / Delete. Not a new fault — it inherits the app-wide floor and will be
+  fixed by the same one-line change to `dora-btn--icon`. Called out so the sweep knows to
+  re-check row-level (not just toolbar) icon buttons.
+- **Recommended resolution:** later — fold into the next design-remediation pass, or
+  whenever the FU-578 UX/UI review is triaged into fix units.
+- **RESOLVED 2026-09-05:** same fix as [[FU-678]] — `dora-btn--icon` / `--danger-icon` / `--filled-icon` now floor at 44×44 under `pointer: coarse`, so the mobile header's hamburger, bell and avatar reach the D-004 target without re-flowing the desktop toolbar this entry was worried about. The row-level `⋮` menus this entry flagged as also-in-scope inherit it. Measured under Playwright: touch 44×44, mouse 36×36. See **ADR-082**.
+
 ## [RESOLVED] FU-835 — Kitchen health's "Stocktake" component scores an activity, not a health signal
 - **Raised:** 2026-09-02 (dashboard chunk 1 — split out of [[FU-823]])
 - **Type:** finding (scoring semantics; owner-flavoured)

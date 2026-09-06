@@ -91,12 +91,27 @@
                         </div>
                     </div>
 
+                    <!-- Owner 2026-09-05 — *"only affordance is in the auto
+                         builder to keep under budget, but what's that based on?
+                         Ingredients to buy or cost of the meal?"* It is the
+                         cost of the meals: `apply_budget_cap` sums each chosen
+                         recipe's full ingredient value, pantry or not, and
+                         swaps the dearest for something cheaper until the week
+                         fits what's left of the budget period. Owner kept that
+                         basis and asked for it to be stated, which is what the
+                         caption does — the control was answering a question it
+                         never asked out loud. -->
                     <div v-if="moneyEnabled" class="builder-field">
                         <q-toggle
                             v-model="budgetCap"
                             dense
                             label="Keep the week under budget"
                         />
+                        <div class="text-caption dora-text-muted q-mt-xs">
+                            Counts what the meals cost to make — the value of
+                            every ingredient they use, whether or not it's
+                            already in your pantry.
+                        </div>
                     </div>
 
                     <div class="builder-field__label">{{ plannedCountHint }}</div>

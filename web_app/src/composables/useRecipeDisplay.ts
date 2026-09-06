@@ -27,6 +27,18 @@ export interface RecipeDisplay {
     ingredientCount: ComputedRef<number>;
     /** Per-serving kcal + whether the figure is solid enough to judge on. */
     kcal: ComputedRef<{ value: number | null; judgeable: boolean }>;
+    /** Owner 2026-09-05 — per-serving cost + whether it was worked out from
+     *  the whole recipe. Deliberately the same shape as `kcal`: both are a
+     *  server-computed per-serving figure that may rest on partial data, and
+     *  the row/card render them with the same asterisk convention.
+     *
+     *  `value` is null when money is off (the server sends nothing), when
+     *  nothing on the recipe could be priced, or when the recipe has no
+     *  servings — the caller draws nothing in all three cases. */
+    cost: ComputedRef<{ value: number | null; judgeable: boolean }>;
+    /** Why the cost figure carries an asterisk. Only meaningful when
+     *  `cost.judgeable` is false. */
+    costTooltip: ComputedRef<string>;
     /** Why the kcal figure carries an asterisk. Only meaningful when
      *  `kcal.judgeable` is false. */
     kcalTooltip: ComputedRef<string>;
@@ -73,6 +85,32 @@ export function useRecipeDisplay(recipe: () => Recipe): RecipeDisplay {
     // the thing you were already doing. Lives here rather than in the two
     // components that render it (R-003) — it was the same sentence twice.
     const kcalTooltip = computed(() => 'Worked out from only part of this recipe.');
+
+    // Owner 2026-09-05 — cost on the cookbook. Everything here is a read of a
+    // server-owned figure (R-003): the division by servings happens on the
+    // server precisely so a recipe with no servings typed in comes back null
+    // rather than being treated as serves-1 by whichever component divided.
+    //
+    // "Judgeable" is the same idea as kcal's: a recipe where only two of six
+    // ingredients priced has a real number attached to it, but it is not a
+    // number you can rank recipes by without being misled — the cheapest-
+    // looking dish on the page is usually just the least-priced one. So the
+    // figure still shows (it's the best we have) and wears an asterisk that
+    // says what it's missing.
+    const cost = computed(() => {
+        const r = recipe();
+        const total = r.estimated_cost_total_count;
+        return {
+            value: r.estimated_cost_per_serving ?? null,
+            judgeable: total > 0 && r.estimated_cost_priced_count === total,
+        };
+    });
+
+    const costTooltip = computed(() => {
+        const r = recipe();
+        return `Based on ${r.estimated_cost_priced_count} of `
+            + `${r.estimated_cost_total_count} ingredients — the rest aren't priced yet.`;
+    });
 
     const metaLine = computed(() => {
         // DR-4 (FU-578 #14): dedupe case-insensitively so a recipe whose
@@ -184,6 +222,8 @@ export function useRecipeDisplay(recipe: () => Recipe): RecipeDisplay {
         ingredientCount,
         kcal,
         kcalTooltip,
+        cost,
+        costTooltip,
         metaLine,
         tagNames,
         missingIds,

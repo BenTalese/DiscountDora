@@ -808,15 +808,43 @@
     @media (max-width: 599px) {
         .stock-row__body {
             padding: 4px 8px 4px 12px;
-            gap: 8px;
+            /* 8px → 6px pays for most of the width the buttons below take
+               back. See the button rule for why that trade is the right way
+               round this time. */
+            gap: 6px;
         }
+        /* Owner 2026-09-05: *"the row buttons need to be slightly bigger on
+           mobile"*. They were 30×30 — the 2026-08-15 response to the trailing
+           cluster eating half the row's width, which was a real complaint and
+           got a fix aimed at the wrong axis. Width was the problem; the
+           buttons were shrunk in *both* dimensions, and the row is 76px tall
+           on mobile (`STOCK_ROW_HEIGHT_MOBILE`), so ~60px of vertical space
+           was sitting unused while the target got smaller.
+
+           44px is not a judgement call here: D-004 sets it as the floor on
+           touch surfaces and B8 repeats it for menus, so 30px was a standing
+           violation on the app's primary surface for its primary audience
+           (the charter's audience is pantry/mobile). Vertically it is free.
+           Horizontally three buttons cost 42px more than they did — paid for
+           by the tighter gap above, and by the name, which already truncates
+           with an ellipsis and is the correct thing to give up: a clipped word
+           is recoverable by tapping the row, a missed tap target isn't.
+
+           `margin-left: -2px` went with the shrink. It was pulling the cluster
+           back toward the name to reclaim a couple of pixels; at 44px the
+           buttons are their own spacing and a negative margin just makes the
+           first one's target overlap its neighbour. */
         .stock-row__body :deep(.dora-btn--icon) {
-            min-width: 30px;
-            min-height: 30px;
-            width: 30px;
-            height: 30px;
-            margin-left: -2px;
+            min-width: 44px;
+            min-height: 44px;
+            width: 44px;
+            height: 44px;
         }
+        /* The glyph does NOT grow with the target. 19px was legible and the
+           owner didn't report it — what was too small was the area you had to
+           hit, which is exactly the distinction D-004 draws (a 20–24px glyph
+           inside a ≥44px target). A 24px glyph in a 44px button would read as
+           three heavy blobs on a phone row. */
         .stock-row__body :deep(.dora-btn--icon .q-icon) {
             font-size: 19px;
         }

@@ -249,7 +249,7 @@
                 </BaseButton>
                 <BaseButton
                     :variant="dirty ? 'secondary' : 'primary'"
-                    :icon="ICONS.restaurant_menu"
+                    :icon="ICONS.chef_hat"
                     :label="compact ? undefined : 'Cook mode'"
                     aria-label="Cook mode"
                     @click="onStartCookMode"

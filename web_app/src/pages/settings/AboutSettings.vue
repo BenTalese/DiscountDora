@@ -28,13 +28,16 @@
 
         <hr class="settings-divider" />
 
-        <!-- Counts come straight from the dashboard summary — the server
-             already owns these aggregates (R-003), so this is a read of an
-             existing fact, not a second tally that could disagree with the
-             dashboard. Hidden entirely if the fetch fails: a stats block is a
-             nicety, and half of one is worse than none. -->
+        <!-- Counts are server-owned aggregates (R-003) — a read of an existing
+             fact, not a second tally that could disagree with another surface.
+             Hidden entirely if the fetch fails: a stats block is a nicety, and
+             half of one is worse than none.
+             Owner 2026-09-05: retitled with the numbers. It used to say "Your
+             kitchen at a glance" over the dashboard's current-state counts,
+             which made it a second dashboard; it now counts what the household
+             has done with Dora over its whole life. -->
         <SettingsSection v-if="stats.length">
-            <template #title>Your kitchen at a glance</template>
+            <template #title>How you've used Dora</template>
 
             <div class="about-stats">
                 <div v-for="stat in stats" :key="stat.label" class="about-stat">
@@ -202,7 +205,8 @@
     import { useSupportChannel, supportHref } from 'src/composables/useSupportChannel';
     import { useFeatureFlags } from 'src/composables/useFeatureFlags';
     import DashboardApiService from 'src/services/api/dashboardApiService';
-    import type { DashboardSummary } from 'src/models/dashboard';
+    import type { UsageStats } from 'src/services/api/dashboardApiService';
+    import { formatMoney } from 'src/composables/useMoney';
     import { PRIMARY_DONATION } from 'src/config/donationLinks';
     import {
         getBackendBaseUrl,
@@ -249,31 +253,59 @@
     });
 
     // ── "At a glance" ──────────────────────────────────────────────────
-    const summary = ref<DashboardSummary | null>(null);
+    // Owner 2026-09-05: this block used to read `/dashboard/summary`, so it
+    // showed what the *dashboard* shows — items running low, items out of
+    // stock, meals coming up. That is a to-do list, and it belongs on the
+    // dashboard where the user can act on it. Standing on the About page it
+    // restated the home screen and changed every time you shopped.
+    //
+    // These are cumulative instead: what this household has built up and done
+    // with Dora. Every figure only ever goes up.
+    const usage = ref<UsageStats | null>(null);
     const dashboardApi = new DashboardApiService();
+
+    /** Thousands-separated, because these are the numbers that get big —
+     *  "1208 prices recorded" is the one figure on this page a user might
+     *  actually want to read aloud. Locale-aware via the browser, matching how
+     *  `formatMoney` defers to the install's region. */
+    const formatCount = (n: number) => n.toLocaleString();
 
     onMounted(async () => {
         try {
-            summary.value = await dashboardApi.getSummaryAsync();
+            usage.value = await dashboardApi.getUsageStatsAsync();
         } catch {
-            // Silent: this block is decoration, and the dashboard itself
-            // already surfaces a real fetch failure loudly.
-            summary.value = null;
+            // Silent: this block is decoration, and a real API outage is
+            // surfaced loudly by the surfaces that depend on it.
+            usage.value = null;
         }
     });
 
-    const stats = computed<{ value: number; label: string }[]>(() => {
-        const s = summary.value;
-        if (!s) return [];
+    /** Values are pre-formatted strings, not numbers — `total_spend` is money
+     *  and the rest are counts, and they share one tile shape. */
+    const stats = computed<{ value: string; label: string }[]>(() => {
+        const u = usage.value;
+        if (!u) return [];
+        const plural = (n: number, one: string, many: string) => (n === 1 ? one : many);
         const out = [
-            { value: s.stock_items.total, label: s.stock_items.total === 1 ? 'item tracked' : 'items tracked' },
-            { value: s.stock_items.low_stock, label: 'running low' },
-            { value: s.stock_items.out_of_stock, label: 'out of stock' },
-            { value: s.recipes.total, label: s.recipes.total === 1 ? 'recipe' : 'recipes' },
-            { value: s.shopping_lists.total, label: s.shopping_lists.total === 1 ? 'shopping list' : 'shopping lists' },
+            { value: formatCount(u.stock_items), label: plural(u.stock_items, 'item tracked', 'items tracked') },
+            { value: formatCount(u.recipes), label: plural(u.recipes, 'recipe curated', 'recipes curated') },
+            { value: formatCount(u.meals_planned), label: plural(u.meals_planned, 'meal planned', 'meals planned') },
+            { value: formatCount(u.meals_cooked), label: plural(u.meals_cooked, 'cook logged', 'cooks logged') },
+            { value: formatCount(u.shopping_lists), label: plural(u.shopping_lists, 'shopping list', 'shopping lists') },
+            { value: formatCount(u.shops_completed), label: plural(u.shops_completed, 'shop finished', 'shops finished') },
         ];
-        const upcoming = s.meal_plan.upcoming_entries.length;
-        out.push({ value: upcoming, label: upcoming === 1 ? 'meal coming up' : 'meals coming up' });
+        // Money-gated (R-058). The server sends null rather than 0 when the
+        // opt-in is off, so the tiles disappear instead of claiming this
+        // household has spent nothing.
+        if (u.total_spend !== null) {
+            out.push({ value: formatMoney(u.total_spend), label: 'spend tracked' });
+        }
+        if (u.prices_recorded !== null) {
+            out.push({
+                value: formatCount(u.prices_recorded),
+                label: plural(u.prices_recorded, 'price recorded', 'prices recorded'),
+            });
+        }
         return out;
     });
 

@@ -95,6 +95,25 @@ export type BeforeYouShopResponse = {
     shop_in_days: number | null;
 };
 
+/** Cumulative "how much have you used Dora" counts for the About page.
+ *  Mirrors `UsageStatsDto` in `get_usage_stats.py`. Unlike everything else on
+ *  this service these only ever go up — they are a record of use, not a
+ *  snapshot of what needs doing.
+ *
+ *  The two money fields are `null` (never 0) when the money opt-in is off:
+ *  "you've tracked no spend" and "this install doesn't do money" are different
+ *  statements and the page renders them differently. */
+export type UsageStats = {
+    stock_items: number;
+    recipes: number;
+    meals_planned: number;
+    meals_cooked: number;
+    shopping_lists: number;
+    shops_completed: number;
+    total_spend: number | null;
+    prices_recorded: number | null;
+};
+
 export default class DashboardApiService {
     private httpClient: AxiosHttpClient;
 
@@ -104,6 +123,13 @@ export default class DashboardApiService {
 
     getSummaryAsync = async (): Promise<DashboardSummary> =>
         await this.httpClient.get<DashboardSummary>('/dashboard/summary');
+
+    /** Owner 2026-09-05 — the About page's "at a glance" block. Its own
+     *  endpoint rather than more fields on `/dashboard/summary`, because it
+     *  asks the opposite question: the summary is what needs doing now, this
+     *  is what the household has accumulated. */
+    getUsageStatsAsync = async (): Promise<UsageStats> =>
+        await this.httpClient.get<UsageStats>('/dashboard/usage-stats');
 
     /** P8-08 — the dashboard's kitchen-health card fetches this
      *  separately from the summary so a slow score query (waste +

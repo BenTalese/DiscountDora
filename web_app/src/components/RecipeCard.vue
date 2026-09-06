@@ -75,6 +75,26 @@
                     >*</span>
                     <q-tooltip v-if="!kcal.judgeable">{{ kcalTooltip }}</q-tooltip>
                 </q-chip>
+                <!-- Owner 2026-09-05 — cost per serving, next to kcal because
+                     they are the same species of fact: a per-serving figure
+                     the server worked out, which may rest on partial data and
+                     says so with the same asterisk. Per-serving rather than
+                     per-recipe so two cards side by side are comparable when
+                     one feeds two and the other feeds eight. -->
+                <q-chip
+                    v-if="moneyEnabled && cost.value !== null"
+                    dense
+                    :icon="ICONS.savings"
+                >
+                    {{ formatMoney(cost.value) }}<span
+                        v-if="!cost.judgeable"
+                        class="recipe-card__part"
+                        aria-hidden="true"
+                    >*</span>
+                    <q-tooltip>
+                        {{ cost.judgeable ? 'Estimated cost per serving.' : costTooltip }}
+                    </q-tooltip>
+                </q-chip>
                 <q-chip
                     v-if="(recipe.section_count ?? 0) > 1"
                     dense
@@ -183,6 +203,8 @@
     import { ICONS } from 'src/style/icons';
     import type { Recipe } from 'src/models/recipe';
     import { useRecipeDisplay } from 'src/composables/useRecipeDisplay';
+    import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
+    import { formatMoney } from 'src/composables/useMoney';
     import { ref } from 'vue';
 
     const props = withDefaults(
@@ -221,10 +243,12 @@
     // shared with the compact `RecipeRow` (R-003) — the card decides only
     // how to lay it out.
     const {
-        totalTime, ingredientCount, kcal, kcalTooltip, metaLine, tagNames, missingIds,
+        totalTime, ingredientCount, kcal, kcalTooltip, cost, costTooltip,
+        metaLine, tagNames, missingIds,
         cookable, cookButtonColor, cookButtonTooltip, addListTooltip,
         initial, mediaStyle, imageUrl,
     } = useRecipeDisplay(() => props.recipe);
+    const { moneyEnabled } = useMoneyEnabled();
 
     function onAddToList() {
         if (cookable.value) {

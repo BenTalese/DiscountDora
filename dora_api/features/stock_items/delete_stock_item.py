@@ -10,6 +10,8 @@ from dora_api.domain.entities.recipe import Recipe
 from dora_api.domain.entities.recipe_ingredient import RecipeIngredient
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.features.routers import STOCK_ITEM_ROUTER
+from dora_api.features.shopping_lists._line_retention import \
+    prepare_lines_for_anchor_delete
 from dora_api.infrastructure.api_response import no_content, not_found
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 from dora_api.infrastructure.ports import Repository
@@ -38,11 +40,12 @@ class DeleteStockItemHandler:
             return DeleteStockItemResponse(stock_item_not_found = True)
 
         # refuse deletion when the item is still an ingredient on any
-        # recipe. Every other FK to StockItem is either CASCADE (shopping
-        # lines, templates, product joins, level-change history, legacy
-        # substitutes) or SET NULL (waste events), so RecipeIngredient is
-        # the only blocker — and the one the user actually wants to know
-        # about, since they have to act in a different page to clear it.
+        # recipe. Every other FK to StockItem is either CASCADE (templates,
+        # product joins, level-change history, legacy substitutes, price
+        # observations) or SET NULL (waste events, and shopping-list lines
+        # since FU-883), so RecipeIngredient is the only blocker — and the
+        # one the user actually wants to know about, since they have to act
+        # in a different page to clear it.
         # Same query shape as get_stock_item_detail.linked_recipes.
         _Session = self.repository.session
         _IngredientRecipeIds = list(_Session.execute(
@@ -60,6 +63,12 @@ class DeleteStockItemHandler:
                     BlockingRecipe(recipe_id=r.id, name=r.name) for r in _Recipes
                 ]
             )
+
+        # FU-883 — lines on draft/shopping lists go with the item; lines on
+        # done lists survive as history (SET NULL + a name snapshot, which
+        # this also backfills for any line that never went through /finish).
+        # Runs before the delete so both land in one transaction.
+        prepare_lines_for_anchor_delete(self.repository, stock_item_id=stock_item_id)
 
         self.repository.remove(_StockItem)
         self.repository.save_changes()

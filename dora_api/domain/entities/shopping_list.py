@@ -55,9 +55,28 @@ class ShoppingListLine(BaseEntity):
     shopping_list_id: UUID
     # a line is anchored by stock_item_id OR product_id
     # (or both, when a product is nested under a stock item). At least
-    # one MUST be set; enforced by a DB CHECK + the add-line validator.
+    # one anchor MUST be set while the line is live; enforced by a DB CHECK
+    # + the add-line validator. Once the list is finished the CHECK also
+    # accepts `display_name_snapshot` alone — see that field.
     stock_item_id: UUID | None = None
     product_id: UUID | None = None
+    # The line's display name, frozen when the list is finished.
+    #
+    # A finished list is a receipt, and a receipt must not lose entries
+    # because the pantry moved on. Both anchors are ON DELETE SET NULL, so
+    # deleting a stock item or product leaves the historic line standing —
+    # but the *name* only ever lived on the anchor row, so without this the
+    # survivor would be nameless (which is why those FKs used to CASCADE and
+    # take the line with them).
+    #
+    # Written at `POST /finish` only. That is already the moment prices are
+    # frozen (`picked_offer_price` / `list_price_at_pick`) and is the enforced
+    # sole path to `done`, so it is the one place a list becomes immutable.
+    # Deliberately NOT written at add time: ~90% of lines never outlive their
+    # referent, so a copy per line would be dead weight and would need
+    # rename-drift handling. Lines on draft/shopping lists are deleted
+    # outright when their anchor goes, so they never need one.
+    display_name_snapshot: str | None = None
     quantity: int | None = None
     is_ticked: bool = False
     selected_product_id: UUID | None = None
@@ -137,6 +156,7 @@ class ShoppingListLine(BaseEntity):
         PREFERRED_BUY_ID = "preferred_buy_id"
         DEFERRED_BY_BUDGET = "deferred_by_budget"
         DEFERRED_REASON = "deferred_reason"
+        DISPLAY_NAME_SNAPSHOT = "display_name_snapshot"
 
 
 def format_list_date(value: date, today: date | None = None) -> str:

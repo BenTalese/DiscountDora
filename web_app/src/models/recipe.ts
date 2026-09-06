@@ -163,12 +163,24 @@ export type Recipe = {
      *  the list endpoint (the client uses `version_group_id` to know
      *  whether siblings might exist). */
     version_siblings: RecipeVersionSibling[];
-    /** C-4 Chunk 9 / DEC-5 — server-derived. Populated only on detail.
-     *  Null when no estimate could be computed (no linked products on
-     *  any ingredient). Client gates render on `useMoneyEnabled()`. */
+    /** C-4 Chunk 9 / DEC-5 — server-derived. Null when no estimate could
+     *  be computed (no linked products on any ingredient). Client gates
+     *  render on `useMoneyEnabled()`.
+     *
+     *  Owner 2026-09-05: no longer detail-only — the list endpoint
+     *  hydrates it too (in two queries for the whole page), so the
+     *  cookbook can show and sort on cost. Still null on every recipe
+     *  when money is off: the server skips the work entirely rather
+     *  than shipping figures the client is trusted to hide. */
     estimated_cost: number | null;
     estimated_cost_priced_count: number;
     estimated_cost_total_count: number;
+    /** Owner 2026-09-05 — the comparable figure across a list, since
+     *  recipes differ in yield. Server-owned (do NOT divide
+     *  `estimated_cost` by `servings` on the client). Null when the
+     *  recipe is unpriced *or* has no servings typed in — a blank
+     *  servings field is not "serves 1". */
+    estimated_cost_per_serving: number | null;
     /** Feedback 2026-08-19 — the per-ingredient working behind the
      *  estimate, shown when the cost card is expanded. Detail only. */
     estimated_cost_lines: RecipeCostLine[];

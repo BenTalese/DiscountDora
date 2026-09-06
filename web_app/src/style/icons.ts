@@ -328,6 +328,19 @@ export const ICONS = {
     recipe: 'mdi-book-open-page-variant',
     ingredients: 'mdi-food-variant',
     meal: 'mdi-silverware-fork-knife',
+    // Owner 2026-09-05 — `chef_hat` is THE glyph for *starting to cook*, on
+    // every surface that offers the action: the cookbook row and card, the
+    // recipe page's Cook mode button, both meal-plan "Cook now" menu items,
+    // and the dashboard's Next-to-cook button. Before this the same action
+    // wore three different glyphs (`chef_hat`, `restaurant_menu`,
+    // `restaurant`) depending on which surface you found it on. If you are
+    // adding a control that opens cook mode, it takes this icon.
+    //
+    // Not to be confused with the *state* axis below — `chef_hat` also marks
+    // "the pool is short one of these" in `NextToCookCard`'s `cookState`,
+    // which is the same idea (somebody has to cook it) rather than a clash.
+    // `meal` is the dish itself and `restaurant` is eating/meals generally;
+    // neither means the act.
     chef_hat: 'mdi-chef-hat',
     // Portions already cooked and waiting to be eaten (the surface formerly
     // called the "meal pool"). A fridge reads as "cooked, stored, ready" —

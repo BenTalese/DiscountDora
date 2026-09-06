@@ -51,6 +51,27 @@
                     calorie figure yet</template>.
                 </q-tooltip>
             </div>
+            <!-- Owner 2026-09-05 — the day's cost sits where the day's calories
+                 do, because it is the same kind of fact under the same coverage
+                 rule. Money-gated install-wide; with money off the server sends
+                 no figure and the cell doesn't exist. -->
+            <div
+                v-if="moneyEnabled && cost && cost.estimated_cost !== null"
+                class="text-caption dora-text-muted q-ml-sm"
+            >
+                {{ formatMoney(cost.estimated_cost) }}
+                <span v-if="cost.counted_meals < cost.total_meals">
+                    ({{ cost.counted_meals }}/{{ cost.total_meals }})
+                </span>
+                <q-tooltip>
+                    Estimated cost of {{ day.label }}'s meals at the servings
+                    they're planned for<template
+                        v-if="cost.counted_meals < cost.total_meals"
+                    >, counting {{ cost.counted_meals }} of
+                    {{ cost.total_meals }} meals — the rest have nothing priced
+                    yet</template>.
+                </q-tooltip>
+            </div>
         </component>
         <q-card-section v-if="!collapsed" class="q-pa-sm column q-gutter-xs">
             <!-- R-Phase 6 §4.6 — slot row is a real <button> so it's
@@ -72,8 +93,8 @@
                 <div class="slot-row__label">{{ slot }}</div>
                 <div class="slot-row__entries">
                     <MealPlanEntryChip
-                        v-for="entry in slotEntries(slot)"
-                        :key="entry.meal_plan_entry_id"
+                        v-for="{ key, entry } in keyedEntries(slotEntries(slot))"
+                        :key="key"
                         :entry="entry"
                         :show-slot="false"
                         :shortfall="entry.needs_cooking"
@@ -102,8 +123,8 @@
                 <div class="slot-row__label">Other</div>
                 <div class="slot-row__entries">
                     <MealPlanEntryChip
-                        v-for="entry in otherEntries"
-                        :key="entry.meal_plan_entry_id"
+                        v-for="{ key, entry } in keyedEntries(otherEntries)"
+                        :key="key"
                         :entry="entry"
                         :show-slot="true"
                         :shortfall="entry.needs_cooking"
@@ -170,8 +191,16 @@
 
 <script lang="ts" setup>
     import MealPlanEntryChip from 'components/MealPlanEntryChip.vue';
+    // Content-identity keys, not `meal_plan_entry_id` — see the helper's note:
+    // every save mints new entry ids, which remounted the chip mid-edit and
+    // took its open menu with it.
+    import { keyedEntries } from 'src/helpers/mealPlanEntryKey';
     import { ICONS } from 'src/style/icons';
-    import type { MealPlanDayNutrition, MealPlanEntry } from 'src/models/mealPlan';
+    import { formatMoney } from 'src/composables/useMoney';
+    import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
+    import type {
+        MealPlanDayCost, MealPlanDayNutrition, MealPlanEntry,
+    } from 'src/models/mealPlan';
     import type { WeekDay } from 'src/composables/useMealPlanner';
     import { computed, ref, watch } from 'vue';
 
@@ -202,7 +231,12 @@
         /** FU-637 — this day's server-summed calories. Null when nutrition is
          *  off or nothing on the day could be counted. */
         nutrition?: MealPlanDayNutrition | null;
+        /** Owner 2026-09-05 — this day's server-summed cost. Null when money
+         *  features are off or nothing on the day could be priced. */
+        cost?: MealPlanDayCost | null;
     }>();
+
+    const { moneyEnabled } = useMoneyEnabled();
 
     /* User-owned once the user touches it; re-seeded whenever the host's
        default changes — which is what a week change looks like from in here,

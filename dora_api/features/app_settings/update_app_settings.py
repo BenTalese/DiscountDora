@@ -39,7 +39,6 @@ class UpdateAppSettingsRequest(BaseModel):
     # no-op, which is the honest failure.
     # C-cross Chunk 1 — install-wide feature flags (proposal §2.6).
     money_enabled: bool | None = None
-    companion_ingestion_enabled: bool | None = None
     deals_email_enabled: bool | None = None
     # Nutrition, install-wide. `nutrition_mode` is validated against
     # NUTRITION_MODE_VALUES below (R-010 carve-out — one boundary point).
@@ -158,7 +157,6 @@ class UpdateAppSettingsHandler:
         # change; the rest are left alone.
         for _Attr in (
             "money_enabled",
-            "companion_ingestion_enabled",
             "deals_email_enabled",
             "nutrition_off_lookup_enabled",
         ):

@@ -102,7 +102,6 @@ def configure_mappings(db: SQLAlchemy):
         # admin can turn off from Settings → System.
         # C-cross Chunk 1 — install-wide feature flags (proposal §2.6).
         Column("money_enabled", Boolean, nullable=False, server_default=false()),
-        Column("companion_ingestion_enabled", Boolean, nullable=False, server_default=false()),
         Column("deals_email_enabled", Boolean, nullable=False, server_default=false()),
         # `products_enabled` column dropped (migration f1a2b3c4d5e6) —
         # products is a data-presence overlay (PROPOSAL_PRODUCTS_AS_OVERLAY).

@@ -326,6 +326,9 @@ export type RecipeNutrition = {
     /** Reason id → how many ingredients it accounts for. Only non-zero
      *  reasons are present. Copy for each id lives in the component. */
     uncounted: Partial<Record<RecipeNutritionGap, number>>;
+    /** The same gaps, named row by row. Detail path only — the cookbook list
+     *  ships the counts and nothing else, so this is empty there. */
+    uncounted_ingredients: RecipeNutritionGapIngredient[];
     /** The four nutrients the panel gained alongside the Health Star Rating
      *  (2026-08-27). Same per-serving basis as the macros above. */
     saturated_fat_g: number | null;
@@ -355,6 +358,16 @@ export type RecipeNutritionGap =
     | 'no_quantity'
     | 'no_conversion'
     | 'no_data';
+
+/** One ingredient behind a gap. `stock_item_id` is null exactly when the
+ *  reason is `not_linked` — for every other reason it's the pantry item the
+ *  fix is written to, which is what lets the panel offer the food search
+ *  inline instead of sending the cook to the pantry page. */
+export type RecipeNutritionGapIngredient = {
+    name: string | null;
+    stock_item_id: string | null;
+    reason: RecipeNutritionGap;
+};
 
 /** PROPOSAL_RECIPE_IMAGE_STEPS — closed set of recipe step payload modes.
  *  Kept as a const union (R-010) so a bad write fails at type-check. */

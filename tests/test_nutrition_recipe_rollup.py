@@ -251,6 +251,30 @@ def test__rollup__EveryFailureKind__IsNamedInTheCoverageMap():
     }
 
 
+def test__rollup__EveryFailureKind__NamesTheIngredientBehindIt():
+    # The counts say how many; this says which — the panel offers a "find a
+    # food" search per row, and it needs the pantry item to write the link to.
+    good = _Food("Flour", kcal=364.0)
+    recipe = _Recipe(
+        [
+            _Ingredient(_StockItem("Flour", good), 100, "g"),
+            _Ingredient(None, 1, "g"),
+            _Ingredient(_StockItem("Salt"), 1, "g"),
+        ],
+        servings=1,
+    )
+
+    result = rollup_recipe_nutrition(_repo_for(recipe, [good]), recipe)
+
+    assert [(row.name, row.reason) for row in result.uncounted_ingredients] == [
+        (None, REASON_NOT_LINKED),
+        ("Salt", REASON_NO_FOOD),
+    ]
+    # Only the linked row carries an anchor to fix it on.
+    assert result.uncounted_ingredients[0].stock_item_id is None
+    assert result.uncounted_ingredients[1].stock_item_id is not None
+
+
 def test__rollup__NothingCountable__ReportsNullsRatherThanZero():
     recipe = _Recipe([_Ingredient(None, 1, "g"), _Ingredient(None, 2, "g")])
 

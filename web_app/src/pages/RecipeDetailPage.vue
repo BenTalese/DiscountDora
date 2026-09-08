@@ -693,8 +693,11 @@
                          it, and a control you can't use is a control you have
                          to read past. -->
                     <div class="rn__sechead">
+                        <!-- Owner feedback 2026-09-08: the step/photo count came
+                             off the heading. The steps are numbered on screen
+                             directly below it, so the count restated something
+                             the reader can already see. -->
                         <h2 class="rn__sectitle" id="rnMet">Method</h2>
-                        <span class="rn__seccount">{{ methodCountLabel }}</span>
                         <BaseSegmented
                             v-if="methodEditing"
                             v-model="form.steps_mode"
@@ -891,16 +894,23 @@
                     v-model="detailOpen.nutrition"
                     dense-toggle
                 >
+                    <!-- Owner feedback 2026-09-08: no caption at all. The
+                         figure and its basis are one tap away and are stated
+                         properly there; restating the number on the collapsed
+                         row only raises the question of what it's per. -->
                     <template #header>
                         <q-item-section>
                             <h2 class="rn__sectitle">Nutrition</h2>
                         </q-item-section>
-                        <q-item-section side>
-                            <span class="rn__seccount">{{ nutritionCaption }}</span>
-                        </q-item-section>
                     </template>
                     <div class="rn__disc">
-                        <RecipeNutritionCard :nutrition="recipe.nutrition" />
+                        <!-- Linking a food from the gap list changes the
+                             server's rollup, so the recipe is re-fetched
+                             rather than patched in place (R-003). -->
+                        <RecipeNutritionCard
+                            :nutrition="recipe.nutrition"
+                            @linked="loadRecipe"
+                        />
                     </div>
                 </q-expansion-item>
 
@@ -1778,8 +1788,6 @@
     const versionSiblings = computed(() => recipe.value?.version_siblings ?? []);
 
     // ── Method ──────────────────────────────────────────────────────────
-    const topLevelSteps = computed(() =>
-        [...form.steps].filter((s) => !s.parent_client_id).sort((a, b) => a.sequence - b.sequence));
     /* A leading ordinal the author typed themselves — "1. ", "2) ", "3: ".
      * Free text is where people number their own steps, and the read face now
      * draws a numeral in a circle beside each line (owner 2026-09-03), so left
@@ -1800,17 +1808,6 @@
             // content that line has, odd as it is.
             return stripped.length > 0 ? stripped : l;
         }));
-    const methodCountLabel = computed(() => {
-        if (form.steps_mode === 'structured') {
-            const n = topLevelSteps.value.length;
-            return `${n} step${n === 1 ? '' : 's'}`;
-        }
-        if (form.steps_mode === 'image') {
-            const n = form.step_images.length;
-            return `${n} photo${n === 1 ? '' : 's'}`;
-        }
-        return `${freeformLines.value.length} line${freeformLines.value.length === 1 ? '' : 's'}`;
-    });
     /** Ingredient rows lit by the currently selected step. */
     const litIngredients = computed(() => {
         const ids = new Set<string>();
@@ -1893,11 +1890,8 @@
     // (owner feedback 2026-08-27): a caption listing what is inside a drawer
     // one tap away is a summary of nothing. The version *count* survived as a
     // pill inside the panel, next to the list it counts.
-    const nutritionCaption = computed(() => {
-        const n = recipe.value?.nutrition;
-        if (!n) return '';
-        return n.kcal ? `${Math.round(n.kcal)} kcal per serving` : 'Per serving';
-    });
+    // `nutritionCaption` went with the caption it fed (owner, 2026-09-08) — see
+    // the panel's header comment.
 
     // ── Ingredient + section mutations ──────────────────────────────────
     /** `sectionId` is the card the button lives in, so a row lands where it

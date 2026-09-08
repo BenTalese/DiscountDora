@@ -22,6 +22,49 @@ top-to-bottom.
 
 ---
 
+## Deploy — the companion stack (2026-09-07) — origin FU-790 / FU-892
+
+Nothing here ran against a real daemon; the whole path is unproven. Run
+`./deploy-dora.sh` and walk down.
+
+- [ ] The **companion image builds** — `pip install`, `npm ci` and `npm run
+      build` all clear inside the container.
+- [ ] Both stacks report healthy: `docker compose ps` in `~/DiscountDora` and in
+      `~/dora-companion`.
+- [ ] **merchant_api registered its routes** — `docker compose logs
+      dora_companion` shows no zero-route startup, and
+      `http://<server>:5172/api` answers.
+- [ ] The companion SPA loads at `http://<server>:5175`, and a **deep link
+      survives a refresh** (nginx `try_files`, history-mode router).
+- [ ] The SPA's baked-in mapi URL resolves **from the browser** — search returns
+      results rather than a CORS or connection error.
+- [ ] **Push to Dora works on a freshly wiped deploy**, without touching the API
+      access page: run a search, push, confirm records land. This is the whole
+      point of the deploy-time minting.
+- [ ] Settings → Admin → API access lists **exactly one** key labelled
+      `companion` after two consecutive deploys, not two.
+- [ ] `./deploy-dora.sh mint-key` re-keys a running companion and pushing still
+      works afterwards.
+- [ ] **Product Search appears in Dora's nav after a wiping deploy** and opens
+      the companion — no visit to the admin page needed. Same check on a local
+      dev boot, where it should point at `localhost:5175`.
+- [ ] The **container-name reclaim** actually fires — deploy over the existing
+      `discountdora`-project container and confirm it's torn down instead of the
+      `up` dying on a name conflict.
+
+## Price history + stock-item Products tab (2026-09-06)
+
+Driven live at 1440, 375 and in `pesto-dark`, so the toolbar, the money field,
+the chart fit and the dark-mode tooltip are all confirmed. What's left:
+
+- [ ] **Set a real price alert** from the notify field and confirm it fires when
+      the price drops below it (the field and button are verified; the alert
+      firing end-to-end is not).
+- [ ] On a stock item's **Products** tab with **two or more** shopping lists
+      open: the cart button offers the picker rather than silently choosing, and
+      a second tap removes. (Driven with one list, where it correctly showed the
+      already-on-a-list state.)
+
 ## My Products — the rebuild (2026-09-06)
 
 Driven live at 1440 and 375 on the dense seed, so layout, both view modes, the
@@ -37,6 +80,17 @@ bulk bar and the five card actions are confirmed. What the seed can't show:
       *low stock on deal*, *out of stock on deal*, *essential, low, on deal*.
 - [ ] The active toggle round-trips: switch a product off, and confirm the
       companion's next sync skips it (pairs with the Companion section below).
+
+## Companion — Dora Target page (2026-09-07)
+
+The `/api/push/config` contract is tested and was confirmed live by curl (real
+URL returned, key absent). The page that renders it wasn't walked.
+
+- [ ] Open the companion's **Dora target** page: the URL shown matches the
+      backend's `DORA_INGEST_URL` (not the old `VITE_DORA_LABEL`), and the
+      bearer-key chip reads *Set*.
+- [ ] Unset `DORA_INGEST_KEY` and reload: URL still shown, key chip reads
+      *Not set*. (The point is that it names which half is missing.)
 
 ## Companion — scheduled refresh (2026-09-06)
 

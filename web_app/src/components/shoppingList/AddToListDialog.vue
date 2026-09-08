@@ -38,8 +38,13 @@
 
         <q-separator />
 
+        <!-- Owner feedback 2026-09-08: the rows ran together as one block of
+             text — a dense list of two-line items with nothing between them.
+             They're separated now, and no longer dense: each row is a tap
+             target carrying a name, a caption and a state chip, which is more
+             than a dense row's height can hold legibly (D-004). -->
         <q-card-section class="q-pt-sm add-to-list__list">
-            <q-list dense>
+            <q-list separator>
                 <AddToListRowItem
                     v-for="row in requiredRows"
                     :key="row.stockItemId"
@@ -50,12 +55,13 @@
                 />
 
                 <!-- Cookbook revision §1.9 — optional ingredients section.
-                     Unchecked by default regardless of stock level. -->
-                <q-item v-if="optionalRows.length > 0" class="add-to-list__sep">
-                    <q-item-section class="text-caption dora-text-muted">
-                        ─── Optional ───
-                    </q-item-section>
-                </q-item>
+                     Unchecked by default regardless of stock level. A section
+                     heading rather than the old em-dash-padded fake rule: it
+                     reads as a heading at any width, and it can't be mistaken
+                     for a row you're meant to tick. -->
+                <div v-if="optionalRows.length > 0" class="add-to-list__grouphead">
+                    Optional
+                </div>
                 <AddToListRowItem
                     v-for="row in optionalRows"
                     :key="row.stockItemId"
@@ -314,6 +320,17 @@
     .add-to-list__list {
         max-height: 360px;
         overflow-y: auto;
+    }
+    /* Same treatment the cost breakdown's group heads wear, so the two
+       recipe-side dialogs label their groups the same way. */
+    .add-to-list__grouphead {
+        margin-top: var(--space-3, 12px);
+        padding: var(--space-2, 8px) var(--space-4, 16px) var(--space-1, 4px);
+        font-size: var(--font-size-xs, 0.6875rem);
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--text-muted);
     }
     /* Says "here's what we couldn't take" — informational, so it borrows the
        hint treatment rather than a warning colour (D-013). */

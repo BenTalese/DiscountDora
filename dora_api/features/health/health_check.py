@@ -128,7 +128,6 @@ def _feature_flags(setting) -> dict[str, bool]:
         # no real off switch; see migration a7c3e5d19f2b.
         "money": False,
         "nutrition": False,
-        "companion_ingestion": False,
         "deals_email": False,
         # Products is a data-presence overlay (PROPOSAL_PRODUCTS_AS_OVERLAY /
         # true iff product data has been ingested — not an admin/user
@@ -170,7 +169,6 @@ def _feature_flags(setting) -> dict[str, bool]:
                 getattr(setting, "nutrition_rating_scheme", RATING_SCHEME_NONE)
                 or RATING_SCHEME_NONE)
             flags["money"] = bool(setting.money_enabled)
-            flags["companion_ingestion"] = bool(setting.companion_ingestion_enabled)
             flags["deals_email"] = bool(setting.deals_email_enabled)
             # Nutrition is install-wide now (2026-08-14). `nutrition` keeps its
             # boolean meaning for the many gates that only ask "is it on at

@@ -64,6 +64,33 @@ def extract_bearer_token() -> str | None:
     return token or None
 
 
+def authenticate_ingestion_request():
+    """The single front door check for every `/api/ingest/*` route.
+
+    Returns `(source, None)` when the caller may proceed, or
+    `(None, response)` with the response to return.
+
+    **Authentication IS the gate.** An install-wide
+    `companion_ingestion_enabled` toggle briefly sat here too and was removed
+    the same day (owner call, migration `e7a2c4f9b361`): ingestion already
+    requires a bearer key an admin minted, and every key is an
+    `IngestionSource` with its own `enabled` flag. Not wanting ingestion means
+    not minting a key, or disabling that source — per source, rather than
+    install-wide. A second, coarser switch over the same door was redundant.
+
+    Kept as a shared helper even without the flag, because it still collapses
+    the identical four-line auth preamble across four routes (R-087).
+    """
+    from dora_api.infrastructure.api_response import unauthorized
+
+    raw_token = extract_bearer_token()
+    source = find_ingestion_source(raw_token) if raw_token else None
+    if source is None:
+        return None, unauthorized("Bearer token missing or invalid.")
+
+    return source, None
+
+
 def stamp_used(source: IngestionSource) -> None:
     """Update `last_used_at` to now. Callers commit alongside their own
     write so the bump is atomic with the ingest result."""

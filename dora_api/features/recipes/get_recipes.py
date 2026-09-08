@@ -292,6 +292,21 @@ class RecipeNutriScoreDto:
 
 
 @dataclass(frozen=True, slots=True)
+class RecipeNutritionGapDto:
+    """One ingredient the rollup couldn't count, named and reasoned.
+
+    Owner feedback 2026-09-08 — the panel could say "2 stock items not linked
+    to a food" but not *which*, so the reader had to go and find them. The id
+    travels because it is what the fix is applied to: linking a food is a write
+    against that stock item, and the panel can offer the search inline rather
+    than sending the cook to the pantry page and back.
+    """
+    name: str | None
+    stock_item_id: str | None
+    reason: str
+
+
+@dataclass(frozen=True, slots=True)
 class RecipeNutritionDto:
     """FU-635 chunk 6 — complex-mode nutrition rolled up from the ingredients'
     linked foods. Detail endpoint only, and only while the install is in
@@ -336,6 +351,10 @@ class RecipeNutritionDto:
     # the SPA without removing it.
     health_star_rating: 'RecipeHealthStarRatingDto | None' = None
     nutri_score: 'RecipeNutriScoreDto | None' = None
+    # The named gaps behind `uncounted`. Detail path only — the cookbook list
+    # renders a kcal badge and has no use for a per-ingredient ledger, and
+    # shipping one per card would grow the page payload for nothing.
+    uncounted_ingredients: list = field(default_factory=list)
 
 
 @dataclass(frozen=True, slots=True)
@@ -1115,7 +1134,12 @@ class GetRecipesHandler:
         )
 
     @classmethod
-    def _nutrition_dto(cls, rollup, scheme: str = RATING_SCHEME_NONE) -> 'RecipeNutritionDto':  # noqa: ANN001
+    def _nutrition_dto(
+        cls,
+        rollup,  # noqa: ANN001
+        scheme: str = RATING_SCHEME_NONE,
+        include_gaps: bool = False,
+    ) -> 'RecipeNutritionDto':
         return RecipeNutritionDto(
             basis=rollup.basis,
             servings=rollup.servings,
@@ -1144,6 +1168,14 @@ class GetRecipesHandler:
                 cls._nutri_score_dto(rollup)
                 if scheme == RATING_SCHEME_NUTRI_SCORE else None
             ),
+            uncounted_ingredients=[
+                RecipeNutritionGapDto(
+                    name=row.name,
+                    stock_item_id=str(row.stock_item_id) if row.stock_item_id else None,
+                    reason=row.reason,
+                )
+                for row in (rollup.uncounted_ingredients if include_gaps else [])
+            ],
         )
 
     def _compute_nutrition(self, dto: RecipeDto, entity: Recipe) -> RecipeDto:
@@ -1169,7 +1201,7 @@ class GetRecipesHandler:
         return dataclasses.replace(
             dto,
             nutrition=(
-                self._nutrition_dto(rollup, scheme)
+                self._nutrition_dto(rollup, scheme, include_gaps=True)
                 if rollup is not None else None
             ),
             kcal_per_serving=kcal,

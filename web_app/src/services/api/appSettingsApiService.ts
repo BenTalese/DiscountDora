@@ -13,7 +13,6 @@ export type AppSettings = {
     // buy-verdict oracle. Default on (pure-personal feature).
     // C-cross Chunk 1 — install-wide feature flags (proposal §2.6).
     money_enabled: boolean;
-    companion_ingestion_enabled: boolean;
     deals_email_enabled: boolean;
     // Nutrition, install-wide (2026-08-14). Replaced `nutrition_enabled` +
     // the per-user mode + the dead `nutrition_db_source` seam.

@@ -41,6 +41,549 @@ next.
 
 ---
 
+## 2026-09-08 — **Recipe view feedback: naming the nutrition gaps**
+
+**Status: complete and driven in the browser.** Six owner items on the recipe
+view; all six landed, and the whole batch was walked live in the scratch
+instance (5171 backend + 5174 SPA, dense seed, pesto-dark).
+
+**The five small ones.** The step/photo counter came off the Method heading —
+the steps are numbered right below it. The Nutrition drawer's collapsed caption
+first dropped its `per serving` suffix, then went entirely — owner's follow-up
+was *"no text is better, no kcal text"*, and he's right: a bare number on the
+collapsed row only raises the question of what it's per, and the panel one tap
+away answers both. `nutritionCaption` deleted with it. The
+add-to-list dialog's rows were `dense` and butted together; they are separated
+and full-height now, and the `─── Optional ───` fake rule became a proper
+section heading — that dialog is shared with meal plans, so both surfaces
+improve. The cost breakdown's per-line share bars used `--brand-primary-soft`,
+which in every dark theme is a low-alpha wash of the brand hue on a near-black
+track: the fill was invisible in pesto-dark. Solid `--brand-primary` now, with
+thickness (4px vs 6px) still separating it from the coverage bar above.
+
+**The one with substance: the nutrition panel.** Two asks with one answer — it
+"looks like a blob of text in a box", and there was no way to fix an ingredient
+it couldn't count. Both are the same failure: the panel could say *"3 stock
+items not linked to a food"* but not **which**, so it was a paragraph you could
+only nod at.
+
+Server side, the rollup now records each gap as a named row alongside the count
+(`UncountedIngredient(name, stock_item_id, reason)` → `RecipeNutritionGapDto`).
+The `stock_item_id` is the point: a `no_food` / `no_data` gap is closed by a
+write against that pantry item, so the panel can offer the search inline. Gated
+to the **detail** path via `_nutrition_dto(..., include_gaps=True)` — the
+cookbook list renders a kcal badge and would carry a per-ingredient ledger per
+card for nothing.
+
+Client side the card was rebuilt: headline figure + basis pill, a labelled grid
+of every nutrient the rollup knew (the rating's sat fat / sugars / fibre /
+sodium were being computed and never displayed), the cost dialog's coverage bar,
+then the gaps grouped by reason with **Find a food** on the two reasons that
+live on the stock item. The picker is `NutritionFoodPicker` unchanged (R-001) —
+same search, same "nothing is saved until you tap a row" contract; all this
+surface adds is the anchor. On a pick it writes `nutrition_food_id` through the
+stock-item store and emits `linked`, and the page re-fetches rather than patching
+the rollup client-side (R-003).
+
+The three reasons that are **not** offered a search (`not_linked`,
+`no_quantity`, `no_conversion`) are fixed by editing the ingredient row, which
+is the page behind the drawer — a food search there would point at the wrong
+thing.
+
+**Verified live.** Carbonara in the dense seed starts at 0 of 4 counted with
+three `no_food` rows and one `no_conversion`; linking Flour to Spaghetti from
+the panel took it to 1 of 4 with the full nutrient grid, and the gap list shrank
+by that row. Also checked with `nutrition_rating_scheme=health_star` so the star
+block + point ledger were exercised. Cost dialog and add-to-list dialog
+screenshotted in pesto-dark.
+
+**Green:** 1030 backend tests (one new rollup test pins the named gaps),
+`vue-tsc`, eslint on the touched files.
+
+**Standards close-gate.** R-001 (picker + `RecipeInfoCard` reused, not
+re-implemented), R-003 (the gap identity is the server's; the client maps copy
+only, and re-fetches after a write rather than patching the rollup), R-010
+(gap reasons stay a closed set on both sides), D-017 (every new declaration is a
+token). D-004 caught one: the gap rows were floored at 36px while the button
+inside them lifts to 44px on a coarse pointer — rows now lift to 52px to match.
+**No new ADR.** The "group the gaps by reason under an uppercase head" shape is
+now in two places (this and `RecipeCostDialog`), which is worth watching, but
+the actionable half is a single instance — not yet a rule.
+
+**Next up:** nothing carried. FU-895 is the one loop this spun off.
+
+---
+
+## 2026-09-07 (×4) — **Publishing the companion, and a key that died every deploy**
+
+**Status: code-complete, entirely unverified against a real daemon.** Owner
+asked for `~/Desktop/deploy-dora.sh` to publish the companion alongside Dora,
+noting dockerisation might be a prerequisite. It was: `dora-companion` had no
+container story at all.
+
+**Owner decisions taken up front:** separate Compose stack (not merged into
+Dora's compose, not one container); the script handles the ingestion key
+itself ("i'm lazy and this is just for testing"); the script stays on the
+Desktop, untracked.
+
+**What was built.** Companion repo: `Dockerfile`, `compose.yml`, `nginx.conf`,
+`startup.sh`, `.dockerignore` — same monolith shape as Dora's image (Python API
+backgrounded, nginx foregrounded so the container's life is nginx's life), on
+5172/5175. Dora repo: `scripts/mint_ingestion_key.py`. Deploy script: companion
+config block, `remote()` and `sync_tree()` helpers, `deploy_dora` /
+`deploy_companion` / `mint_key_only` / `report_urls`, and sub-commands
+`dora` · `companion` · `mint-key` · `init-env`.
+
+**The interesting problem was the key.** The companion authenticates to Dora
+with a bearer key that exists only as a SHA-256 hash in Dora's DB, minted by
+hand on the API access page. `WIPE_DB=true` destroys it every deploy — so every
+deploy silently muted the companion until the owner noticed and re-pasted.
+Options were: bootstrap env var (real feature change in Dora, static key in a
+file), stop wiping (changes deploy semantics), or mint at deploy time. Took the
+third: the deploy waits for `/api/health`, execs the mint script in Dora's
+container, captures the raw key on stdout, writes the companion's `.env`, then
+starts it. The label is the key's *identity* — re-minting revokes the prior
+one, so this converges on exactly one live key rather than accreting dead rows.
+
+**R-087/R-003 caught a first draft.** The mint script originally re-implemented
+what `CreateIngestionSourceHandler` does — mint, hash, build entity, save. That
+is precisely the parallel-implementation R-087 forbids: two doors onto the same
+capability that can drift. Rewritten to drive the existing
+List/Create/Delete handlers; the script is a *door*, not a second
+implementation. Re-verified after the refactor.
+
+**Also fixed en route: FU-790's `reclaim_container_name` had never run.** It was
+written in August and never called — `deploy()` went straight from teardown to
+`up`, so the container-name-conflict hardening had protected exactly zero
+deploys. Wired into `deploy_dora()` and parameterised to `(container, path,
+wipe)` so the companion stack gets it too.
+
+**What I could and couldn't verify.** Verified: the mint script end-to-end
+against a throwaway SQLite (one source per label, new key authenticates via
+`find_ingestion_source`, previous key rejected); `pytest -k ingestion` 11
+passed; `bash -n`; a stubbed dry-run of the whole deploy showing correct
+ordering, a correct generated companion `.env`, and the empty-key abort refusing
+to write a broken file; `docker compose config`; and `npm run build` producing a
+flat `dist/` with both `VITE_*` args inlined. **Not** verified: the image never
+built — Docker needed an interactive sudo password. So `pip install`, `npm ci`
+(lockfile drift would only show there), and whether merchant_api registers its
+routes under the container's CWD are all open. That's FU-892 + a DORA_VERIFY
+section; the first real deploy settles it.
+
+**Found, not fixed:** the owner's local companion `.env` sets
+`DORA_INGEST_URL=http://localhost:5174/api/ingest` — wrong on both counts
+(the client appends `/api/ingest` itself, and 5174 is nginx, which doesn't proxy
+`/api`). Local pushes must be 404ing. Logged as FU-893 rather than edited, since
+it's his untracked local config.
+
+**Then, same unit — owner said "fix the issues for me":**
+
+- **FU-893 fixed** (now in `_RESOLVED`): companion `.env` → `http://localhost:5170`.
+  Took a `.env.bak-preclaude` backup first, then deleted it on noticing the
+  repo's `.gitignore` covers `.env` but not `.env.bak-*` — an untracked,
+  committable file full of live secrets is a worse problem than the one it
+  insured against, and the change is one documented line.
+- **SSH password moved out of the script** to `~/.config/dora-deploy.env`
+  (mode 600), sourced at run time via `DEPLOY_SECRETS_FILE`. Done with a
+  transform that never reproduced the value in a tool call or in output. The
+  script now holds no credential — which incidentally removes the reason it
+  couldn't be committed (FU-790 (c) updated to say so; owner still wants it on
+  the Desktop). Verified both branches: with the file present it resolves a
+  17-char password and picks `sshpass`; with `DEPLOY_SECRETS_FILE` pointed at a
+  missing path it falls back to SSH-key mode instead of crashing under
+  `set -u`. Re-ran the full stubbed dry-run afterwards — unchanged.
+
+**Then — "add the companion URL somewhere I won't have to remember it":**
+
+The mechanism already existed and needed no new surface: `AppSetting.
+product_search_url` (Phase D / FU-186), the sanctioned carve-out to the
+invisibility rule — Dora shows a neutral "Product Search" nav entry that stays
+hidden while the URL is empty. Wiping the DB empties it, which is why it kept
+vanishing. Populated from both ends:
+
+- **Deploy** → `scripts/set_product_search_url.py`, run via `docker compose
+  exec` as Companion step 6, and again from `mint-key` (a wiped DB loses the URL
+  and the key together, which is exactly that command's scenario). Drives
+  `UpdateAppSettingsHandler` — same R-087/R-003 reasoning as the mint script, and
+  it inherits the scheme validation for free (verified: `javascript:` rejected,
+  exit 1, value unchanged).
+- **Dev boot** → `_seed_local_product_search_url()` → `http://localhost:5175`.
+
+**Caught a wrong placement mid-way.** I first put this in `seed_dev_data`, which
+would have looked right and silently never run: an interactive boot defaults to
+the **dense** dataset, and that branch `return`s before `seed_dev_data` is
+reached. Moved to `init_db` just after `create_all`, one call site covering both
+datasets. Excluded from `is_test_env` deliberately — the e2e suite asserts a
+blank default and a dev convenience shouldn't move that baseline. Verified by
+booting **both** datasets and reading the value back, not by reasoning about it.
+
+Gates: 107 passed across `-k "settings or seed or ingestion or startup"`; the
+app-settings e2e set 21 passed; deploy script `bash -n` + dry-run showing step
+6 firing with the right URL.
+
+**Next up:** run `./deploy-dora.sh` and walk the DORA_VERIFY section.
+
+---
+
+## 2026-09-07 (×4) — **Batch E complete: the Aldi rewrite. Products program closed.**
+
+**Status: complete. The eight-batch products program is DONE.** Gates: companion
+pytest **69 passed** (16 new Aldi tests replacing 13 retired ones); verified
+**live** against aldi.com.au — search returns real offers and
+refresh-by-stockcode round-trips.
+
+**Unblocked by the owner confirming Aldi publishes no sales data.** That was the
+one thing I refused to guess, because `price_was` drives Dora's whole discount
+story.
+
+**It was a rewrite, not a selector update.** The old URLs 302 to `/products`,
+all six old class names are gone, and Aldi now runs **Nuxt 3 on Spryker**,
+server-rendering products as JSON into `<script id="__NUXT_DATA__">` — a flat
+"devalue" array where integers are *indices into the same array*.
+
+**Both things the old provider lacked are server-side:** `?q=` full-text search
+(one request, replacing a curated name list + fuzzy matching + a week-long
+per-category cache) and `?page=` pagination.
+
+**Capability gained, not parity restored.** `sku` and `brandName` are in the
+payload; both were hardcoded `None`, which meant **batch D's refresh-by-stockcode
+could never have worked for Aldi** — a hole I didn't know about when I built D.
+`get_product` now matches SKU first, falling back to an *exact* name and never a
+fuzzy one: an approximate match silently reprices the wrong product, which is
+FU-881's failure wearing a different hat.
+
+**`price_was` = `price_now`.** Equal states "no markdown"; `0.0` would read as
+"was free" and make `price_difference` negative. **Consequence recorded in the
+code, the tests and the changelog: Aldi products never appear under Dora's
+on-deal filters** — correct, because there is never a deal. Worth watching that
+this reads as "no deals" rather than "broken" once real Aldi data is in.
+
+**Two defects only the real payload revealed** — neither guessable from a
+fixture I'd have written myself: `"1,000 ml"` defeats
+`_extract_value_and_unit_from_size` (thousands separator → size silently lost),
+and sizeless products (a milk frother) logged a parse warning for a perfectly
+normal case, the kind of noise that trains an operator to ignore the log.
+
+**Retired with it:** `aldi_products_by_category.json` + its cache-seeding, the
+`AldiProductOffer` entity, and the old HTML tests. Those tests are the lesson —
+**they passed happily against invented HTML while the live selectors had been
+dead for months.** The replacement pins a *real captured payload*
+(`tests/fixtures/aldi_nuxt_payload.json`). Three of the four FU-884 defects are
+now impossible by construction; the fourth (`get_product` failing softly) was
+ported forward rather than dropped.
+
+**Not pursued:** `api.aldi.com.au` 403s unauthenticated. Getting past that means
+circumventing an access control, so it was dropped the moment the 403 appeared —
+and the public payload is the better source anyway.
+
+**Engineering-standards close-gate.** R-019/ADR-014 (no magic): `_resolve` is an
+explicit named walker with the encoding explained, not a clever recursive
+comprehension — and it deliberately refuses to follow a reference into a
+container, which is exactly the trap my first attempt fell into. R-003: no
+duplicated derivation; the payload is the single source. **ADR evaluation:** no
+new rule. The candidate — *"pin a scraper against a captured real payload, never
+a hand-written sample"* — is a testing habit better carried by this worklog entry
+and the fixture's own docstring than by a new R-rule.
+
+**Products program status: all eight batches closed.** OD-1, OD-3 and OD-4 are
+answered. **OD-2 (manual product entry) is the only open question**, and is a
+product decision rather than work — put to the owner now.
+
+---
+
+## 2026-09-07 (×3) — **A switch that lied, and a phase row that did too**
+
+**Status: complete.** Gates: **pytest 2344 passed on SQLite** (only the four
+known FU-762 reds — 23 more passing than the session baseline). Products
+program **parked** by the owner at the top of this unit.
+
+**Two things were claimed that weren't true. Both are now either fixed or
+corrected in the record.**
+
+**1. `PROJECT_STATE` said meal-reconcile Chunk 6 was Phase 1's last unbuilt
+item. It was built weeks ago** (commit `850c04ae`, an earlier feedback batch)
+and the row was never updated. Verified properly rather than trusting either
+source: `AdminSystemMealReconcileSettings.vue` exists, is routed at
+`/settings/admin/system/meal-reconcile`, sits in the settings nav, and meets the
+Chunk-6 spec — admin-gated toggle on `auto_drain_past_meals`, household-voice
+explainer, link through to the reconcile page, and it even switches its own copy
+between "Meal log" and "Reconcile past meals" depending on the toggle. **Phase 1
+has nothing unbuilt; all that remains there is browser-verify.** Row corrected.
+*This is the second time today a governing doc asserted something false (PF-6
+was the first). Verify before building on a doc's claim — including my own.*
+
+**2. `companion_ingestion_enabled` gated nothing — [[FU-866]], now resolved.**
+The toggle is labelled *"Product data ingestion — accept product offer data from
+an external source"*, and every ingest request was accepted on its bearer key
+alone. An operator could switch it off and believe the door was shut. That is
+worse than having no switch, and it was the **second instance of the exact
+defect R-078/ADR-075 was written for**, on the same settings page as the first.
+
+**Design calls worth keeping:**
+- **All four doors, not just the write.** Batch, link-status, product list and
+  delete. Gating the write while leaving *delete* open would have been its own
+  lie. The check sits in `authenticate_ingestion_request()`, which every door
+  already calls for auth, so a fifth route can't silently skip it — the same
+  reasoning as R-087.
+- **Authenticate first, then gate.** A caller with no valid key gets 401 and
+  learns nothing about the install; only a legitimate key-holder is told 403
+  and where to fix it. Answering 403 to anonymous callers would leak install
+  config to anyone who guessed the URL. Two tests pin that ordering.
+- **The default stayed `False`.** This FU was deferred for months because
+  wiring the gate would break existing pushers. The owner's *"no real usage
+  yet"* dissolved that objection, so the default was decided **on merit**
+  instead of on migration-compat: an inbound write door should be shut on a
+  fresh install, which is what the setting's own copy promises. The **dev seeds**
+  enable it instead — a seeded install holds ingested products, so a closed door
+  there would contradict its own data. That turned 23 red ingest tests green
+  without weakening the posture. *Convenience and correctness pointed the same
+  way here, but the reasoning was the second one.*
+
+⚠️ **Owner consequence, stated plainly:** the companion will **403 until you
+switch Product data ingestion on** (Settings → Admin → Data & access). One
+toggle — and it now means what it says.
+
+**Engineering-standards close-gate.** R-078/ADR-075 is the rule this closes —
+*a flag that gates nothing is either wired up or deleted*; wired. R-087's
+shared-door reasoning is reused for the gate's placement. **ADR evaluation:**
+no new rule. R-078 already covers it; this is its second enforcement, not a new
+decision. Worth noting the pattern though: both instances were on the same
+settings page, which suggests a sweep of the remaining install flags for the
+same defect would be cheap — logged as a candidate rather than done here.
+
+**AMENDED same day — the toggle was then removed, not kept.** Owner: *"the
+toggle is redundant, we should remove it."* They were right, and it is the
+better answer than the one I'd shipped hours earlier: **ingestion already
+requires a bearer key an admin minted**, and every key is an `IngestionSource`
+with its own `enabled` flag. Not wanting ingestion means not minting a key, or
+disabling that source — per source, rather than install-wide. Two switches over
+one door is worse than one. R-078 says *wire it up or drop it*; I took the first
+branch, the owner took the second, and the second is right.
+
+Migration **`e7a2c4f9b361`** drops the column, following the
+`meal_planning_enabled` precedent exactly. Gone with it: the health flag, the
+admin toggle, the `companionIngestion` accessor (no consumers), the seed lines,
+and my own gate tests. **Kept:** `authenticate_ingestion_request()` — introduced
+to host the gate, but it still collapses the identical four-line auth preamble
+across four routes, which earns its place without the flag (R-087). The
+`app_settings` DTO snapshot caught the removed key, exactly as designed.
+
+**Worth sitting with:** I spent that unit making a switch honest, and the right
+answer was that the switch shouldn't exist. Wiring it up was defensible — R-078
+permits either branch — but I chose the branch that *preserved* my earlier
+assumption rather than questioning whether the control was needed at all, when
+`IngestionSource.enabled` was sitting right there in the same auth function I
+was editing. **Ask "should this exist?" before "why doesn't this work?"**
+
+**Next up:** owner's call. Phase 1 is fully built; the products program is
+parked; Phase 4 (open-source release, ~0%) is the largest untouched block.
+[[FU-892]] (sweep the remaining install flags for the same defect) is now a
+sharper suggestion than when raised — this instance resolved by *deletion*, so
+that sweep should ask of each flag "is this control needed?", not just "is it
+wired?".
+
+---
+
+## 2026-09-07 (later) — **Batch E (partial): the scraper defects, and a severity I had backwards**
+
+**Status: partial by design.** Gates: companion pytest **69 passed** (18 new);
+`vue-tsc` clean; health endpoint confirmed live. All changes in the companion.
+
+Batch E of [`IMPL_PLAN_PRODUCTS_PROGRAM.md`](docs/04_proposals/IMPL_PLAN_PRODUCTS_PROGRAM.md) —
+everything that doesn't require the redesigned Aldi markup or an OD-3 answer.
+
+**All four FU-884 defects fixed — and measuring them reordered their severity,
+which is the part worth carrying forward:**
+1. **Cents parsed as dollars.** `"80c"` → **80.0, not 0.80**. A 100× error that
+   lands in Dora as a real price and poisons the product's history and every
+   cheapest-comparison built on it. I had logged this **last**, as "fragile
+   price parsing". It is comfortably the worst of the four.
+2. **`get_product` raised `StopIteration`** despite its `| None` signature —
+   worst inside batch D's scheduled sync, where one delisted product would
+   abort the entire refresh run.
+3. **Caches were class attributes**, shared across instances while the category
+   map was per-instance.
+4. **`rstrip` vs `removesuffix`** — and I had this **overstated**. The FU said
+   names "are being mangled today", and I repeated that to the owner. Sweeping
+   plausible Aldi listings found **no case where the two disagree**; divergence
+   needs the size to repeat or overlap (`"Rice 1kg1kg"`). It is a latent hazard,
+   fixed defensively. FU-884's wording, the source comment and the test are all
+   corrected to say so. **Two claims, both stated confidently, both wrong in
+   opposite directions — the fix was to measure rather than to reason.**
+
+**Selector drift is now legible.** The health check already detected drift
+implicitly (stale selectors → zero offers → unhealthy) but reported a bare
+boolean, so "site down" and "site redesigned" looked identical — which is
+exactly why Aldi's breakage was invisible. Providers now record
+`last_checked_at` / `last_result_count` / `last_error` on
+`GET /api/health/data-providers`; **zero results with no error is the drift
+signature.** Fixed the *same* bare-`next()` defect there too: with no enabled
+merchant it raised `StopIteration`, was swallowed by `except Exception`, and
+reported a switched-off shop as a broken scraper.
+
+**Deliberately not done, and why:**
+- **The Aldi selector rewrite** needs the current HTML. That means either a live
+  fetch or a saved copy of a category page — and me issuing automated requests
+  to a third-party retailer is different from the user's own tool doing so on
+  their behalf. **Asked rather than assumed.**
+- **Retry/backoff.** The base class has unused `_max_attempt_time_seconds` /
+  `_max_backoff_time_seconds`. Left alone: tuning retries has its blast radius
+  in *live requests to real retailers*, and it wants a trustworthy health signal
+  to measure against first — see [[FU-891]].
+- **New sources** — **OD-3**.
+
+**[[FU-891]] raised:** a never-checked provider reports `is_healthy: true`
+because the default is optimistic and the check runs daily. Batch E made it
+*visible* (`last_checked_at: null`) but didn't change it — flipping the default
+to `False` would have `get_healthy_providers()` disable **all scraping** until
+the first check, turning a cosmetic inaccuracy into an outage. Wants a third
+`unknown` state.
+
+**Engineering-standards close-gate.** R-019/ADR-014 (no magic): `_parse_price`
+is an explicit named helper with its reasoning stated, not a cleverer
+expression. The `next(..., None)` fixes are the same correction applied
+consistently in all three places it occurred. **ADR evaluation:** a candidate is
+now visible — *"a bare `next()` over a filtered generator is a latent raise;
+supply a default"* — found three separate times today (Aldi category, Aldi
+offer, health-check merchant). It is a Python idiom rather than a Dora
+architecture decision, so it belongs in code review habits rather than the
+R-rules; noting it here rather than minting a rule for a language footgun.
+
+**Next up:** the program is done except for the Aldi selector rewrite (needs the
+markup — **your call on how I get it**) and new sources (**OD-3**).
+
+---
+
+## 2026-09-07 — **Batch A: the target page stops lying, and one thing I refused to build**
+
+**Status: complete, with a deliberate carve-out.** Gates: companion pytest
+**51 passed** (4 new); `vue-tsc` clean. Verified live against a running Dora.
+All changes are in the companion; **Dora needed none**, as the plan predicted.
+
+Batch A of [`IMPL_PLAN_PRODUCTS_PROGRAM.md`](docs/04_proposals/IMPL_PLAN_PRODUCTS_PROGRAM.md).
+**Only E now remains, and it is blocked on OD-3.**
+
+**Shipped:** `GET /api/push/config`, and a Dora Target page that renders it. The
+page previously displayed `VITE_DORA_LABEL` — a **frontend build-time** variable
+with no connection to the backend's `DORA_INGEST_URL` — while using it in prose
+to tell the operator where pushes land. Two independent values, so the page
+could name the wrong Dora with total confidence. It now shows the URL the
+backend will actually post to, whether a key is set, and *which half* is missing
+when it isn't ("set the env vars" being useless advice when one of them already
+is). The key is never in the response; pinned by a test that plants a
+distinctive secret, greps the raw body, and asserts the field set exhaustively
+so a future field can't leak it by accident.
+
+**What I did not build, and why it needs you.** A's own description said to add
+a browser field for pasting the bearer key. On reaching the code that turns out
+to **reverse a documented security posture** — the page said, in as many words,
+*"not editable from the browser, by design."* It matters because **the companion
+has no authentication of its own**, so anyone who can reach its web UI could
+repoint the target or (if ever echoed) lift a credential that, since batch C,
+grants **DELETE** on Dora's product catalogue. Dora itself shows a minted key
+exactly once, which is the same instinct.
+
+Re-reading the owner's actual words — *"the user must configure an api access
+key via admin settings in dora and use that for access in the companion app"* —
+that describes the **auth model**, which already existed. The browser editor was
+**this plan's own extrapolation**, not something the owner asked for. Raised as
+**OD-4** with a recommendation (leave env-only; revisit if the companion ever
+gets its own login). The *usability* half of the ask — knowing what you're
+pointed at and whether it's configured — is delivered without touching the
+secret. **Nothing is blocked on OD-4.**
+
+**PF-6 was corrected, not confirmed** — which is the point of having a "confirm
+the rule still holds" step. It claimed *"Dora holds no companion URL"*, and that
+is plainly false: `AppSetting.product_search_url` exists and the SPA opens it.
+Checked what actually matters instead: Dora's only outbound HTTP anywhere is TTS
+voice provisioning and a version check, neither of them the companion. So the
+substance holds — no server-to-server dependency, nothing in Dora breaks if the
+companion vanishes — and the stored URL is a **browser-navigation convenience,
+not a coupling**. Rule reworded to claim only what is true. **A governing rule
+that overstates is worse than none: the next agent trusts it.**
+
+**Engineering-standards close-gate.** R-005 (source-invisibility) is what the
+`/config` endpoint respects — it reports the companion's *own* configuration, and
+Dora still learns nothing about any caller. No new violations. **ADR
+evaluation:** none. The candidate here — "a status endpoint reports whether a
+secret is set, never the secret" — is one instance and is already implied by
+Dora's own show-the-key-once admin flow; not yet a rule.
+
+**Owed:** the Dora Target page itself was not walked in a browser (the companion
+has no launch config and standing up its SPA for a three-field card wasn't
+proportionate). The contract underneath it is tested and was confirmed live via
+curl. In `DORA_VERIFY.md`.
+
+**Next up: only E remains** — Aldi rewrite + scraper robustness ([[FU-884]]),
+**blocked on OD-3** (which new sources, if any, versus a viability spike first).
+
+---
+
+## 2026-09-06 (×7) — **Batch G: the products feedback is now fully actioned**
+
+**Status: complete.** Gates: `vue-tsc` + `eslint` clean · **vitest 717 / 64** ·
+`quasar build` green. Driven at 1440, 375 and in a real dark theme on the
+isolated :5171 seed. **Backend untouched.**
+
+Batch G of [`IMPL_PLAN_PRODUCTS_PROGRAM.md`](docs/04_proposals/IMPL_PLAN_PRODUCTS_PROGRAM.md).
+**With this, every June bullet for My Products and Price History is actioned and
+[[FU-214]] is closed** — the Phase-F tail open since June is empty.
+
+**Shipped:** Price History's ad-hoc header → the shared `PageToolbar` (which
+already solves the title-vs-actions crush, FU-578 #40); new
+`components/MoneyInput.vue` for PH-3/PH-4 — symbol as a `prefix` rather than
+baked into label text (which is *why* the label truncated), 2dp on blur, symbol
+from the money policy (D-006) — with *Set alert* moved below so the field gets
+the full card width; and **MP-6/L196 at last**, the stock-item Products tab
+adopting `AddToListButton` in place of a hand-rolled button that silently added
+to the primary list. That tab was the only product surface without the
+cart-state UX; confirmed live by the cart rendering amber (already-on-a-list).
+
+**FU-214's four browser-confirm bullets: all four genuinely fixed** — PH-2
+(selection now adds a series/swatch/polyline), PH-7 (dark tooltip), PH-8
+(`/alerts` renders 24 rows), PH-9 (chart is 1034px in a 1052px card — the 9px
+each side is the section's own `q-pa-sm`, which the `ResizeObserver` measure
+already subtracts).
+
+**The methodological find, which matters more than the batch.** My first **two**
+runs at PH-7 reported *the bug reproduces* — the tooltip's product name
+rendering dark-on-dark. Both were **false positives**. I had set `data-theme`
+directly, but `themeService.applyThemeKey` also calls `Dark.set()`; without it
+the body never goes dark and text inherits light-theme ink, which manufactures
+precisely the symptom being hunted. Only switching through the real settings UI
+(`body--dark`, page bg `rgb(5,20,17)`) gave the truth: dark bg `rgb(22,39,36)`,
+white name and price. **Rule of thumb for the next agent: to verify a theming
+defect, drive the app's own theme switch — never poke the attribute.** This is
+the second time this session that instrumenting/driving properly reversed a
+confident wrong conclusion (the first was the ResizeObserver hunt in batch F).
+
+**PH-10 (price history as a bottom sheet from My Products) deliberately not
+built.** It was scoped "opportunistic, evaluate with real data, don't build
+blind". Driven, the full page carries a picker rail, a multi-series chart and
+per-product alert cards, and My Products already reaches it in one tap — a
+sheet would duplicate that surface or ship a worse one. Recorded as a decision,
+not an omission.
+
+**Carve-out:** `MoneyInput` is adopted on Price History only; `PriceEntry`,
+`ShoppingListPlanRow`, the dashboard and Money settings are still hand-rolled —
+[[FU-890]], with the `type="number"` trailing-zero limitation noted there.
+
+**Engineering-standards close-gate.** R-001/R-002: two more shared components
+adopted rather than a sixth and seventh local variant. D-006: the currency
+symbol comes from the money policy. R-003 untouched (no client re-derivation
+added). **ADR evaluation:** none. The nearest recurring thing —
+"drive the real control, don't set the underlying state" — is a *verification*
+practice, and its home is `DORA_VERIFY_TRIAGE`/this log, not an engineering
+rule about the code.
+
+**Next up:** **A** (move the companion's Dora key from env-only into its
+settings UI) is small and needs nothing from the owner. **E** (Aldi rewrite +
+scraper robustness, [[FU-884]]) still needs **OD-3** — whether specific new
+sources are wanted, or a viability spike first. Those two are all that remain in
+the program.
+
+---
+
 ## 2026-09-06 (×6) — **Batch F: My Products rebuilt — the original ask**
 
 **Status: complete.** Gates: `vue-tsc` clean · `eslint src/` clean · **vitest

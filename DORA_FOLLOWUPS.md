@@ -39,6 +39,120 @@ long session summary. Distinct from the other logs:
 
 ---
 
+## [OPEN] FU-895 — the nutrition panel's other three gap reasons have no way out
+- **Raised:** 2026-09-08 (recipe view feedback batch)
+- **Type:** follow-up
+- **What:** the nutrition panel now names every uncounted ingredient, but only
+  `no_food` and `no_data` carry an action ("Find a food") — those two are fixed
+  by a write against the **stock item**, which the panel can do. The other
+  three are fixed by editing the **ingredient row**: `not_linked` wants the row
+  bound to a pantry item, `no_quantity` wants an amount typed, `no_conversion`
+  wants a unit the rollup can weigh ("2 sprigs" can't be). Today the reader sees
+  the name and the reason and has to scroll up, find the row, and press the
+  pencil themselves.
+- **Why deferred:** the fix is a jump into the ingredients editor (open the
+  region, scroll to the row, focus the right field), which is a different
+  interaction from "open a dialog and pick" and wants its own design pass — the
+  ingredient rows are keyed by `client_id`, and the panel only holds
+  `stock_item_id`, so `not_linked` rows have no anchor to jump to at all
+  without also shipping the ingredient id.
+- **Recommended resolution:** opportunistic — next time the recipe ingredients
+  editor is open for other work.
+
+## [OPEN] FU-892 — sweep the remaining install flags for the "gates nothing" defect
+- **Raised:** 2026-09-07 (while resolving [[FU-866]])
+- **Type:** finding
+- **What:** [[FU-866]] was the **second** flag found to assert a control it
+  didn't have — `meal_planning_enabled` was the first (deleted in migration
+  `a7c3e5d19f2b`), and **both lived on the same settings page**. Two instances
+  in one place is a pattern, not a coincidence: it is easy to add an
+  `AppSetting` column, a DTO field and a toggle, and never write the line that
+  reads it.
+  FU-866 also noted that **nothing in the SPA reads the
+  `features.companion_ingestion` or `features.deals_email` health flags** — so
+  the health probe advertises capabilities no client consults, which is the same
+  defect pointed the other way.
+- **What to do:** for every install flag on `AppSetting`, check there is at
+  least one *reader that changes behaviour* — not just the settings page, the
+  DTO and the health probe. Each one is then wired up or deleted, per R-078.
+  **Sharpened 2026-09-07:** FU-866 was resolved by **deletion**, and both prior
+  instances (`meal_planning_enabled`, `companion_ingestion_enabled`) went the
+  same way. So the question to ask of each flag is *"is this control needed at
+  all?"* before *"is it wired?"* — in both cases a better control already
+  existed (the feature was core; the access key was per-source). Wiring a
+  redundant switch up is the more expensive wrong answer, because it ships a
+  second way to break things.
+  A grep for each column name is enough to triage; the fix per flag is small.
+- **Why deferred:** FU-866's unit was already broad (four routes + seeds + a
+  behaviour change needing an owner call); auditing every other flag is its own
+  bounded pass and wants doing deliberately rather than as a tail.
+- **Recommended resolution:** opportunistic, and a good standalone chunk — it is
+  cheap, mechanical, and each hit is a shipped lie removed. Cross-ref R-078 /
+  ADR-075, [[FU-866]] (resolved).
+
+## [OPEN] FU-892 — the companion image has never been built
+- **Raised:** 2026-09-07 (companion dockerisation)
+- **Type:** finding
+- **Repo:** `../dora-companion/` (new `Dockerfile` / `compose.yml` / `nginx.conf`
+  / `startup.sh`).
+- **What:** the container files were written but **the image was never built** —
+  Docker in that session needed a sudo password that a non-interactive agent
+  can't supply. What *was* verified: `docker compose config` parses the stack,
+  and `npm run build` succeeds against the real dependency tree, emitting a flat
+  `dist/` (which is what `nginx.conf` roots at) with both `VITE_*` build args
+  correctly inlined. What is unproven: the `pip install`, the `npm ci` (the
+  Dockerfile uses `ci`, the local check used the existing `node_modules`, so a
+  lockfile drift would only surface in the image), and whether merchant_api boots
+  under `startup.sh` — its `register_routers` globs `Path() / 'merchant_api' /
+  'features'` relative to the **working directory**, which is why the entrypoint
+  runs from `/app`; a wrong CWD would silently register zero routes.
+- **Why deferred:** needs a Docker daemon the session couldn't reach.
+- **Recommended resolution:** now — the first `./deploy-dora.sh` proves or
+  disproves all of it. Verify steps are in `DORA_VERIFY.md`.
+
+## [OPEN] FU-891 — a never-checked scraper reports "healthy" (companion repo)
+- **Raised:** 2026-09-07 (products program, batch E)
+- **Type:** finding
+- **Repo:** `../dora-companion/`
+- **What:** `MerchantDataProvider._is_healthy` defaults to `True`, and the health
+  check runs on a **daily** interval trigger — so for up to 24 hours after boot
+  every provider claims health on no evidence. Batch E made this *visible*
+  (`GET /api/health/data-providers` now returns `last_checked_at: null`
+  alongside `is_healthy: true`) but did not change it.
+- **Why not fixed here:** flipping the default to `False` is not safe.
+  `get_healthy_providers()` gates whether a provider is used at all, so a
+  pessimistic default would disable **all scraping** until the first check —
+  turning a cosmetic inaccuracy into an outage. The right fix is a third state
+  (`unknown`) that `get_healthy_providers()` treats as usable while the health
+  endpoint reports honestly, and possibly a check on boot rather than only on
+  the interval.
+- **Recommended resolution:** opportunistic — alongside the Aldi selector
+  rewrite (the rest of [[FU-884]]), since that work is already in this file and
+  wants a trustworthy health signal to verify against.
+
+## [OPEN] FU-890 — four money inputs are still hand-rolled after `MoneyInput` landed
+- **Raised:** 2026-09-06 (products program, batch G)
+- **Type:** finding — half-finished migration
+- **What:** batch G introduced `components/MoneyInput.vue` (currency symbol as a
+  `prefix`, value settles to 2dp on blur, symbol from the money policy per
+  D-006) to answer feedback PH-4, and adopted it on **Price History only** —
+  that being G's surface. The other money fields are untouched and still
+  disagree with each other:
+  `components/dora/PriceEntry.vue` (uses `prefix`, no rounding),
+  `components/shoppingList/ShoppingListPlanRow.vue` (bare `type="number"`),
+  and the money inputs on `DashboardPage` and `settings/MoneySettings.vue`.
+- **Why deferred:** those live on shopping-list, dashboard and settings
+  surfaces, outside the products program. Migrating them blind inside a UI
+  batch — `PriceEntry` in particular carries validation rules and a
+  multipack mode — is how a refactor turns into a regression.
+- **Known limitation to carry into the sweep:** an `<input type="number">`
+  cannot *display* trailing zeros, so the value normalises to 2dp (3.999 → 4)
+  but renders "4", not "4.00". Showing "4.00" needs a text input with masking,
+  which is a bigger decision than this component should make alone.
+- **Recommended resolution:** opportunistic — next time any of those four
+  surfaces is touched, or as a deliberate small sweep. Cross-ref R-001/R-002
+  (componentisation-first) and D-006.
+
 ## [OPEN] FU-889 — `window.onerror` runs `executeRollbacks()` for anything, including non-errors
 - **Raised:** 2026-09-06 (products program, batch F — found by driving the page)
 - **Type:** finding
@@ -139,36 +253,6 @@ long session summary. Distinct from the other logs:
 - **Recommended resolution:** opportunistic — fold into **batch A** (which is
   already touching companion configuration/plumbing) or batch E. Cross-ref
   [[FU-887]].
-
-## [OPEN] FU-884 — Aldi provider has four defects independent of the site redesign (companion repo)
-- **Raised:** 2026-09-06 (products program planning)
-- **Type:** finding
-- **Repo:** `../dora-companion/` — **not this repo.** The companion has no
-  ledger of its own, so it is tracked here.
-- **What:** in
-  `merchant_api/infrastructure/merchant_data_providers/aldi_provider.py`:
-  1. **Product names are being mangled today.**
-     `name = offer.description.rstrip(offer.amount)` — `str.rstrip` takes a
-     *character set*, not a suffix, so `"Milk 2L".rstrip("2L")` strips any
-     trailing `2`/`L` characters.
-  2. **`get_product` can raise instead of returning `None`.** Two bare
-     `next(...)` calls with no default raise `StopIteration` when the product is
-     in no category or absent from the cache, despite the
-     `-> ScrapedProductOffer | None` signature.
-  3. **Shared mutable class state.** `_cached_offers_by_category` and
-     `_cached_offers_last_updated_by_category` are declared as class attributes,
-     so every instance shares one cache, while `_aldi_product_names_by_category`
-     is per-instance.
-  4. **Fragile price parsing** — `.lstrip('$').rstrip('c')` on price strings.
-  Separately, Aldi is *architecturally* the odd provider out: Coles hits a real
-  JSON search API (`_next/data/{buildId}/en/search.json`), whereas Aldi has no
-  search at all and scrapes category pages, fuzzy-matching against a curated
-  `aldi_products_by_category.json` cached for 7 days. The owner reports the Aldi
-  site has since been redesigned, so the BeautifulSoup selectors
-  (`box--wrapper`, `box--amount`, `box--decimal`, `box--former-price`) are stale.
-- **Why deferred:** it is a rewrite, scheduled as its own batch.
-- **Recommended resolution:** batch E of
-  [`IMPL_PLAN_PRODUCTS_PROGRAM.md`](docs/04_proposals/IMPL_PLAN_PRODUCTS_PROGRAM.md).
 
 ## [OPEN] FU-879 — the plan endpoint loads the same recipes twice when nutrition *and* money are both on
 - **Raised:** 2026-09-05 (owner meal-planner batch, item 5)
@@ -406,30 +490,6 @@ long session summary. Distinct from the other logs:
 - **Recommended resolution:** opportunistic — decide when the owner has walked the
   dialog.
 
-## [OPEN] FU-866 — `companion_ingestion_enabled` gates nothing: `POST /api/ingest` never checks it
-- **Raised:** 2026-09-03 (admin settings batch — found while renaming the flag)
-- **Type:** finding
-- **What:** the switch now presented as **Product data ingestion** (Settings →
-  Admin → Data & access) does not stop ingestion. `submit_ingestion_batch()`
-  authenticates the bearer token against an `IngestionSource` and proceeds; it
-  never reads `AppSetting.companion_ingestion_enabled`. Nothing in the SPA reads
-  the `features.companion_ingestion` health flag either (nor
-  `features.deals_email`). The column's only readers are its own settings page,
-  the DTO and the health probe.
-- **Why this matters more than usual:** it is the second instance of exactly the
-  defect **R-078 / ADR-075** was written for this session, on the same page as the
-  first (`meal_planning_enabled`, deleted in migration `a7c3e5d19f2b`) — and
-  unlike that one, the owner-dictated copy now shipping *asserts* the gate
-  ("Accept product offer data from an external source. Enable this if you have a
-  tool…"). The toggle reads as a security control and isn't one.
-- **Why deferred:** the fix is a one-line 403 guard in the route, but the flag
-  **defaults to `False`**, so wiring it up would immediately break ingestion for
-  any install already pushing data without having flipped it on — including the
-  owner's. That is a deliberate behaviour change needing a call, not a tidy-up:
-  guard it and accept that existing pushers must switch it on, or flip the
-  default for existing rows in the same migration.
-- **Recommended resolution:** **now** — before anyone relies on the toggle
-  meaning what it says. R-078's own instruction applies: wire it up or drop it.
 ## [OPEN] FU-865 — Quasar palette vars are set on `<body>`, so the `html` scrollbar rule never gets the theme
 - **Raised:** 2026-09-03 (owner misc batch — found while fixing FU-709)
 - **Type:** finding
@@ -1410,17 +1470,23 @@ long session summary. Distinct from the other logs:
   written into `~/Desktop/deploy-dora.sh` — it detects a container holding the
   name that isn't in `docker compose ps -aq` for the current project, and tears
   it down through *its own* project (taking that project's volumes too when
-  `WIPE_DB=true`, so the old `discountdora_*` volumes don't strand). **The
-  function is defined but not yet wired into `deploy()`** — the final edit was
-  blocked by a session permission check, so the script still behaves exactly as
-  before. Three lines are outstanding; they're in the 2026-08-29 worklog entry.
-- **Why it stays open:** (a) the wiring above; (b) the one-time server cleanup
-  (`docker compose -p discountdora down -v`) has not been confirmed run — SSH
-  was blocked this session, so nothing here was verified against the live
-  daemon; (c) the script remains **only** on the desktop, untracked by this repo
-  (see the existing note under PROJECT_STATE's needs-attention item on
-  `deploy-dora.sh`), so this hardening is one `rm` from being lost.
-- **Recommended resolution:** now — it blocks deploying.
+  wiping, so the old `discountdora_*` volumes don't strand).
+  **2026-09-07: the wiring is done.** `reclaim_container_name` is now called
+  from `deploy_dora()` between the teardown and the `up`, and was parameterised
+  to `(container, path, wipe)` so the new companion stack — which pins its own
+  `container_name` for the same reasons — gets identical protection. Verified
+  only by a stubbed dry-run of the script (no server access this session): the
+  call fires in the right order for both stacks.
+- **Why it stays open:** (a) the reclaim path has still never run against a real
+  daemon — the dry-run proves it is *called*, not that it *works*; (b) the
+  one-time server cleanup (`docker compose -p discountdora down -v`) has not
+  been confirmed run; (c) the script remains **only** on the desktop, untracked
+  by this repo (owner chose 2026-09-07 to keep it there), so this hardening is
+  still one `rm` from being lost. Note (c)'s blocker is gone though: the SSH
+  password was moved out to `~/.config/dora-deploy.env` (mode 600) on
+  2026-09-07, so the script now holds no secret and *could* be committed
+  whenever the owner wants it backed up.
+- **Recommended resolution:** now — first real deploy closes (a) and (b).
 
 ## [OPEN] FU-788 — Voice input can't work in Firefox without server-side transcription
 - **Raised:** 2026-08-29 (settings feedback batch)
@@ -4482,39 +4548,6 @@ Resolved entries carry one extra line, and live in `DORA_FOLLOWUPS_RESOLVED.md`:
 - **2026-07-15 update — item 3 fully drained; `useOfflineQueue` SHIPPED.** `web_app/test/unit/useOfflineQueue.spec.ts` (13 tests): `tryWithQueue` swallow-network-only vs rethrow-others vs pass-through-success; `drain` replays oldest-first, STOPS on the first network error (rest stay queued, `attempts` counted), shunts a non-network rejection into the conflict pile and continues; the false→true `apiReachable` auto-drain edge; `discardConflict`/`retryConflict` (retry re-queues + drains); per-user localStorage isolation + rehydrate-on-user-switch + corrupt-payload degrade-to-empty. Pattern note for future singleton-composable specs: the module registers **module-level watchers that are never torn down**, so the reactive seams (`useNetworkStatus`, `authStore`) must be re-mocked with a FRESH ref per test via `vi.doMock` in `beforeEach` (a hoisted `vi.mock` shares one ref across `resetModules`, letting a prior test's zombie watcher fire on the current flip and drain its stale queue). Import `NormalisedApiError` fresh alongside the composable so `instanceof` lines up with the re-evaluated class. Frontend suite now **385 tests / 30 files**. **Only item 1 (Postgres CI wiring) remains — nothing else on this FU is actionable in-repo.**
 - **Recommended resolution (remaining):** item 1's *run-on-Postgres* half is done (suite is green on PG via the selector) — only the CI wiring remains, gated on [[FU-405]]. Item 3 is now fully done (all component/composable surfaces covered). **Recommended resolution point:** Postgres CI with [[FU-405]] — that is the sole remaining trigger.
 - **Cross-ref:** parent [[FU-371]] (RESOLVED 2026-07-13); [[FU-519]] Phase 3 (RESOLVED 2026-07-13).
-
-## [OPEN] FU-214 — Products-as-overlay Phase F tail: product-surface browser verify + L197/205/206/223/225 items
-- **Raised:** 2026-06-22 (Phase F kickoff — reconstructed 2026-07-01 from `PRODUCTS_OVERLAY_RUNBOOK.md` + 8 worklog references; **the FU entry itself was missing from both ledgers**).
-- **Type:** deferred job (multi-item Phase-F tail).
-- **What:** Original scope was **product-surface browser verify + build the L205/206 bulk-select variants + decide L197 hard-delete**. Over time it accumulated:
-  - **L197** — hard-delete decision for products (still not made).
-  - **L205 / L206** — bulk-select variants on product surfaces (not built).
-  - **L223** — Price-History hover-bubble dark-mode bug (added 2026-06-22 worklog).
-  - **L225** — Price-History box-fit bug (redirected here from FU-227 scope, worklog).
-  - Product-surface browser verify (My Products page, Price History page, stock-item Products tab) — waits on a running app.
-  - **PH residuals (folded in from FU-431, 2026-07-16 — no redesign brief):** (a) **PH-2** "can select products but no change occurs on the Price History page" — behaviour verify with real product data (reported-defect, confirm in browser). (b) **PH-10 optional** — the desktop bottom-sheet the feedback asked for already exists (`PriceHistoryBottomSheet.vue`, built for FU-227) but is wired to the stock-item "your prices" widget; My Products currently *navigates* to the full `/price-history` page instead. Reusing the bottom sheet for the My-Products→product flow is a small **opportunistic** enhancement — evaluate it with real data on-screen during this pass; don't build blind. (c) **PH-1** discoverability is **decided** (see FU-431 in `_RESOLVED`): contextual entry is the right model, so just confirm during verify that My-Products / Subscriptions / onboarding entry points feel adequate — no nav tab.
-- **Why deferred:** every item needs a running browser session; bulk-select is real UI work; L197 is a design call.
-- **Recommended resolution:** when the next browser-verify session opens **and** the products layer has real data — knock out L223/L225 as bugs, do the browser-verify checklist, then split L197 (design call) and L205/206 (build) into their own FUs if this one gets too heavy. **This FU is the runbook's Phase F blocker** ([`PRODUCTS_OVERLAY_RUNBOOK.md`](docs/04_proposals/PRODUCTS_OVERLAY_RUNBOOK.md) §Status row F). Related: [[FU-227]] (resolved), [[FU-212]] (resolved), [[FU-210]] (resolved).
-- **2026-09-06 update — build scope moved out; this FU is now browser-verify only.**
-  The owner reopened the whole products area, and the work is planned as batches in
-  [`IMPL_PLAN_PRODUCTS_PROGRAM.md`](docs/04_proposals/IMPL_PLAN_PRODUCTS_PROGRAM.md).
-  Reassignments: **L197** hard-delete is **BUILT** (owner call D-1; batch C shipped
-  2026-09-06 — `DELETE /api/products/<id>` plus the companion's bearer-authed
-  door and Unsave button). Note the affordance on the My Products page itself is
-  still owed and rides batch F, so today L197 is only reachable from the
-  companion; **L205/L206** bulk-select variants →
-  batch F; **L223/L225** → the static read says both are already fixed (the chart
-  tooltip now uses `--surface-component`/`--text-secondary`; a `ResizeObserver`
-  measures the card), so they join the confirm-in-browser set rather than the bug
-  set. **What remains on this FU is the browser pass only**, over four bullets that
-  look fixed but are unproven per the mandatory reported-defect rule: PH-2
-  (selection changes nothing — appears fixed by [[FU-605]]), PH-7 (dark-mode hover
-  bubble), PH-9 (graph box-fit), PH-8 (central alerts page exists). Do **not**
-  re-plan the build items here; the plan doc owns them. Note the dev seed
-  (`persistence/seed.py`) does build products with offer history, so the "waits for
-  real product data" blocker no longer applies — a scratch backend can drive this.
-  New findings from the same session: [[FU-881]], [[FU-882]], [[FU-883]],
-  [[FU-884]], [[FU-885]].
 
 ## [OPEN] FU-406 — Open-source release readiness (was: self-host launch; de-commercialized 2026-07-31)
 - **Raised:** 2026-07-01 (legacy prompt-plan audit). **Narrowed 2026-07-14 (self-host-first). Reframed 2026-07-31 (donation / open-source pivot).**

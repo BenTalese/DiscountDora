@@ -51,10 +51,8 @@ from dora_api.domain.entities.product_offer import ProductOffer
 from dora_api.features.ingestion.offer_mapping import (OfferOutcome,
                                                        apply_offer_to_product)
 from dora_api.features.routers import INGEST_ROUTER
-from dora_api.infrastructure.api_response import unauthorized
-from dora_api.infrastructure.ingestion_auth import (extract_bearer_token,
-                                                    find_ingestion_source,
-                                                    stamp_used)
+from dora_api.infrastructure.ingestion_auth import (
+    authenticate_ingestion_request, stamp_used)
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 from dora_api.infrastructure.ports import Repository
@@ -405,10 +403,12 @@ class SubmitIngestionBatchHandler:
 
 @INGEST_ROUTER.route("", methods=["POST"], endpoint="submit_ingestion_batch")
 def submit_ingestion_batch():
-    raw_token = extract_bearer_token()
-    source = find_ingestion_source(raw_token) if raw_token else None
-    if source is None:
-        return unauthorized("Bearer token missing or invalid.")
+    # FU-866 — one shared check: authenticate, then honour the
+    # install-wide ingestion switch. Both live in `ingestion_auth` so a
+    # new ingest route cannot quietly skip the gate.
+    source, auth_error = authenticate_ingestion_request()
+    if auth_error is not None:
+        return auth_error
 
     try:
         payload = IngestBatchRequest.model_validate(request.get_json(silent=True) or {})

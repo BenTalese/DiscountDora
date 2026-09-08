@@ -272,11 +272,19 @@
         margin-top: var(--space-1, 4px);
     }
     /* A line that rounds to 0% still gets a visible sliver rather than an
-       empty track — but the printed number stays honest about the rounding. */
+       empty track — but the printed number stays honest about the rounding.
+
+       Owner feedback 2026-09-08: the fill was `--brand-primary-soft`, which in
+       the dark themes is a low-alpha wash of the brand hue (pesto's is a 22%
+       green) sitting on a near-black sunken track — the filled part was
+       effectively invisible. The bar's job is to be read at a glance, so it
+       wears the solid brand ink the coverage bar above it does; it stays
+       distinguishable from that one by being thinner, which is a difference
+       that survives both themes. */
     .rcost__sharefill {
         height: 100%;
         min-width: 2px;
-        background: var(--brand-primary-soft);
+        background: var(--brand-primary);
     }
     .rcost__meta {
         display: flex;

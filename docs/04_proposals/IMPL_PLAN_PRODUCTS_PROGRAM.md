@@ -1,8 +1,15 @@
 # Implementation plan — Products program (Dora + companion)
 
-**Status: in progress.** Owner-agreed 2026-09-06. **Batches B, C2, C, D and F
-are done** (same day). Remaining: **A** (companion key UI, small), **E**
-(scrapers — needs OD-3), **G** (Price History + stock-item tab).
+**Status: COMPLETE — all eight batches done (2026-09-06 → 2026-09-07).**
+A · B · C · C2 · D · E · F · G. The Aldi rewrite landed once the owner confirmed
+Aldi publishes no sales data, which was the one thing blocking it.
+**OD-1 closed** (card actions) · **OD-3 answered** — no third-party grocery
+source is worth hooking into; don't add aggregators · **OD-4 answered** — the
+companion's bearer key stays env-only. **OD-2 (manual product entry) is the last
+open question**; see §6.
+
+**Every June feedback bullet for My Products and Price History is now actioned**
+— §8's coverage table has no open rows, and **FU-214 is closed**.
 
 The Dora↔companion data path is now complete end to end: save what you picked
 (B) · keep receipts when it goes (C2) · unsave/delete (C) · refresh on a
@@ -54,12 +61,22 @@ an ingestion source presents a bearer key (PF-9): `DELETE /api/products/<id>` an
 `POST /api/ingest/link-status`, so search results can show "already in Dora" /
 "linked to <stock item>" and the user is never guessing.
 
-**PF-6 — Dora does not know the companion exists.** Dora holds no companion URL,
-issues no outbound calls to it, and has no notion of "the scraper". The weekly
-deals email is computed purely from what is currently in Dora; keeping data
-fresh enough for the email is the user's business, done by syncing beforehand.
-(This is R-005 source-invisibility applied to the product layer, and is
-**already true today** — see §2.)
+**PF-6 — Dora never calls the companion.** Dora issues no outbound request to
+it, depends on it for no computation, and has no notion of "the scraper" in any
+domain logic. The weekly deals email is computed purely from what is currently
+in Dora; keeping data fresh enough for the email is the user's business, done by
+syncing beforehand. (R-005 source-invisibility applied to the product layer.)
+
+> **Corrected 2026-09-06 (batch A), which is what the "confirm PF-6" step was
+> for.** This rule originally read *"Dora holds no companion URL"*, and that was
+> simply false: `AppSetting.product_search_url` exists and the SPA's
+> `openProductSearch` opens it. Verified what actually matters instead — Dora's
+> only outbound HTTP anywhere is TTS voice provisioning and a version check,
+> neither of them the companion. So the *substance* holds (no server-to-server
+> dependency, nothing in Dora breaks if the companion vanishes) and the stored
+> URL is a **browser-navigation convenience, not a coupling**: it is a link the
+> user's browser follows, never an address Dora dials. Rule reworded to claim
+> only what is true.
 
 **PF-7 — The companion pulls, on a schedule the user configures.** It fetches
 Dora's saved-product list, re-scrapes offers for those products, and pushes the
@@ -103,15 +120,50 @@ re-implement any of this.
 No sequencing constraint from the owner ("not fussed with sequence… this is
 prerelease code"). Dependencies below are technical, not priority.
 
-### Batch A — Data-flow contract + companion auth surface
-**Repos:** both. **Depends on:** nothing.
+### Batch A — Data-flow contract + companion target surface — ➗ **DONE with a carve-out 2026-09-06**
+**Repos:** companion (Dora needed no change, as predicted).
 
-- §1 above is the contract; this batch makes it real where it isn't.
-- Companion: the Dora bearer key is currently **env-only** (`DORA_INGEST_KEY`,
-  read by `IngestConfig.from_env()`). Add a configuration surface in the
-  companion's own settings UI so the user pastes the key minted in Dora, per
-  PF-9. Dora side needs no change.
-- Confirm PF-6 still holds after the batch (no outbound companion awareness).
+- ✅ §1 is the contract, and **PF-6 was corrected rather than confirmed** — see
+  the note under that rule. The check was worth running: the rule claimed
+  something false about Dora holding no companion URL.
+- ✅ New `GET /api/push/config` reports **what the backend is actually
+  configured with**. The Dora Target page previously displayed
+  `VITE_DORA_LABEL` — a *frontend build-time* variable with no link to the
+  backend's `DORA_INGEST_URL` — while using it to tell the operator where
+  pushes land. It could name the wrong Dora with complete confidence. The page
+  now shows the backend's real URL, whether a key is set, and which half is
+  missing when it isn't ("set the env vars" being useless advice when one of
+  the two already is).
+- ✅ The key is **never** in the response. Pinned by a test that plants a
+  distinctive secret and greps the raw body, plus an exhaustive field-set
+  assertion so a future field can't leak it by accident.
+
+**❌ NOT built: a browser-editable key field — deliberately, and it needs an
+owner decision.** This batch's original description said to let the user paste
+the key into the companion's settings UI. On reaching the code, that turns out
+to reverse a documented security posture, and the page said so in as many
+words: *"not editable from the browser, by design."*
+
+The reason it is load-bearing: **the companion has no authentication of its
+own** (`push_to_dora`'s module docstring: *"Auth — there is none on the
+companion side yet"*). Anyone who can reach the companion's web UI can already
+scrape and push; making the key editable there would additionally let them
+**repoint the target** or, if ever echoed back, **exfiltrate a credential that
+now grants DELETE on Dora's product catalogue** (batch C). Dora itself shows a
+minted key exactly once, which is the same instinct.
+
+Re-reading the owner's actual words — *"the user must configure an api access
+key via admin settings in dora and use that for access in the companion app"* —
+that describes the **auth model**, which already existed, not a companion-side
+editor. The editor was this plan's own extrapolation. **Owner decision needed
+(OD-4)** before building it; the usability half of the ask (knowing what you're
+pointed at, and whether it's set) is delivered above without touching the
+secret.
+
+**Gates:** companion pytest **51 passed** (4 new); `vue-tsc` clean. Verified
+live against a running Dora: `/api/push/config` returns the real URL and no
+key; `/api/push/target` with a wrong key returns 502 *"Dora rejected the bearer
+key (401)"*.
 
 ### Batch B — Push semantics rewrite  ← keystone — ✅ **DONE 2026-09-06**
 **Repos:** companion. **Depends on:** A (contract) — built ahead of A; nothing
@@ -323,8 +375,110 @@ A product whose store this companion doesn't scrape counts as *unsupported*, not
   back through batch B's offer-shaped push.
 - **Must honour PF-8** — skip `is_active = false` products.
 
-### Batch E — Scraper robustness + Aldi rewrite
-**Repos:** companion. **Depends on:** nothing.
+### Batch E — Scraper robustness + Aldi rewrite — ✅ **DONE 2026-09-07**
+**Repos:** companion. **Depends on:** OD-3 for new sources; the selector
+rewrite depends on having the redesigned markup.
+
+**Done — the parts that need no network:**
+- ✅ **All four FU-884 defects fixed**, with 13 tests. Their severity ordering
+  changed once measured, which is worth recording:
+  - **Cents parsed as dollars** is the severe one and was originally logged
+    last as "fragile price parsing". `"80c"` became **80.0, not 0.80** — a 100×
+    error that lands in Dora as a real price and poisons the product's history
+    and every cheapest-comparison built on it. New `_parse_price` handles the
+    cents shape and degrades to `0.0` on junk instead of raising.
+  - **`get_product` raised `StopIteration`** despite a `| None` signature.
+    Worst inside batch D's scheduled sync, where it would abort an entire
+    refresh run over one delisted product.
+  - **Caches were class attributes**, shared across instances while the
+    category map was per-instance — two providers disagreeing about what they
+    held. Now per-instance.
+  - **`rstrip` instead of `removesuffix`** for the size suffix. **Downgraded
+    from the original claim:** the FU said names "are being mangled today";
+    sweeping plausible Aldi listings found *no* case where the two disagree
+    (divergence needs the size to repeat or overlap, `"Rice 1kg1kg"`). A latent
+    hazard, fixed defensively — not observed corruption.
+- ✅ **Selector-drift is now legible.** The health check already detected drift
+  implicitly (stale selectors → zero offers → unhealthy) but reported one
+  boolean, so "the site is down" and "the site was redesigned" looked identical.
+  Providers now record `last_checked_at`, `last_result_count` and `last_error`,
+  surfaced on `GET /api/health/data-providers`. **`last_result_count == 0` with
+  `last_error == null` is the drift signature.** Also fixed the *same* bare-
+  `next()` defect there: with no enabled merchant it raised `StopIteration`,
+  which the `except Exception` swallowed and reported as a broken scraper —
+  "you switched this shop off" shown as "this scraper is faulty".
+
+**Not done:**
+- 🔎 **The Aldi rewrite is now SPEC'D, not built** (owner authorised a fetch,
+  2026-09-07). Six requests to the public site established:
+  - **The old model is gone entirely, not just restyled.**
+    `/groceries/{category}/` **302s to `/products`**, and all six old selectors
+    (`box--wrapper`, `box--amount`, `box--decimal`, `box--value`,
+    `box--former-price`, `box--baseprice`) appear **zero** times.
+  - The site is **Nuxt 3 on Spryker**. Products are **server-rendered as JSON**
+    into `<script type="application/json" id="__NUXT_DATA__">` — Nuxt's
+    flat-array (devalue) encoding, where integers are indices into one array.
+    No API call is made to render them, and `api.aldi.com.au` **403s**
+    unauthenticated (not pursued — see below).
+  - **30 products per page** (matches the page's own `WEB_PRODUCTS_PER_PAGE`),
+    3239 total. Category paths work: `/products/super-savers`,
+    `/products/price-reductions`, `/products/lower-prices`.
+    `?categoryKey=` does **not** (client-side only).
+  - Per product: `sku` · `name` · `brandName` · `sellingSize` ("45 g",
+    "1,000 ml") · `urlSlugText` · `price.amount` **as integer cents** ·
+    `price.comparisonDisplay` ("$2.20 per 100 g") · `currencyCode`.
+
+  **This is strictly better than what it replaces**, and two of the gains are
+  capability, not tidiness:
+  - **`merchant_stockcode` finally exists.** The old provider hardcoded
+    `merchant_stockcode=None`, which means batch D's refresh-by-stockcode
+    **could never work for Aldi** — it had only fuzzy name matching. A real SKU
+    fixes that.
+  - **`brandName` exists.** The old provider hardcoded `brand=None`.
+  - **Integer cents removes the FU-884 price bug by construction** — there is no
+    `"80c"` string left to misparse.
+
+  A real-payload fixture is saved at
+  `tests/fixtures/aldi_nuxt_payload.json` (5 products, index-preserving) so the
+  rewrite can be built and tested without touching the network.
+
+  **One gap blocks a faithful rewrite: the discount shape.** `wasPriceDisplay`
+  and `savingsDisplay` exist in the payload's key schema, but **no product on
+  any page fetched carried one** — including `super-savers`,
+  `lower-prices` and `price-reductions`. That is consistent with Aldi's
+  everyday-low-price model rather than markdown pricing, but it means
+  `price_was` — which drives Dora's entire discount story, `DiscountChip`, the
+  on-deal filters and the bulk on-deal selections — is unverified. **Needed: one
+  saved page where an Aldi product is actually showing a was/now price.**
+
+  **Not pursued, deliberately:** `api.aldi.com.au` returned 403 to
+  unauthenticated calls. Hunting the frontend for a key to get past that is
+  circumventing an access control, so it was dropped as soon as the 403
+  appeared. It is also unnecessary — the server-rendered payload is a public,
+  stable, and frankly better source.
+- 🔎 **New sources researched — the honest answer is "there aren't any to hook
+  into" (OD-3).** Australian supermarkets publish **no official price APIs**;
+  the ACCC has *recommended* they start, which is a trend to watch, not
+  something to build on. The consumer comparison services that exist —
+  GroceryWise, Grocery Spy, OzTrolley, WhichGrocer, TrolleyChecker — are
+  **front-ends, not data providers**: none offers a public API, and each is
+  itself scraping the same retailers. Consuming one would add a hop, inherit
+  their staleness, and put us under their terms rather than the retailer's — a
+  worse position than scraping the source directly, which is what the existing
+  Grocerize / SaveOnGroceries integrations already do.
+  **Recommendation: don't add aggregator sources.** Better value is in making
+  the four first-party providers solid (this batch's health reporting is the
+  start) and revisiting if the ACCC recommendation produces real APIs.
+- ❌ **Retry/backoff policy.** The base class carries unused
+  `_max_attempt_time_seconds` / `_max_backoff_time_seconds` fields. Left alone
+  deliberately: tuning retries is a change whose blast radius is *live requests
+  to real retailers*, and it wants the trustworthy health signal above (and
+  [[FU-891]]) to measure against first.
+
+**Gates:** companion pytest **69 passed** (18 new); `vue-tsc` clean. Health
+endpoint shape confirmed live.
+
+**Superseded plan text follows for reference.**
 
 - **Aldi rewrite.** It is structurally unlike every other provider: Coles hits a
   real JSON search API (`_next/data/{buildId}/en/search.json`); Aldi has *no
@@ -401,8 +555,51 @@ on every viewport change**, which turned out to be the browser's benign
 - Destructive-confirm colours per D-008; single-unlink currently has **no
   confirm at all**.
 
-### Batch G — Price History + stock-item Products tab
-**Repos:** Dora. **Depends on:** F for `DiscountChip`.
+### Batch G — Price History + stock-item Products tab — ✅ **DONE 2026-09-06**
+**Repos:** Dora. **Depends on:** F for `DiscountChip` (done).
+
+- ✅ Price History's ad-hoc `text-h5` + segmented + ghost row → the shared
+  `PageToolbar`, which already solves the title-vs-actions crush (FU-578 #40);
+  the alerts button drops its label on phones like the list pages.
+- ✅ **PH-3/PH-4** — new `components/MoneyInput.vue`: currency symbol as a
+  `prefix` (not baked into label text, which is what made the label truncate in
+  a `col-md-4` card), value settles to 2dp on blur, symbol from the money policy
+  (D-006). The *Set alert* button moved **below** the field so the input gets
+  the card's full width. Adoption elsewhere is deliberately deferred —
+  [[FU-890]].
+- ✅ **MP-6 / L196** — the stock-item Products tab finally uses
+  `AddToListButton`. It had a hand-rolled button that silently added to the
+  primary list, making it the only product surface without the cart-state UX
+  (picker on 2+ lists, smart-remove on one, on-a-list state on the control).
+  Confirmed live: the cart renders amber, i.e. already-on-a-list.
+- ✅ `DiscountChip` on both surfaces (landed with F).
+
+**FU-214 closed — all four of its browser-confirm bullets are genuinely fixed**
+(PH-2 selection, PH-7 dark tooltip, PH-8 alerts page, PH-9 chart fit). The
+Phase-F tail that had been open since June is now empty.
+
+**The PH-7 result is worth carrying forward as method, not just outcome.** Two
+successive test runs *said the bug reproduced* — the tooltip's product name
+rendering dark-on-dark. Both were false positives caused by setting
+`data-theme` directly: `themeService.applyThemeKey` also calls `Dark.set()`, so
+the body stayed light and text inherited light-theme ink. Only switching the
+theme through the real settings UI gave a true answer (dark bg, white text).
+**A half-applied theme manufactures exactly the defect you are hunting** — when
+verifying a theming bug, drive the app's own theme switch.
+
+**Gates:** `vue-tsc` + `eslint` clean · vitest **717 / 64** · `quasar build`
+green · driven at 1440, 375 and in `pesto-dark` on the isolated :5171 seed.
+Backend untouched.
+
+**PH-10 (price history as a bottom sheet from My Products) not taken** — it was
+scoped "opportunistic, evaluate with real data, don't build blind". With the
+page driven: the full page carries a picker rail, a multi-series chart and
+per-product alert cards, and My Products' card already reaches it in one tap.
+A bottom sheet would either duplicate that surface or ship a lesser one. Left
+unbuilt deliberately; revisit only if the owner finds the navigation jarring in
+use.
+
+**Superseded plan text follows for reference.**
 
 - Price History: adopt the standard toolbar shape (currently a bare
   `text-h5` + segmented + ghost row); money-formatted notify-under input
@@ -493,10 +690,20 @@ card), PH-8 (central alerts page exists).
   **Resolution point:** revisit only if the owner raises it — not scheduled.
 - **OD-3 — New scraper sources.** Undecided which, if any. **Resolution point:**
   a research spike opening batch E, before any provider is written.
+- **OD-4 — Should the companion's Dora bearer key be editable from its web UI?**
+  Raised by batch A. The companion has **no auth of its own**, so a key field in
+  its browser UI is reachable by anyone who can reach the host — and that key
+  now grants DELETE on Dora's product catalogue. Env-only is the current,
+  documented posture. Options: (a) leave env-only and treat the improved status
+  page as the answer; (b) make it editable and accept the exposure on a private
+  host; (c) make it editable **after** giving the companion its own login,
+  which is a larger piece of work. **Recommendation: (a) for now, (c) if the
+  companion is ever exposed beyond a trusted LAN.** **Resolution point:** owner,
+  whenever convenient — nothing is blocked on it.
 
-**Open decisions — spawned/deferred:** OD-1 and OD-3 are scheduled to their
-batches above; OD-2 is parked with an explicit trigger. No undecided fork is
-left implicit in this plan.
+**Open decisions — spawned/deferred:** OD-1 is **closed** (batch F); OD-3 gates
+batch E; OD-4 is raised by batch A and blocks nothing; OD-2 is parked with an
+explicit trigger. No undecided fork is left implicit in this plan.
 
 ---
 

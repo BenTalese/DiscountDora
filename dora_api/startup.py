@@ -203,6 +203,23 @@ def startup(is_test_env: bool = False):
         )
 
 
+def _seed_local_product_search_url():
+    """Dev-only: point Product Search at a companion on this workstation.
+
+    Writes the AppSetting directly rather than going through
+    `UpdateAppSettingsHandler` — this runs mid-`init_db`, before the routers
+    and their DI are wired, and the handler adds nothing here beyond a scheme
+    check on a constant. `scripts/set_product_search_url.py` (the deploy path,
+    which takes operator input) does go through the handler.
+    """
+    from dora_api.features.app_settings.access import get_or_create_app_setting
+    from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+
+    repository = SqlAlchemyRepository()
+    get_or_create_app_setting(repository).product_search_url = "http://localhost:5175"
+    repository.save_changes()
+
+
 def init_db(is_test_env: bool):
     # Demo / sellable-showcase mode (FU-392) takes precedence over the
     # normal seed/upgrade decision. It seeds the curated showcase dataset
@@ -221,6 +238,21 @@ def init_db(is_test_env: bool):
         if is_test_env or (DORA_CONFIG.is_debug_mode_enabled() and DORA_CONFIG.is_seed_allowed()):
             db.drop_all()
             db.create_all()
+
+            # Point Product Search at a companion running on this workstation.
+            # The nav entry stays hidden while `product_search_url` is empty,
+            # and a dev boot wipes the DB — so without this the companion is a
+            # port you have to remember and re-type on the admin page after
+            # every restart. Set here rather than inside a seed function
+            # because the two datasets diverge below (dense returns early), and
+            # this should hold for both. Excluded from `is_test_env`: the e2e
+            # suite asserts against a blank default, and a dev convenience has
+            # no business moving that baseline. The deployed install gets its
+            # own value from the deploy script; a real install has an admin
+            # type one in.
+            if not is_test_env:
+                _seed_local_product_search_url()
+
             _qa_fixtures = (
                 not is_test_env and DORA_CONFIG.is_qa_fixture_seed_enabled()
             )

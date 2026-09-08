@@ -27,11 +27,9 @@ from uuid import UUID
 from dora_api.domain.entities.product import Product
 from dora_api.features.products.delete_product import DeleteProductHandler
 from dora_api.features.routers import INGEST_ROUTER
-from dora_api.infrastructure.api_response import (no_content, not_found,
-                                                  unauthorized)
-from dora_api.infrastructure.ingestion_auth import (extract_bearer_token,
-                                                    find_ingestion_source,
-                                                    stamp_used)
+from dora_api.infrastructure.api_response import no_content, not_found
+from dora_api.infrastructure.ingestion_auth import (
+    authenticate_ingestion_request, stamp_used)
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 
 
@@ -43,10 +41,12 @@ _Logger = logging.getLogger(__name__)
     endpoint="ingest_delete_product",
 )
 def ingest_delete_product(product_id: UUID):
-    raw_token = extract_bearer_token()
-    source = find_ingestion_source(raw_token) if raw_token else None
-    if source is None:
-        return unauthorized("Bearer token missing or invalid.")
+    # FU-866 — one shared check: authenticate, then honour the
+    # install-wide ingestion switch. Both live in `ingestion_auth` so a
+    # new ingest route cannot quietly skip the gate.
+    source, auth_error = authenticate_ingestion_request()
+    if auth_error is not None:
+        return auth_error
 
     repository = SqlAlchemyRepository()
     response = DeleteProductHandler(repository).handle(product_id)

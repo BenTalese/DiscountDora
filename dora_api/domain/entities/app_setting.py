@@ -114,7 +114,6 @@ class AppSetting(BaseEntity):
     # switch off the planned-demand signal. Meal planning is core; there was
     # nothing to turn off. Column dropped in migration a7c3e5d19f2b.
     money_enabled: bool = False
-    companion_ingestion_enabled: bool = False
     deals_email_enabled: bool = False
     # `products_enabled` removed —
     # products is now a *data-presence* overlay. `features.products` is derived
@@ -315,7 +314,6 @@ class AppSetting(BaseEntity):
         SCANNING_ENABLED = "scanning_enabled"
         NUTRITION_RATING_SCHEME = "nutrition_rating_scheme"
         MONEY_ENABLED = "money_enabled"
-        COMPANION_INGESTION_ENABLED = "companion_ingestion_enabled"
         DEALS_EMAIL_ENABLED = "deals_email_enabled"
         NUTRITION_MODE = "nutrition_mode"
         NUTRITION_USDA_API_KEY = "nutrition_usda_api_key"

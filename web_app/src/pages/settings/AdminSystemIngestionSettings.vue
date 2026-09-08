@@ -2,7 +2,7 @@
     <div class="settings-page">
         <SettingsPageHeader
             title="Product data ingestion"
-            description="Whether an outside tool may push product and offer data into Dora, and where that tool lives."
+            description="Where the outside tool that pushes product and offer data into Dora lives. Access itself is controlled by the keys you mint on the API access page."
             :icon="ICONS.cloud_upload"
         />
 
@@ -11,31 +11,12 @@
         </q-banner>
 
         <template v-else-if="!loading">
-            <SettingsSection>
-                <SettingsRow inline>
-                    <template #label>
-                        Product data ingestion
-                        <InfoTip label="Product data ingestion">
-                            Accept product offer data from an external source.
-                            Enable this if you have a tool or app that can scrape
-                            product data from store websites and push that data
-                            into Dora for analysis and additional functionality.
-                        </InfoTip>
-                    </template>
-                    <q-toggle
-                        :model-value="ingestionDraft"
-                        @update:model-value="onIngestionToggle"
-                    />
-                </SettingsRow>
-            </SettingsSection>
-
-            <!-- Paired with the toggle above (owner 2026-09-03) — the tool that
-                 pushes the data is usually the same tool you want to open when
-                 you're hunting for a product, so setting up one without the
-                 other is rare. Deliberately NOT gated on the `products`
-                 data-presence flag the way it was on the old Features page:
-                 that made the setup control appear only once the data it
-                 produces already existed. -->
+            <!-- Deliberately NOT gated on the `products` data-presence flag
+                 the way it was on the old Features page: that made the setup
+                 control appear only once the data it produces already existed.
+                 (The ingestion toggle that used to sit above this was removed
+                 2026-09-07 — minting a key IS the switch; see
+                 migration `e7a2c4f9b361`.) -->
             <SettingsSection>
                 <template #title>Product search</template>
                 <template #description>
@@ -73,51 +54,23 @@
     import AppSettingsApiService from 'src/services/api/appSettingsApiService';
     import { useAuthStore } from 'src/stores/authStore';
     import { onMounted, ref } from 'vue';
-    import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';
-    import { useFeatureFlags } from 'src/composables/useFeatureFlags';
     import { useProductSearchUrl } from 'src/composables/useProductSearchUrl';
     import SettingsSection from 'src/components/settings/SettingsSection.vue';
     import SettingsRow from 'src/components/settings/SettingsRow.vue';
     import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
-    import InfoTip from 'src/components/help/InfoTip.vue';
 
     const $q = useQuasar();
     const { isAdmin } = storeToRefs(useAuthStore());
     const api = new AppSettingsApiService();
-    const { refresh: featureFlags$refresh } = useFeatureFlags();
     // Session-wide Product Search URL cache — refreshed after a save so the
     // main-nav "Product Search" entry appears/updates without a page reload.
     const productSearch = useProductSearchUrl();
 
     const loading = ref(true);
-    const ingestionDraft = ref(false);
     const productSearchUrlDraft = ref('');
     const savedProductSearchUrl = ref('');
     const savingProductSearchUrl = ref(false);
     const productSearchUrlError = ref<string | null>(null);
-
-    async function onIngestionToggle(next: boolean) {
-        const previous = ingestionDraft.value;
-        ingestionDraft.value = next;
-        try {
-            const result = await api.updateAsync({ companion_ingestion_enabled: next });
-            ingestionDraft.value = result.companion_ingestion_enabled;
-            await featureFlags$refresh();
-            $q.notify({
-                type: 'positive',
-                position: 'bottom-right',
-                message: next ? 'Product data ingestion enabled.' : 'Product data ingestion disabled.',
-            });
-        } catch (err) {
-            ingestionDraft.value = previous;
-            $q.notify({
-                type: 'negative',
-                position: 'bottom-right',
-                message: 'Could not save the ingestion setting.',
-                caption: toastCaption(err),
-            });
-        }
-    }
 
     async function onSaveProductSearchUrl() {
         const trimmed = productSearchUrlDraft.value.trim();
@@ -148,7 +101,6 @@
         }
         try {
             const settings = await api.getAsync();
-            ingestionDraft.value = settings.companion_ingestion_enabled;
             savedProductSearchUrl.value = settings.product_search_url;
             productSearchUrlDraft.value = settings.product_search_url;
         } catch {

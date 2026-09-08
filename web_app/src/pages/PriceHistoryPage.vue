@@ -78,22 +78,31 @@
 
         <!-- ── Chart + range + comparison strip ──────────────────── -->
         <div class="col-12 col-md-9">
-            <div class="row items-center q-mb-sm">
-                <div class="text-h5">Price history</div>
-                <q-space />
-                <BaseSegmented
-                    v-model="range"
-                    :options="rangeOptions"
-                    dense
-                />
-                <BaseButton
-                    variant="ghost"
-                    :icon="ICONS.notifications"
-                    label="Manage alerts"
-                    class="q-ml-md"
-                    @click="alertsOpen = true"
-                />
-            </div>
+            <!-- Was a bare `row` with an h5, the range control and a
+                 full-label button, which had no answer for a narrow viewport:
+                 the three competed on one line and the title lost. PageToolbar
+                 is the shared answer to exactly that (its actions cluster
+                 wraps below the title, and the title cell can shrink) — the
+                 same component the recipe detail page uses. On phones the
+                 alerts button drops its label, matching the list pages. -->
+            <PageToolbar title="Price history">
+                <template #actions>
+                    <BaseSegmented
+                        v-model="range"
+                        :options="rangeOptions"
+                        dense
+                    />
+                    <BaseButton
+                        variant="ghost"
+                        :icon="ICONS.notifications"
+                        :label="compactToolbar ? undefined : 'Manage alerts'"
+                        aria-label="Manage alerts"
+                        @click="alertsOpen = true"
+                    >
+                        <q-tooltip v-if="compactToolbar">Manage alerts</q-tooltip>
+                    </BaseButton>
+                </template>
+            </PageToolbar>
 
             <q-card ref="chartCardRef" flat bordered>
                 <q-card-section class="q-pa-sm">
@@ -197,25 +206,29 @@
                             No data yet.
                         </q-card-section>
                         <q-separator />
+                        <!-- PH-3/PH-4 — was a `type="number"` field labelled
+                             "Notify me below ($)" sharing one row with a
+                             full-label button, inside a `col-md-4` card: the
+                             label truncated and the value was sent exactly as
+                             typed. The field is now the shared `MoneyInput`
+                             (symbol as a prefix, settles to 2dp on blur) with
+                             a short label, and the button sits **below** it so
+                             the input gets the card's full width instead of
+                             competing for it. -->
                         <q-card-section class="q-pt-sm">
-                            <div class="row items-end q-gutter-sm">
-                                <q-input
-                                    v-model.number="alertInputs[s.product_id]"
-                                    outlined
-                                    dense
-                                    type="number"
-                                    step="0.01"
-                                    :label="`Notify me below (${currencySymbol})`"
-                                    class="col"
-                                />
-                                <BaseButton
-                                    variant="primary"
-                                    :icon="ICONS.notifications_active"
-                                    label="Set alert"
-                                    :disable="!alertInputs[s.product_id] || alertInputs[s.product_id]! <= 0"
-                                    @click="onSetAlert(s.product_id)"
-                                />
-                            </div>
+                            <MoneyInput
+                                :model-value="alertInputs[s.product_id] ?? null"
+                                @update:model-value="alertInputs[s.product_id] = $event"
+                                label="Notify below"
+                            />
+                            <BaseButton
+                                variant="primary"
+                                class="full-width q-mt-sm"
+                                :icon="ICONS.notifications_active"
+                                label="Set alert"
+                                :disable="!alertInputs[s.product_id] || alertInputs[s.product_id]! <= 0"
+                                @click="onSetAlert(s.product_id)"
+                            />
                         </q-card-section>
                     </q-card>
                 </div>
@@ -257,11 +270,10 @@
     import SearchInput from 'src/components/SearchInput.vue';
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseSegmented from 'src/components/BaseSegmented.vue';
+    import MoneyInput from 'src/components/MoneyInput.vue';
+    import PageToolbar from 'src/components/PageToolbar.vue';
     import DiscountChip from 'src/components/chips/DiscountChip.vue';
-    import { useMoney, formatMoney } from 'src/composables/useMoney';
-    // money renders + input labels read the install-currency
-    // symbol from the shared money policy.
-    const { currencySymbol } = useMoney();
+    import { formatMoney } from 'src/composables/useMoney';
     import { useQuasar } from 'quasar';
     import { computed, onBeforeUnmount, onMounted, ref, watch, reactive } from 'vue';
     import { useRoute } from 'vue-router';
@@ -278,6 +290,7 @@
 
     const $q = useQuasar();
     const route = useRoute();
+    const compactToolbar = computed(() => $q.screen.lt.sm);
     const historyApi = new PriceHistoryApiService();
     // products come through the store (R-003), so a save on the
     // product-search surface is visible here without a hard refresh.
@@ -302,7 +315,9 @@
     const chartSeries = computed(() => productSeriesToChart(series.value));
     const alerts = ref<PriceAlert[]>([]);
     const alertsOpen = ref(false);
-    const alertInputs = reactive<Record<string, number | null>>({});
+    // Indexed by product id. `| undefined` is explicit because a reactive
+// Record's index access is, and MoneyInput takes `number | null`.
+const alertInputs = reactive<Record<string, number | null | undefined>>({});
 
     // chart width tracks the surrounding card so the graph extends to
     // the card edge at every viewport size. Was hard-coded to 720, which

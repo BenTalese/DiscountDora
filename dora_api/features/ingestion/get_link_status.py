@@ -44,10 +44,9 @@ from dora_api.domain.entities.product import Product
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.entities.store import Store
 from dora_api.features.routers import INGEST_ROUTER
-from dora_api.infrastructure.api_response import ok, unauthorized
-from dora_api.infrastructure.ingestion_auth import (extract_bearer_token,
-                                                    find_ingestion_source,
-                                                    stamp_used)
+from dora_api.infrastructure.api_response import ok
+from dora_api.infrastructure.ingestion_auth import (
+    authenticate_ingestion_request, stamp_used)
 from dora_api.infrastructure.ports import Repository
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
@@ -232,10 +231,12 @@ class GetLinkStatusHandler:
 
 @INGEST_ROUTER.route("/link-status", methods=["POST"], endpoint="ingest_link_status")
 def ingest_link_status():
-    raw_token = extract_bearer_token()
-    source = find_ingestion_source(raw_token) if raw_token else None
-    if source is None:
-        return unauthorized("Bearer token missing or invalid.")
+    # FU-866 — one shared check: authenticate, then honour the
+    # install-wide ingestion switch. Both live in `ingestion_auth` so a
+    # new ingest route cannot quietly skip the gate.
+    source, auth_error = authenticate_ingestion_request()
+    if auth_error is not None:
+        return auth_error
 
     try:
         payload = _LinkStatusRequest.model_validate(request.get_json(silent=True) or {})

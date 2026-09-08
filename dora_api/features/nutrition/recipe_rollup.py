@@ -130,6 +130,11 @@ class IngredientInput:
     quantity: float | None
     unit: str | None
     is_optional: bool = False
+    # What to call this row when it lands in `uncounted_ingredients`. Only the
+    # detail path fills it — the list path never emits the per-ingredient gaps
+    # (see `get_recipes._nutrition_dto`), so paying to carry a label there
+    # would buy nothing.
+    display_name: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -152,10 +157,33 @@ def input_from_entity(recipe) -> RecipeNutritionInput:  # noqa: ANN001
                 quantity = ing.quantity,
                 unit = ing.unit,
                 is_optional = getattr(ing, "is_optional", False),
+                # The pantry item's name when there is one: a gap on a linked
+                # row is fixed on that item, so naming it the way the pantry
+                # does is what makes the fix findable. Unlinked rows have only
+                # the text the author typed.
+                display_name = (
+                    ing.stock_item.name if ing.stock_item
+                    else getattr(ing, "raw_text", None)
+                ),
             )
             for ing in (recipe.ingredients or [])
         ],
     )
+
+
+@dataclass(frozen=True, slots=True)
+class UncountedIngredient:
+    """One ingredient that contributed nothing, named and reasoned.
+
+    The counts in `uncounted` say *how many* rows a gap covers; this says
+    *which*, which is the difference between a coverage line the reader can
+    only nod at and one they can act on. `stock_item_id` is the anchor for
+    that action — a `no_food` / `no_data` gap is closed by linking a food to
+    that pantry item — and is None exactly when the reason is `not_linked`.
+    """
+    name: str | None
+    stock_item_id: object | None
+    reason: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -172,6 +200,8 @@ class RecipeNutrition:
     counted_count: int
     total_count: int
     uncounted: dict[str, int]
+    # The same gaps, named row by row, in ingredient order.
+    uncounted_ingredients: list[UncountedIngredient] = field(default_factory=list)
     # Whether the estimate covers enough of the recipe to rank or filter on
     # (see RELIABLE_COVERAGE_RATIO). Display is never gated on this — a partial
     # figure shown with its coverage is honest; a partial figure used to hide a
@@ -339,29 +369,41 @@ def _rollup_one(recipe: 'RecipeNutritionInput', food_ids_by_item: dict, foods: d
     # weighted twin of `contributors`, and what the coverage line reports.
     known_grams = dict.fromkeys(totals, 0.0)
     uncounted = {reason: 0 for reason in UNCOUNTED_REASONS}
+    uncounted_rows: list[UncountedIngredient] = []
     counted = 0
     total_grams = 0.0
     fvnl_grams = 0.0
     fvl_grams = 0.0
 
     required = [ing for ing in recipe.ingredients if not ing.is_optional]
+
+    def gap(ingredient: 'IngredientInput', reason: str) -> None:
+        """Record a gap both ways — the count the coverage line reads, and the
+        named row the panel offers a fix on."""
+        uncounted[reason] += 1
+        uncounted_rows.append(UncountedIngredient(
+            name = ingredient.display_name or ingredient.stock_item_name,
+            stock_item_id = ingredient.stock_item_id,
+            reason = reason,
+        ))
+
     for ingredient in required:
         if ingredient.stock_item_id is None:
-            uncounted[REASON_NOT_LINKED] += 1
+            gap(ingredient, REASON_NOT_LINKED)
             continue
         food_id = food_ids_by_item.get(ingredient.stock_item_id)
         food = foods.get(food_id) if food_id else None
         if food is None:
-            uncounted[REASON_NO_FOOD] += 1
+            gap(ingredient, REASON_NO_FOOD)
             continue
         if food.kcal_per_100g is None:
             # kcal is the load-bearing figure; a food without one can't
             # contribute to the headline, so it reads as a gap either way.
-            uncounted[REASON_NO_DATA] += 1
+            gap(ingredient, REASON_NO_DATA)
             continue
         quantity = ingredient.quantity
         if quantity is None or quantity <= 0:
-            uncounted[REASON_NO_QUANTITY] += 1
+            gap(ingredient, REASON_NO_QUANTITY)
             continue
         grams = _resolve_grams(
             float(quantity),
@@ -370,7 +412,7 @@ def _rollup_one(recipe: 'RecipeNutritionInput', food_ids_by_item: dict, foods: d
             [name for name in (ingredient.stock_item_name, food.name) if name],
         )
         if grams is None:
-            uncounted[REASON_NO_CONVERSION] += 1
+            gap(ingredient, REASON_NO_CONVERSION)
             continue
 
         counted += 1
@@ -460,6 +502,7 @@ def _rollup_one(recipe: 'RecipeNutritionInput', food_ids_by_item: dict, foods: d
         counted_count = counted,
         total_count = total_count,
         uncounted = {reason: count for reason, count in uncounted.items() if count},
+        uncounted_ingredients = uncounted_rows,
         is_reliable = (
             counted > 0 and total_count > 0
             and (counted / total_count) >= RELIABLE_COVERAGE_RATIO

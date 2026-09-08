@@ -897,13 +897,22 @@
 
                                 <q-separator />
                                 <q-card-actions align="right">
-                                    <BaseButton
-                                        variant="ghost"
-                                        dense
-                                        :icon="ICONS.add_shopping_cart"
-                                        label="Add to list"
-                                        :loading="busy"
-                                        @click="onAddProductToList(prod.product_id)"
+                                    <!-- MP-6 / L196 — the componentised cart
+                                         button, finally on the third product
+                                         surface. This was a hand-rolled button
+                                         that silently added to the primary list
+                                         (or fell back to the generic add), so
+                                         it was the only place a product could
+                                         reach a list *without* the cart-state
+                                         UX the rest of the app has: the picker
+                                         on 2+ lists, smart-remove on exactly
+                                         one, and the on-a-list state showing on
+                                         the control itself. -->
+                                    <AddToListButton
+                                        variant="row"
+                                        :stock-item-id="stockItemId"
+                                        :selected-product-id="prod.product_id"
+                                        @click.stop
                                     />
                                     <BaseButton
                                         v-if="prod.web_url"
@@ -1378,6 +1387,7 @@
     import FadeTransition from 'src/components/transitions/FadeTransition.vue';
     import { storeToRefs } from 'pinia';
     import { QPage, useQuasar } from 'quasar';
+    import AddToListButton from 'src/components/AddToListButton.vue';
     import DiscountChip from 'src/components/chips/DiscountChip.vue';
     import StoreLogo from 'src/components/StoreLogo.vue';
     import NutritionFoodPicker from 'src/components/stock/NutritionFoodPicker.vue';
@@ -2044,24 +2054,8 @@
         openProductSearch(router);
     }
 
-    async function onAddProductToList(productId: string) {
-        const primary = shoppingListStore.quickAddTargetListId;
-        busy.value = true;
-        try {
-            if (primary) {
-                await slActions.addItems(primary, [
-                    {
-                        stock_item_id: stockItemId.value,
-                        selected_product_id: productId,
-                    },
-                ]);
-            } else {
-                await actions.addToList(stockItemId.value);
-            }
-        } finally {
-            busy.value = false;
-        }
-    }
+    // `onAddProductToList` removed 2026-09-06 — `AddToListButton` owns this
+    // flow now (MP-6 / L196).
 
     // ── Recipes ──────────────────────────────────────────────────────────
     const recipesForDetail = computed<Recipe[]>(() => {

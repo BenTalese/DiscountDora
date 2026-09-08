@@ -1,33 +1,48 @@
 <template>
     <!-- The card chrome is `RecipeInfoCard` (R-001) — shared with the version
-         and additional-details panels so the three read as one family. -->
-    <RecipeInfoCard :icon="ICONS.monitor_heart" :heading="basisLabel">
-        <template #heading-after>
+         and additional-details panels so the three read as one family.
+
+         Owner feedback 2026-09-08, two asks with one answer: the panel "just
+         looks like a blob of text in a box", and there was no way to fix an
+         ingredient the rollup couldn't count from here. So the figures are laid
+         out as a headline plus a stat grid rather than run-on sentences, the
+         coverage gets the same bar the cost breakdown wears, and each gap is
+         named with the food search offered against the pantry item behind it.
+
+         No `heading` — the expansion header this sits inside already says
+         "Nutrition", and the basis is a pill on the figure it qualifies. -->
+    <RecipeInfoCard :icon="ICONS.monitor_heart">
+        <div class="rnut__head">
+            <div v-if="nutrition.kcal !== null" class="rnut__figure">
+                <span class="rnut__kcal">{{ Math.round(nutrition.kcal) }}</span>
+                <span class="rnut__unit">kcal</span>
+            </div>
+            <div v-else class="rnut__figure rnut__figure--empty">
+                Nothing to add up yet
+            </div>
+            <span class="rnut__basis">{{ basisLabel }}</span>
             <InfoTip label="Nutrition basis">
                 Summed from the foods your ingredients are linked
                 to, converted to grams. Link more ingredients to a
                 food on their stock item to fill the gaps.
             </InfoTip>
-        </template>
-
-        <div v-if="nutrition.kcal !== null" class="text-body2">
-            <strong>{{ Math.round(nutrition.kcal) }}</strong>
-            <span class="dora-text-muted q-ml-xs">kcal</span>
-        </div>
-        <div v-else class="text-body2 dora-text-muted">
-            Nothing to add up yet
         </div>
 
-        <div v-if="macros.length" class="text-caption dora-text-muted q-mt-xs">
-            <span v-for="(macro, index) in macros" :key="macro.label">
-                <span v-if="index > 0"> · </span>{{ macro.label }} {{ macro.value }}g
-            </span>
-        </div>
+        <!-- One cell per figure the rollup actually knew. The macros and the
+             rating's four nutrients sit in one grid rather than two rows: they
+             are the same kind of fact at the same basis, and splitting them
+             would imply a difference that isn't there. -->
+        <dl v-if="nutrients.length" class="rnut__grid">
+            <div v-for="row in nutrients" :key="row.label" class="rnut__cell">
+                <dt class="rnut__k">{{ row.label }}</dt>
+                <dd class="rnut__v">{{ row.value }}<span class="rnut__vu">{{ row.unit }}</span></dd>
+            </div>
+        </dl>
 
         <!-- Health Star Rating (owner ask 2026-08-27). Renders only
              when the install has it on; the server simply omits the
              field otherwise, so there is no second gate here. -->
-        <div v-if="rating" class="dora-hsr q-mt-sm">
+        <div v-if="rating" class="dora-hsr">
             <div class="dora-hsr__row">
                 <RecipeHealthStars :stars="rating.stars" qualifier="estimated" />
                 <BaseButton
@@ -89,7 +104,7 @@
              different things and their explanations have to say
              different things, and collapsing them would produce copy
              that is vague about both. -->
-        <div v-if="nutriScore" class="dora-hsr q-mt-sm">
+        <div v-if="nutriScore" class="dora-hsr">
             <div class="dora-hsr__row">
                 <RecipeNutriScore :grade="nutriScore.grade" qualifier="estimated" />
                 <BaseButton
@@ -142,15 +157,46 @@
             </q-slide-transition>
         </div>
 
-        <!-- The coverage line is always visible, even at full
-             coverage: a number whose basis is invisible reads as
-             complete whether it is or not. -->
-        <div class="text-caption dora-text-muted q-mt-xs">
-            {{ coverageLine }}
+        <!-- The coverage line is always visible, even at full coverage: a
+             number whose basis is invisible reads as complete whether it is or
+             not. The bar is the cost breakdown's, deliberately — the two
+             "how much of this could we work out?" statements in the recipe
+             page should not be two different shapes. -->
+        <div class="rnut__coverage">
+            <div class="rnut__bar" role="img" :aria-label="coverageLine">
+                <div class="rnut__barfill" :style="{ width: coveragePct + '%' }"></div>
+            </div>
+            <span class="rnut__cov">{{ coverageLine }}</span>
         </div>
-        <ul v-if="gaps.length" class="dora-gaps text-caption dora-text-muted">
-            <li v-for="gap in gaps" :key="gap.reason">{{ gap.text }}</li>
-        </ul>
+
+        <!-- The gaps, named. Grouped by reason so eight unlinked rows read as
+             one heading rather than eight sentences, and each row that can be
+             fixed from here carries the button that fixes it. -->
+        <template v-for="group in gapGroups" :key="group.reason">
+            <div class="rnut__grouphead">{{ group.title }}</div>
+            <ul class="rnut__gaps">
+                <li v-for="(row, i) in group.rows" :key="`${row.stock_item_id}-${i}`">
+                    <span class="rnut__gapname">{{ row.name ?? 'Unnamed ingredient' }}</span>
+                    <BaseButton
+                        v-if="group.canLink && row.stock_item_id"
+                        variant="ghost"
+                        dense
+                        size="sm"
+                        :icon="ICONS.search"
+                        :label="group.actionLabel"
+                        :loading="linkingId === row.stock_item_id"
+                        :disable="linkingId !== null"
+                        @click="onFindFood(row)"
+                    />
+                </li>
+            </ul>
+        </template>
+
+        <NutritionFoodPicker
+            v-model="pickerOpen"
+            :item-name="pickerItemName"
+            @picked="onFoodPicked"
+        />
     </RecipeInfoCard>
 </template>
 
@@ -170,39 +216,48 @@
     import { computed, ref } from 'vue';
 
     import BaseButton from 'src/components/BaseButton.vue';
+    import NutritionFoodPicker from 'src/components/stock/NutritionFoodPicker.vue';
     import RecipeHealthStars from 'src/components/recipes/RecipeHealthStars.vue';
     import RecipeInfoCard from 'src/components/recipes/RecipeInfoCard.vue';
     import RecipeNutriScore from 'src/components/recipes/RecipeNutriScore.vue';
-    import type { RecipeNutrition, RecipeNutritionGap } from 'src/models/recipe';
+    import type {
+        RecipeNutrition, RecipeNutritionGap, RecipeNutritionGapIngredient,
+    } from 'src/models/recipe';
     import { ICONS } from 'src/style/icons';
     import InfoTip from 'src/components/help/InfoTip.vue';
+    import { useSettingsSave } from 'src/composables/useSettingsSave';
+    import { useStockItemStore } from 'src/stores/stockItemStore';
 
     const props = defineProps<{ nutrition: RecipeNutrition }>();
 
+    /** Fired once a food has been linked to one of the gap rows, so the page
+     *  can re-fetch the recipe — the rollup that produced everything on this
+     *  card is the server's, and it has just changed (R-003). */
+    const emit = defineEmits<{ (e: 'linked'): void }>();
+
     const s = (count: number) => (count === 1 ? '' : 's');
 
-    /** Copy per gap reason. Presentation, so it lives client-side; the ids
-     *  themselves are the server's closed set. */
-    const GAP_COPY: Record<RecipeNutritionGap, (count: number) => string> = {
-        not_linked: (n) => `${n} ingredient${s(n)} not linked to a stock item`,
-        no_food: (n) => `${n} stock item${s(n)} not linked to a food`,
-        no_quantity: (n) => `${n} ingredient${s(n)} with no amount given`,
-        no_conversion: (n) => `${n} amount${s(n)} we can't convert to a weight`,
-        no_data: (n) => `${n} food${s(n)} with no calorie data`,
-    };
-
     const basisLabel = computed(() =>
-        props.nutrition.basis === 'serving'
-            ? 'Nutrition (per serving)'
-            : 'Nutrition (whole recipe)',
+        props.nutrition.basis === 'serving' ? 'per serving' : 'whole recipe',
     );
 
-    const macros = computed(() =>
-        [
-            { label: 'Protein', value: props.nutrition.protein_g },
-            { label: 'Carbs', value: props.nutrition.carbs_g },
-            { label: 'Fat', value: props.nutrition.fat_g },
-        ].filter((macro): macro is { label: string; value: number } => macro.value !== null),
+    /** Every figure the rollup knew, in the order a label reads them. Nulls
+     *  are dropped rather than shown as 0 — "nobody told us" and "there is
+     *  none of it" are different claims (the same rule the server applies). */
+    const NUTRIENTS: { key: keyof RecipeNutrition; label: string; unit: string }[] = [
+        { key: 'protein_g', label: 'Protein', unit: 'g' },
+        { key: 'carbs_g', label: 'Carbs', unit: 'g' },
+        { key: 'fat_g', label: 'Fat', unit: 'g' },
+        { key: 'saturated_fat_g', label: 'Sat fat', unit: 'g' },
+        { key: 'sugars_g', label: 'Sugars', unit: 'g' },
+        { key: 'fibre_g', label: 'Fibre', unit: 'g' },
+        { key: 'sodium_mg', label: 'Sodium', unit: 'mg' },
+    ];
+
+    const nutrients = computed(() =>
+        NUTRIENTS
+            .map((row) => ({ ...row, value: props.nutrition[row.key] }))
+            .filter((row): row is typeof row & { value: number } => typeof row.value === 'number'),
     );
 
     const coverageLine = computed(() => {
@@ -213,11 +268,95 @@
         return `From ${counted} of ${total} ingredient${s(total)}${suffix}`;
     });
 
-    const gaps = computed(() =>
-        (Object.entries(props.nutrition.uncounted) as [RecipeNutritionGap, number][])
-            .filter(([, count]) => count > 0)
-            .map(([reason, count]) => ({ reason, text: GAP_COPY[reason](count) })),
-    );
+    const coveragePct = computed(() => {
+        const { counted_count: counted, total_count: total } = props.nutrition;
+        if (total <= 0) return 0;
+        return Math.round((counted / total) * 100);
+    });
+
+    // ── The gaps, named ─────────────────────────────────────────────────
+    /** Copy per gap reason, plus whether a food link is the fix. `canLink` is
+     *  the two reasons that live on the *stock item* — the other three are
+     *  fixed by editing the ingredient row, which is the page behind this
+     *  drawer, so offering a search here would be pointing at the wrong thing.
+     *  The ids themselves are the server's closed set. */
+    const GAP_GROUPS: Record<RecipeNutritionGap, {
+        title: string; canLink: boolean; actionLabel: string;
+    }> = {
+        not_linked: {
+            title: 'Not linked to a pantry item',
+            canLink: false,
+            actionLabel: '',
+        },
+        no_food: {
+            title: 'No food linked, so no figures to add up',
+            canLink: true,
+            actionLabel: 'Find a food',
+        },
+        no_data: {
+            title: 'Linked food carries no calorie figure',
+            canLink: true,
+            actionLabel: 'Find another',
+        },
+        no_quantity: { title: 'No amount given', canLink: false, actionLabel: '' },
+        no_conversion: {
+            title: "Amount can't be converted to a weight",
+            canLink: false,
+            actionLabel: '',
+        },
+    };
+
+    /** Reason order is this list's, not the server's dict order — it runs from
+     *  "we know nothing about this row" to "we nearly had it". */
+    const GAP_ORDER: RecipeNutritionGap[] = [
+        'no_food', 'no_data', 'not_linked', 'no_quantity', 'no_conversion',
+    ];
+
+    const gapGroups = computed(() => {
+        const rows = props.nutrition.uncounted_ingredients ?? [];
+        return GAP_ORDER
+            .map((reason) => ({
+                reason,
+                ...GAP_GROUPS[reason],
+                rows: rows.filter((row) => row.reason === reason),
+            }))
+            .filter((group) => group.rows.length > 0);
+    });
+
+    // ── Linking a food from here ────────────────────────────────────────
+    // The picker is the pantry page's, unchanged (R-001): the same search, the
+    // same "nothing is saved until you tap a row" contract (P12 No-invent).
+    // All this surface adds is the anchor — which pantry item the pick lands on.
+    const stockItemStore = useStockItemStore();
+    const { notifyError, notifySuccess } = useSettingsSave();
+
+    const pickerOpen = ref(false);
+    const pickerRow = ref<RecipeNutritionGapIngredient | null>(null);
+    const linkingId = ref<string | null>(null);
+    const pickerItemName = computed(() => pickerRow.value?.name ?? 'this ingredient');
+
+    function onFindFood(row: RecipeNutritionGapIngredient) {
+        pickerRow.value = row;
+        pickerOpen.value = true;
+    }
+
+    async function onFoodPicked(foodId: string, foodName: string) {
+        const stockItemId = pickerRow.value?.stock_item_id;
+        if (!stockItemId) return;
+        linkingId.value = stockItemId;
+        try {
+            await stockItemStore.updateStockItemAsync({
+                stock_item_id: stockItemId,
+                nutrition_food_id: foodId,
+            });
+            notifySuccess(`Linked ${pickerRow.value?.name ?? 'the ingredient'} to ${foodName}.`);
+            emit('linked');
+        } catch (err) {
+            notifyError('Could not link that food.', err);
+        } finally {
+            linkingId.value = null;
+        }
+    }
 
     // ── Health Star Rating ──────────────────────────────────────────────
     const breakdownOpen = ref(false);
@@ -318,13 +457,124 @@
 </script>
 
 <style scoped>
-    .dora-gaps {
-        margin: 4px 0 0;
-        padding-left: 18px;
+    .rnut__head {
+        display: flex;
+        align-items: baseline;
+        flex-wrap: wrap;
+        gap: var(--space-2, 8px);
+    }
+    .rnut__figure { display: flex; align-items: baseline; gap: var(--space-1, 4px); }
+    .rnut__kcal {
+        font-size: 1.75rem;
+        font-weight: 700;
+        line-height: 1.1;
+        font-variant-numeric: tabular-nums;
+    }
+    .rnut__unit { color: var(--text-muted); font-size: 0.875rem; }
+    .rnut__figure--empty { color: var(--text-muted); font-size: 0.875rem; }
+    /* The basis is a qualifier on the figure, not a heading — it sits on the
+       number it describes so the two can't be read apart. */
+    .rnut__basis {
+        padding: 2px 8px;
+        border-radius: var(--radius-pill, 999px);
+        background: var(--surface-sunken);
+        color: var(--text-secondary);
+        font-size: var(--font-size-xs, 0.6875rem);
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+    }
+
+    /* auto-fit rather than a fixed column count: seven nutrients on a phone
+       and three on a desktop both want the row filled, not padded out. */
+    .rnut__grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(5.5rem, 1fr));
+        gap: var(--space-2, 8px) var(--space-3, 12px);
+        margin: var(--space-3, 12px) 0 0;
+        padding: var(--space-3, 12px) 0 0;
+        border-top: 1px solid var(--divider);
+    }
+    .rnut__cell { min-width: 0; }
+    .rnut__k {
+        font-size: var(--font-size-xs, 0.6875rem);
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--text-muted);
+    }
+    .rnut__v {
+        margin: 0;
+        font-size: 1rem;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+    }
+    .rnut__vu {
+        margin-left: 2px;
+        font-size: 0.75rem;
+        font-weight: 400;
+        color: var(--text-muted);
+    }
+
+    .rnut__coverage {
+        display: flex;
+        align-items: center;
+        gap: var(--space-3, 12px);
+        margin-top: var(--space-3, 12px);
+        padding-top: var(--space-3, 12px);
+        border-top: 1px solid var(--divider);
+    }
+    .rnut__bar {
+        flex: 1;
+        height: 6px;
+        border-radius: var(--radius-pill, 999px);
+        background: var(--surface-sunken);
+        overflow: hidden;
+    }
+    .rnut__barfill { height: 100%; background: var(--brand-primary); }
+    .rnut__cov {
+        font-size: 0.8125rem;
+        color: var(--text-muted);
+        white-space: nowrap;
+    }
+
+    .rnut__grouphead {
+        margin-top: var(--space-3, 12px);
+        font-size: var(--font-size-xs, 0.6875rem);
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--text-muted);
+    }
+    .rnut__gaps {
+        list-style: none;
+        margin: var(--space-1, 4px) 0 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+    .rnut__gaps > li {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2, 8px);
+        padding: var(--space-1, 4px) var(--space-3, 12px);
+        border-radius: var(--radius-sm, 4px);
+        background: var(--surface-sunken);
+        font-size: 0.875rem;
+        color: var(--text-primary);
+        min-height: 36px;
+    }
+    .rnut__gapname { flex: 1; min-width: 0; }
+    /* The action inside is a `BaseButton`, which lifts to the 44px floor on a
+       touch device — the row has to make room for it rather than clip it. */
+    @media (pointer: coarse) {
+        .rnut__gaps > li { min-height: 52px; }
     }
 
     .dora-hsr {
-        padding-top: var(--space-2, 8px);
+        margin-top: var(--space-3, 12px);
+        padding-top: var(--space-3, 12px);
         border-top: 1px solid var(--divider);
     }
     .dora-hsr__row {
@@ -335,14 +585,14 @@
     }
     .dora-hsr__working { margin-top: var(--space-2, 8px); }
     .dora-hsr__ledger {
-        display: flex;
-        flex-wrap: wrap;
-        gap: var(--space-1, 4px) var(--space-4, 16px);
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(5.5rem, 1fr));
+        gap: var(--space-1, 4px) var(--space-3, 12px);
     }
     .dora-hsr__cell {
-        display: inline-flex;
-        align-items: baseline;
-        gap: var(--space-1, 4px);
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
     }
     .dora-hsr__k { color: var(--text-muted); }
     .dora-hsr__v {

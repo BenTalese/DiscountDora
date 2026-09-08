@@ -5,7 +5,140 @@ semver — major bumps signal schema or breaking-config changes.
 
 ## [Unreleased]
 
+### Fixed
+- **ALDI product search works again (2026-09-07).** *Landed in the sibling
+  `dora-companion` repo.* ALDI rebuilt their website, and the scraper had been
+  reading a page layout that no longer exists — the old addresses now redirect
+  and none of the markup it looked for is there, so ALDI searches returned
+  nothing. It now reads ALDI's own product data directly, which is both more
+  reliable and richer than what it could see before: **brand names and product
+  codes now come through** (previously always blank), which is also what lets
+  the scheduled refresh re-check an ALDI product's price by its own code rather
+  than guessing from its name.
+  Two things worth knowing about ALDI specifically: sizes written with a comma
+  ("1,000 ml") were silently losing their size, now fixed; and because ALDI
+  runs everyday-low pricing rather than markdowns, **ALDI products won't show a
+  "% off" badge or appear under "on deal" filters** — there genuinely isn't a
+  was-price to compare against.
+
+### Added
+- **A recipe's nutrition gaps are named, and fixable from the recipe (2026-09-08).**
+  The nutrition panel could say *"3 stock items not linked to a food"* but not
+  which, so the only way to close a gap was to remember the ingredient, go to
+  the pantry, find the item and search there. Each uncounted ingredient is now
+  listed under the reason it wasn't counted, and the two reasons that live on
+  the pantry item — no food linked, or a linked food with no calorie figure —
+  carry a **Find a food** button that opens the same search-and-confirm picker
+  the pantry page uses. Picking a food links it and the recipe's figures
+  recompute on the spot. Nothing is saved without an explicit pick, exactly as
+  on the pantry page.
+
+- **The deploy script now publishes the companion alongside Dora (2026-09-07).**
+  `deploy-dora.sh` deploys two stacks in order — Dora, then the sibling
+  `dora-companion` — each its own Compose project on its own port pair
+  (Dora 5170/5174, companion 5172/5175). New sub-commands: `dora` and
+  `companion` deploy one side only, `mint-key` re-keys the companion without a
+  rebuild. Prerequisite work landed in the companion repo: it had no container
+  story at all, and now ships a `Dockerfile`, `compose.yml`, `nginx.conf` and
+  `startup.sh` in the same monolithic shape as Dora's (Python API in the
+  background, nginx serving the built SPA in the foreground).
+
+- **Product Search now points at the companion automatically (2026-09-07).** The
+  nav entry only appears once an install-wide **Product search URL** is set, and
+  wiping the database cleared it — so after every deploy the address had to be
+  remembered and re-typed on the admin page. The deploy now sets it to the
+  companion it just deployed, and a dev boot sets it to `localhost:5175`. You
+  can still change it on Settings → Admin → Product data ingestion; nothing
+  about the setting itself changed.
+
+- **A wiping deploy no longer silently mutes the companion (2026-09-07).** The
+  companion pushes into Dora with a bearer key that exists only as a hash in
+  Dora's database, so wiping the database on deploy destroyed it and pushes
+  failed until someone re-minted the key by hand on the API access page. The
+  deploy now mints a fresh key itself once Dora's API is answering, and writes
+  it into the companion's environment before starting it — the same operation
+  the API access page performs, driven from the shell
+  (`scripts/mint_ingestion_key.py`). The key's label is its identity, so
+  re-minting revokes the previous one rather than leaving dead keys behind.
+
+### Fixed
+- **The cost breakdown's share bars are visible in the dark themes
+  (2026-09-08).** The filled part of each bar was a low-alpha wash of the brand
+  colour on a near-black track — in dark pesto the fill and the track were
+  effectively the same colour, so the bar carried no information. It uses the
+  solid brand ink now, the same as the coverage bar above it.
+
+- **The recipe method heading no longer counts its own steps (2026-09-08).** The
+  steps are numbered on screen directly beneath it.
+
+- **The collapsed Nutrition row carries no caption (2026-09-08).** It restated
+  the calorie figure with a *"per serving"* qualifier, which only raised the
+  question of what the number was per. The figure and its basis are stated
+  properly one tap away.
+
+- **The deploy script's container-name reclaim now actually runs (2026-09-07).**
+  It was written in August to clear a container held by an older Compose project
+  — the failure that made deploys die on *"Conflict. The container name
+  /dashy_dora is already in use"* — but was never called, so it had never once
+  protected a deploy. It is now wired into the Dora deploy and parameterised, so
+  the companion stack gets the same protection.
+
+
+- **The "Product data ingestion" switch is gone (2026-09-07).** It sat in
+  Settings → Admin → Data & access and read like a security control — *"accept
+  product offer data from an external source"* — while controlling nothing at
+  all: every request was accepted on its bearer key alone. Rather than make the
+  switch work, it was removed, because the control it duplicated is better:
+  **ingestion already requires an access key you mint yourself**, and each key
+  can be disabled or deleted individually on the API access page. Not wanting
+  an outside tool pushing data means not giving it a key — which is per-tool,
+  rather than one install-wide switch that turns off every tool at once.
+  Nothing you need to do: if ingestion works for you today, it keeps working.
+  The page keeps its Product Search setting.
+
+- **Aldi prices under a dollar were being saved 100× too high (2026-09-07).**
+  *Landed in the sibling `dora-companion` repo.* Aldi writes sub-dollar prices
+  in cents ("80c"), and the scraper read that as **$80.00**. Any such product
+  pushed into Dora carried a wildly wrong price — which then fed its price
+  history, its "cheapest" comparison and any budgeting built on it. Now read as
+  $0.80. Three other quiet faults in the same scraper went with it: refreshing a
+  product Aldi had delisted **crashed the whole scheduled sync** instead of
+  skipping that one product; two scraper instances shared one cache; and the
+  product name was trimmed with a character-set strip rather than a suffix
+  removal.
+  The companion's health page also says *why* a scraper is unhealthy now —
+  distinguishing "the shop's website is down" from "the shop redesigned its
+  site and our scraper no longer recognises it", which previously looked
+  identical. A shop you've simply switched off no longer reports as broken.
+
 ### Changed
+- **The recipe nutrition panel reads as figures, not prose (2026-09-08).** It
+  was a run of sentences in a box: a calorie line, macros joined by dots, a
+  coverage line, a bulleted list of gap counts. The figure is now a headline
+  with the basis as a pill beside it, every nutrient the rollup knew sits in a
+  labelled grid (the rating's saturated fat, sugars, fibre and sodium included —
+  they were being computed and never shown), and coverage wears the same bar the
+  cost breakdown does. The rating's point ledger is a grid rather than a
+  wrapping run of pairs.
+
+- **The add-to-list dialog separates its ingredients (2026-09-08).** Rows were
+  dense and butted together, so a list of two-line items read as one block. They
+  are separated and full height now, and the *Optional* group is a section
+  heading rather than a row of em-dashes that could be mistaken for something to
+  tick. Shared surface — meal plans get the same.
+
+- **Price history tidied, and product cards on a stock item behave like
+  everywhere else (2026-09-06).** The *"notify me below"* field was labelled
+  with the currency symbol baked into its text, so the label ran out of room and
+  truncated, and it sent whatever you typed unchanged. It now shows the currency
+  as a prefix, settles to two decimals when you leave the field, and has the
+  full width of the card with **Set alert** beneath it. The page header uses the
+  same title-and-actions bar as the rest of the app, so it no longer squeezes on
+  narrow screens.
+  On a stock item's **Products** tab, "Add to list" was a one-off button that
+  quietly added to your primary list. It's now the same cart control the rest of
+  the app uses — it shows when the product is already on a list, lets you pick
+  when you have more than one, and removes on a second tap.
 - **My Products rebuilt (2026-09-06).** The page now has **two views** — a card
   grid with product photos, and compact rows — switched from the toolbar and
   remembered between visits, the same way the cookbook works. The cards took

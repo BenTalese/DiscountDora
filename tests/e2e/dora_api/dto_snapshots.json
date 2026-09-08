@@ -19,7 +19,6 @@
       "backup_retention_count",
       "backup_storage_path",
       "batch_features_enabled",
-      "companion_ingestion_enabled",
       "currency",
       "deals_email_enabled",
       "email_enabled",

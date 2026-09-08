@@ -10,6 +10,248 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-893 — the local dev `.env` pointed the companion at the wrong Dora URL
+- **Raised:** 2026-09-07 (companion dockerisation)
+- **Type:** finding
+- **Repo:** `../dora-companion/` — the untracked local `.env`, not committed code.
+- **What:** it set `DORA_INGEST_URL=http://localhost:5174/api/ingest`. Two
+  faults: `dora_ingest.py` treats that var as an **origin** and appends the path
+  itself (`url = f"{config.base_url}/api/ingest"`, line 175), so requests went to
+  `/api/ingest/api/ingest`; and `5174` is the SPA's nginx port, which does not
+  proxy `/api` (that block in `nginx.conf` is commented out) — the API is on
+  `5170`. Every local push must have been 404ing.
+- **State — RESOLVED 2026-09-07:** owner asked for it to be fixed; the line is
+  now `DORA_INGEST_URL=http://localhost:5170`. Nothing else in the file was
+  touched. The *deployed* companion was never affected — `deploy-dora.sh`
+  generates the server `.env` with the right shape.
+- **Note:** a `.env.bak-preclaude` backup was taken and then deleted — the repo's
+  `.gitignore` covers `.env` but not `.env.bak-*`, so it would have sat untracked
+  and committable with live secrets in it. If you ever hand-back-up that file,
+  gitignore the pattern first.
+
+## [RESOLVED] FU-214 — Products-as-overlay Phase F tail: product-surface browser verify + L197/205/206/223/225 items
+- **Raised:** 2026-06-22 (Phase F kickoff — reconstructed 2026-07-01 from `PRODUCTS_OVERLAY_RUNBOOK.md` + 8 worklog references; **the FU entry itself was missing from both ledgers**).
+- **Type:** deferred job (multi-item Phase-F tail).
+- **What:** Original scope was **product-surface browser verify + build the L205/206 bulk-select variants + decide L197 hard-delete**. Over time it accumulated:
+  - **L197** — hard-delete decision for products (still not made).
+  - **L205 / L206** — bulk-select variants on product surfaces (not built).
+  - **L223** — Price-History hover-bubble dark-mode bug (added 2026-06-22 worklog).
+  - **L225** — Price-History box-fit bug (redirected here from FU-227 scope, worklog).
+  - Product-surface browser verify (My Products page, Price History page, stock-item Products tab) — waits on a running app.
+  - **PH residuals (folded in from FU-431, 2026-07-16 — no redesign brief):** (a) **PH-2** "can select products but no change occurs on the Price History page" — behaviour verify with real product data (reported-defect, confirm in browser). (b) **PH-10 optional** — the desktop bottom-sheet the feedback asked for already exists (`PriceHistoryBottomSheet.vue`, built for FU-227) but is wired to the stock-item "your prices" widget; My Products currently *navigates* to the full `/price-history` page instead. Reusing the bottom sheet for the My-Products→product flow is a small **opportunistic** enhancement — evaluate it with real data on-screen during this pass; don't build blind. (c) **PH-1** discoverability is **decided** (see FU-431 in `_RESOLVED`): contextual entry is the right model, so just confirm during verify that My-Products / Subscriptions / onboarding entry points feel adequate — no nav tab.
+- **Why deferred:** every item needs a running browser session; bulk-select is real UI work; L197 is a design call.
+- **Recommended resolution:** when the next browser-verify session opens **and** the products layer has real data — knock out L223/L225 as bugs, do the browser-verify checklist, then split L197 (design call) and L205/206 (build) into their own FUs if this one gets too heavy. **This FU is the runbook's Phase F blocker** ([`PRODUCTS_OVERLAY_RUNBOOK.md`](docs/04_proposals/PRODUCTS_OVERLAY_RUNBOOK.md) §Status row F). Related: [[FU-227]] (resolved), [[FU-212]] (resolved), [[FU-210]] (resolved).
+- **2026-09-06 update — build scope moved out; this FU is now browser-verify only.**
+  The owner reopened the whole products area, and the work is planned as batches in
+  [`IMPL_PLAN_PRODUCTS_PROGRAM.md`](docs/04_proposals/IMPL_PLAN_PRODUCTS_PROGRAM.md).
+  Reassignments: **L197** hard-delete is **BUILT** (owner call D-1; batch C shipped
+  2026-09-06 — `DELETE /api/products/<id>` plus the companion's bearer-authed
+  door and Unsave button). Note the affordance on the My Products page itself is
+  still owed and rides batch F, so today L197 is only reachable from the
+  companion; **L205/L206** bulk-select variants →
+  batch F; **L223/L225** → the static read says both are already fixed (the chart
+  tooltip now uses `--surface-component`/`--text-secondary`; a `ResizeObserver`
+  measures the card), so they join the confirm-in-browser set rather than the bug
+  set. **What remains on this FU is the browser pass only**, over four bullets that
+  look fixed but are unproven per the mandatory reported-defect rule: PH-2
+  (selection changes nothing — appears fixed by [[FU-605]]), PH-7 (dark-mode hover
+  bubble), PH-9 (graph box-fit), PH-8 (central alerts page exists). Do **not**
+  re-plan the build items here; the plan doc owns them. Note the dev seed
+  (`persistence/seed.py`) does build products with offer history, so the "waits for
+  real product data" blocker no longer applies — a scratch backend can drive this.
+  New findings from the same session: [[FU-881]], [[FU-882]], [[FU-883]],
+  [[FU-884]], [[FU-885]].
+- **RESOLVED 2026-09-06 (batch G).** The build scope left this FU in batches
+  F and G; what remained here was the browser pass over four bullets a static
+  read had called "probably fixed". All four were driven on the isolated :5171
+  seed and **all four are genuinely fixed** — this FU closes with no residue:
+  - **PH-2** (selecting a product changes nothing) — **fixed**. Selecting adds a
+    series, a swatch and a chart polyline. FU-605's ref reassignment did it.
+  - **PH-7** (dark-mode hover bubble, white-on-white) — **fixed**, and this is
+    the one worth reading. My first *two* test runs said it reproduced
+    (tooltip name rendering dark-on-dark). Both were **false positives**: I set
+    `data-theme` directly, but `themeService.applyThemeKey` also calls
+    `Dark.set()`, so the body never went dark and text inherited light-theme
+    ink. Switching the theme through the real settings UI (`body--dark`, page
+    bg `rgb(5,20,17)`) shows the tooltip as dark bg `rgb(22,39,36)` with white
+    name/price and light-grey date. **Lesson: a half-applied theme manufactures
+    exactly the defect you are looking for.**
+  - **PH-8** (central alerts management) — **exists**; `/alerts` renders 24 rows.
+  - **PH-9** (chart doesn't reach the box edge) — **fixed**. Chart is 1034px in a
+    1052px card: 9px each side, which is the card section's own `q-pa-sm`, and
+    the `ResizeObserver` measure already subtracts it.
+
+## [RESOLVED] FU-866 — `companion_ingestion_enabled` gates nothing: `POST /api/ingest` never checks it
+- **Raised:** 2026-09-03 (admin settings batch — found while renaming the flag)
+- **Type:** finding
+- **What:** the switch now presented as **Product data ingestion** (Settings →
+  Admin → Data & access) does not stop ingestion. `submit_ingestion_batch()`
+  authenticates the bearer token against an `IngestionSource` and proceeds; it
+  never reads `AppSetting.companion_ingestion_enabled`. Nothing in the SPA reads
+  the `features.companion_ingestion` health flag either (nor
+  `features.deals_email`). The column's only readers are its own settings page,
+  the DTO and the health probe.
+- **Why this matters more than usual:** it is the second instance of exactly the
+  defect **R-078 / ADR-075** was written for this session, on the same page as the
+  first (`meal_planning_enabled`, deleted in migration `a7c3e5d19f2b`) — and
+  unlike that one, the owner-dictated copy now shipping *asserts* the gate
+  ("Accept product offer data from an external source. Enable this if you have a
+  tool…"). The toggle reads as a security control and isn't one.
+- **Why deferred:** the fix is a one-line 403 guard in the route, but the flag
+  **defaults to `False`**, so wiring it up would immediately break ingestion for
+  any install already pushing data without having flipped it on — including the
+  owner's. That is a deliberate behaviour change needing a call, not a tidy-up:
+  guard it and accept that existing pushers must switch it on, or flip the
+  default for existing rows in the same migration.
+- **Recommended resolution:** **now** — before anyone relies on the toggle
+  meaning what it says. R-078's own instruction applies: wire it up or drop it.
+- **RESOLVED 2026-09-07:** the gate is real, and it covers **all four**
+  `/api/ingest/*` doors — batch, link-status, product list and delete. Gating
+  only the write would have been its own lie, leaving delete open on a switch
+  the operator believes is shut. The check lives in
+  `ingestion_auth.authenticate_ingestion_request()`, which every door already
+  calls for auth, so a fifth route cannot silently skip it (same reasoning as
+  R-087).
+  **Order is deliberate: authenticate first, then gate.** A caller with no
+  valid key gets 401 and learns nothing about the install; only a legitimate
+  key-holder is told 403 "ingestion is switched off" and where to change it —
+  they are the one party who can act on it. Pinned by two tests.
+  **The default stayed `False`.** The owner's "no real usage yet" removed the
+  migration-compat objection that deferred this, so the default was decided on
+  merit instead: an inbound write door should be shut on a fresh install, which
+  is exactly what the setting's own copy promises (*"Enable this if you have a
+  tool…"*). Instead the **dev seeds** now enable it — a seeded install holds
+  ingested products, so a closed door there would contradict the data. That
+  also turned 23 red ingest tests green without weakening the posture.
+  ⚠️ **Consequence for the owner:** the companion will 403 until
+  Settings → Admin → Data & access → *Product data ingestion* is switched on.
+  One toggle, and now it means what it says. Gates: **pytest 2344 passed**
+  (only the four known FU-762 reds). Closes the second instance of the defect
+  **R-078/ADR-075** was written for.
+- **AMENDED 2026-09-07 (same day) — the flag was then REMOVED, not kept.**
+  Owner: *"the toggle is redundant, we should remove it."* Correct, and the
+  better answer: **ingestion already requires a bearer key an admin minted**,
+  and every key is an `IngestionSource` row with its own `enabled` flag. Not
+  wanting ingestion means not minting a key, or disabling that source — per
+  source, rather than install-wide. Two switches over one door, the second
+  coarser than the first, is worse than one.
+  So R-078 is satisfied by the *other* branch of its own instruction: dropped,
+  not wired. Migration **`e7a2c4f9b361`** drops the column, following the
+  `meal_planning_enabled` precedent (`a7c3e5d19f2b`) — the first instance of
+  this defect, on the same page. Gone with it: the
+  `features.companion_ingestion` health flag, the admin toggle, the
+  `companionIngestion` feature-flag accessor (which had no consumers), the seed
+  lines, and the gate tests.
+  **Kept:** `authenticate_ingestion_request()`, which was introduced to host the
+  gate but still collapses the identical four-line auth preamble across four
+  routes (R-087). Also updated the `app_settings` DTO snapshot, which caught the
+  removed key exactly as intended.
+  **The earlier "⚠️ owner consequence" is void** — there is no toggle to switch
+  on; minting a key is the only thing required. Gates: **pytest 2340 passed**,
+  only the four known FU-762 reds; migration up/down/up clean.
+
+## [RESOLVED] FU-884 — Aldi provider has four defects independent of the site redesign (companion repo)
+- **Raised:** 2026-09-06 (products program planning)
+- **Type:** finding
+- **Repo:** `../dora-companion/` — **not this repo.** The companion has no
+  ledger of its own, so it is tracked here.
+- **What:** in
+  `merchant_api/infrastructure/merchant_data_providers/aldi_provider.py`:
+  1. **Name suffix stripped as a character set.**
+     `name = offer.description.rstrip(offer.amount)` — `str.rstrip` takes a
+     *character set*, not a suffix, so it keeps eating while characters happen
+     to be in that set.
+     **Corrected 2026-09-07 (batch E):** the original wording here said names
+     "are being mangled today". That was **wrong** — a sweep of plausible Aldi
+     listings found *no* case where `rstrip` and the correct `removesuffix`
+     disagree; divergence needs the size to repeat or overlap into the name
+     (`"Rice 1kg1kg"` − `"1kg"` → `"Rice"`). It is a latent hazard, not observed
+     corruption. Fixed anyway, because the correct operation is free and the
+     failure mode is silent.
+  2. **`get_product` can raise instead of returning `None`.** Two bare
+     `next(...)` calls with no default raise `StopIteration` when the product is
+     in no category or absent from the cache, despite the
+     `-> ScrapedProductOffer | None` signature.
+  3. **Shared mutable class state.** `_cached_offers_by_category` and
+     `_cached_offers_last_updated_by_category` are declared as class attributes,
+     so every instance shares one cache, while `_aldi_product_names_by_category`
+     is per-instance.
+  4. **Cents parsed as dollars — a 100× price error, and the most severe of the
+     four.** `float(value.lstrip('$').rstrip('c') + decimal)` turns Aldi's
+     sub-dollar shape `"80c"` into **80.0** instead of 0.80. That lands in Dora
+     as a genuine price, poisoning the product's history and any
+     cheapest-comparison built on it. **Reprioritised 2026-09-07:** originally
+     logged last as "fragile price parsing"; measuring it showed it is the one
+     that actually corrupts data.
+  Separately, Aldi is *architecturally* the odd provider out: Coles hits a real
+  JSON search API (`_next/data/{buildId}/en/search.json`), whereas Aldi has no
+  search at all and scrapes category pages, fuzzy-matching against a curated
+  `aldi_products_by_category.json` cached for 7 days. The owner reports the Aldi
+  site has since been redesigned, so the BeautifulSoup selectors
+  (`box--wrapper`, `box--amount`, `box--decimal`, `box--former-price`) are stale.
+- **2026-09-07 (batch E) — all four defects are FIXED; the rewrite is not.**
+  `_parse_price` handles the cents shape and degrades to 0.0 on junk rather than
+  raising; `removesuffix` replaces `rstrip`; both `next()` calls take a default
+  and `get_product` honours its `| None` signature (which matters most inside
+  batch D's scheduled sync, where a raise would abort the whole refresh run over
+  one delisted product); the two caches are per-instance. 13 new tests in
+  `tests/test_aldi_provider_defects.py`; companion suite **64 passed**.
+  **Still open: the rewrite — now SPEC'D against the live site (2026-09-07,
+  owner-authorised fetch).** It is not a selector update; the model changed.
+  `/groceries/{category}/` **302s to `/products`**, all six old selectors appear
+  **zero** times, and the site is now **Nuxt 3 on Spryker** serving products as
+  **server-rendered JSON** in `<script id="__NUXT_DATA__">` (flat-array devalue
+  encoding). 30 products/page; category paths `/products/super-savers`,
+  `/products/price-reductions`, `/products/lower-prices` work.
+  Each product carries `sku`, `name`, `brandName`, `sellingSize`,
+  `urlSlugText`, `price.amount` **in integer cents**, and
+  `price.comparisonDisplay`. **Two capability gains:** `merchant_stockcode`
+  exists at last (the old provider hardcoded `None`, so batch D's
+  refresh-by-stockcode could *never* work for Aldi), and so does `brandName`
+  (also hardcoded `None`). Integer cents also removes defect 1 by construction.
+  Real fixture saved at `tests/fixtures/aldi_nuxt_payload.json` so the rewrite
+  needs no network.
+  **Blocked on one thing:** `wasPriceDisplay`/`savingsDisplay` exist in the key
+  schema but **no product on any page fetched had one** — so `price_was`, which
+  drives Dora's whole discount story, is unverified. Needs one saved page where
+  an Aldi product actually shows a was/now price.
+  **`api.aldi.com.au` 403s unauthenticated and was not pursued** — getting past
+  it would mean circumventing an access control, and the server-rendered payload
+  is a better source anyway.
+- **Why deferred:** the rewrite half needs the new markup.
+- **Recommended resolution:** batch E of
+  [`IMPL_PLAN_PRODUCTS_PROGRAM.md`](docs/04_proposals/IMPL_PLAN_PRODUCTS_PROGRAM.md).
+- **RESOLVED 2026-09-07 (batch E complete).** Rewritten against the live site,
+  which the owner authorised fetching. It was not a selector update: the old
+  URLs 302 to `/products`, all six old class names are gone, and Aldi now runs
+  **Nuxt 3 on Spryker**, server-rendering products as JSON into
+  `<script id="__NUXT_DATA__">` (flat devalue encoding — integers are indices
+  into the same array).
+  **Both things the old provider lacked are server-side:** `?q=` full-text
+  search (one request per search, replacing the curated-name-list fuzzy match
+  and its per-category week-long cache) and `?page=` pagination.
+  **Capability gained, not just parity:** `sku` and `brandName` are in the
+  payload — both were hardcoded `None` before, which meant **Dora's
+  refresh-by-stockcode could never work for Aldi at all**. `get_product` now
+  matches on SKU, falling back to an *exact* name; deliberately never fuzzy,
+  since an approximate match silently reprices the wrong product (FU-881's
+  failure in another costume). Verified live: search returns real offers, and
+  refresh-by-stockcode round-trips.
+  **`price_was` = `price_now`.** Owner confirmed Aldi publishes no sales data,
+  matching the fetches (no `wasPriceDisplay` on any listing). Equal states "no
+  markdown"; `0.0` would read as "was free" and make `price_difference`
+  negative. **Consequence: Aldi products never appear under Dora's on-deal
+  filters** — correct, because there is never a deal to show.
+  Two defects fixed that only the real payload revealed: `"1,000 ml"` defeats
+  `_extract_value_and_unit_from_size` (thousands separator → size silently
+  lost), and sizeless products (a milk frother) logged a spurious parse warning.
+  Retired with it: `aldi_products_by_category.json`, its cache-seeding, the
+  `AldiProductOffer` entity and the stale HTML tests — replaced by
+  `tests/test_aldi_nuxt_payload.py` (16 tests) pinned to a **real captured
+  payload**, because the old tests passed against invented HTML while the live
+  selectors had been dead for months. Companion suite **69 passed**.
+  `api.aldi.com.au` 403s unauthenticated and was deliberately not pursued.
+
 ## [RESOLVED] FU-885 — `discountPct` is implemented four times and rendered three ways, plus a dead `ProductChip.vue`
 - **Raised:** 2026-09-06 (products program planning)
 - **Type:** finding

@@ -1,23 +1,5 @@
 <template>
     <DashboardCard :icon="ICONS.calendar_month" title="What's coming">
-        <template #action>
-            <!-- No `flat`: BaseSegmented forces `--text-on-primary` on the
-                 pressed segment (to beat Quasar's `.text-primary !important`),
-                 so it needs Quasar to actually paint the primary fill
-                 underneath. With `flat` there is no fill and the selected label
-                 came out white-on-light — measured **1.21:1** against the pill
-                 track, i.e. invisible (D-002 wants 4.5). The component's own
-                 header comment describes this trap; it caught me anyway. -->
-            <BaseSegmented
-                :model-value="span"
-                :options="spans"
-                aria-label="Days to show"
-                dense
-                size="sm"
-                @update:model-value="(v: CalendarSpan) => emit('update:span', v)"
-            />
-        </template>
-
         <div class="dora-cal-legend q-mb-sm">
             <span class="dora-cal-leg"><span class="dora-cal-dot dot-meal" /> meals</span>
             <span class="dora-cal-leg"><span class="dora-cal-dot dot-expiry" /> expiry</span>
@@ -58,41 +40,58 @@
                     </span>
                 </button>
             </div>
+            <!-- Owner 2026-09-08 — *"The text all looks too similar in the area
+                 shown when tapping on a day."* It was four type roles at two
+                 sizes and two weights, so the day, the category and the thing
+                 itself all read as one block of prose. Three changes, each
+                 giving one role a channel of its own: the day becomes the
+                 panel's title (a step up the scale, accent ink, its own rule);
+                 every category label carries the SAME dot the grid above uses,
+                 so "Expiring" is keyed to the red pip you just tapped; and each
+                 entry becomes an obvious tappable row with the qualifier (slot /
+                 level) demoted to a chip rather than more sentence. -->
             <div v-if="selectedDay" class="dora-cal-detail">
                 <div class="dora-cal-detail-date">
                     {{ formatRelativeDay(selectedDay.date) }}
                 </div>
                 <div v-if="selectedDay.meals.length > 0" class="dora-cal-group">
-                    <div class="dora-cal-group-label">Meals</div>
+                    <div class="dora-cal-group-label">
+                        <span class="dora-cal-dot dot-meal" />Meals
+                    </div>
                     <router-link
                         v-for="(m, i) in selectedDay.meals"
                         :key="`${m.recipe_id}-${m.slot}-${i}`"
                         class="dora-cal-item"
                         :to="`/cookbook/${m.recipe_id}`"
                     >
-                        {{ m.recipe_name }} <span class="dora-cal-slot">· {{ m.slot }}</span>
+                        <span class="dora-cal-item__name">{{ m.recipe_name }}</span>
+                        <span class="dora-cal-slot">{{ m.slot }}</span>
                     </router-link>
                 </div>
                 <div v-if="selectedDay.expiries.length > 0" class="dora-cal-group">
-                    <div class="dora-cal-group-label">Expiring</div>
+                    <div class="dora-cal-group-label">
+                        <span class="dora-cal-dot dot-expiry" />Expiring
+                    </div>
                     <router-link
                         v-for="e in selectedDay.expiries"
                         :key="e.stock_item_id"
                         class="dora-cal-item"
                         :to="`/stock/${e.stock_item_id}`"
                     >
-                        {{ e.name }}
+                        <span class="dora-cal-item__name">{{ e.name }}</span>
                     </router-link>
                 </div>
                 <div v-if="selectedDay.shopping.length > 0" class="dora-cal-group">
-                    <div class="dora-cal-group-label">Shopping</div>
+                    <div class="dora-cal-group-label">
+                        <span class="dora-cal-dot dot-shopping" />Shopping
+                    </div>
                     <router-link
                         v-for="s in selectedDay.shopping"
                         :key="s.list_id"
                         class="dora-cal-item"
                         :to="`/shopping-lists/${s.list_id}`"
                     >
-                        {{ s.name }}
+                        <span class="dora-cal-item__name">{{ s.name }}</span>
                     </router-link>
                 </div>
             </div>
@@ -101,7 +100,7 @@
             </div>
         </template>
         <div v-else class="dora-empty">
-            Nothing scheduled {{ spanLabel }} — enjoy the calm.
+            Nothing scheduled in the next fortnight — enjoy the calm.
             <router-link class="dora-empty-cta" to="/meal-plans">Plan a week →</router-link>
         </div>
     </DashboardCard>
@@ -117,9 +116,10 @@
      * `/dashboard/summary`'s `upcoming_entries`, the grid from
      * `/alerts/upcoming` — so the overlapping week could disagree with itself on
      * one screen with no way to tell which was right (R-003). One source now,
-     * with a 7/14-day toggle; D-012's reading is that a pip strip and a dot grid
-     * are the same widget at two zoom levels, so they were never two cards'
-     * worth of information.
+     * D-012's reading is that a pip strip and a dot grid are the same widget at
+     * two zoom levels, so they were never two cards' worth of information. The
+     * 7/14 toggle that merge shipped is gone too (owner, 2026-09-08) — see the
+     * note above `CalendarCell`.
      *
      * Two things improved in the merge: the week view gained the **expiry and
      * shopping** dots it never had, and the old "Next up" callout went — it
@@ -131,14 +131,18 @@
      */
     import { ICONS } from 'src/style/icons';
     import { formatRelativeDay } from 'src/composables/useDateFormat';
-    import BaseSegmented from 'src/components/BaseSegmented.vue';
     import DashboardCard from 'src/components/dashboard/DashboardCard.vue';
     import CardLoadError from 'src/components/dashboard/CardLoadError.vue';
     import type { UpcomingDay } from 'src/models/alert';
 
-    /** How many days the grid shows. 7 is the default — a week is the planning
-     *  unit; 14 is the old "This fortnight" view. */
-    export type CalendarSpan = 7 | 14;
+    /* `CalendarSpan` and the 7/14 toggle are gone (owner, 2026-09-08 — *"Just
+       show 14 days always, remove the toggle option"*). FU-818 shipped the
+       toggle when it merged the 7-day strip and the 14-day grid into this card,
+       on the reasoning that a week is the planning unit. But both spans always
+       came from the same already-fetched 14 days, so the control cost a header
+       widget and a piece of persisted-looking state (it wasn't persisted — it
+       reset on every navigation) to hide half of a payload the card had already
+       paid for. Two rows of seven is also the shape a fortnight *is*. */
 
     export type CalendarCell = {
         iso: string;
@@ -154,11 +158,8 @@
 
     withDefaults(
         defineProps<{
+            /** All fourteen, built by the page. */
             cells: CalendarCell[];
-            span: CalendarSpan;
-            spans: { label: string; value: CalendarSpan }[];
-            /** "in the next week" / "in the next fortnight", for the empty copy. */
-            spanLabel: string;
             selected: string | null;
             selectedDay: UpcomingDay | null;
             failed?: boolean;
@@ -167,7 +168,6 @@
     );
 
     const emit = defineEmits<{
-        (e: 'update:span', value: CalendarSpan): void;
         (e: 'select', iso: string): void;
         (e: 'retry'): void;
     }>();
@@ -289,33 +289,90 @@
         background: var(--surface-sunken);
         border-radius: var(--radius-md);
     }
+    /* ── The tapped day's panel (owner 2026-09-08: "text all looks too
+       similar") ────────────────────────────────────────────────────────────
+       Before: the date was `md`/700, the category label `xs`/uppercase, the
+       entry `sm`/primary and its slot `sm`/secondary — so the entry and its
+       qualifier were the same size, and the date differed from an entry only by
+       weight. Four roles, effectively two appearances. Each role now has one
+       clear channel: SIZE for the title, a COLOURED DOT for the category, a
+       ROW SHAPE for the entry, and a CHIP for the qualifier. */
     .dora-cal-detail-date {
+        /* One step up the ladder, and the accent ink every other
+           accent-coloured string on this page uses (R-069) — the date is this
+           panel's heading, not a bold line of its body. */
+        font-size: calc(var(--font-size-lg) * 1rem);
         font-weight: 700;
+        line-height: 1.2;
+        color: var(--accent-ink);
+        padding-bottom: var(--space-2);
+        /* A6: an in-panel separator is `--divider`. */
+        border-bottom: 1px solid var(--divider);
         margin-bottom: var(--space-2);
     }
-    .dora-cal-group {
-        margin-top: var(--space-2);
+    .dora-cal-group + .dora-cal-group {
+        margin-top: var(--space-3);
     }
+    /* Carries the grid's own legend dot, so the label is keyed to the pip the
+       user just tapped rather than being another line of small caps. D-013: the
+       dot never travels alone — it is always beside its word. */
     .dora-cal-group-label {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
         font-size: calc(var(--font-size-xs) * 1rem);
+        font-weight: 700;
         text-transform: uppercase;
         letter-spacing: 0.06em;
         color: var(--text-secondary);
         margin-bottom: var(--space-1);
     }
+    /* An entry is a tappable row now, not a line of text whose only affordance
+       was a hover underline that touch devices never see. D-004's 44px floor
+       applies for the same reason it does on `.dora-use-recipe`: these are
+       links, so nothing else supplies it. */
     .dora-cal-item {
-        display: block;
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+        min-height: 44px;
+        padding: var(--space-1) var(--space-2);
+        border-radius: var(--radius-md);
         color: var(--text-primary);
         text-decoration: none;
-        font-size: calc(var(--font-size-sm) * 1rem);
-        padding: var(--space-1) 0;
+        font-size: calc(var(--font-size-md) * 1rem);
     }
     .dora-cal-item:hover {
-        text-decoration: underline;
+        /* The panel already sits on `--surface-sunken`, so a row inside it
+           lifts rather than sinking further. */
+        background: var(--surface-component);
     }
+    /* A6 — focus is always visible, and these had nothing. */
+    .dora-cal-item:focus-visible {
+        outline: 2px solid var(--focus-ring);
+        outline-offset: 2px;
+    }
+    .dora-cal-item__name {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    /* The qualifier, as a chip: two steps below the name and on its own
+       ground, so "Dinner" can no longer be mistaken for part of the dish. */
     .dora-cal-slot {
+        margin-inline-start: auto;
+        flex-shrink: 0;
+        padding: 0 var(--space-2);
+        border-radius: var(--radius-pill);
+        background: var(--surface-component);
+        border: 1px solid var(--border-default);
         color: var(--text-secondary);
-        font-size: calc(var(--font-size-sm) * 1rem);
+        font-size: calc(var(--font-size-xs) * 1rem);
+        line-height: 1.8;
+    }
+    .dora-cal-item:hover .dora-cal-slot {
+        background: var(--surface-sunken);
     }
 
     @media (prefers-reduced-motion: reduce) {

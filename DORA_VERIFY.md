@@ -22,6 +22,79 @@ top-to-bottom.
 
 ---
 
+## Dashboard — the 2026-09-08 sixteen-item batch
+
+**⚠️ None of this has been driven in the running app.** The batch was built,
+gated (pytest dashboard suites, vitest 720, `vue-tsc`, `eslint src/`,
+`quasar build` — all green) and the seeded backend was booted, but the live
+walk was not done. Walk it at **1440 and 375** on the dense seed, money on.
+
+The two worth doing first, because they are the ones a code read cannot settle:
+
+- [ ] **The budget-score staleness fix.** This is the reported defect. On the
+      dashboard, note *My budget* (spend vs target) and *Kitchen health*'s
+      **Budget** row. Then go to Settings → Money, **change the period**
+      (weekly → monthly) and/or the amount so the household is clearly OVER,
+      come straight back to the dashboard — **inside five minutes**, which is
+      what makes it a real test — and confirm the two now agree: an over-budget
+      card must not sit beside a Budget row reading 100 / "Under budget this
+      period". Before the fix the score row kept the number it fetched under the
+      *old* period. Repeat once the other way (set a comfortable budget) so it is
+      not just always-refetching-to-red.
+- [ ] **Restock radar's `is_planned` chip and its 30-day cutoff**, against real
+      seed data: rows ordered most-recent-first regardless of band, a level dot
+      at the head of each row whose colour matches that item's level on the stock
+      page, and a **Planned** chip only where the coming fortnight actually needs
+      the item. Nothing older than 30 days should be listed — and if the card is
+      empty, its copy must say "in the last 30 days", not "everything's stocked".
+
+Then the rest:
+
+- [ ] **Hero hint** renders as a callout (info icon, tinted well, accent rule)
+      *inside* the hero card, and still wraps before the Cards button at 375.
+- [ ] **Next to cook** rows read: name · day · [missing chip] · Cook. No slot
+      word, no "serves N", no "to cook"/"already cooked". Cook is icon-only
+      below `sm` with a working tooltip, and still opens cook mode at the
+      batch's yield (the 09-05 behaviour — regression check).
+- [ ] **Next to cook ordering**: plan several slots on one day (breakfast +
+      dessert + dinner) and confirm the card lists them in the household's slot
+      order, dessert last. Pinned by a backend test, but worth one look.
+- [ ] **No header links on any card** — Kitchen health, Next to cook, Use it up,
+      What's coming, Restock radar, My stock, My budget, and Price drops (switch
+      it on in the Cards menu; it is opt-in and was the one this sweep initially
+      missed). Empty-state CTAs ("Plan a meal →", "Plan a week →") and the stock
+      donut's filtered segment/legend links **stay** — those are not the pattern
+      that was removed.
+- [ ] **Use it up**: heading reads "Recipes using these", each row's label reads
+      "uses N expiring" right-aligned, and **See more** lands on the cookbook
+      with the *Uses expiring ingredients* filter already applied (check the chip
+      is lit and the result set is filtered, not just the route).
+- [ ] **What's coming** shows 14 days with no toggle, two rows of seven.
+- [ ] **Tap a day**: the date reads as a heading, each category label carries
+      the same coloured dot as the grid, entries are obvious tappable rows, and
+      the slot renders as a chip. This is the "text all looks too similar" item —
+      judge it by eye, that is the whole acceptance test.
+- [ ] **Kitchen health**: first card by default (on a *fresh* user — an existing
+      saved layout keeps its own order, so check both); a hollow ring with the
+      number inside; the trend chip under the ring, not in the header; one
+      bordered box per signal; **no info chip** on the title; **no links** on any
+      row; and a dormant signal reading "NOT COUNTED" in a dashed box —
+      *"No budget set"* and *"Dora settles past meals for you"* must look
+      identical (that is the specific ask). Check the ring in a **dark theme**
+      too — the arc is a `stroke` on semantic tokens.
+- [ ] **My stock**: donut + legend centred as a pair, no left-hugging with all
+      the slack on one side. Check at 1440 half-width, where the complaint was.
+- [ ] **My budget**: titled "My budget", no kept-vs-RRP section, no range
+      toggle, no "Save $X this week / N swaps ready" line, and the open-lists
+      figure reads as a sentence in its own tinted row ("$34.20 still to buy on
+      your open lists").
+- [ ] **The Cards menu** lists seven default-on cards + Price drops, with no
+      "Before you shop" and no "Shopping lists" entry. A user whose stored
+      layout named those (or `savings`) must not see a gap or a duplicate — the
+      renamed budget card should appear once.
+
+---
+
 ## Deploy — the companion stack (2026-09-07) — origin FU-790 / FU-892
 
 Nothing here ran against a real daemon; the whole path is unproven. Run

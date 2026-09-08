@@ -1,18 +1,16 @@
 <template>
     <!-- The card is deliberately not one big link: the low and out legend rows
          and donut segments deep-link to the *filtered* stock view
-         (`?level_id=…`), while the header's "View →" keeps the unfiltered pantry
-         link for the show-me-everything case (FU-299). -->
+         (`?level_id=…`), which is the useful destination. The header's
+         unfiltered "View →" went with every other card's header link on
+         2026-09-08 (owner: *"you can just click the main menu buttons"*) — and
+         the nav's Stock entry is precisely that unfiltered view, so nothing is
+         lost but the duplication (FU-299's segment links are untouched). -->
     <!-- "My stock", not "Pantry" (owner, 2026-09-04). The app's noun for these
          things is *stock* everywhere else — the route is `/stock`, the entity is
          `StockItem`, the nav item says Stock — and this card was the last place
          calling them the pantry. -->
     <DashboardCard :icon="ICONS.inventory_2" title="My stock">
-        <template #action>
-            <router-link class="dora-card-action dora-card-link" to="/stock">
-                View →
-            </router-link>
-        </template>
         <div class="dora-stock-body">
             <svg
                 viewBox="0 0 36 36"
@@ -115,9 +113,26 @@
 <style scoped lang="scss">
     /* Moved with the card (R-027); off the page-local `--c-*` aliases, which
        resolve to nothing from a component (R-060). */
+    /* Owner 2026-09-08 — *"Perhaps also make the my stock graph and text centred
+       seeing as it still doesn't take up the whole card? Too much empty space."*
+
+       The 09-04 pass already let the donut grow into the card (`clamp(132px,
+       42%, 220px)`), which fixed the *small circle* half of the complaint but
+       not the *left-hugging* half: donut + three short legend rows are narrower
+       than a half-width desktop column, so the pair sat against the leading edge
+       with the slack all on one side. `justify-content: center` splits the slack
+       either side instead, which reads as a composition rather than as content
+       that ran out.
+
+       Deliberately NOT `flex: 1` on the legend to fill the row: that would
+       stretch the gap between each count and its label to the card's width, so
+       "12" and "in stock" would drift apart on a wide screen — worse than the
+       empty space it removed. Centring the group is the change; the group's own
+       internals stay content-sized. */
     .dora-stock-body {
         display: flex;
         align-items: center;
+        justify-content: center;
         gap: var(--space-5);
     }
     /* Owner 2026-09-04 — *"it looks a bit sparse on desktop width (very empty).
@@ -201,10 +216,17 @@
         text-transform: lowercase;
         letter-spacing: 0.05em;
     }
+    /* A flex column since the group above is centred: the three rows keep a
+       common leading edge relative to each other (so the dots form a line)
+       while the *pair* — donut + legend — centres as one unit. Without this the
+       `ul` would fill the flex line and the rows would spread. */
     .dora-legend {
         list-style: none;
         margin: 0;
         padding: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
         font-size: calc(var(--font-size-sm) * 1rem);
     }
     .dora-legend li {
@@ -213,6 +235,7 @@
         gap: var(--space-2);
         padding: var(--space-1) 0;
     }
+
     .dora-dot {
         width: 9px;
         height: 9px;

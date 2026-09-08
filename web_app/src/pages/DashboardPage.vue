@@ -119,7 +119,30 @@
                 </BaseButton>
             </div>
 
-            <div class="dora-hero-hint">{{ welcomeHint }}</div>
+            <!-- Owner 2026-09-08 — *"Put the hint from the hero card into an
+                 info box with an info icon at the front, like how you'd see it
+                 in markdown/obsidian styling. Gives it some visual separation
+                 and makes it look nice. It should still be within the hero
+                 card."* It was a bare grey line under the greeting, which read
+                 as a third sentence of the same paragraph rather than as a
+                 different *kind* of thing — Dora's message of the day is voice,
+                 the hint is a tip about the app.
+
+                 An Obsidian-style callout is exactly the right borrow: a tinted
+                 well, a leading rule in the accent tone, and an icon that
+                 declares the genre before you read a word. The app already had
+                 this shape once — `.dora-welcome`'s `border-left: 4px` band —
+                 so this is the house pattern, not a new one.
+
+                 Left inline rather than extracted to a component: this is its
+                 only consumer. The moment a second callout appears anywhere
+                 (Help, Settings, an empty state) it becomes a `BaseCallout` and
+                 this markup moves into it (R-001 — two consumers is a pattern,
+                 one is a card). -->
+            <aside class="dora-hero-hint" role="note">
+                <q-icon :name="ICONS.info" size="18px" class="dora-hero-hint__icon" />
+                <span>{{ welcomeHint }}</span>
+            </aside>
         </section>
 
         <!-- The Phase 5 quick-action bar (Add item · Add to list · Log price)
@@ -269,46 +292,15 @@
                 />
             </div>
 
-            <!-- ───── Before you shop (owner 2026-09-04) ──────────────────── -->
-            <!-- The other replacement card. Two forward-looking signals the
-                 rest of the app never puts together: items whose own
-                 consumption rate says they run out before the household's next
-                 shop, and what the coming week's plan needs that the pantry
-                 can't cover. Both end in the same verb — add it to a list. -->
-            <div
-                v-if="cardRendered('before_you_shop')"
-                :class="cardCol('before_you_shop')"
-                :style="{ order: cardCssOrder('before_you_shop') }"
-            >
-                <BeforeYouShopCard
-                    :running-out="beforeYouShop?.running_out ?? []"
-                    :plan-gaps="beforeYouShop?.plan_gaps ?? []"
-                    :shop-in-days="beforeYouShop?.shop_in_days ?? null"
-                    :failed="slotFailed('before_you_shop')"
-                    @retry="loadBeforeYouShop"
-                />
-            </div>
-
-            <!-- ───── Shopping lists (owner 2026-09-04) ───────────────────── -->
-            <!-- Was "Primary shopping list", which showed one list and labelled
-                 it *primary* — a word from the era when the cart button's target
-                 was the point. The owner's question ("why would I need to see my
-                 shopping list?") has an answer, but it isn't one list: it's
-                 quick nav to the three that matter, each with the totals that
-                 tell you which one you want. -->
-            <div
-                v-if="cardRendered('shopping_lists')"
-                :class="cardCol('shopping_lists')"
-                :style="{ order: cardCssOrder('shopping_lists') }"
-            >
-                <ShoppingListsCard
-                    :current="shoppingListCards.current"
-                    :next="shoppingListCards.next"
-                    :finished="shoppingListCards.finished"
-                    :failed="slotFailed('shopping_lists')"
-                    @retry="loadShoppingListCards"
-                />
-            </div>
+            <!-- "Before you shop" and "Shopping lists" were cut here (owner,
+                 2026-09-08). Before-you-shop overlapped Restock radar — *"I'm
+                 inclined to axe before you shop and chuck 'planned' as a chip
+                 on the rows for restock radar"* — and its `is_planned` signal
+                 is now that chip. Shopping lists was *"useless, axe it"*; the
+                 nav's own entry is the way there. Both endpoints
+                 (`/dashboard/before-you-shop`, `/dashboard/lists`) were deleted
+                 with them: the dashboard was each one's only consumer, checked
+                 before deleting per R-057. -->
 
             <!-- ───── Kitchen health (P8-08 Dora Score) ─────────────────── -->
             <div
@@ -368,13 +360,9 @@
             >
                 <WhatsComingCard
                     :cells="calendarCells"
-                    :span="calendarSpan"
-                    :spans="CALENDAR_SPANS"
-                    :span-label="calendarSpanLabel"
                     :selected="selectedCalDate"
                     :selected-day="selectedCalDay"
                     :failed="slotFailed('upcoming')"
-                    @update:span="calendarSpan = $event"
                     @select="selectCalDate"
                     @retry="loadUpcoming"
                 />
@@ -387,32 +375,29 @@
                 :style="{ order: cardCssOrder('restock') }"
             >
                 <RestockRadarCard
-                    :recently-out="restockRadar?.recently_out ?? []"
-                    :recently-low="restockRadar?.recently_low ?? []"
+                    :rows="restockRadar?.rows ?? []"
+                    :window-days="restockRadar?.window_days ?? 30"
                     :failed="slotFailed('restock')"
                     @retry="loadRestockRadar"
                 />
             </div>
 
-            <!-- ───── Savings captured (Phase 4 — Money zone flagship) ────── -->
+            <!-- ───── My budget (Phase 4 — the Money zone's one card) ─────── -->
+            <!-- Was "Grocery spend" / `MoneyCard`, carrying a kept-vs-RRP half
+                 and a budget-defense swaps bullet. The 09-08 batch cut both —
+                 *"remove the bottom part 'kept vs RRP', product data is a niche
+                 area of the app"* and *"Substitutes are for cooking when you
+                 must use one, not to get a cheaper shop"* — so the card, its
+                 title and its registry id are all just the budget now. -->
             <div
-                v-if="cardRendered('savings')"
-                :class="cardCol('savings')"
-                :style="{ order: cardCssOrder('savings') }"
+                v-if="cardRendered('my_budget')"
+                :class="cardCol('my_budget')"
+                :style="{ order: cardCssOrder('my_budget') }"
             >
-                <MoneyCard
+                <BudgetCard
                     :budget="budgetStatus"
-                    :savings="savings"
-                    :swaps="swapSummary"
-                    :range="savingsRange"
-                    :ranges="SAVINGS_RANGES"
-                    :range-label="savingsRangeLabel"
                     :budget-failed="slotFailed('budget')"
-                    :savings-failed="slotFailed('savings')"
-                    @update:range="savingsRange = $event"
                     @retry-budget="loadBudget"
-                    @retry-savings="loadSavings"
-                    @open-swaps="router.push('/meal-plans')"
                 />
             </div>
 
@@ -469,19 +454,16 @@
     // (the parallel load, the per-slot error tracking and the post-action
     // refresh are page concerns); each card takes what it renders and emits what
     // it wants doing.
-    import MoneyCard from 'src/components/dashboard/MoneyCard.vue';
+    import BudgetCard from 'src/components/dashboard/BudgetCard.vue';
     import PriceDropsCard from 'src/components/dashboard/PriceDropsCard.vue';
     import RestockRadarCard from 'src/components/dashboard/RestockRadarCard.vue';
     import PantryDonutCard, {
         type DonutSegment,
     } from 'src/components/dashboard/PantryDonutCard.vue';
     import NextToCookCard from 'src/components/dashboard/NextToCookCard.vue';
-    import ShoppingListsCard from 'src/components/dashboard/ShoppingListsCard.vue';
     import UseItUpCard from 'src/components/dashboard/UseItUpCard.vue';
-    import BeforeYouShopCard from 'src/components/dashboard/BeforeYouShopCard.vue';
     import WhatsComingCard, {
         type CalendarCell,
-        type CalendarSpan,
     } from 'src/components/dashboard/WhatsComingCard.vue';
     import DoraScoreCard from 'src/components/dashboard/DoraScoreCard.vue';
     import { storeToRefs } from 'pinia';
@@ -499,17 +481,15 @@
     import BudgetApiService, {
         type BudgetStatus,
     } from 'src/services/api/budgetApiService';
-    import MealPlanApiService from 'src/services/api/mealPlanApiService';
     import DashboardApiService, {
         type UseItUpResponse,
-        type BeforeYouShopResponse,
-        type DashboardListsResponse,
         type RestockRadarResponse,
     } from 'src/services/api/dashboardApiService';
     import OnboardingApiService from 'src/services/api/onboardingApiService';
+    // `SavingsCapturedResponse` / `ReportRange` went with the savings half of
+    // the money card (owner, 2026-09-08). `/reports` is that endpoint's only
+    // consumer now — an inventory note, not an orphan (R-057 / FU-898).
     import ReportsApiService, {
-        type ReportRange,
-        type SavingsCapturedResponse,
         type PriceDropsResponse,
     } from 'src/services/api/reportsApiService';
     import { useAuthStore } from 'src/stores/authStore';
@@ -522,6 +502,9 @@
     } from 'src/helpers/stockStatus';
     import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
     import { useBatchEnabled } from 'src/composables/useBatchEnabled';
+    // The page refreshes Kitchen health with everything else in `loadAll` — see
+    // the comment there for the staleness bug that made it necessary.
+    import { useDoraScore } from 'src/composables/useDoraScore';
     import { useFeatureFlags } from 'src/composables/useFeatureFlags';
     import { useDragDropList } from 'src/composables/useDragDropList';
     import { computed, onMounted, ref, watch } from 'vue';
@@ -567,6 +550,10 @@
     // Cook style — the install-wide batch switch. "Next to cook" selects
     // different rows under it (see `nextToCook`), and the card labels them.
     const { batchEnabled } = useBatchEnabled();
+    // Only `refresh` — the card itself calls `useDoraScore()` for the value.
+    // Both reach the same module-level singleton, so there is one fetch, one
+    // cache and no second copy of the score on the page (R-003).
+    const { refresh: refreshDoraScore } = useDoraScore();
     const dashboardApiService = new DashboardApiService();
     const alertApi = new AlertApiService();
     const budgetApi = new BudgetApiService();
@@ -653,12 +640,8 @@
     // "did *this* slot fail" and the banner needs "did *anything* fail", and one
     // structure answers both without eleven more refs to keep in step (R-003).
     type SlotId =
-        | 'shopping_lists'
         | 'use_it_up'
-        | 'before_you_shop'
         | 'budget'
-        | 'swaps'
-        | 'savings'
         | 'price_drops'
         | 'restock'
         | 'upcoming';
@@ -697,31 +680,24 @@
     // in parallel and never block each other — one slow response shouldn't
     // gate the rest of the dashboard.
     //
-    // The three lists worth quick nav to (current · next · most recently
-    // finished), server-picked. See `dashboardApiService.getListsAsync`.
-    const dashboardLists = ref<DashboardListsResponse | null>(null);
-    // The two replacement insight cards (owner, 2026-09-04). Both are
-    // server-computed joins — the client renders rows and emits verbs (R-003);
-    // it does not decide what is expiring, what a recipe covers, or when the
-    // household next shops.
+    // `use-it-up` is a server-computed join — the client renders rows and emits
+    // verbs (R-003); it does not decide what is expiring or what a recipe
+    // covers. Its 09-04 sibling `beforeYouShop` and the `dashboardLists` ref
+    // went with their cards on 09-08.
     const useItUp = ref<UseItUpResponse | null>(null);
-    const beforeYouShop = ref<BeforeYouShopResponse | null>(null);
     // Feeds the budget half of the merged Money card. Always loads (so the
     // passive "spent this period" figure works for users who haven't set a
     // target), and the block is `v-if`'d out when the loader errors so a failed
     // slot never blocks the rest of the card — the savings half still renders.
     const budgetStatus = ref<BudgetStatus | null>(null);
-    // FU-451 — budget-defense swap summary for the current week (bullet + deep
-    // link on the budget card). Null when money's off, no current-week plan, or
-    // the week isn't projected over budget.
-    const mealPlanApi = new MealPlanApiService();
-    const swapSummary = ref<{ saved: number; count: number } | null>(null);
     // Phase 4 — money widgets backed by the reports API. Only loaded when money
     // is enabled (the cards are gated on it anyway). `spendByStore` and
     // `pantryValue` went with their cards on 2026-09-04 — both were reports on
-    // the dashboard, and Reports is where they live.
-    const savings = ref<SavingsCapturedResponse | null>(null);
-    const savingsRange = ref<ReportRange>('30d');
+    // the dashboard, and Reports is where they live. `savings` + its range and
+    // FU-451's `swapSummary` went the same way on 09-08 when the owner cut the
+    // money card down to the budget: the savings figure is retrospective and
+    // product-dependent, and the swaps bullet was selling substitutes as a way
+    // to shop cheaper, which is not what they are for.
     const priceDrops = ref<PriceDropsResponse | null>(null);
     // Restock radar — what just ran out and what just went low. Reworked on
     // the owner's ask (2026-09-04) off `/dashboard/restock-radar`; the old
@@ -1162,51 +1138,22 @@
     // rather than deleted here: R-057 is explicit that a replaced surface's
     // contracts are an inventory to check, not a casualty list.
 
-    // ── Shopping lists (current · next · last finished) ──────────────────
-    // Was one card showing the *primary* list's totals, which the owner read —
-    // correctly — as a leftover from when the cart button's target was the
-    // interesting fact about a list. It also fetched a whole `ShoppingListDetail`
-    // (every line, every price) to render three numbers.
-    //
-    // The server now picks the three lists and returns their totals
-    // (`/api/dashboard/lists`), which is both the smaller payload and the
-    // right owner: "which list am I shopping, which is next, which did I just
-    // finish" is a cross-entity question about status and dates (R-003).
-    const shoppingListCards = computed(() => ({
-        current: dashboardLists.value?.current ?? null,
-        next: dashboardLists.value?.next ?? null,
-        finished: dashboardLists.value?.finished ?? null,
-    }));
+    // The "Shopping lists" card and its `/dashboard/lists` endpoint were cut on
+    // 2026-09-08 (*"useless, axe it"*), taking `shoppingListCards`,
+    // `loadShoppingListCards` and the `quickAddTargetListId` watch that
+    // refetched them with it. `shoppingListStore` still loads in `loadAll` —
+    // `AddToListButton` on the Restock radar rows reads it.
 
-    async function loadShoppingListCards() {
-        await loadSlot('shopping_lists', async () => {
-            dashboardLists.value = await dashboardApiService.getListsAsync();
-        });
-    }
-
-    // The card's picks depend on which list is in flight, so re-fetch when the
-    // store's quick-add target changes (e.g. set-primary from another tab).
-    watch(() => shoppingListStore.quickAddTargetListId, () => {
-        void loadShoppingListCards();
-    });
-
-    // ── Use it up / Before you shop (owner, 2026-09-04) ──────────────────
-    // Both are server-computed joins. `use-it-up` walks near-expiry stock and
-    // the recipes that use it; `before-you-shop` puts consumption rate against
-    // the household's own shop cadence, and the coming week's plan against what
-    // the pantry holds. Neither could be assembled client-side without the SPA
-    // re-implementing expiry windows, per-item burn rates and plan demand — the
-    // exact "client computing a cross-entity rule" smell the state-ownership
-    // principle names.
+    // ── Use it up (owner, 2026-09-04) ────────────────────────────────────
+    // A server-computed join: near-expiry stock and the recipes that use it.
+    // It could not be assembled client-side without the SPA re-implementing the
+    // household's expiry window and the ingredient links — the exact "client
+    // computing a cross-entity rule" smell the state-ownership principle names.
+    // Its `before-you-shop` sibling was cut on 09-08; the plan-demand half of
+    // that signal now rides on the Restock radar rows as `is_planned`.
     async function loadUseItUp() {
         await loadSlot('use_it_up', async () => {
             useItUp.value = await dashboardApiService.getUseItUpAsync();
-        });
-    }
-
-    async function loadBeforeYouShop() {
-        await loadSlot('before_you_shop', async () => {
-            beforeYouShop.value = await dashboardApiService.getBeforeYouShopAsync();
         });
     }
 
@@ -1243,66 +1190,22 @@
         });
     }
 
-    async function loadSwapSummary() {
-        if (!moneyEnabled.value) { swapSummary.value = null; return; }
-        await loadSlot('swaps', async () => {
-            const [today, page] = await Promise.all([
-                mealPlanApi.getTodayAsync(),
-                mealPlanApi.getAllAsync(),
-            ]);
-            const todayMs = Date.parse(`${today}T00:00:00`);
-            const weekMs = 7 * 24 * 60 * 60 * 1000;
-            const plan = page.items.find((p) => {
-                const startMs = Date.parse(`${p.start_date}T00:00:00`);
-                return startMs <= todayMs && todayMs < startMs + weekMs;
-            });
-            if (!plan) { swapSummary.value = null; return; }
-            const s = await mealPlanApi.getSwapSuggestionsAsync(plan.meal_plan_id);
-            if (s.projected_over && s.candidates.length > 0) {
-                swapSummary.value = {
-                    saved: Math.max(0, s.cost_per_week - s.projected_after_applying_all),
-                    count: s.candidates.length,
-                };
-            } else {
-                swapSummary.value = null;
-            }
-        });
-    }
-
     // ── Money zone loaders (Phase 4) ─────────────────────────────────────
     // Guarded on `moneyEnabled` — the cards are gated on it, so there's no point
     // fetching dollar reports when money is off. Each records its own failure
     // through `loadSlot` so the card can say "couldn't load this" rather than
     // "nothing here yet". The reports endpoints already aggregate server-side
     // (state-ownership) — we just render.
-    const RANGE_LABEL: Record<ReportRange, string> = {
-        '30d': 'last 30 days',
-        '90d': 'last 90 days',
-        '1y': 'last year',
-        '2y': 'last 2 years',
-        '5y': 'last 5 years',
-        'all': 'all time',
-    };
-    const savingsRangeLabel = computed(() => RANGE_LABEL[savingsRange.value]);
-    // The savings range toggle (Month / Year / All). Now driven by
-    // `BaseSegmented` rather than the hand-rolled `.dora-range-chip` buttons it
-    // used to be: B2a says one-of-several goes through that component, and the
-    // lookalike carried no `aria-pressed`, no focus-visible state and an 11.5px
-    // label (R-048, D-003). Same option shape the component takes.
-    const SAVINGS_RANGES: { value: ReportRange; label: string }[] = [
-        { value: '30d', label: 'Month' },
-        { value: '1y', label: 'Year' },
-        { value: 'all', label: 'All' },
-    ];
-
-    async function loadSavings() {
-        if (!moneyEnabled.value) { savings.value = null; return; }
-        await loadSlot('savings', async () => {
-            savings.value = await reportsApi.getSavingsCapturedAsync(savingsRange.value);
-        });
-    }
-    // Re-fetch when the user flips the savings range toggle.
-    watch(savingsRange, () => { void loadSavings(); });
+    //
+    // `loadSavings` + `RANGE_LABEL` + `SAVINGS_RANGES` + the range watch, and
+    // FU-451's `loadSwapSummary`, were all deleted on 2026-09-08 with the two
+    // halves of the money card the owner cut. `loadSwapSummary` is worth a
+    // note: it fetched `getTodayAsync` + `getAllAsync` + `getSwapSuggestions`
+    // — three requests on every dashboard load — to decide whether to render
+    // one bullet, and it did that client-side week arithmetic to find "the
+    // current plan", which was a cross-entity rule living in the browser
+    // (R-003). Cutting the bullet removes the smell with it. The swap panel
+    // itself is untouched in the planner, which is where a swap is made.
 
     // `loadSpendByStore` and `loadPantryValue` went with their cards (owner,
     // 2026-09-04). `reportsApi.getSpendByStoreAsync` / `getStockValueAsync` keep
@@ -1336,23 +1239,20 @@
     // walk the full window and look each date up.
     async function loadUpcoming() {
         await loadSlot('upcoming', async () => {
-            upcoming.value = await alertApi.getUpcomingAsync(14);
+            upcoming.value = await alertApi.getUpcomingAsync(CALENDAR_DAYS);
         });
     }
 
-    // FU-818 — the merged card's range toggle. 7 is the default because a week
-    // is the planning unit; 14 is the old "This fortnight" view. Both come from
-    // the SAME already-fetched 14 days, so flipping the toggle is a slice, not a
-    // refetch. `CalendarSpan` and `CalendarCell` are the card's own types, so
-    // they live with the card and are imported above.
-    const CALENDAR_SPANS: { label: string; value: CalendarSpan }[] = [
-        { label: '7 days', value: 7 },
-        { label: '14 days', value: 14 },
-    ];
-    const calendarSpan = ref<CalendarSpan>(7);
-    const calendarSpanLabel = computed(() =>
-        calendarSpan.value === 7 ? 'in the next week' : 'in the next fortnight'
-    );
+    // FU-818's 7/14 range toggle is gone (owner, 2026-09-08 — *"Just show 14
+    // days always, remove the toggle option"*), and with it `CALENDAR_SPANS`,
+    // `calendarSpan`, `calendarSpanLabel` and the `CalendarSpan` type. It was
+    // always slicing an already-fetched fortnight, so the control spent a
+    // header widget hiding half of a payload the card had already paid for.
+    // `CalendarCell` is still the card's own type, imported above.
+
+    /** The fortnight the card shows, and the number `/alerts/upcoming` is asked
+     *  for below — one constant, so the fetch and the grid can't disagree. */
+    const CALENDAR_DAYS = 14;
 
     const DOW_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     const calendarCells = computed<CalendarCell[]>(() => {
@@ -1366,8 +1266,11 @@
         const start = parseLocalIso(u.start);
         if (!start) return [];
         const cells: CalendarCell[] = [];
-        // Never render more than the server sent, however the toggle is set.
-        const span = Math.min(calendarSpan.value, u.days);
+        // Never render more than the server sent. `/alerts/upcoming` is asked
+        // for 14 and the card shows 14, but the clamp stays: `u.days` is the
+        // server's word on how many it actually answered with, and building
+        // cells past it would render days with no data as "nothing on".
+        const span = Math.min(CALENDAR_DAYS, u.days);
         for (let i = 0; i < span; i++) {
             const d = new Date(start);
             d.setDate(start.getDate() + i);
@@ -1419,17 +1322,38 @@
         // so calling getX() when already populated is ~free.
         await Promise.all([
             loadSummary(),
-            loadShoppingListCards(),
             loadUseItUp(),
-            loadBeforeYouShop(),
             loadBudget(),
-            loadSwapSummary(),
-            loadSavings(),
             loadPriceDrops(),
             loadRestockRadar(),
             // FU-818 — the merged "What's coming" card is default-on and this is
             // its only source, so it is no longer conditional.
             loadUpcoming(),
+            // Owner 2026-09-08 — *"Noticed when testing the budget widget, the
+            // budget health indicator stayed the same. For example, $20 over
+            // budget with a monthly budget of $10 with the current seed data,
+            // but the widget is on 100 'under budget this period'."*
+            //
+            // Nothing was wrong with the score's budget maths. The card's data
+            // was simply **stale**: `useDoraScore` is a module-level singleton
+            // with a 5-minute stale window, and the staleness is only tested
+            // when the composable is *called* — i.e. when the card mounts.
+            // Change your budget in Settings, come back inside five minutes,
+            // and every other card refetches (this page calls `loadAll` on
+            // every navigation, which is why D3 could delete the manual refresh
+            // button) while Kitchen health re-renders the number it fetched
+            // before the change. With the budget period switched weekly →
+            // monthly, that number was computed against a *different window* —
+            // hence "under budget" beside a card saying $20 over. Two windows,
+            // one screen, no way to tell.
+            //
+            // So the dashboard refreshes the score with everything else. The
+            // 5-minute window keeps doing its real job (a second consumer of
+            // the composable, or a remount inside one navigation, doesn't
+            // refetch); it just no longer decides what a deliberate page load
+            // shows you. `refreshDoraScore` bypasses it outright — a `loadAll`
+            // is the user asking for current numbers.
+            refreshDoraScore(),
             shoppingListStore.ensureLoadedAsync(),
             // the donut's low/out segments deep-link to
             // /stock?level_id=<id>; the store hydrates those ids.
@@ -1449,8 +1373,10 @@
     watch(moneyEnabled, (on) => {
         if (!on) return;
         void loadBudget();
-        void loadSwapSummary();
-        void loadSavings();
+        // The score's budget component is gated server-side on the same flag
+        // (R-058), so a gate that lands late leaves Kitchen health scoring four
+        // signals where it should score five.
+        void refreshDoraScore();
     });
     watch(productsEnabled, (on) => {
         if (!on) return;
@@ -1555,13 +1481,43 @@
         font-size: calc(var(--font-size-md) * 1rem);
         line-height: 1.35;
     }
-    /* The hint that used to be `.dora-welcome-hint` in the merged band. Its own
-       row now, left-aligned to the hero's edge (column 1, under the mascot)
-       and ending at the actions column. */
+    /* The hint that used to be `.dora-welcome-hint` in the merged band, then a
+       bare line of secondary text, and since 2026-09-08 an Obsidian-style
+       callout (owner). Its own row, spanning columns 1-2 so it wraps before the
+       Cards button rather than sliding under it.
+
+       The 4px leading rule + tinted ground is `.dora-welcome`'s band, which is
+       the app's existing callout shape — reused rather than invented. The tint
+       is `--brand-primary-soft` and the rule `--brand-primary`, i.e. an
+       informational callout in the theme's own voice; a `-soft` token is a
+       background only, so the text on it stays on `--text-secondary` per A1's
+       soft-token rule rather than taking the brand tone (R-069). */
     .dora-hero-hint {
         grid-area: 2 / 1 / 3 / 3;
+        display: flex;
+        align-items: flex-start;
+        gap: var(--space-2);
+        /* Asymmetric, exactly as `.dora-welcome` is: the wider inline-start pad
+           sits behind the 4px rule so the text keeps an even optical inset. */
+        padding: var(--space-2) var(--space-3) var(--space-2) var(--space-4);
+        background: var(--brand-primary-soft);
+        border-inline-start: 4px solid var(--brand-primary);
+        /* D-017 — a box nested inside a card is `--radius-md`. Only the trailing
+           corners: the leading edge is the rule, and rounding it would leave a
+           sliver of card showing through the notch. */
+        border-start-end-radius: var(--radius-md);
+        border-end-end-radius: var(--radius-md);
         color: var(--text-secondary);
         font-size: calc(var(--font-size-sm) * 1rem);
+        line-height: 1.4;
+    }
+    /* The icon takes the accent ink, not the fill tone — R-069, same rule the
+       greeting follows. `margin-top` optically seats an 18px glyph against a
+       `sm` first line rather than hanging above it. */
+    .dora-hero-hint__icon {
+        flex-shrink: 0;
+        margin-top: 1px;
+        color: var(--accent-ink);
     }
     .dora-hero-actions {
         grid-area: 1 / 3;

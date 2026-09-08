@@ -1,7 +1,14 @@
-"""Owner feedback 2026-09-04 — the four endpoints behind the reworked dashboard.
+"""Owner feedback 2026-09-04 — the endpoints behind the reworked dashboard.
 
-`/dashboard/use-it-up`, `/dashboard/before-you-shop`, `/dashboard/lists` and
-`/dashboard/restock-radar`.
+`/dashboard/use-it-up` and `/dashboard/restock-radar`.
+
+**Two of the original four are gone** (owner batch, 2026-09-08). He axed the
+*Shopping lists* card outright (*"useless, axe it"*) and folded *Before you
+shop* into Restock radar (*"a lot of crossover … I'm inclined to axe before you
+shop"*), so `/dashboard/lists` and `/dashboard/before-you-shop` were deleted
+with their only consumers and their tests went with them. The one rule this
+file loses in that trade is *Before you shop*'s list-membership filter, which
+was not carried over — see `DORA_FOLLOWUPS.md` FU-897.
 
 **Why these have tests when the verification stance is manual-first**
 (`DORA_VERIFY_TRIAGE.md`): the stance says automate only what pins a *stable,
@@ -12,13 +19,10 @@ set up by hand:
 
   use-it-up        a recipe is listed only if it *requires* an expiring item —
                    an optional ingredient must not pull it in.
-  before-you-shop  a low item on an active list must NOT appear. This is the
-                   whole reason the card exists rather than restating the bell,
-                   and eyeballing it means building a list mid-verify.
-  lists            "current" prefers a list somebody pressed Start shopping on,
-                   over any draft, whatever the dates say.
   restock-radar    only items *currently* in the band — an item that went out
-                   and was restocked must drop off.
+                   and was restocked must drop off — and only ones that changed
+                   band *recently*, which is a clock you cannot wind forward in
+                   a browser.
 
 Get any of those wrong and the card still renders plausibly, which is precisely
 the failure a manual walk misses.
@@ -27,15 +31,17 @@ Delta-style like `test_dashboard_router.py`: create through the real endpoints
 and assert on the rows we created, so the seeded dataset never leaks into an
 expectation.
 """
-from datetime import timedelta
-from uuid import uuid4
+from datetime import datetime, timedelta, timezone
+from uuid import UUID, uuid4
 
 import requests
 
+from dora_api.app import app
+from dora_api.domain.entities.stock_item import StockItem
+from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+
 BASE = "http://localhost:5170/api"
 USE_IT_UP = f"{BASE}/dashboard/use-it-up"
-BEFORE_YOU_SHOP = f"{BASE}/dashboard/before-you-shop"
-LISTS = f"{BASE}/dashboard/lists"
 RESTOCK_RADAR = f"{BASE}/dashboard/restock-radar"
 STOCK_ITEMS = f"{BASE}/stock-items"
 SHOPPING_LISTS = f"{BASE}/shopping-lists"
@@ -60,11 +66,11 @@ def _make_item(**body) -> dict:
     defaults to Stocked here — the expiry tests care about dates, not levels.
 
     ⚠️ Every card under test shows a **top-N slice** of a seeded dataset that
-    already fills it (5 running-out rows, 4-5 per restock column, 4 use-it-up
-    items). A freshly created item is therefore only observable if it out-ranks
-    the seed under that card's own sort. Each test below says how it does that;
-    an assertion that "my item is in the list" without that consideration is the
-    trap this note exists to stop.
+    already fills it (6 restock rows, 4 use-it-up items). A freshly created item
+    is therefore only observable if it out-ranks the seed under that card's own
+    sort. Each test below says how it does that; an assertion that "my item is
+    in the list" without that consideration is the trap this note exists to
+    stop.
     """
     payload = {
         "name": f"Insight Item {uuid4().hex[:8]}",
@@ -153,148 +159,46 @@ def test__use_it_up__OptionalIngredient__DoesNotPullTheRecipeIn(api):
 
 #endregion use-it-up
 
-#region ---------------- before-you-shop ----------------
-
-
-def test__before_you_shop__ResponseShape__CarriesBothHalvesAndShopTiming(api):
-    body = requests.get(BEFORE_YOU_SHOP).json()
-    assert body.keys() == {"running_out", "plan_gaps", "shop_in_days"}
-
-
-def test__before_you_shop__OutAndEssential__IsListedFirst(api):
-    # The sort is (out before low, essential before not, then name), and none of
-    # the seeded rows is essential — so an essential out-of-stock item is the
-    # top row by construction, which is both the assertion and how it survives
-    # the 5-row slice.
-    item = _make_item(stock_level_id=_stock_level_id(2), is_essential=True)
-
-    rows = requests.get(BEFORE_YOU_SHOP).json()["running_out"]
-    assert rows[0]["stock_item_id"] == item["stock_item_id"]
-    assert rows[0]["band"] == "out"
-    assert rows[0]["is_essential"] is True
-
-
-def test__before_you_shop__OutRanksLow__AndBandIsReported(api):
-    rows = requests.get(BEFORE_YOU_SHOP).json()["running_out"]
-    # The ordering promise the card leans on: the worse state reads first, so
-    # no "low" row may precede an "out" row. Asserted over whatever the dataset
-    # holds rather than a planted item — it is a property of the list, not of
-    # any one row.
-    bands = [r["band"] for r in rows]
-    assert bands == sorted(bands, key=lambda b: b != "out")
-
-
-def test__before_you_shop__ItemAlreadyOnAnActiveList__DropsOut(api):
-    """**The** rule of this card.
-
-    The alerts bell and the stock page both keep saying "you're low on flour"
-    after you have added it to Saturday's list. This card is the one surface
-    that knows the difference, and if this filter breaks the card silently
-    becomes a third copy of the bell — which is what the owner deleted the
-    attention card for.
-    """
-    # Essential + out for the same top-of-slice reason as above.
-    item = _make_item(stock_level_id=_stock_level_id(2), is_essential=True)
-    before = requests.get(BEFORE_YOU_SHOP).json()["running_out"]
-    assert item["stock_item_id"] in {r["stock_item_id"] for r in before}
-
-    lst = requests.post(SHOPPING_LISTS, json={"name": f"Gap List {uuid4().hex[:8]}"})
-    assert lst.status_code == 201, lst.text
-    line = requests.post(
-        f"{SHOPPING_LISTS}/{lst.json()['shopping_list_id']}/lines",
-        json={"stock_item_id": item["stock_item_id"], "quantity": 1},
-    )
-    # POST /lines returns 200 with `{already_on_list, line_id}` — the add is
-    # idempotent, so it reports what happened rather than always claiming 201.
-    assert line.status_code == 200, line.text
-
-    after = requests.get(BEFORE_YOU_SHOP).json()["running_out"]
-    assert item["stock_item_id"] not in {r["stock_item_id"] for r in after}
-
-#endregion before-you-shop
-
-#region ---------------- lists ----------------
-
-
-def test__dashboard_lists__ResponseShape__CarriesThreeTenses(api):
-    body = requests.get(LISTS).json()
-    assert body.keys() == {"current", "next", "finished"}
-
-
-def test__dashboard_lists__ShoppingListWins__OverAnyDraft(api):
-    """A list somebody pressed Start shopping on is "current", full stop.
-
-    Date-based, a draft planned for today would outrank a shopping list started
-    yesterday — and the one you are holding in the supermarket is obviously the
-    current one. Invisible in a browser unless you build both lists first.
-    """
-    # The seed already has a list in the `shopping` state; plant a draft dated
-    # *today*, which is the one that would win on dates alone, and assert the
-    # in-flight list still holds `current`.
-    started = requests.post(SHOPPING_LISTS, json={
-        "name": f"In Flight {uuid4().hex[:8]}",
-    })
-    assert started.status_code == 201, started.text
-    started_id = started.json()["shopping_list_id"]
-    # PATCH status returns 204 No Content — a status edit is not a read.
-    begin = requests.patch(
-        f"{SHOPPING_LISTS}/{started_id}", json={"status": "shopping"},
-    )
-    assert begin.status_code == 204, begin.text
-
-    soon = requests.post(SHOPPING_LISTS, json={
-        "name": f"Sooner Draft {uuid4().hex[:8]}",
-        "planned_shop_date": _today().isoformat(),
-    })
-    assert soon.status_code == 201, soon.text
-
-    current = requests.get(LISTS).json()["current"]
-    assert current is not None
-    assert current["status"] == "shopping"
-    assert current["shopping_list_id"] != soon.json()["shopping_list_id"]
-
-
-def test__dashboard_lists__CardCarriesTheTotalsTheCardRenders(api):
-    """The card renders five fields off each pick; a missing one is a blank row.
-
-    Asserted over the seed's own three lists rather than a planted one: which
-    list lands in which slot is the endpoint's decision, so a test that plants a
-    list and then hunts for it is really testing the picker twice. The picker
-    has its own test above.
-    """
-    body = requests.get(LISTS).json()
-    cards = [c for c in (body["current"], body["next"], body["finished"]) if c]
-    assert cards, "the seeded dataset should fill at least one slot"
-
-    for card in cards:
-        for field in (
-            "shopping_list_id", "display_name", "status", "effective_date",
-            "line_count", "unticked_count",
-            "remaining_price", "total_price", "total_savings",
-        ):
-            assert field in card, f"{field} missing from {card.get('display_name')}"
-    # A finished list reports what it cost; an open one what is left to grab.
-    # Both numbers travel, because the card renders a different one per tense.
-    if body["finished"]:
-        assert body["finished"]["status"] == "done"
-
-#endregion lists
-
 #region ---------------- restock radar ----------------
 
 
-def test__restock_radar__ResponseShape__CarriesBothColumns(api):
+def test__restock_radar__ResponseShape__CarriesOneListAndItsWindow(api):
+    """One list since the 2026-09-08 batch, not two columns.
+
+    The band it used to sort into is now the level dot at the head of the row,
+    so the shape carries `level_sequence` + `level_name` — get those wrong and
+    every row renders a grey dot, which looks deliberate.
+    """
     body = requests.get(RESTOCK_RADAR).json()
-    assert body.keys() == {"recently_out", "recently_low"}
+    assert body.keys() == {"rows", "window_days"}
+    assert body["window_days"] >= 1
+    for row in body["rows"]:
+        for field in (
+            "stock_item_id", "name", "changed_at", "is_essential",
+            "level_sequence", "level_name", "band", "is_planned",
+        ):
+            assert field in row, f"{field} missing from {row.get('name')}"
+        assert row["band"] in ("low", "out")
 
 
-def test__restock_radar__SortsIntoTheRightColumn(api):
+def test__restock_radar__LowAndOut__ShareOneRecencyOrderedList(api):
+    """Both bands, one list, most recent first.
+
+    Two freshly levelled items are the two most recent band changes in the
+    dataset by construction, so they take the top two rows whichever band they
+    are in — which is the ordering promise, and the thing the old per-column
+    sort could not make.
+    """
     out_item = _make_item(stock_level_id=_stock_level_id(2))
     low_item = _make_item(stock_level_id=_stock_level_id(1))
 
-    body = requests.get(RESTOCK_RADAR).json()
-    assert out_item["stock_item_id"] in {r["stock_item_id"] for r in body["recently_out"]}
-    assert low_item["stock_item_id"] in {r["stock_item_id"] for r in body["recently_low"]}
+    rows = requests.get(RESTOCK_RADAR).json()["rows"]
+    top_two = {r["stock_item_id"] for r in rows[:2]}
+    assert out_item["stock_item_id"] in top_two
+    assert low_item["stock_item_id"] in top_two
+    bands = {r["stock_item_id"]: r["band"] for r in rows}
+    assert bands[out_item["stock_item_id"]] == "out"
+    assert bands[low_item["stock_item_id"]] == "low"
 
 
 def test__restock_radar__RestockedItem__LeavesTheRadar(api):
@@ -305,10 +209,8 @@ def test__restock_radar__RestockedItem__LeavesTheRadar(api):
     ranking had, where the card looked identical week after week.
     """
     item = _make_item(stock_level_id=_stock_level_id(2))
-    out_ids = {
-        r["stock_item_id"] for r in requests.get(RESTOCK_RADAR).json()["recently_out"]
-    }
-    assert item["stock_item_id"] in out_ids
+    rows = requests.get(RESTOCK_RADAR).json()["rows"]
+    assert item["stock_item_id"] in {r["stock_item_id"] for r in rows}
 
     restock = requests.patch(
         f"{STOCK_ITEMS}/{item['stock_item_id']}",
@@ -316,8 +218,72 @@ def test__restock_radar__RestockedItem__LeavesTheRadar(api):
     )
     assert restock.status_code == 204, restock.text
 
-    body = requests.get(RESTOCK_RADAR).json()
-    assert item["stock_item_id"] not in {r["stock_item_id"] for r in body["recently_out"]}
-    assert item["stock_item_id"] not in {r["stock_item_id"] for r in body["recently_low"]}
+    rows = requests.get(RESTOCK_RADAR).json()["rows"]
+    assert item["stock_item_id"] not in {r["stock_item_id"] for r in rows}
+
+
+def test__restock_radar__LongStandingLow__IsOutsideTheWindow(api):
+    """The 2026-09-08 cutoff: *"don't show stuff that has been low/out for a
+    long time"*.
+
+    A clock rule, so a browser walk cannot see it without waiting a month — the
+    exact shape this file is for. Driven by back-dating
+    `stock_level_last_updated` directly, because no endpoint lets you claim a
+    level changed in the past (and none should).
+    """
+    item = _make_item(stock_level_id=_stock_level_id(2))
+    window = requests.get(RESTOCK_RADAR).json()["window_days"]
+
+    with app.app_context():
+        repository = SqlAlchemyRepository()
+        entity = repository.get(StockItem).by_id(UUID(item["stock_item_id"]))
+        assert entity is not None
+        entity.stock_level_last_updated = (
+            datetime.now(timezone.utc).replace(tzinfo=None)
+            - timedelta(days=window + 1)
+        )
+        repository.save_changes()
+
+    rows = requests.get(RESTOCK_RADAR).json()["rows"]
+    assert item["stock_item_id"] not in {r["stock_item_id"] for r in rows}
+
+
+def test__restock_radar__PlannedMeal__FlagsTheRowAsPlanned(api):
+    """`is_planned` is what survived the "Before you shop" merge.
+
+    The chip is the only thing on the card that distinguishes "you're out of
+    this" from "you're out of this *and Thursday's dinner needs it*", and it is
+    invisible in a browser without building a recipe and a plan first.
+    """
+    item = _make_item(stock_level_id=_stock_level_id(2))
+    recipe = requests.post(RECIPES, json={
+        "name": f"Planned Radar {uuid4().hex[:8]}",
+        "ingredients": [
+            {"raw_text": item["name"], "stock_item_id": item["stock_item_id"]},
+        ],
+    })
+    assert recipe.status_code == 201, recipe.text
+
+    rows = requests.get(RESTOCK_RADAR).json()["rows"]
+    mine = next(r for r in rows if r["stock_item_id"] == item["stock_item_id"])
+    # A recipe alone is not demand — nothing is planned yet.
+    assert mine["is_planned"] is False
+
+    plan = requests.post(MEAL_PLANS, json={"start_date": _today().isoformat()})
+    assert plan.status_code == 201, plan.text
+    entry = requests.patch(
+        f"{MEAL_PLANS}/{plan.json()['meal_plan_id']}",
+        json={"entries": [{
+            "recipe_id": recipe.json()["recipe_id"],
+            "scheduled_for": _today().isoformat(),
+            "slot": "Dinner",
+            "servings": 2,
+        }]},
+    )
+    assert entry.status_code in (200, 204), entry.text
+
+    rows = requests.get(RESTOCK_RADAR).json()["rows"]
+    mine = next(r for r in rows if r["stock_item_id"] == item["stock_item_id"])
+    assert mine["is_planned"] is True
 
 #endregion restock radar

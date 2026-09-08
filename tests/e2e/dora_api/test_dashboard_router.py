@@ -171,6 +171,47 @@ def test__dashboard_summary__EntryScheduledWithinWeek__AppearsInUpcomingEntries(
     assert _Entry["unlinked_ingredient_count"] == 0
 
 
+def test__dashboard_summary__UpcomingEntries__AreOrderedByDayThenSlotSequence(api):
+    """Owner 2026-09-08: *"dessert should not appear before breakfast"*.
+
+    The sort used to be `(scheduled_for, slot)` — the slot **name** — so within
+    a day the order was alphabetical and Dessert genuinely preceded Dinner and
+    Lunch. It now reads the household's configured slot `sequence`.
+
+    Worth automating despite the manual-first stance: the card shows a
+    three-row slice, so on most days the mis-ordering is simply invisible, and
+    reproducing it by hand means planning several slots on one day and reading
+    a truncated list.
+    """
+    _Today = _household_today()
+    _Recipe = _make_recipe("Dashboard Slot Order")
+    _Slots = requests.get(f"{BASE}/meal-slots").json()
+    assert len(_Slots) >= 2, "need at least two slots to have an order at all"
+    # Sequence order is the expectation; feed them in REVERSE so a stable sort
+    # or an insertion-order accident can't pass this by luck.
+    _Ordered = sorted(_Slots, key=lambda s: (s["sequence"], s["name"].lower()))
+    _Day = (_Today + timedelta(days=3)).isoformat()
+
+    _CreateResponse = requests.post(MEAL_PLANS, json={
+        "start_date": _Today.isoformat(),
+        "entries": [
+            {
+                "recipe_id": _Recipe["recipe_id"],
+                "scheduled_for": _Day,
+                "slot": slot["name"],
+            }
+            for slot in reversed(_Ordered)
+        ],
+    })
+    assert _CreateResponse.status_code == 201, _CreateResponse.text
+
+    _OnTheDay = [
+        e for e in _summary()["meal_plan"]["upcoming_entries"]
+        if e["recipe_id"] == _Recipe["recipe_id"] and e["scheduled_for"] == _Day
+    ]
+    assert [e["slot"] for e in _OnTheDay] == [s["name"] for s in _Ordered]
+
+
 def test__dashboard_summary__UpcomingEntryForEmptyRecipe__MissingCountIsNull(api):
     # Tri-state contract on the "Next to cook" card: a recipe with no
     # ingredients has nothing to evaluate — null, not zero.

@@ -24,6 +24,14 @@
  * invariants went with the zones; the retired-id list grew by six, which is the
  * part that still matters, because those ids are sitting in every existing
  * user's stored `dashboard_layout`.
+ *
+ * **2026-09-08 — two more cut, one renamed, and the retired-id list earned its
+ * keep.** `before_you_shop` and `shopping_lists` went; the money card became
+ * "My budget". The obvious id for it was `budget` — and `budget` is *already*
+ * on the retired list below (FU-830 folded a separate "Grocery budget" card
+ * into `savings`), so taking it would have handed the new card some users'
+ * stored hidden flag. That is precisely the resurrection this list is for, and
+ * it is the first time it has actually caught one. The id is `my_budget`.
  */
 import { describe, expect, it } from 'vitest';
 import {
@@ -44,28 +52,26 @@ describe('the default-visible count is a decision, not a default', () => {
         ).toBe(DEFAULT_VISIBLE_COUNT);
     });
 
-    it('is 9, and 9 is also what actually renders', () => {
-        expect(DEFAULT_VISIBLE_COUNT).toBe(9);
+    it('is 7, and 7 is also what actually renders', () => {
+        expect(DEFAULT_VISIBLE_COUNT).toBe(7);
         // Before the 09-04 cull the registered count and the rendered count
         // differed (`reconcile_pending` hid itself when its queue was empty),
         // and the docs had to keep explaining "11, or 10 in practice". That card
         // is gone and no survivor hides on its own data, so the two numbers are
         // one number again. `cardRendered` in the page is where a future
         // hide-when-empty card would reintroduce the distinction.
-        expect(defaultVisible()).toHaveLength(9);
+        expect(defaultVisible()).toHaveLength(7);
     });
 
     it('keeps every card the owner left default-on', () => {
         const expected: CardId[] = [
+            'dora_score',
             'next_to_cook',
             'use_it_up',
-            'before_you_shop',
-            'shopping_lists',
             'meal_plan',
             'restock',
-            'dora_score',
             'stock_items',
-            'savings',
+            'my_budget',
         ];
         expect(defaultVisible().map((c) => c.id).sort()).toEqual([...expected].sort());
     });
@@ -93,6 +99,8 @@ describe('retired cards stay retired', () => {
         // Renamed in the same batch — the old ids must not linger either, or a
         // stored layout would carry both the old and the new entry.
         'cookable', 'primary_list',
+        // The 2026-09-08 owner batch: two cut, one renamed.
+        'before_you_shop', 'shopping_lists', 'savings',
     ];
     for (const gone of retired) {
         it(`${gone} is not in the registry`, () => {
@@ -135,7 +143,7 @@ describe('registry invariants', () => {
         // `price_drops` is products-gated instead: it is a product surface
         // first, and the owner asked specifically that it be gated on the
         // products feature (2026-09-04).
-        const statesDollars: CardId[] = ['savings'];
+        const statesDollars: CardId[] = ['my_budget'];
         for (const id of statesDollars) {
             const card = CARD_DEFS.find((c) => c.id === id);
             expect(card, `${id} is missing from the registry`).toBeDefined();

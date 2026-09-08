@@ -1,34 +1,15 @@
 <template>
     <!-- dashboard's kitchen-health card. Reads the composite +
          five-component breakdown from `useDoraScore()`; renders each
-         component as a mini-bar chip that links to a remediating
-         action (charter: every weak component should nudge toward the
-         feature that improves it, never shame). -->
-    <DashboardCard :icon="ICONS.favorite">
-        <template #title>
-            Kitchen health
-            <InfoTip label="Kitchen health">
-                A 0–100 score of how your kitchen's doing right now — waste,
-                on-budget, freshness, whether planned meals got settled, and
-                whether you can actually cook the week ahead, averaged. Only
-                signals with real data count; missing signals don't drag the
-                score down.
-            </InfoTip>
-        </template>
-        <template #action>
-            <span
-                v-if="score && score.trend_direction && score.trend_direction !== 'flat'"
-                class="dora-score-trend"
-                :class="`dora-score-trend--${score.trend_direction}`"
-                :aria-label="trendAriaLabel"
-            >
-                <q-icon :name="trendIcon" size="16px" />
-                <span class="dora-score-trend__delta">
-                    {{ score.trend_delta! > 0 ? '+' : '' }}{{ score.trend_delta }}
-                </span>
-            </span>
-        </template>
+         component in its own box.
 
+         The `InfoTip` beside the title went on 2026-09-08 (*"I don't think we
+         need the info chip for this widget?"*) — and he is right for a reason
+         worth writing down: every sentence that tip carried is now *shown*.
+         The ring names its window, each signal box states its own reason in
+         plain words, and a dormant box says "not counted" on its face. A tip
+         explaining a card that explains itself is a card that doesn't. -->
+    <DashboardCard :icon="ICONS.favorite" title="Kitchen health">
         <div v-if="loading && !score" class="dora-text-muted text-caption">
             Loading…
         </div>
@@ -44,17 +25,73 @@
         </div>
 
         <template v-else>
+            <!-- Owner 2026-09-08 — *"Can make the top area of the card look
+                 more pretty/interesting/satisfying. Maybe a hollow circle
+                 design or something else?"* A hollow ring it is, and it earns
+                 its place beyond decoration: the old head was a bare numeral
+                 beside the words "out of 100", which asked the reader to hold
+                 a scale in their head. A ring *is* the scale — 72 out of 100
+                 is 72% of the way round, readable before you read the digits.
+
+                 Same SVG idiom as `PantryDonutCard`'s donut, deliberately: one
+                 `stroke-dasharray` arc on a 15.915r circle (circumference ≈
+                 100, so the array value is literally the percentage), rotated
+                 -90deg so it starts at twelve o'clock. Unlike that donut this
+                 one takes no runtime palette read — the arc is a single
+                 traffic-light class, so plain CSS `stroke` works and there is
+                 no `paletteToken` dependency to keep honest (FU-824). -->
             <div class="dora-score-hero">
-                <div class="dora-score-hero__number">{{ score.composite }}</div>
+                <svg
+                    viewBox="0 0 36 36"
+                    class="dora-score-ring"
+                    role="img"
+                    :aria-label="`Kitchen health ${score.composite} out of 100, last ${score.window_days} days`"
+                >
+                    <circle class="dora-score-ring__track" cx="18" cy="18" r="15.915" />
+                    <circle
+                        class="dora-score-ring__arc"
+                        :class="barClass(score.composite)"
+                        cx="18"
+                        cy="18"
+                        r="15.915"
+                        :stroke-dasharray="`${score.composite} ${100 - score.composite}`"
+                    />
+                </svg>
+                <div class="dora-score-hero__figure" aria-hidden="true">
+                    <span class="dora-score-hero__number">{{ score.composite }}</span>
+                    <span class="dora-score-hero__scale">/100</span>
+                </div>
                 <div class="dora-score-hero__caption">
-                    <div>out of 100</div>
-                    <div class="text-caption dora-text-muted">
+                    <!-- The trend moved off the card header and under the ring.
+                         It was the `#action` slot's only occupant, and with
+                         every other card's header now bare, one card carrying a
+                         floating chip up there read as leftover chrome. It also
+                         belongs to the number, not to the card. -->
+                    <span
+                        v-if="score.trend_direction && score.trend_direction !== 'flat'"
+                        class="dora-score-trend"
+                        :class="`dora-score-trend--${score.trend_direction}`"
+                        :aria-label="trendAriaLabel"
+                    >
+                        <q-icon :name="trendIcon" size="16px" />
+                        <span class="dora-score-trend__delta">
+                            {{ score.trend_delta! > 0 ? '+' : '' }}{{ score.trend_delta }}
+                        </span>
+                    </span>
+                    <span class="dora-score-hero__window">
                         last {{ score.window_days }} days
-                    </div>
+                    </span>
                 </div>
             </div>
 
             <ul class="dora-score-components">
+                <!-- Owner 2026-09-08 — *"Put each signal in its own card/box to
+                     visually separate it better."* They were five stacked
+                     label/bar/reason triplets separated only by a gap, so at a
+                     glance the card was one fifteen-line block. Each is a
+                     sunken box now, which is also what finally makes a dormant
+                     signal legible: dimming a row inside a run of rows just
+                     looked like a rendering glitch. -->
                 <li
                     v-for="c in score.components"
                     :key="c.key"
@@ -63,8 +100,23 @@
                 >
                     <div class="dora-score-component__head">
                         <span class="dora-score-component__label">{{ c.label }}</span>
-                        <span class="dora-score-component__score">
-                            {{ c.score === null ? '—' : c.score }}
+                        <!-- Owner 2026-09-08 — *"'No budget set' I feel should
+                             render same as auto meal reconciliation."* Those two
+                             ARE the same state (a dormant signal, excluded from
+                             the mean) and they rendered differently for one
+                             reason: budget alone carried a "Set a budget →"
+                             action. With the row links gone the two are
+                             identical by construction — which is why this says
+                             "not counted" rather than a bare em-dash. The dash
+                             looked like a missing value; the words say it is
+                             deliberately outside the average, which is the
+                             honest claim (P3, and the reason `_score_budget`
+                             returns None rather than 0). -->
+                        <span
+                            class="dora-score-component__score"
+                            :class="{ 'dora-score-component__score--dormant': c.score === null }"
+                        >
+                            {{ c.score === null ? 'not counted' : c.score }}
                         </span>
                     </div>
                     <div
@@ -78,16 +130,17 @@
                             :class="barClass(c.score)"
                         />
                     </div>
-                    <div class="dora-score-component__foot">
-                        <span class="dora-score-component__reason">{{ c.reason }}</span>
-                        <router-link
-                            v-if="actionLinkFor(c)"
-                            :to="actionLinkFor(c)!.to"
-                            class="dora-score-component__action"
-                        >
-                            {{ actionLinkFor(c)!.label }} →
-                        </router-link>
-                    </div>
+                    <!-- The action links went with every other card's links
+                         (owner, 2026-09-08: *"Remove the quick links to things
+                         on each row (makes it too busy looking)"*). Five rows
+                         each ending in a green "Expiring items →" / "Reconcile
+                         meals →" was five calls to action on a card whose job is
+                         to *report*, and the reason text — the thing you'd read
+                         to decide whether to act — was competing with them for
+                         the same line. The whole `actionLinkFor` map is deleted;
+                         the routes it named are all one tap away in the nav,
+                         which is the batch's standing argument. -->
+                    <div class="dora-score-component__reason">{{ c.reason }}</div>
                 </li>
             </ul>
         </template>
@@ -104,35 +157,27 @@
      * (5-min stale window) and fetch orchestration; this file only
      * renders what it hands back.
      *
-     * Component→action links are hardcoded here rather than server-
-     * assigned because the routes are SPA-owned identifiers, not
-     * kitchen-health facts. If the routes ever move, this is the one
-     * place to touch. Charter P1 Effortless: every weak component
-     * points at the feature that improves it.
-     *
      * Owner review 2026-09-04 swapped two components (see
-     * `DoraScoreComponentKey` server-side for the reasoning). One of the
-     * replacements is why the dashboard's "Reconcile past meals" chip card
-     * could be deleted: *"remove the dedicated button card for that (because
-     * that's quite odd) and instead put that metric as the link to go do meal
-     * reconciliation"*. `plan_adherence`'s action link below **is** that card,
-     * now attached to a number that says why it's worth doing.
+     * `DoraScoreComponentKey` server-side for the reasoning). The 2026-09-08
+     * batch then reworked the card's *presentation* on five items — a hollow
+     * ring instead of a bare numeral, one box per signal, no InfoTip, no
+     * per-row action links, and dormant signals rendering identically whatever
+     * made them dormant. Each is annotated at its site in the template above.
+     *
+     * One consequence worth stating plainly: **this card no longer links
+     * anywhere.** That includes the `plan_adherence` row, which since 09-04 was
+     * the replacement for the deleted "Reconcile past meals" card — the owner's
+     * *"put that metric as the link to go do meal reconciliation"*. The metric
+     * stays and the link goes, because the same batch's standing decision
+     * ("Remove them all I reckon") applies to it too; `/meal-plans/reconcile` is
+     * reachable from the meal-plans header nudge, which was never removed.
      */
     import { computed } from 'vue';
     import DashboardCard from 'src/components/dashboard/DashboardCard.vue';
     import { ICONS } from 'src/style/icons';
-    import InfoTip from 'src/components/help/InfoTip.vue';
     import { useDoraScore } from 'src/composables/useDoraScore';
-    import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
-    import type {
-        DoraScoreComponent,
-    } from 'src/models/doraScore';
 
     const { doraScore: score, loading } = useDoraScore();
-    // Layers the install flag with the per-user money opt-in — the server's
-    // `money_features_enabled` is install-wide only, so a user who personally
-    // opted out still needs the render-side guard (FU-823).
-    const { moneyEnabled } = useMoneyEnabled();
 
     const trendIcon = computed(() => {
         if (score.value?.trend_direction === 'up') return ICONS.trending_up;
@@ -149,77 +194,21 @@
     });
 
     function barClass(v: number): string {
-        // Traffic-light banding for the mini-bar fills — the composite
-        // number is honest and the bar is a shape-of-story cue.
+        // Traffic-light banding for the ring and the mini-bar fills — the
+        // composite number is honest and the shape is a story cue.
         // Server owns the score; the client just paints the tone.
-        if (v >= 80) return 'dora-score-component__bar-fill--good';
-        if (v >= 50) return 'dora-score-component__bar-fill--fair';
-        return 'dora-score-component__bar-fill--weak';
+        if (v >= 80) return 'dora-score--good';
+        if (v >= 50) return 'dora-score--fair';
+        return 'dora-score--weak';
     }
 
-    type ActionLink = { to: string; label: string };
-
-    /**
-     * Takes the whole component, not just its key, because two of the five
-     * links depend on *why* the component is dormant.
-     *
-     * A dormant component is not automatically a dead link — `budget`'s
-     * "Set a budget →" on a `score: null` row is deliberate discoverability:
-     * the feature exists and you haven't set it up. But the two plan signals
-     * go dormant for the opposite reason — there is nothing to do — and
-     * "Reconcile meals →" pointing at a queue that is empty by construction is
-     * worse than no link at all (caught in the 2026-09-04 browser walk, where
-     * an auto-drain install rendered exactly that).
-     */
-    function actionLinkFor(component: DoraScoreComponent): ActionLink | null {
-        const key = component.key;
-        // The plan signals link only when they have something to say.
-        if (
-            component.score === null
-            && (key === 'plan_adherence' || key === 'plan_coverage')
-        ) {
-            return null;
-        }
-        switch (key) {
-            // FU-823 / R-058 — belt and braces on the money gate. The server no
-            // longer emits a budget component at all when money features are
-            // off, so this branch shouldn't be reachable then; the guard is here
-            // because a "Set a budget →" link into /settings/money is the exact
-            // leak the FU was about, and a render-side check costs nothing if a
-            // future caller ever hands us a component the server didn't gate.
-            case 'budget':
-                return moneyEnabled.value
-                    ? { to: '/settings/money', label: 'Set a budget' }
-                    : null;
-            case 'waste':
-                // No dedicated action link — PROPOSAL_WASTE_MINIMISATION
-                // dissolved the /waste page (D10). Users log waste inline
-                // via the StockItemRow expiry dropdown's "Mark as wasted"
-                // action, and review history per-item on StockItemDetail's
-                // History tab; there is no aggregated "waste review" surface
-                // to link to. Score row still explains the number, just
-                // without a dead button — this is the calm-empty-state
-                // pattern, not R-029 hide-when-off.
-                return null;
-            case 'freshness':
-                // Filter stock to expiring / expired items so the user
-                // can act. The stock overview reads ?expiring=1.
-                return { to: '/stock?expiring=1', label: 'Expiring items' };
-            case 'plan_adherence':
-                // The retired "Reconcile past meals" card's job, reattached to
-                // the metric that motivates it. Only ever emitted with a score
-                // in manual reconcile mode, so this link can't send an
-                // auto-drain household to an empty queue.
-                return { to: '/meal-plans/reconcile', label: 'Reconcile meals' };
-            case 'plan_coverage':
-                // A short week is short of *ingredients*, so the useful next
-                // step is the list you'd fix it with, not the plan you'd stare
-                // at. Matches where "Before you shop" sends the same problem.
-                return { to: '/shopping-lists', label: 'Shopping lists' };
-            default:
-                return null;
-        }
-    }
+    /* `actionLinkFor` and the `useMoneyEnabled` guard it carried are deleted
+       (owner, 2026-09-08 — no row links). The guard was FU-823/R-058
+       belt-and-braces against a "Set a budget →" link leaking onto a money-off
+       install; with no link there is nothing to leak. The **server** gate is
+       the one that mattered and it is untouched: `compute_score` omits the
+       budget component entirely when money features are off, so a money-off
+       install renders four boxes, not a dormant fifth. */
 </script>
 
 <style scoped>
@@ -236,25 +225,76 @@
        Now on the real A1 tokens. This is also the honest close-out of feedback
        D2 ("dark mode not working"), which Phase 0 of the dashboard rebuild
        marked done. */
+
+    /* ── The ring (owner 2026-09-08) ──────────────────────────────────────
+       Three layers stacked in the same grid cell: the SVG, the figure, and the
+       caption below it. A grid rather than absolute positioning so the ring's
+       intrinsic size sets the block's height and the figure centres in it
+       without magic offsets. */
     .dora-score-hero {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr);
+        align-items: center;
+        gap: var(--space-4);
+        margin-bottom: var(--space-4);
+    }
+    .dora-score-ring {
+        grid-area: 1 / 1;
+        /* Bounded like the donut's: big enough that the figure inside stays
+           legible in a phone-width column, small enough that a 1920px dashboard
+           doesn't render a dinner plate. Fixed rather than `clamp`ed on a
+           percentage — this one shares its cell with the figure, so a growing
+           ring would need the figure to grow with it. */
+        width: 92px;
+        height: 92px;
+        transform: rotate(-90deg);
+    }
+    .dora-score-ring__track {
+        fill: none;
+        /* A1: an inset well sits on `--surface-sunken`, not a black wash. */
+        stroke: var(--surface-sunken);
+        stroke-width: 3;
+    }
+    .dora-score-ring__arc {
+        fill: none;
+        stroke-width: 3;
+        stroke-linecap: round;
+        transition: stroke-dasharray var(--motion-slow) ease-out;
+    }
+    /* The figure sits in the ring's own cell, centred over it. `pointer-events`
+       off so it never eats a tap meant for anything underneath. */
+    .dora-score-hero__figure {
+        grid-area: 1 / 1;
         display: flex;
         align-items: baseline;
-        gap: var(--space-3);
-        margin-bottom: var(--space-3);
+        justify-content: center;
+        gap: 1px;
+        pointer-events: none;
     }
-
     .dora-score-hero__number {
-        /* A2's ladder tops out at `--font-size-3xl` (30px). This was
-           2.5rem/40px — the largest type on the page, and off the scale. It
-           now matches `.dora-stat-num`, the dashboard's other hero number. */
+        /* A2's ladder tops out at `--font-size-3xl` (30px), which is where this
+           already was; the `/100` beside it is what lets the number stay that
+           size without the words "out of 100" taking a second line. */
         font-size: calc(var(--font-size-3xl) * 1rem);
         font-weight: 600;
         line-height: 1;
         color: var(--text-primary);
     }
-
+    .dora-score-hero__scale {
+        font-size: calc(var(--font-size-sm) * 1rem);
+        font-weight: 600;
+        color: var(--text-secondary);
+    }
     .dora-score-hero__caption {
-        line-height: 1.2;
+        grid-area: 1 / 2;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: var(--space-2);
+    }
+    .dora-score-hero__window {
+        font-size: calc(var(--font-size-sm) * 1rem);
+        color: var(--text-secondary);
     }
 
     .dora-score-trend {
@@ -277,41 +317,65 @@
         color: var(--semantic-negative);
     }
 
+    /* ── One box per signal (owner 2026-09-08) ───────────────────────────── */
     .dora-score-components {
         list-style: none;
         padding: 0;
         margin: 0;
         display: flex;
         flex-direction: column;
-        gap: var(--space-3);
+        gap: var(--space-2);
     }
-
     .dora-score-component {
-        padding: 0;
+        padding: var(--space-2) var(--space-3);
+        /* D-017 — a box nested in a card is `--radius-md`; A1 — a nested well
+           sits on `--surface-sunken` with a hairline, not on a shadow (a
+           five-deep stack of elevated boxes inside one card is noise). */
+        border-radius: var(--radius-md);
+        background: var(--surface-sunken);
+        border: 1px solid var(--border-default);
     }
+    /* A dormant signal is a *stated* fact ("not counted"), so it no longer
+       leans on opacity to say so — 0.55 on a box that is now bordered read as
+       disabled, and one of these (budget with no target set) is something the
+       reader might well want to act on. Flat ground, no border, and the words
+       carry it. D-002: never a contrast reduction as the only signal. */
     .dora-score-component--dormant {
-        opacity: 0.55;
+        background: transparent;
+        border-style: dashed;
     }
 
     .dora-score-component__head {
         display: flex;
         justify-content: space-between;
         align-items: baseline;
+        gap: var(--space-2);
         margin-bottom: var(--space-1);
     }
     .dora-score-component__label {
-        font-weight: 500;
+        font-weight: 600;
     }
     .dora-score-component__score {
         font-variant-numeric: tabular-nums;
+        font-weight: 600;
+        flex-shrink: 0;
+    }
+    .dora-score-component__score--dormant {
+        /* Words, not a number, so it takes the caption scale and the readable
+           secondary token rather than sitting at the score's weight. */
+        font-size: calc(var(--font-size-xs) * 1rem);
         font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--text-secondary);
     }
 
     .dora-score-component__bar {
         height: 4px;
         border-radius: var(--radius-pill);
-        /* A1: an inset well sits on `--surface-sunken`, not a black wash. */
-        background: var(--surface-sunken);
+        /* A1: an inset well sits on `--surface-sunken`. Inside a box that is
+           itself sunken, the track needs the hairline colour to stay visible. */
+        background: var(--border-default);
         overflow: hidden;
     }
     .dora-score-component__bar-fill {
@@ -320,43 +384,36 @@
         transition: width var(--motion-slow) ease-out;
     }
     /* Traffic-light banding straight off A1's semantic table, which names these
-       exact roles: positive = "good scores", warning = "fair scores". */
-    .dora-score-component__bar-fill--good {
+       exact roles: positive = "good scores", warning = "fair scores". One set of
+       classes for the ring and the bars — they mean the same thing, so a future
+       retune moves both (they were two parallel sets before). */
+    .dora-score--good {
         background: var(--semantic-positive);
+        stroke: var(--semantic-positive);
     }
-    .dora-score-component__bar-fill--fair {
+    .dora-score--fair {
         background: var(--semantic-warning);
+        stroke: var(--semantic-warning);
     }
-    .dora-score-component__bar-fill--weak {
+    .dora-score--weak {
         background: var(--semantic-negative);
+        stroke: var(--semantic-negative);
     }
 
-    .dora-score-component__foot {
-        display: flex;
-        justify-content: space-between;
-        gap: var(--space-2);
+    .dora-score-component__reason {
         margin-top: var(--space-1);
         font-size: calc(var(--font-size-xs) * 1rem);
+        /* Was `--text-muted` while it shared a line with a green action link.
+           With the link gone the reason is the only sentence in the box and the
+           thing you actually read, so it takes the readable secondary token
+           (D-002). */
+        color: var(--text-secondary);
     }
-    .dora-score-component__reason {
-        color: var(--text-muted);
-        flex: 1 1 auto;
-    }
-    .dora-score-component__action {
-        white-space: nowrap;
-        /* An action link takes the brand action colour, not the accent yellow
-           the undeclared `--dora-primary` fallback was painting — and as *text*
-           that is `--accent-ink`, the ink-strength sibling (R-069). */
-        color: var(--accent-ink);
-        text-decoration: none;
-    }
-    .dora-score-component__action:hover {
-        text-decoration: underline;
-    }
-    /* A6: focus is always visible, and it was not defined anywhere on this card. */
-    .dora-score-component__action:focus-visible {
-        outline: 2px solid var(--focus-ring);
-        outline-offset: 2px;
-        border-radius: var(--radius-sm);
+
+    @media (prefers-reduced-motion: reduce) {
+        .dora-score-ring__arc,
+        .dora-score-component__bar-fill {
+            transition: none !important;
+        }
     }
 </style>

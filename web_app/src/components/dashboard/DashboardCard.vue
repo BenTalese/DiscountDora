@@ -107,14 +107,21 @@
         color: var(--accent-ink);
         opacity: 1;
     }
-    :deep(.dora-card-link) {
-        color: var(--accent-ink);
-        text-decoration: none;
-        font-weight: 600;
-    }
-    :deep(.dora-card-link:hover) {
-        text-decoration: underline;
-    }
+    /* `.dora-card-link` — the accent-ink "Stock →" / "Meal plan →" header link
+       look — is **deleted**, not merely unused: the 2026-09-08 batch removed
+       every one of its call sites (owner: *"Leaning towards removing the links
+       to open relevant pages on the dashboard cards … Remove them all I
+       reckon"*), and a styled class sitting here with no consumer is an
+       invitation to reinstate the pattern he just cut. Grepped app-wide before
+       deleting — zero consumers, dashboard and Reports both.
+
+       The `#action` slot itself STAYS: Reports' `SpendCard` puts a
+       `BaseSegmented` in it, which is a control, not navigation. What the owner
+       removed was links out of a card, not the header's right-hand slot.
+
+       `.dora-card-action` (below) and the `to` / `.dora-card-clickable` path are
+       now consumer-less too — logged as FU-899 rather than ripped out here,
+       since `to` is a public prop of a component Reports also renders. */
 
     /* Respect reduced motion (the parent page's media query can't reach these
        extracted elements). */

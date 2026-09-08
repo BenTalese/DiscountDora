@@ -2,31 +2,6 @@ import type { DashboardSummary } from 'src/models/dashboard';
 import type { DoraScore } from 'src/models/doraScore';
 import AxiosHttpClient from './axiosHttpClient';
 
-/** One of the three shopping lists the dashboard offers quick nav to.
- *  Mirrors `DashboardListCard` in `get_dashboard_lists.py`. */
-export type DashboardListCard = {
-    shopping_list_id: string;
-    display_name: string;
-    status: string;
-    /** Server-resolved: completed date > planned shop date > created. */
-    effective_date: string;
-    line_count: number;
-    unticked_count: number;
-    /** Money always travels; the *card* gates it on the money opt-in, exactly
-     *  as the shopping-list page does. */
-    total_price: number;
-    remaining_price: number;
-    total_savings: number;
-};
-
-/** Current · next · most recently finished. Any of the three may be null —
- *  a household with one draft list has a `current` and nothing else. */
-export type DashboardListsResponse = {
-    current: DashboardListCard | null;
-    next: DashboardListCard | null;
-    finished: DashboardListCard | null;
-};
-
 export type UseItUpItem = {
     stock_item_id: string;
     name: string;
@@ -53,46 +28,39 @@ export type UseItUpResponse = {
     window_days: number;
 };
 
-export type RunningOutRow = {
-    stock_item_id: string;
-    name: string;
-    /** 'low' | 'out' — the *recorded* band. Not a belief: the inference
-     *  overlay is opt-in and this card isn't. */
-    band: 'low' | 'out';
-    is_essential: boolean;
-};
-
-export type PlanGapRow = {
-    stock_item_id: string;
-    name: string;
-    needed_meals: number;
-    earliest_needed: string | null;
-    recipe_names: string[];
-    urgency: 'none' | 'watch' | 'blocking';
-};
-
 export type RestockRow = {
     stock_item_id: string;
     name: string;
     /** When the item's band last changed — what "recently" is ordered on. */
     changed_at: string;
     is_essential: boolean;
+    /** The recorded level, so the row renders the app's own `StockLevelDot`
+     *  rather than the words "out" / "low" (owner, 2026-09-08 — *"use
+     *  consistent level indicator at the start of the row instead of out/etc
+     *  text"*). `band` travels alongside it because the client must not decide
+     *  which sequence is the out rung. */
+    level_sequence: number;
+    level_name: string;
+    band: 'low' | 'out';
+    /** Does the coming fortnight's plan still need this? The one signal that
+     *  survived the retired "Before you shop" card — same
+     *  `gather_planned_demand` it read, never re-derived here (R-003). */
+    is_planned: boolean;
 };
 
 /** Present-tense restock radar: what's *currently* out or low, most recently
  *  changed first. Distinct from `/reports/keeps-running-out`, which ranks on a
- *  lifetime count and still backs the reports page. */
+ *  lifetime count and still backs the reports page.
+ *
+ *  One list since 2026-09-08 — it was `recently_out` / `recently_low`, two
+ *  columns each ordered by recency *within* the column, so the single most
+ *  recent change wasn't necessarily the top row. The band is the level dot
+ *  now, not which column you're reading. */
 export type RestockRadarResponse = {
-    recently_out: RestockRow[];
-    recently_low: RestockRow[];
-};
-
-export type BeforeYouShopResponse = {
-    running_out: RunningOutRow[];
-    plan_gaps: PlanGapRow[];
-    /** Days until the nearest planned shop date on an active list; null when
-     *  no active list names one. Negative means that date has passed. */
-    shop_in_days: number | null;
+    rows: RestockRow[];
+    /** How far back "recently" reaches, so the empty copy can name the window
+     *  rather than hardcoding a number the server owns. */
+    window_days: number;
 };
 
 /** Cumulative "how much have you used Dora" counts for the About page.
@@ -137,23 +105,14 @@ export default class DashboardApiService {
     getDoraScoreAsync = async (): Promise<DoraScore> =>
         await this.httpClient.get<DoraScore>('/dashboard/dora-score');
 
-    /** Owner 2026-09-04 — the three lists worth a shortcut (current · next ·
-     *  last finished), picked and totalled server-side. Replaced a card that
-     *  fetched a whole `ShoppingListDetail` to render three numbers. */
-    getListsAsync = async (): Promise<DashboardListsResponse> =>
-        await this.httpClient.get<DashboardListsResponse>('/dashboard/lists');
-
     /** Near-expiry stock joined to the recipes that would use it up. One of
-     *  the two cards that replaced "Needs your attention" + "Dora suggests". */
+     *  the two cards that replaced "Needs your attention" + "Dora suggests";
+     *  its sibling `/dashboard/before-you-shop` was deleted on 2026-09-08 when
+     *  the owner folded that card into Restock radar. */
     getUseItUpAsync = async (): Promise<UseItUpResponse> =>
         await this.httpClient.get<UseItUpResponse>('/dashboard/use-it-up');
 
-    /** What won't survive until the next shop: recorded-low items that are on
-     *  no active list, plus the coming plan's uncovered demand. */
-    getBeforeYouShopAsync = async (): Promise<BeforeYouShopResponse> =>
-        await this.httpClient.get<BeforeYouShopResponse>('/dashboard/before-you-shop');
-
-    /** What just ran out and what just went low. */
+    /** What recently went low or out, most recent first. */
     getRestockRadarAsync = async (): Promise<RestockRadarResponse> =>
         await this.httpClient.get<RestockRadarResponse>('/dashboard/restock-radar');
 }

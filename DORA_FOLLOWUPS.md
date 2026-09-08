@@ -39,6 +39,89 @@ long session summary. Distinct from the other logs:
 
 ---
 
+## [OPEN] FU-899 — `DashboardCard`'s `to` prop and `.dora-card-action` now have no consumers
+- **Raised:** 2026-09-08 (dashboard feedback batch)
+- **Type:** leftover (R-057 contract inventory)
+- **What:** the batch removed every card's header link and the one whole-card
+  link (`MoneyCard` passed `to="/settings/money"`). Three things in the shared
+  shell are consequently consumer-less app-wide, dashboard and Reports both
+  (grepped): the **`to` prop**, the `.dora-card-clickable` cursor/hover/`:deep`
+  rules that only fire when `to` is set, and the `:deep(.dora-card-action)`
+  text style. `.dora-card-link` was deleted in-place (it *is* the pattern the
+  owner cut, so leaving it invites reinstatement); these three were not.
+- **Why deferred:** `to` is a public prop of a component the Reports page also
+  renders, and the `<component :is="to ? 'router-link' : 'article'">` root is
+  the mechanism that makes a card a real keyboard-focusable control — removing
+  it is a small API change to a shared shell rather than a UI tidy, and it is
+  plausible that a future non-dashboard consumer wants a whole-card link. The
+  `#action` slot is **not** part of this: Reports' `SpendCard` still puts a
+  `BaseSegmented` in it.
+- **Recommended resolution:** opportunistic — next time anyone is in
+  `DashboardCard.vue`. Either delete all three or leave a comment saying `to` is
+  deliberately kept for non-dashboard callers.
+
+## [OPEN] FU-898 — `savings-captured` and the swap-suggestions call lost their dashboard callers
+- **Raised:** 2026-09-08 (dashboard feedback batch)
+- **Type:** leftover (R-057 contract inventory)
+- **What:** the owner cut the money card down to the budget, which removed the
+  dashboard's only calls to `reportsApi.getSavingsCapturedAsync` and to the
+  `mealPlanApi.getTodayAsync` + `getAllAsync` + `getSwapSuggestionsAsync` trio
+  that fed FU-451's swaps bullet. **Neither is orphaned** — `/reports` still
+  reads savings-captured, and the planner still reads swap suggestions — so
+  this is an inventory note, not a deletion candidate. Logged because R-057 is
+  explicit that a replaced surface's contracts get checked rather than assumed,
+  and because `/reports` is now savings-captured's *only* consumer, which
+  changes who owns its shape (relevant to [[FU-831]], which is going to rename
+  that DTO field).
+- **Recommended resolution:** opportunistic — fold into [[FU-831]], which is
+  already the unit that touches this handler.
+
+## [OPEN] FU-897 — the "already on a list" filter did not survive the Before-you-shop merge
+- **Raised:** 2026-09-08 (dashboard feedback batch)
+- **Type:** finding
+- **What:** *Before you shop* earned its place on one join nothing else in the
+  app makes: **is this already on an active list?** The bell says "you're low on
+  flour", the stock page says "you're low on flour", and neither knows you added
+  it to Saturday's list ten minutes ago. That filter was the card's whole
+  premise, and it had its own e2e test
+  (`test__before_you_shop__ItemAlreadyOnAnActiveList__DropsOut`).
+  The owner axed that card in favour of Restock radar, and Restock radar does
+  **not** filter on list membership — so an item you have already dealt with
+  keeps occupying a row.
+- **Mitigating, and why this is a finding rather than a bug:** every row ends in
+  `AddToListButton`, which renders its own already-on-a-list state, so the fact
+  *is* on screen — it just isn't used to hide the row. And the new staleness
+  cutoff means a dealt-with row ages off the card within 30 days regardless.
+- **What to decide:** whether Restock radar should drop (or visually demote)
+  rows already on an active list. Demoting is probably better than hiding: the
+  card's claim is "what changed recently", and silently omitting a recent change
+  because of a list edit makes the list less trustworthy than a greyed row does.
+  Either way it wants the owner's call, not a unilateral re-add of a filter he
+  just deleted the card for.
+- **Recommended resolution:** when the owner next walks the dashboard — it is a
+  one-line question with a cheap fix either way.
+
+## [OPEN] FU-896 — `invalidateDoraScore()` is now definitively dead
+- **Raised:** 2026-09-08 (dashboard feedback batch)
+- **Type:** leftover
+- **What:** `composables/useDoraScore.ts` exports `invalidateDoraScore()`, whose
+  docstring says it is *"bumped after any mutation that could shift the score
+  (log waste, finish a shopping list, mark an item checked, cook + drop
+  level)"*. It has **never had a caller** — grepped app-wide, zero, and that was
+  already true before this batch. None of those mutations invalidates it.
+  That gap is what produced the owner's *"the budget health indicator stayed the
+  same"* report (see the fix note in `DashboardPage.loadAll`), and the fix taken
+  was the blunt one: the dashboard now force-refreshes the score on every load,
+  which is correct for the one surface that renders it and makes the
+  invalidation hook redundant rather than merely unused.
+- **What to do:** delete `invalidateDoraScore` (and say so in the composable's
+  header, since the comment currently describes behaviour that does not exist),
+  **or** wire it to the four mutations it names — which only becomes worth doing
+  if a second surface ever renders the score, since the dashboard no longer
+  needs it. `clearDoraScoreCache` is separate and does have a caller (logout).
+- **Recommended resolution:** opportunistic. Deleting is the honest option; the
+  comment lying about it is the actual defect.
+
 ## [OPEN] FU-895 — the nutrition panel's other three gap reasons have no way out
 - **Raised:** 2026-09-08 (recipe view feedback batch)
 - **Type:** follow-up

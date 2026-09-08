@@ -1,70 +1,68 @@
 <template>
     <DashboardCard :icon="ICONS.replay" title="Restock radar">
-        <template #action>
-            <router-link class="dora-card-action dora-card-link" to="/stock">
-                Stock →
-            </router-link>
-        </template>
-
         <CardLoadError
             v-if="failed"
             line="I couldn't work out what needs restocking."
             @retry="emit('retry')"
         />
 
-        <div v-else-if="hasRows" class="dora-radar">
-            <!-- Two columns on desktop, stacked on phones. Out on the left
-                 because it is the worse state and the eye starts there. -->
-            <section class="dora-radar__col">
-                <div class="dora-radar__head">
-                    <q-icon :name="ICONS.error" size="14px" />
-                    Just ran out
-                </div>
-                <ul v-if="recentlyOut.length > 0" class="dora-cook-list">
-                    <li v-for="row in recentlyOut" :key="row.stock_item_id" class="dora-radar__row">
-                        <router-link class="dora-cook-name" :to="`/stock/${row.stock_item_id}`">
-                            {{ row.name }}
-                        </router-link>
-                        <span class="dora-cook-meta">{{ whenLabel(row) }}</span>
-                        <!-- The owner asked for "the same shopping cart button
-                             from the stock overview rows" — this is literally
-                             that component, in its `row` variant. It owns the
-                             already-on-a-list toggle, the multi-list popover and
-                             the toast, so the card emits nothing (R-011). -->
-                        <AddToListButton variant="row" :stock-item-id="row.stock_item_id" />
-                    </li>
-                </ul>
-                <p v-else class="dora-radar__none">Nothing's out.</p>
-            </section>
+        <template v-else-if="rows.length > 0">
+            <div class="dora-radar__head">Recently low or out</div>
+            <ul class="dora-cook-list">
+                <li v-for="row in rows" :key="row.stock_item_id" class="dora-radar__row">
+                    <!-- Owner 2026-09-08 — *"use consistent level indicator at
+                         the start of the row instead of out/etc text"*. This is
+                         the app's own dot (`StockLevelDot`, R-001), the same one
+                         the stock item header, the level picker and the stock
+                         filter render, so "out" looks identical here and there.
+                         D-013: a bare coloured dot is not a decodable signal, so
+                         it carries the level's own name as a tooltip — which is
+                         also what the words it replaced were for. -->
+                    <StockLevelDot :sequence="row.level_sequence" size="12px">
+                        <q-tooltip>{{ row.level_name }}</q-tooltip>
+                    </StockLevelDot>
+                    <router-link class="dora-cook-name" :to="`/stock/${row.stock_item_id}`">
+                        {{ row.name }}
+                    </router-link>
+                    <!-- The chip that carried across from the retired "Before
+                         you shop" card. It is the difference between "you're out
+                         of this" and "you're out of this *and something you
+                         planned needs it*", which is the whole reason that card
+                         existed. -->
+                    <q-badge
+                        v-if="row.is_planned"
+                        color="warning"
+                        label="Planned"
+                        class="dora-radar__chip"
+                    >
+                        <q-tooltip>A meal you've planned needs this</q-tooltip>
+                    </q-badge>
+                    <span class="dora-cook-meta">{{ whenLabel(row) }}</span>
+                    <!-- The owner asked for "the same shopping cart button
+                         from the stock overview rows" — this is literally
+                         that component, in its `row` variant. It owns the
+                         already-on-a-list toggle, the multi-list popover and
+                         the toast, so the card emits nothing (R-011). -->
+                    <AddToListButton variant="row" :stock-item-id="row.stock_item_id" />
+                </li>
+            </ul>
+        </template>
 
-            <section class="dora-radar__col">
-                <div class="dora-radar__head">
-                    <q-icon :name="ICONS.warning_amber" size="14px" />
-                    Getting low
-                </div>
-                <ul v-if="recentlyLow.length > 0" class="dora-cook-list">
-                    <li v-for="row in recentlyLow" :key="row.stock_item_id" class="dora-radar__row">
-                        <router-link class="dora-cook-name" :to="`/stock/${row.stock_item_id}`">
-                            {{ row.name }}
-                        </router-link>
-                        <span class="dora-cook-meta">{{ whenLabel(row) }}</span>
-                        <AddToListButton variant="row" :stock-item-id="row.stock_item_id" />
-                    </li>
-                </ul>
-                <p v-else class="dora-radar__none">Nothing's low.</p>
-            </section>
-        </div>
-
+        <!-- Honest about the window it actually looked at. The old copy said
+             "Everything's stocked", which after the 09-08 staleness cutoff would
+             be a lie: an item you ran out of in March is still out, it just
+             isn't *recent*. The stock page, filtered by level, is where
+             "everything you're out of" lives. -->
         <div v-else class="dora-empty dora-empty-ok">
             <q-icon :name="ICONS.check_circle" size="20px" class="q-mr-sm" />
-            Everything's stocked.
+            Nothing's gone low or out in the last {{ windowDays }} days.
         </div>
     </DashboardCard>
 </template>
 
 <script lang="ts" setup>
     /**
-     * Restock radar — what just ran out (left) and what just went low (right).
+     * Restock radar — what recently went low or out, most recent first.
      *
      * Reworked on the owner's ask, 2026-09-04. It used to render
      * `/reports/keeps-running-out`: how often an item was already out at the
@@ -76,18 +74,40 @@
      * This is the present tense of the same idea, and it keeps the verb: every
      * row ends in the stock overview's own cart button. The lifetime ranking
      * still lives on the reports page, which is where a history belongs.
+     *
+     * **2026-09-08 — this card absorbed "Before you shop".** The owner's list
+     * asked that card for a level indicator, a "recently low or out" heading
+     * and recency ordering, and then concluded a few items later that the two
+     * cards overlapped and *"I'm inclined to axe before you shop and chuck
+     * 'planned' as a chip on the rows for restock radar"*. Later points win, so
+     * all of it landed here:
+     *
+     *   · **one list, not two columns.** Out and Low were ordered by recency
+     *     *within* a column, so the most recent change was not necessarily the
+     *     top row — which is the only claim a radar makes. The band is the
+     *     level dot at the head of the row now.
+     *   · **`is_planned`** — a chip, straight off `gather_planned_demand`.
+     *   · **a staleness cutoff**, server-side: *"don't show stuff that has been
+     *     low/out for a long time"*.
+     *
+     * Everything above is server-decided (`/dashboard/restock-radar`); this file
+     * picks words and shapes (R-003).
      */
-    import { computed } from 'vue';
     import { ICONS } from 'src/style/icons';
     import AddToListButton from 'src/components/AddToListButton.vue';
+    import StockLevelDot from 'src/components/stock/StockLevelDot.vue';
     import DashboardCard from 'src/components/dashboard/DashboardCard.vue';
     import CardLoadError from 'src/components/dashboard/CardLoadError.vue';
     import type { RestockRow } from 'src/services/api/dashboardApiService';
 
-    const props = withDefaults(
+    withDefaults(
         defineProps<{
-            recentlyOut: RestockRow[];
-            recentlyLow: RestockRow[];
+            /** Already ordered by recency, capped and staleness-filtered by the
+             *  server. This component does not sort. */
+            rows: RestockRow[];
+            /** How far back "recently" reaches — named in the empty copy rather
+             *  than hardcoded, because the server owns the number. */
+            windowDays: number;
             failed?: boolean;
         }>(),
         { failed: false },
@@ -95,14 +115,10 @@
 
     const emit = defineEmits<{ (e: 'retry'): void }>();
 
-    const hasRows = computed(
-        () => props.recentlyOut.length > 0 || props.recentlyLow.length > 0,
-    );
-
     /**
      * How long it has been in this state. Coarse on purpose — "3 days ago" is
-     * the actionable resolution, and an item that went low in March wants
-     * "months ago", not a date nobody reads on a dashboard.
+     * the actionable resolution, and with the server's 30-day cutoff in front of
+     * it the long arms of this ladder now only fire near the edge of the window.
      *
      * Not `formatRelativeDay`: that names the *day* ("Tuesday"), and after a
      * fortnight a weekday name is useless. This answers "how long has this been
@@ -115,32 +131,22 @@
         if (days === 1) return 'yesterday';
         if (days < 7) return `${days} days ago`;
         if (days < 14) return 'last week';
-        if (days < 60) return `${Math.round(days / 7)} weeks ago`;
-        return `${Math.round(days / 30)} months ago`;
+        return `${Math.round(days / 7)} weeks ago`;
     }
 </script>
 
 <style scoped lang="scss">
     /* `.dora-cook-list`, `.dora-cook-name`, `.dora-cook-meta` and the empty
-       states come from `css/dashboardCards.scss`. The two-column shell and the
-       row's own grid are this card's. */
+       states come from `css/dashboardCards.scss`. The row's own grid is this
+       card's — and it is a grid rather than the shared `.dora-cook-row` because
+       this row leads with a level dot and can carry a chip, which no other
+       dashboard row does. */
 
-    .dora-radar {
-        display: grid;
-        /* R-078: the card is a container, so it sizes on its own width, never
-           on the viewport — a two-up card in a half-width column must stack
-           exactly as it does on a phone. `auto-fit` + a min track does that
-           without the card knowing what a breakpoint is. */
-        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-        gap: var(--space-4);
-    }
-    .dora-radar__col {
-        min-width: 0;
-    }
+    /* The two-column `.dora-radar` shell is gone with the two columns (owner,
+       2026-09-08). What is left is one heading over one list, so the heading no
+       longer needs per-column icon tinting — the level dot on each row carries
+       the band, which is strictly better than a column header implying it. */
     .dora-radar__head {
-        display: flex;
-        align-items: center;
-        gap: var(--space-1);
         margin-bottom: var(--space-2);
         font-size: calc(var(--font-size-xs) * 1rem);
         font-weight: 700;
@@ -148,32 +154,47 @@
         text-transform: uppercase;
         color: var(--text-secondary);
     }
-    /* D-014 — the icons carry the band, the words carry the meaning; neither
-       column relies on colour alone. Tinting only the glyph keeps the heading
-       text on the readable secondary token (D-002). */
-    .dora-radar__col:first-child .dora-radar__head .q-icon {
-        color: var(--semantic-negative);
-    }
-    .dora-radar__col:last-child .dora-radar__head .q-icon {
-        color: var(--semantic-warning);
-    }
-    /* Same anatomy as `.dora-cook-row` but with the cart button as the only
-       trailing control — three columns, not four. Declared here rather than
-       adding a third modifier to the shared primitive: two consumers with a
-       badge and one without is not yet a pattern. */
+    /* dot · name · chip · when · cart.
+       **Flex-wrap, not a five-track grid.** The row now carries five things and
+       a grid keeps them on one line at any width, which is what squeezed the
+       Next-to-cook recipe name to zero at 375px (fixed there in the 09-05 batch
+       with a `7ch` floor). Here the row is allowed to *wrap* instead: the name
+       holds a `7ch` floor and everything past it drops to a second line when
+       there isn't room. That is intrinsic — it responds to the CARD's width, not
+       the viewport's, which is what R-078 requires of a card that can render
+       half-width on a desktop and full-width on a phone. No container query,
+       because nothing in this app declares a containment context and adding one
+       to the shared `DashboardCard` shell would change every card including
+       Reports'. */
     .dora-radar__row {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) auto auto;
+        display: flex;
+        flex-wrap: wrap;
         align-items: center;
         gap: var(--space-2);
         padding: var(--space-1) var(--space-2);
         background: var(--surface-sunken);
         border-radius: var(--radius-md);
     }
-    .dora-radar__none {
-        margin: 0;
-        padding: var(--space-2) var(--space-3);
-        font-size: calc(var(--font-size-sm) * 1rem);
-        color: var(--text-secondary);
+    /* The one flexible item. `min-width` is what actually permits the shrink —
+       a flex item's default `min-width: auto` refuses to go below its content. */
+    .dora-radar__row .dora-cook-name {
+        flex: 1 1 auto;
+        min-width: 7ch;
+    }
+    /* Pins the cart button to the trailing edge of whichever line it lands on,
+       so a wrapped row still reads as a row rather than a ragged pile. Selected
+       positionally because `AddToListButton`'s row variant renders a
+       `RowActionButton` with no class of its own to hook — and it is always the
+       last thing in the row. An auto margin absorbs the free space *before*
+       flex-grow gets it, which is deliberate: the name sizes to its content and
+       the cart sits hard right, rather than the name stretching and the button
+       floating in the middle of the row. */
+    .dora-radar__row > *:last-child {
+        margin-inline-start: auto;
+    }
+    /* D-014 — the chip says "Planned" in words; the warning tint is support,
+       not the signal. */
+    .dora-radar__chip {
+        font-size: calc(var(--font-size-xs) * 1rem);
     }
 </style>

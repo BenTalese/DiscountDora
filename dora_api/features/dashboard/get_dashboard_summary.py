@@ -11,6 +11,7 @@ from typing import List, Optional
 from uuid import UUID
 
 from dora_api.domain.entities.meal_plan_entry import MealPlanEntry
+from dora_api.domain.entities.meal_slot import MealSlot
 from dora_api.domain.entities.recipe import Recipe
 from dora_api.domain.entities.shopping_list import (SHOPPING_LIST_STATUS_DONE,
                                                     ShoppingList)
@@ -18,6 +19,9 @@ from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.entities.stock_level import StockLevel
 from dora_api.domain.stock_status import StockStatus, level_for_status
 from dora_api.features.app_settings.clock import household_today
+# The household's own slot order, from the feature that owns it (R-003). See
+# the sort below for why alphabetical was actively wrong here.
+from dora_api.features.meal_plans.daily_brief import slot_order_map
 from dora_api.features.recipes.get_recipes import load_recipe_cookability
 from dora_api.features.routers import DASHBOARD_ROUTER
 from dora_api.infrastructure.api_response import ok
@@ -249,7 +253,24 @@ class GetDashboardSummaryHandler:
                 .between(_Today, _Window)
             )
         )
-        upcoming_entries_entities.sort(key=lambda e: (e.scheduled_for, e.slot))
+        # Owner 2026-09-08 — *"How is next to cook ordered? It should be based on
+        # day, then by meal slot order (dessert should not appear before
+        # breakfast)"*. It was sorting on the slot **name**, so within a day the
+        # order was alphabetical: Breakfast, Dessert, Dinner, Lunch, Snack. A
+        # dessert genuinely did appear before breakfast.
+        #
+        # `slot_order_map` is the household's own configured order (the same
+        # `sequence` the planner and the daily brief lay slots out by), so this
+        # reads the ordering rather than inventing a second one (R-003). An entry
+        # whose slot has since been renamed falls to the end of its day and stays
+        # stable among its peers — the same tolerance `format_meal_line` applies,
+        # because `MealPlanEntry.slot` is free text validated at write time.
+        _SlotOrder = slot_order_map(self.repository.get(MealSlot).all())
+        upcoming_entries_entities.sort(key=lambda e: (
+            e.scheduled_for,
+            _SlotOrder.get(e.slot.lower(), len(_SlotOrder)),
+            e.slot.lower(),
+        ))
         # reuse the cookability map already computed for the recipe
         # summary above so we don't load ingredients twice.
         # IMPL_PLAN_RECIPE_IMPORTER §Chunk 4: an upcoming meal-plan entry

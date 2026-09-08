@@ -32,15 +32,11 @@ export type CardId =
     // since FU-298, and it now switches selection strategy on the household's
     // cook style, which "cookable" actively misdescribes.
     | 'next_to_cook'
-    // The two cards that replaced `attention` + `suggestions` (owner, 09-04).
-    // Each answers one cross-entity question the alerts bell and the chat can't:
-    // "what's about to go off that I could cook now" and "what won't survive
-    // until my next shop".
+    // One of the two cards that replaced `attention` + `suggestions` (owner,
+    // 09-04). It answers a cross-entity question the alerts bell and the chat
+    // can't: "what's about to go off that I could cook now". Its sibling
+    // `before_you_shop` was cut on 09-08 — see the deletion note below.
     | 'use_it_up'
-    | 'before_you_shop'
-    // Renamed from `primary_list`: the card stopped being about *the primary*
-    // and became the three lists that matter (current · next · last finished).
-    | 'shopping_lists'
     | 'stock_items'
     // FU-818 — "What's coming": the 7-day strip and the 14-day fortnight
     // calendar merged into this one id. The retired `calendar` id is dropped by
@@ -49,7 +45,21 @@ export type CardId =
     // Phase 4 — Money zone widgets backed by the reports API. FU-830 folded the
     // old `budget` id into `savings` and cut `best_deals`; the 09-04 batch cut
     // `spend_trend` and `pantry_value` (see the deletion note below).
-    | 'savings'
+    //
+    // `my_budget` since 09-08, because the card is now only that: the owner cut
+    // its kept-vs-RRP half and its swaps line and retitled it "My budget", and
+    // an id saying `savings` on a card that states no savings is exactly the
+    // drift this file exists to stop. `savings` is retired like any other id —
+    // `parseLayout` drops it — the same trade `cookable` → `next_to_cook` made
+    // in the 09-04 batch.
+    //
+    // **`my_budget`, not `budget`**, and that is not a stylistic choice:
+    // `budget` is *already* a retired id (FU-830 folded a separate "Grocery
+    // budget" card into `savings`), so it is sitting in stored layouts today.
+    // Reusing it would hand this card some users' old hidden flag — the exact
+    // resurrection `dashboardCards.spec.ts`'s retired-id list exists to catch,
+    // and it caught this.
+    | 'my_budget'
     | 'price_drops'
     // Phase 5 — predictive restock.
     | 'restock'
@@ -74,6 +84,24 @@ export type CardId =
 //                        The dashboard and the reports page shouldn't overlap.
 //   `pantry_value`       Pantry value           — the same judgement the reports
 //                        review already reached about stock valuation.
+//
+// ── Cards deleted in the 2026-09-08 owner batch ──────────────────────────
+//
+//   `before_you_shop`    Before you shop        — *"There's a lot of crossover
+//                        between before you shop and restock radar. I'm
+//                        inclined to axe before you shop and chuck 'planned' as
+//                        a chip on the rows for restock radar."* Done exactly
+//                        that: `restock` rows carry `is_planned` now, and
+//                        `/dashboard/before-you-shop` is deleted with its only
+//                        consumer. The one thing this loses is the "already on
+//                        a list" filter — logged as FU-897, not dropped
+//                        silently.
+//   `shopping_lists`     Shopping lists         — *"Shopping lists widget is
+//                        useless, axe it."* `/dashboard/lists` went with it; the
+//                        nav's own Shopping lists entry is the way there, which
+//                        is the same reasoning that cut the header links off
+//                        every remaining card in this batch.
+//
 //   `reconcile_pending`  Reconcile past meals   — a bare button card. Meal
 //                        reconciliation is now the `plan_adherence` component
 //                        of Kitchen health, and *that* row is the link to go and
@@ -105,28 +133,31 @@ export type CardDef = {
  * `defaultHidden: true`, or get the count re-agreed and update
  * `DEFAULT_VISIBLE_COUNT` deliberately. The spec asserts it.
  *
- * Ordering intent: the two things to *do today* (cook, use up), then the two
- * that shape the next shop, then the week, then the standing kitchen view, then
- * money. No band labels — the order itself is the gradient now.
+ * Ordering intent: **kitchen health first** (owner, 2026-09-08 — *"feels like
+ * its default ordering should be first"*). It is the one card that answers "how
+ * are we doing?" rather than "what's next?", and every other card is a way of
+ * acting on one of its five signals. Then the things to *do today* (cook, use
+ * up), then the week, then restock, then the standing stock view, then money.
+ * No band labels — the order itself is the gradient now.
  */
 export const CARD_DEFS: CardDef[] = [
+    { id: 'dora_score', label: 'Kitchen health', icon: ICONS.favorite },
     { id: 'next_to_cook', label: 'Next to cook', icon: ICONS.restaurant_menu },
     { id: 'use_it_up', label: 'Use it up', icon: ICONS.expiry },
-    { id: 'before_you_shop', label: 'Before you shop', icon: ICONS.shopping_cart },
-    { id: 'shopping_lists', label: 'Shopping lists', icon: ICONS.list_alt },
     { id: 'meal_plan', label: 'What\'s coming', icon: ICONS.calendar_month },
     { id: 'restock', label: 'Restock radar', icon: ICONS.replay },
-    { id: 'dora_score', label: 'Kitchen health', icon: ICONS.favorite },
     // `ICONS.inventory_2`, not the bare string 'inventory_2'. The app's icon set
     // is MDI; a raw Material Icons ligature name doesn't resolve and Quasar
     // renders it as literal text — "inventory_2 My stock" was showing on the
     // card header and in the Cards menu. Caught in the 2026-09-04 browser walk;
     // it predates this batch (the card was "Pantry" then).
     { id: 'stock_items', label: 'My stock', icon: ICONS.inventory_2 },
-    // FU-810/830 — one spend-led card: the budget bar when a target exists,
-    // kept-vs-RRP as the supporting line. Money-gated (FU-297) — even the
-    // no-target body states dollars.
-    { id: 'savings', label: 'Grocery spend', icon: ICONS.savings, gate: 'money' },
+    // FU-810/830 made this one spend-led card with kept-vs-RRP as its
+    // supporting line. The 09-08 batch cut that line — *"remove the bottom part
+    // 'kept vs RRP', product data is a niche area of the app"* — and the swaps
+    // bullet with it, so what remains is the budget and nothing else. Hence
+    // both the title and the id. Money-gated (FU-297): every figure is dollars.
+    { id: 'my_budget', label: 'My budget', icon: ICONS.savings, gate: 'money' },
     // Products-gated (owner 09-04: *"ensure it's gated behind products feature
     // enabled"*). Surfaces only genuine new lows so the claim "price drop" is
     // honest (§2.4). Opt-in like the other secondary money widgets.
@@ -137,9 +168,10 @@ export const CARD_DEFS: CardDef[] = [
  * How many cards a fresh install shows with every gate satisfied — the number
  * §2.2 owns. Asserted in the spec so it can only change on purpose.
  *
- * Nine: the ten registered cards less `price_drops`, which is opt-in. Every one
- * of the nine renders unconditionally now — the 09-04 batch removed the last
+ * Seven: the eight registered cards less `price_drops`, which is opt-in. It was
+ * nine until the 09-08 batch cut `before_you_shop` and `shopping_lists`. Every
+ * one of the seven renders unconditionally — the 09-04 batch removed the last
  * hide-when-empty card (`reconcile_pending`), so "registered and visible" and
- * "actually on screen" are finally the same number.
+ * "actually on screen" are the same number.
  */
-export const DEFAULT_VISIBLE_COUNT = 9;
+export const DEFAULT_VISIBLE_COUNT = 7;

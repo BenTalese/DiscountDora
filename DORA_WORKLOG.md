@@ -41,6 +41,101 @@ next.
 
 ---
 
+## 2026-09-08 — **Dashboard feedback: sixteen items, two cards fewer**
+
+**Status: built and gated, NOT driven in the browser.** The owner interrupted
+before the live walk; a separate agent is picking up testing. Gates on this
+tree: `pytest tests/e2e/dora_api/test_dashboard_*` **21 passed**, vitest
+**720 / 64 files**, `vue-tsc` clean, `eslint src/` clean, `quasar build` green.
+A seeded backend was booted (dense, port 5171) and answered
+`/dashboard/restock-radar` correctly ("6 rows within 30 days (1 planned)"), but
+nothing was looked at. **The walk is `DORA_VERIFY.md` → "Dashboard — the
+2026-09-08 sixteen-item batch"**, top two items first.
+
+**Two of the sixteen items contradicted each other, and the owner resolved it:**
+he asked for *Before you shop* to grow a level indicator, a "recently low or
+out" heading and recency ordering — and then, further down the same list,
+concluded the card overlapped Restock radar and should be axed. Asked which way,
+he said *"pretty sure option 1. the points were written in order from earliest to
+latest. later points win."* **That is worth remembering for future batches:
+his lists are chronological, so a later bullet supersedes an earlier one.** So
+BYS is deleted and its two surviving ideas landed on Restock radar.
+
+**Three other decisions taken with him up front** (rather than guessed): Kitchen
+health's *"default ordering should be first"* means the **card's** position, not
+the signals inside it; the cryptic "+$## in active lists" line gets **reworded
+and restyled**, not removed; and Use it up's *See more* goes to the cookbook
+**with the filter built**. That last one turned out to be free — the *Uses
+expiring ingredients* filter already existed (`?expiring_within_days=14`), it
+simply had no deep link, so this is four lines in `RecipesOverview.applyQuery`
+rather than a new filter.
+
+**The reported defect was real but not where it looked.** *"$20 over budget with
+a monthly budget of $10 … but the widget is on 100 'under budget this period'.
+Is stuff not wired up properly?"* The budget maths is fine, in both places, and
+they read the **same handler**. `useDoraScore` is a module-level singleton whose
+5-minute staleness is only tested when the composable is *called* — i.e. when
+the card mounts. The dashboard calls `loadAll` on every navigation (which is why
+D3 could delete the manual refresh button), so every other card refetched while
+Kitchen health re-rendered a score computed against the **previous budget
+period**. Two windows, one screen. Fixed by having `loadAll` force-refresh the
+score; the 5-minute window keeps its real job and stops deciding what a
+deliberate page load shows you. The invalidation hook that should have covered
+this — `invalidateDoraScore()` — has **never had a caller** despite a docstring
+claiming four; logged as FU-896, because a comment describing behaviour that
+does not exist is the actual defect there.
+
+**Two things the batch's own guard rails caught, which is the pleasing part.**
+The money card's honest new id was `budget` — and `dashboardCards.spec.ts`'s
+retired-id list already contained `budget` (FU-830 folded an old separate
+"Grocery budget" card into `savings`), so taking it would have handed the new
+card some users' stored hidden flag. That list has existed for four days and
+this is the first time it has fired; the id is `my_budget`. And the "remove them
+all" link sweep initially missed **`PriceDropsCard`**, because it is opt-in and
+products-gated so it never rendered while I was reading the page — found by
+grepping `dora-card-link` afterwards rather than by looking. Which then showed
+that class had zero consumers app-wide, so it is deleted from the shared shell
+(leaving a styled class for a pattern the owner just cut invites its return);
+`to` / `.dora-card-action` are consumer-less too but are public API on a
+component Reports renders, so they are FU-899 rather than a ride-along.
+
+**Backend.** Three files. `get_dashboard_summary.py` sorted upcoming entries by
+`(scheduled_for, e.slot)` — the slot **name**, so within a day the order was
+alphabetical and Dessert genuinely preceded Dinner; it now reads
+`slot_order_map` from the reconcile/brief feature, which is the household's own
+configured order (R-003, not a second copy). `get_restock_radar.py` was rewritten
+for one recency-ordered list carrying `level_sequence`/`level_name`, a `band`,
+`is_planned` off `gather_planned_demand`, and a 30-day `MAX_AGE_DAYS` cutoff.
+`get_before_you_shop.py` and `get_dashboard_lists.py` are deleted — the
+dashboard was each one's only consumer, checked before deleting per R-057.
+
+**Tests.** The two deleted endpoints' e2e regions went with them; four new
+restock-radar tests replace the two old column tests, and one of the four
+(`LongStandingLow__IsOutsideTheWindow`) back-dates `stock_level_last_updated`
+through the repository inside an `app_context`, because the cutoff is a clock
+rule no endpoint can express and no browser walk can see without waiting a
+month. Plus one new summary test pinning the slot ordering — it feeds the slots
+in **reverse** sequence order so a stable-sort accident can't pass it. That is
+the automate-only-a-stable-contract line from `DORA_VERIFY_TRIAGE.md`: the card
+layouts are churn and got a verify checklist, these two rules are invisible and
+got tests.
+
+**One thing genuinely lost, and it is logged rather than papered over: FU-897.**
+*Before you shop* filtered on "is this already on an active list?", which is a
+join nothing else in the app makes and was its entire reason to exist over the
+alerts bell. Restock radar does not filter on it. The fact is still on screen
+(every row's `AddToListButton` shows its own on-list state) and the 30-day
+cutoff ages dealt-with rows off anyway — but whether those rows should be
+dropped or demoted is the owner's call, not a unilateral re-add of a filter he
+just deleted the card for.
+
+**Next up:** the browser walk in `DORA_VERIFY.md`, then FU-897 needs a one-line
+owner decision. `PROJECT_STATE.md` was **not** regenerated — the unit closed
+early on the interrupt and the dashboard row there needs the card count (9 → 7)
+and this batch folded in.
+
+---
+
 ## 2026-09-08 — **Recipe view feedback: naming the nutrition gaps**
 
 **Status: complete and driven in the browser.** Six owner items on the recipe

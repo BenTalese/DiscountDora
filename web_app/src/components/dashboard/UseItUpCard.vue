@@ -1,11 +1,5 @@
 <template>
     <DashboardCard :icon="ICONS.expiry" title="Use it up">
-        <template #action>
-            <router-link class="dora-card-action dora-card-link" to="/stock?expiring=1">
-                Expiring →
-            </router-link>
-        </template>
-
         <CardLoadError
             v-if="failed"
             line="I couldn't work out what needs using up."
@@ -36,7 +30,31 @@
                  real and common state — the list above still stands on its
                  own. -->
             <div v-if="recipes.length > 0" class="dora-use-recipes">
-                <div class="dora-use-recipes__head">Cook one of these</div>
+                <div class="dora-use-recipes__head">
+                    <span>Recipes using these</span>
+                    <!-- Owner 2026-09-08 — *"Add a 'see more' button inline with
+                         the 'recipes using these' heading."* It lands on the
+                         cookbook's own **Uses expiring ingredients** filter,
+                         which already exists (`?expiring_within_days=14`
+                         server-side) and simply was not reachable by link — so
+                         this is a deep link, not a new filter. The card shows at
+                         most three; the filter shows the rest, ranked and
+                         badged, on the surface that owns recipes.
+
+                         Not `dora-card-link`: that is the header-action look
+                         this batch just deleted from every card. This is a
+                         control inside the body beside the heading it belongs
+                         to, which is the distinction the owner drew. -->
+                    <BaseButton
+                        variant="ghost"
+                        dense
+                        size="sm"
+                        :icon-right="ICONS.east"
+                        label="See more"
+                        to="/cookbook?expiring=1"
+                        aria-label="See more recipes that use your expiring items"
+                    />
+                </div>
                 <router-link
                     v-for="recipe in recipes"
                     :key="recipe.recipe_id"
@@ -44,7 +62,7 @@
                     :to="`/cookbook/${recipe.recipe_id}`"
                 >
                     <span class="dora-use-recipe__name">{{ recipe.name }}</span>
-                    <span class="dora-use-recipe__uses">uses {{ usesLabel(recipe) }}</span>
+                    <span class="dora-use-recipe__uses">{{ usesLabel(recipe) }}</span>
                 </router-link>
             </div>
         </template>
@@ -77,6 +95,7 @@
      * (R-003).
      */
     import { ICONS } from 'src/style/icons';
+    import BaseButton from 'src/components/BaseButton.vue';
     import DashboardCard from 'src/components/dashboard/DashboardCard.vue';
     import CardLoadError from 'src/components/dashboard/CardLoadError.vue';
     import type {
@@ -110,14 +129,26 @@
         return `${days} days left`;
     }
 
-    /** "spinach and ricotta" — an Oxford-comma-free list of at most three, which
-     *  is all the server sends. Named rather than counted: "uses spinach and
-     *  ricotta" is a reason to cook it, "uses 2 of your expiring items" is a
-     *  statistic about it. */
+    /**
+     * "uses 2 expiring" — the count, not the names (owner, 2026-09-08: *"swap
+     * the 'uses <ingredient name>' for 'uses # expiring'"*).
+     *
+     * This reverses a deliberate earlier call, and rightly. The original
+     * reasoning was that "uses spinach and ricotta" is a *reason* to cook it
+     * while a count is merely a statistic — true in isolation, but the names
+     * are already printed in the items list three lines above. So the row was
+     * repeating them, at a length that wrapped on a phone, to say something the
+     * count says in two words: this recipe clears **more** of that list than the
+     * one under it. Which is the actual question, because the rows are ranked on
+     * exactly that number.
+     *
+     * `recipe.uses.length`, not a new server field: the array is already on the
+     * wire and its length is not a domain rule — the server still decides which
+     * items count as expiring, which ingredients are required, and how the rows
+     * rank (R-003).
+     */
     function usesLabel(recipe: UseItUpRecipe): string {
-        const names = recipe.uses;
-        if (names.length <= 1) return names[0] ?? '';
-        return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+        return `uses ${recipe.uses.length} expiring`;
     }
 </script>
 
@@ -139,13 +170,27 @@
         flex-direction: column;
         gap: var(--space-1);
     }
+    /* The heading and its See-more button share one line (owner: *"inline with
+       the heading"*). `space-between` rather than an auto margin, so the button
+       keeps its own hit area at the card's trailing edge at any width. */
     .dora-use-recipes__head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--space-2);
         font-size: calc(var(--font-size-xs) * 1rem);
         font-weight: 700;
         letter-spacing: 0.08em;
         text-transform: uppercase;
         color: var(--text-secondary);
         margin-bottom: var(--space-1);
+    }
+    /* The button carries its own type scale from `BaseButton`; the heading's
+       uppercase + letter-spacing must not leak into it. */
+    .dora-use-recipes__head :deep(.dora-btn) {
+        text-transform: none;
+        letter-spacing: normal;
+        font-weight: 600;
     }
     .dora-use-recipe {
         display: flex;
@@ -167,7 +212,25 @@
         color: var(--accent-ink);
         font-weight: 600;
     }
+    /* Right-aligned (owner, 2026-09-08). Now that the label is a short fixed
+       shape ("uses 2 expiring") rather than a run of names, the counts line up
+       into a column you can read down — which is the point of ranking the rows
+       on that number.
+       `nowrap` on the row goes with it: the row allowed wrapping for the old
+       long label, and a wrapped count would sit left-aligned on its own line,
+       which is worse than truncating the name. */
+    .dora-use-recipe {
+        flex-wrap: nowrap;
+    }
+    .dora-use-recipe__name {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
     .dora-use-recipe__uses {
+        margin-inline-start: auto;
+        white-space: nowrap;
         font-size: calc(var(--font-size-xs) * 1rem);
         color: var(--text-secondary);
     }

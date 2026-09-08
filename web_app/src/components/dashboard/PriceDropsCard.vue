@@ -1,14 +1,10 @@
 <template>
+    <!-- The header's "My products →" link went with every other card's on
+         2026-09-08 (owner: *"Remove them all I reckon"*). This card is opt-in
+         and products-gated, so it was the easiest one to miss in the sweep —
+         noting it here so a future reader doesn't reinstate it as an oversight.
+         The nav's own My products entry is the way there. -->
     <DashboardCard :icon="ICONS.trending_down" title="Price drops">
-        <template #action>
-            <router-link
-                v-if="rows.length > 0"
-                class="dora-card-action dora-card-link"
-                to="/my-products"
-            >
-                My products →
-            </router-link>
-        </template>
         <CardLoadError
             v-if="failed"
             line="I couldn't check for price drops just now."

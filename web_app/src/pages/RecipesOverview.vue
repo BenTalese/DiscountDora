@@ -1632,9 +1632,18 @@
         if (route.query.cookable === 'true' || route.query.cookable === '1') {
             cookableNowOnly.value = true;
         }
+        // Owner 2026-09-08 — the dashboard's "Use it up" card grew a "See more"
+        // button beside its *Recipes using these* heading, and this is where it
+        // lands. The filter itself already existed (the `expiringOnly` chip, and
+        // `?expiring_within_days=14` behind it); it simply had no deep link, so
+        // the card could show three recipes and offer no way to the rest.
+        // Setting the ref is enough — its own `watch` runs the fetch.
+        if (route.query.expiring === 'true' || route.query.expiring === '1') {
+            expiringOnly.value = true;
+        }
     }
     watch(
-        () => [route.query.usesStockItem, route.query.cookable],
+        () => [route.query.usesStockItem, route.query.cookable, route.query.expiring],
         applyQuery,
     );
 

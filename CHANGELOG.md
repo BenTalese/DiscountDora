@@ -21,6 +21,56 @@ semver — major bumps signal schema or breaking-config changes.
   "% off" badge or appear under "on deal" filters** — there genuinely isn't a
   was-price to compare against.
 
+### Changed
+- **The dashboard lost two cards and most of its chrome (2026-09-08).** A
+  sixteen-item pass over the home screen, all of it the owner's:
+  **Shopping lists** and **Before you shop** are gone — the first because the
+  nav already gets you there, the second because it overlapped *Restock radar*,
+  which now carries the one thing it knew that nothing else did: a **Planned**
+  chip on anything the coming fortnight's meals need. Restock radar is also one
+  list instead of two columns, ordered purely by what changed most recently,
+  with the app's own level dot at the head of each row instead of the words
+  "out" / "low" — and it now leaves out anything that has been low or out for
+  more than a month, which is the difference between a restock cue and a list of
+  things you have decided to live without.
+  **Every card's "open the page" header link is gone** ("Meal plan →",
+  "Stock →", "View →", "My products →", and Kitchen health's five per-row
+  links). The main menu does that job. Empty-state prompts and the stock
+  donut's *filtered* links stay, because those go somewhere the menu can't.
+  **Next to cook** is much less dense: recipe name, the day, a missing-
+  ingredients chip and a Cook button — icon-only on a phone. Gone from the row:
+  the meal slot, "serves N", and the "to cook / already cooked" label. It is
+  also **ordered properly** at last: by day, then by your own meal-slot order,
+  so a dessert no longer appears above a breakfast.
+  **Kitchen health** was rebuilt: the score is a hollow ring you can read at a
+  glance rather than a bare number, each of the five signals sits in its own
+  box, and a signal that isn't being counted now says so — "No budget set" and
+  "Dora settles past meals for you" look identical, because they are the same
+  state. It is also the first card on the dashboard by default.
+  **Grocery spend is now "My budget"**: the kept-vs-RRP figure and the
+  "N swaps ready" line have both gone (substitutes are for cooking, not for
+  shopping cheaper), and the money still to buy on your open lists is spelled
+  out in a sentence instead of appearing as a cryptic "+$34.20".
+  **What's coming** always shows the fortnight — the 7/14 toggle is gone — and
+  the panel you get when you tap a day is legible now rather than four kinds of
+  text at the same size. **Use it up** says "uses 3 expiring" instead of listing
+  the ingredient names it has already shown you three lines above, and its
+  *Recipes using these* heading has a **See more** button that opens the
+  cookbook filtered to recipes using your expiring items. **My stock**'s donut
+  is centred instead of hugging the left edge. And the hint at the top of the
+  page is now a proper info callout inside the hero card.
+
+### Fixed
+- **Kitchen health's budget signal could disagree with your budget card
+  (2026-09-08).** Change your grocery budget — its amount or its weekly/monthly
+  period — and come back to the dashboard, and Kitchen health would keep showing
+  the Budget score it worked out *before* the change for up to five minutes.
+  With the period switched, the two cards were then measuring different windows:
+  the budget card could say you were $20 over while Kitchen health said 100,
+  "under budget this period". Both numbers were computed correctly; one of them
+  was just old. The dashboard now refreshes the score along with everything else
+  each time you open it.
+
 ### Added
 - **A recipe's nutrition gaps are named, and fixable from the recipe (2026-09-08).**
   The nutrition panel could say *"3 stock items not linked to a food"* but not

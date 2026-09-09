@@ -45,7 +45,7 @@
                              own (D-013). -->
                         <q-item-section side>
                             <StockLevelDot :sequence="levelSequence(item.stock_level_id)" size="12px">
-                                <q-tooltip>{{ levelLabel(item.stock_level_id) }}</q-tooltip>
+                                <BaseTooltip>{{ levelLabel(item.stock_level_id) }}</BaseTooltip>
                             </StockLevelDot>
                         </q-item-section>
                         <q-item-section>{{ item.name }}</q-item-section>
@@ -92,6 +92,7 @@
 </template>
 
 <script lang="ts" setup>
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
     import AppSpinner from 'src/components/AppSpinner.vue';

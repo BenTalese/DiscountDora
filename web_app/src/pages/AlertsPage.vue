@@ -9,12 +9,12 @@
                     <span v-else>
                         {{ alerts.actionable_count }} need action · {{ alerts.fyi_count }} FYI
                         <q-icon :name="ICONS.help_outline" size="14px" class="q-ml-xs">
-                            <q-tooltip>
+                            <BaseTooltip>
                                 Needs action = things you should decide on soon
                                 (expiring items, low stock, run-outs). FYI = things
                                 worth knowing about but no decision required (price
                                 drops, stocktake nudges).
-                            </q-tooltip>
+                            </BaseTooltip>
                         </q-icon>
                         <span v-if="snoozedCount > 0"> · {{ snoozedCount }} snoozed</span>
                     </span>
@@ -209,6 +209,7 @@
 </template>
 
 <script lang="ts" setup>
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     import { ICONS } from 'src/style/icons';
     import { formatDate as formatLocaleDate } from 'src/composables/useDateFormat';
     import BaseButton from 'src/components/BaseButton.vue';

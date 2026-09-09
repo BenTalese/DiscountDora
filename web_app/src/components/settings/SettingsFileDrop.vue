@@ -53,7 +53,7 @@
                 aria-label="Remove file"
                 @click="onClear"
             >
-                <q-tooltip>Remove file</q-tooltip>
+                <BaseTooltip>Remove file</BaseTooltip>
             </BaseButton>
         </template>
 
@@ -78,6 +78,7 @@
 </template>
 
 <script lang="ts" setup>
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     import BaseButton from 'src/components/BaseButton.vue';
     import { ICONS } from 'src/style/icons';
     import { computed, ref } from 'vue';

@@ -39,6 +39,82 @@ long session summary. Distinct from the other logs:
 
 ---
 
+## [OPEN] FU-902 — the units the nutrition rollup can weigh and the units the picker offers are different sets
+- **Raised:** 2026-09-09 (cookbook + recipe-view feedback batch)
+- **Type:** finding
+- **What:** the ingredient row editor's unit dropdown is a **closed list** built
+  from `UNIT_TABLE` (`useUnitOptions`), but the nutrition rollup's most
+  productive path is its *unknown unit word* branch — it takes whatever string
+  is on the row and looks for a USDA portion row mentioning it, which is how
+  "3 cloves garlic" gets weighed at all. `clove`, `stalk`, `sprig`, `head`,
+  `slice` and `rasher` are **not in `UNIT_TABLE`**, so they can't be picked —
+  yet the seed's own Sunday Ragu uses `cloves`, and the rollup weighs it. The
+  two vocabularies were built for different jobs and nobody reconciled them: a
+  user cannot enter the unit that gives them nutrition coverage, and the ones
+  they *can* enter are the ones USDA portion rows are least likely to name.
+- **Why deferred:** it is a vocabulary decision, not a bug fix — either those
+  words join `UNIT_TABLE` as count units (which puts them in every unit
+  dropdown in the app, `SubstituteMetadataDialog` included, and gives them a
+  measurement-system tag they don't want), or the ingredient picker alone gains
+  a "cooking words" tier. `whole` was added on 2026-09-09 because it was
+  already a *count* in every sense and its absence was a live defect; the rest
+  is a design call.
+- **Half of the vocabulary now exists, 2026-09-09:** resolving [[FU-904]] added
+  `units.SUB_ITEM_UNITS` — `clove`, `sprig`, `rasher`, `slice`, `stalk`,
+  `floret`, `leaf`, `wedge`, plus four vague amounts. It is a *pricing* rule,
+  not a picker vocabulary, so the dropdown still can't offer any of them; but
+  the list of words worth offering is now written down in the domain layer,
+  which is most of what made this a design call. The remaining question is
+  narrow: should `useUnitOptions` offer `SUB_ITEM_UNITS` as its own group in
+  the ingredient picker only?
+- **Recommended resolution:** opportunistic — next time the ingredient row
+  editor or `useUnitOptions` is open. Pairs with [[FU-895]].
+
+## [OPEN] FU-901 — no test pins the recipe-DTO cache against the flags that change what the server puts in it
+- **Raised:** 2026-09-09 (cookbook + recipe-view feedback batch)
+- **Type:** finding
+- **What:** the "health stars don't appear until I refresh" defect was a cache
+  the flag refresh didn't reach: `nutrition_rating_scheme` and `nutrition_mode`
+  change **what the server computes into every recipe DTO**, so the flag map
+  and the cached recipe list have to be dropped together. Fixed at both call
+  sites (Nutrition settings, Region's nudge) by adding
+  `recipeStore.invalidateRecipes()` beside the existing `refreshFlags()`. That
+  pairing is a convention held by hand in two files, and the next writer of a
+  recipe-affecting setting has nothing telling them about it — which is exactly
+  how these two came to be missing it.
+- **Why deferred:** the durable fix is structural, not a test: either the
+  recipe store watches the flags it depends on (rejected today as the kind of
+  action-at-a-distance R-019 exists to prevent), or `useFeatureFlags.refresh()`
+  grows a documented list of caches it drops (a layering inversion — the flags
+  composable would import the stores). Both want a design call rather than a
+  patch inside a feedback batch.
+- **Recommended resolution:** opportunistic — next time either `recipeStore`
+  or `useFeatureFlags` is open for other work.
+
+## [OPEN] FU-900 — `stick` is still 113 g outside the two recipe calculators
+- **Raised:** 2026-09-09 (cookbook + recipe-view feedback batch)
+- **Type:** finding
+- **Narrowed 2026-09-09:** originally "the rollup treats one symptom". Both
+  recipe calculators are now guarded off one shared record
+  (`units.FOOD_SPECIFIC_MASS_UNITS`): nutrition takes the food's own portion
+  row or reports `no_conversion`, costing refuses unless the ingredient names
+  an owning food. What remains is everything else.
+- **What:** `units.UNIT_TABLE` still defines `stick` as **113 g of butter**, a
+  US supermarket fact standing in a table of universal conversions, and the
+  other callers of `units.convert` take it at face value — `your_prices.py`
+  (product sizes) and the assistant's `convert` tool. The assistant answering
+  "2 sticks in grams → 226 g" is arguably fine for butter and misleading for
+  anything else; a product whose size is recorded in sticks would be
+  mis-normalised.
+- **Why deferred:** the honest fix is that `stick` isn't a unit, it is a
+  packaging convention for one product, and removing it from the table changes
+  a US household's butter conversions. The guard is now available
+  (`units.food_specific_mass_applies`) — the remaining work is deciding whether
+  the assistant should refuse an ambiguous unit rather than answering for
+  butter.
+- **Recommended resolution:** opportunistic, or when anything else touches
+  `dora_api/domain/units.py`'s mass block.
+
 ## [OPEN] FU-899 — `DashboardCard`'s `to` prop and `.dora-card-action` now have no consumers
 - **Raised:** 2026-09-08 (dashboard feedback batch)
 - **Type:** leftover (R-057 contract inventory)
@@ -429,30 +505,15 @@ long session summary. Distinct from the other logs:
 - **Why deferred:** worth little until FU-874 lands — today most of what lands
   in this bucket is the fixable case, so splitting first would mostly produce a
   more precise description of a bug.
-- **Recommended resolution:** after FU-874. Owner call (investigation D4,
+- **Unblocked 2026-09-09:** [[FU-874]] is resolved, so the bucket no longer
+  hides a known bug and the split is now worth making. `no_quantity` was added
+  as a fourth reason the same day, which is the shape this proposes — the copy
+  map and the closed union are already set up to take more. Note the bucket
+  gained a fourth situation to distinguish: a **food-specific unit applied to
+  the wrong food** ("2 sticks" of anything that isn't butter), which is neither
+  a density gap nor a pack-size gap.
+- **Recommended resolution:** now-ish. Owner call (investigation D4,
   recommended yes).
-
-## [OPEN] FU-874 — recipe costing never passes the ingredient name, so the density bridge is dead code
-- **Raised:** 2026-09-05 (owner feedback: the ice-cream 1 L vs 200 g case)
-- **Type:** finding (owner decision D3)
-- **What:** `domain/units.convert()` bridges mass↔volume when given an
-  `ingredient=` name to look up in `INGREDIENT_DENSITY_G_PER_ML` (77 entries).
-  `recipe_cost._line_cost` calls it as `units.convert(qty, ing_unit, price.unit)`
-  — **no `ingredient=`** — so the density branch can never fire on the pricing
-  path, and every mass-vs-volume ingredient is reported unpriced. Verified
-  against the live table:
-  `convert(200,'g','L')` → `None`, `convert(200,'g','L',ingredient='cream')` → `0.2`.
-  The owner's reported case fails twice over: the argument isn't passed, and
-  `'ice cream'` isn't in the table either.
-- **Why it matters:** this is the single largest class of "Units don't match the
-  price", and it is not a guess — a density lookup for a *named* ingredient is
-  the same species of fact as a unit factor, and is what commercial recipe
-  costing does (the trade reference is a book of exactly these figures). Fixing
-  it does not weaken ADR-073's honest-gap stance: unknown ingredients still
-  report unpriced, because there is still no default density.
-- **Recommended resolution:** **now-ish** — one keyword argument plus table
-  rows. Owner call (investigation D3, recommended yes). Cross-ref: FU-855,
-  FU-856, ADR-073, `docs/05_investigations/RECIPE_PRICE_UNIT_MISMATCH.md` §4.
 
 ## [OPEN] FU-873 — `frequently_added.py` reads a `lazy="noload"` relationship and reports `None`
 - **Raised:** 2026-09-04 (log-price picker ordering)

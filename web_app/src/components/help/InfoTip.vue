@@ -13,13 +13,14 @@
     -->
     <span class="info-tip" :aria-label="`More information: ${label}`" tabindex="0">
         <q-icon :name="ICONS.help_outline" size="18px" />
-        <q-tooltip max-width="340px" :offset="[0, 6]" class="info-tip__tooltip">
+        <BaseTooltip max-width="340px" :offset="[0, 6]" class="info-tip__tooltip">
             <slot />
-        </q-tooltip>
+        </BaseTooltip>
     </span>
 </template>
 
 <script setup lang="ts">
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     import { ICONS } from 'src/style/icons';
 
     defineProps<{

@@ -54,7 +54,7 @@
                             :disable="!detail || detail.status === 'done'"
                             @click="onOpenQuickAdd"
                         >
-                            <q-tooltip>Search every stock item and drop it onto this list</q-tooltip>
+                            <BaseTooltip>Search every stock item and drop it onto this list</BaseTooltip>
                         </BaseButton>
                         <!-- Draft only. Once you are standing in the shop the
                              day it was planned for is a fact, not a decision —
@@ -67,10 +67,10 @@
                             aria-label="Set shop day"
                             @click="openPlannedDateEditor"
                         >
-                            <q-tooltip>
+                            <BaseTooltip>
                                 Set the day you plan to shop this list. Helps Dora pick
                                 which list is your active one, and drives shop-day reminders.
-                            </q-tooltip>
+                            </BaseTooltip>
                         </BaseButton>
                         <!-- Bulk select is gone. Of its four actions, Tick and
                              Untick went with draft ticking, and "Move to list"
@@ -93,10 +93,10 @@
                             aria-label="Log a price"
                             @click="openLogPrice()"
                         >
-                            <q-tooltip>
+                            <BaseTooltip>
                                 Record a price you spotted for something that isn't on
                                 this list
-                            </q-tooltip>
+                            </BaseTooltip>
                         </BaseButton>
                         <BaseButton
                             variant="secondary"
@@ -105,7 +105,7 @@
                             aria-label="Manage templates"
                             to="/shopping-lists/templates"
                         >
-                            <q-tooltip>Reusable lists you can start a shop from</q-tooltip>
+                            <BaseTooltip>Reusable lists you can start a shop from</BaseTooltip>
                         </BaseButton>
                         <!-- Products-gated (2026-08-26 feedback). Offers only
                              exist on the product axis, so on an install with
@@ -121,7 +121,7 @@
                             :disable="!detail || detail.lines.length === 0"
                             @click="onRefreshDeals"
                         >
-                            <q-tooltip>Re-check linked product offers</q-tooltip>
+                            <BaseTooltip>Re-check linked product offers</BaseTooltip>
                         </BaseButton>
                         <BaseButton
                             variant="secondary"
@@ -131,7 +131,7 @@
                             :disable="!detail || detail.lines.length === 0"
                             @click="onPrint"
                         >
-                            <q-tooltip>Opens a printable view — print it or save it as a PDF</q-tooltip>
+                            <BaseTooltip>Opens a printable view — print it or save it as a PDF</BaseTooltip>
                         </BaseButton>
                         <BaseButton
                             variant="secondary"
@@ -141,7 +141,7 @@
                             :disable="!detail || detail.lines.length === 0"
                             @click="onSaveAsTemplate"
                         >
-                            <q-tooltip>Keep these items as a reusable snapshot</q-tooltip>
+                            <BaseTooltip>Keep these items as a reusable snapshot</BaseTooltip>
                         </BaseButton>
                     </div>
                 </div>
@@ -214,7 +214,7 @@
                         aria-label="Rename list"
                         @click="startNameEdit"
                     >
-                        <q-tooltip>Rename — leave blank to label by date</q-tooltip>
+                        <BaseTooltip>Rename — leave blank to label by date</BaseTooltip>
                     </BaseButton>
                 </div>
 
@@ -394,7 +394,7 @@
                                 aria-label="Hide suggestions"
                                 @click="suggestionsDismissed = true"
                             >
-                                <q-tooltip>Hide these for now</q-tooltip>
+                                <BaseTooltip>Hide these for now</BaseTooltip>
                             </BaseButton>
                         </q-card-section>
                         <q-card-section class="q-pt-none">
@@ -410,10 +410,10 @@
                                     @click="onAddSuggestion(s)"
                                 >
                                     {{ s.name }}
-                                    <q-tooltip v-if="s.reason" max-width="280px">
+                                    <BaseTooltip v-if="s.reason" max-width="280px">
                                         {{ s.reason }} Nothing has been added — tap to put it
                                         on this list.
-                                    </q-tooltip>
+                                    </BaseTooltip>
                                 </q-chip>
                             </div>
                         </q-card-section>
@@ -615,7 +615,7 @@
                                     dense
                                     @click="onDeleteAttachment(att.attachment_id)"
                                 >
-                                    <q-tooltip>Remove receipt</q-tooltip>
+                                    <BaseTooltip>Remove receipt</BaseTooltip>
                                 </BaseButton>
                             </div>
                         </div>
@@ -656,7 +656,7 @@
                             :disable="detail.lines.length === 0"
                             @click="onClearAll"
                         >
-                            <q-tooltip>Remove every line. The list itself stays.</q-tooltip>
+                            <BaseTooltip>Remove every line. The list itself stays.</BaseTooltip>
                         </BaseButton>
                         <BaseButton
                             variant="ghost"
@@ -666,7 +666,7 @@
                             :disable="!currentSummary"
                             @click="onDeleteCurrentList"
                         >
-                            <q-tooltip>Delete this list and everything on it.</q-tooltip>
+                            <BaseTooltip>Delete this list and everything on it.</BaseTooltip>
                         </BaseButton>
                     </div>
 
@@ -1107,6 +1107,7 @@
 </template>
 
 <script lang="ts" setup>
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     import { ICONS } from 'src/style/icons';
     import { formatDate as formatLocaleDate } from 'src/composables/useDateFormat';
     import AppSkeleton from 'src/components/AppSkeleton.vue';

@@ -182,6 +182,7 @@
     import { CURRENCY_CHOICES, LOCALE_CHOICES } from 'src/models/regionChoices';
     import { unitsForSystem, useMeasurementSystem } from 'src/composables/useMeasurementSystem';
     import type { MeasurementSystem } from 'src/generated/units_table';
+    import { useRecipeStore } from 'src/stores/recipeStore';
 
     const $q = useQuasar();
     const { isAdmin } = storeToRefs(useAuthStore());
@@ -665,6 +666,11 @@
         try {
             await api.updateAsync({ nutrition_rating_scheme: scheme });
             await refreshFlags();
+            // Same reason as the Nutrition settings page: the rating is
+            // computed per request and is absent from every recipe DTO fetched
+            // while the scheme was 'none', so the cached list has to be dropped
+            // or the chip stays blank until a full page reload.
+            useRecipeStore().invalidateRecipes();
             $q.notify({
                 type: 'positive', position: 'bottom-right',
                 message: scheme === 'health_star'

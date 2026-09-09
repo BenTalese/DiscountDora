@@ -91,7 +91,7 @@
                 @click.stop="emit('open-stock-item', product.linked_stock_item_id!)"
             >
                 {{ product.linked_stock_item_name ?? 'Stock item' }}
-                <q-tooltip>Open stock item</q-tooltip>
+                <BaseTooltip>Open stock item</BaseTooltip>
             </q-chip>
             <span v-else class="text-caption dora-text-muted">Not linked</span>
         </q-card-section>
@@ -137,7 +137,7 @@
                 aria-label="View price history"
                 @click.stop="emit('price-history')"
             >
-                <q-tooltip>View price history</q-tooltip>
+                <BaseTooltip>View price history</BaseTooltip>
             </BaseButton>
             <q-space />
             <BaseButton
@@ -146,13 +146,14 @@
                 aria-label="Delete product"
                 @click.stop="emit('delete')"
             >
-                <q-tooltip>Delete product</q-tooltip>
+                <BaseTooltip>Delete product</BaseTooltip>
             </BaseButton>
         </q-card-actions>
     </q-card>
 </template>
 
 <script setup lang="ts">
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     /** Expanded ("cards") view of a saved product — the richer of the two
      *  modes the owner asked for (D-10), paired with `ProductRow`.
      *

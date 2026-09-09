@@ -166,9 +166,9 @@
                             Recipes · {{ planner.recipes.value.length }}
                         </span>
                         <q-icon :name="ICONS.chevron_right" size="18px" />
-                        <q-tooltip anchor="center right" self="center left">
+                        <BaseTooltip anchor="center right" self="center left">
                             Show recipes
-                        </q-tooltip>
+                        </BaseTooltip>
                     </button>
 
                     <!-- S2 / S3 — open. The picker owns browsing vs targeting;
@@ -182,7 +182,7 @@
                                 aria-label="Hide recipes"
                                 @click="railOpen = false"
                             >
-                                <q-tooltip>Hide recipes</q-tooltip>
+                                <BaseTooltip>Hide recipes</BaseTooltip>
                             </BaseButton>
                             <span class="rail-head__label">Recipes</span>
                         </div>
@@ -225,7 +225,7 @@
                                 aria-label="Previous week"
                                 @click="planner.goPrevWeek"
                             >
-                                <q-tooltip>Previous week</q-tooltip>
+                                <BaseTooltip>Previous week</BaseTooltip>
                             </BaseButton>
                             <div class="planner-toolbar__week">
                                 <div class="text-subtitle2">{{ planner.weekRangeLabel.value }}</div>
@@ -247,7 +247,7 @@
                                 aria-label="Next week"
                                 @click="planner.goNextWeek"
                             >
-                                <q-tooltip>Next week</q-tooltip>
+                                <BaseTooltip>Next week</BaseTooltip>
                             </BaseButton>
 
                             <q-space />
@@ -261,7 +261,7 @@
                                 :label="compactToolbar ? undefined : 'Build my week'"
                                 @click="builderOpen = true"
                             >
-                                <q-tooltip>Build my week</q-tooltip>
+                                <BaseTooltip>Build my week</BaseTooltip>
                             </BaseButton>
 
                             <!-- The overflow menu (§3.2). Absorbs what used to
@@ -276,7 +276,7 @@
                                 aria-label="More week actions"
                                 class="q-ml-xs"
                             >
-                                <q-tooltip>More week actions</q-tooltip>
+                                <BaseTooltip>More week actions</BaseTooltip>
                                 <q-menu anchor="bottom right" self="top right">
                                     <q-list style="min-width: 220px">
                                         <q-item
@@ -395,11 +395,11 @@
                                 label="All slots"
                                 class="planner-toolbar__allslots"
                             >
-                                <q-tooltip>
+                                <BaseTooltip>
                                     {{ showAllSlots
                                         ? 'Showing every household meal slot on each day'
                                         : 'Showing only slots with a meal planned' }}
-                                </q-tooltip>
+                                </BaseTooltip>
                             </q-toggle>
                         </div>
                     </div>
@@ -642,6 +642,7 @@
 </template>
 
 <script lang="ts" setup>
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     import { ICONS } from 'src/style/icons';
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';

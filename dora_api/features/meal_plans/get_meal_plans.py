@@ -147,6 +147,12 @@ class _CostIngredient:
     stock_item_id: UUID | None
     quantity: float | None
     unit: str | None
+    # Carried because `_line_cost` prices a mass↔volume line by looking the
+    # ingredient's density up by name (FU-874). An adapter that dropped it
+    # would have the planner quote a lower figure than the cookbook for the
+    # same recipe — the exact disagreement the shared batch path exists to
+    # prevent (R-003).
+    stock_item_name: str | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -166,6 +172,7 @@ class _CostInput:
                     stock_item_id = ing.stock_item.id if ing.stock_item else None,
                     quantity = ing.quantity,
                     unit = ing.unit,
+                    stock_item_name = ing.stock_item.name if ing.stock_item else None,
                 )
                 for ing in (recipe.ingredients or [])
             ],

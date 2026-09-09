@@ -33,17 +33,18 @@ recipe as written, so they neither add nutrients nor count as a gap.
 from dataclasses import dataclass, field
 from typing import Iterable, List
 
-from dora_api.domain import units
 from dora_api.domain import health_star_rating as hsr
 from dora_api.domain import nutri_score as ns
 from dora_api.domain.entities.nutrition_food import NutritionFood
-from dora_api.domain.entities.nutrition_portion import NutritionPortion
-from dora_api.domain.entities.stock_item import StockItem
 from dora_api.features.nutrition.food_categories import (
     is_fvl_category,
     is_fvnl_category,
 )
-from dora_api.features.nutrition.text_matching import singular
+from dora_api.features.nutrition.household_measures import (
+    food_ids_by_stock_item,
+    portions_by_food,
+    resolve_grams,
+)
 from dora_api.infrastructure.ports import Repository
 from dora_api.persistence.field import EntityField as Field
 
@@ -67,14 +68,6 @@ UNCOUNTED_REASONS = (
 # than divide by a guessed 4 we report the whole-recipe total and say so.
 BASIS_SERVING = "serving"
 BASIS_RECIPE = "recipe"
-
-# Count-unit portion matching. USDA describes a whole item in one of these
-# words; tried in order so "1 onion" lands on "medium" rather than the first
-# row the dataset happens to hold. No match ⇒ unconvertible, never a guess.
-_COUNT_MEASURE_PREFERENCE = (
-    "each", "whole", "medium", "fruit", "piece", "unit", "large", "small",
-)
-
 
 # Coverage at or above which the estimate is solid enough to *judge* a recipe
 # on — filter it out of a "≤ N kcal" search, or rank it against its peers.
@@ -248,120 +241,6 @@ class RecipeNutrition:
     nutri_score: ns.NutriScore | None = None
 
 
-def _measure_words(measure: str) -> set[str]:
-    """USDA measures read like `cup, chopped` / `medium (2-1/2" dia)`. Split
-    into comparable singular words so a plain "cup" matches the first."""
-    cleaned = "".join(c if c.isalpha() else " " for c in (measure or "").lower())
-    return {singular(word) for word in cleaned.split() if word}
-
-
-def _match_portion(portions: list, token: str):
-    """The least-qualified portion whose measure mentions *token*.
-
-    Least-qualified wins because "cup" in a recipe means a plain cup; a
-    dataset row for `cup, chopped` weighs differently and is the wrong answer
-    unless the recipe said chopped. Ties break on the measure text so the
-    result never depends on row order.
-    """
-    wanted = singular(token)
-    candidates = [
-        portion for portion in portions
-        if wanted in _measure_words(portion.measure) and portion.gram_weight
-        and portion.amount
-    ]
-    if not candidates:
-        return None
-    candidates.sort(key=lambda portion: (len(portion.measure or ""), portion.measure or ""))
-    return candidates[0]
-
-
-def _grams_from_portion(quantity: float, portion) -> float:
-    return quantity / float(portion.amount) * float(portion.gram_weight)
-
-
-def _resolve_grams(quantity: float, unit: str | None, portions: list, names: Iterable[str]) -> float | None:
-    """Grams for *quantity* of *unit*, or None when it can't be known.
-
-    `names` are the labels to try against the shared density table (the stock
-    item's name, then the linked food's) — density is the last resort for a
-    volume, since the food's own portion row is measured, not modelled.
-    """
-    normalised = units.normalise_unit(unit or "")
-    definition = units.find_unit(normalised) if normalised else None
-
-    if definition is not None and definition.dimension == units.MASS:
-        return units.convert(quantity, normalised, "g")
-
-    # A bare quantity ("2 eggs" with no unit) is a count.
-    if not normalised or (definition is not None and definition.dimension == units.COUNT):
-        for token in _COUNT_MEASURE_PREFERENCE:
-            portion = _match_portion(portions, token)
-            if portion is not None:
-                return _grams_from_portion(quantity, portion)
-        return None
-
-    if definition is not None and definition.dimension == units.VOLUME:
-        # The food's own measured portion beats a modelled density.
-        portion = _match_portion(portions, definition.canonical.lower())
-        if portion is None:
-            portion = _match_portion(portions, normalised)
-        if portion is not None:
-            return _grams_from_portion(quantity, portion)
-        for name in names:
-            grams = units.convert(quantity, normalised, "g", ingredient=name)
-            if grams is not None:
-                return grams
-        return None
-
-    # Unknown unit word ("clove", "slice", "sprig") — only a portion row can
-    # answer, and if none mentions it we say so rather than approximate.
-    portion = _match_portion(portions, normalised)
-    return _grams_from_portion(quantity, portion) if portion is not None else None
-
-
-def _food_ids_by_stock_item(repository: Repository, stock_item_ids: list) -> dict:
-    """`stock_item_id → nutrition_food_id` for the whole batch, one query.
-
-    Both callers resolve the link this way rather than reading it off a loaded
-    entity, so the list and detail paths share one code path (R-019). Only
-    scalar columns are read, so there's no noload relationship to trip over
-    (R-032).
-    """
-    if not stock_item_ids:
-        return {}
-    rows = repository.get(StockItem).where(
-        Field(StockItem, "id").in_(stock_item_ids)
-    ).all()
-    return {
-        row.id: row.nutrition_food_id
-        for row in rows
-        if row.nutrition_food_id is not None
-    }
-
-
-def _foods_by_id(repository: Repository, food_ids: list) -> dict:
-    if not food_ids:
-        return {}
-    rows = repository.get(NutritionFood).where(
-        Field(NutritionFood, "id").in_(food_ids)
-    ).all()
-    return {row.id: row for row in rows}
-
-
-def _portions_by_food(repository: Repository, food_ids: list) -> dict:
-    """One query for the whole recipe — the mapping carries no relationship
-    object (R-032), so portions are gathered explicitly."""
-    if not food_ids:
-        return {}
-    rows = repository.get(NutritionPortion).where(
-        Field(NutritionPortion, NutritionPortion.Fields.NUTRITION_FOOD_ID).in_(food_ids)
-    ).all()
-    grouped: dict = {}
-    for row in rows:
-        grouped.setdefault(row.nutrition_food_id, []).append(row)
-    return grouped
-
-
 def _rollup_one(recipe: 'RecipeNutritionInput', food_ids_by_item: dict, foods: dict, portions: dict) -> RecipeNutrition:
     totals = {key: 0.0 for key, _ in _SUMMED_NUTRIENTS}
     contributors = dict.fromkeys(totals, 0)
@@ -405,7 +284,7 @@ def _rollup_one(recipe: 'RecipeNutritionInput', food_ids_by_item: dict, foods: d
         if quantity is None or quantity <= 0:
             gap(ingredient, REASON_NO_QUANTITY)
             continue
-        grams = _resolve_grams(
+        grams = resolve_grams(
             float(quantity),
             ingredient.unit,
             portions.get(food.id, []),
@@ -553,6 +432,18 @@ def effective_kcal_per_serving(mode: str, typed_kcal, rollup: RecipeNutrition | 
     return (None, False)
 
 
+def _foods_by_id(repository: Repository, food_ids: list) -> dict:
+    """Stays here rather than in `household_measures`: the nutrient figures are
+    this module's business, while the portion rows beside them answer a
+    question costing asks too."""
+    if not food_ids:
+        return {}
+    rows = repository.get(NutritionFood).where(
+        Field(NutritionFood, "id").in_(food_ids)
+    ).all()
+    return {row.id: row for row in rows}
+
+
 def rollup_recipes_nutrition(repository: Repository, recipes: Iterable['RecipeNutritionInput']) -> dict:
     """`recipe_id → RecipeNutrition` for every recipe passed. Three queries
     total (stock-item links, foods, portions) regardless of how many recipes —
@@ -564,10 +455,10 @@ def rollup_recipes_nutrition(repository: Repository, recipes: Iterable['RecipeNu
         for ingredient in recipe.ingredients
         if ingredient.stock_item_id is not None and not ingredient.is_optional
     })
-    food_ids_by_item = _food_ids_by_stock_item(repository, stock_item_ids)
+    food_ids_by_item = food_ids_by_stock_item(repository, stock_item_ids)
     food_ids = list(set(food_ids_by_item.values()))
     foods = _foods_by_id(repository, food_ids)
-    portions = _portions_by_food(repository, food_ids)
+    portions = portions_by_food(repository, food_ids)
     return {
         recipe.recipe_id: _rollup_one(recipe, food_ids_by_item, foods, portions)
         for recipe in recipes

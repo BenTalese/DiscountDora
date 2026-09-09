@@ -78,7 +78,7 @@
                             :loading="headerEditing && saveState === 'saving'"
                             @click="onToggleHeaderEdit"
                         >
-                            <q-tooltip v-if="!headerEditing">Edit the recipe details</q-tooltip>
+                            <BaseTooltip v-if="!headerEditing">Edit the recipe details</BaseTooltip>
                         </BaseButton>
                     </div>
 
@@ -234,7 +234,7 @@
                     :disable="!canSave"
                     @click="onSave"
                 >
-                    <q-tooltip v-if="compact">Save changes</q-tooltip>
+                    <BaseTooltip v-if="compact">Save changes</BaseTooltip>
                 </BaseButton>
                 <BaseButton
                     v-if="dirty"
@@ -245,7 +245,7 @@
                     :disable="saveState === 'saving'"
                     @click="onDiscard"
                 >
-                    <q-tooltip v-if="compact">Discard changes</q-tooltip>
+                    <BaseTooltip v-if="compact">Discard changes</BaseTooltip>
                 </BaseButton>
                 <BaseButton
                     :variant="dirty ? 'secondary' : 'primary'"
@@ -254,7 +254,7 @@
                     aria-label="Cook mode"
                     @click="onStartCookMode"
                 >
-                    <q-tooltip v-if="compact">Cook mode</q-tooltip>
+                    <BaseTooltip v-if="compact">Cook mode</BaseTooltip>
                 </BaseButton>
                 <BaseButton
                     variant="ghost"
@@ -264,7 +264,7 @@
                     :aria-label="recipe.is_favourite ? 'Remove from favourites' : 'Add to favourites'"
                     @click="onToggleFavourite"
                 >
-                    <q-tooltip v-if="compact">{{ recipe.is_favourite ? 'Favourited' : 'Favourite' }}</q-tooltip>
+                    <BaseTooltip v-if="compact">{{ recipe.is_favourite ? 'Favourited' : 'Favourite' }}</BaseTooltip>
                 </BaseButton>
                 <BaseButton
                     variant="ghost"
@@ -274,7 +274,7 @@
                     :loading="newVersionLoading"
                     @click="onNewVersion"
                 >
-                    <q-tooltip v-if="compact">New version</q-tooltip>
+                    <BaseTooltip v-if="compact">New version</BaseTooltip>
                 </BaseButton>
                 <BaseButton
                     variant="ghost"
@@ -283,7 +283,7 @@
                     aria-label="Print"
                     @click="onPrint"
                 >
-                    <q-tooltip v-if="compact">Print</q-tooltip>
+                    <BaseTooltip v-if="compact">Print</BaseTooltip>
                 </BaseButton>
                 <BaseButton
                     variant="danger-ghost"
@@ -293,7 +293,7 @@
                     aria-label="Delete recipe"
                     @click="onDelete"
                 >
-                    <q-tooltip v-if="compact">Delete recipe</q-tooltip>
+                    <BaseTooltip v-if="compact">Delete recipe</BaseTooltip>
                 </BaseButton>
             </div>
 
@@ -330,7 +330,7 @@
                         :aria-label="`${addMissingLabel} — the ingredients you're missing`"
                         @click="onAddMissingToList"
                     >
-                        <q-tooltip v-if="compact">{{ addMissingLabel }}</q-tooltip>
+                        <BaseTooltip v-if="compact">{{ addMissingLabel }}</BaseTooltip>
                     </BaseButton>
                 </div>
 
@@ -384,7 +384,7 @@
                              not) is explainable without opening the planner. -->
                         <span v-if="poolLabel" class="rn__cellsub">
                             {{ poolLabel }}
-                            <q-tooltip v-if="poolTooltip">{{ poolTooltip }}</q-tooltip>
+                            <BaseTooltip v-if="poolTooltip">{{ poolTooltip }}</BaseTooltip>
                         </span>
                     </span>
                 </div>
@@ -416,7 +416,7 @@
                                 :loading="ingredientsEditing && saveState === 'saving'"
                                 @click="onToggleIngredientsEdit"
                             >
-                                <q-tooltip v-if="!ingredientsEditing">Edit the ingredients</q-tooltip>
+                                <BaseTooltip v-if="!ingredientsEditing">Edit the ingredients</BaseTooltip>
                             </BaseButton>
                         </div>
 
@@ -539,10 +539,10 @@
                                                 class="rn__chip rn__chip--unlinked"
                                             >
                                                 Free text
-                                                <q-tooltip>
+                                                <BaseTooltip>
                                                     Not linked to a pantry item, so Dora
                                                     can't tell whether you have it.
-                                                </q-tooltip>
+                                                </BaseTooltip>
                                             </q-chip>
                                             <span v-if="row.notes" class="rn__ingnote">{{ row.notes }}</span>
                                         </span>
@@ -605,7 +605,7 @@
                                                     size="14px"
                                                 />
                                                 <span>{{ expiringChipFor(row.stock_item_id)!.label }}</span>
-                                                <q-tooltip>{{ expiringChipFor(row.stock_item_id)!.tooltip }}</q-tooltip>
+                                                <BaseTooltip>{{ expiringChipFor(row.stock_item_id)!.tooltip }}</BaseTooltip>
                                             </span>
                                         </span>
                                         <!-- Per-row actions, split by mode. Reading a
@@ -673,10 +673,10 @@
                             label="Add section"
                             @click="addSection"
                         >
-                            <q-tooltip>
+                            <BaseTooltip>
                                 Sections group the list under headings - "For the
                                 sauce", "To serve".
-                            </q-tooltip>
+                            </BaseTooltip>
                         </BaseButton>
                     </section>
                 </div>
@@ -722,7 +722,7 @@
                             :loading="methodEditing && saveState === 'saving'"
                             @click="onToggleMethodEdit"
                         >
-                            <q-tooltip v-if="!methodEditing">{{ methodEditLabel }}</q-tooltip>
+                            <BaseTooltip v-if="!methodEditing">{{ methodEditLabel }}</BaseTooltip>
                         </BaseButton>
                     </div>
 
@@ -983,9 +983,9 @@
                                     :loading="newVersionLoading"
                                     @click="onNewVersion"
                                 >
-                                    <q-tooltip>
+                                    <BaseTooltip>
                                         Makes a copy you can change without losing this one.
-                                    </q-tooltip>
+                                    </BaseTooltip>
                                 </BaseButton>
                             </div>
 
@@ -1108,6 +1108,7 @@
 </template>
 
 <script lang="ts" setup>
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     /**
      * The recipe page — the 2026-08-20 redesign, and since 2026-08-26 the only
      * one.

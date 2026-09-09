@@ -69,7 +69,7 @@
                     >
                         <q-icon :name="ICONS.help_outline" size="24px" />
                     </span>
-                    <q-tooltip>Help &amp; guides</q-tooltip>
+                    <BaseTooltip>Help &amp; guides</BaseTooltip>
                 </BaseButton>
 
                 <!-- Account / settings — direct nav, no dropdown.
@@ -99,7 +99,7 @@
                             :username="currentUser.username"
                         />
                     </span>
-                    <q-tooltip>{{ currentUser.username }}</q-tooltip>
+                    <BaseTooltip>{{ currentUser.username }}</BaseTooltip>
                 </BaseButton>
             </q-toolbar>
         </q-header>
@@ -163,6 +163,7 @@
 </template>
 
 <script setup lang="ts">
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     import BaseButton from 'src/components/BaseButton.vue';
     import { ICONS } from 'src/style/icons';
     import { storeToRefs } from 'pinia';

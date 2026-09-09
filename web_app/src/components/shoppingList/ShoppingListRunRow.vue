@@ -51,24 +51,25 @@
                 :class="{ 'sl-runrow__price--estimate': line.estimate_source !== 'actual' }"
                 @click.stop="emit('capture-price')"
             >
-                <q-tooltip>
+                <BaseTooltip>
                     {{
                         line.estimate_source === 'actual'
                             ? 'The price you entered — tap to change'
                             : 'Tap to record what you actually paid'
                     }}
-                </q-tooltip>
+                </BaseTooltip>
             </BaseButton>
             <span v-else class="sl-runrow__price sl-runrow__price--estimate">
                 {{ priceLabel }}
             </span>
         </div>
 
-        <q-tooltip v-if="picked">Tap to put it back on the list</q-tooltip>
+        <BaseTooltip v-if="picked">Tap to put it back on the list</BaseTooltip>
     </div>
 </template>
 
 <script lang="ts" setup>
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     /**
      * One line on the shopping list's run face — the list as it is used in a
      * store.

@@ -7,11 +7,12 @@
         :aria-label="label"
         @click.stop="onClick"
     >
-        <q-tooltip>{{ label }}</q-tooltip>
+        <BaseTooltip>{{ label }}</BaseTooltip>
     </BaseButton>
 </template>
 
 <script setup lang="ts">
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     /** Link state as a single control (feedback MP-5).
      *
      *  The owner asked for the placement the companion's "save product" button

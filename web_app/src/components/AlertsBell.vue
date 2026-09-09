@@ -4,13 +4,13 @@
             <q-badge v-if="badgeCount > 0" floating class="alerts-count-badge" text-color="white" rounded>
                 {{ badgeCount }}
             </q-badge>
-            <q-tooltip>
+            <BaseTooltip>
                 {{
                     totalCount === 0
                         ? 'Nothing needs your attention'
                         : `${totalCount} thing${totalCount === 1 ? '' : 's'} need attention`
                 }}
-            </q-tooltip>
+            </BaseTooltip>
         </BaseButton>
 
         <q-dialog v-model="open" position="right" full-height seamless>
@@ -94,6 +94,7 @@
 </template>
 
 <script lang="ts" setup>
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     import BaseButton from 'src/components/BaseButton.vue';
     import { ICONS } from 'src/style/icons';
     import { useQuasar } from 'quasar';
@@ -241,6 +242,25 @@
        so white stays >=6:1 in every theme while reading as a standard alert red. */
     .alerts-count-badge {
         background: color-mix(in srgb, var(--semantic-negative) 65%, black);
+    }
+    /* Owner feedback 2026-09-09: the badge sat differently on mobile vs desktop
+       — "desktop feels like it's too covered, mobile feels too close to the edge
+       of the screen". Cause: Quasar pins `--floating` to the *button* box
+       (top:-4px/right:-3px), but BaseButton's icon variant is 36px with a mouse
+       and 44px under `pointer: coarse` (the D-004 touch floor). The bell glyph
+       is the same size in both, so the 8px box difference pushed the badge 4px
+       further out from the icon on touch.
+       Offsetting by that 4px in opposite directions lands both on one position,
+       midway between the two the owner compared. */
+    .alerts-count-badge.q-badge--floating {
+        top: -6px;
+        right: -5px;
+    }
+    @media (pointer: coarse) {
+        .alerts-count-badge.q-badge--floating {
+            top: -2px;
+            right: -1px;
+        }
     }
     .alerts-panel {
         width: 420px;

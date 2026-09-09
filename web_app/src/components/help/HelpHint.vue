@@ -19,11 +19,12 @@
         :aria-label="`What is this? — ${topic}`"
         :to="{ path: '/help', query: { q: topic } }"
     >
-        <q-tooltip>Read the "{{ topic }}" guide</q-tooltip>
+        <BaseTooltip>Read the "{{ topic }}" guide</BaseTooltip>
     </BaseButton>
 </template>
 
 <script setup lang="ts">
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     import BaseButton from 'src/components/BaseButton.vue';
     import { ICONS } from 'src/style/icons';
 

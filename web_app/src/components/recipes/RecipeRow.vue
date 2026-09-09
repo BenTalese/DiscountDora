@@ -69,7 +69,7 @@
                                 aria-hidden="true"
                             >*</span>
                         </span>
-                        <q-tooltip v-if="!kcal.judgeable">{{ kcalTooltip }}</q-tooltip>
+                        <BaseTooltip v-if="!kcal.judgeable">{{ kcalTooltip }}</BaseTooltip>
                     </span>
                     <!-- Owner 2026-09-05: cost joins the fact line for the
                          same reason kcal did — it's a plain fact about the
@@ -87,9 +87,9 @@
                                 aria-hidden="true"
                             >*</span>
                         </span>
-                        <q-tooltip>
+                        <BaseTooltip>
                             {{ cost.judgeable ? 'Estimated cost per serving.' : costTooltip }}
-                        </q-tooltip>
+                        </BaseTooltip>
                     </span>
                 </div>
             </div>
@@ -132,9 +132,9 @@
                 :color="recipe.is_favourite ? 'red' : undefined"
                 @click.stop="emit('toggle-favourite', recipe.recipe_id)"
             >
-                <q-tooltip>
+                <BaseTooltip>
                     {{ recipe.is_favourite ? 'Remove from favourites' : 'Mark favourite' }}
-                </q-tooltip>
+                </BaseTooltip>
             </BaseButton>
             <BaseButton
                 variant="filled-icon"
@@ -142,7 +142,7 @@
                 :color="cookButtonColor"
                 @click.stop="emit('cook', recipe.recipe_id)"
             >
-                <q-tooltip>{{ cookButtonTooltip }}</q-tooltip>
+                <BaseTooltip>{{ cookButtonTooltip }}</BaseTooltip>
             </BaseButton>
             <BaseButton
                 variant="icon"
@@ -151,13 +151,14 @@
                 :disable="recipe.ingredients.length === 0"
                 @click.stop="onAddToList"
             >
-                <q-tooltip>{{ addListTooltip }}</q-tooltip>
+                <BaseTooltip>{{ addListTooltip }}</BaseTooltip>
             </BaseButton>
         </q-card-section>
     </q-card>
 </template>
 
 <script lang="ts" setup>
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     import { ICONS } from 'src/style/icons';
     import ExpiringChip from 'src/components/recipes/ExpiringChip.vue';
     import RecipeBeliefChip from 'src/components/recipes/RecipeBeliefChip.vue';

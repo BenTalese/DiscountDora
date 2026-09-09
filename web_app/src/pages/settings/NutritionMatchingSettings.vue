@@ -141,9 +141,9 @@
                                 :disable="busy"
                                 @click="onIgnore(item)"
                             >
-                                <q-tooltip>
+                                <BaseTooltip>
                                     Stop asking about {{ item.name }}
-                                </q-tooltip>
+                                </BaseTooltip>
                             </BaseButton>
                         </div>
                     </div>
@@ -202,6 +202,7 @@
 </template>
 
 <script setup lang="ts">
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     /**
      * Bulk nutrition matching — the "unlinked ingredients" of complex mode.
      *

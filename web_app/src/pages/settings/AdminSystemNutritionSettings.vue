@@ -236,6 +236,7 @@
     import type { RatingScheme } from 'src/composables/useNutritionRating';
     import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
     import DoraSegmented, { type DoraSegmentedOption } from 'src/components/settings/DoraSegmented.vue';
+    import { useRecipeStore } from 'src/stores/recipeStore';
 
     type NutritionMode = 'off' | 'simple' | 'complex';
 
@@ -243,6 +244,7 @@
     const appSettingsApi = new AppSettingsApiService();
     const { update, notifyError } = useSettingsSave();
     const { refresh: refreshFlags } = useFeatureFlags();
+    const recipeStore = useRecipeStore();
 
     // Short enough for a segmented control; the provenance line under it
     // carries the detail that would not fit here.
@@ -382,6 +384,13 @@
             // The mode drives /api/health gates all over the app; refresh the
             // cached flag map so other surfaces don't run on a stale answer.
             await refreshFlags();
+            // Refreshing the flags is only half of it. The rating and the whole
+            // complex-mode rollup are *server-computed per request* — the DTO
+            // carries no rating at all while the scheme is 'none' — so a recipe
+            // list fetched before this write stays ratingless even once the flag
+            // says the chip should render. That read as "health stars don't
+            // appear until I refresh the page" (owner 2026-09-09).
+            recipeStore.invalidateRecipes();
         } finally {
             saving.value = false;
         }

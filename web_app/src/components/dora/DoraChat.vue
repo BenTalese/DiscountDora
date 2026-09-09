@@ -8,9 +8,9 @@
                      anywhere in the row (the mode slider, the close button…). -->
                 <span class="dora-bot-name">
                     D.O.R.A.
-                    <q-tooltip anchor="bottom middle" self="top middle">
+                    <BaseTooltip anchor="bottom middle" self="top middle">
                         Delicious Organised Restock Assistant
-                    </q-tooltip>
+                    </BaseTooltip>
                 </span>
                 <DoraModeSlider
                     class="q-ml-sm"
@@ -34,9 +34,9 @@
                     :aria-label="voiceOutputEnabled ? 'Mute Dora\'s voice' : 'Enable Dora\'s voice'"
                     @click="toggleVoiceOutput"
                 >
-                    <q-tooltip>
+                    <BaseTooltip>
                         {{ voiceOutputEnabled ? 'Mute Dora\'s replies' : 'Have Dora speak her replies' }}
-                    </q-tooltip>
+                    </BaseTooltip>
                 </BaseButton>
                 <BaseButton
                     variant="icon"
@@ -44,7 +44,7 @@
                     class="dora-accent-btn"
                     @click="openDoraHelp"
                 >
-                    <q-tooltip>What can D.O.R.A. do?</q-tooltip>
+                    <BaseTooltip>What can D.O.R.A. do?</BaseTooltip>
                 </BaseButton>
                 <BaseButton variant="icon" :icon="ICONS.close" @click="emit('close')" />
             </div>
@@ -356,7 +356,7 @@
                     class="dora-help-btn q-ml-xs"
                     @click="rotateChips"
                 >
-                    <q-tooltip>Show different suggestions</q-tooltip>
+                    <BaseTooltip>Show different suggestions</BaseTooltip>
                 </BaseButton>
             </div>
 
@@ -383,9 +383,9 @@
                         :aria-label="voiceListening ? 'Stop listening' : 'Start voice input'"
                         @click="toggleVoiceInput"
                     >
-                        <q-tooltip>
+                        <BaseTooltip>
                             {{ voiceListening ? 'Stop listening' : 'Voice input' }}
-                        </q-tooltip>
+                        </BaseTooltip>
                     </BaseButton>
                     <BaseButton
                         variant="icon"
@@ -401,6 +401,7 @@
 </template>
 
 <script lang="ts" setup>
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     import BaseButton from 'src/components/BaseButton.vue';
     import DoraModeSlider from 'src/components/dora/DoraModeSlider.vue';
     import { ICONS } from 'src/style/icons';

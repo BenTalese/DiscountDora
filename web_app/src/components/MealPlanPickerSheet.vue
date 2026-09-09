@@ -11,7 +11,7 @@
                 <div class="text-subtitle1">Pick a recipe</div>
                 <q-space />
                 <BaseButton variant="icon" :icon="ICONS.close" @click="emit('update:modelValue', false)">
-                    <q-tooltip>Close</q-tooltip>
+                    <BaseTooltip>Close</BaseTooltip>
                 </BaseButton>
             </q-card-section>
             <q-separator />
@@ -34,6 +34,7 @@
 </template>
 
 <script lang="ts" setup>
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     import BaseButton from 'src/components/BaseButton.vue';
     import MealPlanRecipePicker from 'src/components/MealPlanRecipePicker.vue';
     import { ICONS } from 'src/style/icons';

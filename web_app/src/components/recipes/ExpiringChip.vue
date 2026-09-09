@@ -16,11 +16,12 @@
     -->
     <q-chip dense :color="tone.color" :text-color="tone.textColor" :icon="tone.icon">
         {{ label }}
-        <q-tooltip max-width="260px">{{ tooltip }}</q-tooltip>
+        <BaseTooltip max-width="260px">{{ tooltip }}</BaseTooltip>
     </q-chip>
 </template>
 
 <script setup lang="ts">
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     import { computed } from 'vue';
     import { ICONS } from 'src/style/icons';
     import { expiryToneFor } from 'src/helpers/expiryIndicator';

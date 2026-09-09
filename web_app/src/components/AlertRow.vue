@@ -54,7 +54,7 @@
                         label="Snooze 7d"
                         @click="emit('snooze')"
                     >
-                        <q-tooltip>Hide for 7 days.</q-tooltip>
+                        <BaseTooltip>Hide for 7 days.</BaseTooltip>
                     </BaseButton>
                     <BaseButton
                         variant="ghost"
@@ -64,7 +64,7 @@
                         label="Dismiss"
                         @click="emit('dismiss')"
                     >
-                        <q-tooltip>Hide until it re-fires.</q-tooltip>
+                        <BaseTooltip>Hide until it re-fires.</BaseTooltip>
                     </BaseButton>
                 </template>
                 <BaseButton
@@ -81,6 +81,7 @@
 </template>
 
 <script lang="ts" setup>
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     import BaseButton from 'src/components/BaseButton.vue';
     import { formatDate as formatLocaleDate } from 'src/composables/useDateFormat';
     import { ICONS } from 'src/style/icons';

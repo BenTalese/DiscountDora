@@ -50,7 +50,7 @@
                 :aria-label="actionLabel"
                 @click="onActionClick"
             >
-                <q-tooltip>{{ actionLabel }}</q-tooltip>
+                <BaseTooltip>{{ actionLabel }}</BaseTooltip>
             </BaseButton>
             <!-- Feedback 2026-08-23: the caret used to live inside the summary
                  button, which put it LEFT of the action — so it sat in a
@@ -144,6 +144,7 @@
 </template>
 
 <script setup lang="ts">
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     import AddToListButton from 'src/components/AddToListButton.vue';
     import BaseButton from 'src/components/BaseButton.vue';
     import { axisIcon, reasonDetail } from 'src/components/stock/buyVerdictDisplay';

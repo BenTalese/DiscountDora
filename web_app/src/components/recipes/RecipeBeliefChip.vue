@@ -27,11 +27,12 @@
         <span v-if="labelled">
             {{ recipe.inference_hint === 'at_risk' ? 'May be short' : 'May be cookable' }}
         </span>
-        <q-tooltip max-width="300px">{{ inferenceTooltip }}</q-tooltip>
+        <BaseTooltip max-width="300px">{{ inferenceTooltip }}</BaseTooltip>
     </q-chip>
 </template>
 
 <script lang="ts" setup>
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     import { ICONS } from 'src/style/icons';
     import type { Recipe } from 'src/models/recipe';
     import { useRecipeDisplay } from 'src/composables/useRecipeDisplay';

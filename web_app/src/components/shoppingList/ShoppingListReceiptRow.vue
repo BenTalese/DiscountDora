@@ -58,7 +58,7 @@
                 class="sl-rcpt__editbtn"
                 @click="emit('edit-price')"
             >
-                <q-tooltip>Correct the price and store for this line</q-tooltip>
+                <BaseTooltip>Correct the price and store for this line</BaseTooltip>
             </BaseButton>
         </div>
         <div v-else-if="moneyEnabled" class="sl-row__money sl-rcpt__money">
@@ -75,6 +75,7 @@
 </template>
 
 <script lang="ts" setup>
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     /**
      * One bought line on the receipt face.
      *

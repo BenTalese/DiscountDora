@@ -17,7 +17,7 @@
         @mouseleave="emit('clearHover')"
     >
         <StockLevelDot :sequence="levelSequence" size="12px" dot-class="mp-ing__dot">
-            <q-tooltip>{{ levelLabel }}</q-tooltip>
+            <BaseTooltip>{{ levelLabel }}</BaseTooltip>
         </StockLevelDot>
 
         <div class="mp-ing__body">
@@ -44,6 +44,7 @@
 </template>
 
 <script lang="ts" setup>
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     import AddToListButton from 'src/components/AddToListButton.vue';
     import StockLevelDot from 'src/components/stock/StockLevelDot.vue';
     import { formatQuantity } from 'src/helpers/formatQuantity';

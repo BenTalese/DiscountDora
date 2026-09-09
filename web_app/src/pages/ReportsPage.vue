@@ -25,10 +25,10 @@
                 />
                 <span v-if="windowLabel" class="reports-window">{{ windowLabel }}</span>
                 <q-icon :name="ICONS.info" size="18px" class="reports-caveat">
-                    <q-tooltip>
+                    <BaseTooltip>
                         Built from your archived shopping lists, stock history and
                         tracked store prices.
-                    </q-tooltip>
+                    </BaseTooltip>
                 </q-icon>
             </div>
         </header>
@@ -112,6 +112,7 @@
 </template>
 
 <script lang="ts" setup>
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     /**
      * `/reports` — four questions, one card each.
      *

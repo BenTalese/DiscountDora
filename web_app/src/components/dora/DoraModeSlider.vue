@@ -24,11 +24,12 @@
             AI
         </span>
         <span class="dora-mode-slider__knob" aria-hidden="true"></span>
-        <q-tooltip v-if="tooltip" :delay="300">{{ tooltip }}</q-tooltip>
+        <BaseTooltip v-if="tooltip">{{ tooltip }}</BaseTooltip>
     </div>
 </template>
 
 <script lang="ts" setup>
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     // D-016 carve-out: the rule says a disabled control is "not focusable +
     // visibly inert". This one carries `aria-disabled` rather than native
     // disabled semantics precisely so it stays focusable and keeps a handler —

@@ -75,9 +75,9 @@
                         :disable="user.user_id === currentUserId"
                         @update:model-value="onToggleAdmin(user, $event)"
                     >
-                        <q-tooltip v-if="user.user_id === currentUserId">
+                        <BaseTooltip v-if="user.user_id === currentUserId">
                             Use Account settings to manage your own account.
-                        </q-tooltip>
+                        </BaseTooltip>
                     </q-toggle>
                     <q-toggle
                         :model-value="user.is_active"
@@ -86,9 +86,9 @@
                         :disable="user.user_id === currentUserId"
                         @update:model-value="onToggleActive(user, $event)"
                     >
-                        <q-tooltip v-if="user.user_id === currentUserId">
+                        <BaseTooltip v-if="user.user_id === currentUserId">
                             You can't deactivate your own account.
-                        </q-tooltip>
+                        </BaseTooltip>
                     </q-toggle>
 
                     <!-- Edit / password / delete collapse into one menu. Four
@@ -289,6 +289,7 @@
 </template>
 
 <script lang="ts" setup>
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     import AppSpinner from 'src/components/AppSpinner.vue';
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';

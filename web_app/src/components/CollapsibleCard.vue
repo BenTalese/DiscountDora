@@ -30,7 +30,7 @@
                 @click="toggle"
             >
                 <q-icon :name="expanded ? ICONS.collapse : ICONS.expand" size="18px" />
-                <q-tooltip>{{ caretLabel }}</q-tooltip>
+                <BaseTooltip>{{ caretLabel }}</BaseTooltip>
             </button>
         </div>
 
@@ -60,6 +60,7 @@
 </template>
 
 <script lang="ts" setup>
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     /**
      * The shared disclosure card.
      *

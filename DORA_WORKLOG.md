@@ -41,6 +41,428 @@ next.
 
 ---
 
+## 2026-09-09 (fourth) — **FU-904 + FU-905, and the level chip reverted to 32px**
+
+**Status: built and gated, NOT driven in the browser.** pytest **2372 passed**
+(the four known FU-762 reds only), vitest **720 / 64 files**, `vue-tsc`,
+`eslint src/`, `quasar build` clean. **Resolves FU-904 and FU-905.**
+
+**What changed:**
+- **New `features/nutrition/household_measures.py`** — the pure grams
+  resolution (`resolve_grams`, `match_portion`, `grams_from_portion`,
+  `COUNT_MEASURE_PREFERENCE`) plus the two batched loaders, extracted from
+  `recipe_rollup` and now called by both calculators. It states the precedence
+  once: **a measured portion row beats a modelled density.** That alone settles
+  FU-905's second half — a cup of plain flour was 125 g on the nutrition panel
+  and 132.5 g in the cost breakdown, and is now 125 on both.
+- **Costing can weigh things.** `portions_by_stock_item()` (two batched queries
+  per entry point) feeds a `by_weight()` route in `_line_cost`, used when the
+  price is per mass. "2 leeks" against $6.90/kg is **$1.23** instead of
+  unpriced; "1 cup frozen peas" **$0.58**; "2 sticks celery" **$0.32** — the
+  right answer at last, after being $0.90 (butter) and then unpriced.
+- **`units.SUB_ITEM_UNITS`** — twelve words that name a *part* of a shelf item
+  (`clove`, `sprig`, `rasher`, `slice`, `stalk`, `floret`, `leaf`, `wedge`) or
+  a vague amount with no size (`knob`, `splash`, `drizzle`, `handful`).
+  `_line_cost` never counts one as a whole product. **3 cloves of garlic: $3.60
+  → unpriced**, or **$0.06** when a portion row knows a clove is 3 g.
+- **The stock level chip is back to 32px on touch.** The 09-05 sweep read the
+  owner's *"bit thicker/bigger for mobile"* as being about the button; it was
+  about the **rows in the menu it opens**, which are 44px and stay that way
+  (`app.scss`), beside the 200→260px menu widening. Reverted with the reasoning
+  kept in place as an R-085/D-004 carve-out.
+
+**Measured on the same 18-ingredient pie** (before this unit → after):
+
+| line | before | after |
+|---|---|---|
+| `2 whole` Leeks @ $6.90/kg | unpriced | **$1.23** |
+| `1 cup` Frozen Peas @ $4.30/kg | unpriced | **$0.58** |
+| `2 sticks` Celery @ $4/kg | unpriced | **$0.32** |
+| `3 cloves` Garlic @ $1.20/bulb | **$3.60** | unpriced |
+| `2 sprigs` Tarragon @ $2.50/bunch | **$5.00** | unpriced |
+| `0.25 cup` Plain Flour | $0.06 (33.1 g, density) | $0.06 (**31.25 g**, portion row) |
+
+Priced 11/18 either way, but the composition changed: three lines that were
+silently wrong left, three that were honestly missing arrived. Cost and grams
+now agree on every line where both resolve.
+
+**Decisions made:**
+- **`portions_by_stock_item` is deliberately NOT gated on the nutrition mode.**
+  Those rows exist because a dataset was imported and foods were linked, which
+  is true whether or not nutrition is currently set to complex. Gating would
+  mean a household's grocery estimate silently improving because someone
+  flipped a nutrition setting — a stranger coupling than reading data that is
+  simply present. R-058 is about not *computing* money features when money is
+  off, which both callers still honour. No dataset ⇒ `{}` ⇒ every path falls
+  back to exactly the old behaviour, pinned by its own test.
+- **Sub-item words prefer weight over refusal.** Refusing "3 cloves" outright
+  was the option in the FU; routing it through `by_weight()` first means the
+  common case (a portion row for `clove`, a per-kilo garlic price) gets a real
+  number rather than a gap. Refusal is the fallback, not the rule.
+- **`head` and `bunch` are not on the list**, though they look like they
+  belong: a head of garlic and a bunch of coriander *are* the things you buy,
+  so counting them is correct.
+- **The level chip's carve-out is written down rather than silently reverted.**
+  It is the one place in the tap-target sweep where D-004's floor cost
+  something real — the chip is a colour block, so hit area *is* visual weight —
+  and the usual escape (hold the size, grow the target with a pseudo-element)
+  is unavailable because `::after` carries the uncertainty ring and QBtn owns
+  `::before`. The comment names the trade so the next sweep doesn't re-apply it.
+- **`_foods_by_id` stayed in `recipe_rollup`.** Nutrient figures are that
+  module's business; only the portion rows beside them answer a question
+  costing also asks.
+
+**Files touched:** `dora_api/features/nutrition/household_measures.py` (new),
+`dora_api/features/nutrition/recipe_rollup.py` (delegates; ~90 lines removed),
+`dora_api/features/recipes/recipe_cost.py`, `dora_api/domain/units.py`,
+`web_app/src/components/stock/StockLevelPicker.vue`. Tests:
+`tests/test_recipe_line_cost.py` (13 → 23 cases). Docs: `CHANGELOG.md`,
+`DORA_VERIFY.md`, `DORA_FOLLOWUPS.md` (FU-902 amended),
+`DORA_FOLLOWUPS_RESOLVED.md` (FU-904, FU-905).
+
+**Verification:**
+- The pie harness re-run after every step; the table above is its output, not a
+  reading of the diff. Deleted after use.
+- `test_recipes_query_count` is a **ratio** test, so the two new batched
+  queries per entry point are safe by construction — and they are batched over
+  the whole page, so the per-recipe delta is unchanged. Confirmed green.
+- **Not verified:** none of it in a running browser, including the level chip's
+  size on a real phone — which is the one thing here that only glass can settle.
+
+**Next up:**
+1. Owner walks the `DORA_VERIFY.md` cost items and confirms the level chip
+   reads right again at 32px.
+2. **FU-875** (splitting the vague "units don't match the price" message) is
+   now the natural next one — its blocker is gone and this unit added a fourth
+   situation the bucket conflates.
+
+**Open questions for user:**
+- Anything else that should be on `SUB_ITEM_UNITS`? It is deliberately short.
+  Candidates I left off as too ambiguous: `piece`, `fillet`, `stick` (already
+  handled separately), `bunch`, `head`.
+
+---
+
+## 2026-09-09 (later still) — **FU-874 (the cost density bridge) + a line-by-line drive of a realistic recipe**
+
+**Status: built and gated, NOT driven in the browser.** pytest **2362 passed**
+(the four known FU-762 reds only), vitest **720 / 64 files**, `vue-tsc`,
+`eslint src/`, `quasar build` all clean. **Resolves FU-874.**
+
+**What changed:**
+- **FU-874 — `_line_cost` now passes `ingredient=stock_item_name`** into
+  `units.convert`, so the mass↔volume density bridge finally fires on the
+  pricing path. It lands on top of the widened
+  `units.density_for_ingredient` from the previous unit, which is what makes it
+  worth having: an exact-match lookup would still have missed every real pantry
+  name.
+- **`_CostIngredient` in `get_meal_plans.py` gained `stock_item_name`.** It is
+  a hand-written adapter onto the shared batch pricing path, and without the
+  field the planner would have quoted a *lower* figure than the cookbook for
+  the same recipe — the precise disagreement that file's own R-003 note says
+  the shared path exists to prevent. The other two callers
+  (`build_week`, `swap_suggestions`) pass real `RecipeDto`s and already carried
+  it.
+- **`stick` is now one shared record, `units.FOOD_SPECIFIC_MASS_UNITS`.** The
+  previous unit had the rollup holding its own private literal; costing had
+  nothing and was still billing celery as butter. The record names both the
+  foods the 113 g belongs to and the portion measures a dataset uses for the
+  same thing, and each calculator reads the half it can act on —
+  `food_specific_mass()` for the rollup, `food_specific_mass_applies()` for
+  costing (R-003, one source).
+- **New unpriced reason `no_quantity`.** "Salt to taste" — an ingredient with
+  no amount — defaulted to a quantity of 1 and against a per-item price billed
+  a whole $2.50 jar **and counted itself as priced**, flattering both the total
+  and the coverage ratio. The nutrition rollup has had `REASON_NO_QUANTITY`
+  since it was written; costing was simply missing its half. Server constant +
+  the client's closed reason union + the dialog's copy map.
+
+**How it was found — the actual method:**
+Wrote a throwaway harness that drives one realistic 18-ingredient recipe (a
+chicken-and-leek pie, written the way a recipe site writes one: cups, spoons,
+rashers, cloves, sheets, a tin, a pinch) line by line through **both**
+`_line_cost` and `_resolve_grams`, against plausible price shapes, and printed
+cost and grams side by side. Every claim below is off that table, not off a
+reading of the code. Deleted after use, per the DORA_VERIFY_TRIAGE stance;
+the cases it found are now permanent as `tests/test_recipe_line_cost.py`.
+
+**Measured, before → after:**
+| line | before | after |
+|---|---|---|
+| `0.25 cup` Plain Flour @ $1.80/kg | unpriced | $0.06 |
+| `2 sticks` Celery @ $4/kg | **$0.90** (226 g of butter) | unpriced |
+| `1 stick` Salted Butter @ $12/kg | $1.36 | $1.36 (unchanged) |
+| `-` Sea Salt @ $2.50 ea | **$2.50**, counted as priced | unpriced, `no_quantity` |
+
+Isolating FU-874 exactly (same recipe, name passed vs not): **one line gained**
+here — the flour. The other volume ingredients in this recipe are priced per
+litre, so they never needed to bridge dimensions at all. Worth being precise
+about: the fix matters wherever prices come off products (per kg, per L) and
+recipes are written in cups, not universally.
+
+**Two findings the drive turned up, both logged rather than fixed:**
+- **FU-904 — an unrecognised unit word is billed as a whole item.**
+  `3 cloves` of garlic → **$3.60** (three bulbs), `2 sprigs` → **$5.00** (two
+  bunches), `4 rashers` → **$3.60** (four packs). Same family as the $16.50 egg
+  yolks, in the branch that fix didn't touch. Left alone because it is
+  genuinely undecidable from the data — "2 tins" and "3 cloves" are the same
+  shape, and only knowledge of what a shelf item *contains* separates them.
+  Noted there that the two calculators take **opposite** policies on the
+  identical word: nutrition refuses without a portion row, costing bills.
+- **FU-905 — the calculators can't see each other's data, and disagree.**
+  Nutrition weighs "2 leeks" (178 g) and "1 cup frozen peas" (134 g) from
+  measured portion rows; costing reports both unpriced, having only the
+  modelled density table. And one cup of plain flour is 132.5 g to costing and
+  125 g to nutrition — 6% apart on the same page.
+
+**Decisions made:**
+- **Guarded `stick` in the two recipe calculators, not inside
+  `units.convert`.** A guard in `convert` would have fixed every caller at once
+  and been tidier, but it also catches the assistant's own unit-conversion tool
+  — where "2 sticks in grams" is a reasonable question with a reasonable
+  butter-shaped answer — and `your_prices`. Narrowed to where the ambiguity
+  does damage; the rest is FU-900, now rewritten to say exactly what's left.
+- **`no_quantity` checked *after* the price lookup**, so the breakdown row
+  still shows the unit price. The reader can see the item is priced and only
+  the amount is missing, which is a different problem from "no price recorded".
+- **Did not fix FU-904 opportunistically.** Option (b) there — an allowlist of
+  sub-item words — is cheap and would have covered all three observed cases,
+  but it is a vocabulary judgement overlapping FU-902 and it *removes* coverage
+  from anyone whose pantry genuinely counts in those words. Not a call to make
+  inside a batch the owner scoped as "fix the cost path".
+
+**Files touched:** `dora_api/domain/units.py` (FOOD_SPECIFIC_MASS_UNITS +
+`food_specific_mass` / `food_specific_mass_applies`),
+`dora_api/features/recipes/recipe_cost.py`,
+`dora_api/features/nutrition/recipe_rollup.py`,
+`dora_api/features/meal_plans/get_meal_plans.py`,
+`web_app/src/models/recipe.ts`,
+`web_app/src/components/recipes/RecipeCostDialog.vue`. Tests:
+`tests/test_recipe_line_cost.py` (new, 13 cases). Docs: `CHANGELOG.md`,
+`DORA_FOLLOWUPS.md` (FU-904, FU-905, FU-900 narrowed),
+`DORA_FOLLOWUPS_RESOLVED.md` (FU-874), `DORA_VERIFY.md`.
+
+**Engineering-standards close-gate:** checked. R-003 — the `stick` ambiguity
+became one record in `units` read by both calculators, rather than the private
+literal the previous unit left in the rollup; R-010 — `no_quantity` was added
+to the closed reason set at every level (server constant, DTO note, client
+union, copy map) rather than shipped as a bare string; R-007 — FU-904's fix was
+scoped out deliberately and logged with its evidence. **ADR evaluation: no new
+rule.** The candidate ("a hand-written adapter onto a shared calculator must
+carry every field the calculator reads") is real — the `_CostIngredient` bug
+would have shipped silently — but it has one instance and is arguably just
+R-003 applied; a second occurrence should promote it.
+
+**Next up:**
+1. Owner walks the `DORA_VERIFY.md` cost/nutrition items.
+2. **FU-904 wants a decision** — it inflates estimates, which is the direction
+   that erodes trust in the number.
+
+**Open questions for user:**
+- FU-904's option (b): should `clove`, `sprig`, `rasher`, `slice` and `stalk`
+  be treated as *never* a whole item — refusing to price them instead of
+  billing a bulb/bunch/pack? It's a few lines. It costs coverage for anyone
+  whose pantry genuinely counts in those words, which I doubt is anyone.
+
+---
+
+## 2026-09-09 (later) — **Five feedback items: cookbook rating cache, expiring-filter round trip, parts chip, free-text close, nutrition units**
+
+**Status: built and gated, NOT driven in the browser.** pytest **2349 passed**
+(the four known FU-762 buy-verdict reds only), vitest **720 / 64 files**,
+`vue-tsc` clean, `eslint src/` clean, `quasar build` green. Verify items logged
+under a new `DORA_VERIFY.md` section.
+
+**What changed:**
+- **Health stars needed a page reload** (owner report). Root cause was a cache,
+  not the flag: both writers of `nutrition_rating_scheme`
+  (`AdminSystemNutritionSettings`, and Region's "match this device" nudge)
+  already called `refreshFlags()`, but the rating is **computed per request** —
+  `get_recipes._hydrate_nutrition` reads the scheme and emits no rating DTO at
+  all while it is `none`. So every recipe fetched before the flip stayed
+  ratingless, and `ratingAvailable` flipping true only meant the chip found
+  nothing to draw. Both sites now call `recipeStore.invalidateRecipes()`
+  alongside. The store already had the mechanism (written for exactly this
+  class, for stock edits); nobody had wired the nutrition settings to it.
+- **"Uses expiring ingredients" went inert on the way back** (owner report).
+  The filter has two halves with **different lifetimes**: `expiringOnly` is A8
+  session state and survives navigation via `useListState`; the map behind it,
+  `expiringByRecipeId`, is a plain ref that dies with the component. Returning
+  from a recipe restored the chip with an empty map, and the predicate
+  deliberately doesn't narrow on an empty map (it's the loading state), so the
+  filter read as on and did nothing. `watch(..., { immediate: true })`.
+- **Recipe card's "N parts" chip** deleted (owner: bloat). `section_count`
+  stays on the model as a wire mirror, commented as reader-less.
+- **Free-text ingredient left the dropdown open** (owner report). `createItem`
+  closed the popup and filled the input; the `.onCancel` — "Keep as free text",
+  the *other* answer to the same question — did neither. Made symmetric.
+- **Nutrition on volume/count units** (owner question: can we do better, or
+  live with it?). Three real defects, found by driving `_resolve_grams`
+  directly against the Sunday Ragu unit set:
+  1. `whole` was an **unrecognised word**, so "1 whole onion" fell to the
+     unknown-word branch and needed a portion row literally saying "whole",
+     while "1 onion" hit the count ladder and weighed 110 g. Added to
+     `UNIT_TABLE` as COUNT with its own canonical + `UNIVERSAL_CANONICAL_UNITS`.
+  2. `stick`/`sticks` is **113 g of butter** in `UNIT_TABLE`, and mass units
+     convert outright — so "2 sticks celery" was folded into the rollup as
+     226 g. New `_FOOD_SPECIFIC_MASS_UNITS` in the rollup: the food's own
+     portion row answers (trying USDA's `stalk` as well as `stick`) or the
+     ingredient is reported `no_conversion`. Butter is unaffected — USDA
+     carries a `stick` portion for it.
+  3. The **density fallback was exact-match only** on the ingredient name, so a
+     77-entry table of correct densities answered for `milk` and never for
+     `Full Cream Milk`. New `units.density_for_ingredient`: exact, then
+     whole-word match resolved head-noun-first then longest.
+
+**Decisions made:**
+- **Head noun before longest match** in the density lookup. Longest-alone reads
+  "Full Cream Milk" as cream; suffix-alone reads "Vanilla Ice Cream" as cream
+  (1.00 vs the real ~0.55). The two rules in that order get both right, and
+  `ice cream` gained its own row so the second case resolves rather than
+  merely being avoided. Both spellings of yog(h)urt added — the app ships in
+  Australian English and the table only had the US one.
+- **No fuzzy fallback, and no default density.** A name with nothing listed in
+  it still returns None and the ingredient is reported uncounted. The change
+  widens the net, it does not lower the bar (P12 No-invent, the module's own
+  "grams are never guessed" contract).
+- **`whole` promoted in the domain table, the rest of the cooking vocabulary
+  not** (`clove`, `stalk`, `sprig`, `rasher`). `whole` is a count in every
+  sense and its absence was a live defect; the others are a picker-vocabulary
+  design call — logged as **FU-902**, which also records that the ingredient
+  unit picker is a closed list that *cannot* offer the words the rollup weighs
+  best.
+- **Fixed `stick` only where it was wrong**, not in `units` globally — removing
+  a US household's butter conversion is a bigger call (**FU-900**).
+
+**Files touched:** `dora_api/domain/units.py`,
+`dora_api/features/nutrition/recipe_rollup.py`,
+`web_app/src/generated/units_table.ts` (regenerated via `scripts/dump_units.py`),
+`web_app/src/pages/RecipesOverview.vue`,
+`web_app/src/pages/settings/AdminSystemNutritionSettings.vue`,
+`web_app/src/pages/settings/AdminSystemRegionSettings.vue`,
+`web_app/src/components/RecipeCard.vue`,
+`web_app/src/components/recipes/RecipeIngredientRowEditor.vue`,
+`web_app/src/models/recipe.ts`. Tests: `tests/test_units.py` (+7),
+`tests/test_nutrition_recipe_rollup.py` (+5). Docs: `CHANGELOG.md`,
+`DORA_VERIFY.md`, `DORA_FOLLOWUPS.md` (FU-900/901/902).
+
+**Verification:**
+- Every nutrition claim above was **measured**, not reasoned: `_resolve_grams`
+  was driven directly against USDA-shaped portion fixtures before and after.
+  Before — `1 whole onion → None`, `2 sticks celery → 226.0`,
+  `200 ml Full Cream Milk → None`. After — `110.0`, `80.0`, `206.0`, with
+  `1 stick cinnamon → None` (the honest refusal) and `1 stick butter → 113.0`
+  (unchanged) as the guard's two boundaries. All five are now pinned by tests.
+- Gates: pytest 2349 / vitest 720 / `vue-tsc` / `eslint src/` / `quasar build`.
+- **Not verified:** none of the five in a running browser. The four client-side
+  ones are interaction-level (a settings write then a navigation; a back
+  button; a QSelect popup) and the pane can't render routed pages here.
+
+**Engineering-standards close-gate:** checked. R-003 held — the density and
+portion logic stayed server-side and the client re-derives nothing new; R-001
+held — the `stick` guard went in the one shared resolver rather than at call
+sites. **ADR evaluation ran and deliberately produced no rule:** the recurring
+shape it exposed ("a flag that changes what the server computes into a DTO must
+drop the client cache of that DTO, not just the flag map") is real and now has
+two instances, but the durable mechanism is unsettled — store-watches-flags is
+the action-at-a-distance R-019 forbids, and flags-composable-drops-stores
+inverts the layering. Logged as **FU-901** rather than promoted on a guess.
+
+**Next up:**
+1. Owner walks the new `DORA_VERIFY.md` section.
+2. **FU-874 is the other half of item 5** and is now the odd one out: the
+   *nutrition* path passes `ingredient=` into `units.convert` and just got a
+   much better lookup behind it, while the *cost* path still omits the argument
+   entirely — so recipe costing gets none of this. It is one keyword argument.
+
+**Open questions for user:**
+- The nutrition rollup can only weigh a count or an unusual unit when the
+  linked food carries a matching USDA **portion row**. If your install imported
+  a dataset without portions (or uses Open Food Facts, which has none), counts
+  and volumes stay uncounted no matter what the unit says — worth checking
+  which source your foods came from before judging the coverage.
+
+---
+
+## 2026-09-09 — **Four UI feedback items: tooltip delay, bell badge, donate menu, nav icon**
+
+**Status: built and gated, NOT driven in the browser.** `vue-tsc` clean,
+`eslint src/` clean, `quasar build` green, vitest **720 / 64 files**. Not walked
+live — the bell item keys off `pointer: coarse`, which needs a real phone, and
+the browser pane in this environment can't render routed pages. Verify items
+logged.
+
+**What changed:**
+- **Tooltip delay, app-wide.** New `BaseTooltip.vue` (delay 500ms, hideDelay 0,
+  everything else via `$attrs`) and every `<q-tooltip>` swept onto it — **313
+  call sites across 81 files**. The two pre-existing ad-hoc delays
+  (`PreferencesSettings` 400, `DoraModeSlider` 300) were deleted so the wrapper
+  is the single source. Root cause: QTooltip defaults `delay: 0` and on mobile
+  binds show to `touchstart` / hide to `touchend`+`click`, so every tap flashed
+  the tooltip; D-005 mandates a tooltip on every icon-only control, so this hit
+  essentially the whole app.
+- **Alerts bell badge position** (`AlertsBell.vue`). Explicit `top`/`right` on
+  `.q-badge--floating`, offset 4px in opposite directions under
+  `pointer: coarse`. Cause found: Quasar pins `--floating` to the *button* box
+  (`top:-4px/right:-3px`), but `BaseButton`'s icon variant is 36px on mouse and
+  44px on touch (the R-085/D-004 floor added 2026-09-05) while the bell glyph is
+  the same size in both — so the badge sat 4px further from the icon on touch.
+  Both now land on one position, midway between the two the owner compared.
+- **`DonateMenu.vue`** — head block (heart + "Support Dora" + blurb) removed,
+  per-row `open_in_new` icon removed, dead styles + `ICONS` import removed, list
+  padding evened to `6px 0` now that nothing sits above it.
+- **`SideMenuButton.vue`** — `open_in_new` glyph removed from the `href` branch
+  (its only consumer is the Product Search nav entry). `MainMenuButton.vue`'s
+  `href` branch never had one; nothing to do there.
+
+**Decisions made:**
+- **Wrapper, not a boot-time monkey-patch, for the tooltip default.** Quasar has
+  no `framework.config` entry for QTooltip, so the options were per-call-site
+  (the state that caused the bug), mutating `QTooltip.props.delay.default` in a
+  boot file (one line, but makes `<q-tooltip>` silently disobey its own docs —
+  the invisible magic R-019 exists to prevent), or a `Base*` wrapper. Took the
+  wrapper: explicit at every call site, greppable, per-site overridable.
+  Promoted to **R-088 + ADR-085**.
+- **One delay value for both pointers, no `pointer: coarse` split.** 500ms works
+  as a touch guard (the show timer is cleared by `touchend` before it fires) and
+  as a conventional desktop hover dwell. R-085 would allow a split; two numbers
+  to keep in sync buy nothing here.
+- **Badge fix keyed to the pointer, not a width breakpoint** — R-085 compliant,
+  and correct on the merits since the thing that differs *is* the touch floor.
+
+**Files touched:** `web_app/src/components/BaseTooltip.vue` (new),
+`AlertsBell.vue`, `donate/DonateMenu.vue`, `menu/SideMenuButton.vue`, + 80 files
+swept to `BaseTooltip`. Docs: `ENGINEERING_STANDARDS.md` (R-088, ADR-085),
+`CHANGELOG.md`, `DORA_VERIFY.md`.
+
+**Verification:**
+- `vue-tsc --noEmit` clean · `eslint src/ --fix` clean · `quasar build` green ·
+  `vitest run` **720 passed / 64 files**.
+- Meaningful runtime evidence for the sweep: the specs that assert tooltip text
+  through a `QTooltip` stub (`doraModeSlider`, `alertRow`, `recipeRatingChip`,
+  `addToListButton`, `settingsFileDrop`) pass **unchanged** — the wrapper
+  resolves and forwards its slot correctly inside real component trees.
+- Quasar internals read to ground both fixes rather than guessed:
+  `QBadge.sass` (`--floating` = `top:-4px; right:-3px`) and `QTooltip.js`
+  (`delay` default 0; `$q.platform.is.mobile` → `touchstart`/`touchend` binding).
+- **Not verified:** the live feel of 500ms, and the badge position on a real
+  phone. Both in `DORA_VERIFY.md`.
+
+**Next up:**
+1. **Owner walks the two `DORA_VERIFY.md` items** (new "Cross-cutting — tooltip
+   delay + chrome tidy" section). The 500ms number is a first guess at feel and
+   is trivially tunable in one place.
+2. The 2026-09-08 dashboard batch is still un-walked — that section is above
+   this one in `DORA_VERIFY.md` and is the bigger owed verification.
+
+**Open questions for user:**
+- Does 500ms feel right? It's one constant in `BaseTooltip.vue`.
+- The donate menu is now three bare link rows with no heading. Confirm that's
+  the intent and it doesn't read as an unlabelled popup out of context — the
+  trigger button is the only remaining "Support Dora" wording.
+
+---
+
 ## 2026-09-08 — **Dashboard feedback: sixteen items, two cards fewer**
 
 **Status: built and gated, NOT driven in the browser.** The owner interrupted

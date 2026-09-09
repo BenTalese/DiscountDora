@@ -9,7 +9,7 @@
         <span class="donate-btn__disc donate-btn__disc--pulse">
             <q-icon :name="ICONS.favorite" size="20px" />
         </span>
-        <q-tooltip>Support Dora 💗</q-tooltip>
+        <BaseTooltip>Support Dora 💗</BaseTooltip>
         <DonateMenu />
     </button>
 
@@ -33,12 +33,13 @@
         aria-label="Support Dora"
     >
         <q-icon :name="ICONS.favorite" size="26px" />
-        <q-tooltip anchor="center right" self="center left">Support Dora 💗</q-tooltip>
+        <BaseTooltip anchor="center right" self="center left">Support Dora 💗</BaseTooltip>
         <DonateMenu anchor="top left" self="bottom left" />
     </button>
 </template>
 
 <script lang="ts" setup>
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     import { ICONS } from 'src/style/icons';
     import DonateMenu from 'src/components/donate/DonateMenu.vue';
 

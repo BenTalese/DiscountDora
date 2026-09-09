@@ -19,7 +19,7 @@
                          it carries the level's own name as a tooltip — which is
                          also what the words it replaced were for. -->
                     <StockLevelDot :sequence="row.level_sequence" size="12px">
-                        <q-tooltip>{{ row.level_name }}</q-tooltip>
+                        <BaseTooltip>{{ row.level_name }}</BaseTooltip>
                     </StockLevelDot>
                     <router-link class="dora-cook-name" :to="`/stock/${row.stock_item_id}`">
                         {{ row.name }}
@@ -35,7 +35,7 @@
                         label="Planned"
                         class="dora-radar__chip"
                     >
-                        <q-tooltip>A meal you've planned needs this</q-tooltip>
+                        <BaseTooltip>A meal you've planned needs this</BaseTooltip>
                     </q-badge>
                     <span class="dora-cook-meta">{{ whenLabel(row) }}</span>
                     <!-- The owner asked for "the same shopping cart button
@@ -61,6 +61,7 @@
 </template>
 
 <script lang="ts" setup>
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     /**
      * Restock radar — what recently went low or out, most recent first.
      *

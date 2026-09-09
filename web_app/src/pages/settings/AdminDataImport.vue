@@ -18,7 +18,7 @@
                     :loading="templatesLoading"
                     @click="onDownloadTemplate(templates[0]!)"
                 >
-                    <q-tooltip>{{ templates[0]!.caption }}</q-tooltip>
+                    <BaseTooltip>{{ templates[0]!.caption }}</BaseTooltip>
                 </BaseButton>
                 <BaseButton
                     v-else
@@ -125,7 +125,7 @@
                                 color="negative"
                                 size="20px"
                             >
-                                <q-tooltip>Required</q-tooltip>
+                                <BaseTooltip>Required</BaseTooltip>
                             </q-icon>
                         </template>
                     </q-select>
@@ -282,6 +282,7 @@
 </template>
 
 <script lang="ts" setup>
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
     import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';

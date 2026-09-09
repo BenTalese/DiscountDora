@@ -60,7 +60,7 @@
                     class="dora-update-badge"
                 >
                     NEW
-                    <q-tooltip>A newer version of Dashy Dora is available.</q-tooltip>
+                    <BaseTooltip>A newer version of Dashy Dora is available.</BaseTooltip>
                 </q-badge>
                 <!-- suggestion count badge. Skipped while the
                      NEW (update) badge is showing so they don't stack. -->
@@ -72,11 +72,11 @@
                     class="dora-suggestion-badge"
                 >
                     {{ suggestionCount > 9 ? '9+' : suggestionCount }}
-                    <q-tooltip>
+                    <BaseTooltip>
                         Dora has {{ suggestionCount }} suggestion{{
                             suggestionCount === 1 ? '' : 's'
                         }} for you.
-                    </q-tooltip>
+                    </BaseTooltip>
                 </q-badge>
             </div>
         </button>
@@ -84,6 +84,7 @@
 </template>
 
 <script lang="ts" setup>
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     import { ICONS } from 'src/style/icons';
     import { storeToRefs } from 'pinia';
     import BaseButton from 'src/components/BaseButton.vue';

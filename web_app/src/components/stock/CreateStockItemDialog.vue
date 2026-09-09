@@ -203,11 +203,11 @@
                                  kind `essential_low`). D-014 — say what it does
                                  for you, not what it does in the code. Kept
                                  word-identical to the detail page's copy. -->
-                            <q-tooltip max-width="320px">
+                            <BaseTooltip max-width="320px">
                                 Something you always want in the house. Dora
                                 chases it up as soon as it runs low, instead of
                                 waiting until it's gone.
-                            </q-tooltip>
+                            </BaseTooltip>
                         </q-icon>
                     </div>
 
@@ -224,10 +224,10 @@
                     <div v-if="stocktakeEnabled" class="row items-center q-gutter-sm">
                         <q-toggle v-model="form.stocktake_alerts_are_enabled" label="Stocktake" />
                         <q-icon :name="ICONS.info_outline" size="16px" class="dora-text-secondary">
-                            <q-tooltip max-width="320px">
+                            <BaseTooltip max-width="320px">
                                 Controls whether this item ever joins the
                                 stocktake queue.
-                            </q-tooltip>
+                            </BaseTooltip>
                         </q-icon>
                     </div>
 
@@ -241,6 +241,7 @@
 </template>
 
 <script setup lang="ts">
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     import { storeToRefs } from 'pinia';
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';

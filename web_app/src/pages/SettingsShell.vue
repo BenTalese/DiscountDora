@@ -54,7 +54,7 @@
                     aria-label="Sign out"
                     @click="onSignOut"
                 >
-                    <q-tooltip v-if="$q.screen.lt.md">Sign out</q-tooltip>
+                    <BaseTooltip v-if="$q.screen.lt.md">Sign out</BaseTooltip>
                 </BaseButton>
             </div>
         </header>
@@ -82,6 +82,7 @@
 </template>
 
 <script lang="ts" setup>
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     import { ICONS } from 'src/style/icons';
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';

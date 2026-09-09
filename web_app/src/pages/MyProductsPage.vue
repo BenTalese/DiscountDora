@@ -39,7 +39,7 @@
                     >
                         {{ stockItemsMissingProducts.length }}
                     </q-badge>
-                    <q-tooltip v-if="compactToolbar">{{ orphansLabel }}</q-tooltip>
+                    <BaseTooltip v-if="compactToolbar">{{ orphansLabel }}</BaseTooltip>
                 </BaseButton>
 
                 <BaseButton
@@ -50,7 +50,7 @@
                     aria-label="Bulk select"
                     @click="enterBulkMode"
                 >
-                    <q-tooltip v-if="compactToolbar">Bulk select</q-tooltip>
+                    <BaseTooltip v-if="compactToolbar">Bulk select</BaseTooltip>
                 </BaseButton>
                 <BaseButton
                     v-else
@@ -60,7 +60,7 @@
                     aria-label="Cancel bulk select"
                     @click="exitBulkMode"
                 >
-                    <q-tooltip v-if="compactToolbar">Cancel bulk select</q-tooltip>
+                    <BaseTooltip v-if="compactToolbar">Cancel bulk select</BaseTooltip>
                 </BaseButton>
 
                 <!-- D-10 — the two view modes, on the cookbook's existing
@@ -74,9 +74,9 @@
                         : 'Switch to cards, with photos'"
                     @click="toggleViewMode"
                 >
-                    <q-tooltip>
+                    <BaseTooltip>
                         {{ viewMode === 'grid' ? 'Compact rows, no photos' : 'Card grid with photos' }}
-                    </q-tooltip>
+                    </BaseTooltip>
                 </BaseButton>
 
                 <!-- MP-19 / C16: the Refresh button is gone. "I can't think of
@@ -433,7 +433,7 @@
                                     aria-label="Find a product"
                                     @click="searchForOrphan()"
                                 >
-                                    <q-tooltip>Find a product</q-tooltip>
+                                    <BaseTooltip>Find a product</BaseTooltip>
                                 </BaseButton>
                                 <BaseButton
                                     variant="icon"
@@ -441,7 +441,7 @@
                                     aria-label="Open stock item"
                                     @click="goToStockItem(item.stock_item_id)"
                                 >
-                                    <q-tooltip>Open stock item</q-tooltip>
+                                    <BaseTooltip>Open stock item</BaseTooltip>
                                 </BaseButton>
                             </div>
                         </q-item-section>
@@ -490,6 +490,7 @@
 </template>
 
 <script lang="ts" setup>
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     import AppSpinner from 'src/components/AppSpinner.vue';
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';

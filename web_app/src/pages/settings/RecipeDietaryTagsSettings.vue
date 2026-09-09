@@ -36,10 +36,10 @@
                 <q-item-section side>
                     <div class="row q-gutter-xs">
                         <BaseButton variant="icon" :icon="ICONS.edit" @click="onRenameDietaryTag(tag)">
-                            <q-tooltip>Rename</q-tooltip>
+                            <BaseTooltip>Rename</BaseTooltip>
                         </BaseButton>
                         <BaseButton variant="icon" :icon="ICONS.delete_outline" @click="onDeleteDietaryTag(tag)">
-                            <q-tooltip>Delete</q-tooltip>
+                            <BaseTooltip>Delete</BaseTooltip>
                         </BaseButton>
                     </div>
                 </q-item-section>
@@ -65,6 +65,7 @@
 </template>
 
 <script lang="ts" setup>
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     import AppSpinner from 'src/components/AppSpinner.vue';
     import BaseButton from 'src/components/BaseButton.vue';
     import { ICONS } from 'src/style/icons';

@@ -121,10 +121,10 @@
                     >
                         <q-icon :name="ICONS.place" size="14px" class="q-mr-xs" />
                         {{ locationName }}
-                        <q-tooltip v-if="locationHasFullDetail">
+                        <BaseTooltip v-if="locationHasFullDetail">
                             {{ locationFull }} · Filter to this location
-                        </q-tooltip>
-                        <q-tooltip v-else>Filter to this location</q-tooltip>
+                        </BaseTooltip>
+                        <BaseTooltip v-else>Filter to this location</BaseTooltip>
                     </button>
                 </div>
             </div>
@@ -180,7 +180,7 @@
                 :aria-label="expiry.tooltip"
                 @click.stop
             >
-                <q-tooltip>{{ expiry.tooltip }}</q-tooltip>
+                <BaseTooltip>{{ expiry.tooltip }}</BaseTooltip>
 
                 <!-- Unset → date picker. q-popup-proxy auto-uses a
                      dialog on mobile and a menu on desktop. -->
@@ -289,9 +289,9 @@
                 :aria-label="item.is_open ? 'Mark as sealed' : 'Mark as open / in-use'"
                 @click.stop="onToggleOpen"
             >
-                <q-tooltip>
+                <BaseTooltip>
                     {{ item.is_open ? 'Mark as sealed' : 'Mark as open / in-use' }}
-                </q-tooltip>
+                </BaseTooltip>
             </RowActionButton>
 
 
@@ -318,6 +318,7 @@
 </template>
 
 <script setup lang="ts">
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     import { ICONS } from 'src/style/icons';
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';

@@ -14,7 +14,7 @@
              not exist and the arrows in the action cell are the real path. -->
         <div v-if="canReorder" class="sl-row__grip dora-dnd-handle">
             <q-icon :name="ICONS.drag_indicator" size="16px" />
-            <q-tooltip>Drag to reorder</q-tooltip>
+            <BaseTooltip>Drag to reorder</BaseTooltip>
         </div>
 
         <!-- Quantity. A tile at rest, a stepper on approach (owner call
@@ -85,10 +85,10 @@
                         class="q-mr-xs dora-text-muted"
                     />
                     {{ line.stock_item_name }}
-                    <q-tooltip v-if="productOnly">
+                    <BaseTooltip v-if="productOnly">
                         Product only — no linked stock item on this list
-                    </q-tooltip>
-                    <q-tooltip v-else-if="nested">Nested product</q-tooltip>
+                    </BaseTooltip>
+                    <BaseTooltip v-else-if="nested">Nested product</BaseTooltip>
                 </span>
                 <BuyVerdictBadgeInline
                     v-if="!nested && line.stock_item_id"
@@ -134,10 +134,10 @@
                             <q-item-section>{{ opt.label }}</q-item-section>
                         </q-item>
                     </q-list>
-                    <q-tooltip>
+                    <BaseTooltip>
                         Where you plan to buy this. Follow the usual store to
                         leave it unset.
-                    </q-tooltip>
+                    </BaseTooltip>
                 </BaseDropdown>
 
                 <BaseDropdown
@@ -205,14 +205,14 @@
                     <span v-if="offerSavings(offer) > 0" class="sl-row__offersave">
                         save {{ formatMoney(offerSavings(offer)) }}
                     </span>
-                    <q-tooltip>
+                    <BaseTooltip>
                         {{ offer.brand ? `${offer.brand} — ` : '' }}{{ offer.name }}
                         <span v-if="offer.size"> ({{ offer.size }})</span>
                         <span v-if="offer.price_was != null && offer.price_now != null">
                             · RRP {{ formatMoney(offer.price_was) }}
                         </span>
                         · Tap to buy this one — it becomes the line's store
-                    </q-tooltip>
+                    </BaseTooltip>
                 </q-chip>
             </div>
         </div>
@@ -242,7 +242,7 @@
                     :disable="isFirst"
                     @click="emit('move', -1)"
                 >
-                    <q-tooltip>Move up</q-tooltip>
+                    <BaseTooltip>Move up</BaseTooltip>
                 </BaseButton>
                 <BaseButton
                     variant="icon"
@@ -253,7 +253,7 @@
                     :disable="isLast"
                     @click="emit('move', 1)"
                 >
-                    <q-tooltip>Move down</q-tooltip>
+                    <BaseTooltip>Move down</BaseTooltip>
                 </BaseButton>
             </template>
             <BaseButton
@@ -264,13 +264,14 @@
                 :disable="lineDone"
                 @click="emit('remove')"
             >
-                <q-tooltip>Remove from list</q-tooltip>
+                <BaseTooltip>Remove from list</BaseTooltip>
             </BaseButton>
         </div>
     </div>
 </template>
 
 <script lang="ts" setup>
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     /**
      * One line on the shopping list's plan face.
      *

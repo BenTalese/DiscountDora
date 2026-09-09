@@ -24,13 +24,13 @@
         :aria-label="ariaLabel"
         @click.stop
     >
-        <q-tooltip>
+        <BaseTooltip>
             {{ levelName ? `Level: ${levelName}` : 'Set stock level' }}
             <template v-if="uncertain && uncertaintyTooltip">
                 <br />
                 {{ uncertaintyTooltip }}
             </template>
-        </q-tooltip>
+        </BaseTooltip>
         <q-menu auto-close transition-show="jump-down" transition-hide="jump-up">
             <!-- Width lives in the stylesheet, not an inline `min-width:
                  200px`: the owner's report was that these options read
@@ -71,6 +71,7 @@
 </template>
 
 <script setup lang="ts">
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     import { computed } from 'vue';
     import { storeToRefs } from 'pinia';
     import BaseButton from 'src/components/BaseButton.vue';
@@ -158,26 +159,23 @@
         position: relative;
     }
 
-    /* Owner 2026-09-05 — *"Good for desktop, bit thicker/bigger for mobile
-       would be better"*, said of this control. 32px is under the D-004 floor
-       and this is a primary control on the app's primary mobile surface, so
-       the chip grows with the pointer rather than staying a desktop size on a
-       phone. Desktop is explicitly left alone, per the same sentence.
+    /* R-085/D-004 carve-out — this control stays 32px on touch.
 
-       This is the one change in the tap-target sweep that alters *visual
-       weight* rather than just hit area — the chip is a colour block, so a
-       bigger target is a bigger block. Flagged in DORA_VERIFY for the owner's
-       eye rather than assumed: the alternative (hold 32px visually and expand
-       the target with a pseudo-element) is unavailable here, because `::after`
-       carries the uncertainty ring and Quasar's QBtn owns `::before`. */
-    @media (pointer: coarse) {
-        .stock-level-picker {
-            width: 44px;
-            height: 44px;
-            min-width: 44px;
-            min-height: 44px;
-        }
-    }
+       The 2026-09-05 tap-target sweep read the owner's *"bit thicker/bigger
+       for mobile"* as being about this button and grew it to the 44px floor.
+       Wrong half: the report was about the **menu rows** it opens, which were
+       32px and are now 44 (`app.scss`) beside a wider menu (below). Reverted
+       2026-09-09 on the owner's correction.
+
+       It is also the one place in that sweep where the floor cost something
+       real. The chip is a colour block, so its hit area *is* its visual
+       weight — 44px turned a quiet status marker into the loudest element in
+       a stock row, on the surface where those rows are densest. The usual
+       escape (hold the size, expand the target with a pseudo-element) is
+       unavailable: `::after` carries the uncertainty ring below and Quasar's
+       QBtn owns `::before`. Since the thing being tapped opens a menu whose
+       own rows now clear the floor comfortably, the mis-tap cost is a menu
+       you dismiss, and that is the trade being taken deliberately. */
 
     /* The menu's own width. 200px is the desktop figure this list has always
        used and it stays there; on touch it widens, which is the "narrow" half

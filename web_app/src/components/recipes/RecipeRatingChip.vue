@@ -32,7 +32,7 @@
              against a tinted background. An asterisk is the convention for
              exactly this claim, and it costs 4px. -->
         <span v-if="!judgeable" class="rating-chip__part" aria-hidden="true">*</span>
-        <q-tooltip class="rating-chip__tip">
+        <BaseTooltip class="rating-chip__tip">
             <RecipeHealthStars
                 :stars="stars.stars"
                 size="md"
@@ -40,7 +40,7 @@
                 :qualifier="qualifier"
             />
             <div class="rating-chip__tip-text">{{ tooltip }}</div>
-        </q-tooltip>
+        </BaseTooltip>
     </span>
     <span v-else-if="nutriScore" class="rating-chip">
         <RecipeNutriScore
@@ -49,11 +49,12 @@
             :qualifier="qualifier"
         />
         <span v-if="!judgeable" class="rating-chip__part" aria-hidden="true">*</span>
-        <q-tooltip>{{ tooltip }}</q-tooltip>
+        <BaseTooltip>{{ tooltip }}</BaseTooltip>
     </span>
 </template>
 
 <script lang="ts" setup>
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     import { computed, toRef } from 'vue';
 
     import RecipeHealthStars from 'src/components/recipes/RecipeHealthStars.vue';

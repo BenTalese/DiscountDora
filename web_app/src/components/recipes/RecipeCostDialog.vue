@@ -180,6 +180,7 @@
         no_link: 'Not linked to a pantry item',
         no_price: 'No price recorded yet',
         unit_mismatch: "Units don't match the price",
+        no_quantity: 'No amount on the ingredient',
     };
 
     const unpricedGroups = computed(() => {

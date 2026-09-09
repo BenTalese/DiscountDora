@@ -99,9 +99,9 @@
                     <AppSpinner v-if="loadingId === voice.id" size="14px" />
                     <q-icon v-else :name="ICONS.play_arrow" size="16px" />
                     <span>{{ playingId === voice.id ? 'Playing…' : 'Preview' }}</span>
-                    <q-tooltip v-if="!piperAvailable">
+                    <BaseTooltip v-if="!piperAvailable">
                         The neural voice engine isn't installed on this server yet.
-                    </q-tooltip>
+                    </BaseTooltip>
                 </button>
             </div>
 
@@ -159,6 +159,7 @@
 </template>
 
 <script lang="ts" setup>
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     import { computed, onBeforeUnmount, ref } from 'vue';
     import { useQuasar } from 'quasar';
     import AppSpinner from 'src/components/AppSpinner.vue';

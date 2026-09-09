@@ -98,6 +98,8 @@ export const UNIT_TABLE: Readonly<Record<string, UnitDef>> = {
     "each": { dimension: "count", factor: 1.0, canonical: "ea" },
     "unit": { dimension: "count", factor: 1.0, canonical: "ea" },
     "units": { dimension: "count", factor: 1.0, canonical: "ea" },
+    "whole": { dimension: "count", factor: 1.0, canonical: "whole" },
+    "wholes": { dimension: "count", factor: 1.0, canonical: "whole" },
     "pack": { dimension: "count", factor: 1.0, canonical: "pack" },
     "packs": { dimension: "count", factor: 1.0, canonical: "pack" },
     "dozen": { dimension: "count", factor: 12.0, canonical: "dozen" },
@@ -142,7 +144,7 @@ export const MEASUREMENT_SYSTEMS: ReadonlyArray<MeasurementSystem> = ["metric", 
 
 /** Canonical units that belong to every system — the informal cooking
  *  amounts, the count units, and energy. Always offered. */
-export const UNIVERSAL_CANONICAL_UNITS: ReadonlySet<string> = new Set(["J", "dash", "dozen", "ea", "kJ", "kcal", "pack", "pinch", "smidgen", "tsp"]);
+export const UNIVERSAL_CANONICAL_UNITS: ReadonlySet<string> = new Set(["J", "dash", "dozen", "ea", "kJ", "kcal", "pack", "pinch", "smidgen", "tsp", "whole"]);
 
 /** Canonical unit → the systems that offer it. Units absent from both
  *  this map and `UNIVERSAL_CANONICAL_UNITS` are offered by no system. */
@@ -203,6 +205,8 @@ export const INGREDIENT_DENSITY_G_PER_ML: Readonly<Record<string, number>> = {
     "margarine": 0.91,
     "yogurt": 1.04,
     "greek yogurt": 1.05,
+    "yoghurt": 1.04,
+    "greek yoghurt": 1.05,
     "sour cream": 0.95,
     "cream cheese": 0.95,
     "ricotta": 0.85,
@@ -210,6 +214,7 @@ export const INGREDIENT_DENSITY_G_PER_ML: Readonly<Record<string, number>> = {
     "cream": 1.0,
     "heavy cream": 1.0,
     "thickened cream": 1.0,
+    "ice cream": 0.55,
     "peanut butter": 1.05,
     "rice": 0.78,
     "white rice": 0.78,

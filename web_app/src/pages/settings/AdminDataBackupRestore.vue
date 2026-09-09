@@ -53,9 +53,9 @@
                                 icon="warning"
                             >
                                 Sensitive
-                                <q-tooltip max-width="300px">
+                                <BaseTooltip max-width="300px">
                                     This backup contains {{ sensitiveSectionsLabel(row) }} — handle the file accordingly.
-                                </q-tooltip>
+                                </BaseTooltip>
                             </q-chip>
                         </div>
                         <div class="backup-row__meta">
@@ -72,21 +72,21 @@
                             :icon="ICONS.download"
                             @click="onDownloadRow(row)"
                         >
-                            <q-tooltip>Download</q-tooltip>
+                            <BaseTooltip>Download</BaseTooltip>
                         </BaseButton>
                         <BaseButton
                             variant="icon"
                             :icon="ICONS.cloud_upload"
                             @click="onRestoreRow(row)"
                         >
-                            <q-tooltip>Restore this backup</q-tooltip>
+                            <BaseTooltip>Restore this backup</BaseTooltip>
                         </BaseButton>
                         <BaseButton
                             variant="icon"
                             :icon="ICONS.delete"
                             @click="onDeleteRow(row)"
                         >
-                            <q-tooltip>Delete</q-tooltip>
+                            <BaseTooltip>Delete</BaseTooltip>
                         </BaseButton>
                     </div>
                 </div>
@@ -379,6 +379,7 @@
 </template>
 
 <script lang="ts" setup>
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     import BaseButton from 'src/components/BaseButton.vue';
     import { formatDateTime as formatLocaleDateTime } from 'src/composables/useDateFormat';
     import BaseDialog from 'src/components/BaseDialog.vue';

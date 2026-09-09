@@ -23,13 +23,14 @@
             >
                 <span class="toggle-card__label">{{ option.label }}</span>
                 <span v-if="option.caption" class="toggle-card__caption">{{ option.caption }}</span>
-                <q-tooltip v-if="option.tooltip">{{ option.tooltip }}</q-tooltip>
+                <BaseTooltip v-if="option.tooltip">{{ option.tooltip }}</BaseTooltip>
             </button>
         </div>
     </div>
 </template>
 
 <script setup lang="ts">
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     /*
      * Multi-select counterpart to BaseSegmented (D-015 — one anatomy per job):
      * a labelled row of card-sized toggle buttons plus a select-all/clear-all

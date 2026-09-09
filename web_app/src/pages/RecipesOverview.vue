@@ -25,7 +25,7 @@
                 aria-label="New recipe"
                 @click="onCreateClick"
             >
-                <q-tooltip v-if="compactToolbar">New recipe</q-tooltip>
+                <BaseTooltip v-if="compactToolbar">New recipe</BaseTooltip>
             </BaseButton>
             <BaseButton
                 variant="secondary"
@@ -34,7 +34,7 @@
                 aria-label="Import a recipe"
                 @click="onImportClick"
             >
-                <q-tooltip v-if="compactToolbar">Import a recipe</q-tooltip>
+                <BaseTooltip v-if="compactToolbar">Import a recipe</BaseTooltip>
             </BaseButton>
             <!-- 2026-08-17 feedback: card grid ⇄ one row per recipe (the
                  Stock Overview shape). The icon shows the shape the button
@@ -58,9 +58,9 @@
                 <!-- The "· remembered next visit" suffix was dropped
                      2026-08-19 (owner): the setting IS remembered, but saying
                      so in a tooltip you read every time is noise. -->
-                <q-tooltip>
+                <BaseTooltip>
                     {{ viewMode === 'grid' ? 'Compact rows, no photos' : 'Card grid with photos' }}
-                </q-tooltip>
+                </BaseTooltip>
             </BaseButton>
 
             <q-space class="gt-xs" />
@@ -132,7 +132,7 @@
             <FilterChip v-model="cookableNowOnly" :icon="ICONS.chef_hat" active-color="positive">
                 Cookable now
                 <q-icon :name="ICONS.help_outline" size="14px" class="q-ml-xs">
-                    <q-tooltip>Recipes where every ingredient is currently in stock.</q-tooltip>
+                    <BaseTooltip>Recipes where every ingredient is currently in stock.</BaseTooltip>
                 </q-icon>
             </FilterChip>
             <!-- "Meals prepared" (was "Have meals in pool"): portions you've
@@ -523,6 +523,7 @@
 </template>
 
 <script lang="ts" setup>
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     import { ICONS } from 'src/style/icons';
     import AppSpinner from 'src/components/AppSpinner.vue';
     import BaseButton from 'src/components/BaseButton.vue';
@@ -1321,6 +1322,14 @@
     // it when flipped off so a stale map doesn't leak into a future
     // session. R-003 — the predicate (which items expire within N days,
     // which recipes use them) lives entirely on the server.
+    //
+    // `immediate` because the two halves of this filter have different
+    // lifetimes: `expiringOnly` is A8 session state and survives navigation
+    // (`useListState`), while `expiringByRecipeId` is a plain ref that dies
+    // with the component. Open a recipe and come back and the chip restored as
+    // on with an empty map behind it — the predicate below then narrowed
+    // nothing, so the filter read as active and did nothing (owner 2026-09-09).
+    // Re-running on mount re-pairs the two.
     watch(expiringOnly, async (on) => {
         if (!on) {
             expiringByRecipeId.value = new Map();
@@ -1350,7 +1359,7 @@
         } finally {
             expiringFetchInFlight.value = false;
         }
-    });
+    }, { immediate: true });
 
     function clearFilters() {
         searchText.value = '';

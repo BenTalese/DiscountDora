@@ -73,7 +73,7 @@
                         class="recipe-card__part"
                         aria-hidden="true"
                     >*</span>
-                    <q-tooltip v-if="!kcal.judgeable">{{ kcalTooltip }}</q-tooltip>
+                    <BaseTooltip v-if="!kcal.judgeable">{{ kcalTooltip }}</BaseTooltip>
                 </q-chip>
                 <!-- Owner 2026-09-05 — cost per serving, next to kcal because
                      they are the same species of fact: a per-serving figure
@@ -91,18 +91,9 @@
                         class="recipe-card__part"
                         aria-hidden="true"
                     >*</span>
-                    <q-tooltip>
+                    <BaseTooltip>
                         {{ cost.judgeable ? 'Estimated cost per serving.' : costTooltip }}
-                    </q-tooltip>
-                </q-chip>
-                <q-chip
-                    v-if="(recipe.section_count ?? 0) > 1"
-                    dense
-                    outline
-                    color="primary"
-                    :icon="ICONS.list"
-                >
-                    {{ recipe.section_count }} parts
+                    </BaseTooltip>
                 </q-chip>
                 <!-- C-waste W4 — surfaced only when the cookbook's
                      "Uses expiring ingredients" filter is active (the
@@ -161,9 +152,9 @@
                 :color="recipe.is_favourite ? 'red' : undefined"
                 @click.stop="emit('toggle-favourite', recipe.recipe_id)"
             >
-                <q-tooltip>
+                <BaseTooltip>
                     {{ recipe.is_favourite ? 'Remove from favourites' : 'Mark favourite' }}
-                </q-tooltip>
+                </BaseTooltip>
             </BaseButton>
             <BaseButton
                 v-if="showFilterByIngredients"
@@ -171,7 +162,7 @@
                 :icon="ICONS.filter_list"
                 @click.stop="emit('filter-by-ingredients', recipe.recipe_id)"
             >
-                <q-tooltip>Filter stock to this recipe's ingredients</q-tooltip>
+                <BaseTooltip>Filter stock to this recipe's ingredients</BaseTooltip>
             </BaseButton>
             <BaseButton
                 variant="filled-icon"
@@ -179,7 +170,7 @@
                 :color="cookButtonColor"
                 @click.stop="emit('cook', recipe.recipe_id)"
             >
-                <q-tooltip>{{ cookButtonTooltip }}</q-tooltip>
+                <BaseTooltip>{{ cookButtonTooltip }}</BaseTooltip>
             </BaseButton>
             <q-space />
             <BaseButton
@@ -189,13 +180,14 @@
                 :disable="recipe.ingredients.length === 0"
                 @click.stop="onAddToList"
             >
-                <q-tooltip>{{ addListTooltip }}</q-tooltip>
+                <BaseTooltip>{{ addListTooltip }}</BaseTooltip>
             </BaseButton>
         </q-card-actions>
     </q-card>
 </template>
 
 <script lang="ts" setup>
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     import BaseButton from 'src/components/BaseButton.vue';
     import ExpiringChip from 'src/components/recipes/ExpiringChip.vue';
     import RecipeBeliefChip from 'src/components/recipes/RecipeBeliefChip.vue';

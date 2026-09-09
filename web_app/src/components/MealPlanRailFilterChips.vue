@@ -42,14 +42,15 @@
                 v-if="chip.key !== 'all' && chip.key !== 'suggests'"
                 class="rail-chips__count"
             >{{ chip.count }}</span>
-            <q-tooltip v-if="chip.disabled && chip.disabledReason">
+            <BaseTooltip v-if="chip.disabled && chip.disabledReason">
                 {{ chip.disabledReason }}
-            </q-tooltip>
+            </BaseTooltip>
         </FilterChip>
     </div>
 </template>
 
 <script setup lang="ts">
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     import FilterChip from 'src/components/chips/FilterChip.vue';
     import type { RecipeFilterChip, RecipeFilterKey } from 'src/helpers/recipeRailFilters';
     import { ICONS } from 'src/style/icons';

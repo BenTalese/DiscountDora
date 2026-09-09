@@ -28,7 +28,7 @@
                         aria-label="Rename list"
                         @click="emit('rename')"
                     >
-                        <q-tooltip>Rename — leave blank to label by date</q-tooltip>
+                        <BaseTooltip>Rename — leave blank to label by date</BaseTooltip>
                     </BaseButton>
                 </div>
 
@@ -51,10 +51,10 @@
                             <q-icon :name="ICONS.info" size="13px" />
                             {{ unpricedCount }} item{{ unpricedCount === 1 ? '' : 's' }}
                             with no price yet
-                            <q-tooltip>
+                            <BaseTooltip>
                                 This total only counts what Dora has a price
                                 for, so the real figure is higher.
-                            </q-tooltip>
+                            </BaseTooltip>
                         </div>
                     </div>
 
@@ -119,9 +119,9 @@
                                  that isn't a dynamic name per value, and the
                                  information being preserved is *why* a mode is
                                  greyed out, which reads fine said once. -->
-                            <q-tooltip v-if="unavailableLabel">
+                            <BaseTooltip v-if="unavailableLabel">
                                 {{ unavailableLabel }}
-                            </q-tooltip>
+                            </BaseTooltip>
                         </BaseSegmented>
                     </div>
 
@@ -136,10 +136,10 @@
                         :label="amending ? 'Done amending' : 'Amend'"
                         @click="emit('update:amending', !amending)"
                     >
-                        <q-tooltip>
+                        <BaseTooltip>
                             Correct the price, store or quantity on a line.
                             Your pantry isn't restocked again.
-                        </q-tooltip>
+                        </BaseTooltip>
                     </BaseButton>
 
                     <BaseButton
@@ -151,10 +151,10 @@
                         :loading="starting"
                         @click="emit('start-shopping')"
                     >
-                        <q-tooltip>
+                        <BaseTooltip>
                             Tick items off as you grab them — prices you enter
                             become the receipt
-                        </q-tooltip>
+                        </BaseTooltip>
                     </BaseButton>
                     <!-- Always "Finish", never "Finish early" (2026-08-29:
                          *"people know if they are finishing early or not"*).
@@ -170,12 +170,12 @@
                         :loading="finishing"
                         @click="emit('finish')"
                     >
-                        <q-tooltip>
+                        <BaseTooltip>
                             Marks this shop as done: every ticked item moves
                             back to Stocked in your pantry, and the list is
                             archived. Anything you didn't buy can move to
                             another list on the way out.
-                        </q-tooltip>
+                        </BaseTooltip>
                     </BaseButton>
                     <BaseButton
                         v-else
@@ -184,10 +184,10 @@
                         label="Put away"
                         @click="emit('put-away')"
                     >
-                        <q-tooltip>
+                        <BaseTooltip>
                             Ephemeral checklist grouped by kitchen location so
                             you don't forget a corner. Doesn't save.
-                        </q-tooltip>
+                        </BaseTooltip>
                     </BaseButton>
                 </div>
             </div>
@@ -222,6 +222,7 @@
 </template>
 
 <script lang="ts" setup>
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     /**
      * The shopping list's overview card — one component across all three faces.
      *

@@ -13,7 +13,7 @@
              because a bare dot isn't a decodable signal on its own (D-013). -->
         <q-item-section side class="add-to-list-row__dot">
             <StockLevelDot :sequence="levelSequence" size="12px">
-                <q-tooltip>{{ levelLabel }}</q-tooltip>
+                <BaseTooltip>{{ levelLabel }}</BaseTooltip>
             </StockLevelDot>
         </q-item-section>
         <q-item-section>
@@ -35,6 +35,7 @@
 </template>
 
 <script lang="ts" setup>
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     import StockLevelDot from 'src/components/stock/StockLevelDot.vue';
     import { ICONS } from 'src/style/icons';
     import { useStockStatus } from 'src/composables/useStockStatus';

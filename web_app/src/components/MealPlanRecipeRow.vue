@@ -97,7 +97,7 @@
                 aria-label="One fewer cooked"
                 @click="emit('poolAdjust', recipe.recipe_id, -1)"
             >
-                <q-tooltip>One fewer cooked</q-tooltip>
+                <BaseTooltip>One fewer cooked</BaseTooltip>
             </BaseButton>
             <!-- Owner feedback 2026-09-03 - *"meal pool count input seems to
                  be unclickable, possibly because the row is already clickable
@@ -129,13 +129,14 @@
                 aria-label="One more cooked"
                 @click="emit('poolAdjust', recipe.recipe_id, 1)"
             >
-                <q-tooltip>One more cooked</q-tooltip>
+                <BaseTooltip>One more cooked</BaseTooltip>
             </BaseButton>
         </div>
     </div>
 </template>
 
 <script setup lang="ts">
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     import BaseButton from 'src/components/BaseButton.vue';
     import type { Recipe } from 'src/models/recipe';
     import { ICONS } from 'src/style/icons';

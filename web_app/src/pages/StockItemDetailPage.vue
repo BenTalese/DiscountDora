@@ -11,7 +11,7 @@
         <div class="row items-center no-wrap q-mb-md q-gutter-sm stock-detail__header">
             <BaseButton v-if="!embedded" variant="icon" :icon="ICONS.arrow_back" @click="goBack" />
             <BaseButton v-else variant="icon" :icon="ICONS.close" @click="emit('close')">
-                <q-tooltip>Close panel</q-tooltip>
+                <BaseTooltip>Close panel</BaseTooltip>
             </BaseButton>
             <!-- 2026-08-24 feedback: a long name used to wrap, which pushed the
                  buttons to a third line and left the back arrow alone on the
@@ -39,7 +39,7 @@
                 :label="compactHeader ? undefined : 'Delete'"
                 @click="confirmDelete"
             >
-                <q-tooltip v-if="compactHeader">Delete</q-tooltip>
+                <BaseTooltip v-if="compactHeader">Delete</BaseTooltip>
             </BaseButton>
         </div>
 
@@ -327,7 +327,7 @@
                                                     aria-label="Search for a different food"
                                                     @click="foodPickerOpen = true"
                                                 >
-                                                    <q-tooltip>Link a different food</q-tooltip>
+                                                    <BaseTooltip>Link a different food</BaseTooltip>
                                                 </BaseButton>
                                                 <BaseButton
                                                     variant="danger-icon"
@@ -337,7 +337,7 @@
                                                     aria-label="Unlink food"
                                                     @click="onUnlinkFood"
                                                 >
-                                                    <q-tooltip>Unlink</q-tooltip>
+                                                    <BaseTooltip>Unlink</BaseTooltip>
                                                 </BaseButton>
                                             </div>
                                             <NutritionFactsList
@@ -391,7 +391,7 @@
                                                     aria-label="Search for a food"
                                                     @click="foodPickerOpen = true"
                                                 >
-                                                    <q-tooltip>Search for a food yourself</q-tooltip>
+                                                    <BaseTooltip>Search for a food yourself</BaseTooltip>
                                                 </BaseButton>
                                                 <q-space />
                                                 <BaseButton
@@ -402,9 +402,9 @@
                                                     :disable="busy"
                                                     @click="onIgnoreNutrition"
                                                 >
-                                                    <q-tooltip>
+                                                    <BaseTooltip>
                                                         Stop suggesting a food for this item
-                                                    </q-tooltip>
+                                                    </BaseTooltip>
                                                 </BaseButton>
                                             </div>
                                         </div>
@@ -442,7 +442,7 @@
                                                 aria-label="Search for a food"
                                                 @click="foodPickerOpen = true"
                                             >
-                                                <q-tooltip>Search for a food to link</q-tooltip>
+                                                <BaseTooltip>Search for a food to link</BaseTooltip>
                                             </BaseButton>
                                         </div>
                                     </q-item-section>
@@ -477,7 +477,7 @@
                                                 aria-label="Set expiry date"
                                                 @click="expiryDialogOpen = true"
                                             >
-                                                <q-tooltip>{{ expiryIndicator.tooltip }}</q-tooltip>
+                                                <BaseTooltip>{{ expiryIndicator.tooltip }}</BaseTooltip>
                                             </BaseButton>
                                             <!-- Feedback 2026-08-21: the date (or the
                                                  dash standing in for it) is the thing the
@@ -509,7 +509,7 @@
                                                 :disable="busy"
                                                 @click="clearExpiry"
                                             >
-                                                <q-tooltip>Clear expiry</q-tooltip>
+                                                <BaseTooltip>Clear expiry</BaseTooltip>
                                             </BaseButton>
                                             <BaseButton variant="ghost" dense size="sm" label="+1d" :disable="busy" @click="shiftExpiry(1)" />
                                             <BaseButton variant="ghost" dense size="sm" label="+7d" :disable="busy" @click="shiftExpiry(7)" />
@@ -535,12 +535,12 @@
                                                 Opened {{ detail.opened_on }}
                                             </span>
                                             <q-icon :name="ICONS.info_outline" size="16px" class="dora-text-secondary">
-                                                <q-tooltip max-width="320px">
+                                                <BaseTooltip max-width="320px">
                                                     Flags this item as
                                                     opened. Set a shorter
                                                     expiry above if it's
                                                     perishable.
-                                                </q-tooltip>
+                                                </BaseTooltip>
                                             </q-icon>
                                         </div>
                                     </q-item-section>
@@ -561,13 +561,13 @@
                                                      owner-approved) — one
                                                      explanation of Essential,
                                                      not two. -->
-                                                <q-tooltip max-width="320px">
+                                                <BaseTooltip max-width="320px">
                                                     Something you always want in
                                                     the house. Dora chases it up
                                                     as soon as it runs low,
                                                     instead of waiting until
                                                     it's gone.
-                                                </q-tooltip>
+                                                </BaseTooltip>
                                             </q-icon>
                                         </div>
                                     </q-item-section>
@@ -601,11 +601,11 @@
                                                  sentence that says what the toggle
                                                  does. -->
                                             <q-icon :name="ICONS.info_outline" size="16px" class="dora-text-secondary">
-                                                <q-tooltip max-width="320px">
+                                                <BaseTooltip max-width="320px">
                                                     Controls whether this item
                                                     ever joins the stocktake
                                                     queue.
-                                                </q-tooltip>
+                                                </BaseTooltip>
                                             </q-icon>
                                         </div>
                                     </q-item-section>
@@ -666,10 +666,10 @@
                             <div class="q-mt-md dora-text-secondary text-weight-bold q-mb-sm row items-center q-gutter-xs">
                                 <span>Preferred buys</span>
                                 <q-icon :name="ICONS.info_outline" size="14px" class="dora-text-muted">
-                                    <q-tooltip max-width="320px">
+                                    <BaseTooltip max-width="320px">
                                         What you actually buy for this — e.g.
                                         “Vitasoy Oat Milky 1L”.
-                                    </q-tooltip>
+                                    </BaseTooltip>
                                 </q-icon>
                             </div>
                             <!-- Feedback 2026-06-18 (round 3): the manual
@@ -711,7 +711,7 @@
                                                 :disable="busy"
                                                 @click="startBuyRename(pb)"
                                             >
-                                                <q-tooltip>Rename</q-tooltip>
+                                                <BaseTooltip>Rename</BaseTooltip>
                                             </BaseButton>
                                             <BaseButton
                                                 variant="icon"
@@ -719,7 +719,7 @@
                                                 :disable="busy"
                                                 @click="deleteBuy(pb)"
                                             >
-                                                <q-tooltip>Remove</q-tooltip>
+                                                <BaseTooltip>Remove</BaseTooltip>
                                             </BaseButton>
                                         </div>
                                     </q-item-section>
@@ -789,7 +789,7 @@
                                                 :disable="busy"
                                                 @click="deleteObservation(obs)"
                                             >
-                                                <q-tooltip>Remove</q-tooltip>
+                                                <BaseTooltip>Remove</BaseTooltip>
                                             </BaseButton>
                                         </q-item-section>
                                     </q-item>
@@ -922,10 +922,10 @@
                                         target="_blank"
                                         rel="noopener"
                                     >
-                                        <q-tooltip>Open on {{ prod.store_name }}</q-tooltip>
+                                        <BaseTooltip>Open on {{ prod.store_name }}</BaseTooltip>
                                     </BaseButton>
                                     <BaseButton variant="icon" :icon="ICONS.link_off" class="text-negative" @click="onUnlink(prod.product_id)">
-                                        <q-tooltip>Unlink</q-tooltip>
+                                        <BaseTooltip>Unlink</BaseTooltip>
                                     </BaseButton>
                                 </q-card-actions>
                             </q-card>
@@ -1031,7 +1031,7 @@
                                         :icon="ICONS.edit"
                                         @click.stop="onEditSubstituteMetadata(sub)"
                                     >
-                                        <q-tooltip>Edit note / ratio</q-tooltip>
+                                        <BaseTooltip>Edit note / ratio</BaseTooltip>
                                     </BaseButton>
                                     <BaseButton
                                         variant="icon"
@@ -1039,7 +1039,7 @@
                                         class="text-negative"
                                         @click.stop="onRemoveSubstitute(sub.stock_item_id)"
                                     >
-                                        <q-tooltip>Remove substitute</q-tooltip>
+                                        <BaseTooltip>Remove substitute</BaseTooltip>
                                     </BaseButton>
                                 </div>
                             </q-item-section>
@@ -1179,7 +1179,7 @@
                                         class="text-negative"
                                         @click="onRemoveBarcode(bc.barcode_id)"
                                     >
-                                        <q-tooltip>Remove barcode</q-tooltip>
+                                        <BaseTooltip>Remove barcode</BaseTooltip>
                                     </BaseButton>
                                 </q-item-section>
                             </q-item>
@@ -1259,7 +1259,7 @@
                                 side
                             >
                                 <q-icon :name="ICONS.star" color="warning" size="18px">
-                                    <q-tooltip>Quick-add target list</q-tooltip>
+                                    <BaseTooltip>Quick-add target list</BaseTooltip>
                                 </q-icon>
                             </q-item-section>
                         </q-item>
@@ -1346,7 +1346,7 @@
                                     color="positive"
                                     :aria-label="`Link ${si.name} as a substitute`"
                                 >
-                                    <q-tooltip>Link as a substitute</q-tooltip>
+                                    <BaseTooltip>Link as a substitute</BaseTooltip>
                                 </BaseButton>
                             </q-item-section>
                         </q-item>
@@ -1367,6 +1367,7 @@
 </template>
 
 <script lang="ts" setup>
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     import { ICONS } from 'src/style/icons';
     import { formatDateTime as formatLocaleDateTime } from 'src/composables/useDateFormat';
     import SearchInput from 'src/components/SearchInput.vue';

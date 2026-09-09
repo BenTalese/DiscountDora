@@ -12,7 +12,7 @@
                     :loading="loading"
                     @click="loadSources"
                 >
-                    <q-tooltip>Refresh</q-tooltip>
+                    <BaseTooltip>Refresh</BaseTooltip>
                 </BaseButton>
                 <BaseButton
                     variant="primary"
@@ -179,7 +179,7 @@
                                             :icon="ICONS.delete"
                                             @click="onDeleteMapping(src.id, m)"
                                         >
-                                            <q-tooltip>Drop this mapping entirely</q-tooltip>
+                                            <BaseTooltip>Drop this mapping entirely</BaseTooltip>
                                         </BaseButton>
                                     </div>
                                 </q-item-section>
@@ -312,6 +312,7 @@
 </template>
 
 <script lang="ts" setup>
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     import AppSpinner from 'src/components/AppSpinner.vue';
     import { formatDateTime as formatLocaleDateTime } from 'src/composables/useDateFormat';
     import BaseButton from 'src/components/BaseButton.vue';

@@ -32,9 +32,9 @@
                     :class="{ 'theme-card--active': familyDraft === family.key }"
                     @click="onFamilyChange(family)"
                 >
-                    <q-tooltip v-if="family.blurb" anchor="top middle" self="bottom middle" :delay="400">
+                    <BaseTooltip v-if="family.blurb" anchor="top middle" self="bottom middle">
                         {{ family.blurb }}
-                    </q-tooltip>
+                    </BaseTooltip>
                     <q-icon
                         v-if="familyDraft === family.key"
                         :name="ICONS.check_circle"
@@ -95,6 +95,7 @@
 </template>
 
 <script lang="ts" setup>
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     import { ICONS } from 'src/style/icons';
     import { storeToRefs } from 'pinia';
     import type {

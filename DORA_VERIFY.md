@@ -22,6 +22,53 @@ top-to-bottom.
 
 ---
 
+## Cookbook + recipe view — the 2026-09-09 five-item batch
+
+Built and gated (pytest 2349, vitest 720, `vue-tsc`, `eslint src/`,
+`quasar build`) but not driven.
+
+- [ ] **Rating appears without a reload.** With nutrition on **complex**, set
+      Settings → Nutrition → rating scheme to Health Star (or Nutri-Score), then
+      navigate straight to the cookbook — the chips should be there. Repeat via
+      Region's "match this device" nudge.
+- [ ] **Expiring filter survives a round trip.** Cookbook → "Uses expiring
+      ingredients" → open a recipe → back. The chip stays on **and** the list is
+      still narrowed and still ordered most-at-risk-first.
+- [ ] **Free-text ingredient.** Type an ingredient you don't have, choose **Keep
+      as free text**: the dropdown closes and the box shows your text.
+- [ ] **Nutrition on a volume/count recipe** (Sunday Ragu is the fixture, in
+      complex mode with its foods linked): the panel's uncounted list should
+      have lost the onion, the carrot and the celery. Celery reading ~40 g a
+      stalk rather than 113 g is the fix worth eyeballing.
+- [ ] **Cost breakdown on a recipe written in cups/spoons**, money on. Lines
+      that read "Units don't match the price" should have moved into the total.
+      A recipe with an amount-less ingredient ("salt to taste") should show it
+      under the new **"No amount on the ingredient"** heading rather than
+      silently adding a whole product to the estimate.
+- [ ] **The same recipe's cost agrees on the cookbook card, its own page and
+      the meal-planner rail** — the planner reads through a separate adapter
+      that had to be updated in step.
+- [ ] **A recipe with cloves / sprigs / rashers in it.** Those lines should
+      either carry a small sensible figure or sit under an unpriced heading —
+      never a figure the size of a whole bulb, bunch or pack. Sanity-check the
+      recipe total against what you'd guess it costs.
+- [ ] **The stock level chip is back to its old size on your phone** (32px),
+      while the level menu it opens still has the taller rows and the wider
+      menu. That split is the whole point of the revert.
+
+## Cross-cutting — tooltip delay + chrome tidy (2026-09-09)
+
+Built and gated (`vue-tsc`, `eslint src/`, `quasar build`, vitest 720) but not
+driven. Walk on a **real phone**, not a resized desktop window — the bell item
+keys off `pointer: coarse`.
+
+- [ ] **Tooltip delay feels right at 500ms.** Tap around (stock rows, cook mode,
+      toolbars): a normal tap should show no tooltip at all; a press-and-hold
+      should. Say if it wants to be shorter or longer — it's one number in
+      `BaseTooltip.vue`. Check a desktop hover reads as a pause, not a lag.
+- [ ] **The alerts bell number sits in one place** on phone and desktop, and is
+      neither over the bell nor at the screen edge.
+
 ## Dashboard — the 2026-09-08 sixteen-item batch
 
 **⚠️ None of this has been driven in the running app.** The batch was built,
@@ -225,13 +272,15 @@ fix are confirmed. What's left is the states that drive couldn't reach.
 
 ## Tap targets on a real phone (2026-09-05) — origin ADR-082
 
-Sizes were measured under Playwright touch emulation (44/44/260×44) and desktop
-confirmed unchanged (32/36/200×32), so the mechanism works. What's left is
-whether it *looks* right on glass — one of these changes visual weight.
+Sizes were measured under Playwright touch emulation and desktop confirmed
+unchanged, so the mechanism works. What's left is whether it *looks* right on
+glass.
 
-- [ ] Stock overview at 375: the level chip is now 44×44 on touch (was 32). It's
-      a colour block, so it got visually heavier, not just easier to hit — say
-      whether that reads as balanced against the name and image or too loud.
+**The level chip is no longer part of this** — it was grown to 44px in the
+sweep and put back to 32px on 2026-09-09, the owner's report having been about
+the rows in the menu it opens rather than the button itself. Those rows are
+still 44px; check them below.
+
 - [ ] Stock row's trailing buttons at 44px: the row gap tightened 8→6px to pay
       for the width. Confirm the name still gets enough room and isn't
       truncating words it used to show.

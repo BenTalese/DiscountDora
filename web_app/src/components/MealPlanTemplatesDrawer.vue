@@ -11,7 +11,7 @@
                 <div class="text-subtitle1">Templates</div>
                 <q-space />
                 <BaseButton variant="icon" :icon="ICONS.close" @click="emit('update:modelValue', false)">
-                    <q-tooltip>Close</q-tooltip>
+                    <BaseTooltip>Close</BaseTooltip>
                 </BaseButton>
             </q-card-section>
             <q-separator />
@@ -27,9 +27,9 @@
                         class="full-width"
                         @click="emit('saveCurrentWeek')"
                     >
-                        <q-tooltip v-if="!canSaveCurrentWeek">
+                        <BaseTooltip v-if="!canSaveCurrentWeek">
                             Add some meals to this week first.
-                        </q-tooltip>
+                        </BaseTooltip>
                     </BaseButton>
                     <BaseButton
                         variant="secondary"
@@ -97,10 +97,10 @@
                                         @click="onApply(t)"
                                     />
                                     <BaseButton variant="icon" :icon="ICONS.edit" @click="startRename(t)">
-                                        <q-tooltip>Rename</q-tooltip>
+                                        <BaseTooltip>Rename</BaseTooltip>
                                     </BaseButton>
                                     <BaseButton variant="danger-ghost" :icon="ICONS.delete_outline" round dense @click="confirmDelete(t)">
-                                        <q-tooltip>Delete</q-tooltip>
+                                        <BaseTooltip>Delete</BaseTooltip>
                                     </BaseButton>
                                 </template>
                             </div>
@@ -130,6 +130,7 @@
 </template>
 
 <script lang="ts" setup>
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     import { ICONS } from 'src/style/icons';
     import BaseButton from 'src/components/BaseButton.vue';
     import type { MealPlanTemplateSummary } from 'src/models/mealPlanTemplate';

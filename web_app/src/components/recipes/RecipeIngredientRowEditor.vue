@@ -372,6 +372,15 @@
                 draft.value.stock_item_id = null;
                 draft.value.raw_text = text;
                 typed.value = '';
+                // Symmetric with `createItem` below: answering the question
+                // *is* the choice, whichever way it was answered, so the menu
+                // that asked it closes. It used to close on "Add to pantry"
+                // only, leaving the free-text path staring at an open list of
+                // pantry items it had just declined to pick from (owner
+                // 2026-09-09). `true` skips re-filtering, so the box shows the
+                // free text rather than re-offering "Use …" against itself.
+                itemSelect.value?.updateInputValue(text, true);
+                itemSelect.value?.hidePopup();
             });
     }
 

@@ -202,6 +202,66 @@ def test__rollup__CountWithNoWholeItemPortion__IsUnconvertibleNotGuessed():
     assert result.uncounted == {REASON_NO_CONVERSION: 1}
 
 
+def test__rollup__WholeAsAUnit__CountsTheSameAsNoUnitAtAll():
+    """"1 whole onion" and "1 onion" are the same ingredient. `whole` used to
+    be an unrecognised word, so only a portion row literally saying "whole"
+    could answer it — the count ladder never ran (owner 2026-09-09)."""
+    food = _Food("Onion", kcal=40.0)
+    portions = [_Portion(food.id, 1, "medium", 110.0)]
+    recipe = _Recipe([_Ingredient(_StockItem("Onion", food), 1, "whole")], servings=1)
+
+    result = rollup_recipe_nutrition(_repo_for(recipe, [food], portions), recipe)
+
+    assert result.kcal == pytest.approx(round(110 / 100 * 40))
+
+
+def test__rollup__SticksOfCelery__WeighedByThePortionRowNotTheButterStick():
+    """`units` prices a stick at 113 g because that is butter. Celery went
+    through the same conversion and came out at 226 g for two stalks."""
+    food = _Food("Celery", kcal=16.0)
+    portions = [_Portion(food.id, 1, "stalk, medium", 40.0)]
+    recipe = _Recipe([_Ingredient(_StockItem("Celery", food), 2, "sticks")], servings=1)
+
+    result = rollup_recipe_nutrition(_repo_for(recipe, [food], portions), recipe)
+
+    assert result.total_grams == pytest.approx(80.0)
+
+
+def test__rollup__SticksWithNoPortionRow__IsUnconvertibleNotButter():
+    """The point of the guard: absent a row of the food's own, a food-specific
+    mass word reports honestly rather than borrowing butter's weight."""
+    food = _Food("Cinnamon", kcal=247.0)
+    recipe = _Recipe([_Ingredient(_StockItem("Cinnamon", food), 1, "stick")], servings=1)
+
+    result = rollup_recipe_nutrition(_repo_for(recipe, [food]), recipe)
+
+    assert result.kcal is None
+    assert result.uncounted == {REASON_NO_CONVERSION: 1}
+
+
+def test__rollup__SticksOfButter__StillWeighedFromItsOwnPortionRow():
+    food = _Food("Butter", kcal=717.0)
+    portions = [_Portion(food.id, 1, "stick", 113.0)]
+    recipe = _Recipe([_Ingredient(_StockItem("Butter", food), 1, "stick")], servings=1)
+
+    result = rollup_recipe_nutrition(_repo_for(recipe, [food], portions), recipe)
+
+    assert result.total_grams == pytest.approx(113.0)
+
+
+def test__rollup__VolumeAgainstAQualifiedPantryName__ReachesTheDensityTable():
+    """The density fallback is keyed on the ingredient's name, and matched it
+    exactly until 2026-09-09 — so it fired for "milk" and never for what a
+    household actually calls the carton."""
+    food = _Food("Milk", kcal=64.0)
+    recipe = _Recipe(
+        [_Ingredient(_StockItem("Full Cream Milk", food), 200, "ml")], servings=1)
+
+    result = rollup_recipe_nutrition(_repo_for(recipe, [food]), recipe)
+
+    assert result.total_grams == pytest.approx(206.0)
+
+
 def test__rollup__UnknownUnitWord__AnsweredOnlyByAPortionRow():
     food = _Food("Garlic", kcal=149.0)
     portions = [_Portion(food.id, 1, "clove", 3.0)]

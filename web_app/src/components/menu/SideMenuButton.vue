@@ -11,10 +11,7 @@
             <q-icon :name="icon" />
         </q-item-section>
         <q-item-section>
-            <q-item-label>
-                {{ label }}
-                <q-icon name="open_in_new" size="14px" class="q-ml-xs" />
-            </q-item-label>
+            <q-item-label>{{ label }}</q-item-label>
             <q-item-label caption v-if="caption">{{ caption }}</q-item-label>
         </q-item-section>
     </q-item>

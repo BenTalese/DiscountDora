@@ -34,7 +34,7 @@
                         @click.stop
                         @update:model-value="(v: number) => emit('adjust', v - entry.servings)"
                     >
-                        <q-tooltip>Servings — removes the meal at 0</q-tooltip>
+                        <BaseTooltip>Servings — removes the meal at 0</BaseTooltip>
                     </NumberStepper>
                 </q-item-section>
             </q-item>
@@ -107,6 +107,7 @@
 </template>
 
 <script lang="ts" setup>
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     import { ICONS } from 'src/style/icons';
     import NumberStepper from 'src/components/NumberStepper.vue';
     import { useBatchEnabled } from 'src/composables/useBatchEnabled';

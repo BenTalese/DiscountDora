@@ -3,11 +3,11 @@
         <!-- Week nav -->
         <div class="mobile-focus__weeknav">
             <BaseButton variant="icon" :icon="ICONS.arrow_back" @click="goPrevWeek">
-                <q-tooltip>Previous week</q-tooltip>
+                <BaseTooltip>Previous week</BaseTooltip>
             </BaseButton>
             <div class="mobile-focus__weeknav-label">{{ weekRangeLabel }}</div>
             <BaseButton variant="icon" :icon="ICONS.arrow_forward" @click="goNextWeek">
-                <q-tooltip>Next week</q-tooltip>
+                <BaseTooltip>Next week</BaseTooltip>
             </BaseButton>
             <!-- Owner feedback 2026-09-03 — *"mobile view is missing some
                  functionality… no save as template, no browse/apply template,
@@ -86,7 +86,7 @@
                         </q-item>
                     </q-list>
                 </q-menu>
-                <q-tooltip>More week actions</q-tooltip>
+                <BaseTooltip>More week actions</BaseTooltip>
             </BaseButton>
         </div>
 
@@ -248,6 +248,7 @@
 </template>
 
 <script lang="ts" setup>
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     import BaseButton from 'src/components/BaseButton.vue';
     import { formatDate as formatLocaleDate } from 'src/composables/useDateFormat';
     import MealPlanDayPips from 'src/components/MealPlanDayPips.vue';

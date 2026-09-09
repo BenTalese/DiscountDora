@@ -38,7 +38,7 @@
                     size="14px"
                     class="entry-chip__status text-positive"
                 >
-                    <q-tooltip>Cooked</q-tooltip>
+                    <BaseTooltip>Cooked</BaseTooltip>
                 </q-icon>
                 <q-icon
                     v-else-if="shortfall && batchEnabled"
@@ -46,7 +46,7 @@
                     size="14px"
                     class="entry-chip__status text-warning"
                 >
-                    <q-tooltip>Needs cooking — pool is short</q-tooltip>
+                    <BaseTooltip>Needs cooking — pool is short</BaseTooltip>
                 </q-icon>
                 <span class="entry-chip__pill">×{{ entry.servings }}</span>
                 <!-- FU-653 — Dora's belief about this meal. Its own glyph, not
@@ -61,7 +61,7 @@
                     class="entry-chip__status"
                     :class="entry.inference_hint === 'at_risk' ? 'text-warning' : 'text-positive'"
                 >
-                    <q-tooltip max-width="280px">{{ inferenceTooltip }}</q-tooltip>
+                    <BaseTooltip max-width="280px">{{ inferenceTooltip }}</BaseTooltip>
                 </q-icon>
             </div>
         </div>
@@ -84,6 +84,7 @@
 </template>
 
 <script lang="ts" setup>
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     import { ICONS } from 'src/style/icons';
     import MealPlanEntryMenu from 'src/components/MealPlanEntryMenu.vue';
     import { useBatchEnabled } from 'src/composables/useBatchEnabled';

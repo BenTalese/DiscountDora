@@ -95,6 +95,52 @@ def test__cross_dimension_with_unknown_ingredient_returns_none():
     assert units.convert(1, "cup", "g", ingredient="unobtanium") is None
 
 
+# ── Density lookup by real pantry names (owner 2026-09-09) ────────────────
+
+
+def test__density_for_ingredient__ExactTableKey__StillWins():
+    assert units.density_for_ingredient("olive oil") == 0.92
+
+
+def test__density_for_ingredient__QualifiedPantryName__ResolvesToItsHeadNoun():
+    """The reason the table read as dead: households name things
+    "Extra Virgin Olive Oil", never "olive oil"."""
+    assert units.density_for_ingredient("Extra Virgin Olive Oil") == 0.92
+    assert units.density_for_ingredient("Self-raising flour") == 0.53
+
+
+def test__density_for_ingredient__TwoKeysPresent__TrailingHeadNounWins():
+    """"Full Cream Milk" is a milk. Longest-match alone would call it cream."""
+    assert units.density_for_ingredient("Full Cream Milk") == 1.03
+
+
+def test__density_for_ingredient__TrailingKeysOverlap__LongestWins():
+    assert units.density_for_ingredient("Light Brown Sugar") == 0.93
+    assert units.density_for_ingredient("Vanilla Ice Cream") == 0.55
+
+
+def test__density_for_ingredient__WholeWordsOnly__NoSubstringMatches():
+    """Buttermilk is neither butter nor milk, and matching it as either is
+    exactly the false confidence the whole-word rule exists to prevent."""
+    assert units.density_for_ingredient("Buttermilk") is None
+
+
+def test__density_for_ingredient__NothingListed__StillReturnsNone():
+    """P12 No-invent — a wider net, not a guessed default."""
+    assert units.density_for_ingredient("Chicken Thighs") is None
+    assert units.density_for_ingredient("") is None
+    assert units.density_for_ingredient(None) is None
+
+
+def test__whole_is_a_count_unit():
+    """"1 whole onion" is a count. It used to be an unrecognised word, which
+    kept the nutrition rollup's count ladder from ever running for it."""
+    definition = units.find_unit("whole")
+    assert definition is not None
+    assert definition.dimension == units.COUNT
+    assert units.find_unit("wholes") == definition
+
+
 # ── Unknown unit handling ─────────────────────────────────────────────────
 
 

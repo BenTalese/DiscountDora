@@ -16,7 +16,7 @@
         :aria-label="`Log a price for ${itemName}`"
         @click="onOpen"
     >
-        <q-tooltip>Log a price</q-tooltip>
+        <BaseTooltip>Log a price</BaseTooltip>
     </RowActionButton>
 
     <BaseDialog
@@ -39,6 +39,7 @@
 </template>
 
 <script setup lang="ts">
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     import { computed, ref } from 'vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
     import PriceEntry from 'src/components/dora/PriceEntry.vue';

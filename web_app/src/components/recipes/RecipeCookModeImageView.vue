@@ -50,7 +50,7 @@
                     aria-label="Zoom this photo"
                     @click="openZoom()"
                 >
-                    <q-tooltip>Zoom in — tap the photo too</q-tooltip>
+                    <BaseTooltip>Zoom in — tap the photo too</BaseTooltip>
                 </BaseButton>
             </div>
 
@@ -86,7 +86,7 @@
                         :aria-label="magnified ? 'Fit photo to screen' : 'Magnify photo'"
                         @click="magnified = !magnified"
                     >
-                        <q-tooltip>{{ magnified ? 'Fit to screen' : 'Magnify — drag to pan' }}</q-tooltip>
+                        <BaseTooltip>{{ magnified ? 'Fit to screen' : 'Magnify — drag to pan' }}</BaseTooltip>
                     </BaseButton>
                     <BaseButton
                         variant="icon"
@@ -94,7 +94,7 @@
                         aria-label="Close zoom"
                         @click="zoomOpen = false"
                     >
-                        <q-tooltip>Close</q-tooltip>
+                        <BaseTooltip>Close</BaseTooltip>
                     </BaseButton>
                 </q-card-section>
                 <!-- Scroll container, so the magnified image can be panned by
@@ -140,6 +140,7 @@
 </template>
 
 <script setup lang="ts">
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     import { computed, reactive, ref, watch } from 'vue';
     import BaseButton from 'src/components/BaseButton.vue';
     import CookStepProgress from 'src/components/recipes/CookStepProgress.vue';

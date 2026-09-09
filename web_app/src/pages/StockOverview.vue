@@ -24,7 +24,7 @@
                 aria-label="New item"
                 @click="onCreateClick"
             >
-                <q-tooltip v-if="compactToolbar">New item</q-tooltip>
+                <BaseTooltip v-if="compactToolbar">New item</BaseTooltip>
             </BaseButton>
             <!-- FU-378 — action-first scan. Opens the camera in the default
                  "open item" action; the current action is shown and switched
@@ -39,7 +39,7 @@
                 aria-label="Scan"
                 @click="openScan"
             >
-                <q-tooltip v-if="compactToolbar">Scan</q-tooltip>
+                <BaseTooltip v-if="compactToolbar">Scan</BaseTooltip>
             </BaseButton>
             <!-- Gated on the install-wide stocktake switch (2026-08-20
                  feedback) — off ⇒ the household doesn't use stocktake and
@@ -77,7 +77,7 @@
                 <q-badge v-if="stocktakeOverdue > 0" color="primary" class="q-ml-xs">
                     {{ stocktakeOverdue }}
                 </q-badge>
-                <q-tooltip v-if="compactToolbar">{{ stocktakeAriaLabel }}</q-tooltip>
+                <BaseTooltip v-if="compactToolbar">{{ stocktakeAriaLabel }}</BaseTooltip>
             </BaseButton>
             <BaseButton
                 v-if="!bulkMode"
@@ -87,7 +87,7 @@
                 aria-label="Bulk select"
                 @click="bulkMode = true"
             >
-                <q-tooltip v-if="compactToolbar">Bulk select</q-tooltip>
+                <BaseTooltip v-if="compactToolbar">Bulk select</BaseTooltip>
             </BaseButton>
             <BaseButton
                 v-else
@@ -97,7 +97,7 @@
                 aria-label="Cancel bulk select"
                 @click="cancelBulk"
             >
-                <q-tooltip v-if="compactToolbar">Cancel bulk select</q-tooltip>
+                <BaseTooltip v-if="compactToolbar">Cancel bulk select</BaseTooltip>
             </BaseButton>
             <!-- 2026-08-15 feedback: "Log a price" moves off the dashboard
                  and onto the surface where the user is actually looking at
@@ -115,7 +115,7 @@
                 aria-label="Log a price"
                 @click="openLogPrice()"
             >
-                <q-tooltip v-if="compactToolbar">Log a price</q-tooltip>
+                <BaseTooltip v-if="compactToolbar">Log a price</BaseTooltip>
             </BaseButton>
             <!-- Feedback 2026-06-18 (round 3): Export rides BaseButton
                  (secondary) so it sits flush with the other toolbar
@@ -654,6 +654,7 @@
 </template>
 
 <script lang="ts" setup>
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     import { ICONS } from 'src/style/icons';
     import { storeToRefs } from 'pinia';
     import type { QInput } from 'quasar';

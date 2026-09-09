@@ -39,7 +39,7 @@
                                  shared StockLevelDot, tooltip'd per D-013. -->
                             <q-item-section side>
                                 <StockLevelDot :sequence="levelSequence(item.stock_level_id)" size="12px">
-                                    <q-tooltip>{{ levelLabel(item.stock_level_id) }}</q-tooltip>
+                                    <BaseTooltip>{{ levelLabel(item.stock_level_id) }}</BaseTooltip>
                                 </StockLevelDot>
                             </q-item-section>
                             <q-item-section>
@@ -50,7 +50,7 @@
                                         size="14px"
                                         color="warning"
                                     >
-                                        <q-tooltip>Frequently added</q-tooltip>
+                                        <BaseTooltip>Frequently added</BaseTooltip>
                                     </q-icon>
                                     <span>{{ item.name }}</span>
                                 </div>
@@ -121,6 +121,7 @@
 </template>
 
 <script lang="ts" setup>
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     import BaseButton from 'src/components/BaseButton.vue';
     import { ICONS } from 'src/style/icons';
     import StockLevelDot from 'src/components/stock/StockLevelDot.vue';

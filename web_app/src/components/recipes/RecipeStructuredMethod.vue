@@ -46,7 +46,7 @@
                     v-bind="editing ? dnd.bind(step).handleProps : {}"
                 >
                     {{ stepIndex + 1 }}
-                    <q-tooltip v-if="editing">Drag to reorder</q-tooltip>
+                    <BaseTooltip v-if="editing">Drag to reorder</BaseTooltip>
                 </span>
 
                 <div class="dora-steps__body rsm__content">
@@ -117,7 +117,7 @@
                                 :aria-label="`Move step ${stepIndex + 1} up`"
                                 @click="move(step, -1)"
                             >
-                                <q-tooltip>Move up</q-tooltip>
+                                <BaseTooltip>Move up</BaseTooltip>
                             </BaseButton>
                             <BaseButton
                                 variant="icon" dense
@@ -126,7 +126,7 @@
                                 :aria-label="`Move step ${stepIndex + 1} down`"
                                 @click="move(step, 1)"
                             >
-                                <q-tooltip>Move down</q-tooltip>
+                                <BaseTooltip>Move down</BaseTooltip>
                             </BaseButton>
                             <BaseButton
                                 variant="icon" dense
@@ -137,7 +137,7 @@
                                 <q-badge v-if="linkCount(step) > 0" floating rounded color="primary">
                                     {{ linkCount(step) }}
                                 </q-badge>
-                                <q-tooltip>Ingredients, tools and section</q-tooltip>
+                                <BaseTooltip>Ingredients, tools and section</BaseTooltip>
                             </BaseButton>
                             <BaseButton
                                 variant="icon" dense
@@ -147,7 +147,7 @@
                                     : `Remove the hint on step ${stepIndex + 1}`"
                                 @click="toggleHint(step)"
                             >
-                                <q-tooltip>{{ step.hint === null ? 'Add hint' : 'Remove hint' }}</q-tooltip>
+                                <BaseTooltip>{{ step.hint === null ? 'Add hint' : 'Remove hint' }}</BaseTooltip>
                             </BaseButton>
                             <BaseButton
                                 :variant="step.timer_minutes === null ? 'icon' : 'secondary'"
@@ -159,7 +159,7 @@
                                     : `Remove the timer on step ${stepIndex + 1}`"
                                 @click="toggleTimer(step)"
                             >
-                                <q-tooltip>{{ step.timer_minutes === null ? 'Add a timer' : 'Remove the timer' }}</q-tooltip>
+                                <BaseTooltip>{{ step.timer_minutes === null ? 'Add a timer' : 'Remove the timer' }}</BaseTooltip>
                             </BaseButton>
                             <BaseButton
                                 variant="icon" dense
@@ -167,7 +167,7 @@
                                 :aria-label="`Add a sub-step under step ${stepIndex + 1}`"
                                 @click="addSubStep(step.client_id)"
                             >
-                                <q-tooltip>Add sub-step</q-tooltip>
+                                <BaseTooltip>Add sub-step</BaseTooltip>
                             </BaseButton>
                             <q-space />
                             <BaseButton
@@ -176,7 +176,7 @@
                                 :aria-label="`Remove step ${stepIndex + 1}`"
                                 @click="remove(step.client_id)"
                             >
-                                <q-tooltip>Remove</q-tooltip>
+                                <BaseTooltip>Remove</BaseTooltip>
                             </BaseButton>
                         </div>
                     </template>
@@ -257,7 +257,7 @@
                                             :aria-label="`Move sub-step ${subIndex + 1} up`"
                                             @click="move(sub, -1)"
                                         >
-                                            <q-tooltip>Move up</q-tooltip>
+                                            <BaseTooltip>Move up</BaseTooltip>
                                         </BaseButton>
                                         <BaseButton
                                             variant="icon" dense
@@ -266,7 +266,7 @@
                                             :aria-label="`Move sub-step ${subIndex + 1} down`"
                                             @click="move(sub, 1)"
                                         >
-                                            <q-tooltip>Move down</q-tooltip>
+                                            <BaseTooltip>Move down</BaseTooltip>
                                         </BaseButton>
                                         <BaseButton
                                             variant="icon" dense
@@ -277,7 +277,7 @@
                                             <q-badge v-if="linkCount(sub) > 0" floating rounded color="primary">
                                                 {{ linkCount(sub) }}
                                             </q-badge>
-                                            <q-tooltip>Ingredients and tools</q-tooltip>
+                                            <BaseTooltip>Ingredients and tools</BaseTooltip>
                                         </BaseButton>
                                         <BaseButton
                                             variant="icon" dense
@@ -287,7 +287,7 @@
                                                 : `Remove the hint on sub-step ${subIndex + 1}`"
                                             @click="toggleHint(sub)"
                                         >
-                                            <q-tooltip>{{ sub.hint === null ? 'Add hint' : 'Remove hint' }}</q-tooltip>
+                                            <BaseTooltip>{{ sub.hint === null ? 'Add hint' : 'Remove hint' }}</BaseTooltip>
                                         </BaseButton>
                                         <BaseButton
                                             :variant="sub.timer_minutes === null ? 'icon' : 'secondary'"
@@ -299,7 +299,7 @@
                                                 : `Remove the timer on sub-step ${subIndex + 1}`"
                                             @click="toggleTimer(sub)"
                                         >
-                                            <q-tooltip>{{ sub.timer_minutes === null ? 'Add a timer' : 'Remove the timer' }}</q-tooltip>
+                                            <BaseTooltip>{{ sub.timer_minutes === null ? 'Add a timer' : 'Remove the timer' }}</BaseTooltip>
                                         </BaseButton>
                                         <q-space />
                                         <BaseButton
@@ -308,7 +308,7 @@
                                             :aria-label="`Remove sub-step ${subIndex + 1}`"
                                             @click="remove(sub.client_id)"
                                         >
-                                            <q-tooltip>Remove</q-tooltip>
+                                            <BaseTooltip>Remove</BaseTooltip>
                                         </BaseButton>
                                     </div>
                                 </template>
@@ -361,6 +361,7 @@
 </template>
 
 <script setup lang="ts">
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     import { computed, ref } from 'vue';
 
     import BaseButton from 'src/components/BaseButton.vue';

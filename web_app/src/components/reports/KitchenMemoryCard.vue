@@ -69,10 +69,10 @@
                             class="km-column__bar"
                             :style="{ height: `${col.heightPct}%` }"
                         >
-                            <q-tooltip>
+                            <BaseTooltip>
                                 {{ col.date }} — {{ col.cookCount }}
                                 cook{{ col.cookCount === 1 ? '' : 's' }}
-                            </q-tooltip>
+                            </BaseTooltip>
                         </span>
                     </li>
                 </ul>
@@ -140,6 +140,7 @@
 </template>
 
 <script lang="ts" setup>
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     /**
      * "What do we actually eat?" — cooks, repertoire, and what you keep buying.
      *

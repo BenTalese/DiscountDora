@@ -3149,6 +3149,34 @@ one-off, or purely product/UX decisions (those go to the Charter check + worklog
   Deliberately not promoted at the first or second. See ADR-084.
 
 
+### R-088 — A cross-cutting interaction default is owned by a wrapper, never repeated or patched
+- **Rule:** when a framework component's *default behaviour* is wrong for this
+  app on every surface (a delay, a transition, a dismiss policy, a position),
+  fix it by routing every call site through a thin `Base*` wrapper that sets the
+  default and passes the rest through. Do **not** set the prop at each call site,
+  and do **not** mutate the vendor component's `props.*.default` at boot.
+- **Why:** per-call-site is how you get 313 tooltips of which 2 have a delay —
+  the default is then whatever the last author happened to type, and the next
+  one silently reverts it. Boot-time patching fixes it in one place but makes
+  `<q-tooltip>` behave differently from its own documentation with nothing in the
+  template to say so; that is the reflection-shaped magic R-019 exists to keep
+  out. A wrapper is explicit at every call site (`<BaseTooltip>` is visibly not
+  `<q-tooltip>`), greppable, and overridable by a prop where one site genuinely
+  differs.
+- **How to comply:** wrapper renders the vendor component, declares only the
+  props whose defaults it is changing, and lets `$attrs` carry everything else
+  (so `anchor` / `self` / `class` keep working untouched). Sweep the call sites
+  in the same change — a wrapper that only new code uses is not a default, it is
+  a second convention. Then delete the now-redundant per-site overrides, or the
+  single source is a lie.
+- **Violation signal:** a new raw `q-tooltip` in a diff; the same prop set to the
+  same value at more than ~3 call sites; anything assigning to a vendor
+  component's `.props` outside its own package.
+- **Established:** 2026-09-09 (`BaseTooltip`, 313 call sites across 81 files).
+  Prior art it now generalises: `BaseButton`, `BaseDialog`, `BaseSelect`. See
+  ADR-085.
+
+
 ### ADR-001 — Adopt engineering standards + mandatory explain-or-flag gate
 - **Date / task:** 2026-06-06 (user request after repeated theme/component regressions)
 - **Status:** accepted
@@ -5727,3 +5755,46 @@ A non-binding cookbook of solutions to recurring problems. Not rules — just a
   diverge in behaviour. The pattern also gives a natural home for future
   non-session callers (a CLI, a second companion) without re-litigating auth.
 - **Rule promoted:** R-087.
+
+
+### ADR-085 — App-wide component defaults live in a wrapper, not at the call site or in a monkey-patch (promotes R-088)
+- **Date / task:** 2026-09-09 (owner feedback: *"I don't like how everywhere
+  through the app you immediately see the tooltip on mobile for all UI elements
+  when interacting with them. There should be a delay. Otherwise you see
+  tooltips flashing as you use the app."*)
+- **Status:** accepted
+- **Context:** QTooltip defaults `delay` to 0, and on mobile it binds show to
+  `touchstart` and hide to `touchend`/`click`. Every tap on every icon button in
+  the app therefore flashed its tooltip up and straight back down. D-005 requires
+  a tooltip on every icon-only control, so this was not a few bad call sites — it
+  was 313 tooltips across 81 files, of which exactly two (`PreferencesSettings`,
+  `DoraModeSlider`) had ever set a delay, each a local patch of the same global
+  problem. Quasar's `framework.config` has no QTooltip entry, so there is no
+  supported one-line global.
+- **Decision:** add `BaseTooltip` — a wrapper declaring `delay` (500ms) and
+  `hideDelay`, passing all other attrs through — and sweep every call site onto
+  it, deleting the two ad-hoc overrides. 500ms is one number for both pointers:
+  on touch the show timer is cleared by `touchend` before it fires, so a tap is
+  silent and a deliberate long-press still surfaces the label; on mouse it is a
+  conventional hover dwell. That avoids a `pointer: coarse` split (R-085 would
+  have permitted one, but two numbers to keep in sync buys nothing here).
+- **Alternatives considered:**
+  - *Set `:delay` at each call site.* Rejected — that is the state that produced
+    the bug, and it degrades the moment someone adds tooltip 314.
+  - *Patch `QTooltip.props.delay.default` in a boot file.* Rejected. One line and
+    zero churn, but it makes `<q-tooltip>` silently disobey its own docs with
+    nothing in the template to hint at it — exactly the invisible-action-at-a-
+    distance R-019 rules out. The 81-file sweep is mechanical and reviewable;
+    the magic is neither.
+- **Consequences:**
+  - A large but purely mechanical diff (tag rename + one import per file).
+    `vue-tsc`, `eslint`, `quasar build` and 720 vitest specs all green; the
+    existing specs that assert tooltip text through a `QTooltip` stub
+    (`doraModeSlider`, `alertRow`, `recipeRatingChip`, `addToListButton`) pass
+    unchanged, which is the runtime evidence that the wrapper resolves and
+    forwards its slot correctly inside real component trees.
+  - `.q-tooltip` styling in `app.scss` is untouched — the wrapper still renders a
+    real QTooltip.
+  - The 500ms value is a first guess at the feel and is the one thing here that
+    wants the owner's eye on a real phone. Logged in `DORA_VERIFY.md`.
+- **Rule promoted:** R-088.

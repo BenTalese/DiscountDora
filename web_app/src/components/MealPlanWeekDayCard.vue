@@ -43,13 +43,13 @@
                 <span v-if="nutrition.counted_meals < nutrition.total_meals">
                     ({{ nutrition.counted_meals }}/{{ nutrition.total_meals }})
                 </span>
-                <q-tooltip>
+                <BaseTooltip>
                     One serving of each meal planned for {{ day.label }}<template
                         v-if="nutrition.counted_meals < nutrition.total_meals"
                     >, counting {{ nutrition.counted_meals }} of
                     {{ nutrition.total_meals }} meals — the rest don't have a
                     calorie figure yet</template>.
-                </q-tooltip>
+                </BaseTooltip>
             </div>
             <!-- Owner 2026-09-05 — the day's cost sits where the day's calories
                  do, because it is the same kind of fact under the same coverage
@@ -63,14 +63,14 @@
                 <span v-if="cost.counted_meals < cost.total_meals">
                     ({{ cost.counted_meals }}/{{ cost.total_meals }})
                 </span>
-                <q-tooltip>
+                <BaseTooltip>
                     Estimated cost of {{ day.label }}'s meals at the servings
                     they're planned for<template
                         v-if="cost.counted_meals < cost.total_meals"
                     >, counting {{ cost.counted_meals }} of
                     {{ cost.total_meals }} meals — the rest have nothing priced
                     yet</template>.
-                </q-tooltip>
+                </BaseTooltip>
             </div>
         </component>
         <q-card-section v-if="!collapsed" class="q-pa-sm column q-gutter-xs">
@@ -190,6 +190,7 @@
 </template>
 
 <script lang="ts" setup>
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     import MealPlanEntryChip from 'components/MealPlanEntryChip.vue';
     // Content-identity keys, not `meal_plan_entry_id` — see the helper's note:
     // every save mints new entry ids, which remounted the chip mid-edit and

@@ -84,7 +84,7 @@ UNIVERSAL_CANONICAL_UNITS: frozenset[str] = frozenset({
     # 5 ml here, 4.93 ml in the US, 5.9 ml in the UK — nobody measures a
     # teaspoon to 2%. One row, offered everywhere.
     "tsp",
-    "ea", "pack", "dozen",
+    "ea", "pack", "dozen", "whole",
     "kJ", "kcal", "J",
 })
 
@@ -313,7 +313,10 @@ UNIT_TABLE: dict[str, UnitDef] = {
     "lbs": UnitDef(MASS, 453.592, "lb"),
     "pound": UnitDef(MASS, 453.592, "lb"),
     "pounds": UnitDef(MASS, 453.592, "lb"),
-    "stick": UnitDef(MASS, 113.0, "stick"),          # butter
+    # 113 g is a stick *of butter*. See FOOD_SPECIFIC_MASS_UNITS below — the
+    # figure is only meaningful for the foods listed there, and both recipe
+    # calculators check that before trusting it.
+    "stick": UnitDef(MASS, 113.0, "stick"),
     "sticks": UnitDef(MASS, 113.0, "stick"),
 
     # ── Count — base ea (new — B1, FU-227) ────────────────────────────
@@ -325,6 +328,15 @@ UNIT_TABLE: dict[str, UnitDef] = {
     "each": UnitDef(COUNT, 1.0, "ea"),
     "unit": UnitDef(COUNT, 1.0, "ea"),
     "units": UnitDef(COUNT, 1.0, "ea"),
+    # "1 whole onion" is a count, and was previously an *unknown* word — which
+    # meant the nutrition rollup's count ladder (each/whole/medium/large/…)
+    # never ran for it and only a portion row literally saying "whole" could
+    # answer. "1 onion" weighed 110 g while "1 whole onion" weighed nothing
+    # (owner 2026-09-09). Its own canonical rather than an "ea" alias: a recipe
+    # that says whole means the ingredient uncut, and flattening that to "1 ea"
+    # in the ingredient list would lose a word the cook reads.
+    "whole": UnitDef(COUNT, 1.0, "whole"),
+    "wholes": UnitDef(COUNT, 1.0, "whole"),
     "pack": UnitDef(COUNT, 1.0, "pack"),
     "packs": UnitDef(COUNT, 1.0, "pack"),
     "dozen": UnitDef(COUNT, 12.0, "dozen"),
@@ -387,9 +399,16 @@ INGREDIENT_DENSITY_G_PER_ML: dict[str, float] = {
     "icing sugar": 0.56, "powdered sugar": 0.56, "confectioners sugar": 0.56,
     # Fats / dairy
     "butter": 0.91, "margarine": 0.91,
+    # Both spellings: the app ships in Australian English, where the table's
+    # US spelling never matches what anyone types into their pantry.
     "yogurt": 1.04, "greek yogurt": 1.05,
+    "yoghurt": 1.04, "greek yoghurt": 1.05,
     "sour cream": 0.95, "cream cheese": 0.95, "ricotta": 0.85, "mascarpone": 1.00,
     "cream": 1.00, "heavy cream": 1.00, "thickened cream": 1.00,
+    # Aerated, so it is barely half the density of the cream in its name —
+    # without its own row, "Vanilla Ice Cream" resolves to `cream` and reads
+    # nearly twice its real weight.
+    "ice cream": 0.55,
     "peanut butter": 1.05,
     # Grains / pulses / starches
     "rice": 0.78, "white rice": 0.78, "brown rice": 0.76,
@@ -525,6 +544,161 @@ def snap_gas_mark(celsius: float) -> str:
     return best_key
 
 
+@dataclass(frozen=True, slots=True)
+class FoodSpecificMass:
+    """A mass unit whose gram value is a fact about one food, not about the
+    unit. `owners` are the foods the figure belongs to; `portion_measures` are
+    the words a nutrition dataset uses for the same household measure."""
+    owners: tuple[str, ...]
+    portion_measures: tuple[str, ...]
+
+
+# The one entry, and the reason this exists: `stick` is 113 g because that is a
+# stick of butter in a US supermarket. A stick of celery is about 40 g and a
+# cinnamon stick about 2.6 g, so a table of universal conversions is quietly
+# carrying one product's packaging. Rather than delete it — US households
+# genuinely measure butter this way — the ambiguity is named here, and both
+# recipe calculators ask before trusting the number: the nutrition rollup
+# prefers the food's own portion row (`portion_measures`, including USDA's
+# "stalk" for the celery case), and recipe costing refuses the conversion
+# outright unless the ingredient is one of `owners`. Before that check,
+# "2 sticks of celery" was weighed as 226 g and billed as 226 g (owner
+# 2026-09-09).
+FOOD_SPECIFIC_MASS_UNITS: dict[str, FoodSpecificMass] = {
+    "stick": FoodSpecificMass(
+        owners=("butter", "margarine"),
+        portion_measures=("stick", "stalk"),
+    ),
+}
+
+
+# Words that name a *part of* a shelf item, never the item itself. A recipe
+# asking for three of these is asking for three pieces of one thing you buy,
+# and costing them against the per-item price bills three of the thing:
+# measured 2026-09-09, "3 cloves" of garlic came to $3.60 (three bulbs), "2
+# sprigs" of tarragon to $5.00 (two bunches), "4 rashers" of bacon to $3.60
+# (four packs). Same family as the $16.50 egg yolks (R-076/ADR-073).
+#
+# The counted branch is otherwise deliberately permissive — "2 tins" is the
+# identical shape and is correct, because a tin *is* the shelf item — and no
+# data distinguishes the two cases. This list is the distinction, stated
+# explicitly. An ingredient measured in one of these is priced from its weight
+# where a weight is knowable, and reported unpriced where it isn't; it is never
+# billed as a whole product.
+#
+# Deliberately short. Every word here is a part in every kitchen — a "head" of
+# garlic or a "bunch" of herbs is the thing you buy and is correctly counted,
+# so neither belongs.
+SUB_ITEM_UNITS: frozenset[str] = frozenset({
+    "clove",        # of garlic
+    "sprig",        # of a soft herb
+    "rasher",       # of bacon
+    "slice",        # of bread, cheese, ham
+    "stalk",        # of celery, rhubarb
+    "floret",       # of broccoli, cauliflower
+    "leaf",         # of basil, gelatine
+    "wedge",        # of lemon, lime
+    # Not a part but the same failure: a vague amount, never a whole product.
+    # "pinch", "dash" and "smidgen" are already real volume units and convert
+    # properly, so only the ones with no defined size are listed.
+    "knob",         # of butter
+    "splash",
+    "drizzle",
+    "handful",
+})
+
+
+def is_sub_item_unit(unit: str | None) -> bool:
+    """Whether *unit* names a part of a shelf item rather than the item.
+    Accepts plurals, which is how recipes are actually written ("3 cloves")."""
+    if not unit:
+        return False
+    normalised = normalise_unit(unit)
+    return normalised in SUB_ITEM_UNITS or normalised.rstrip("s") in SUB_ITEM_UNITS
+
+
+def food_specific_mass(unit: str | None) -> FoodSpecificMass | None:
+    """The ambiguity record for *unit*, or None when the unit means one thing
+    everywhere. Accepts plurals ("sticks")."""
+    if not unit:
+        return None
+    normalised = normalise_unit(unit)
+    return FOOD_SPECIFIC_MASS_UNITS.get(
+        normalised) or FOOD_SPECIFIC_MASS_UNITS.get(normalised.rstrip("s"))
+
+
+def food_specific_mass_applies(unit: str | None, ingredient: str | None) -> bool:
+    """Whether *unit*'s gram value may be applied to *ingredient*.
+
+    True for a unit that isn't food-specific at all — the common case, and the
+    reason callers can put this in front of every mass conversion. For one that
+    is, the ingredient has to name one of the owning foods as a whole word,
+    which means an unknown ingredient is a **no**: the number is unusable
+    without knowing what it is measuring, and that is the state that produced
+    the wrong answer.
+    """
+    record = food_specific_mass(unit)
+    if record is None:
+        return True
+    if not ingredient:
+        return False
+    words = set("".join(
+        c if c.isalnum() else " " for c in ingredient.lower()
+    ).split())
+    return any(owner in words for owner in record.owners)
+
+
+def density_for_ingredient(name: str | None) -> float | None:
+    """Grams per millilitre for *name*, or None when the table can't answer.
+
+    An exact lookup was the whole of this until 2026-09-09, and it meant the
+    table almost never fired against a real pantry: households type
+    "Extra Virgin Olive Oil" and "Full Cream Milk", not "olive oil" and "milk",
+    so a 77-entry table of correct densities sat there answering nothing and
+    every volume-measured ingredient reported as unweighable.
+
+    So: exact match first, then a table key appearing in the name **as whole
+    words**, resolved by two rules in order.
+
+    1. *Head noun wins.* English names an ingredient last — "Full Cream Milk"
+       is a milk, not a cream — so a key that ends the name beats one buried in
+       the middle. Without this rule that name reads as cream, and it is the
+       common shape, not an edge case.
+    2. *Then longest wins*, because "brown sugar" and "sugar" both appear in
+       "Light Brown Sugar" and the specific one is the right answer. This is
+       also what keeps "Vanilla Ice Cream" off the dairy-cream row.
+
+    Whole words rather than a substring test throughout, or "buttermilk" would
+    be butter and "coconut oil" would be right only by luck.
+
+    This is still a lookup, not an estimate (P12 No-invent): a name with no
+    listed ingredient in it returns None exactly as before, and the caller
+    reports the ingredient as unconvertible rather than inventing a weight.
+    """
+    if not name:
+        return None
+    lowered = name.lower().strip()
+    exact = INGREDIENT_DENSITY_G_PER_ML.get(lowered)
+    if exact is not None:
+        return exact
+    words = [w for w in "".join(
+        c if (c.isalnum() or c == "-") else " " for c in lowered
+    ).split() if w]
+    if not words:
+        return None
+    normalised = " ".join(words)
+    haystack = f" {normalised} "
+    matches = [
+        key for key in INGREDIENT_DENSITY_G_PER_ML
+        if f" {key} " in haystack
+    ]
+    if not matches:
+        return None
+    trailing = [key for key in matches if normalised.endswith(key)]
+    best = max(trailing or matches, key=len)
+    return INGREDIENT_DENSITY_G_PER_ML[best]
+
+
 def convert(
     amount: float,
     from_unit: str,
@@ -549,7 +723,7 @@ def convert(
     if {src.dimension, dst.dimension} == {MASS, VOLUME}:
         if not ingredient:
             return None
-        density = INGREDIENT_DENSITY_G_PER_ML.get(ingredient.lower())
+        density = density_for_ingredient(ingredient)
         if density is None:
             return None
         base = amount * src.factor                # to source's base unit

@@ -80,7 +80,7 @@
                     :loading="loadingFact"
                     @click="loadFoodFact"
                 >
-                    <q-tooltip>Another, please</q-tooltip>
+                    <BaseTooltip>Another, please</BaseTooltip>
                 </BaseButton>
             </q-card-section>
         </q-card>
@@ -287,6 +287,7 @@
 </template>
 
 <script lang="ts" setup>
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     import BaseButton from 'src/components/BaseButton.vue';
     import { ICONS } from 'src/style/icons';
     import { useQuasar } from 'quasar';

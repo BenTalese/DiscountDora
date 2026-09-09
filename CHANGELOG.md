@@ -6,6 +6,65 @@ semver — major bumps signal schema or breaking-config changes.
 ## [Unreleased]
 
 ### Fixed
+- **Health Star Ratings / Nutri-Score show up without reloading the page
+  (2026-09-09).** Turning the rating scheme on refreshed the feature flag but
+  not the recipes already fetched — and the rating is computed per request, so
+  those recipes carried none. The cookbook consequently showed no rating until
+  a full browser refresh. Both places that can switch the scheme on (Settings →
+  Nutrition, and Region's "match this device" nudge) now drop the cached
+  recipes as well.
+- **"Uses expiring ingredients" still filters after you open a recipe and come
+  back (2026-09-09).** The chip stayed switched on — filters are meant to
+  survive navigation — but the list quietly went back to showing everything,
+  because the set of at-risk recipes behind the chip is fetched fresh and was
+  not re-fetched on the way back in. The one filter on the page that asks the
+  server a question, and the only one affected.
+- **Nutrition can now weigh several things it used to skip (2026-09-09).**
+  Three fixes, all of them about ingredients measured the way recipes are
+  actually written rather than in grams:
+  **"1 whole onion"** counted as nothing while "1 onion" counted correctly —
+  *whole* wasn't recognised as a way of counting something.
+  **"2 sticks of celery"** was counted as 226 g, because a "stick" is a stick
+  of butter in the conversion table; a stick of celery is about 40 g. Anything
+  measured in sticks is now weighed from that food's own data, and reported as
+  uncounted when the data doesn't cover it — rather than confidently wrong.
+  And the **fallback weights for liquids and powders** (used when a food has no
+  measured cup/spoon entry of its own) only ever matched a pantry item named
+  *exactly* "milk" or "olive oil" — never "Full Cream Milk" or "Extra Virgin
+  Olive Oil", which is what people actually type. It now reads the item's name
+  properly. Nothing is guessed: an ingredient it still can't weigh is listed as
+  uncounted, same as before.
+- **"3 cloves of garlic" no longer costs three bulbs of garlic (2026-09-09).**
+  Words that mean a *part* of something you buy — a clove, a sprig, a rasher, a
+  slice, a knob of butter — were being counted as whole products, so a few
+  cloves could add several dollars to a recipe. Dora now prices them by weight
+  where it knows what one weighs, and leaves them out of the total where it
+  doesn't. Ingredients written in tins, packs or plain numbers are unaffected.
+- **Cost estimates can now price things counted rather than weighed
+  (2026-09-09).** "2 leeks" against a price per kilo used to be left out of the
+  estimate; if Dora knows what one leek weighs — the same figures the nutrition
+  panel uses — it can price it. And the two now agree: a cup of flour weighs
+  the same in the cost breakdown as it does in the nutrition panel, where they
+  used to differ by 6%.
+- **Recipe cost estimates reach ingredients measured by volume (2026-09-09).**
+  A recipe written in cups, against a product priced by the kilo, was always
+  reported as *"units don't match the price"* — Dora knew the weight of a cup
+  of flour and never looked it up. It does now, on the cookbook, the recipe
+  page and the meal planner alike.
+- **"Salt to taste" no longer costs a whole jar of salt (2026-09-09).** An
+  ingredient with no amount written on it was billed as one of whatever the
+  product is, and counted as successfully priced. It now reads *"No amount on
+  the ingredient"* in the breakdown, alongside the other reasons a line can't
+  be costed.
+- **Celery isn't priced as butter (2026-09-09).** "2 sticks" meant two 113 g
+  sticks of butter to the cost estimate, whatever the ingredient was — so two
+  stalks of celery were billed at nearly a quarter-kilo. Anything measured in
+  sticks is now priced only for the foods that unit actually describes.
+- **Adding a free-text ingredient closes the list it came from (2026-09-09).**
+  Typing an ingredient your pantry doesn't have asks whether to track it or
+  keep it as plain text. Answering "Add to pantry" closed the dropdown;
+  answering "Keep as free text" left it hanging open over a list of pantry
+  items you'd just declined to pick from. Both answers now close it.
 - **ALDI product search works again (2026-09-07).** *Landed in the sibling
   `dora-companion` repo.* ALDI rebuilt their website, and the scraper had been
   reading a page layout that no longer exists — the old addresses now redirect
@@ -22,6 +81,22 @@ semver — major bumps signal schema or breaking-config changes.
   was-price to compare against.
 
 ### Changed
+- **The stock level chip is back to its original size on phones
+  (2026-09-09).** It was enlarged in the touch-target pass; the request had
+  been about the rows in the menu it opens, which stay at their bigger size.
+- **Recipe cards drop the "N parts" chip (2026-09-09).** How many named
+  sections a recipe is split into isn't something you choose a dinner on.
+- **Tooltips wait before they appear (2026-09-09).** Tapping anything on a phone
+  used to flash that control's tooltip up and straight back down, all over the
+  app. Tooltips now wait half a second, so a normal tap shows nothing and a
+  deliberate press-and-hold still tells you what the button does. On a mouse
+  it's the usual hover pause.
+- **Small chrome tidy-ups (2026-09-09).** The alerts bell's number no longer
+  sits in a different spot on a phone than on a desktop — it sat further out on
+  touch, close to the screen edge, and too far over the bell on desktop; it's
+  now one position on both. **Support Dora** drops its heading and blurb and the
+  arrow icons beside each row — it's just the three links. The **Product
+  search** menu entry drops its "opens elsewhere" arrow too.
 - **The dashboard lost two cards and most of its chrome (2026-09-08).** A
   sixteen-item pass over the home screen, all of it the owner's:
   **Shopping lists** and **Before you shop** are gone — the first because the

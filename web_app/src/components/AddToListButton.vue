@@ -33,7 +33,7 @@
         :disable="!productId"
         @click.stop="onInlineProductClick"
     >
-        <q-tooltip>Add a product-only line to a draft list</q-tooltip>
+        <BaseTooltip>Add a product-only line to a draft list</BaseTooltip>
     </BaseButton>
 
     <!-- ── Bulk variant ─────────────────────────────────────────────────
@@ -108,7 +108,7 @@
              square, on a row that had eight other things to say. The verdict
              now lives only where the user went looking for it: the stock-item
              detail card and the shopping list. -->
-        <q-tooltip>{{ tooltip }}</q-tooltip>
+        <BaseTooltip>{{ tooltip }}</BaseTooltip>
         <q-popup-proxy
             v-if="multiPopoverOpen"
             v-model="multiPopoverOpen"
@@ -121,6 +121,7 @@
 </template>
 
 <script setup lang="ts">
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     import { computed, h, ref, type Component } from 'vue';
     import { storeToRefs } from 'pinia';
     import { QCard, QCardSection, QItem, QItemSection, QList, QSeparator, useQuasar } from 'quasar';

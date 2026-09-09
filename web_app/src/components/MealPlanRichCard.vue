@@ -55,7 +55,7 @@
                     size="14px"
                     class="rich-card__status text-positive"
                 >
-                    <q-tooltip>Cooked</q-tooltip>
+                    <BaseTooltip>Cooked</BaseTooltip>
                 </q-icon>
                 <q-icon
                     v-else-if="shortfall && batchEnabled"
@@ -63,7 +63,7 @@
                     size="14px"
                     class="rich-card__status text-warning"
                 >
-                    <q-tooltip>Needs cooking — pool is short</q-tooltip>
+                    <BaseTooltip>Needs cooking — pool is short</BaseTooltip>
                 </q-icon>
                 <span class="rich-card__servings">×{{ entry.servings }}</span>
                 <span v-if="entry.cook_time_minutes" class="rich-card__cook-time">
@@ -98,6 +98,7 @@
 </template>
 
 <script lang="ts" setup>
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     import { ICONS } from 'src/style/icons';
     import MealPlanEntryMenu from 'src/components/MealPlanEntryMenu.vue';
     import { recipeImageUrl } from 'src/services/api/recipeApiService';

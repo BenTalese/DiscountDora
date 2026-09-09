@@ -41,7 +41,7 @@
                                 :disable="index === 0"
                                 @click="emit('reorder', item.id, 'up')"
                             >
-                                <q-tooltip>Move up</q-tooltip>
+                                <BaseTooltip>Move up</BaseTooltip>
                             </BaseButton>
                             <BaseButton
                                 variant="icon"
@@ -49,14 +49,14 @@
                                 :disable="index === items.length - 1"
                                 @click="emit('reorder', item.id, 'down')"
                             >
-                                <q-tooltip>Move down</q-tooltip>
+                                <BaseTooltip>Move down</BaseTooltip>
                             </BaseButton>
                         </template>
                         <BaseButton variant="icon" :icon="ICONS.edit" @click="startRename(item)">
-                            <q-tooltip>Rename</q-tooltip>
+                            <BaseTooltip>Rename</BaseTooltip>
                         </BaseButton>
                         <BaseButton variant="icon" :icon="ICONS.delete_outline" @click="onDelete(item)">
-                            <q-tooltip>Delete</q-tooltip>
+                            <BaseTooltip>Delete</BaseTooltip>
                         </BaseButton>
                     </div>
                 </q-item-section>
@@ -75,6 +75,7 @@
 </template>
 
 <script lang="ts" setup>
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     import AppSpinner from 'src/components/AppSpinner.vue';
     import BaseButton from 'src/components/BaseButton.vue';
     import { ICONS } from 'src/style/icons';

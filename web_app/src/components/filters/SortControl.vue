@@ -45,13 +45,14 @@
                 :aria-label="`Sort ${directionLabel.toLowerCase()} — click to reverse`"
                 @click.stop="toggleDirection"
             >
-                <q-tooltip>{{ directionLabel }}</q-tooltip>
+                <BaseTooltip>{{ directionLabel }}</BaseTooltip>
             </q-btn>
         </template>
     </BaseSelect>
 </template>
 
 <script setup lang="ts">
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     import { computed } from 'vue';
     import { ICONS } from 'src/style/icons';
     import BaseSelect from 'src/components/BaseSelect.vue';

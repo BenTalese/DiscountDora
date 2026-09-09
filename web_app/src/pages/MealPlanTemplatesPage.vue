@@ -4,7 +4,7 @@
     <q-page class="q-pa-md column q-gutter-md page">
         <div class="row items-center">
             <BaseButton variant="icon" :icon="ICONS.chevron_left" @click="goToPlanner">
-                <q-tooltip>Back to the planner</q-tooltip>
+                <BaseTooltip>Back to the planner</BaseTooltip>
             </BaseButton>
             <div class="q-ml-sm">
                 <div class="text-h6">Rotating template sets</div>
@@ -49,10 +49,10 @@
                     <q-item-section side>
                         <div class="row items-center q-gutter-xs">
                             <BaseButton variant="icon" :icon="ICONS.edit" @click="openSetEditor(s.meal_plan_template_set_id)">
-                                <q-tooltip>Edit</q-tooltip>
+                                <BaseTooltip>Edit</BaseTooltip>
                             </BaseButton>
                             <BaseButton variant="icon" :icon="ICONS.delete" @click="deleteSet(s)">
-                                <q-tooltip>Delete</q-tooltip>
+                                <BaseTooltip>Delete</BaseTooltip>
                             </BaseButton>
                         </div>
                     </q-item-section>
@@ -115,6 +115,7 @@
 </template>
 
 <script lang="ts" setup>
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     import { ICONS } from 'src/style/icons';
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';

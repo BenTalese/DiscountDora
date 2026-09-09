@@ -99,7 +99,7 @@
                         aria-label="Manage alerts"
                         @click="alertsOpen = true"
                     >
-                        <q-tooltip v-if="compactToolbar">Manage alerts</q-tooltip>
+                        <BaseTooltip v-if="compactToolbar">Manage alerts</BaseTooltip>
                     </BaseButton>
                 </template>
             </PageToolbar>
@@ -158,13 +158,13 @@
                                 <span v-if="aboveLowPct(s) !== null">
                                     · currently {{ aboveLowPct(s) }}% above
                                     <q-icon :name="ICONS.help_outline" size="14px" class="q-ml-xs">
-                                        <q-tooltip>
+                                        <BaseTooltip>
                                             You're paying more than your own usual
                                             price for this product, based on prices
                                             you've logged. Not a comparison to the
                                             all-time-low across all stores — it's
                                             personal.
-                                        </q-tooltip>
+                                        </BaseTooltip>
                                     </q-icon>
                                 </span>
                             </div>
@@ -182,12 +182,12 @@
                                     }}{{ s.your_prices.baseline_unit ? `/${s.your_prices.baseline_unit}` : '' }}
                                 </strong>
                                 <q-icon :name="ICONS.help_outline" size="14px" class="q-ml-xs">
-                                    <q-tooltip>
+                                    <BaseTooltip>
                                         "Usually" is the median of prices you've
                                         logged for this item. "Above usual" means
                                         today's shelf price is meaningfully higher
                                         than that median.
-                                    </q-tooltip>
+                                    </BaseTooltip>
                                 </q-icon>
                                 <q-chip
                                     v-if="s.your_prices.above_baseline"
@@ -266,6 +266,7 @@
 </template>
 
 <script lang="ts" setup>
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     import { ICONS } from 'src/style/icons';
     import SearchInput from 'src/components/SearchInput.vue';
     import BaseButton from 'src/components/BaseButton.vue';

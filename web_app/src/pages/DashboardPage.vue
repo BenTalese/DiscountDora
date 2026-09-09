@@ -51,7 +51,7 @@
                     :label="$q.screen.lt.sm ? undefined : 'Cards'"
                     aria-label="Cards"
                 >
-                    <q-tooltip v-if="$q.screen.lt.sm">Show &amp; order cards</q-tooltip>
+                    <BaseTooltip v-if="$q.screen.lt.sm">Show &amp; order cards</BaseTooltip>
                     <q-menu anchor="bottom right" self="top right" transition-show="jump-down" transition-hide="jump-up">
                         <q-list dense style="min-width: 300px">
                             <q-item-label header>Show & order cards</q-item-label>
@@ -81,7 +81,7 @@
                                     v-bind="cardDnd.bind(card.id).handleProps"
                                 >
                                     <q-icon :name="ICONS.drag_indicator" />
-                                    <q-tooltip>Drag to reorder</q-tooltip>
+                                    <BaseTooltip>Drag to reorder</BaseTooltip>
                                 </q-item-section>
                                 <q-item-section avatar>
                                     <q-icon :name="card.icon" />
@@ -96,7 +96,7 @@
                                             :disable="!canMove(card.id, 'up')"
                                             @click="moveCard(card.id, 'up')"
                                         >
-                                            <q-tooltip>Move up</q-tooltip>
+                                            <BaseTooltip>Move up</BaseTooltip>
                                         </BaseButton>
                                         <BaseButton
                                             variant="icon"
@@ -105,7 +105,7 @@
                                             :disable="!canMove(card.id, 'down')"
                                             @click="moveCard(card.id, 'down')"
                                         >
-                                            <q-tooltip>Move down</q-tooltip>
+                                            <BaseTooltip>Move down</BaseTooltip>
                                         </BaseButton>
                                         <q-toggle
                                             :model-value="isCardVisible(card.id)"
@@ -439,6 +439,7 @@
 </template>
 
 <script lang="ts" setup>
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     import { ICONS } from 'src/style/icons';
     // FU-820 — `formatRelativeDay` and the local-ISO parse now come from the
     // shared date authority (D-006/R-003). The page's own copies parsed

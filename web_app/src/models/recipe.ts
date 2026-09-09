@@ -185,9 +185,10 @@ export type Recipe = {
      *  estimate, shown when the cost card is expanded. Detail only. */
     estimated_cost_lines: RecipeCostLine[];
     /** C-4 Chunk 10 — named sections (DEC-3 option A). The list endpoint
-     *  populates only `section_count` for the card badge; the detail
-     *  endpoint also hydrates `sections[]`. Empty sections +
-     *  `section_count === 0` ⇒ recipe is flat. */
+     *  populates only `section_count`; the detail endpoint also hydrates
+     *  `sections[]`. Empty sections + `section_count === 0` ⇒ recipe is flat.
+     *  Kept as a wire-shape mirror only — the cookbook card's "N parts" chip
+     *  that was its one reader was cut as bloat (owner 2026-09-09). */
     section_count: number;
     sections: RecipeSection[];
     /** C-waste W4 — number of this recipe's (non-optional) ingredients
@@ -398,7 +399,8 @@ export type RecipeVersionSibling = {
 /** Why an ingredient contributed nothing to the estimate. Mirrors the
  *  `UNPRICED_*` constants in `dora_api/features/recipes/recipe_cost.py`;
  *  the phrasing lives on the client so the server ships facts, not copy. */
-export type RecipeCostUnpricedReason = 'no_link' | 'no_price' | 'unit_mismatch';
+export type RecipeCostUnpricedReason =
+    'no_link' | 'no_price' | 'unit_mismatch' | 'no_quantity';
 
 /** One ingredient's row in the expandable cost breakdown. `line_cost` is
  *  set exactly when `reason` is null. */

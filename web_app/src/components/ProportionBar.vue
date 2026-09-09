@@ -7,12 +7,13 @@
             :class="{ 'proportion-bar__seg--unassigned': seg.isUnassigned }"
             :style="{ width: `${seg.width}%`, background: seg.isUnassigned ? undefined : seg.colour }"
         >
-            <q-tooltip v-if="seg.label">{{ seg.label }}</q-tooltip>
+            <BaseTooltip v-if="seg.label">{{ seg.label }}</BaseTooltip>
         </div>
     </div>
 </template>
 
 <script lang="ts" setup>
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     /**
      * One horizontal bar showing how a total divides up.
      *

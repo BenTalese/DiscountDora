@@ -26,7 +26,7 @@
                 aria-label="Previous month"
                 @click="pageMonth(-1)"
             >
-                <q-tooltip>Previous month</q-tooltip>
+                <BaseTooltip>Previous month</BaseTooltip>
             </BaseButton>
             <q-space />
             <div class="text-subtitle2 text-weight-bold cal__month">{{ monthBanner }}</div>
@@ -37,7 +37,7 @@
                 aria-label="Next month"
                 @click="pageMonth(1)"
             >
-                <q-tooltip>Next month</q-tooltip>
+                <BaseTooltip>Next month</BaseTooltip>
             </BaseButton>
         </q-card-section>
         <q-separator />
@@ -89,9 +89,9 @@
                                  — the tooltip below names the meals, and
                                  `aria-label` spells the day's status out. -->
                             <MealPlanDayPips :pips="cell.pips" />
-                            <q-tooltip v-if="cell.tooltip" anchor="top middle" self="bottom middle">
+                            <BaseTooltip v-if="cell.tooltip" anchor="top middle" self="bottom middle">
                                 {{ cell.tooltip }}
-                            </q-tooltip>
+                            </BaseTooltip>
                         </button>
                     </div>
                 </div>
@@ -101,6 +101,7 @@
 </template>
 
 <script lang="ts" setup>
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     import { ICONS } from 'src/style/icons';
     import { formatDate as formatLocaleDate } from 'src/composables/useDateFormat';
     import BaseButton from 'src/components/BaseButton.vue';

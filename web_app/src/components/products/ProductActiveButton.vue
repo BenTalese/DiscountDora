@@ -7,11 +7,12 @@
         :aria-label="label"
         @click.stop="emit('toggle')"
     >
-        <q-tooltip>{{ label }}</q-tooltip>
+        <BaseTooltip>{{ label }}</BaseTooltip>
     </BaseButton>
 </template>
 
 <script setup lang="ts">
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     /** Whether this product is still being tracked (feedback MP-8).
      *
      *  The owner's own suggestion: *"Not sure what styling shows products are

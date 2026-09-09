@@ -187,7 +187,7 @@
                                     >
                                         {{ entry.recipe_name }}
                                         <q-icon :name="ICONS.swap_horiz" size="14px" />
-                                        <q-tooltip>Swap for another recipe</q-tooltip>
+                                        <BaseTooltip>Swap for another recipe</BaseTooltip>
                                     </button>
                                     <div class="builder-row__meta">
                                         <span
@@ -240,7 +240,7 @@
                                         class="builder-day-select"
                                         :options="dayOptions"
                                     >
-                                        <q-tooltip>Move to another day</q-tooltip>
+                                        <BaseTooltip>Move to another day</BaseTooltip>
                                     </q-select>
                                     <q-select
                                         v-model="entry.slot"
@@ -248,7 +248,7 @@
                                         class="builder-slot-select"
                                         :options="slotNames"
                                     >
-                                        <q-tooltip>Which meal slot</q-tooltip>
+                                        <BaseTooltip>Which meal slot</BaseTooltip>
                                     </q-select>
                                     <NumberStepper
                                         v-model="entry.servings"
@@ -257,14 +257,14 @@
                                         increment-label="One more serving"
                                         class="builder-servings"
                                     >
-                                        <q-tooltip>Servings</q-tooltip>
+                                        <BaseTooltip>Servings</BaseTooltip>
                                     </NumberStepper>
                                     <BaseButton
                                         variant="icon" dense
                                         :icon="ICONS.delete_outline"
                                         @click="removeEntry(entry)"
                                     >
-                                        <q-tooltip>Remove</q-tooltip>
+                                        <BaseTooltip>Remove</BaseTooltip>
                                     </BaseButton>
                                 </div>
                             </div>
@@ -420,6 +420,7 @@
 </template>
 
 <script lang="ts" setup>
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     import { ICONS } from 'src/style/icons';
     import BaseButton from 'src/components/BaseButton.vue';
     import NumberStepper from 'src/components/NumberStepper.vue';

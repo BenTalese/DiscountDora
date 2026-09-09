@@ -15,17 +15,18 @@
     <span v-if="belief && shouldShow" class="belief-hint">
         <q-icon :name="ICONS.dora_voice" size="14px" class="belief-hint__icon" />
         <span class="belief-hint__text">Dora thinks {{ bandWord }}</span>
-        <q-tooltip max-width="260px" anchor="top middle" self="bottom middle">
+        <BaseTooltip max-width="260px" anchor="top middle" self="bottom middle">
             {{ belief.reason }}
             <br />
             <span class="belief-hint__tip-conf">Confidence: {{ belief.confidence_band }}</span>
             <br />
             <span class="belief-hint__tip-note">Differs from your recorded level — a quick check helps.</span>
-        </q-tooltip>
+        </BaseTooltip>
     </span>
 </template>
 
 <script setup lang="ts">
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     import { computed } from 'vue';
     import { ICONS } from 'src/style/icons';
     import type { PantryBelief } from 'src/models/pantryBelief';

@@ -46,6 +46,10 @@ from dora_api.domain.entities.stock_item_price_observation import \
     StockItemPriceObservation
 from dora_api.domain.stock_status import \
     get_stock_item_unit_cost_with_unit_at
+from dora_api.features.nutrition.household_measures import (
+    portions_by_stock_item,
+    resolve_grams,
+)
 from dora_api.persistence.field import EntityField
 
 # Why an ingredient contributed nothing — surfaced per line in the recipe
@@ -54,6 +58,12 @@ from dora_api.persistence.field import EntityField
 UNPRICED_NO_LINK = "no_link"            # ingredient isn't linked to a stock item
 UNPRICED_NO_PRICE = "no_price"          # linked, but no offer and no observation
 UNPRICED_UNIT_MISMATCH = "unit_mismatch"  # priced, but the units can't bridge
+# "Salt to taste", "oil for frying" — an ingredient with no amount on it. It
+# used to default to a quantity of 1, which against a per-item price billed a
+# whole jar of salt and counted the line as *priced*, flattering the coverage
+# ratio as well as the total. The nutrition rollup has always had this reason
+# (`REASON_NO_QUANTITY`); costing was missing its half (owner 2026-09-09).
+UNPRICED_NO_QUANTITY = "no_quantity"
 
 
 @dataclass(frozen=True, slots=True)
@@ -237,7 +247,7 @@ def _cheaper(candidate: UnitPrice, incumbent: UnitPrice) -> bool:
     return (candidate.amount / src.factor) < (incumbent.amount / dst.factor)
 
 
-def _line_cost(ingredient, price: UnitPrice) -> float | None:
+def _line_cost(ingredient, price: UnitPrice, portions: list | None = None) -> float | None:
     """What this ingredient contributes, or None when it can't be priced.
 
     Recipes measure ingredients two different ways and each needs a different
@@ -248,29 +258,90 @@ def _line_cost(ingredient, price: UnitPrice) -> float | None:
       that can't bridge dimensions (200 ml of a thing priced per bottle: we
       don't know the bottle's size) is **unpriced**. Guessing here is what
       produced the $1590 Juice Bowl.
+      Mass↔volume is the one cross-dimension bridge, and it needs to know
+      *what* is being converted — 250 ml of oil and 250 ml of honey are 50 g
+      apart. The ingredient's name is passed for that (FU-874): until
+      2026-09-09 it was omitted, so `units.convert` refused every mass-vs-volume
+      pair and a recipe measured in cups against a product priced per kilo read
+      as unpriced no matter how well the density table knew the ingredient.
+      This does not soften ADR-073 — an ingredient the table doesn't list still
+      returns None and is still reported unpriced.
     * **By the item** — "2 tins", "1 onion", or a bare "2". Multiply by the
-      price of one countable item. Deliberately permissive about the unit
-      itself: "tins" and "cloves" aren't units we know, and don't need to be,
-      because the count is all the arithmetic needs. But the *price* side has
-      to be a real per-item figure — a pack measured in grams doesn't say how
-      many items are in it, so that combination is **unpriced** rather than
-      billed as whole packs (feedback 2026-09-03; see `_item_price`).
+      price of one countable item. Permissive about the unit itself: "tins"
+      isn't a unit we know and doesn't need to be, because the count is all the
+      arithmetic needs. But the *price* side has to be a real per-item figure —
+      a pack measured in grams doesn't say how many items are in it, so that
+      combination is **unpriced** rather than billed as whole packs (feedback
+      2026-09-03; see `_item_price`).
+      Two exceptions, both added 2026-09-09 after driving a real recipe through
+      this function. `units.SUB_ITEM_UNITS` names the words that mean a *part*
+      of a shelf item — "3 cloves" was being billed as three whole bulbs
+      (FU-904) — and those are never counted. And a counted ingredient with no
+      per-item price can still be priced from its **weight**, when the pantry
+      knows what one of them weighs.
+
+    `portions` is that last piece: the linked food's measured household
+    measures, when the caller has them. With them, "2 leeks" against a per-kilo
+    price is 178 g rather than unpriced, and one cup of flour weighs the same
+    here as it does on the nutrition panel (FU-905). Without them — no dataset
+    imported, no food linked — every path falls back to exactly what it did
+    before.
     """
+    # `_cost_one` refuses a quantity-less ingredient before it gets here
+    # (UNPRICED_NO_QUANTITY); the 1.0 remains only for the direct callers in
+    # the tests, and is never how a real line is billed.
     qty = float(ingredient.quantity) if ingredient.quantity is not None else 1.0
     ing_unit = (getattr(ingredient, "unit", None) or "").strip()
     ing_def = units.find_unit(ing_unit) if ing_unit else None
 
+    name = getattr(ingredient, "stock_item_name", None)
+    names = [n for n in (name,) if n]
+
+    def by_weight() -> float | None:
+        """Price this line through its weight in grams. Only meaningful when
+        the price is per mass — grams say nothing about what one of something
+        costs when the shelf price is per item or per litre."""
+        price_def = units.find_unit(price.unit)
+        if price_def is None or price_def.dimension != units.MASS:
+            return None
+        grams = resolve_grams(qty, ing_unit or None, portions or [], names)
+        if grams is None:
+            return None
+        in_price_unit = units.convert(grams, "g", price.unit)
+        return None if in_price_unit is None else in_price_unit * price.amount
+
+    # A part of a shelf item, never the item. Weight is the only honest route.
+    if units.is_sub_item_unit(ing_unit):
+        return by_weight()
+
     measured = ing_def is not None and ing_def.dimension != units.COUNT
     if measured:
+        # "2 sticks" is 226 g of butter or two stalks of celery, and the table
+        # only knows the first. Billing celery at butter's weight is the same
+        # class of error as the $16.50 egg yolks, so an ingredient this unit
+        # doesn't belong to is unpriced rather than over-billed — unless a
+        # portion row can say what this food's stick actually weighs.
+        if not units.food_specific_mass_applies(ing_unit, name):
+            return by_weight()
         if units.normalise_unit(ing_unit) == units.normalise_unit(price.unit):
             return qty * price.amount
-        converted = units.convert(qty, ing_unit, price.unit)
+        # Weight first when the price is per mass: a measured portion row beats
+        # the modelled density, and `resolve_grams` owns that precedence so the
+        # cost breakdown and the nutrition panel can't disagree about a cup.
+        weighed = by_weight()
+        if weighed is not None:
+            return weighed
+        converted = units.convert(qty, ing_unit, price.unit, ingredient=name)
         return None if converted is None else converted * price.amount
 
     # Counted (no unit, an unrecognised unit, or an explicit count unit).
     if ing_def is not None and ing_def.dimension == units.COUNT:
         qty *= ing_def.factor          # "1 dozen" is twelve items
-    return None if price.pack_amount is None else qty * price.pack_amount
+    if price.pack_amount is not None:
+        return qty * price.pack_amount
+    # No per-item price. "2 leeks" against $6.90/kg used to stop here; if the
+    # pantry knows a leek is 89 g, it doesn't have to.
+    return by_weight()
 
 
 def _line_name(ingredient) -> str:
@@ -292,7 +363,12 @@ def _unpriced_line(ingredient, reason: str, price: UnitPrice | None) -> CostLine
     )
 
 
-def _cost_one(ingredients, offer_by_item: dict, obs_cost_by_item: dict) -> CostEstimate:
+def _cost_one(
+    ingredients,
+    offer_by_item: dict,
+    obs_cost_by_item: dict,
+    portions_by_item: dict | None = None,
+) -> CostEstimate:
     total = 0.0
     priced = 0
     lines: list[CostLine] = []
@@ -305,7 +381,14 @@ def _cost_one(ingredients, offer_by_item: dict, obs_cost_by_item: dict) -> CostE
         if unit_price is None:
             lines.append(_unpriced_line(ing, UNPRICED_NO_PRICE, None))
             continue
-        line_cost = _line_cost(ing, unit_price)
+        # Checked after the price so the row still shows what the ingredient
+        # costs per unit — the reader can see the price exists and that only
+        # the amount is missing.
+        if ing.quantity is None:
+            lines.append(_unpriced_line(ing, UNPRICED_NO_QUANTITY, unit_price))
+            continue
+        line_cost = _line_cost(
+            ing, unit_price, (portions_by_item or {}).get(ing.stock_item_id))
         if line_cost is None:
             lines.append(_unpriced_line(ing, UNPRICED_UNIT_MISMATCH, unit_price))
             continue
@@ -333,7 +416,10 @@ def _cost_one(ingredients, offer_by_item: dict, obs_cost_by_item: dict) -> CostE
 def estimate_costs_for(repository, recipes: Iterable) -> dict:
     """Batch: `recipe_id (UUID) → CostEstimate` for every recipe passed. Each
     recipe must expose `.recipe_id` and `.ingredients` (each ingredient with
-    `.stock_item_id` and `.quantity`). Two queries total."""
+    `.stock_item_id` and `.quantity`). Four queries total — two for the prices,
+    two for the household measures that weigh a counted or volume ingredient
+    (FU-905). All four are batched over the whole page; none scales with the
+    recipe count, which is what `test_recipes_query_count` pins."""
     recipes = list(recipes)
     all_ids: list = []
     for r in recipes:
@@ -341,8 +427,10 @@ def estimate_costs_for(repository, recipes: Iterable) -> dict:
             if ing.stock_item_id is not None:
                 all_ids.append(ing.stock_item_id)
     offer_by_item, obs_cost_by_item = _unit_price_map(repository, all_ids)
+    portions_by_item = portions_by_stock_item(repository, all_ids)
     return {
-        r.recipe_id: _cost_one(r.ingredients or [], offer_by_item, obs_cost_by_item)
+        r.recipe_id: _cost_one(
+            r.ingredients or [], offer_by_item, obs_cost_by_item, portions_by_item)
         for r in recipes
     }
 
@@ -353,10 +441,11 @@ def estimate_cost_for_ingredients(repository, ingredients) -> CostEstimate:
     ingredients = list(ingredients)
     ids = [i.stock_item_id for i in ingredients if i.stock_item_id is not None]
     offer_by_item, obs_cost_by_item = _unit_price_map(repository, ids)
+    portions_by_item = portions_by_stock_item(repository, ids)
     # total_count preserves the original behaviour: it counted *all* dto
     # ingredients (the detail endpoint only ever passes linked-or-null rows and
     # reported len(ingredients)); keep that contract for the caller.
-    est = _cost_one(ingredients, offer_by_item, obs_cost_by_item)
+    est = _cost_one(ingredients, offer_by_item, obs_cost_by_item, portions_by_item)
     return CostEstimate(
         estimated_cost=est.estimated_cost,
         priced_count=est.priced_count,

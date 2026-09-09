@@ -28,7 +28,7 @@
         aria-label="Clear filters"
         @click="$emit('clear')"
     >
-        <q-tooltip v-if="compact">Clear filters</q-tooltip>
+        <BaseTooltip v-if="compact">Clear filters</BaseTooltip>
     </BaseButton>
 
     <BaseButton
@@ -38,7 +38,7 @@
         :aria-label="toggleLabel"
         @click="expanded = !expanded"
     >
-        <q-tooltip v-if="compact">{{ toggleLabel }}</q-tooltip>
+        <BaseTooltip v-if="compact">{{ toggleLabel }}</BaseTooltip>
         <q-badge v-if="(activeCount ?? 0) > 0" color="primary" floating>
             {{ activeCount }}
         </q-badge>
@@ -46,6 +46,7 @@
 </template>
 
 <script setup lang="ts">
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     import { ICONS } from 'src/style/icons';
     import BaseButton from 'src/components/BaseButton.vue';
 

@@ -19,7 +19,7 @@
         <span>{{ label }}</span>
         <q-icon v-if="hasSwaps" :name="ICONS.expand_more" size="14px" />
 
-        <q-tooltip>{{ tooltip }}</q-tooltip>
+        <BaseTooltip>{{ tooltip }}</BaseTooltip>
 
         <q-menu v-if="hasSwaps" anchor="bottom left" self="top left" class="rmic__menu">
             <div class="rmic__head">
@@ -33,7 +33,7 @@
                          2026-08-27). Tooltip'd — a bare dot isn't decodable. -->
                     <q-item-section side class="rmic__dot">
                         <StockLevelDot :sequence="entry.levelSequence" size="12px">
-                            <q-tooltip>{{ entry.levelLabel }}</q-tooltip>
+                            <BaseTooltip>{{ entry.levelLabel }}</BaseTooltip>
                         </StockLevelDot>
                     </q-item-section>
                     <q-item-section>
@@ -61,6 +61,7 @@
 </template>
 
 <script lang="ts" setup>
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     /**
      * A missing ingredient's whole story, as one row-level chip.
      *

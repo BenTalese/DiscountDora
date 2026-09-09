@@ -10,6 +10,125 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-905 — costing can't see the portion table nutrition weighs with, and the two disagree about a cup of flour
+- **Raised:** 2026-09-09 (driving a realistic recipe through both calculators)
+- **Type:** finding
+- **What:** the two recipe calculators answer "how much of this is there?" from
+  **different data** and neither knows about the other's.
+  *Nutrition* asks the linked food's `NutritionPortion` rows — measured values
+  from the dataset ("1 cup flour = 125 g", "1 medium leek = 89 g", "1 stalk of
+  celery = 40 g"). *Costing* has only `INGREDIENT_DENSITY_G_PER_ML`, a modelled
+  table keyed on the ingredient's name. Two consequences, both seen on one
+  18-ingredient recipe:
+  1. **Costing leaves money on the table.** "2 leeks" and "1 cup of frozen
+     peas" against per-kilo prices are weighed correctly by nutrition (178 g,
+     134 g) and reported *unpriced* by costing, because neither leeks nor peas
+     has a density row and costing can't read a portion row.
+  2. **They disagree.** One cup of plain flour is **132.5 g** to costing
+     (250 ml × 0.53 g/ml) and **125 g** to nutrition (the USDA portion row).
+     6% apart, on the same ingredient, on the same page.
+- **Why deferred:** it is a real architectural question, not a patch. The
+  portion table is nutrition-owned and only populated for foods a dataset was
+  imported for, so costing reading it introduces a dependency on whether
+  nutrition is even switched on — a money feature quietly getting better
+  because you turned on nutrition is a surprising coupling that wants a
+  decision. The disagreement half is smaller: a shared "grams for this
+  quantity" resolver with a documented precedence (measured portion beats
+  modelled density) would settle it.
+- **Recommended resolution:** later, as its own unit. Best paired with a look
+  at [[FU-855]] / [[FU-856]], since all three are about how much coverage the
+  cost estimate can honestly reach.
+
+- **State — RESOLVED 2026-09-09:** the pure grams resolution was extracted out of
+  `recipe_rollup` into **`features/nutrition/household_measures.py`**, which both
+  calculators now call, and which states the precedence in one place: **a
+  measured portion row beats a modelled density.** So a cup of plain flour is
+  125 g on both surfaces instead of 125 on one and 132.5 on the other. Costing
+  gained `portions_by_stock_item()` (two batched queries on each entry point,
+  neither scaling with the recipe count) and a `by_weight()` route used when the
+  price is per mass: **"2 leeks" against $6.90/kg is now $1.23 instead of
+  unpriced**, "1 cup frozen peas" $0.58, "2 sticks celery" $0.32.
+  **Deliberately not gated on the nutrition mode** — the rows exist because a
+  dataset was imported and foods were linked, and gating would mean a grocery
+  estimate silently improving when someone flipped a nutrition setting. An
+  install with no dataset gets `{}` and every path falls back exactly as before,
+  which `test__line_cost__NoPortionRows__BehavesExactlyAsBefore` pins.
+
+## [RESOLVED] FU-904 — an unrecognised unit word is billed as a whole item: "3 cloves" costs three bulbs
+- **Raised:** 2026-09-09 (driving a realistic recipe through both calculators)
+- **Type:** finding
+- **What:** `_line_cost`'s counted branch is **deliberately permissive** — any
+  unit it doesn't recognise is treated as "that many of the item" and
+  multiplied by the per-item price. That is right for "2 tins" and wrong by an
+  order of magnitude for anything written in sub-item units. Measured against
+  plausible prices: **3 cloves of garlic → $3.60** (three whole bulbs at
+  $1.20), **2 sprigs of tarragon → $5.00** (two bunches at $2.50), **4 rashers
+  of bacon → $3.60** (four packs at 90c). It is the same family as the $16.50
+  egg yolks the owner reported on 2026-09-03 ([[FU-874]]'s sibling), surviving
+  in the branch that fix didn't touch.
+  Note the two calculators take **opposite** policies on the identical word:
+  nutrition refuses an unknown unit unless the food's own portion row names it;
+  costing bills confidently.
+- **Why deferred:** genuinely undecidable from the data. "2 tins" and "3
+  cloves" are the same shape — an unrecognised word and a count — and only
+  knowledge of what one shelf item *contains* separates them, which Dora has no
+  model of. The choices are (a) refuse every non-COUNT unit, which is honest
+  but loses the tins case that motivated the permissiveness, (b) an
+  allowlist of sub-item words (`clove`, `sprig`, `rasher`, `slice`, `stalk`)
+  that are never a whole item, or (c) a real pack-contents model. (b) is cheap
+  and covers the observed cases; it is still a vocabulary judgement, and it
+  overlaps [[FU-902]].
+- **Recommended resolution:** now-ish if the owner has seen a wrong figure in
+  the wild — it inflates the estimate rather than deflating it, which is the
+  direction that erodes trust. Otherwise pair it with [[FU-902]].
+
+- **State — RESOLVED 2026-09-09:** owner took option (b). `units.SUB_ITEM_UNITS`
+  names the twelve words that mean a *part* of a shelf item (`clove`, `sprig`,
+  `rasher`, `slice`, `stalk`, `floret`, `leaf`, `wedge`) or a vague amount with
+  no defined size (`knob`, `splash`, `drizzle`, `handful`), and `_line_cost`
+  never counts one as a whole product. **3 cloves of garlic went from $3.60 to
+  unpriced** — or, better, to **$0.06** where a portion row knows a clove is 3 g
+  and the price is per weight, which arrived with [[FU-905]] in the same unit.
+  "2 tins" is untouched and pinned by a test: a tin *is* the shelf item, and
+  that case is what the permissive branch was for. `head` and `bunch` were
+  deliberately left off the list for the same reason.
+
+## [RESOLVED] FU-874 — recipe costing never passes the ingredient name, so the density bridge is dead code
+- **Raised:** 2026-09-05 (owner feedback: the ice-cream 1 L vs 200 g case)
+- **Type:** finding (owner decision D3)
+- **What:** `domain/units.convert()` bridges mass↔volume when given an
+  `ingredient=` name to look up in `INGREDIENT_DENSITY_G_PER_ML` (77 entries).
+  `recipe_cost._line_cost` calls it as `units.convert(qty, ing_unit, price.unit)`
+  — **no `ingredient=`** — so the density branch can never fire on the pricing
+  path, and every mass-vs-volume ingredient is reported unpriced. Verified
+  against the live table:
+  `convert(200,'g','L')` → `None`, `convert(200,'g','L',ingredient='cream')` → `0.2`.
+  The owner's reported case fails twice over: the argument isn't passed, and
+  `'ice cream'` isn't in the table either.
+- **Why it matters:** this is the single largest class of "Units don't match the
+  price", and it is not a guess — a density lookup for a *named* ingredient is
+  the same species of fact as a unit factor, and is what commercial recipe
+  costing does (the trade reference is a book of exactly these figures). Fixing
+  it does not weaken ADR-073's honest-gap stance: unknown ingredients still
+  report unpriced, because there is still no default density.
+- **Recommended resolution:** **now-ish** — one keyword argument plus table
+  rows. Owner call (investigation D3, recommended yes). Cross-ref: FU-855,
+  FU-856, ADR-073, `docs/05_investigations/RECIPE_PRICE_UNIT_MISMATCH.md` §4.
+- **State — RESOLVED 2026-09-09:** `_line_cost` now passes
+  `ingredient=stock_item_name` into `units.convert`, and the lookup behind it was
+  widened at the same time — `units.density_for_ingredient` matches whole words
+  head-noun-first instead of demanding an exact key, so it answers for "Extra
+  Virgin Olive Oil" and "Full Cream Milk" rather than only "olive oil" and
+  "milk". `ice cream` gained its own row (0.55 — it is aerated, so the `cream`
+  row would have read it at nearly twice its weight), as did both spellings of
+  yog(h)urt. ADR-073 is intact: an ingredient the table doesn't list is still
+  unpriced, and there is still no default density. The meal-planner's
+  `_CostIngredient` adapter gained `stock_item_name` in the same change, or the
+  planner would have quoted a lower figure than the cookbook for one recipe.
+  Measured on a realistic 18-ingredient pie: the fix priced the
+  cups-of-flour-against-a-per-kilo-price line, which nothing else could reach.
+  Pinned by `tests/test_recipe_line_cost.py` (13 cases) + 7 in `test_units.py`.
+
 ## [RESOLVED] FU-893 — the local dev `.env` pointed the companion at the wrong Dora URL
 - **Raised:** 2026-09-07 (companion dockerisation)
 - **Type:** finding

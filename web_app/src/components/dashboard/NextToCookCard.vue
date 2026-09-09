@@ -35,7 +35,7 @@
                     aria-label="Cook"
                     @click="emit('cook', entry)"
                 >
-                    <q-tooltip v-if="$q.screen.lt.sm">Cook this</q-tooltip>
+                    <BaseTooltip v-if="$q.screen.lt.sm">Cook this</BaseTooltip>
                 </BaseButton>
             </li>
         </ul>
@@ -56,6 +56,7 @@
 </template>
 
 <script lang="ts" setup>
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     /**
      * The next few meals worth cooking, each flagged missing-N when it isn't
      * cookable (feedback L272, FU-298).

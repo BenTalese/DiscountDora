@@ -76,21 +76,21 @@
                             :icon="ICONS.image_not_supported"
                             @click="onRemoveImage(s)"
                         >
-                            <q-tooltip>Remove logo</q-tooltip>
+                            <BaseTooltip>Remove logo</BaseTooltip>
                         </BaseButton>
                         <BaseButton
                             variant="icon"
                             :icon="ICONS.edit"
                             @click="startRename(s)"
                         >
-                            <q-tooltip>Rename</q-tooltip>
+                            <BaseTooltip>Rename</BaseTooltip>
                         </BaseButton>
                         <BaseButton
                             variant="icon"
                             :icon="ICONS.delete_outline"
                             @click="onDelete(s)"
                         >
-                            <q-tooltip>Delete</q-tooltip>
+                            <BaseTooltip>Delete</BaseTooltip>
                         </BaseButton>
                     </div>
                 </q-item-section>
@@ -109,6 +109,7 @@
 </template>
 
 <script lang="ts" setup>
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     import BaseButton from 'src/components/BaseButton.vue';
     import ImageEditTile from 'src/components/ImageEditTile.vue';
     import StoreLogo from 'src/components/StoreLogo.vue';

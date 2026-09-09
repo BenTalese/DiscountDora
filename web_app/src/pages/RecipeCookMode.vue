@@ -47,7 +47,7 @@
                     aria-label="Exit cook mode"
                     @click="exitCookMode"
                 >
-                    <q-tooltip>Exit cook mode</q-tooltip>
+                    <BaseTooltip>Exit cook mode</BaseTooltip>
                 </BaseButton>
                 <div class="text-h6 ellipsis cook-header__name">{{ recipe.name }}</div>
 
@@ -82,7 +82,7 @@
                                  out in the tooltip was a third copy of one fact, and
                                  the half of the tooltip that actually teaches
                                  something is what Sous Chef *does*. -->
-                            <q-tooltip>Sous Chef reads each step aloud as you go, hands-free.</q-tooltip>
+                            <BaseTooltip>Sous Chef reads each step aloud as you go, hands-free.</BaseTooltip>
                         </BaseButton>
                         <BaseButton
                             v-if="speechRecognitionAvailable"
@@ -95,13 +95,13 @@
                         >
                             <!-- extended tooltip explains the mic is independent
                                  of Sous Chef narration. -->
-                            <q-tooltip>
+                            <BaseTooltip>
                                 {{ listening ? 'Stop listening.' : 'Listen for hands-free commands.' }}
                                 Turns on the mic so next / previous / repeat / pause navigate
                                 cook mode without touching the screen. Independent of Sous
                                 Chef — you can listen without narration or narrate without
                                 listening.
-                            </q-tooltip>
+                            </BaseTooltip>
                         </BaseButton>
                         <!-- Owner feedback 2026-08-28: *"Would it be better to only
                              show the info button for sous chef if sous chef is
@@ -115,7 +115,7 @@
                             :icon="ICONS.help_outline"
                             aria-label="Sous Chef commands"
                         >
-                            <q-tooltip>What can I say?</q-tooltip>
+                            <BaseTooltip>What can I say?</BaseTooltip>
                             <q-menu>
                                 <q-card class="sous-chef-help" flat>
                                     <q-card-section>
@@ -176,7 +176,7 @@
                     <!-- Owner feedback 2026-09-03: *"Trim text '- the saved
                          recipe stays at X servings'"*. "for this cook only"
                          already says it. -->
-                    <q-tooltip>Rescales quantities for this cook only.</q-tooltip>
+                    <BaseTooltip>Rescales quantities for this cook only.</BaseTooltip>
                 </NumberStepper>
             </div>
 
@@ -426,7 +426,7 @@
                                                 aria-label="Undo substitute"
                                                 @click="clearSwap(row.ingredient.stock_item_id!)"
                                             >
-                                                <q-tooltip>Undo substitute</q-tooltip>
+                                                <BaseTooltip>Undo substitute</BaseTooltip>
                                             </BaseButton>
                                         </template>
                                         <template v-else>
@@ -454,7 +454,7 @@
                                                 :aria-label="`Use a substitute for ${row.ingredient.stock_item_name}`"
                                                 @click="openSwapPicker(row.ingredient.stock_item_id!, row.ingredient.stock_item_name!)"
                                             >
-                                                <q-tooltip>Use a substitute for this cook</q-tooltip>
+                                                <BaseTooltip>Use a substitute for this cook</BaseTooltip>
                                             </BaseButton>
                                         </template>
                                     </div>
@@ -741,7 +741,7 @@
                         decrement-label="One fewer serving"
                         increment-label="One more serving"
                     >
-                        <q-tooltip>Servings kept for later</q-tooltip>
+                        <BaseTooltip>Servings kept for later</BaseTooltip>
                     </NumberStepper>
                 </div>
             </q-card-section>
@@ -754,6 +754,7 @@
 </template>
 
 <script lang="ts" setup>
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     import { ICONS } from 'src/style/icons';
     import AppSpinner from 'src/components/AppSpinner.vue';
     import BaseButton from 'src/components/BaseButton.vue';

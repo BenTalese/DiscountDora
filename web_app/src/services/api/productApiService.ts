@@ -59,14 +59,19 @@ export type CreateProductCommand = {
     is_active: boolean;
     is_available: boolean;
     store_name: string;
-    merchant_stockcode: string;
+    /** Nullable: the API has always accepted `null` (a hand-entered product
+     *  has no merchant SKU). The type said otherwise. */
+    merchant_stockcode: string | null;
     name: string;
     price_now: number;
-    price_was: number;
+    /** Optional (OD-2): a hand-entered product usually has no "was" price.
+     *  Omitted means "no markdown" — the server defaults it to `price_now`. */
+    price_was?: number;
     size: string;
     size_unit: string;
     size_value: number;
-    web_url: string;
+    /** Nullable, same as `merchant_stockcode` — a butcher has no product page. */
+    web_url: string | null;
 };
 
 export type UpdateProductCommand = {

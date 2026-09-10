@@ -3,10 +3,10 @@
 **Status: COMPLETE — all eight batches done (2026-09-06 → 2026-09-07).**
 A · B · C · C2 · D · E · F · G. The Aldi rewrite landed once the owner confirmed
 Aldi publishes no sales data, which was the one thing blocking it.
-**OD-1 closed** (card actions) · **OD-3 answered** — no third-party grocery
-source is worth hooking into; don't add aggregators · **OD-4 answered** — the
-companion's bearer key stays env-only. **OD-2 (manual product entry) is the last
-open question**; see §6.
+**Every open decision is closed.** OD-1 (card actions) · OD-2 (**custom products
+— built 2026-09-08**, after the owner showed `PreferredBuy` couldn't substitute)
+· OD-3 (no third-party source worth hooking into) · OD-4 (bearer key stays
+env-only). **Nothing in this program is outstanding.**
 
 **Every June feedback bullet for My Products and Price History is now actioned**
 — §8's coverage table has no open rows, and **FU-214 is closed**.
@@ -682,12 +682,25 @@ card), PH-8 (central alerts page exists).
   through a **red** destructive dialog (D-008), and (d) on the **compact row**
   the face drops to add-to-list + link only, with the rest reachable from the
   expanded view — a row is too dense to carry a destructive control safely.
-- **OD-2 — Custom/manual product entry.** `PROPOSAL_PRODUCTS_AS_OVERLAY.md`
-  refused it by design (products arrive via ingestion; `PreferredBuy` is the
-  everyday substitute). PF-1 makes Dora the source of truth for what is *saved*,
-  which does not by itself reopen manual *creation*, but the original spec has
-  a "manually add product offers to saved scraped products" note (§7).
-  **Resolution point:** revisit only if the owner raises it — not scheduled.
+- ~~**OD-2 — Custom/manual product entry.**~~ **CLOSED 2026-09-08 — BUILT.**
+  The June pivot refused it (products arrive via ingestion; `PreferredBuy` was
+  the everyday substitute). The owner reopened it with the decisive argument:
+  **`PreferredBuy` is mutually exclusive with what's needed** — it is a *label*
+  with no price, store or history, so recording "the butcher's mince is $12/kg"
+  meant choosing between a note you couldn't compare and a product you couldn't
+  create. PF-1 also made the refusal harder to defend: if Dora owns what is
+  saved, "Dora only holds what a scraper gave it" is an odd exception.
+  **Built with the owner's constraint — strictly marked, never synced.**
+  `Product.is_custom` (migration `f3c8b1d75e02`) is load-bearing in three
+  places: the sync list excludes them (nothing to refresh them *from*),
+  **ingest dedupe excludes them** (it falls back to `(store, name)`, so a
+  scraped "Mince" would otherwise overwrite a hand-entered "Mince" at the same
+  store and quietly turn the user's figure into scraped data), and the SPA marks
+  them so a typed price never reads as a maintained one.
+  `POST /products` already existed as "the manual product-add path" and its SPA
+  caller was orphaned — so this was wire-up plus marking, not new machinery.
+  `price_was` became optional (defaults to `price_now` = no markdown; 0.0 would
+  make every custom product look permanently discounted).
 - **OD-3 — New scraper sources.** Undecided which, if any. **Resolution point:**
   a research spike opening batch E, before any provider is written.
 - **OD-4 — Should the companion's Dora bearer key be editable from its web UI?**
@@ -748,7 +761,7 @@ out of scope with a reason.
 | # | Bullet | Disposition |
 |---|---|---|
 | MP-1 | Standalone-usable; product-only line, nesting, removal modal | **Built** — `AddToListButton` `inline-product` variant. Browser-confirm (FU-214) |
-| MP-2 | No way to add custom products | **Out of scope by design** — manual entry refused (`PROPOSAL_PRODUCTS_AS_OVERLAY` §1); see OD-2 |
+| MP-2 | No way to add custom products | ✅ **BUILT 2026-09-08** (OD-2). Was refused by design; reopened because `PreferredBuy` carries no price, store or history and so cannot substitute. Marked `is_custom`, excluded from sync and from ingest dedupe |
 | MP-3 | "Cannot mark products inactive: Extra inputs are not permitted" | **Built** — update command sends only `{is_active}`. Browser-confirm (FU-214) |
 | MP-4 | Buttons could move to the card, remove ellipses | **Batch F**, gated on OD-1 |
 | MP-5 | Link button placement; grey broken / green connected; click to link/unlink | **Batch F** |

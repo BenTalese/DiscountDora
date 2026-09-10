@@ -292,6 +292,15 @@ class SubmitIngestionBatchHandler:
         field_stockcode = EntityField(Product, Product.Fields.MERCHANT_STOCKCODE)
         field_store_id = EntityField(Store, Store.Fields.ID)
 
+        # OD-2 — never adopt a hand-entered product. Dedupe falls back to
+        # (store, name) for records without a stockcode, so a scraped "Mince"
+        # would otherwise match a custom "Mince" at the same store and
+        # overwrite its brand, size and price: the user's own figure quietly
+        # replaced by scraped data. A custom product is the user's to edit,
+        # and a scrape that finds the same thing creates its own row.
+        field_is_custom = EntityField(Product, Product.Fields.IS_CUSTOM)
+        not_custom = field_is_custom.eq(False)
+
         existing: Product | None = None
         if raw.merchant_stockcode:
             existing = (
@@ -301,6 +310,7 @@ class SubmitIngestionBatchHandler:
                 .one(
                     field_stockcode.eq(raw.merchant_stockcode)
                     & field_store_id.eq(store.id)
+                    & not_custom
                 )
             )
         if existing is None:
@@ -308,7 +318,11 @@ class SubmitIngestionBatchHandler:
                 self.repository.get(Product)
                 .include(Product.Fields.STORE)
                 .include(Product.Fields.CURRENT_OFFER)
-                .one(field_name.eq(raw.name) & field_store_id.eq(store.id))
+                .one(
+                    field_name.eq(raw.name)
+                    & field_store_id.eq(store.id)
+                    & not_custom
+                )
             )
 
         record_source = raw.source or str(ctx.source.id)

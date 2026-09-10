@@ -202,6 +202,7 @@
       "has_image",
       "is_active",
       "is_available",
+      "is_custom",
       "linked_stock_item_id",
       "linked_stock_item_name",
       "merchant_stockcode",

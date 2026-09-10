@@ -631,6 +631,76 @@ the actionable half is a single instance — not yet a rule.
 
 ---
 
+## 2026-09-08 — **OD-2: custom products. The products program has nothing open.**
+
+**Status: complete.** Gates: **pytest 2379 passed** (7 new; only the four known
+FU-762 reds) · `vue-tsc` + `eslint` clean · **vitest 720** · migration
+`f3c8b1d75e02` up/down/up clean · driven live end-to-end.
+
+**The owner's argument is what reopened this, and it was the right one.**
+June refused manual entry, with `PreferredBuy` named as the everyday
+substitute. The owner: *"preferred buys is mutually exclusive."* Reading the
+entity confirms it — `PreferredBuy` is a **label**: `stock_item_id`, `label`,
+`created_at`. No price, no store, no history. So recording "the butcher's mince
+is $12/kg" meant choosing between a note you couldn't compare and a product you
+couldn't create, and there was no third option. PF-1 made the refusal harder to
+hold too: if Dora owns what is saved, "Dora only holds what a scraper gave it"
+is a strange exception.
+
+**Smaller than expected: `POST /products` already existed** and its own
+docstring calls it "the manual product-add path" — it even stamps offers with
+source `"manual"` and refuses to auto-create stores. Its SPA caller had been
+**orphaned** since the in-app product search was removed. So this was wire-up
+plus marking, not new machinery.
+
+**`Product.is_custom` is load-bearing in three places, not decoration:**
+1. **Ingest dedupe excludes it.** This is the one that matters. Dedupe falls
+   back to `(store, name)` for records without a stockcode, so a scraped
+   "Mince" would have matched a hand-entered "Mince" at the same store and
+   overwritten its brand, size and price — **the user's own figure silently
+   replaced by scraped data.** Exactly the quiet substitution this program has
+   spent its whole time removing. Pinned by a test that pushes a colliding
+   product and asserts the custom one is untouched.
+2. **The sync list excludes it** — there is nothing to refresh a custom product
+   *from*, and offering it to a producer risks it being matched to something
+   else.
+3. **The UI marks it**, on both card and row. A price Dora maintains and a
+   price you typed are different promises, and a custom product is never
+   refreshed — so unmarked, its figure would read as current forever.
+
+**`price_was` became optional**, defaulting to `price_now`. Same reasoning as
+Aldi yesterday: 0.0 reads as "was free" and would make every custom product look
+permanently discounted. Verified live — the footer reads **0 On deal** with a
+custom product present.
+
+**Two things the browser caught that tests didn't:** validation errors persisted
+after the user fixed each field (they only cleared on the next save attempt), so
+a corrected field went on shouting — now cleared per-field as it's addressed.
+And the SPA's `CreateProductCommand` typed `merchant_stockcode`/`web_url` as
+non-nullable when the API has always accepted null; the types were wrong, so I
+corrected the types rather than casting around them.
+
+**Deliberately fewer fields than the API accepts.** A scraper fills stockcode,
+availability, image and a was-price because it *has* them. Asking a person for
+those to make the form look complete would be asking for data they don't have.
+Size is one box, split into `size_value`/`size_unit` server-side rather than
+asked for three times.
+
+**Engineering-standards close-gate.** R-003: `is_custom` is a server-owned fact
+on the DTO, not re-derived client-side. R-006: forward-only migration, defaulted
+`False` (every existing product came from ingestion), real downgrade, up/down/up
+verified. **ADR evaluation:** no new rule — this is PF-1 applied, and the
+"marked provenance so a maintained value and a typed one aren't confused" idea
+is one instance so far.
+
+**Feedback:** MP-2 flips from *out-of-scope-by-design* to **built** — the last
+June bullet that was refused rather than delivered.
+
+**The products program now has nothing open.** All eight batches done, all four
+open decisions closed.
+
+---
+
 ## 2026-09-07 (×4) — **Publishing the companion, and a key that died every deploy**
 
 **Status: code-complete, entirely unverified against a real daemon.** Owner

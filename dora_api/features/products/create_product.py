@@ -39,7 +39,11 @@ class CreateProductRequest(BaseModel):
     merchant_stockcode: str | None = Field(default = None, min_length = 1)
     name: str = Field(min_length = 1)
     price_now: float = Field(gt = 0)
-    price_was: float = Field(gt = 0)
+    # Optional (OD-2). A hand-entered product usually has no "was" price —
+    # the user knows what the butcher charges, not what it charged last month.
+    # Defaults to `price_now`, which reads as "no markdown"; 0.0 would read as
+    # "was free" and make every custom product look permanently discounted.
+    price_was: float | None = Field(default = None, gt = 0)
     size: str = Field(min_length = 1)
     size_unit: str = Field(min_length = 1)
     size_value: float = Field(gt = 0)
@@ -103,7 +107,7 @@ class CreateProductHandler:
                 self.repository,
                 _ExistingProduct,
                 price_now=request.price_now,
-                price_was=request.price_was,
+                price_was=request.price_was or request.price_now,
                 observed_at=observed_at,
                 source=_MANUAL_SOURCE,
             )
@@ -117,7 +121,7 @@ class CreateProductHandler:
         _Offer = ProductOffer(
             offered_on=observed_at,
             price_now=request.price_now,
-            price_was=request.price_was,
+            price_was=request.price_was or request.price_now,
         )
         _NewProduct = Product(
             brand=request.brand,
@@ -133,6 +137,11 @@ class CreateProductHandler:
             size_unit=request.size_unit,
             size_value=request.size_value,
             web_url=request.web_url,
+            # OD-2 — this route IS the hand-entry path (its own docstring calls
+            # it "the manual product-add"), so anything created here is custom
+            # by definition. That marking is what keeps the scheduled sync from
+            # trying to refresh it and ingestion from overwriting it.
+            is_custom=True,
         )
 
         self.repository.add(_Offer)

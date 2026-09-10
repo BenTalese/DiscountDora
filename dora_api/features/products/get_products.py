@@ -29,6 +29,9 @@ class ProductDto:
     # `GET /products/<id>/image`. Mirrors stock-item / recipe pattern.
     has_image: bool
     is_active: bool
+    # OD-2 — hand-entered. The SPA marks these so a user can tell at a glance
+    # which prices Dora maintains and which are their own.
+    is_custom: bool
     is_available: bool
     store_id: UUID
     store_name: str
@@ -58,6 +61,7 @@ class ProductDto:
             brand = product.brand,
             has_image = False,
             is_active = product.is_active,
+            is_custom = bool(getattr(product, "is_custom", False)),
             is_available = product.is_available,
             store_id = product.store.id,
             store_name = product.store.name,

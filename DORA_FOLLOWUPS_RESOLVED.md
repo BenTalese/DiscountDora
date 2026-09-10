@@ -10,6 +10,61 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-796 — `.page-counts-footer` overflows a 375px viewport by 8px on /my-products
+- **Raised:** 2026-08-31 (recipe-view feedback batch — the "where else?" sweep)
+- **Type:** finding
+- **What:** swept all 13 main routes at 375px for horizontal page overflow while
+  answering the owner's *"where else might this be an issue?"*. Twelve are clean;
+  `/my-products` overflows by **8px**, and the offender is
+  `PageCountsFooter.vue`'s `margin: 16px -16px -16px` outdent — it assumes the
+  page wrapper's padding is 16px per side, and on this page it isn't, so the
+  bar comes out 391px wide in a 375px viewport. D-011 (no page h-scroll).
+- **Why deferred:** unrelated to the recipe surface this batch was scoped to,
+  and the footer is shared — the fix wants checking on every page that mounts
+  it, not just this one.
+- **Recommended resolution:** opportunistic — next time anything touches
+  `PageCountsFooter` or the My Products page.
+- **RESOLVED 2026-09-06 (batch F).** `PageCountsFooter` outdents a hardcoded
+  `-16px` to cancel a `q-pa-md` parent, but `/my-products` used `<q-page padding>`,
+  whose padding is **8px at xs** — so it over-outdented by 16px, 8px each side.
+  It was the only one of the four pages using that footer not already saying
+  `q-pa-md`; aligned with the other three. Confirmed live at 375px:
+  `scrollWidth == clientWidth`, no horizontal page scroll.
+
+## [RESOLVED] FU-358 — Check / upgrade the Aldi scraper (site appears updated)
+- **Raised:** 2026-06-12 (user note during Phase 1 wrap-up)
+- **Type:** deferred job
+- **What:** User flagged that Aldi's website appears to have
+  changed; the existing Aldi scraper in the companion / merchant
+  scraping module likely needs revisiting. Concrete steps when
+  picked up:
+  1. Hit a representative Aldi product page in a browser, compare
+     the live DOM to what the scraper's selectors expect.
+  2. Run the scraper against a known SKU and inspect the result
+     (price, size, on-special detection) — note any fields that
+     come back null / wrong / missing.
+  3. Decide whether it's a selector tweak or a structural
+     rewrite. Aldi historically uses a different layout from
+     Coles/Woolworths, so changes there can ripple more than a
+     simple class rename.
+  4. If structural: cross-check the merchant scraping posture
+     (`RECONCILED_FINISHING_PLAN.md` Decision 1 — scraper is the
+     companion-app-only path; the core repo doesn't ship live
+     scrape).
+- **Why deferred:** out of scope of the current finishing-pass
+  stream; needs live URLs + the companion app to investigate
+  properly.
+- **Recommended resolution:** opportunistic — when the user
+  next needs Aldi pricing data, or as a focused session in the
+  companion repo.
+- **RESOLVED 2026-09-08.** Done as batch E of the products program — and the
+  site had changed far more than 'appears updated' suggested: the old URLs 302
+  away, every old selector is gone, and Aldi now runs Nuxt 3 on Spryker serving
+  products as server-rendered JSON. Rewritten against that, with `sku` and
+  `brandName` now populated (both were hardcoded `None`). Full detail on
+  [[FU-884]], which superseded this entry without either noticing the other —
+  see the note below.
+
 ## [RESOLVED] FU-905 — costing can't see the portion table nutrition weighs with, and the two disagree about a cup of flour
 - **Raised:** 2026-09-09 (driving a realistic recipe through both calculators)
 - **Type:** finding

@@ -94,6 +94,22 @@
                 <BaseTooltip>Open stock item</BaseTooltip>
             </q-chip>
             <span v-else class="text-caption dora-text-muted">Not linked</span>
+            <!-- OD-2 — say which prices Dora maintains and which the user
+                 typed. A custom product is never refreshed, so without this
+                 its price would silently look as current as a scraped one. -->
+            <q-chip
+                v-if="product.is_custom"
+                dense
+                outline
+                color="secondary"
+                :icon="ICONS.edit"
+                class="q-ml-xs"
+            >
+                Custom
+                <BaseTooltip>
+                    You added this by hand — Dora won't change or refresh it.
+                </BaseTooltip>
+            </q-chip>
         </q-card-section>
 
         <q-separator class="q-mt-sm" />
@@ -153,7 +169,6 @@
 </template>
 
 <script setup lang="ts">
-    import BaseTooltip from 'src/components/BaseTooltip.vue';
     /** Expanded ("cards") view of a saved product — the richer of the two
      *  modes the owner asked for (D-10), paired with `ProductRow`.
      *
@@ -167,6 +182,7 @@
     import { computed } from 'vue';
     import AddToListButton from 'src/components/AddToListButton.vue';
     import BaseButton from 'src/components/BaseButton.vue';
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     import DiscountChip from 'src/components/chips/DiscountChip.vue';
     import ProductActiveButton from 'src/components/products/ProductActiveButton.vue';
     import ProductLinkButton from 'src/components/products/ProductLinkButton.vue';

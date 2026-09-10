@@ -206,7 +206,7 @@ next reviewer can fast-skip them.
   scope; the cart/standalone-product bullets (L83-84,108,130,154,191,196,288,
   380-382) are now covered. **Update 2026-06-17:** My Products + Price History + the stock-item
   Products tab **stay in Dora, data-gated**; only Product Search moves to the companion. Custom
-  products (L192) is **by-design refused** (no manual product entry); the everyday substitute is
+  products (L192) was **by-design refused**; **REVERSED and BUILT 2026-09-08** (OD-2) — the everyday substitute was
   `PreferredBuy`. The My-Products link affordance is repaired (FU-208). See
   `04_proposals/PROPOSAL_PRODUCTS_AS_OVERLAY.md` §4.
   **Update 2026-09-06 — every MY PRODUCTS bullet now has a home.**
@@ -218,7 +218,7 @@ next reviewer can fast-skip them.
   marked **superseded, not covered** — the filter-clear-consistency and
   filter-default-open ones, both answered differently by later owner calls
   (`FilterToggleButton` / `useFilterPanelExpanded`, 2026-08-20). Custom products
-  (L192) stays by-design refused; see that plan's OD-2.
+  (L192) is **BUILT 2026-09-08**: `PreferredBuy` is a label with no price, store or history, so it could never substitute. Custom products are marked `is_custom` and excluded from the scheduled sync and from ingest dedupe.
 - PRODUCT HISTORY — B9.6. **Update 2026-09-06:** all ten PRODUCT HISTORY bullets
   are dispositioned in `04_proposals/IMPL_PLAN_PRODUCTS_PROGRAM.md` §8
   (PH-1..PH-10) — four appear already fixed and await a browser confirm under

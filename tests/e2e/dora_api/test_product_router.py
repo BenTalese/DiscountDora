@@ -348,7 +348,6 @@ def test__create_product__MissingRequiredFields__AllMissingFieldsReported(api):
             'store_name': [validation_err("missing", "Field required")],
             'name': [validation_err("missing", "Field required")],
             'price_now': [validation_err("missing", "Field required")],
-            'price_was': [validation_err("missing", "Field required")],
             'size': [validation_err("missing", "Field required")],
             'size_unit': [validation_err("missing", "Field required")],
             'size_value': [validation_err("missing", "Field required")],
@@ -441,7 +440,6 @@ def test__create_product__EmptyRequest__IsRequiredInputsValidationFailure(api):
             'store_name': [validation_err("missing", "Field required")],
             'name': [validation_err("missing", "Field required")],
             'price_now': [validation_err("missing", "Field required")],
-            'price_was': [validation_err("missing", "Field required")],
             'size': [validation_err("missing", "Field required")],
             'size_unit': [validation_err("missing", "Field required")],
             'size_value': [validation_err("missing", "Field required")],
@@ -464,6 +462,10 @@ def test__get_products__GettingProduct__GetsAllExpectedAttributes(api):
     assert _Product['has_image'] is False
     assert _Product['is_active'] is True
     assert _Product['is_available'] is True
+    # OD-2 — this product was created through `POST /products`, which IS the
+    # hand-entry path, so it is custom. Ingested products (the seed's) are not;
+    # `test_custom_products.py` pins both sides.
+    assert _Product['is_custom'] is True
     assert is_valid_uuid(_Product['store_id'])
     assert _Product['store_name'] == 'Woolworths'
     assert _Product['merchant_stockcode'] == '50332BA'
@@ -492,7 +494,8 @@ def test__get_products__GettingProduct__GetsAllExpectedAttributes(api):
         'size_value',
         'web_url',
         'linked_stock_item_id',
-        'linked_stock_item_name'
+        'linked_stock_item_name',
+        'is_custom'
     }
 
 

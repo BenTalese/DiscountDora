@@ -42,6 +42,19 @@
                     <BaseTooltip v-if="compactToolbar">{{ orphansLabel }}</BaseTooltip>
                 </BaseButton>
 
+                <!-- OD-2 — hand-enter a product for a shop no scraper
+                     covers. `PreferredBuy` can't: it is a label with no price,
+                     store or history. -->
+                <BaseButton
+                    variant="secondary"
+                    :icon="ICONS.add"
+                    :label="compactToolbar ? undefined : 'Add custom'"
+                    aria-label="Add a custom product"
+                    @click="customOpen = true"
+                >
+                    <BaseTooltip v-if="compactToolbar">Add a custom product</BaseTooltip>
+                </BaseButton>
+
                 <BaseButton
                     v-if="!bulkMode"
                     variant="secondary"
@@ -450,6 +463,8 @@
             </q-card-section>
         </BaseDialog>
 
+        <CustomProductDialog v-model="customOpen" @created="loadAll" />
+
         <!-- ── Link-to-stock-item dialog ────────────────────────────────── -->
         <BaseDialog
             v-model="linkOpen"
@@ -499,6 +514,7 @@
     import FilterRow from 'src/components/filters/FilterRow.vue';
     import FilterToggleButton from 'src/components/FilterToggleButton.vue';
     import PageCountsFooter from 'src/components/PageCountsFooter.vue';
+    import CustomProductDialog from 'src/components/products/CustomProductDialog.vue';
     import ProductCard from 'src/components/products/ProductCard.vue';
     import ProductRow from 'src/components/products/ProductRow.vue';
     import FadeTransition from 'src/components/transitions/FadeTransition.vue';
@@ -1049,6 +1065,7 @@
 
     // ── Stock items without products ────────────────────────────────────
     const orphansOpen = ref(false);
+    const customOpen = ref(false);
 
     const stockItemsMissingProducts = computed<StockItem[]>(() => {
         const linkedIds = new Set(

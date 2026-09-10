@@ -8,6 +8,10 @@ export type Product = {
     // shell (R-045; three surfaces did exactly that until FU-827).
     has_image: boolean;
     is_active: boolean;
+    /** Hand-entered rather than scraped (OD-2). Never refreshed by the
+     *  scheduled sync and never overwritten by ingestion, so the UI marks it —
+     *  a price Dora maintains and a price you typed are different promises. */
+    is_custom: boolean;
     is_available: boolean;
     store_id?: string;
     store_name: string;

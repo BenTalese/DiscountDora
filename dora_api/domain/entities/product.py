@@ -33,6 +33,20 @@ class Product(BaseEntity):
     # "$4.20 for 4 × 125g" rather than "500g flat". ``None`` ⇒ single
     # pack / free-weight, the common case.
     pack_count: int | None = None
+    # OD-2 — hand-entered rather than ingested. A custom product records a
+    # price for a shop no scraper covers (a butcher, a market stall, an IGA
+    # nobody supports). `PreferredBuy` cannot: it is a label with no price,
+    # store or history, so before this the user had to choose between a note
+    # they couldn't compare and a product they couldn't create.
+    #
+    # It is load-bearing, not decorative:
+    #   - the scheduled sync must not try to refresh it (there is nothing to
+    #     refresh it *from*), and
+    #   - ingestion must not adopt it. Dedupe matches on (store, name) when a
+    #     record has no stockcode, so a scraped "Mince" would otherwise
+    #     overwrite a hand-entered "Mince" at the same store and quietly turn
+    #     the user's own figure into scraped data.
+    is_custom: bool = False
 
     class Fields(BaseEntity.Fields):
         BRAND = "brand"
@@ -49,3 +63,4 @@ class Product(BaseEntity):
         SIZE_VALUE = "size_value"
         WEB_URL = "web_url"
         PACK_COUNT = "pack_count"
+        IS_CUSTOM = "is_custom"

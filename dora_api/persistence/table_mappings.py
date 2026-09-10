@@ -236,6 +236,9 @@ def configure_mappings(db: SQLAlchemy):
         # free-weight. ``size_value`` stays as the total measure of the
         # whole bundle (existing convention); pack_count is informational.
         Column("pack_count", Integer, nullable=True),
+        # OD-2 — hand-entered product. Excluded from the ingestion sync list
+        # and from ingest dedupe; see the entity for why both matter.
+        Column("is_custom", Boolean, nullable=False, server_default=false()),
     )
 
     stock_group_table = Table(

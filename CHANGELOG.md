@@ -147,6 +147,20 @@ semver — major bumps signal schema or breaking-config changes.
   each time you open it.
 
 ### Added
+- **Add your own products, for shops Dora can't check (2026-09-08).** Until now
+  a product could only exist if a scraper found it, so a butcher, a market stall
+  or an unsupported supermarket simply couldn't hold a price — you could leave
+  yourself a note ("preferred buy"), but a note carries no price, no store and
+  no history, so it can't be compared or tracked. **Add custom** on My Products
+  takes a name, store, price and size, and creates a real product from them.
+  Custom products are **clearly marked as yours**: Dora never refreshes them,
+  never overwrites them, and a scraped product of the same name at the same shop
+  can no longer quietly replace your figure with its own. They also don't show
+  "% off" or appear under "on deal", because there's no earlier price to compare
+  against — only what you typed.
+  Stores still come from your own list (Settings → Stores); the form links
+  straight there if the shop you want isn't set up yet.
+
 - **A recipe's nutrition gaps are named, and fixable from the recipe (2026-09-08).**
   The nutrition panel could say *"3 stock items not linked to a food"* but not
   which, so the only way to close a gap was to remember the ingredient, go to

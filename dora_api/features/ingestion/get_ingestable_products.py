@@ -93,6 +93,10 @@ class GetIngestableProductsHandler:
             )
             .where(
                 product_table.c.is_active.is_(True),
+                # OD-2 — a custom product has no upstream to refresh from.
+                # Offering it to a producer would at best waste a request and
+                # at worst have it matched against something else entirely.
+                product_table.c.is_custom.is_(False),
                 product_table.c.store_id.in_(external_by_store.keys()),
             )
             .order_by(product_table.c.name)

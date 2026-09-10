@@ -39,6 +39,11 @@
                     <span v-if="!product.is_available" class="text-negative">
                         · Out of stock
                     </span>
+                    <!-- OD-2 — a hand-entered price is a different promise
+                         from a maintained one; say so here too. -->
+                    <span v-if="product.is_custom" class="text-secondary">
+                        · Custom
+                    </span>
                 </div>
             </div>
 

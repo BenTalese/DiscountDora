@@ -55,6 +55,12 @@ export type MealPlanEntry = {
      *  cookbook and the week builder use. Null when money features are off,
      *  when the recipe couldn't be priced, or when it records no servings. */
     estimated_cost: number | null;
+    /** Owner 2026-09-12 — how many of the recipe's linked ingredients are
+     *  missing right now. Server-owned, from the app's one cookability rule.
+     *  Cards flag it only when this meal is actually cooked from ingredients
+     *  (see `showsMissingIngredients`) and only when it's > 0 — "you have
+     *  everything" is not news. */
+    missing_count: number;
 };
 
 /** Owner 2026-09-05 — one day's planned cost, with the coverage that keeps it
@@ -123,6 +129,14 @@ export type UnlinkedIngredient = {
 export type MealPlanIngredients = {
     items: MealPlanIngredient[];
     unlinked: UnlinkedIngredient[];
+    /** Owner 2026-09-12 — the two bands counted separately (a low item may not
+     *  need buying at all), plus what the shop and the meals are worth. All
+     *  four are server-derived; the costs are `null` when money features are
+     *  off install-wide (R-058) or when nothing in the set could be priced. */
+    low_count: number;
+    out_count: number;
+    to_buy_cost: number | null;
+    meals_cost: number | null;
 };
 
 export type Shortfall = {

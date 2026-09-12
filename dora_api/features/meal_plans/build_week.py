@@ -63,13 +63,23 @@ EXPIRING_HORIZON_DAYS = 14
 # slot vocabulary (server-resolved, so a client can't inflate it); this is the
 # backstop for an install with an unusually long slot list.
 MAX_MEALS = 42
-# Per-candidate random tiebreak added to the emphasis score so the "Reshuffle"
-# button (a fresh rng each request) yields a different-but-still-good plan.
-# Kept sub-dominant to the real signals — a single expiring ingredient (3.0) or
-# a favourite (3.0) still outranks it — so only near-ties get shuffled. Without
-# an rng (the fixture unit tests) no jitter is added, so selection stays fully
-# deterministic there.
-RESHUFFLE_JITTER = 1.5
+# How Reshuffle varies a plan (owner, 2026-09-12: *"reshuffle doesn't do
+# anything on the current dev data — I'd at least expect a couple of meals to
+# swap or days to rotate"*).
+#
+# It used to be a per-candidate random tiebreak of up to 1.5 added to the
+# score. That is invisible on a real cookbook: one expiring ingredient is worth
+# 3.0 and cookable-now 2.0, so the same recipes won every single time and only
+# a pool of genuinely equal candidates (which the unit tests build, and a
+# kitchen doesn't) ever shuffled.
+#
+# Instead of nudging the score, the *pick* is now a sample: at each step take
+# the candidates within `NEAR_BEST_WINDOW` of the leader — capped, so a flat
+# pool doesn't turn selection into a lottery — and choose one at random. A
+# strong signal still wins outright, because nothing else is near it. With no
+# rng (the fixture unit tests) it is the plain argmax, exactly as before.
+NEAR_BEST_WINDOW = 1.5
+NEAR_BEST_MAX = 4
 # PROPOSAL_MEAL_PLANS_PART_2 §9 — for Batch-cook-style households the builder
 # proposes *cook batches* (one cook feeds a run of days in a slot) instead of a
 # distinct recipe per day. Each cook spans up to this many days — a middle
@@ -189,27 +199,32 @@ def select_recipes(
         (c for c in candidates if c.recipe_id not in exclude_ids),
         key=lambda c: (c.name.lower(), str(c.recipe_id)),
     )
-    # Per-candidate tiebreak, fixed for the whole selection (so a recipe's
-    # jitter doesn't fluctuate between iterations). A fresh rng per request is
-    # what makes "Reshuffle" produce a new plan; no rng ⇒ no jitter ⇒ stable.
-    jitter = (
-        {c.recipe_id: rng.random() * RESHUFFLE_JITTER for c in eligible}
-        if rng is not None else {}
-    )
     selected: List[RecipeCandidate] = []
     used_cuisine: Counter = Counter()
     used_category: Counter = Counter()
     vweight = _variety_weight(emphasis)
 
     while len(selected) < count and eligible:
-        best = None
-        best_score = None
-        for c in eligible:
-            repeats = used_cuisine[c.cuisine_id] + used_category[c.category_id]
-            score = _base_score(c, emphasis, rng) - vweight * repeats + jitter.get(c.recipe_id, 0.0)
-            if best_score is None or score > best_score:
-                best, best_score = c, score
-        assert best is not None
+        scored = [
+            (
+                _base_score(c, emphasis, rng)
+                - vweight * (used_cuisine[c.cuisine_id] + used_category[c.category_id]),
+                c,
+            )
+            for c in eligible
+        ]
+        leader = max(score for score, _ in scored)
+        if rng is None:
+            # Plain argmax; `eligible` is name-sorted, so ties resolve stably.
+            best = next(c for score, c in scored if score == leader)
+        else:
+            # Best-first, so the cap keeps the strongest few rather than
+            # whichever names happen to sort first.
+            near = [
+                c for score, c in sorted(scored, key=lambda t: -t[0])
+                if score >= leader - NEAR_BEST_WINDOW
+            ]
+            best = rng.choice(near[:NEAR_BEST_MAX])
         selected.append(best)
         eligible.remove(best)
         used_cuisine[best.cuisine_id] += 1
@@ -217,19 +232,61 @@ def select_recipes(
     return selected
 
 
+def cost_per_serving(c: RecipeCandidate) -> Optional[float]:
+    """One serving of this recipe, or None when it couldn't be priced.
+
+    `estimated_cost` is what the whole pot costs — the recipe's own yield. A
+    plan schedules *servings*, so every figure this module quotes is built from
+    this one, exactly as `get_meal_plans._hydrate_cost` does for a saved week
+    (R-003). Before 2026-09-12 the builder quoted the pot per entry, which
+    ignored the servings control on step 1 and counted a three-day cook batch
+    three times over — the budget cap was then swapping meals on that inflated
+    figure (owner: *"are linked meal slots accounted for properly when
+    calculating cost?"* — they were not).
+    """
+    if c.estimated_cost is None:
+        return None
+    return c.estimated_cost / float(max(c.servings or 1, 1))
+
+
+def _entry_cost(c: RecipeCandidate, servings: int) -> Optional[float]:
+    """What one proposed meal costs at the servings it's planned for."""
+    per_serving = cost_per_serving(c)
+    return None if per_serving is None else round(per_serving * servings, 2)
+
+
 def apply_budget_cap(
     selected: List[RecipeCandidate],
     pool: List[RecipeCandidate],
     budget_remaining: float,
+    servings_per_meal: int = 1,
+    meals_per_pick: int = 1,
 ) -> tuple[List[RecipeCandidate], set]:
     """Best-effort: while the selection's priced cost exceeds what's left of the
     budget, swap the dearest picked recipe for the cheapest cheaper alternative
     from `pool`. Returns the (possibly changed) list + the set of swapped-in ids
     (for the budget reason chip). Never guarantees under-budget — same honest
-    posture as the FU-451 swap ranker."""
+    posture as the FU-451 swap ranker.
+
+    The comparison is against **what the plan will cost**, not what the pots are
+    worth: each pick is counted at the servings the week is being built for,
+    multiplied by how many meals that one pick fills (a repeated day, or the
+    run of days a batch cook spans). `meals_per_pick` is uniform because it is
+    a property of the placement *shape*, which is decided before placement
+    runs; a final short batch chunk therefore rounds up. Best-effort is the
+    contract.
+
+    Owner call 2026-09-12: the basis stays the **full value of the meals**
+    rather than only what you'd have to buy — what changed is that the review
+    step now states the to-buy figure beside it, so "under budget" is no longer
+    a number with an unstated meaning.
+    """
 
     def cost(c: RecipeCandidate) -> Optional[float]:
-        return c.estimated_cost
+        per_serving = cost_per_serving(c)
+        if per_serving is None:
+            return None
+        return per_serving * servings_per_meal * meals_per_pick
 
     def total(items: List[RecipeCandidate]) -> float:
         return sum((cost(x) or 0.0) for x in items)
@@ -547,7 +604,26 @@ def compute_auto_build(
     if request.budget_cap and budget_remaining is not None:
         selected_ids = {c.recipe_id for c in selected}
         pool = [c for c in candidates if c.recipe_id not in selected_ids and c.recipe_id not in excluded]
-        selected, swapped = apply_budget_cap(selected, pool, budget_remaining)
+        # How many meals one pick fills: every selected day when the line-up is
+        # repeated, the batch span when a batch household cooks once for a run,
+        # one otherwise.
+        if request.repeat_same_day:
+            meals_per_pick = max(len(days), 1)
+        else:
+            meals_per_pick = span
+        selected, swapped = apply_budget_cap(
+            selected, pool, budget_remaining,
+            servings_per_meal=request.default_servings,
+            meals_per_pick=meals_per_pick,
+        )
+
+    # Which recipe lands on which day is otherwise selection rank order, so the
+    # best pick always took the earliest day and a reshuffle left the week
+    # looking untouched even when the set had changed. Shuffling only the
+    # placement order leaves the *set* — and `_fill_one_day`'s time-of-day
+    # preference — exactly as ranked.
+    if rng is not None:
+        rng.shuffle(selected)
 
     # Batch households get grouped cooks (one recipe across a run of days);
     # everyone else keeps the distinct-per-day placement (cook_key None).
@@ -573,7 +649,10 @@ def compute_auto_build(
             # `v-if`, which is a render gate, not a feature gate (owner
             # 2026-09-03: *"ensure the money text and budget setting in the
             # auto builder respect feature gates"*).
-            estimated_cost=c.estimated_cost if money_on else None,
+            # Priced at the servings this entry is planned for, so a batch's
+            # days each carry their share and sum to the one cook — see
+            # `cost_per_serving`.
+            estimated_cost=_entry_cost(c, request.default_servings) if money_on else None,
             cook_key=cook_key,
         )
         for (c, day, slot, cook_key) in placements

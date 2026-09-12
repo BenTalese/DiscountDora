@@ -7,8 +7,20 @@
         @update:model-value="(v: boolean) => emit('update:modelValue', v)"
     >
         <q-card class="picker-sheet column">
+            <!-- Owner 2026-09-12 — the title names the destination when there
+                 is one. "Pick a recipe" is what the sheet obviously is; the
+                 slot and day are what you need to hold in your head while you
+                 scroll, and putting them here buys back the line the picker's
+                 own target row was spending inside a 80vh sheet. -->
             <q-card-section class="row items-center q-py-sm">
-                <div class="text-subtitle1">Pick a recipe</div>
+                <div class="text-subtitle1 picker-sheet__title"
+                     :class="{ 'picker-sheet__title--target': !!focusedTarget }">
+                    <template v-if="focusedTarget">
+                        <q-icon :name="ICONS.arrow_forward" size="16px" />
+                        {{ focusedTarget.slot }} · {{ formatDate(focusedTarget.dayIso) }}
+                    </template>
+                    <template v-else>Pick a recipe</template>
+                </div>
                 <q-space />
                 <BaseButton variant="icon" :icon="ICONS.close" @click="emit('update:modelValue', false)">
                     <BaseTooltip>Close</BaseTooltip>
@@ -21,6 +33,7 @@
                     :suggestions="suggestions"
                     :recipes="recipes"
                     :focused-target="focusedTarget"
+                    :show-target="false"
                     :format-date="formatDate"
                     @update:recipe-search="(v: string) => emit('update:recipeSearch', v)"
                     @cancel-target="emit('cancelTarget')"
@@ -82,5 +95,16 @@
     }
     .picker-sheet__body {
         overflow-y: auto;
+    }
+    /* Accent ink when it is naming a destination — the same signal the desktop
+       picker's target row carries. */
+    .picker-sheet__title {
+        display: flex;
+        align-items: center;
+        gap: var(--space-1);
+        min-width: 0;
+    }
+    .picker-sheet__title--target {
+        color: var(--accent-ink);
     }
 </style>

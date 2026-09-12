@@ -149,13 +149,23 @@
                          it's the same sentence the level picker shows).
                          `confident` rows get nothing — they're at the bottom
                          of the walk and "Dora already knows this" is not a
-                         reason to look harder. -->
+                         reason to look harder.
+
+                         Owner, 2026-09-12: the block used to open with "Dora's
+                         not sure about this one" on every card — which is the
+                         premise of the whole runner, not news about this item —
+                         and then the reason said the band again. It now leads
+                         with the same "Dora thinks <band>" the overview chip
+                         uses, and the reason underneath just tells the story. -->
                     <div
                         v-if="current.check_rank === 'uncertain' && current.belief_reason"
                         class="runner-belief q-mt-sm"
                     >
-                        <q-icon :name="ICONS.dora_voice" size="14px" class="q-mr-xs" />
-                        Dora's not sure about this one — {{ current.belief_reason }}
+                        <div class="runner-belief__head">
+                            <q-icon :name="ICONS.dora_voice" size="14px" />
+                            <span>Dora thinks {{ beliefWord(current.belief_band) }}</span>
+                        </div>
+                        {{ current.belief_reason }}
                     </div>
                 </q-card-section>
 
@@ -490,6 +500,18 @@
         const level = stockLevels.value.find((l) => l.name === c.stock_level_name);
         return colourForSequence(level?.sequence);
     });
+
+    // Belief's own words, matching `PantryBeliefChip` on the stock overview so
+    // the phrase a user learns in one place reads the same in the other.
+    const BELIEF_WORD: Record<string, string> = {
+        out: 'out',
+        low: 'low',
+        stocked: 'stocked',
+    };
+    function beliefWord(band: string | null): string {
+        if (!band) return 'something has changed';
+        return BELIEF_WORD[band] ?? band;
+    }
 
     function bandLabel(band: CadenceBand): string {
         // Weekly → "week", Fortnightly → "fortnight", Monthly → "month".
@@ -907,6 +929,13 @@
     }
     .runner-belief .q-icon {
         color: var(--semantic-warning);
+    }
+    /* The band, said once, above its reason. */
+    .runner-belief__head {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        font-weight: 600;
     }
 
     /* Two big primary buttons side-by-side. gap comes from `q-gutter-*`

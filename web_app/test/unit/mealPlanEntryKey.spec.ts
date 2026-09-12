@@ -26,6 +26,7 @@ function entry(over: Partial<MealPlanEntry>): MealPlanEntry {
         needs_cooking: false,
         cook_fresh: false,
         estimated_cost: null,
+        missing_count: 0,
         ...over,
     };
 }

@@ -10,8 +10,12 @@
         *is* the auto-check that was explicitly rejected, with a human-shaped fig
         leaf — and every risk that rejection was protecting against comes back.
 
-        So the screen is built to be *read*: real item names, the level Dora
-        believes, and her one-line reason, each on its own row. Everything is
+        So the screen is built to be *read*: real item names and the two levels
+        — believed and recorded — one row each. Owner, 2026-09-12: the reason
+        line was dropped. On this screen you are agreeing or disagreeing at a
+        glance, twelve times in a row; the cadence story behind each guess is a
+        paragraph nobody reads here. It still lives on the walk card and the
+        stock-item page, where you're looking at one item. Everything is
         pre-ticked, so agreeing is still one tap. The value being delivered is
         not "confirm in bulk" — it's that **disagreeing is cheap**: untick a row
         and it joins the items you check yourself.
@@ -24,7 +28,7 @@
         <div class="stocktake-review__head">
             <div class="text-h6">Dora's fairly sure about these</div>
             <div class="text-caption dora-text-muted-7 q-mt-xs">
-                Worked out from your shopping and cooking — no need to go and look.
+                Worked out from your shopping and cooking.
                 Untick anything you'd rather check yourself.
             </div>
         </div>
@@ -68,14 +72,11 @@
                             {{ bandWord(item.belief_band) }}
                         </span>
                         <template v-if="item.stock_level_name">
-                            <span>· recorded as</span>
+                            <span>· but is currently</span>
                             <span :class="tintClassForSequence(levelSequence(item.stock_level_id))">
-                                {{ item.stock_level_name }}
+                                {{ recordedWord(item) }}
                             </span>
                         </template>
-                    </q-item-label>
-                    <q-item-label v-if="item.belief_reason" caption class="stocktake-review__reason">
-                        {{ item.belief_reason }}
                     </q-item-label>
                 </q-item-section>
             </q-item>
@@ -176,12 +177,30 @@
         return BAND_SEQUENCE[band] ?? null;
     }
 
+    // The other direction, for saying a *recorded* level in belief's words.
+    const BAND_BY_SEQUENCE: Record<number, string> = {
+        [STOCKED_SEQUENCE]: 'stocked',
+        [LOW_STOCK_SEQUENCE]: 'low',
+        [OUT_OF_STOCK_SEQUENCE]: 'out',
+    };
+
     // The row carries the level's id, not its sequence, so the catalogue
     // resolves it. Renaming a level must not change its colour (FU-050).
     const { stockLevels } = storeToRefs(useStockLevelStore());
     function levelSequence(levelId: string | null): number | null {
         if (!levelId) return null;
         return stockLevels.value.find((l) => l.stock_level_id === levelId)?.sequence ?? null;
+    }
+
+    // Owner, 2026-09-12: the two pills on a row are read as a pair, so they
+    // have to speak the same language — "Dora thinks Low · but is currently
+    // Low Stock" reads as two different claims. The recorded level is said in
+    // belief's words wherever the catalogue maps onto a band; a household's
+    // extra levels (anything off the three canonical sequences) keep their own
+    // name, because there's no band word to say instead.
+    function recordedWord(item: StocktakeSessionItem): string {
+        const band = BAND_BY_SEQUENCE[levelSequence(item.stock_level_id) ?? -1];
+        return band ? bandWord(band) : (item.stock_level_name ?? '');
     }
 
     const confirmLabel = computed(() => {
@@ -237,10 +256,6 @@
         align-items: center;
         gap: var(--space-1);
         color: var(--text-secondary);
-    }
-    .stocktake-review__reason {
-        color: var(--text-secondary);
-        white-space: normal;
     }
     .stocktake-review__actions {
         flex: 0 0 auto;

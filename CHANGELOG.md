@@ -6,6 +6,72 @@ semver — major bumps signal schema or breaking-config changes.
 ## [Unreleased]
 
 ### Fixed
+- **The week builder was pricing the pot, not the plan (2026-09-12).** Every
+  proposed meal was quoted at what the whole recipe costs to make, no matter
+  how many servings you'd asked for — and a batch cook that feeds three days
+  was counted three times over. The "keep the week under budget" switch was
+  choosing which meals to swap out on that same inflated figure. A meal now
+  costs what it costs at the servings it's planned for, which is what the
+  saved planner has always shown.
+- **Reshuffle now actually reshuffles (2026-09-12).** It varied the plan only
+  when two recipes scored *exactly* alike, which on a real cookbook never
+  happens — so the same week came back every time. Dora now picks at random
+  among the recipes that are close to best, and varies which day each one
+  lands on. A strong reason to cook something (an ingredient about to expire)
+  still wins outright.
+- **Meal cards line up again (2026-09-12).** A meal with a status icon on it
+  pushed its servings, time and cost to the right-hand edge while the meals
+  without one kept them on the left, so a day's cards read as two different
+  layouts.
+
+### Changed
+- **The auto builder's review step reads as a list of meals (2026-09-12).**
+  Each meal is its own card with the servings stepper and remove button up on
+  the name's line; days are separated by a centred heading instead of a bold
+  line that looked like another meal. Two labels went: "Added" (on meals you
+  added yourself) and "You have everything", which the ingredient list below
+  answers for the whole week. A batch's first day says **Cook day** rather
+  than "Cook once", and its leftover days are grey — never a colour that reads
+  as a verdict.
+- **A meal you can't cook says so (2026-09-12).** Planned meals and proposed
+  ones flag how many ingredients you'd need to buy. Only the gap is flagged —
+  a meal you can cook says nothing — and only on the meals it applies to: a
+  leftovers day is eaten from a cook that already happened.
+- **"What you'll need" counts low and out separately, and prices them
+  (2026-09-12).** It said "N to buy", which counted low items you may well not
+  need to buy. It now reads "3 low · 2 out", with what the shop would cost and
+  what the meals themselves are worth beside it — the figures that actually
+  decide whether a week is affordable.
+- **Meal planner filters fit on a phone (2026-09-12).** The A-Z/Cheapest
+  ordering moved up beside the filter chips instead of taking a row of its
+  own, and there's a new **Can cook now** chip for recipes you have every
+  ingredient for. "Any level" reads "Any difficulty" — it was never about
+  stock levels.
+- **Picking a recipe on a phone (2026-09-12).** The sheet's title names where
+  the meal is going ("→ Breakfast · Tue 14 Oct") instead of "Pick a recipe",
+  and the Done button that did nothing there is gone — the sheet closes when
+  you pick. On a desktop the same destination line is now a tinted card rather
+  than loose text.
+- **Auto builder, step 1 (2026-09-12).** Called **Setup**, not "Guide". The
+  servings control no longer stretches across the dialog, it no longer recites
+  your household size back at you, and "Dora will plan 14 meals" sits in an
+  info box directly above the button that does it.
+- **Dora says what she thinks once (2026-09-12).** Her explanation for a stock
+  level used to repeat the verdict it was explaining — "~Low — bought 12 days
+  ago…" sitting directly under a pill already reading "Dora thinks low", on the
+  stock overview's level picker, the item page and the stocktake runner alike.
+  The explanation now just tells the story: "Bought 12 days ago, cooked with 2×
+  since; you usually finish in about 14 days." The tildes went with it.
+- **The stocktake review screen is a list again, not an essay (2026-09-12).**
+  Each row is the item and the two levels — what Dora thinks and what's
+  currently recorded — said in the same words, so "Dora thinks Low · but is
+  currently Low Stock" can't happen. The per-row reasoning is gone from this
+  screen (you're agreeing or disagreeing at a glance, twelve times over); it's
+  still on the walk card and the item's own page. The walk card leads with
+  "Dora thinks low" instead of telling you on every single item that Dora isn't
+  sure about this one — which is the premise of the whole runner.
+
+### Fixed
 - **Health Star Ratings / Nutri-Score show up without reloading the page
   (2026-09-09).** Turning the rating scheme on refreshed the feature flag but
   not the recipes already fetched — and the rating is computed per request, so

@@ -49,6 +49,19 @@
                     <BaseTooltip>Needs cooking — pool is short</BaseTooltip>
                 </q-icon>
                 <span class="entry-chip__pill">×{{ entry.servings }}</span>
+                <!-- Cookability, flagged only when it's a problem — the rule
+                     (and why a leftovers day never asks) lives in
+                     `showsMissingIngredients`, shared with the phone card. -->
+                <q-icon
+                    v-if="showsMissing"
+                    :name="ICONS.add_shopping_cart"
+                    size="14px"
+                    class="entry-chip__status text-warning"
+                >
+                    <BaseTooltip>
+                        {{ entry.missing_count }} ingredient{{ entry.missing_count === 1 ? '' : 's' }} to buy for this
+                    </BaseTooltip>
+                </q-icon>
                 <!-- FU-653 — Dora's belief about this meal. Its own glyph, not
                      a change to the chip's state: the week's shortfall and
                      "need to buy" figures are unchanged, and this sits beside
@@ -87,6 +100,7 @@
     import BaseTooltip from 'src/components/BaseTooltip.vue';
     import { ICONS } from 'src/style/icons';
     import MealPlanEntryMenu from 'src/components/MealPlanEntryMenu.vue';
+    import { showsMissingIngredients } from 'src/helpers/mealPlanEntryFlags';
     import { useBatchEnabled } from 'src/composables/useBatchEnabled';
     import type { MealPlanEntry } from 'src/models/mealPlan';
     import { computed } from 'vue';
@@ -134,6 +148,9 @@
         props.entry.is_cook_day
             ? `Cook · serves ${props.entry.cook_batch_total_servings ?? props.entry.servings}`
             : 'Leftovers',
+    );
+    const showsMissing = computed(
+        () => showsMissingIngredients(props.entry, batchEnabled.value),
     );
 
     // R-Phase 6 §4.6 — single accessible label that names the recipe + slot +

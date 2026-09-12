@@ -66,6 +66,16 @@
                     <BaseTooltip>Needs cooking — pool is short</BaseTooltip>
                 </q-icon>
                 <span class="rich-card__servings">×{{ entry.servings }}</span>
+                <!-- Cookability, flagged only when it's a problem — see
+                     `showsMissingIngredients` for why there is no positive
+                     state and why a leftovers day never asks. -->
+                <span v-if="showsMissing" class="rich-card__missing">
+                    <q-icon :name="ICONS.add_shopping_cart" size="12px" />
+                    {{ entry.missing_count }} to buy
+                    <BaseTooltip>
+                        You're missing {{ entry.missing_count }} ingredient{{ entry.missing_count === 1 ? '' : 's' }} for this.
+                    </BaseTooltip>
+                </span>
                 <span v-if="entry.cook_time_minutes" class="rich-card__cook-time">
                     <q-icon :name="ICONS.timer" size="12px" />
                     {{ entry.cook_time_minutes }}m
@@ -103,6 +113,7 @@
     import MealPlanEntryMenu from 'src/components/MealPlanEntryMenu.vue';
     import { recipeImageUrl } from 'src/services/api/recipeApiService';
     import { formatMoney } from 'src/composables/useMoney';
+    import { showsMissingIngredients } from 'src/helpers/mealPlanEntryFlags';
     import { useBatchEnabled } from 'src/composables/useBatchEnabled';
     import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
     import type { MealPlanEntry } from 'src/models/mealPlan';
@@ -140,6 +151,10 @@
         props.entry.is_cook_day
             ? `Cook · serves ${props.entry.cook_batch_total_servings ?? props.entry.servings}`
             : 'Leftovers',
+    );
+
+    const showsMissing = computed(
+        () => showsMissingIngredients(props.entry, batchEnabled.value),
     );
 
     const thumbUrl = computed(() => recipeImageUrl(props.entry.recipe_id));
@@ -280,7 +295,26 @@
         align-items: center;
         gap: 2px;
     }
+    /* Owner 2026-09-12 — this used to be `margin-left: auto`, which pushed the
+       status glyph to the right edge and took the servings, time and money with
+       it. Only the meals that HAVE a glyph did that, so a day's cards read
+       left-aligned or right-aligned depending on whether they were short —
+       *"green meals have the text on the left, shortfall meals have it on the
+       right. Inconsistent."* The meta line reads left-to-right for every card
+       now; the glyph keeps its place immediately before the servings count,
+       which is the column the 2026-09-03 alignment feedback established. */
     .rich-card__status {
-        margin-left: auto;
+        flex: 0 0 auto;
+    }
+    /* The one negative signal on the card. The tint rides the glyph, never the
+       words — full-strength warning ink is the D-002 contrast fail. */
+    .rich-card__missing {
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        color: var(--text-secondary);
+    }
+    .rich-card__missing .q-icon {
+        color: var(--semantic-warning);
     }
 </style>

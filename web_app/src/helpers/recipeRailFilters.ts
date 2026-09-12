@@ -31,7 +31,8 @@ import type { Recipe } from 'src/models/recipe';
  * the server flag and the ordering is by name. Do not reintroduce a client
  * recency sort; if a recency *order* is wanted, the server should ship it.
  */
-export type RecipeFilterKey = 'suggests' | 'all' | 'favourites' | 'not_lately' | 'regulars';
+export type RecipeFilterKey =
+    | 'suggests' | 'all' | 'cookable' | 'favourites' | 'not_lately' | 'regulars';
 
 /**
  * The rail's SECOND filter axis (owner, 2026-09-01: "some useful filters feel
@@ -90,6 +91,11 @@ const PREDICATES: Record<
     (r: Recipe) => boolean
 > = {
     all: () => true,
+    // Owner 2026-09-12 — *"add quick filter for ingredients all available
+    // (cookable now)"*. `cookable` is the server's own tri-state (§3.2): only
+    // an explicit `true` qualifies, so a recipe with unlinked ingredients —
+    // where the app admits it doesn't know — is not offered as cookable.
+    cookable: (r) => r.cookable === true,
     favourites: (r) => r.is_favourite,
     not_lately: (r) => r.not_made_recently,
     regulars: (r) => r.plan_count > 0,
@@ -98,12 +104,14 @@ const PREDICATES: Record<
 const LABELS: Record<RecipeFilterKey, string> = {
     suggests: 'Dora suggests',
     all: 'All',
+    cookable: 'Can cook now',
     favourites: 'Favourites',
     not_lately: 'Not lately',
     regulars: 'Regulars',
 };
 
 const DISABLED_REASONS: Record<Exclude<RecipeFilterKey, 'suggests' | 'all'>, string> = {
+    cookable: "Nothing's cookable from stock right now.",
     favourites: 'No favourites yet — tap the heart on a recipe.',
     not_lately: "Nothing's gone stale — you've cooked everything recently.",
     regulars: "Nothing's been planned more than once yet.",
@@ -194,7 +202,7 @@ export function buildFilterChips(
     // "no recipes yet" state, and a disabled `All` would leave no chip usable.
     chips.push({ key: 'all', label: LABELS.all, count: countFor('all'), disabled: false });
 
-    for (const key of ['favourites', 'not_lately', 'regulars'] as const) {
+    for (const key of ['cookable', 'favourites', 'not_lately', 'regulars'] as const) {
         const count = countFor(key);
         const disabled = count === 0;
         chips.push({

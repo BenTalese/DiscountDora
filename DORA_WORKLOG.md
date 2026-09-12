@@ -41,6 +41,161 @@ next.
 
 ---
 
+## 2026-09-12 (second) — **Meal-planner batch: ~20 owner items, three of them real bugs**
+
+**Status: built and gated, NOT driven in the browser.** pytest **2384 passed**
+(the four known FU-762 reds only), vitest **729 / 65 files**, `vue-tsc`,
+`eslint src/`, `quasar build` clean. Opens **FU-907** and **FU-908**.
+
+**Three decisions were the owner's, taken up front rather than guessed:**
+1. **Budget cap basis — kept as-is, made transparent.** The alternative (count
+   only what you'd have to buy) was offered and declined; what changed is that
+   the review step now states the to-buy figure beside the meal-value one, so
+   the number the cap works to is no longer the only number on screen.
+2. **Cookable state — flag the gap only.** No positive state (Charter 10), no
+   third colour competing with the batch-pool amber.
+3. **Reshuffle — sample among the near-best and rotate the days.**
+
+**The bugs (found by reading the code the questions pointed at):**
+- **The builder priced the pot, not the plan.** `estimated_cost` per proposed
+  entry was the recipe's whole yield — the step-1 servings control changed
+  nothing, and a 3-day batch cook was counted **three times**. The budget cap
+  was then swapping meals on that inflated figure. Now
+  `cost_per_serving × entry servings`, which is exactly what
+  `get_meal_plans._hydrate_cost` has always done for a saved week (R-003), so a
+  batch's days sum to one cook. This is the answer to *"are linked meal slots
+  accounted for properly?"* — they were not.
+- **Reshuffle was out-voted, not broken.** The per-candidate jitter was ≤1.5
+  against 2.0 for cookable and 3.0 per expiring ingredient, so only a pool of
+  exactly-equal candidates (which the unit tests build and a kitchen doesn't)
+  ever varied. Replaced with **sampling**: take the candidates within
+  `NEAR_BEST_WINDOW` of the leader, cap at four, choose one — then shuffle the
+  placement order so the days rotate too. No rng ⇒ plain argmax, so the fixture
+  tests stay deterministic.
+- **`.rich-card__status { margin-left: auto }`** pushed the status glyph to the
+  right edge and dragged servings/time/cost with it — so only the meals *with* a
+  glyph right-aligned, which is the *"green on the left, orange on the right"*
+  report. One line.
+
+**New server-owned data (both R-003, both replacing a client-side derivation):**
+- `MealPlanIngredientsDto` gains **`low_count` / `out_count` / `to_buy_cost` /
+  `meals_cost`** (`summarise_demand`). The bands are counted separately because
+  *"we don't necessarily need to buy low items"*, and both figures come from
+  `estimate_cost_for_ingredients` — the aggregate is shimmed through the recipe
+  pricing ladder rather than estimated a second way. Money-gated. The builder
+  stopped counting to-buy rows itself through `useStockStatus`.
+- `MealPlanEntryDto` gains **`missing_count`** (`_hydrate_cookability` →
+  `load_recipe_cookability`), so a week card can flag a meal you can't cook
+  without the client re-deriving cookability against the stock store.
+
+**The rest of the batch:** step 1 renamed **Setup**; the servings stepper in a
+shrink-to-fit wrapper; the headcount sentence cut; "Dora will plan N meals"
+moved into an info box above the action row; the review rows rebuilt as cards
+(servings + delete on the name's line, no swap glyph, centred day divider in the
+recipe page's `.rn__sectitle` voice); `picked` and `cookable_now` chips given
+empty labels so they render nothing; "Cook once" → **Cook day**; leftovers grey;
+the A-Z/Cheapest control moved into the chip row via a new `#trailing` slot; a
+**Can cook now** chip (`cookable === true` only — the tri-state unknown is not
+an invitation); "Any level" → "Any difficulty"; the desktop target line is a
+tinted card and the phone sheet names the destination in its **title** instead,
+dropping the Done button that did nothing there.
+
+**Decisions made:**
+- **`showsMissingIngredients` is a shared helper, not a computed in each card.**
+  The chip and the rich card would otherwise each own a four-clause rule about
+  batch households, and a drift between them is invisible until you open both
+  breakpoints (R-001). It has its own spec.
+- **The cookability hydrate is not gated on anything.** "Can I cook this" is the
+  planner's core question, unlike money or nutrition. The cost of that is
+  **FU-908** — an unbounded cookbook read per plan fetch — logged rather than
+  hidden.
+- **`meals_per_pick` on the budget cap is a uniform scalar**, so a short final
+  batch chunk rounds up. Logged as **FU-907**; the honest fix is to apply the
+  cap after placement, which is a restructure this batch didn't own.
+- **`missing_count` for a manual add in the builder** is read from the
+  cookbook's own recipe rather than from the proposal, because a client-built
+  entry has no `missing_stock_item_names` — one lookup, same server field.
+
+**Files touched:** `dora_api/features/meal_plans/build_week.py`,
+`get_meal_plan_ingredients.py`, `get_meal_plans.py`;
+`web_app/src/components/MealPlanBuilderDialog.vue`, `MealPlanRecipePicker.vue`,
+`MealPlanRailFilterChips.vue`, `MealPlanPickerSheet.vue`, `MealPlanRichCard.vue`,
+`MealPlanEntryChip.vue`, `src/helpers/recipeRailFilters.ts`,
+`src/helpers/mealPlanEntryFlags.ts` (new), `src/models/mealPlan.ts`. Tests:
+`tests/test_build_week.py` (+4), `tests/e2e/dora_api/test_meal_plan_preview.py`
+(+1, +1 amended), `test/unit/mealPlanEntryFlags.spec.ts` (new),
+`test/unit/recipeRailFilters.spec.ts` (+2), `test/unit/mealPlanEntryKey.spec.ts`.
+Docs: `CHANGELOG.md`, `DORA_VERIFY.md`, `DORA_FOLLOWUPS.md`.
+
+**Standards close-gate:** R-003 is the rule this unit applies twice (both new
+server fields replace client-side derivation). R-001 honoured by extracting
+`showsMissingIngredients` and by the chip row's slot rather than a second sort
+control. R-058 honoured — both new figures are null with money off. D-002: the
+new "N to buy" markers keep warning colour on the glyph and page ink on the
+words. No ADR: nothing here is a new recurring decision.
+
+**Next up:** owner walks `DORA_VERIFY.md`'s new meal-planner section; FU-907 /
+FU-908 when a perf or budget pass comes round.
+
+---
+
+## 2026-09-12 — **Stocktake belief copy: the band said once**
+
+**Status: built and gated, NOT driven in the browser.** pytest **2379 passed**
+(the four known FU-762 reds only), vitest **720 / 64 files**, `vue-tsc`,
+`eslint src/` and `quasar build` clean. Five owner items, all copy/presentation;
+no schema, no API shape change.
+
+**What changed:**
+- **`_cadence_reason` (`pantry_belief.py`) dropped its band prefix and its
+  tildes.** It returned `"~Out — bought 26 days ago…"` and every surface that
+  renders it already renders the band beside it (`PantryBeliefChip`,
+  `PantryBeliefCard`, the overview row's level-picker menu header,
+  and now the walk card), so the verdict was being stated twice. Now:
+  `"Bought 26 days ago, cooked with 2× since; your usual 28-day supply should
+  be gone."` Capitalised because the string also starts a standalone sentence
+  in `suggestions/generators.py` and the buy verdict's need axis. Measured on
+  three fixtures before/after rather than reasoned about.
+- **Review phase** (`StocktakeReviewPhase.vue`): "— no need to go and look"
+  cut; `· recorded as` → `· but is currently`; the recorded pill now speaks
+  belief's vocabulary (`recordedWord` maps a level *sequence* → band word, so a
+  household level named "Low Stock" reads **Low** beside "Dora thinks Low"),
+  falling back to the catalogue name for any level off the three canonical
+  sequences; the per-row reason line **removed** (and its dead style with it).
+- **Walk card** (`StocktakeRunner.vue`): "Dora's not sure about this one — " is
+  gone — it was on every card, and it's the premise of the runner, not news.
+  The box now leads with a `Dora thinks <band>` head line in the chip's own
+  words, reason underneath.
+
+**Decisions made:**
+- **Fixed server-side, not per-surface.** The reason is server-owned copy
+  (R-003) precisely so one sentence appears everywhere; stripping the prefix in
+  the two stocktake components would have left the same double-statement live
+  on the overview picker and the item page, which is where the owner also saw
+  it ("same issue ... from the overview dropdown picker").
+- **The recorded pill falls back to the catalogue name** rather than forcing a
+  band word. A household can add levels; there is no band word for a fourth
+  one, and inventing one would be worse than the inconsistency being fixed.
+- **The other belief reasons keep their em dashes** ("Based on the last
+  recorded level … — not enough history to infer yet"). The owner's complaint
+  named the cadence string's `~`/`—`; those dashes are doing ordinary
+  sentence work, and R-003's one-voice rule cuts against churning copy that
+  wasn't reported.
+
+**Files touched:** `dora_api/features/stock_items/pantry_belief.py`,
+`web_app/src/components/stocktake/StocktakeReviewPhase.vue`,
+`web_app/src/pages/StocktakeRunner.vue`. Docs: `CHANGELOG.md`, `DORA_VERIFY.md`
+(three new checks; the 09-01 dark-theme item reworded off the deleted string).
+
+**Standards close-gate:** no R-rule violations introduced. R-003 is the rule
+this unit *applies* (one owner for the belief sentence). D-001 colour roles
+unchanged — both pills still take their tint from level sequence. No ADR: this
+is copy, not a recurring architectural decision.
+
+**Next up:** the owner's meal-planner batch (~20 items), sent mid-session.
+
+---
+
 ## 2026-09-09 (fourth) — **FU-904 + FU-905, and the level chip reverted to 32px**
 
 **Status: built and gated, NOT driven in the browser.** pytest **2372 passed**

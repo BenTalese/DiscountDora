@@ -25,7 +25,19 @@
                  that slot"*). It never undid anything — it disarms the slot —
                  and "Done" is what disarming means once you have added
                  something. -->
-            <div v-if="focusedTarget" role="status" class="picker-target q-mb-sm">
+            <!-- Owner 2026-09-12, two changes.
+                 (1) The line reads as a target, not as a stray sentence: a
+                 tinted, bordered strip in the accent — *"style the destination
+                 text better, maybe in a card or something"*.
+                 (2) `showTarget` is false on the phone sheet, which names the
+                 destination in its own title bar instead (*"could save some
+                 vertical space on mobile by moving the destination text to the
+                 heading of the dialog instead of 'Pick a recipe'"*). The Done
+                 button goes with it there: the sheet closes on a pick, so
+                 disarming inside it had nothing left to do — which is exactly
+                 the *"Done button does nothing on mobile and also makes no
+                 sense there"* report. Its close button is the way out. -->
+            <div v-if="focusedTarget && showTarget" role="status" class="picker-target q-mb-sm">
                 <span class="picker-target__label">
                     <q-icon :name="ICONS.arrow_forward" size="14px" />
                     {{ focusedTarget.slot }} · {{ formatDate(focusedTarget.dayIso) }}
@@ -54,7 +66,32 @@
                 :chips="chips"
                 :selected="activeFilter"
                 @update:selected="onFilterChange"
-            />
+            >
+                <!-- Owner 2026-09-05 — *"no way to filter recipes on estimated
+                     cost."* This is a ranking rather than a filter,
+                     deliberately: a cost *filter* needs bands, and a band
+                     boundary ("under $3 a serving") is a domain constant this
+                     client doesn't own and shouldn't invent. Cheapest-first
+                     answers the same question out of figures the server
+                     already ships, and it is the same ordering the cookbook's
+                     Cost-per-serving sort produces (one comparator, R-001).
+
+                     Two options, so `BaseSegmented` is the right primitive
+                     (B2a sanctions it at 2-4). Money-gated install-wide: with
+                     money off the server sends no cost at all, so the control
+                     would sort every recipe by null. It sits in the chip row
+                     since 2026-09-12 — see the slot's comment there. -->
+                <template #trailing>
+                    <BaseSegmented
+                        v-if="moneyEnabled"
+                        v-model="sortBy"
+                        class="picker-sort"
+                        dense
+                        :options="sortOptions"
+                        aria-label="Order recipes"
+                    />
+                </template>
+            </MealPlanRailFilterChips>
 
             <!-- Owner feedback 2026-09-01 — "some useful filters feel like
                  they're missing from the left rail (time of day, difficulty)".
@@ -67,7 +104,11 @@
 
                  Time-of-day options are the household `MealSlot` vocabulary,
                  not a hardcoded list — the same source the week's slot rows
-                 use, so deleting a slot in settings removes it here too. -->
+                 use, so deleting a slot in settings removes it here too.
+
+                 Owner 2026-09-12: the difficulty field's empty state reads
+                 "Any difficulty", not "Any level" — in an app whose other long
+                 list is full of *stock* levels, "level" was the wrong word. -->
             <div class="picker-axes q-mt-sm">
                 <BaseSelect
                     v-model="axisTimeOfDay"
@@ -84,31 +125,11 @@
                     :options="difficultyOptions"
                     behavior="menu"
                     clearable
-                    empty-text="Any level"
+                    empty-text="Any difficulty"
                     aria-label="Filter by difficulty"
                 />
             </div>
 
-            <!-- Owner 2026-09-05 — *"no way to filter recipes on estimated
-                 cost."* This is a ranking rather than a filter, deliberately: a
-                 cost *filter* needs bands, and a band boundary ("under $3 a
-                 serving") is a domain constant this client doesn't own and
-                 shouldn't invent. Cheapest-first answers the same question —
-                 "what can I plan that's cheap?" — out of figures the server
-                 already ships, and it is the same ordering the cookbook's
-                 Cost-per-serving sort produces (one comparator, R-001).
-
-                 Two options, so `BaseSegmented` is the right primitive (B2a
-                 sanctions it at 2-4). Money-gated install-wide: with money off
-                 the server sends no cost at all, so the control would sort
-                 every recipe by null. -->
-            <BaseSegmented
-                v-if="moneyEnabled"
-                v-model="sortBy"
-                class="q-mt-sm"
-                :options="sortOptions"
-                aria-label="Order recipes"
-            />
         </q-card-section>
         <q-separator />
 
@@ -232,8 +253,17 @@
             selectionMode?: 'click-add' | 'multi-select' | undefined;
             /** Selected recipe ids in 'multi-select' mode. Ignored otherwise. */
             selectedIds?: string[] | undefined;
+            /** Whether to render the "→ slot · date" target line. False on the
+             *  phone sheet, whose own title bar names the destination — an
+             *  explicit prop, never a viewport sniff (R-019 / ADR-014): this
+             *  card is hosted at three widths and only the host knows which
+             *  chrome is around it. */
+            showTarget?: boolean | undefined;
         }>(),
-        { selectionMode: 'click-add', selectedIds: () => [], suggestions: () => [] },
+        {
+            selectionMode: 'click-add', selectedIds: () => [],
+            suggestions: () => [], showTarget: true,
+        },
     );
 
     const emit = defineEmits<{
@@ -487,6 +517,10 @@
         align-items: center;
         gap: var(--space-2);
         min-height: 28px;
+        padding: var(--space-1) var(--space-2);
+        border: 1px solid color-mix(in srgb, var(--brand-primary) 35%, var(--border-default));
+        border-radius: var(--radius-sm);
+        background: color-mix(in srgb, var(--brand-primary) 6%, var(--surface-component));
     }
     .picker-target__label {
         flex: 1 1 auto;

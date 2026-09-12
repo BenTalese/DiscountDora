@@ -12,8 +12,8 @@ from dora_api.features.meal_plans.build_week import (
     CHIP_BUDGET, CHIP_COOKABLE_NOW, CHIP_FAVOURITE, CHIP_NOT_MADE_RECENTLY,
     CHIP_USES_EXPIRING, EMPHASIS_FAVOURITES, EMPHASIS_SURPRISE,
     EMPHASIS_USE_UP_STOCK, EMPHASIS_VARIETY, RecipeCandidate, _buildable_days,
-    _fill_one_day, apply_budget_cap, place_entries, place_entries_batched,
-    reason_chip, select_recipes)
+    _entry_cost, _fill_one_day, apply_budget_cap, cost_per_serving,
+    place_entries, place_entries_batched, reason_chip, select_recipes)
 
 
 def _cand(name, *, time_of_day=None, cookable=None, expiring=0, favourite=False,
@@ -94,6 +94,24 @@ def test__reshuffle__different_rng_varies_the_pick_when_the_pool_has_slack():
         for seed in range(8)
     }
     assert len(picks) > 1  # not always the same three
+
+
+def test__reshuffle__varies_even_when_the_signals_are_not_equal():
+    """The 2026-09-12 complaint: on real data every recipe carries a different
+    signal, the top-scoring ones won every time, and Reshuffle looked inert.
+    Sampling among the near-best is what fixes that — these three are within
+    the window of each other, so which of them leads varies."""
+    import random
+    pool = [
+        _cand("expiring", expiring=1, cuisine=uuid4()),
+        _cand("cookable", cookable=True, cuisine=uuid4()),
+        _cand("both", cookable=True, not_recent=True, cuisine=uuid4()),
+    ]
+    firsts = {
+        select_recipes(pool, EMPHASIS_USE_UP_STOCK, 1, set(), random.Random(seed))[0].name
+        for seed in range(12)
+    }
+    assert len(firsts) > 1
 
 
 def test__reshuffle__no_rng_is_still_deterministic():
@@ -179,13 +197,39 @@ def test__place_entries__no_days__places_nothing():
 
 
 def test__budget_cap__swaps_dearest_for_cheaper():
+    # `_cand` yields 2 servings, so planning 2 servings of each is the whole
+    # pot: $10 + $5 against $8 left, and the dear one has to go.
     dear = _cand("dear", cost=10.0)
     mid = _cand("mid", cost=5.0)
     cheap = _cand("cheap", cost=2.0)
-    selected, swapped = apply_budget_cap([dear, mid], [cheap], budget_remaining=8.0)
+    selected, swapped = apply_budget_cap(
+        [dear, mid], [cheap], budget_remaining=8.0, servings_per_meal=2,
+    )
     names = {c.name for c in selected}
     assert names == {"cheap", "mid"}
     assert cheap.recipe_id in swapped
+
+
+def test__budget_cap__counts_the_plan_not_the_pot():
+    """Owner 2026-09-12 — the cap used to compare the recipe's whole yield
+    against the budget however many servings were actually being planned, and
+    counted a batch cook once per day it spanned. One serving each of these two
+    is $7.50 of a $8 budget: nothing needs swapping."""
+    dear = _cand("dear", cost=10.0)
+    mid = _cand("mid", cost=5.0)
+    cheap = _cand("cheap", cost=2.0)
+    selected, swapped = apply_budget_cap(
+        [dear, mid], [cheap], budget_remaining=8.0, servings_per_meal=1,
+    )
+    assert {c.name for c in selected} == {"dear", "mid"}
+    assert swapped == set()
+
+    # The same two picks, each cooked once and eaten across 3 days, cost 3×.
+    selected, swapped = apply_budget_cap(
+        [dear, mid], [cheap], budget_remaining=8.0,
+        servings_per_meal=1, meals_per_pick=3,
+    )
+    assert "cheap" in {c.name for c in selected}
 
 
 def test__budget_cap__no_cheaper_alternative__unchanged():
@@ -193,6 +237,29 @@ def test__budget_cap__no_cheaper_alternative__unchanged():
     selected, swapped = apply_budget_cap([dear], [], budget_remaining=1.0)
     assert [c.name for c in selected] == ["dear"]
     assert swapped == set()
+
+
+# ── cost per serving ────────────────────────────────────────────────────────
+
+
+def test__cost_per_serving__divides_the_pot_by_the_recipe_yield():
+    assert cost_per_serving(_cand("a", cost=12.0, servings=4)) == 3.0
+    # An unpriced recipe stays unpriced rather than becoming a zero.
+    assert cost_per_serving(_cand("b", cost=None)) is None
+    # A recipe with no stated yield is one serving, not a divide-by-zero.
+    assert cost_per_serving(_cand("c", cost=7.0, servings=None)) == 7.0
+
+
+def test__entry_cost__is_priced_at_the_planned_servings():
+    """The builder used to quote the whole pot for every entry, so the servings
+    control on step 1 changed nothing and a 3-day batch cook was counted three
+    times (owner 2026-09-12)."""
+    pot = _cand("pie", cost=12.0, servings=4)
+    assert _entry_cost(pot, 1) == 3.0
+    assert _entry_cost(pot, 4) == 12.0
+    # Three days of a batch cook at 2 servings each: one pot and a half, not
+    # three pots.
+    assert round(sum(_entry_cost(pot, 2) for _ in range(3)), 2) == 18.0
 
 
 # ── reason_chip ─────────────────────────────────────────────────────────────

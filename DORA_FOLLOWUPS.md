@@ -39,6 +39,38 @@ long session summary. Distinct from the other logs:
 
 ---
 
+## [OPEN] FU-908 — every meal-plan fetch now loads the whole cookbook's cookability
+- **Raised:** 2026-09-12 (meal-planner feedback batch)
+- **Type:** finding
+- **What:** `GetMealPlansHandler._hydrate_cookability` calls
+  `load_recipe_cookability`, which eager-loads **every** recipe with its
+  ingredients, their stock items and those items' levels — one query, but an
+  unbounded one — to put `missing_count` on each planned entry. The planner
+  refetches the week after every edit (`PATCH` → reload), so a household with a
+  large cookbook pays that read on each servings tap. The dashboard has the same
+  call, but once per page.
+- **Why deferred:** it is the same shape the dashboard already ships and the
+  rule genuinely lives there (R-003); narrowing it means a
+  `load_recipe_cookability(recipe_ids=…)` variant, which is a change to a helper
+  three surfaces share and wants its own query-count test.
+- **Recommended resolution:** when a query-count or perf pass touches the
+  planner — or sooner if a seeded large cookbook makes the week feel slow.
+
+## [OPEN] FU-907 — the auto builder's budget cap assumes a uniform meals-per-pick
+- **Raised:** 2026-09-12 (meal-planner feedback batch)
+- **Type:** finding
+- **What:** `apply_budget_cap` now counts a pick at
+  `per_serving × servings × meals_per_pick`, where `meals_per_pick` is one
+  scalar for the whole build (1, the number of days when repeating, or the batch
+  span). A batch week whose last chunk is shorter than the span therefore rounds
+  that pick **up**. The cap runs before placement, so the exact per-pick count
+  isn't knowable where it is applied.
+- **Why deferred:** fixing it properly means applying the cap *after* placement
+  (swap entries rather than picks), which is a real restructure of
+  `compute_auto_build` and was outside this batch's scope. The cap is
+  documented best-effort and errs toward under-spending.
+- **Recommended resolution:** opportunistic — if the budget cap is revisited.
+
 ## [OPEN] FU-902 — the units the nutrition rollup can weigh and the units the picker offers are different sets
 - **Raised:** 2026-09-09 (cookbook + recipe-view feedback batch)
 - **Type:** finding

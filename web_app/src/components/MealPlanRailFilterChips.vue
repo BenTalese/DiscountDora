@@ -46,6 +46,15 @@
                 {{ chip.disabledReason }}
             </BaseTooltip>
         </FilterChip>
+        <!-- Owner 2026-09-12 — *"move the sort toggle next to the Regulars
+             quick filter chip so on mobile there isn't 4 rows of filter
+             controls"*. It rides the chip row's own wrapping rather than
+             owning a line: it is the same size as a chip, and on a phone it
+             lands beside the last chip instead of below all of them. It is NOT
+             a chip — it re-orders rather than narrows — so it keeps its own
+             segmented shape, the same way "Dora suggests" is marked out for
+             being a ranking. -->
+        <slot name="trailing" />
     </div>
 </template>
 

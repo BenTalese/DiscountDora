@@ -8,6 +8,10 @@ from pydantic import BaseModel, ConfigDict, Field
 from dora_api.domain.entities.meal_plan import MealPlan
 from dora_api.domain.entities.recipe import Recipe
 from dora_api.domain.entities.recipe_ingredient import RecipeIngredient
+from dora_api.domain.entities.stock_item import StockItem
+from dora_api.domain.stock_status import is_low_stock, is_missing
+from dora_api.features.app_settings.access import money_features_enabled
+from dora_api.features.recipes.recipe_cost import estimate_cost_for_ingredients
 from dora_api.features.routers import MEAL_PLAN_ROUTER
 from dora_api.infrastructure.api_response import not_found, ok
 from dora_api.infrastructure.decorators import has_request_body
@@ -52,6 +56,19 @@ class MealPlanIngredientsDto:
     expressed per-item (those rows have no stock item to hang off)."""
     items: List[MealPlanIngredientDto]
     unlinked: List[UnlinkedIngredientDto]
+    # Owner 2026-09-12 — *"change text to '# low - # out'. We don't necessarily
+    # need to buy low items. Also no cost estimate shown? Should be one for
+    # low/out ingredients, and one for the meals planned."* All four are
+    # server-derived: the bands are a cross-entity read of the stock levels
+    # behind the aggregate, and the two figures come from the app's one pricing
+    # ladder (R-003), never from a client adding rows up.
+    low_count: int = 0
+    out_count: int = 0
+    #: What the low/out items would cost to buy, and what the whole selection's
+    #: ingredients are worth. Both None when money features are off (R-058) or
+    #: when nothing in the set could be priced.
+    to_buy_cost: float | None = None
+    meals_cost: float | None = None
 
 
 def aggregate_meal_plan_ingredients(
@@ -130,6 +147,78 @@ def aggregate_meal_plan_ingredients(
     )
 
 
+@dataclass(frozen=True, slots=True)
+class _DemandRow:
+    """An aggregated ingredient, shaped for the pricing ladder. `_cost_one`
+    asks for exactly these four attributes, so the week's demand can be priced
+    by the same code that prices a recipe rather than by a second estimator
+    that could disagree with it (R-003)."""
+    stock_item_id: UUID
+    quantity: float | None
+    unit: str | None
+    stock_item_name: str
+
+
+def summarise_demand(repository, dto: MealPlanIngredientsDto) -> MealPlanIngredientsDto:
+    """Attach the band counts and the two cost figures to an aggregate.
+
+    Low and out are counted separately on purpose (owner 2026-09-12): a low
+    item is one you *may* not need to buy, so folding both into one "to buy"
+    number overstated the shop. An item with no stock record at all counts as
+    out — there is nothing on the shelf we know about.
+
+    `to_buy_cost` prices only the low/out rows; `meals_cost` prices the whole
+    demand, which is what the selected meals are worth to make. Both are
+    skipped outright when money features are off, so an install that doesn't
+    use them pays for none of this.
+    """
+    if not dto.items:
+        return dto
+
+    levels_by_item = {}
+    stock_items = repository.get(StockItem).include(StockItem.Fields.STOCK_LEVEL).all(
+        EntityField(StockItem, "id").in_([i.stock_item_id for i in dto.items])
+    )
+    for item in stock_items:
+        levels_by_item[item.id] = item.stock_level
+
+    def band(item: MealPlanIngredientDto) -> str:
+        level = levels_by_item.get(item.stock_item_id)
+        if is_missing(level):
+            return "out"
+        return "low" if is_low_stock(level) else "stocked"
+
+    bands = {item.stock_item_id: band(item) for item in dto.items}
+    low_count = sum(1 for b in bands.values() if b == "low")
+    out_count = sum(1 for b in bands.values() if b == "out")
+
+    to_buy_cost: float | None = None
+    meals_cost: float | None = None
+    if money_features_enabled(repository):
+        rows = [
+            _DemandRow(
+                stock_item_id=i.stock_item_id,
+                quantity=i.total_quantity,
+                unit=i.unit,
+                stock_item_name=i.stock_item_name,
+            )
+            for i in dto.items
+        ]
+        meals_cost = estimate_cost_for_ingredients(repository, rows).estimated_cost
+        shopping = [r for r in rows if bands[r.stock_item_id] in ("low", "out")]
+        if shopping:
+            to_buy_cost = estimate_cost_for_ingredients(repository, shopping).estimated_cost
+
+    return MealPlanIngredientsDto(
+        items=dto.items,
+        unlinked=dto.unlinked,
+        low_count=low_count,
+        out_count=out_count,
+        to_buy_cost=to_buy_cost,
+        meals_cost=meals_cost,
+    )
+
+
 class GetMealPlanIngredientsHandler:
     def __init__(self, repository: Repository) -> None:
         self.repository = repository
@@ -154,7 +243,10 @@ class GetMealPlanIngredientsHandler:
                 _RecipeIdToServings.get(_Entry._recipe_id, 0) + _Entry.servings
             )
 
-        return aggregate_meal_plan_ingredients(self.repository, _RecipeIdToServings)
+        return summarise_demand(
+            self.repository,
+            aggregate_meal_plan_ingredients(self.repository, _RecipeIdToServings),
+        )
 
 
 @MEAL_PLAN_ROUTER.route("<uuid:meal_plan_id>/ingredients")
@@ -192,7 +284,10 @@ class PreviewIngredientsHandler:
         recipe_id_to_servings: dict[UUID, int] = {}
         for r in request.recipes:
             recipe_id_to_servings[r.recipe_id] = recipe_id_to_servings.get(r.recipe_id, 0) + r.servings
-        return aggregate_meal_plan_ingredients(self.repository, recipe_id_to_servings)
+        return summarise_demand(
+            self.repository,
+            aggregate_meal_plan_ingredients(self.repository, recipe_id_to_servings),
+        )
 
 
 @MEAL_PLAN_ROUTER.route("preview-ingredients", methods=["POST"])

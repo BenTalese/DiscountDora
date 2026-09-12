@@ -253,6 +253,38 @@ merchant sites, which the agent can't drive — these are yours.
       all three states (unset env vars, wrong key, working) — it's a read now,
       so confirm it does **not** create any product in Dora.
 
+## Meal planner — the 2026-09-12 owner batch (~20 items)
+
+Built and gated, not driven. The auto builder's review step and the phone
+picker sheet changed shape, so both want eyes at 375 and 1440.
+
+- [ ] Auto builder step 1 reads **Setup**; the servings stepper is its own
+      width (not stretched to the dialog edge) on a phone; its caption says
+      only that you can adjust servings next; "Dora will plan N meals" sits in
+      an info box directly above the button.
+- [ ] Review step: one card per meal, servings + delete on the name's line, the
+      day heading centred between two rules. No swap glyph, no "Added" chip, no
+      "You have everything". A batch's first day says **Cook day**; its
+      leftover days are grey.
+- [ ] Reshuffle two or three times on the dev cookbook: the meals and/or the
+      days visibly change, and an expiring-ingredient recipe keeps showing up.
+- [ ] Budget cap ON with a small budget left: the swaps make sense against the
+      *servings you chose* — halve the servings and fewer meals get swapped.
+- [ ] "What you'll need" reads "N low · M out" with a to-buy figure and a meals
+      figure beside it; both absent with money **off**, and the whole block
+      still correct after editing servings on a row.
+- [ ] A meal missing ingredients shows "N to buy" on the week card; a meal you
+      can cook shows nothing; a **leftovers** day shows nothing even when the
+      recipe is short. Check in both a fresh and a batch household.
+- [ ] Phone: tap a slot → the sheet's title reads "→ Breakfast · <date>", there
+      is no Done button inside it, and picking a recipe closes it.
+- [ ] Desktop rail: the A-Z/Cheapest control sits on the chip row (wrapping
+      with it, not below it), the **Can cook now** chip filters to cookable
+      recipes and is disabled with a tooltip when none are, and the difficulty
+      field's empty state reads "Any difficulty".
+- [ ] A day's meal cards all align the same way — servings/time/cost on the
+      left whether or not the card carries a status glyph.
+
 ## Meal planner — the 2026-09-05 thirteen-item batch
 
 Driven live at 1440 and 375 with money ON, so the layout and the servings-menu
@@ -841,6 +873,17 @@ the pane can't produce — it never paints a frame, so nothing below was *seen*.
 - [ ] A household with **more than three** stock levels: the finish row renders
       all of them as segments (it reads the table, it doesn't assume three).
 
+## Stocktake — belief copy (2026-09-12)
+
+- [ ] Review phase: each row reads "Dora thinks Low · but is currently
+      Stocked", both words from the same vocabulary, with no reason paragraph
+      underneath. A household level *off* the three canonical sequences still
+      shows its own name in the second pill.
+- [ ] Walk card on an `uncertain` item: "Dora thinks low" on its own line, then
+      a reason starting "Bought N days ago…" — no band or tilde inside it.
+- [ ] Stock overview: open a row's level picker where Dora disagrees — the menu
+      header says the band once, not twice.
+
 ## Stocktake — theme, copy, locations, add-to-list (2026-09-01)
 
 Most of this batch was driven live in the pane on the pesto **light** theme and
@@ -848,8 +891,8 @@ deleted. What's left needs a surface the pane can't produce.
 
 - [ ] Run a stocktake under a **dark** theme family: the shell is still dark
       (it now inherits `--surface-page` rather than pinning black), and the
-      review/sweep headings and the "Dora's not sure about this one" line are
-      still legible against it.
+      review/sweep headings and the walk card's belief box are still legible
+      against it.
 - [ ] Hover the (?) glyph beside "Checked every fortnight · N days overdue",
       then the "Push 3 days" button: each tooltip wraps to a narrow column
       instead of one screen-wide line. (The 280px cap + `white-space: normal`

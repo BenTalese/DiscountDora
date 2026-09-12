@@ -23,8 +23,10 @@
                 :alternative-labels="$q.screen.lt.sm"
                 class="builder-stepper"
             >
-                <!-- ── Step 1 — Guide ─────────────────────────────────────── -->
-                <q-step :name="1" title="Guide" :icon="ICONS.dora_voice" :done="step > 1">
+                <!-- ── Step 1 — Setup ─────────────────────────────────────── -->
+                <!-- Owner 2026-09-12: was "Guide". You are setting the week's
+                     parameters here, not being guided through anything. -->
+                <q-step :name="1" title="Setup" :icon="ICONS.dora_voice" :done="step > 1">
                     <div class="text-caption dora-text-muted q-mb-md">
                         Tell Dora what you're after and she'll build a plan. You can
                         tweak everything before it's saved.
@@ -75,17 +77,25 @@
                          headcount (Settings → System → Cooking, server-owned
                          via `useCookingPolicy`); with none set it falls back to
                          1, which is what the builder always did. -->
+                    <!-- Owner 2026-09-12: the stepper stretched to the dialog's
+                         right edge on a phone — `NumberStepper` fills whatever
+                         box it is given, and a `builder-field` div is
+                         full-width. It sits in an inline-flex wrapper now, so
+                         it is as wide as its own three controls at every
+                         width. -->
                     <div class="builder-field">
                         <div class="builder-field__label">Servings per meal</div>
-                        <NumberStepper
-                            v-model="defaultServings"
-                            :min="1"
-                            :max="99"
-                            variant="pill"
-                            :icon="ICONS.people"
-                            decrement-label="One fewer serving per meal"
-                            increment-label="One more serving per meal"
-                        />
+                        <div class="builder-stepper-wrap">
+                            <NumberStepper
+                                v-model="defaultServings"
+                                :min="1"
+                                :max="99"
+                                variant="pill"
+                                :icon="ICONS.people"
+                                decrement-label="One fewer serving per meal"
+                                increment-label="One more serving per meal"
+                            />
+                        </div>
                         <div class="text-caption dora-text-muted q-mt-xs">
                             {{ servingsHint }}
                         </div>
@@ -100,7 +110,16 @@
                          fits what's left of the budget period. Owner kept that
                          basis and asked for it to be stated, which is what the
                          caption does — the control was answering a question it
-                         never asked out loud. -->
+                         never asked out loud.
+
+                         Re-assessed 2026-09-12 against the alternative (count
+                         only what you'd have to buy) and the owner kept the
+                         meal-value basis, with the to-buy figure *shown*
+                         instead: the review step now states both, so the
+                         number the cap works to is no longer the only number
+                         you can see. The cap itself stopped comparing whole
+                         pots against the budget on the same date — it counts
+                         the servings you're actually planning. -->
                     <div v-if="moneyEnabled" class="builder-field">
                         <q-toggle
                             v-model="budgetCap"
@@ -110,11 +129,24 @@
                         <div class="text-caption dora-text-muted q-mt-xs">
                             Counts what the meals cost to make — the value of
                             every ingredient they use, whether or not it's
-                            already in your pantry.
+                            already in your pantry — against what's left of this
+                            period's budget. The next step also shows what
+                            you'd have to buy.
                         </div>
                     </div>
 
-                    <div class="builder-field__label">{{ plannedCountHint }}</div>
+                    <!-- Owner 2026-09-12 — *"put 'Dora will plan # meals' above
+                         the build button, and put it in an info box"*. It was
+                         a bare label at the bottom of a column of fields,
+                         reading as the caption of whatever sat above it. It is
+                         the summary of everything on this step and the last
+                         thing you read before tapping Build, so it gets the
+                         step's own info-box shape and sits directly above the
+                         action row. -->
+                    <div class="builder-hint builder-hint--summary">
+                        <q-icon :name="ICONS.info" size="18px" class="builder-hint__icon" />
+                        <div>{{ plannedCountHint }}</div>
+                    </div>
                 </q-step>
 
                 <!-- ── Step 2 — Review ────────────────────────────────────── -->
@@ -150,7 +182,14 @@
 
                     <template v-for="group in groupedByDay" :key="group.iso">
                         <div v-if="group.entries.length" class="builder-day">
-                            <div class="builder-day__label">{{ group.label }}</div>
+                            <!-- Owner 2026-09-12 — a centred divider in the
+                                 recipe page's section-heading voice (uppercase,
+                                 tracked, secondary ink), with a rule running
+                                 out to both edges. It was left-aligned bold
+                                 text that read as another row. -->
+                            <div class="builder-day__label">
+                                <span>{{ group.label }}</span>
+                            </div>
                             <!-- FU-852 / owner feedback 2026-09-03 — *"UI isn't
                                  fitting in the auto planner modal, UI is
                                  overlapping other UI… perhaps the recipe name
@@ -173,64 +212,97 @@
                                  the owner's suggestion — the name IS the swap
                                  control (a button, so it is focusable and
                                  announced), which is one fewer 36px cell in the
-                                 cluster that was overflowing. -->
+                                 cluster that was overflowing.
+
+                                 Owner 2026-09-12 — the row became a card and
+                                 lost a line. The swap glyph beside the name is
+                                 gone (the name is still the swap control, and
+                                 the tooltip still says so); the servings
+                                 stepper and the delete button moved up onto the
+                                 name's line, which is the row's only spare
+                                 horizontal space; and the two selects keep the
+                                 line below. "Cook once" reads as "Cook day" —
+                                 the marker names the day, not a restriction. -->
                             <div
                                 v-for="entry in group.entries"
                                 :key="entry._key"
                                 class="builder-row"
                             >
-                                <div class="builder-row__main">
+                                <div class="builder-row__head">
                                     <button
                                         type="button"
                                         class="builder-row__name"
                                         @click="openSwap(entry)"
                                     >
                                         {{ entry.recipe_name }}
-                                        <q-icon :name="ICONS.swap_horiz" size="14px" />
                                         <BaseTooltip>Swap for another recipe</BaseTooltip>
                                     </button>
-                                    <div class="builder-row__meta">
-                                        <span
-                                            v-if="cookMarker(entry)"
-                                            class="builder-cook"
-                                            :class="{ 'builder-cook--leftover': cookMarker(entry) === 'leftover' }"
-                                        >
-                                            <q-icon :name="ICONS.link" size="12px" />
-                                            {{ cookMarker(entry) === 'cook' ? 'Cook once' : 'Leftovers' }}
-                                        </span>
-                                        <q-chip dense square class="builder-reason">
-                                            {{ reasonLabel(entry.reason_chip) }}
-                                        </q-chip>
-                                        <!-- The dollar figure is null unless the
-                                             install has money on — the server
-                                             stopped sending it otherwise
-                                             (R-058), so this is no longer a
-                                             render gate over data that arrived
-                                             anyway. `moneyEnabled` stays as the
-                                             belt to that braces. -->
-                                        <span
-                                            v-if="entry.estimated_cost != null && moneyEnabled"
-                                            class="dora-text-muted text-caption"
-                                        >
-                                            ~{{ money(entry.estimated_cost) }}
-                                        </span>
-                                        <!-- The no-price fallback, and only
-                                             when the reason chip beside it
-                                             isn't already saying the same
-                                             words: `cookable_now`'s label IS
-                                             "You have everything", so a
-                                             cookable meal with no price
-                                             estimate printed it twice in a row
-                                             (seen live 2026-09-03 on "Mum's
-                                             lemon slice"). -->
-                                        <span
-                                            v-else-if="entry.cookable === true
-                                                && entry.reason_chip !== 'cookable_now'"
-                                            class="dora-text-muted text-caption"
-                                        >
-                                            You have everything
-                                        </span>
-                                    </div>
+                                    <NumberStepper
+                                        v-model="entry.servings"
+                                        :min="1"
+                                        decrement-label="One fewer serving"
+                                        increment-label="One more serving"
+                                        class="builder-servings"
+                                    >
+                                        <BaseTooltip>Servings</BaseTooltip>
+                                    </NumberStepper>
+                                    <BaseButton
+                                        variant="icon" dense
+                                        :icon="ICONS.delete_outline"
+                                        @click="removeEntry(entry)"
+                                    >
+                                        <BaseTooltip>Remove</BaseTooltip>
+                                    </BaseButton>
+                                </div>
+                                <div class="builder-row__meta">
+                                    <span
+                                        v-if="cookMarker(entry)"
+                                        class="builder-cook"
+                                        :class="{ 'builder-cook--leftover': cookMarker(entry) === 'leftover' }"
+                                    >
+                                        <q-icon :name="ICONS.link" size="12px" />
+                                        {{ cookMarker(entry) === 'cook' ? 'Cook day' : 'Leftovers' }}
+                                    </span>
+                                    <!-- Owner 2026-09-12 — a chip only when
+                                         Dora has a reason of her own. A meal
+                                         you added yourself said "Added", which
+                                         you knew, and "You have everything" was
+                                         restating the ingredient list below. -->
+                                    <q-chip
+                                        v-if="reasonLabel(entry.reason_chip)"
+                                        dense square class="builder-reason"
+                                    >
+                                        {{ reasonLabel(entry.reason_chip) }}
+                                    </q-chip>
+                                    <!-- Cookability, flagged only when it's a
+                                         problem (owner call 2026-09-12). A meal
+                                         you can cook says nothing; one you
+                                         can't names the count, because that is
+                                         the number that decides whether it
+                                         stays on the plan. -->
+                                    <span
+                                        v-if="missingCount(entry) > 0"
+                                        class="builder-missing"
+                                    >
+                                        <q-icon :name="ICONS.add_shopping_cart" size="12px" />
+                                        {{ missingCount(entry) }} to buy
+                                        <BaseTooltip v-if="entry.missing_stock_item_names.length">
+                                            {{ entry.missing_stock_item_names.join(', ') }}
+                                        </BaseTooltip>
+                                    </span>
+                                    <!-- The dollar figure is null unless the
+                                         install has money on — the server
+                                         stopped sending it otherwise (R-058),
+                                         so this is no longer a render gate over
+                                         data that arrived anyway.
+                                         `moneyEnabled` stays as the belt to
+                                         that braces. -->
+                                    <span
+                                        v-if="entry.estimated_cost != null && moneyEnabled"
+                                        class="dora-text-muted text-caption"
+                                    >
+                                        {{ money(entry.estimated_cost) }}
+                                    </span>
                                 </div>
                                 <div class="builder-row__controls">
                                     <q-select
@@ -250,22 +322,6 @@
                                     >
                                         <BaseTooltip>Which meal slot</BaseTooltip>
                                     </q-select>
-                                    <NumberStepper
-                                        v-model="entry.servings"
-                                        :min="1"
-                                        decrement-label="One fewer serving"
-                                        increment-label="One more serving"
-                                        class="builder-servings"
-                                    >
-                                        <BaseTooltip>Servings</BaseTooltip>
-                                    </NumberStepper>
-                                    <BaseButton
-                                        variant="icon" dense
-                                        :icon="ICONS.delete_outline"
-                                        @click="removeEntry(entry)"
-                                    >
-                                        <BaseTooltip>Remove</BaseTooltip>
-                                    </BaseButton>
                                 </div>
                             </div>
                         </div>
@@ -283,13 +339,29 @@
                     <div class="text-subtitle2">What you'll need</div>
                     <div v-if="previewLoading" class="text-caption dora-text-muted">Calculating…</div>
                     <template v-else>
-                        <!-- Was "N to buy · M in stock". The second half is
-                             gone: every row below carries its own level dot, so
-                             counting the in-stock ones in words above them said
-                             the same thing twice (the same duplication the owner
-                             called out on the week status strip). -->
-                        <div class="text-caption dora-text-muted q-mb-xs">
-                            {{ needToBuyCount }} to buy
+                        <!-- Was "N to buy · M in stock", then just "N to buy".
+                             Owner 2026-09-12 — *"we don't necessarily need to
+                             buy low items"*, so the two bands are counted
+                             separately rather than summed into a shopping
+                             figure that overstates the trip. And the two
+                             numbers that actually decide whether this week is
+                             affordable are here now: what the low/out items
+                             would cost, and what the meals are worth. Both are
+                             server-priced (R-003 — the same ladder the recipe
+                             and cookbook costs come from) and absent entirely
+                             when money is off. -->
+                        <div class="builder-need">
+                            <span class="builder-need__bands">
+                                {{ previewLowCount }} low · {{ previewOutCount }} out
+                            </span>
+                            <template v-if="moneyEnabled">
+                                <span v-if="previewToBuyCost !== null" class="builder-need__figure">
+                                    {{ money(previewToBuyCost) }} to buy
+                                </span>
+                                <span v-if="previewMealsCost !== null" class="builder-need__figure">
+                                    {{ money(previewMealsCost) }} of meals
+                                </span>
+                            </template>
                         </div>
                         <div v-if="previewUnlinked.length" class="builder-hint">
                             <q-icon :name="ICONS.info" size="18px" class="builder-hint__icon" />
@@ -430,7 +502,6 @@
     import MealPlanIngredientRow from 'src/components/MealPlanIngredientRow.vue';
     import MealPlanRecipePicker from 'src/components/MealPlanRecipePicker.vue';
     import { useCookingPolicy } from 'src/composables/useCookingPolicy';
-    import { useStockStatus } from 'src/composables/useStockStatus';
     import type {
         AutoBuildEmphasis, AutoBuildReason, MealPlanIngredient, ProposedEntry,
         UnlinkedIngredient,
@@ -464,9 +535,6 @@
 
     const api = new MealPlanApiService();
     const $q = useQuasar();
-    // Only the "N to buy" figure now — the preview rows code their own level
-    // through `MealPlanIngredientRow`, which reads the same composable.
-    const { needsBuying } = useStockStatus();
     const { householdHeadcount } = useCookingPolicy();
 
     // ── Local editable copy of a proposed entry (adds a stable render key) ──
@@ -483,6 +551,10 @@
     // step can say so before you commit to the week.
     const previewUnlinked = ref<UnlinkedIngredient[]>([]);
     const previewLoading = ref(false);
+    const previewLowCount = ref(0);
+    const previewOutCount = ref(0);
+    const previewToBuyCost = ref<number | null>(null);
+    const previewMealsCost = ref<number | null>(null);
 
     // FU-611 — the ranker only ever picks *distinct* recipes, so a day×slot
     // grid larger than the cookbook fills days in order and then stops, leaving
@@ -529,10 +601,13 @@
     };
     const emphasisHint = computed(() => emphasisHints[emphasis.value]);
 
+    // Owner 2026-09-12 — the headcount sentence went. The number is already in
+    // the stepper beside it, and it was reciting a setting back at the person
+    // who set it; what they need to know is that it isn't final.
     const servingsHint = computed(() => (
         householdHeadcount.value === null
             ? 'Set how many people you cook for in Settings to seed this automatically.'
-            : `Your household cooks for ${householdHeadcount.value}. Change it per meal in the next step.`
+            : 'You can adjust servings in the next step.'
     ));
 
     const upcomingDays = computed(() => props.weekDays.filter((d) => !props.isPastDay(d.iso)));
@@ -595,17 +670,31 @@
     });
 
     // ── Reason chips ────────────────────────────────────────────────────────
+    // Owner 2026-09-12 — two of these stopped earning their row. `picked` said
+    // "Added" on a meal the user had just added themselves, and `cookable_now`
+    // said "You have everything", which the ingredient list below the rows
+    // answers properly for the whole week. An empty label renders no chip.
     const REASON_LABELS: Record<AutoBuildReason, string> = {
         uses_expiring: 'Uses expiring stock',
-        cookable_now: 'You have everything',
+        cookable_now: '',
         favourite: 'Favourite',
         not_made_recently: 'Haven’t had lately',
         variety: 'Adds variety',
         budget_friendly: 'Budget-friendly',
-        picked: 'Added',
+        picked: '',
     };
     function reasonLabel(r: AutoBuildReason): string {
-        return REASON_LABELS[r] ?? 'Added';
+        return REASON_LABELS[r] ?? '';
+    }
+
+    // Cookability, counted from the cookbook rather than from the proposal: a
+    // manually added meal carries no `missing_stock_item_names` (the client
+    // builds that entry), and the recipe's own server-computed `missing_count`
+    // is the same number for both kinds of row (R-003). The names are only for
+    // the tooltip, so their absence costs nothing.
+    function missingCount(entry: DraftEntry): number {
+        const recipe = props.recipes.find((r) => r.recipe_id === entry.recipe_id);
+        return recipe ? recipe.missing_count : entry.missing_stock_item_names.length;
     }
 
     // ── The add/swap picker's search ────────────────────────────────────────
@@ -619,9 +708,10 @@
     const recipeSearch = ref('');
 
     // ── Ingredient preview (aggregate demand) ───────────────────────────────
-    const needToBuyCount = computed(
-        () => previewIngredients.value.filter((i) => needsBuying(i.stock_item_id)).length,
-    );
+    // The bands and both figures are read off the envelope rather than counted
+    // here: which items need buying is a read of the stock levels behind the
+    // aggregate, and a price is the server's to quote (R-003). The client used
+    // to count the to-buy rows itself through `useStockStatus`.
     function money(n: number): string {
         return `$${n.toFixed(2)}`;
     }
@@ -629,6 +719,10 @@
         if (proposed.value.length === 0) {
             previewIngredients.value = [];
             previewUnlinked.value = [];
+            previewLowCount.value = 0;
+            previewOutCount.value = 0;
+            previewToBuyCost.value = null;
+            previewMealsCost.value = null;
             return;
         }
         previewLoading.value = true;
@@ -638,6 +732,10 @@
             );
             previewIngredients.value = payload.items;
             previewUnlinked.value = payload.unlinked;
+            previewLowCount.value = payload.low_count;
+            previewOutCount.value = payload.out_count;
+            previewToBuyCost.value = payload.to_buy_cost;
+            previewMealsCost.value = payload.meals_cost;
         } finally {
             previewLoading.value = false;
         }
@@ -871,37 +969,78 @@
         margin-top: 1px;
         color: var(--text-secondary);
     }
-    .builder-day {
-        margin-top: 0.75rem;
+    /* The step's closing summary, so it sits against the action row rather
+       than floating between two fields. */
+    .builder-hint--summary {
+        margin: 0.75rem 0 0;
     }
+    /* Shrink-to-fit: the stepper otherwise takes the whole dialog width. */
+    .builder-stepper-wrap {
+        display: inline-flex;
+    }
+    .builder-day {
+        margin-top: var(--space-3);
+    }
+    /* The recipe page's section-heading voice (`.rn__sectitle`), centred, with
+       the rule running out to both edges — this separates days, where the row
+       beneath it names a meal. */
     .builder-day__label {
-        font-size: calc(var(--font-size-sm) * 1rem);
-        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+        margin-bottom: var(--space-2);
+        font-size: 0.8125rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
         color: var(--text-secondary);
-        margin-bottom: 0.25rem;
+    }
+    .builder-day__label::before,
+    .builder-day__label::after {
+        content: '';
+        flex: 1 1 auto;
+        height: 1px;
+        background: var(--divider);
     }
     /* FU-852 — stacked at every width. See the template comment: the previous
        single-line layout was only ever un-broken below a 599px VIEWPORT, which
        says nothing about the ~600px dialog the row actually lives in. */
+    /* Owner 2026-09-12 — a card per meal, tighter than the divider-separated
+       rows it replaces. A day's meals are separate objects you move, re-serve
+       and delete individually; a divider between two of them read as one
+       continuous list, and the day heading above them read as another row in
+       it. Same shape on desktop: the dialog is ~600px there too. */
     .builder-row {
         display: flex;
         flex-direction: column;
         align-items: stretch;
-        gap: var(--space-2);
-        padding: var(--space-2) 0;
-        border-bottom: 1px solid var(--divider);
+        gap: var(--space-1);
+        padding: var(--space-2);
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-sm);
+        background: var(--surface-component);
     }
-    .builder-row__main {
+    .builder-row + .builder-row {
+        margin-top: var(--space-1);
+    }
+    /* Name, servings and delete on one line — the row's only spare horizontal
+       space, and it saves a line per meal on a phone. */
+    .builder-row__head {
+        display: flex;
+        align-items: center;
+        gap: var(--space-1);
         min-width: 0;
     }
     /* The name is the swap control, so it is a real button — but it reads as
-       the row's title, not as a button: no fill, no border, and the swap glyph
-       only says what clicking does. */
+       the row's title, not as a button: no fill, no border. The swap glyph
+       that used to sit beside it is gone (owner 2026-09-12); the tooltip still
+       says what clicking does. */
     .builder-row__name {
         display: flex;
         align-items: center;
         gap: var(--space-1);
-        width: 100%;
+        flex: 1 1 auto;
+        min-width: 0;
         padding: 0;
         border: none;
         background: none;
@@ -919,16 +1058,25 @@
         outline-offset: 2px;
         border-radius: var(--radius-sm);
     }
-    /* The glyph is a hint, not a second signal competing with the name. */
-    .builder-row__name .q-icon {
-        flex: 0 0 auto;
-        color: var(--text-muted);
-    }
     .builder-row__meta {
         display: flex;
         align-items: center;
-        gap: 0.5rem;
-        margin-top: 0.1rem;
+        flex-wrap: wrap;
+        gap: var(--space-1) var(--space-2);
+        font-size: calc(var(--font-size-sm) * 1rem);
+        color: var(--text-secondary);
+    }
+    /* The one negative signal on the row. Amber ink is the D-002 contrast fail
+       the app corrects everywhere else, so the tint rides the glyph and the
+       words stay page ink. */
+    .builder-missing {
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        color: var(--text-primary);
+    }
+    .builder-missing .q-icon {
+        color: var(--semantic-warning);
     }
     .builder-reason {
         background: var(--surface-sunken);
@@ -943,8 +1091,12 @@
         font-weight: 600;
         color: var(--brand-primary);
     }
+    /* Leftovers are grey, never a verdict colour (owner 2026-09-12): a day you
+       eat from a cook you've already made is neither a warning nor an
+       all-clear, and painting it either way puts two contradictory-looking
+       states side by side in the same day. */
     .builder-cook--leftover {
-        color: var(--text-secondary);
+        color: var(--text-muted);
         font-weight: 500;
     }
     /* Wraps rather than overflows: the two selects take a line of their own on
@@ -967,7 +1119,22 @@
         min-width: 0;
     }
     .builder-servings {
-        margin-left: auto;
+        flex: 0 0 auto;
+    }
+    /* The week's two figures beside the two band counts, wrapping on a phone
+       rather than squeezing. */
+    .builder-need {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: var(--space-1) var(--space-3);
+        margin-bottom: var(--space-1);
+        font-size: calc(var(--font-size-sm) * 1rem);
+        color: var(--text-secondary);
+    }
+    .builder-need__figure {
+        color: var(--text-primary);
+        font-variant-numeric: tabular-nums;
     }
     .builder-picker {
         max-height: 55vh;

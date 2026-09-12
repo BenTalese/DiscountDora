@@ -10,6 +10,7 @@ from sqlalchemy import bindparam, text
 
 from dora_api.domain.entities.meal_plan import MealPlan
 from dora_api.domain.entities.meal_plan_entry import MealPlanEntry
+from dora_api.features.recipes.get_recipes import load_recipe_cookability
 from dora_api.features.routers import MEAL_PLAN_ROUTER
 from dora_api.infrastructure.api_response import bad_request, paginated
 from dora_api.infrastructure.query_options import (InvalidQueryParameter,
@@ -99,6 +100,18 @@ class MealPlanEntryDto:
     # could be priced, or when the recipe has no servings recorded (there is no
     # per-serving figure to scale, and inventing one would be a guess).
     estimated_cost: float | None = None
+    # Owner 2026-09-12 — *"there's currently no visual clue for cookable state
+    # (only relevant for fresh cooks and cooking day meal slots)"*. How many of
+    # this recipe's LINKED ingredients are missing right now, from the app's one
+    # cookability rule (`load_recipe_cookability` → `missing_count_for`, R-003)
+    # rather than a client re-derivation against the stock store.
+    #
+    # The card flags only the gap: a meal you can cook says nothing (Charter 10
+    # — "Dora agrees" is not information), and a leftovers day says nothing
+    # either, because its ingredients were spent on the cook day. Unlinked rows
+    # are not counted here for the same reason the cookbook doesn't count them:
+    # "we don't know" is not "you're missing something".
+    missing_count: int = 0
 
     @classmethod
     def from_entity(cls, entry: MealPlanEntry) -> 'MealPlanEntryDto':
@@ -654,14 +667,38 @@ class GetMealPlansHandler:
             for plan in plans
         ]
 
+    def _hydrate_cookability(self, plans: list[MealPlanDto]) -> list[MealPlanDto]:
+        """Owner 2026-09-12 — how many linked ingredients each planned meal is
+        missing, so a card can flag a meal you can't actually cook.
+
+        One query for the whole cookbook, through the same
+        `load_recipe_cookability` the `?cookable` filter and the dashboard's
+        cookable count use — the rule lives once (R-003). Not gated on anything:
+        "can I cook this" is the planner's core question, not a money or
+        nutrition feature.
+        """
+        if not plans:
+            return plans
+        cookability = load_recipe_cookability(self.repository)
+        return [
+            dataclasses.replace(plan, entries=[
+                dataclasses.replace(
+                    entry,
+                    missing_count=cookability.get(entry.recipe_id, (0, 0, 0))[0],
+                )
+                for entry in plan.entries
+            ])
+            for plan in plans
+        ]
+
     def handle(self, options) -> Page[MealPlanDto]:
         page = self._base_query().paginate(
             options, MealPlanDto.from_entity, field_map=_FIELD_MAP
         )
         hydrated = self._hydrate_cook_coverage(self._hydrate_inference(
-            self._hydrate_cost(
+            self._hydrate_cookability(self._hydrate_cost(
                 self._hydrate_nutrition(self._hydrate_entry_has_image(list(page.items)))
-            )
+            ))
         ))
         return Page(items=hydrated, total=page.total, page=page.page, limit=page.limit)
 
@@ -671,7 +708,9 @@ class GetMealPlansHandler:
             return None
         dto = MealPlanDto.from_entity(entity)
         return self._hydrate_cook_coverage(self._hydrate_inference(
-            self._hydrate_cost(self._hydrate_nutrition(self._hydrate_entry_has_image([dto])))
+            self._hydrate_cookability(
+                self._hydrate_cost(self._hydrate_nutrition(self._hydrate_entry_has_image([dto])))
+            )
         ))[0]
 
 

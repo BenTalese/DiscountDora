@@ -113,6 +113,23 @@ describe('buildFilterChips', () => {
     });
 });
 
+describe('the "Can cook now" chip', () => {
+    // Owner 2026-09-12 — a quick filter for "ingredients all available".
+    const COOKABLE = recipe({ recipe_id: 'd', name: 'Dal', cookable: true });
+    const SHORT = recipe({ recipe_id: 'e', name: 'Eggs Benedict', cookable: false });
+    const UNKNOWN = recipe({ recipe_id: 'f', name: 'Focaccia', cookable: null });
+
+    it('takes only recipes the server calls cookable', () => {
+        const names = filterRecipes([COOKABLE, SHORT, UNKNOWN], 'cookable').map((r) => r.name);
+        expect(names).toEqual(['Dal']);
+    });
+
+    it("excludes the tri-state unknown — \"we don't know\" is not \"you can\"", () => {
+        expect(filterRecipes([UNKNOWN], 'cookable')).toEqual([]);
+        expect(buildFilterChips([UNKNOWN]).find((c) => c.key === 'cookable')?.disabled).toBe(true);
+    });
+});
+
 // ── The second axis: time of day + difficulty (owner, 2026-09-01) ─────────
 //
 // These narrow whatever the chip row produced, the way the search box does —

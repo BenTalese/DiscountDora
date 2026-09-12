@@ -261,17 +261,21 @@ def _cadence_reason(
     cadence_days: float,
     cooks_since_purchase: int,
 ) -> str:
+    # Owner, 2026-09-12: no band prefix here. Every surface that shows this
+    # reason already shows the believed band beside it ("Dora thinks low"), so
+    # leading with "~Low — " said it twice. The tildes went with it — the
+    # sentence already hedges in words ("about", "usual").
     cadence = round(cadence_days)
-    bought = "bought today" if days_since_purchase == 0 else f"bought {_plural(days_since_purchase)} ago"
+    bought = "Bought today" if days_since_purchase == 0 else f"Bought {_plural(days_since_purchase)} ago"
     cooked = (
         f", cooked with {cooks_since_purchase}× since"
         if cooks_since_purchase > 0 else ""
     )
     if believed == OUT_OF_STOCK_SEQUENCE:
-        return f"~Out — {bought}{cooked}; your usual ~{cadence}-day supply should be gone."
+        return f"{bought}{cooked}; your usual {cadence}-day supply should be gone."
     if believed == LOW_STOCK_SEQUENCE:
-        return f"~Low — {bought}{cooked}; you usually finish in about {_plural(cadence)}."
-    return f"Stocked — {bought}{cooked}; you buy about every {_plural(cadence)}."
+        return f"{bought}{cooked}; you usually finish in about {_plural(cadence)}."
+    return f"{bought}{cooked}; you buy about every {_plural(cadence)}."
 
 
 # ── Repo gathering ───────────────────────────────────────────────────────

@@ -157,15 +157,13 @@
                                 <strong>{{ formatMoney(s.all_time_low.unit_price) }}</strong>
                                 <span v-if="aboveLowPct(s) !== null">
                                     · currently {{ aboveLowPct(s) }}% above
-                                    <q-icon :name="ICONS.help_outline" size="14px" class="q-ml-xs">
-                                        <BaseTooltip>
-                                            You're paying more than your own usual
-                                            price for this product, based on prices
-                                            you've logged. Not a comparison to the
-                                            all-time-low across all stores — it's
-                                            personal.
-                                        </BaseTooltip>
-                                    </q-icon>
+                                    <InfoTip label="What above the all-time low means">
+                                        You're paying more than your own usual
+                                        price for this product, based on prices
+                                        you've logged. Not a comparison to the
+                                        all-time-low across all stores — it's
+                                        personal.
+                                    </InfoTip>
                                 </span>
                             </div>
                             <!-- the user's own usual
@@ -181,14 +179,12 @@
                                     {{ formatMoney(s.your_prices.baseline)
                                     }}{{ s.your_prices.baseline_unit ? `/${s.your_prices.baseline_unit}` : '' }}
                                 </strong>
-                                <q-icon :name="ICONS.help_outline" size="14px" class="q-ml-xs">
-                                    <BaseTooltip>
-                                        "Usually" is the median of prices you've
-                                        logged for this item. "Above usual" means
-                                        today's shelf price is meaningfully higher
-                                        than that median.
-                                    </BaseTooltip>
-                                </q-icon>
+                                <InfoTip label="What your usual price means">
+                                    "Usually" is the median of prices you've
+                                    logged for this item. "Above usual" means
+                                    today's shelf price is meaningfully higher
+                                    than that median.
+                                </InfoTip>
                                 <q-chip
                                     v-if="s.your_prices.above_baseline"
                                     dense
@@ -267,6 +263,7 @@
 
 <script lang="ts" setup>
     import BaseTooltip from 'src/components/BaseTooltip.vue';
+    import InfoTip from 'src/components/help/InfoTip.vue';
     import { ICONS } from 'src/style/icons';
     import SearchInput from 'src/components/SearchInput.vue';
     import BaseButton from 'src/components/BaseButton.vue';

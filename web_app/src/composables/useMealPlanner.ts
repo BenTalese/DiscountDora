@@ -5,17 +5,19 @@ import { formatDate as formatLocaleDate } from 'src/composables/useDateFormat';
 import { useMealPlanExport } from 'src/composables/useMealPlanExport';
 import { useReducedMotion } from 'src/composables/useReducedMotion';
 import { useBatchEnabled } from 'src/composables/useBatchEnabled';
+import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
 import { useStockStatus } from 'src/composables/useStockStatus';
 import { DEFAULT_MEAL_SLOTS } from 'src/helpers/recipeVocabulary';
 import { isoDate as toIso, localTodayIso, mondayOf, shiftDays } from 'src/helpers/weekDates';
 import type {
-    MealPlan, MealPlanDayCost, MealPlanDayNutrition, MealPlanEntry, MealPlanIngredient,
+    MealPlan, MealPlanDayCost, MealPlanEntry, MealPlanIngredient,
     MealPlanSuggestion, UnlinkedIngredient,
 } from 'src/models/mealPlan';
 import type { AddToListConfirm } from 'src/components/shoppingList/addToListTypes';
 import { rowsFromMealPlanIngredients, unlinkedFromMealPlan } from 'src/helpers/addToListRows';
 import { useShoppingListActions } from 'src/composables/useShoppingListActions';
 import { cartStateFor, type Membership } from 'src/models/shoppingList';
+import BudgetApiService, { type BudgetStatus } from 'src/services/api/budgetApiService';
 import type { MealPlanEntryCommand } from 'src/services/api/mealPlanApiService';
 import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';
 import { useMealPlanStore } from 'src/stores/mealPlanStore';
@@ -53,6 +55,8 @@ export function useMealPlanner() {
     // The household cook-style. A "fresh" household has no cook pool, so it
     // has no cook batches either and every batch branch below is inert.
     const { batchEnabled } = useBatchEnabled();
+    const { moneyEnabled } = useMoneyEnabled();
+    const budgetApi = new BudgetApiService();
 
     const mealPlanStore = useMealPlanStore();
     const mealPlanTemplateStore = useMealPlanTemplateStore();
@@ -75,6 +79,18 @@ export function useMealPlanner() {
     // does the adding — ingredients with no linked stock item can't become
     // lines, and the dialog names them rather than dropping them silently.
     const unlinkedIngredients = ref<UnlinkedIngredient[]>([]);
+    /**
+     * Owner 2026-09-12 — *"no indication of how much budget remains."* The
+     * week's own cost has been on this page since 09-05; what it was missing is
+     * the thing that makes a number mean something. Loaded once per page (not
+     * per card — the summary renders at both breakpoints) and only when money
+     * features are on, so an install without them makes no call.
+     *
+     * This is the household's period budget, the same figure the shopping
+     * lists and the auto builder's cap work against (R-003 — one budget
+     * engine, `/budget/status`), NOT a per-week allowance.
+     */
+    const budgetStatus = ref<BudgetStatus | null>(null);
     const ingredientsLoading = ref(false);
     const generating = ref(false);
     // FU-354 — the picker's search string survives navigate-away-and-back
@@ -158,14 +174,11 @@ export function useMealPlanner() {
     // FU-637 — one day's planned calories, summed server-side and looked up
     // by date here. The lookup is presentation; the sum is not (a cross-entity
     // aggregate belongs to the server).
-    function dayNutrition(dayIso: string): MealPlanDayNutrition | null {
-        return (focusedPlan.value?.day_nutrition ?? []).find(
-            (d) => toIso(d.scheduled_for) === dayIso,
-        ) ?? null;
-    }
+    // `dayNutrition` was deleted on 2026-09-13 with the desktop day card's kcal
+    // cell, its only consumer (owner: the same "a total you don't read" call
+    // that removed the per-day cost rollup the day before). `day_nutrition` is
+    // still on the DTO; a surface that wants a day's calories can read it.
 
-    // Owner 2026-09-05 — the money twin of the line above, and the same
-    // division of labour: the server sums the day, this looks it up by date.
     function dayCost(dayIso: string): MealPlanDayCost | null {
         return (focusedPlan.value?.day_cost ?? []).find(
             (d) => toIso(d.scheduled_for) === dayIso,
@@ -646,7 +659,14 @@ export function useMealPlanner() {
         // show last week's answer under this week's heading.
         suggestions.value = [];
         suggestionsWeek.value = null;
-        void router.replace({ query: { ...route.query, monday: next } });
+        // Owner 2026-09-12 — the param is `week`, not `monday`. The VALUE is
+        // always a Monday (that is what a focused week is here), so naming the
+        // key after the value described the encoding rather than the thing:
+        // `?week=2026-09-14` says what you are looking at. Renamed outright
+        // rather than accepting both — nothing is released, and a compat alias
+        // for a URL nobody has bookmarked is the kind of shim that outlives its
+        // reason.
+        void router.replace({ query: { ...route.query, week: next } });
     });
     function onKeydown(e: KeyboardEvent) {
         const t = e.target as HTMLElement | null;
@@ -725,6 +745,17 @@ export function useMealPlanner() {
     // Hovering a needed ingredient highlights the day cells whose recipes use
     // it (desktop only — mouse events don't fire on touch).
     const hoveredRecipeIds = ref<Set<string>>(new Set());
+    async function loadBudgetStatus() {
+        if (!moneyEnabled.value) { budgetStatus.value = null; return; }
+        try {
+            budgetStatus.value = await budgetApi.getStatusAsync();
+        } catch {
+            // A budget we can't read is not worth interrupting the planner for;
+            // the card simply shows the week's cost without it.
+            budgetStatus.value = null;
+        }
+    }
+
     function hoverIngredient(ing: MealPlanIngredient) {
         hoveredRecipeIds.value = new Set(ing.used_in_recipe_ids);
     }
@@ -1103,9 +1134,11 @@ export function useMealPlanner() {
             ]);
             // Resume on the URL's week if present (F28), else the household's
             // current week (server tz, C-2.K).
-            const urlMonday = typeof route.query.monday === 'string' ? route.query.monday : null;
-            focusedMonday.value = mondayOf(urlMonday ?? today.value ?? localTodayIso());
-            await loadIngredients();
+            // `mondayOf` normalises whatever day the URL names, so a
+            // hand-typed `?week=2026-09-17` still resumes on that week.
+            const urlWeek = typeof route.query.week === 'string' ? route.query.week : null;
+            focusedMonday.value = mondayOf(urlWeek ?? today.value ?? localTodayIso());
+            await Promise.all([loadIngredients(), loadBudgetStatus()]);
         } finally {
             isInitialLoading.value = false;
         }
@@ -1127,7 +1160,6 @@ export function useMealPlanner() {
         focusedMonday,
         focusedPlan,
         weekDays,
-        dayNutrition,
         dayCost,
         weekRangeLabel,
         weekRelativeLabel,
@@ -1144,6 +1176,7 @@ export function useMealPlanner() {
         needToBuyOnList,
         needToBuyOutstanding,
         unlinkedIngredients,
+        budgetStatus,
         hoveredRecipeIds,
         focusedTarget,
         slideDir,

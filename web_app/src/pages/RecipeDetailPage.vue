@@ -1283,7 +1283,7 @@
         const r = recipe.value;
         if (!r || r.committed_meals === 0) return null;
         const meals = `${r.committed_meals} meal${r.committed_meals === 1 ? '' : 's'}`;
-        return `${meals} of this recipe ${r.committed_meals === 1 ? 'is' : 'are'} already on your meal plan, so ${r.committed_meals === 1 ? "it isn't" : "they aren't"} counted as free. Adding to the pool covers those first.`;
+        return `${meals} of this recipe ${r.committed_meals === 1 ? 'is' : 'are'} already on your meal plan, so ${r.committed_meals === 1 ? "it isn't" : "they aren't"} counted as free. Cooking more covers those first.`;
     });
     const { nutritionEnabled, isComplex } = useNutritionMode();
     const { batchEnabled } = useBatchEnabled();

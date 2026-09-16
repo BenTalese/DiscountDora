@@ -66,6 +66,10 @@ keys off `pointer: coarse`.
       toolbars): a normal tap should show no tooltip at all; a press-and-hold
       should. Say if it wants to be shorter or longer — it's one number in
       `BaseTooltip.vue`. Check a desktop hover reads as a pause, not a lag.
+- [ ] **A (?) chip on a phone (2026-09-13).** These now open with no delay, so a
+      quick tap flashes the tip and drops it on lift — press-and-hold to read.
+      Confirm the flash isn't annoying; if it is, the chip wants press-to-open
+      rather than a dwell. (Desktop hover verified: 18 ms.)
 - [ ] **The alerts bell number sits in one place** on phone and desktop, and is
       neither over the bell nor at the screen edge.
 
@@ -253,6 +257,28 @@ merchant sites, which the agent can't drive — these are yours.
       all three states (unset env vars, wrong key, working) — it's a read now,
       so confirm it does **not** create any product in Dora.
 
+## Meal planner — templates redesign + mobile parity (2026-09-13)
+
+- [ ] Toolbar: **Apply template** sits left of Build my week and opens one
+      dialog. Pick a template → Apply to this week. Flip **Repeat for several
+      weeks** → the two week fields appear *in the same dialog* (no second
+      modal) and the button reads "Apply to those weeks".
+- [ ] Choose a **rotating set**: the repeat toggle switches on, goes inert, and
+      says a set always repeats. Applying it plans the run.
+- [ ] The apply dialog has **no** save button, no rename/delete, no link out.
+- [ ] Week menu: "Save week as template…" still saves; **Manage templates…**
+      opens the Templates page, which now lists *Your templates* with inline
+      rename + delete above *Rotating sets*. Delete asks first.
+- [ ] Deleting a template that a set rotates through: the set keeps its slot and
+      shows "(deleted template)".
+- [ ] Phone (375): **Build my week** and **Apply template** are equal-width side
+      by side; the over-budget banner appears above the day strip; the week label
+      is uppercase with "This week / N planned" split beneath it; the focused day
+      header reads just the weekday.
+- [ ] No per-day kcal cell on desktop day cards any more.
+- [ ] Rail cost card reads "$X remaining of $Y budget" on one line inside the
+      card (and "$X over $Y budget" when over).
+
 ## Meal planner — the 2026-09-12 owner batch (~20 items)
 
 Built and gated, not driven. The auto builder's review step and the phone
@@ -272,10 +298,63 @@ picker sheet changed shape, so both want eyes at 375 and 1440.
       *servings you chose* — halve the servings and fewer meals get swapped.
 - [ ] "What you'll need" reads "N low · M out" with a to-buy figure and a meals
       figure beside it; both absent with money **off**, and the whole block
-      still correct after editing servings on a row.
-- [ ] A meal missing ingredients shows "N to buy" on the week card; a meal you
-      can cook shows nothing; a **leftovers** day shows nothing even when the
-      recipe is short. Check in both a fresh and a batch household.
+      still correct after editing servings on a row. No per-meal "N to buy"
+      marker on the builder rows (cut as noise — it lives on the planner).
+- [ ] **The two-glyph card** (batch household): a cook day shows a chef hat
+      *and* a fridge; a leftovers day shows only the fridge; a cook-fresh meal
+      shows only the chef hat. In a **fresh** household no card shows a fridge.
+      Green when fine, amber when not, hover for the counts.
+- [ ] Trim colour agrees with the glyphs on every card: green all-good, grey on
+      leftovers and cooked meals, amber whenever a glyph is amber. Specifically
+      check a batch week — no green card beside an amber one for the same cook.
+- [ ] A batch's cook day reads "Cook day · N servings" with the **whole cook's**
+      price beside it; its leftover days carry no price chip. The week total on
+      the header still matches the sum of the cards.
+- [ ] No day-level cost line anywhere (desktop day header or phone day header).
+- [ ] "Cook now" from a planned meal that's missing ingredients raises the cook
+      guard dialog and names them; "Start anyway" opens cook mode at the batch's
+      servings, as before.
+- [ ] Nothing user-facing says "pool" — check the meal menu's Cook-fresh
+      caption, the week status "fresh" tip, and the dashboard's Next-to-cook
+      empty state.
+- [ ] **Batch household, standalone meal with no ready serving behind it**: the
+      chef hat now shows on it (it was appearing only on multi-linked cook days).
+      A meal the ready servings *do* cover still shows only the fridge.
+- [ ] Card row order holds a column down a day: Dora's hunch → chef hat →
+      fridge → time → price → ×servings, with ×servings always last. Nothing
+      shifts sideways as meals change state. Icons are noticeably bigger.
+- [ ] Rail: **Recipes** heading is centred, matches "Missing this week" in size,
+      and clicking anywhere on it (not just the chevron) collapses the rail.
+- [ ] A week containing a paste-imported recipe shows a **Free-text
+      ingredients** disclosure with the names and their recipes; a week without
+      one shows no such section at all.
+- [ ] Calendar: hover a busy day — one summary line ("4 meals · 2 to cook"),
+      not a list. Hover an empty day — "no meals planned".
+- [ ] Week grid day headers show the day name only, no date, and TODAY is caps.
+- [ ] **Type scale**: the week's meal cards no longer read smaller than Stock
+      overview's rows — meal name, slot label, servings pill and the three
+      icons. Check at 1440 and 375.
+- [ ] No status banner above the week at either breakpoint. The planned count
+      reads beside "in N weeks" in the week scroller; the week's cost is a
+      **Cost this week** card under the rail's lists (absent with money off).
+- [ ] Free-text rows hover-highlight their source meals and show the amount,
+      like the rows above them. No explanatory paragraph in that section.
+- [ ] Calendar: a day whose meals are missing ingredients shows **amber** pips,
+      not green (it read only the needs-cooking half before).
+- [ ] Rail: collapsed strip says just "Recipes"; open header shows the count as
+      a badge beside the centred label.
+- [ ] "All slots" sits left of Build my week and still switches the day cards.
+- [ ] Change weeks → the URL reads `?week=YYYY-MM-DD`; reload → same week.
+- [ ] **Over budget** (money on, a budget set, an expensive week): a warning
+      banner sits **above** the first day card, one line, collapsed; opening it
+      lists the swaps; with no swap available it says dropping a meal is the
+      lever and offers no shopping-list button. The rail's Cost this week card
+      shows "$X left of your $Y budget", and "$X over" when it is.
+- [ ] A meal's menu → Servings is a typeable tile: type 4, press Enter, the
+      meal updates; Esc reverts; ± are always visible there.
+- [ ] A folded past day reads "3 meals", not the recipe names.
+- [ ] Auto builder review step: no meal count line; Reshuffle is right-aligned
+      on the same row as "Add a meal".
 - [ ] Phone: tap a slot → the sheet's title reads "→ Breakfast · <date>", there
       is no Done button inside it, and picking a recipe closes it.
 - [ ] Desktop rail: the A-Z/Cheapest control sits on the chip row (wrapping

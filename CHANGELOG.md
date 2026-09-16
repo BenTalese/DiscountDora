@@ -5,7 +5,151 @@ semver — major bumps signal schema or breaking-config changes.
 
 ## [Unreleased]
 
+### Changed
+- **Cook mode's four panels stopped arguing with each other (2026-09-13).**
+  *Your notes* was a bordered card floating below the Prev/Repeat/Next row; it's
+  now a collapsed band hanging off the bottom of the step card, the same way the
+  timer does — open it once and it stays open for the whole cook. The current
+  row in *All steps* wears the same tint-and-accent-rule the ingredient and tool
+  rows wear, instead of Quasar's recoloured text, and its step numbers are the
+  numbered circles from the recipe view rather than bare numerals. Ingredients,
+  Tools and All steps now sit apart instead of flush, so three panels read as
+  three panels.
+- **Prices are quoted the way a shelf label quotes them (2026-09-13).** Logging
+  $3.50 for a 500 g pack used to preview "≈ $0.01 per g" — a figure that rounds
+  to nothing in cents, in a denominator no shop prices in. It now reads
+  "≈ $0.70 per 100g", and a 1 kg pack still reads per kg. The recipe cost
+  breakdown follows the same convention, so spaghetti stopped listing at
+  "$0.00 / g" as though it were free. Both surfaces now use the one convention
+  the rest of the app already used (the price chart, the YourPrices widget, the
+  offers sidecar, reports) instead of two private answers, which also means both
+  follow the install's measurement system — per lb and per oz on a US install.
+- **Templates, rebuilt (2026-09-13).** "Apply template" is a button beside
+  *Build my week* now, and it opens one dialog that only applies: pick a
+  template, optionally flip **Repeat for several weeks** to set a range inline,
+  apply. Rotating sets are in the same list. What it replaced was a side sheet
+  reached from a menu, which also saved the current week, opened a *second*
+  modal to apply recurring, renamed and deleted templates, and linked out to
+  another page. Saving stays in the week menu; renaming and deleting moved to
+  **Manage templates…**, also in the week menu.
+- **The phone and the desktop stopped disagreeing (2026-09-13).** The
+  over-budget warning now shows on a phone at all (it was desktop-only), sitting
+  above the day strip. *Build my week* and *Apply template* are a matched pair
+  of buttons there. The week heading wears the same uppercase voice as the
+  desktop toolbar and the calendar, with the same "This week / 9 planned" line.
+  The focused day says "Sunday" rather than "Sunday 13 September" — the week and
+  the day strip above it already said the date twice.
+- **Per-day calories are gone from the week grid (2026-09-13).** Following the
+  per-day cost total out for the same reason: a number on a header you scan
+  rather than read. Calories still live on recipes and meals, and the phone
+  never showed this one — so it closes a gap rather than opening one.
+- **The week's budget reads inside the cost card (2026-09-13)** as "$62
+  remaining of $150 budget", rather than as a caption under it.
+- **A meal card now says one thing per colour (2026-09-12).** Amber had come to
+  mean three different instructions — "go cook this", "you *can't* cook this",
+  and "Dora thinks an ingredient ran out" — while green meant "cooked", "Dora
+  thinks you're fine", and, on the trim of every ordinary meal, nothing at all.
+  Each question now has its own glyph: a **chef hat** for *can you make it*
+  (green when you have everything, amber when you don't) and a **fridge** for
+  *is it already made* (green when a cooked serving is waiting, amber when it
+  still has to be cooked). A question that doesn't apply to a meal isn't asked:
+  a leftovers day shows no chef hat, and nothing shows a fridge unless the
+  household batch-cooks. Hovering either one tells you how many ingredients are
+  missing, or how many servings short you are.
+- **The card's left trim follows those two glyphs instead of arguing with
+  them (2026-09-12).** Green when the meal is fine, grey when nothing is
+  required of you — a leftovers day, or one you've cooked — and amber when
+  either glyph is amber.
+- **Cook day and price are chips (2026-09-12).** A batch's first day reads
+  **Cook day · 6 servings**, and every meal carries what it costs. A batch
+  prices the whole cook on its cook day and nothing on the days it feeds,
+  because that's when you spend the money. The per-day cost totals are gone —
+  the chips themselves show what's priced.
+- **"Cook now" from a planned meal asks first (2026-09-12).** If you're missing
+  ingredients it raises the same confirmation the recipe page and the cookbook
+  raise, instead of dropping you into cook mode to find out.
+- **Going over budget is visible now (2026-09-12).** The over-budget panel
+  rendered *below* the seven day cards, at the bottom of the week's scroller —
+  so on any planned week you had to scroll past the whole week to learn you
+  couldn't afford it. It's a warning banner above the week now, one line, with
+  the swaps folded behind it. How much budget is left sits under **Cost this
+  week** in the right rail. The dead end at the bottom of the old panel — "open
+  shopping lists" when no swap saves money — is gone; dropping a meal is the
+  lever, and it says so.
+- **The servings control in a meal's menu is typeable (2026-09-12).** Same tile
+  as the recipe rail's cooked count: type 6 rather than tapping + six times.
+- **The week's summary banner is gone (2026-09-12).** It restated what the
+  meal cards and the rail already say, per-meal and per-item rather than as a
+  total. The two figures worth keeping moved: the planned count sits with the
+  week you're looking at ("in 2 weeks · 9 planned"), and the week's cost is now
+  a small **Cost this week** card under the rail's ingredient lists.
+- **Calendar pips read both halves of a meal's state (2026-09-12).** An amber
+  pip meant only "this still has to be cooked", so a day of meals you had no
+  ingredients for showed six green dots. It now means the same thing the meal
+  card's trim means: this one needs you, either way.
+- **Free-text ingredients read like every other ingredient row (2026-09-12).**
+  Hovering one highlights the meals it came from, and it shows the amount the
+  week needs — the same row as the two lists above it, minus the things that
+  can't apply to an ingredient with no pantry item behind it.
+- **The planner's middle column is no longer a size smaller than the rest of
+  the app (2026-09-12).** Meal names, slot labels, servings and the three
+  status icons all moved onto the app's own type scale — the cards were reading
+  visibly tinier than, say, Stock overview.
+- **The cookability glyph was under-showing (2026-09-12).** In a batch-cooking
+  household it appeared only on a batch's cook day, so a standalone meal with
+  no cooked serving behind it — one you will be cooking from scratch — said
+  nothing about whether you have the ingredients. It now appears wherever a
+  meal is actually cooked from ingredients.
+- **Free-text ingredients have a home on the planner (2026-09-12).** Ingredients
+  that were never linked to a pantry item were left out of both the week's
+  ingredient lists, so a week of paste-imported recipes looked fully accounted
+  for. They get their own collapsible list — separate, because Dora can't tell
+  whether you have them and they can't go on a shopping list — shown only when
+  a planned meal has some.
+- **Calendar day tooltips are a summary (2026-09-12).** A busy day printed a
+  line per meal; it now reads "3 meals · 1 to cook".
+- **Smaller things on the planner (2026-09-12).** A folded past day shows a
+  meal count rather than listing what you ate. The auto builder's review step
+  drops its meal count and puts Reshuffle opposite "Add a meal". The recipe
+  rail's heading is one size open or shut and loses its magnifier. "This week"
+  and "9 planned" sit at opposite ends of their line. There's breathing room
+  between the toolbar and the first day. Dora's hunch moved to the far left of
+  a meal's row (it shows least often) and its tooltip lost a sentence. The
+  week's URL says
+  `?week=` rather than `?monday=`. The collapsed recipe rail drops its count and
+  the open one shows it as a badge, matching the ingredient lists. The date
+  range above the week wears the calendar's heading style, day headers show the
+  day name only, and TODAY is capitalised. The "All slots" switch sits beside
+  Build my week. A meal's price sits just left of its three status icons.
+  The row stays ordered so the things that are always there sit right of the
+  things that come and go, and nothing shuffles sideways as meals change state.
+  The rail's **Recipes** heading matches the two below it, is centred, and the
+  whole heading collapses the rail rather than just its chevron. The planner's
+  cookable filter is called **Cookable now**, same as the cookbook's, and a
+  short cook reads "short by 2 ready servings".
+- **Dora stopped saying "pool" (2026-09-12).** It was an internal word for the
+  portions you've already cooked. She now talks about *ready servings*.
+- Day names in the week grid wear the same heading style as the auto builder's
+  day dividers.
+
 ### Fixed
+- **Info toasts were rendering their message in invisible ink (2026-09-13).**
+  Every "info"-kind toast in the app — 24-odd call sites, including the one that
+  fires when your connection comes back — drew its text white on a near-white
+  surface, so it arrived as an empty box with a blue icon and a blue spine.
+  Light themes only, which is why it went unnoticed. The toast's own colour now
+  wins over the framework's white-text default.
+- **The offline toasts stopped promising a sync that can't happen
+  (2026-09-13).** Three of them still said stock changes and list ticks "will
+  sync when we reconnect". Offline has been read-only since August; the banner's
+  copy was corrected at the time and the toasts were missed. They now say what's
+  true: you can look around, but not make changes.
+- **Info (?) chips open instantly again (2026-09-13).** The longer tooltip
+  dwell added for phones was right for buttons — a tap shouldn't flash a label
+  on the way to doing something — but a (?) chip does nothing except show its
+  tip, so the delay was pure latency on the only gesture it has. Four (?) chips
+  on Alerts, Stocktake, Cookbook and Price history that had been hand-rolled
+  rather than built from the shared one now match it in size and behaviour too.
 - **The week builder was pricing the pot, not the plan (2026-09-12).** Every
   proposed meal was quoted at what the whole recipe costs to make, no matter
   how many servings you'd asked for — and a batch cook that feeds three days
@@ -33,10 +177,6 @@ semver — major bumps signal schema or breaking-config changes.
   answers for the whole week. A batch's first day says **Cook day** rather
   than "Cook once", and its leftover days are grey — never a colour that reads
   as a verdict.
-- **A meal you can't cook says so (2026-09-12).** Planned meals and proposed
-  ones flag how many ingredients you'd need to buy. Only the gap is flagged —
-  a meal you can cook says nothing — and only on the meals it applies to: a
-  leftovers day is eaten from a cook that already happened.
 - **"What you'll need" counts low and out separately, and prices them
   (2026-09-12).** It said "N to buy", which counted low items you may well not
   need to buy. It now reads "3 low · 2 out", with what the shop would cost and

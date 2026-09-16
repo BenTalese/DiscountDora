@@ -22,12 +22,19 @@
                  shared `NumberStepper` rather than a hand-rolled − value +
                  (R-001). `min="0"` because stepping the last serving away is
                  how you take a meal off the plan; the host asks before it does
-                 anything a whole cook batch would notice. -->
+                 anything a whole cook batch would notice.
+
+                 Owner 2026-09-12 — typeable here, like the rail's cooked-count
+                 tile: a menu you opened to change a number should let you say
+                 the number. The ± buttons are always visible (the rail hides
+                 its pair until hover, which is a list affordance; inside an
+                 opened menu there is nothing to keep quiet for). -->
             <q-item>
                 <q-item-section>Servings</q-item-section>
                 <q-item-section side>
                     <NumberStepper
                         :model-value="entry.servings"
+                        editable
                         :min="0"
                         decrement-label="One fewer serving"
                         increment-label="One more serving"
@@ -81,7 +88,7 @@
                     <q-item-section>
                         <q-item-label>{{ fresh ? 'Cooking fresh' : 'Cook fresh on the day' }}</q-item-label>
                         <q-item-label caption>
-                            {{ fresh ? 'Tap to put it back on the pool' : 'Skips the cooked pool entirely' }}
+                            {{ fresh ? 'Tap to serve it from cooked servings instead' : 'Cooked on the day, not from ready servings' }}
                         </q-item-label>
                     </q-item-section>
                     <q-item-section v-if="fresh" side>

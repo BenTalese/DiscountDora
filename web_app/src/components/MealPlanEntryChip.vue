@@ -2,80 +2,104 @@
     <button
         type="button"
         class="entry-chip"
-        :class="{
-            'entry-chip--consumed': !!entry.consumed_at,
-            'entry-chip--shortfall': shortfall && batchEnabled && !entry.consumed_at,
-            'entry-chip--highlight': highlight,
-        }"
+        :class="[
+            `entry-chip--trim-${status.trim}`,
+            {
+                'entry-chip--consumed': !!entry.consumed_at,
+                'entry-chip--highlight': highlight,
+            },
+        ]"
         :aria-label="accessibleLabel"
         :disabled="!!entry.consumed_at"
     >
         <div class="entry-chip__body">
             <div v-if="showSlot" class="entry-chip__slot">{{ entry.slot }}</div>
-            <div v-if="linked" class="entry-chip__cook" :class="{ 'entry-chip__cook--leftover': !entry.is_cook_day }">
-                <q-icon :name="ICONS.link" size="12px" />
-                <span>{{ cookMarkerLabel }}</span>
-            </div>
-            <!-- Owner 2026-09-04 — the fresh marker sits where the linked-cook
-                 eyebrow does, because it answers the same question ("how does
-                 this meal relate to the pool?") and the two can never both be
-                 true. Icon + word, not colour alone (D-014). -->
-            <div v-else-if="fresh" class="entry-chip__cook entry-chip__cook--fresh">
-                <q-icon :name="ICONS.cookFresh" size="12px" />
-                <span>Fresh</span>
+            <!-- Owner 2026-09-12 — provenance (where this meal's food comes
+                 from) reads as a labelled chip rather than loose eyebrow text:
+                 *"cook cards for multi-linked days should say 'cook day - N
+                 servings' in a chip"*. It carries NO verdict colour — it is a
+                 fact about the plan, and the two status glyphs beside the name
+                 are what say whether anything is wrong. That separation is the
+                 whole point of the 2026-09-12 assessment: one axis per channel.
+                 Owner 2026-09-04: the fresh marker takes the same position,
+                 because it answers the same question and the two can never both
+                 be true. Icon + word, never colour alone (D-014). -->
+            <div v-if="linked || fresh" class="entry-chip__marks">
+                <span
+                    v-if="linked"
+                    class="meal-chip"
+                    :class="entry.is_cook_day ? 'meal-chip--cook' : 'meal-chip--leftover'"
+                >
+                    <q-icon :name="ICONS.link" size="12px" />
+                    {{ cookMarkerLabel }}
+                </span>
+                <span v-else-if="fresh" class="meal-chip">
+                    <q-icon :name="ICONS.cookFresh" size="12px" />
+                    Fresh
+                </span>
             </div>
             <div class="entry-chip__main">
                 <span class="entry-chip__name">{{ entry.recipe_name }}</span>
-                <!-- Owner feedback 2026-09-03 — *"put the needs-cook chef hat
-                     on the LEFT of the servings counter so we get UI aligned
-                     where possible. The chef hat is the element that is
-                     sometimes there, sometimes not."* The servings pill is on
-                     every chip, so it is the one that has to hold a column;
-                     the conditional glyph moves to the variable side of it. -->
-                <q-icon
-                    v-if="entry.consumed_at"
-                    :name="ICONS.check"
-                    size="14px"
-                    class="entry-chip__status text-positive"
-                >
-                    <BaseTooltip>Cooked</BaseTooltip>
-                </q-icon>
-                <q-icon
-                    v-else-if="shortfall && batchEnabled"
-                    :name="ICONS.chef_hat"
-                    size="14px"
-                    class="entry-chip__status text-warning"
-                >
-                    <BaseTooltip>Needs cooking — pool is short</BaseTooltip>
-                </q-icon>
-                <span class="entry-chip__pill">×{{ entry.servings }}</span>
-                <!-- Cookability, flagged only when it's a problem — the rule
-                     (and why a leftovers day never asks) lives in
-                     `showsMissingIngredients`, shared with the phone card. -->
-                <q-icon
-                    v-if="showsMissing"
-                    :name="ICONS.add_shopping_cart"
-                    size="14px"
-                    class="entry-chip__status text-warning"
-                >
-                    <BaseTooltip>
-                        {{ entry.missing_count }} ingredient{{ entry.missing_count === 1 ? '' : 's' }} to buy for this
-                    </BaseTooltip>
-                </q-icon>
-                <!-- FU-653 — Dora's belief about this meal. Its own glyph, not
-                     a change to the chip's state: the week's shortfall and
-                     "need to buy" figures are unchanged, and this sits beside
-                     them as a remark. Server sends it only when the user opted
-                     the meal-planner surface in, and never on a cooked meal. -->
+                <!-- Owner 2026-09-12 — *"dislike the UI moving around too much:
+                     put items that are always shown to the RIGHT of items that
+                     show and hide."* So the row reads rarest-first:
+                     Dora's hunch (rare) → the two status glyphs (conditional) →
+                     cook time (usually) → price (usually) → servings (always).
+                     The always-there servings pill therefore holds one column
+                     down the day whatever the meals above it are doing, which
+                     is the 2026-09-03 alignment ask generalised.
+
+                     FU-653 — Dora's belief is a *remark*, not a state: the
+                     week's shortfall and to-buy figures are unchanged by it,
+                     and it keeps its own glyph rather than tinting one of the
+                     two axes. Server sends it only for an opted-in surface, and
+                     never on a cooked meal. -->
+                <!-- Owner 2026-09-12 — order by how often each thing is
+                     there: Dora's hunch is the rarest, then the price, then
+                     the status glyphs, then the always-present servings. -->
                 <q-icon
                     v-if="entry.inference_hint"
                     :name="ICONS.dora_voice"
-                    size="14px"
+                    size="22px"
                     class="entry-chip__status"
                     :class="entry.inference_hint === 'at_risk' ? 'text-warning' : 'text-positive'"
                 >
                     <BaseTooltip max-width="280px">{{ inferenceTooltip }}</BaseTooltip>
                 </q-icon>
+                <span v-if="priceLabel" class="meal-chip meal-chip--price">{{ priceLabel }}</span>
+                <!-- `chef_hat` = can you make it, `mealsPrepared` (the fridge) =
+                     is it already made. One colour meaning each — green fine,
+                     amber not — and an axis that doesn't apply to this meal
+                     renders nothing. See `mealPlanEntryStatus`. -->
+                <q-icon
+                    v-if="entry.consumed_at"
+                    :name="ICONS.check"
+                    size="22px"
+                    class="entry-chip__status"
+                >
+                    <BaseTooltip>Cooked</BaseTooltip>
+                </q-icon>
+                <template v-else>
+                    <q-icon
+                        v-if="status.supply"
+                        :name="ICONS.chef_hat"
+                        size="22px"
+                        class="entry-chip__status"
+                        :class="status.supply === 'ok' ? 'text-positive' : 'text-warning'"
+                    >
+                        <BaseTooltip>{{ supplyTooltip(entry) }}</BaseTooltip>
+                    </q-icon>
+                    <q-icon
+                        v-if="status.readiness"
+                        :name="ICONS.mealsPrepared"
+                        size="22px"
+                        class="entry-chip__status"
+                        :class="status.readiness === 'ok' ? 'text-positive' : 'text-warning'"
+                    >
+                        <BaseTooltip>{{ readinessTooltip(entry, !!shortfall) }}</BaseTooltip>
+                    </q-icon>
+                </template>
+                <span class="entry-chip__pill">×{{ entry.servings }}</span>
             </div>
         </div>
 
@@ -100,12 +124,17 @@
     import BaseTooltip from 'src/components/BaseTooltip.vue';
     import { ICONS } from 'src/style/icons';
     import MealPlanEntryMenu from 'src/components/MealPlanEntryMenu.vue';
-    import { showsMissingIngredients } from 'src/helpers/mealPlanEntryFlags';
+    import {
+        mealCardStatus, readinessTooltip, supplyTooltip,
+    } from 'src/helpers/mealPlanEntryStatus';
+    import { formatMoney } from 'src/composables/useMoney';
     import { useBatchEnabled } from 'src/composables/useBatchEnabled';
+    import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
     import type { MealPlanEntry } from 'src/models/mealPlan';
     import { computed } from 'vue';
 
     const { batchEnabled } = useBatchEnabled();
+    const { moneyEnabled } = useMoneyEnabled();
 
     const props = withDefaults(
         defineProps<{
@@ -133,7 +162,7 @@
     const inferenceTooltip = computed(() => {
         const names = (props.entry.inference_stock_item_names ?? []).join(', ');
         return props.entry.inference_hint === 'at_risk'
-            ? `Dora thinks you may have run out of ${names} since you planned this. Your plan and its shopping figures are unchanged.`
+            ? `Dora thinks you may have run out of ${names} since you planned this.`
             : `Recorded as missing ${names}, but Dora thinks you're back in stock — this may be cookable after all.`;
     });
 
@@ -144,14 +173,36 @@
     // for a batch household: where every meal is cooked fresh, saying so about
     // one of them is noise.
     const fresh = computed(() => batchEnabled.value && props.entry.cook_fresh);
-    const cookMarkerLabel = computed(() =>
-        props.entry.is_cook_day
-            ? `Cook · serves ${props.entry.cook_batch_total_servings ?? props.entry.servings}`
-            : 'Leftovers',
+    // Owner 2026-09-12 — "Cook day · 6 servings" rather than "Cook · serves 6":
+    // the chip names the day's role first, then what that one cook produces.
+    const cookMarkerLabel = computed(() => {
+        if (!props.entry.is_cook_day) return 'Leftovers';
+        const serves = props.entry.cook_batch_total_servings ?? props.entry.servings;
+        return `Cook day · ${serves} serving${serves === 1 ? '' : 's'}`;
+    });
+
+    const status = computed(
+        () => mealCardStatus(props.entry, batchEnabled.value, props.shortfall),
     );
-    const showsMissing = computed(
-        () => showsMissingIngredients(props.entry, batchEnabled.value),
-    );
+
+    /**
+     * The price chip's text, or '' for no chip.
+     *
+     * A batch's COOK DAY prices the whole cook — the servings its own chip says
+     * it will produce — and its leftover days price nothing, because the money
+     * is spent once (owner 2026-09-12). Both figures are server-owned; the
+     * client never divides or multiplies money here (R-003).
+     */
+    const priceLabel = computed(() => {
+        if (!moneyEnabled.value) return '';
+        if (props.entry.cook_batch_id !== null) {
+            if (!props.entry.is_cook_day) return '';
+            return props.entry.cook_batch_estimated_cost === null
+                ? '' : formatMoney(props.entry.cook_batch_estimated_cost);
+        }
+        return props.entry.estimated_cost === null
+            ? '' : formatMoney(props.entry.estimated_cost);
+    });
 
     // R-Phase 6 §4.6 — single accessible label that names the recipe + slot +
     // servings, so AT users hear the whole meal at once instead of three
@@ -172,18 +223,33 @@
 
 <style scoped>
     /*
-        §7 colour discipline — chip is a content-forward card, not a
-        saturated fill. Status reads through:
-            border-left accent (brand-primary normally, amber on shortfall,
-            neutral on consumed)  +  icon  +  text alternative (aria-label).
-        Three channels = WCAG 1.4.1 honoured without colour-only signalling.
+        §7 colour discipline — chip is a content-forward card, not a saturated
+        fill. Status reads through the border-left accent + icons + the
+        aria-label's text alternative: three channels, so WCAG 1.4.1 is met
+        without colour-only signalling.
+
+        Owner assessment 2026-09-12 — the trim is now a ROLL-UP of the two
+        status glyphs rather than a fourth opinion:
+            green  — all good, and there's still something to do (you'll cook it)
+            grey   — nothing is required of you (a leftovers day, or cooked)
+            amber  — one of the glyphs is amber
+        It therefore cannot contradict the icons, which is what "this one says
+        okay and this one says not okay" was. The rule lives in
+        `mealPlanEntryStatus`, shared with the phone card.
     */
+    /* Owner 2026-09-12 — *"the text/elements in the middle area of the page
+       feel too tiny compared with other areas of the app. Compare with stock
+       overview."* They were: the meal name was inherited body at ~0.875rem
+       inside a 28px chip, where the stock row gives its name 1.05rem in 64px.
+       The chip is the thing you actually read on this page, so it now sits on
+       the app's own scale — name at `--font-size-md`, a 36px floor, and the
+       three status glyphs at 22px. */
     .entry-chip {
         display: flex;
         align-items: stretch;
         width: 100%;
         text-align: left;
-        padding: 6px 8px;
+        padding: 8px 10px;
         margin-bottom: 4px;
         background: var(--surface-elevated);
         border: 1px solid var(--border-default);
@@ -192,7 +258,7 @@
         color: var(--text-primary);
         cursor: pointer;
         transition: background 0.12s ease, border-color 0.12s ease;
-        min-height: 28px;
+        min-height: 36px;
         font: inherit;
     }
     .entry-chip:hover,
@@ -203,12 +269,14 @@
     .entry-chip:focus-visible {
         border-color: var(--q-primary);
     }
-    .entry-chip--shortfall {
+    .entry-chip--trim-alert {
         border-left-color: var(--q-warning);
+    }
+    .entry-chip--trim-idle {
+        border-left-color: var(--border-strong);
     }
     .entry-chip--consumed {
         opacity: 0.55;
-        border-left-color: var(--border-default);
         cursor: default;
     }
     .entry-chip--highlight {
@@ -220,32 +288,21 @@
         min-width: 0;
     }
     .entry-chip__slot {
-        font-size: 0.7rem;
+        font-size: calc(var(--font-size-xs) * 1rem);
         font-weight: 600;
         text-transform: uppercase;
         letter-spacing: 0.02em;
         color: var(--text-muted);
     }
-    /* PROPOSAL_MEAL_PLANS_PART_2 — linked-cook eyebrow. Icon + text carry the
-       signal (not colour alone), D-014-safe. */
-    .entry-chip__cook {
+    /* The provenance + price row. These are facts about the plan, so they wear
+       the app's quiet chip shape and never a verdict colour — the two glyphs
+       beside the name own the verdict. */
+    .entry-chip__marks {
         display: flex;
+        flex-wrap: wrap;
         align-items: center;
         gap: 3px;
-        font-size: 0.68rem;
-        font-weight: 600;
-        color: var(--brand-primary);
-        margin-bottom: 1px;
-    }
-    .entry-chip__cook--leftover {
-        color: var(--text-muted);
-        font-weight: 500;
-    }
-    /* Fresh is a deliberate state, not a shortage — it reads in the same
-       secondary ink as a leftovers day rather than borrowing the amber that
-       means "the pool is short one of these". */
-    .entry-chip__cook--fresh {
-        color: var(--text-secondary);
+        margin-bottom: 2px;
     }
     .entry-chip__main {
         display: flex;
@@ -257,7 +314,8 @@
         flex: 1 1 auto;
         white-space: normal;
         word-break: break-word;
-        line-height: 1.2;
+        line-height: 1.25;
+        font-size: calc(var(--font-size-md) * 1rem);
         font-weight: 600;
     }
     .entry-chip__pill {
@@ -265,9 +323,9 @@
         background: var(--surface-sunken);
         color: var(--text-secondary);
         border-radius: 6px;
-        padding: 1px 6px;
+        padding: 2px 8px;
         font-weight: 700;
-        font-size: 0.8rem;
+        font-size: calc(var(--font-size-sm) * 1rem);
     }
     .entry-chip__status {
         flex: 0 0 auto;

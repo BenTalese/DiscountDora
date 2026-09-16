@@ -48,6 +48,15 @@ class UnlinkedIngredientDto:
     lost."""
     recipe_name: str
     ingredient_name: str
+    # Owner 2026-09-12 — *"make the [free-text] ingredient rows the same as the
+    # other ingredient sections: highlight source meals on hover and show
+    # quantity required."* Both need data this DTO didn't carry: the recipe id
+    # is what the planner highlights meals by, and the amount is what the other
+    # rows put in their caption. Scaled to the plan's servings, exactly as the
+    # linked rows are, so the two lists quote the same week.
+    recipe_id: UUID
+    quantity: float | None
+    unit: str | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -111,6 +120,12 @@ def aggregate_meal_plan_ingredients(
                     recipe_name = recipe.name,
                     ingredient_name = (ingredient.raw_text or "").strip()
                         or "(unnamed ingredient)",
+                    recipe_id = recipe_id,
+                    quantity = (
+                        ingredient.quantity * scale
+                        if ingredient.quantity is not None else None
+                    ),
+                    unit = ingredient.unit,
                 ))
                 continue
             existing = aggregated.setdefault(ingredient.stock_item.id, {

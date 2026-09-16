@@ -26,7 +26,9 @@
                  `listStatusLabel` — "not on a list" beside a cart button that
                  already says exactly that, on the same row (owner: "redundant,
                  we can see that from the icon on the same row"). -->
-            <div v-if="quantityLabel" class="mp-ing__qty">{{ quantityLabel }}</div>
+            <div v-if="quantityLabel || note" class="mp-ing__qty">
+                {{ [quantityLabel, note].filter(Boolean).join(' · ') }}
+            </div>
         </div>
 
         <!-- FU-803 asked the question this prop answers: the auto builder's
@@ -58,8 +60,13 @@
             /** Show the per-ingredient add-to-list button. Off for a preview
              *  of demand that isn't committed yet (see the template note). */
             showCart?: boolean;
+            /** Owner 2026-09-12 — a second fact for the caption, after the
+             *  quantity. The free-text list uses it to name the recipe a row
+             *  came from, which is the only thing that identifies an ingredient
+             *  with no pantry item behind it. */
+            note?: string | undefined;
         }>(),
-        { showCart: true },
+        { showCart: true, note: undefined },
     );
 
     const emit = defineEmits<{

@@ -41,6 +41,602 @@ next.
 
 ---
 
+## 2026-09-13 — **Cook mode: four-item owner batch (notes band, step highlight, numerals, gaps)**
+
+**Status: built, gated, AND driven live.** vitest **749 / 66 files**, `vue-tsc`,
+`eslint src/`, `quasar build` clean; pytest untouched (no server change). Driven
+on the isolated 5172/5175 pair at **1280 and 375**, on *Sunday Ragu* (the seed's
+only structured recipe — 16 steps, 2 sections, 3 tools). New:
+`components/recipes/CookNotesSection.vue`.
+
+**1. "Your notes" is a band on the step card, collapsed.** Owner: *"Make 'your
+notes' an extension visually of the step text area. Possibly collapsed?"* It was
+a bordered card below the Prev/Repeat/Next row — a fourth widget between the step
+and the three section panels. The step card already had the idiom: the timer is a
+sunken band hanging off its bottom. The notes are a second one, after the timer
+(the timer is about *this* step, the notes about the recipe, so the step-specific
+thing stays nearest the step). **Collapsed by default** is the substantive half —
+notes don't change as you step, so an open one pushes the step text further down
+the screen on every single step; the header stays visible so you know they exist,
+and the open state persists across steps because the component never unmounts.
+Verified: `notesInsideStepCard: true`, flush with the card's bottom edge (1px =
+the card border), header 47px (clears D-004 on coarse pointers).
+
+Extracted rather than inlined because **image mode has no step card** — that call
+site wraps the same component in its own `q-card`. One implementation, two hosts.
+
+**2. The All-steps current row matches the ingredient/tool highlight.** Owner:
+*"Match highlight styling for current step from the all steps area with the
+ingredients and tools highlight. Prefer ingredients and tools highlight look."*
+It was Quasar's `:active`, which only recolours text. Now `.cook-row--highlighted`
+— measured identical to an ingredient row: `bg rgb(228,237,251)`, `border-left
+3px rgb(37,147,92)`. **`aria-current="step"`** carries what `active` used to
+imply. Deliberately *not* borrowed: `.cook-row--dim`. On ingredients the dimming
+answers "which of these does this step need?", so the rest are noise; in All steps
+every other row is something you read ahead to, so dimming them would dim the
+list's purpose.
+
+**3. Step numerals are the recipe view's circles.** Owner: *"Use same number
+circles styling as on the recipe view."* The chrome already lived in the shared
+`css/recipeSteps.scss` (its own header says it was extracted there for exactly
+this reason, R-001); cook mode was the last numbered step list still drawing its
+own. Measured byte-identical to the recipe view: `34px / 50% / rgb(222,247,235) /
+rgb(37,147,92) / 700`. `.cook-row__avatar` went 32px → 34px so the column holds
+the circle without squashing it — which keeps the deliberate alignment of
+quantity, tool glyph and step number at one x.
+
+**One shared-file change:** `.dora-steps__num` now reads
+`var(--dora-step-num, 34px)`. The variable is declared on `.dora-steps`, and cook
+mode uses the numeral alone inside a `q-item` with no such ancestor — without the
+fallback both dimensions resolve to `auto` and the circle collapses. Consumers
+wanting a different size still declare the variable on an ancestor and win.
+
+**4. Gaps between the three sections.** `margin-bottom: var(--space-4)` on
+`.cook-section`; measured 16px / 16px. They were flush, so three panels with a
+deliberately *shared* shape (the 09-01 pass) read as one striped block — the
+shared shape was working against itself.
+
+**Decisions made:**
+- Notes default **collapsed**, not open — the owner asked it as a question
+  ("Possibly collapsed?"). One-line reversal if it reads wrong in a real cook.
+- The notes band went *after* the timer band, not before.
+- The highlight took the ingredient look wholesale but not the dimming (above).
+
+**Files touched:** `components/recipes/CookNotesSection.vue` (new),
+`pages/RecipeCookMode.vue`, `css/recipeSteps.scss`, `CHANGELOG.md`.
+
+**Standards close-gate:** R-001 (the notes panel is one component across two
+hosts; the numeral circle is the shared class rather than a third copy),
+R-002 (no raw colour — all four changes are tokens), R-003 (the numeral chrome
+keeps its single source), D-004 (the one new control clears 44px on coarse
+pointers). No new rule warranted: every decision here is an application of
+existing ones. No unexplained violations.
+
+**Next up:** nothing owed from this batch. Standing queue unchanged — the
+meal-planner browser pass is still the largest verify debt.
+
+**Open questions for user:** the highlight you asked to standardise on is a
+**blue** fill (`--semantic-info-soft`) with a **green** accent rule
+(`--brand-primary`). That's pre-existing and now on three surfaces rather than
+two, so it's more visible than it was. Say if you want the fill on the brand axis
+to match its rule.
+
+---
+
+## 2026-09-13 — **Three-item owner batch: tooltip dwell, the blank toast, shelf-price denominators**
+
+**Status: built, gated, AND driven live.** pytest **2384 passed** (the four known
+FU-762 reds only), vitest **749 / 66 files**, `vue-tsc` and `eslint src/` clean.
+Verified by driving the running app on the isolated 5172/5175 pair against the
+dense seed — all three items confirmed with observed values, not inference.
+New: `web_app/src/helpers/unitPriceDisplay.ts` + its spec. **R-089 / ADR-086**
+established; **R-088 amended**.
+
+**1. Info (?) chips open instantly again.** Owner: *"recent feedback to increase
+time before tooltips appear for mobile … has been applied too broadly. For info
+(?) chips specifically, I'd expect those to be instant."* R-088/ADR-085's
+`BaseTooltip` 500 ms dwell is right for its stated reason — a tap on a *button*
+shouldn't flash the label on the way to doing the button's job — and wrong for a
+control whose only job is the tip. `InfoTip` sets `:delay="0"`, in the shared
+component, so it stays one decision in one place. While there, the four (?)
+chips that were still hand-rolled `q-icon` + `BaseTooltip` (Alerts, Stocktake,
+Cookbook's *Cookable now*, Price history ×2) moved onto `InfoTip` — R-001, and
+they'd otherwise have kept the 500 ms and the wrong size. **Measured live: 18 ms
+to the tip.**
+
+**2. The blank blue info toast.** Owner: *"I saw a blank blue info toast when I
+was offline reconnecting. What was that? Fix?"* It was
+`useNetworkStatus.onBrowserOnline`'s *"Network detected. Checking the server…"*,
+and it was blank because **every info toast in the app has been drawing its
+message in white on `--surface-elevated`** since the B7/D-002 change made `info`
+the neutral kind. Quasar seeds every notification with `textColor: 'white'`
+before any registered type is applied and emits it as `text-white`, which its own
+stylesheet declares `!important` — so `.dora-toast--info`'s `color` never won.
+Light themes only (dark ones have a dark elevated surface), which is why 24-odd
+call sites survived it. What was left visible was the icon, the left spine and
+the progress bar, all `--semantic-info`: "blank blue". Fixed in `app.scss` with
+`!important` on the ink — the alternative, suppressing the seed from the
+registration, needs `textColor: undefined`, which `exactOptionalPropertyTypes`
+rejects without a cast. **Verified live**: class `text-white` is present on the
+element exactly as diagnosed, computed ink is now `rgb(22,39,36)` on
+`rgb(245,250,249)`.
+
+Also corrected in the same file: **three offline toasts still promised a write
+queue that was removed on 2026-08-23.** `OfflineBanner`'s copy was fixed at the
+time and the toasts were missed, so reconnecting said *"Syncing any queued
+changes"* when offline is read-only. All three now match the banner's line.
+
+**3. Prices quoted the way shelves quote them.** Owner: *"Log price and possibly
+other areas I can't recall — shouldn't be displaying in such low amounts e.g.
+'≈ $0.01 per g'. Stores always show per 100g, or per 100ml."* The convention
+already existed and was already right — `units.display_denominator_for`, read by
+four server-rendered surfaces. The two the owner was looking at couldn't reach
+it, because both quote a price the server has never seen: `PriceEntry` previews
+while you type, and `RecipeCostDialog` gets the price in the linked product's raw
+`size_unit`. Both had grown a private answer. Rather than a third one, the Python
+rule became a **data table** (`PRICE_DISPLAY_RULES`) with the existing function
+as a thin read over it, emitted into `units_table.ts` by `scripts/dump_units.py`,
+with `helpers/unitPriceDisplay.ts` as the client reader — the same mechanism the
+unit table itself uses, now written down as **R-089**. `display_denominator_for`'s
+behaviour is unchanged, checked across both conventions and both flip boundaries.
+
+Measured in the running app: entry preview `$3.50 / 500 g` → **≈ $0.70 per 100g**
+(was ≈ $0.01 per g), `$6.90 / 1 kg` → **$6.90 per kg**, `$8.75 / 500 ml` →
+**$1.75 per 100ml**, `$4 / 2 L` → **$2.00 per L**. Cost breakdown, against 27
+real seed lines: Spaghetti **$0.00 / g → $0.30 / 100g**, Greek Yoghurt
+**$0.01 / g → $0.74 / 100g**, and every line already quoted per kg / L / ea
+untouched. Note this *also* moves the cost dialog off its old "/kg below $0.05"
+answer and onto /100g, which is the owner's stated expectation and what the rest
+of the app now shows for the same product.
+
+**Decisions made:**
+- A `Base*` wrapper default is a default, not a ban on the prop — overriding it
+  **in another shared component**, with a reason, is compliant. Written into
+  R-088 as an amendment so the next session doesn't "fix" `InfoTip` back.
+- The cost dialog was *not* fixed server-side (adding display fields to the DTO),
+  even though that's the R-003-purest option for that one surface. It does
+  nothing for the price-entry preview, which is the surface actually reported, so
+  the client would have needed the rule anyway.
+- The offline toast copy was in scope: the owner asked *"what was that?"* about a
+  reconnect toast, and what it says is wrong.
+
+**Files touched:** `dora_api/domain/units.py`, `scripts/dump_units.py`,
+`web_app/src/generated/units_table.ts` (regenerated),
+`web_app/src/helpers/unitPriceDisplay.ts` + `test/unit/unitPriceDisplay.spec.ts`
+(new), `components/dora/PriceEntry.vue`, `components/recipes/RecipeCostDialog.vue`,
+`components/help/InfoTip.vue`, `boot/notifyTypeRegistration.ts`, `css/app.scss`,
+`composables/useNetworkStatus.ts`, `pages/AlertsPage.vue`,
+`pages/StocktakeRunner.vue`, `pages/RecipesOverview.vue`,
+`pages/PriceHistoryPage.vue`, `CHANGELOG.md`, `ENGINEERING_STANDARDS.md`.
+
+**Standards close-gate:** R-001 (four hand-rolled (?) chips folded into
+`InfoTip`; two private denominator rules folded into one reader), R-003 / **R-089**
+(the convention stays server-owned and is mirrored, not retyped), R-088 (amended,
+not violated). No unexplained violations. One new rule + ADR.
+
+**Next up:** nothing owed from this batch. The standing queue is unchanged — the
+meal-planner browser pass (seven passes across 09-12/09-13, none walked) is still
+the largest verify debt.
+
+**Open questions for user:** the cost breakdown now says `/100g` where it used to
+say `/kg` for fine-priced ingredients. That follows your "stores always show per
+100g" directive and matches every other price surface, but it's a visible change
+to a number you may have been reading as /kg — say if you'd rather the breakdown
+kept the larger denominator.
+
+---
+
+## 2026-09-13 — **Templates redesigned, and the desktop/mobile audit the owner asked for**
+
+**Status: built and gated, NOT driven in the browser.** pytest **2384 passed**
+(the four known FU-762 reds only), vitest **737 / 65 files**, `vue-tsc`,
+`eslint src/`, `quasar build` clean. **`MealPlanTemplatesDrawer.vue` deleted**,
+**`MealPlanApplyTemplateDialog.vue` added**. Reverses **FU-308** deliberately.
+
+**Templates.** Owner: *"the presentation and usage of templates here is genuinely
+terrible and a little confusing. Redo it."* The diagnosis was that one side
+sheet, reached from a menu item called *"Apply template…"*, did four unrelated
+jobs — saved the current week (a duplicate of the overflow item that opened it),
+applied recurring **through a second modal stacked on the sheet**, renamed and
+deleted each row, and linked out to the sets page. Applying was one button among
+them. Rebuilt to the owner's own layout:
+- **`MealPlanApplyTemplateDialog`** — a radio list of templates (sets listed with
+  them), a **Repeat for several weeks** toggle that reveals the range *inline*,
+  one action button. Choosing a set forces repeat on and says why: rotating is
+  what a set is, so it has no single-week meaning.
+- **Toolbar** gains *Apply template* left of *Build my week* — two ways to fill
+  an empty week in one move, so they sit together.
+- **Overflow** keeps *Save week as template…* and gains *Manage templates…*.
+- **The Templates page** grew a *Your templates* section (inline rename +
+  delete) above the rotating sets, and its heading is now just "Templates".
+- The page's standalone recurring dialog and its five refs are gone.
+
+**This reverses FU-308 (2026-07-07) on purpose**, which had moved per-template
+CRUD *into* the drawer on the reasoning that managing belongs beside applying.
+In use that is what made the drawer four surfaces in one. The reversal is written
+into the page itself, not left as a silent flip, and FU-308's one good idea (the
+inline rename, over the old `$q.dialog.prompt`) is kept.
+
+**The audit.** Owner: *"there might be some inconsistencies between desktop and
+mobile. Find them and decide with me."* Two turned out to be by design and were
+reported as such: past-day **collapsing** (the phone shows one day, so there is
+nothing to fold) and the **All slots** toggle (the phone always sections every
+slot). Five were real; the owner chose on three:
+1. **No over-budget warning existed on a phone at all** — the panel rendered
+   inside the desktop week scroller only. Now a `#alert` slot above the day
+   strip, filled by the page with the same component: the panel stays page-owned
+   (it holds the plan id and the reload), placement is the mobile view's.
+2. **Week heading** — the phone had a plain bold label, no relative label and no
+   planned count. Now the calendar's uppercase voice with the same split line.
+3. **Apply template** was promoted on desktop, a menu item on the phone. Now a
+   matched pair with Build my week — **owner amended my proposal**: side by side,
+   equal width, not stacked.
+4. **Per-day kcal** was desktop-only. Owner chose to **drop it from desktop**
+   rather than add it to the phone, following the per-day cost total out on
+   09-12 for the same reason. `dayNutrition` went with its only consumer.
+5. **The phone's day header** read "Sunday 13 September" under a week range and a
+   numbered day strip. Now "Sunday" — the same duplication that took the dates
+   off the desktop day headers on 09-12.
+
+**Also:** the budget line moved *inside* the cost card as "$62 remaining of $150
+budget" (it was a caption below it, which read as a note about the rail rather
+than the other half of the same question).
+
+**Decisions made:**
+- **The apply dialog owns no `t:`/`s:` encoding of its own** — it emits the same
+  token `useMealPlanner.recurringSourceOptions` already uses, so the choice has
+  one representation rather than two that can drift.
+- **`day_nutrition` stays on the DTO.** Removing a server field because its
+  current consumer went is a wider change than the owner asked for, and a future
+  surface may want a day's calories. Only the client plumbing went.
+- **The mobile alert is a slot, not a prop.** Passing `mealPlanId` down so the
+  phone could mount its own copy would mean two instances fetching the same
+  suggestions at different breakpoints.
+
+**Files touched:** `MealPlanApplyTemplateDialog.vue` (new),
+`MealPlanShoppingSummary.vue`, `MealPlanMobileFocus.vue`, `MealPlanWeekDayCard.vue`,
+`MealPlansOverview.vue`, `MealPlanTemplatesPage.vue`, `composables/useMealPlanner.ts`;
+**deleted** `MealPlanTemplatesDrawer.vue`. Docs: `CHANGELOG.md`, `DORA_VERIFY.md`.
+
+**Standards close-gate:** R-001 (one apply surface, one warning component across
+breakpoints — this unit *removed* two duplicate entry points rather than adding
+any), R-003 (the recurring token is shared, not re-encoded), R-007 (the Templates
+page edit is in scope because the owner moved work onto it, not adjacent tidying),
+D-023 (the phone's two week actions hold their shape; only the promoted set
+changed). No ADR — the "one axis per channel" candidate from 09-12 is untouched
+and still unwritten.
+
+**Next up:** the browser walk. Seven passes on this surface across two days with
+no eyes on any of it; the verify file now has four planner sections.
+
+---
+
+## 2026-09-12 (sixth) — **Nine planner items, the substantial one being that the over-budget warning was unfindable**
+
+**Status: built and gated, NOT driven in the browser.** pytest **2384 passed**
+(the four known FU-762 reds only), vitest **737 / 65 files**, `vue-tsc`,
+`eslint src/`, `quasar build` clean.
+
+**The budget item.** Owner: *"no indication/warning of going over budget, or how
+much budget remains. UPDATE: found it by stumbling upon it."* The cause was
+placement, not absence: `SwapSuggestionsPanel` rendered at the **bottom of the
+week's own scroller**, below seven day cards, so on any planned week you had to
+scroll the entire week to learn you couldn't afford it. Restructured along the
+owner's own suggestion — *"just the top line as a warning banner and the other
+info in the right rail somehow"*:
+- The panel moved **above** the day cards and its head is now a one-line
+  warning banner (tinted fill, glyph carries the tone, words stay page ink per
+  D-002) that toggles the swaps beneath it. Collapsed on arrival: the banner
+  interrupts, a list of swaps above the week you're reading interrupts twice.
+- The **figures moved to the rail**, under *Cost this week*: "$62 left of your
+  $150 budget", or "$8.40 over" when it is. That is the household's period
+  budget from `/budget/status` — the same engine the shopping lists and the
+  builder's cap read (R-003), loaded once per page rather than per card.
+- The zero-state's **"Open shopping lists"** button is gone with the sentence
+  that justified it (*"swaps are for cooking, and you would remove meals, not
+  go to shopping lists"*). It now says dropping a meal is the lever and stops.
+
+**`NumberStepper` gained a typeable value.** The meal menu's servings control
+was a readout you could only nudge; it is now the same tile the recipe rail's
+cooked count has had since 09-03 (Enter/blur commits, Esc reverts, clamped to
+the same bounds `step` honours). Opt-in via `editable`, so nudge-only call sites
+are unchanged. The ± buttons stay visible there — hiding until hover is a *list*
+affordance, and there is nothing to keep quiet for inside an opened menu.
+
+**The rest:** folded past days show a count, not the names (the fold exists to
+get the past out of the way, not to summarise it) · the rail strip's heading
+matches the open one and loses its magnifier (it opens a list, it isn't a search
+box) · "This week" and "9 planned" split to opposite ends of their line · a gap
+between the toolbar and the first day card · the builder's review step drops its
+meal count and puts Reshuffle opposite "Add a meal" · Dora's hunch moved to the
+far left of the meal row (rarest-first, the order agreed yesterday) and its
+tooltip lost *"Your plan and its shopping figures are unchanged."*
+
+**Decisions made:**
+- **The budget line is a caption under the cost card, not a row inside it.**
+  The cost is *this week's*; the budget is *the period's*. One card stating two
+  different spans as one figure pair is how the old status banner read.
+- **The swaps stayed inside the banner** rather than moving to the rail with the
+  figures. They are edits to *this week's meals*, and the rail is where the
+  week's ingredients and money are read, not where its meals are changed.
+
+**Files touched:** `SwapSuggestionsPanel.vue`, `MealPlanShoppingSummary.vue`,
+`MealPlansOverview.vue`, `MealPlanWeekDayCard.vue`, `MealPlanEntryChip.vue`,
+`MealPlanRichCard.vue`, `MealPlanEntryMenu.vue`, `MealPlanBuilderDialog.vue`,
+`NumberStepper.vue`, `composables/useMealPlanner.ts`. Docs: `CHANGELOG.md`,
+`DORA_VERIFY.md`.
+
+**Standards close-gate:** R-001 (`NumberStepper` absorbed the typeable tile
+rather than the menu hand-rolling a third one — though the rail's own
+`.mp-row__tile` is still a separate copy, see the finding below), R-003 (one
+budget engine, read once by the page), R-029/R-058 (budget line is
+feature-gated), D-002 (banner tone on fill + glyph, not on text ink), D-004 (the
+banner and the rail head are 44px targets).
+
+**New finding, logged not fixed:** `MealPlanRecipeRow.mp-row__tile` is now the
+second implementation of the typeable count tile, after `NumberStepper` gained
+one. Converging them means porting the rail row's hover-hiding and its 30px
+sizing into the shared component, which is a change to a control on a different
+surface mid-batch. → **FU-909**.
+
+**Next up:** the browser walk, now six passes deep on this surface.
+
+---
+
+## 2026-09-12 (fifth) — **Eleven more planner items: the banner deleted, the pips re-derived, and the middle pane put back on the app's type scale**
+
+**Status: built and gated, NOT driven in the browser.** pytest **2384 passed**
+(the four known FU-762 reds only), vitest **737 / 65 files**, `vue-tsc`,
+`eslint src/`, `quasar build` clean. **`MealPlanWeekStatus.vue` deleted.**
+
+**The two questions, answered:**
+- *"Why is the route `monday=`?"* — it was the focused week's Monday, so the key
+  was named after the **encoding** rather than the thing. Renamed to `?week=`
+  outright (no compat alias — nothing is released, and `mondayOf()` already
+  normalises whatever day the URL names, so a hand-typed mid-week date still
+  resumes correctly).
+- *"What does the calendar day pip show now?"* — it showed only the readiness
+  half (`needs_cooking`), so after the card gained a second axis a day of meals
+  you had no ingredients for was six green pips. `pipForEntry` now takes the
+  card's own trim roll-up, so the month view and the week cards cannot disagree
+  about which days are fine. It needed `batchEnabled` threaded through both
+  callers, which is also what tells the shared rule whether the readiness axis
+  exists at all for this household.
+
+**The banner.** `MealPlanWeekStatus` is deleted at both breakpoints — owner:
+*"it just repeats info readily available elsewhere."* It did: the shortfall and
+to-buy cells restated the meal cards and the rail's own per-item counts, less
+precisely. The two survivors moved to where they belong — the **planned count**
+into the week scroller beside "in 2 weeks", the **week cost** into a small
+non-collapsible **Cost this week** card under the rail's lists (a card, not a
+disclosure: one figure has nothing to collapse), with its three-sentence InfoTip
+cut to one line.
+
+**Free-text ingredients became real rows.** The list landed an hour earlier as
+name + recipe with an explanatory paragraph. It is now the same
+`MealPlanIngredientRow` the other two lists draw: hover highlights the source
+meals, and the caption carries the amount the week needs. That required the
+server's `UnlinkedIngredientDto` to carry `recipe_id`, `quantity` and `unit` —
+the first is what the planner highlights by, the second is what the other rows
+put in their caption, and the quantity is scaled to planned servings so the two
+lists quote the same week.
+
+**Type scale.** Owner: *"everything is teeny tiny — compare with stock
+overview."* It was measurably so: the meal chip's name was inherited body
+(~0.875rem) in a 28px chip, where `StockItemRow` gives its name 1.05rem in 64px.
+The chip's name is now `--font-size-md` on a 36px floor, the servings pill and
+slot labels moved onto the token scale, the phone card's 0.72rem meta line went
+to `--font-size-sm` with a 48px thumb, and the three status glyphs are 22px.
+
+**The rest:** collapsed rail strip drops its count / the open header shows it as
+the shared `MealPlanRailCount` badge · the week range wears the calendar's
+uppercase tracked voice · **TODAY** capitalised at both breakpoints · "All
+slots" moved up beside Build my week (row 1 has the width now the status row is
+gone) · price sits immediately left of the three icons · the cookability tooltip
+says **"Cookable now"**, the cookbook's own words for that state.
+
+**Decisions made:**
+- **The free-text adapter is explicit, not a second row component.** What
+  differs is the *data* (no stock item ⇒ no level, no cart), not the layout, and
+  the owner asked for the layout to be the same. `stock_item_id: ''` resolves
+  through `useStockStatus` to no level and the row renders "Not tracked", which
+  is the honest reading for an ingredient with nothing behind it.
+- **`Cost this week` is money-gated, not hidden-when-empty.** With money off the
+  server sends no figure, so the card doesn't exist rather than rendering blank
+  (R-029 / R-058).
+- **The pip keeps three states, not four.** A fourth ("can't cook it") would ask
+  a 6px dot to carry an axis the tooltip and the card already separate; "this
+  day needs you" is what a month view is for.
+
+**Files touched:** `dora_api/features/meal_plans/get_meal_plan_ingredients.py`;
+`MealPlansOverview.vue`, `MealPlanShoppingSummary.vue`, `MealPlanIngredientRow.vue`,
+`MealPlanEntryChip.vue`, `MealPlanRichCard.vue`, `MealPlanWeekDayCard.vue`,
+`MealPlanMobileFocus.vue`, `MealPlanCalendar.vue`, `helpers/mealPlanDayPips.ts`,
+`helpers/mealPlanEntryStatus.ts`, `composables/useMealPlanner.ts`,
+`models/mealPlan.ts`, `css/mealChips.scss`; **deleted**
+`components/MealPlanWeekStatus.vue`. Tests: `mealPlanDayPips.spec.ts` (+1 case,
+signature updated), `mealPlanEntryStatus.spec.ts`, `addToListRows.spec.ts`.
+Docs: `CHANGELOG.md`, `DORA_VERIFY.md`.
+
+**Standards close-gate:** R-001 (the free-text list reuses the ingredient row
+rather than growing a fourth list shape; the rail count is the shared badge),
+R-003 (the pip and the card read one rule; quantity scaling stays server-side),
+R-029/R-058 (the cost card is feature-gated, not empty-hidden), D-003 (the whole
+point of the type pass — the middle pane was off the scale). The **"one axis per
+channel"** ADR candidate now has its third sighting today (the pip). Still not
+written: promoting it wants one deliberate pass over the other surfaces, not a
+rule minted while the batch is still moving. Recommended as the next unit if the
+owner wants it.
+
+**Next up:** the browser walk. This is now three passes deep on one surface with
+no eyes on any of it.
+
+---
+
+## 2026-09-12 (fourth) — **Ten follow-ups on the planner card, one of which was the new rule under-firing**
+
+**Status: built and gated, NOT driven in the browser.** pytest **2384 passed**
+(the four known FU-762 reds only), vitest **736 / 65 files**, `vue-tsc`,
+`eslint src/`, `quasar build` clean.
+
+**The one that mattered.** The owner asked *"is the cookability showing
+correctly? I only see it on multi-linked days"* — and it wasn't. The rule
+written an hour earlier said a batch household's meal is cooked from ingredients
+only if it's a batch's cook day or explicitly cook-fresh; everything else was
+assumed to come off the cooked servings. That is true only while there *are*
+servings for it. When the allocation says there aren't (`needs_cooking`),
+somebody is cooking that meal from scratch and whether you have the ingredients
+is exactly the question. One clause, and its own test case.
+
+**The rest, in the owner's words:**
+- *"Change 'can cook now' to 'cookable now'"* — matches the cookbook's own
+  filter chip.
+- *"Are text ingredients shown in the missing and all ingredients lists?"* They
+  were not, anywhere on the rail — the server has reported them since
+  2026-08-27 (FU-505) and only the add-to-list picker used them. New
+  **Free-text ingredients** disclosure, rendered only when a planned meal has
+  some. Deliberately plainer than the two lists above it: no level dot, no
+  cart, because neither question can be answered about a row with no stock item.
+- *"Calendar day tooltips are too dense"* — `dayTooltip` was a line per meal;
+  it's now `"4 meals · 2 to cook · 1 cooked"`.
+- *"Give Recipes the same heading text… centre it… make the whole word plus the
+  button clickable"* — the rail head is one 44px button now, chevron pinned
+  left (absolute, so the label centres on the **column**, not on what's left
+  beside the chevron), label at the disclosure's own size.
+- *"The date text is too much"* — week-grid day headers show the day name only.
+  Kept in `aria-label`, where there's no week banner to have just read.
+- *"Should be 'short by 2 ready servings'"*.
+- *"Dislike money chip where it is"* + *"put always-shown items right of items
+  that hide"* — the meta row now runs **rarest → always**: Dora's hunch → chef
+  hat → fridge → time → price → ×servings. The always-there servings pill
+  therefore holds one column down the day whatever its neighbours do, which
+  generalises the 2026-09-03 alignment ask.
+- *"The icons… are all too small"* — 14px → 18px on all three.
+
+**Decisions made:**
+- **The phone card gained Dora's hunch glyph.** It was on the desktop chip only.
+  Two cards drawing the same meal had different vocabularies, which is the drift
+  R-001 exists to stop — noticed while reordering the row, fixed rather than
+  carried.
+- **Free-text ingredients are their own disclosure, not rows in the other two.**
+  The lists above are stock items with a level and a cart; these have neither.
+  Folding them in would mean rows that can't answer the question their
+  neighbours answer.
+- **It is the one section on the rail allowed to disappear.** Every other
+  control holds its place when empty (B2a). A permanently visible "0 free-text
+  ingredients" would be an invitation to fix something that isn't wrong.
+
+**Files touched:** `MealPlanEntryChip.vue`, `MealPlanRichCard.vue`,
+`MealPlanWeekDayCard.vue`, `MealPlanCalendar.vue`, `MealPlanShoppingSummary.vue`,
+`MealPlansOverview.vue`, `helpers/mealPlanEntryStatus.ts`,
+`helpers/recipeRailFilters.ts`. Tests: `test/unit/mealPlanEntryStatus.spec.ts`
+(+1 case, 1 amended). Docs: `CHANGELOG.md`, `DORA_VERIFY.md`.
+
+**Standards close-gate:** no new violations. R-001 (both cards share the rule +
+the chip stylesheet, and the hunch glyph is no longer desktop-only), R-003 (the
+supply rule reads server fields only — `needs_cooking`, `missing_count`), D-004
+(the rail head is a 44px target, which the old 32px chevron wasn't). The
+"one axis per channel" ADR remains a candidate, not written — see the previous
+entry.
+
+**Next up:** unchanged — the owner walks the DORA_VERIFY meal-planner sections.
+
+---
+
+## 2026-09-12 (third) — **The meal card's signal vocabulary, rebuilt around one axis per channel**
+
+**Status: built and gated, NOT driven in the browser.** pytest **2384 passed**
+(the four known FU-762 reds only), vitest **735 / 65 files**, `vue-tsc`,
+`eslint src/`, `quasar build` clean.
+
+**The assessment that drove it.** The owner spotted that cookability and
+shortfall were being signalled "using colours that mean the same thing and icons
+that mean multiple things", and asked whether the green trim was carrying
+anything at all. Inventorying the card confirmed both: **amber** meant *"the
+pool is short, go cook this"*, *"you're missing ingredients, you can't cook
+this"* and *"Dora thinks an ingredient ran out"* — three different instructions
+— while **green** meant *cooked*, *Dora's good-news hunch*, and, on the trim of
+every ordinary meal, **nothing**. An always-on signal carries no information;
+wearing a verdict colour, it gets read as a verdict, which is why a leftovers
+day looked like an all-clear beside an amber one.
+
+Root cause: three independent axes (provenance · supply · labour) multiplexed
+into two colour channels, assigned per feature as each one landed.
+
+**The fix — one axis per channel** (`helpers/mealPlanEntryStatus.ts`, shared by
+both cards):
+- **Supply** — `chef_hat`, green/amber. Applies only where a meal is cooked
+  from ingredients.
+- **Readiness** — `mealsPrepared` (the fridge), green/amber. Batch households
+  only, and never on a `cook_fresh` meal.
+- **Trim** — a *roll-up* of the two, so it cannot contradict them: green all
+  good, grey nothing-required (leftovers, consumed), amber if either glyph is.
+- **Provenance** — chips, no verdict colour. `Cook day · 6 servings` /
+  `Leftovers` / `Fresh`, plus the price.
+
+An axis that doesn't apply renders **nothing** (owner call) rather than a greyed
+glyph: a green chef hat on a leftovers day would claim a shop you never have to
+do, and a fridge in a fresh household describes a store that doesn't exist.
+
+**Also in this pass:**
+- **`cook_batch_estimated_cost`** on the entry DTO — the sum of a batch's own
+  per-entry figures, so the cook day's price chip and the week total can't
+  drift. The cook day prices the whole cook; its leftover days price nothing,
+  because the money is spent once (owner call).
+- **Day cost rollups removed** from both the desktop day header and the phone
+  day header (owner: *"too much text to look at, and we can see X/X priced based
+  on presence of a price chip"*). The week total stays.
+- **"Cook now" from a planned meal is guarded** — it pushed straight to cook
+  mode, while the recipe page and the cookbook both ask first. Third consumer of
+  `helpers/cookModeGuard`, which is exactly what that helper exists for.
+- **"Pool" is gone from user-facing copy** — the meal menu's cook-fresh caption,
+  the week status "fresh" tip, the dashboard's Next-to-cook empty state and the
+  recipe page's free-meals tooltip all talk about **ready servings** now.
+- **The builder's "N to buy" marker was cut** the same day it landed (owner:
+  *"just noise in the builder"*); the aggregate below the rows already answers it
+  for the whole proposal.
+- Week-grid day names took the auto builder's day-divider voice.
+
+**Decisions made:**
+- **`shortfall` stayed the prop name** on both cards even though the copy no
+  longer says it. It is the server's own concept (`needs_cooking` ← the pool
+  allocation) and renaming the prop without renaming the field would put a
+  second vocabulary between them. Flagged here rather than half-done.
+- **The day name was NOT centred** in the week grid. Its header row also holds
+  the collapse chevron, the date, a Today badge and the calorie cell; centring
+  one item of five reads as misalignment, not as a heading. The auto builder's
+  divider is centred because it owns its own line. Worth a look when walked.
+- **`mealPlanEntryFlags.ts` was deleted, not extended.** It answered one
+  boolean ("flag the gap?"); the card now needs three coordinated answers, and
+  keeping the old helper beside the new one would leave two places deciding when
+  a leftovers day speaks.
+
+**Files touched:** `dora_api/features/meal_plans/get_meal_plans.py`;
+`web_app/src/helpers/mealPlanEntryStatus.ts` (new, replaces
+`mealPlanEntryFlags.ts`), `src/css/mealChips.scss` (new, registered in
+`quasar.config.ts`), `MealPlanEntryChip.vue`, `MealPlanRichCard.vue`,
+`MealPlanWeekDayCard.vue`, `MealPlanMobileFocus.vue`, `MealPlanBuilderDialog.vue`,
+`MealPlanEntryMenu.vue`, `MealPlanWeekStatus.vue`, `MealPlansOverview.vue`,
+`dashboard/NextToCookCard.vue`, `RecipeDetailPage.vue`, `src/models/mealPlan.ts`.
+Tests: `test/unit/mealPlanEntryStatus.spec.ts` (new, 14 cases),
+`mealPlanEntryKey.spec.ts`. Docs: `CHANGELOG.md`, `DORA_VERIFY.md`.
+
+**Standards close-gate:** R-001 — the two cards share the status rule and the
+chip stylesheet rather than each owning a copy. R-003 — the price chip does no
+money arithmetic; the batch figure is server-summed. D-002 — warning colour
+stays on glyphs, never on text ink. D-014 — every state still carries icon +
+text (tooltip/aria), never colour alone. **Candidate ADR, not written:** "one
+axis per channel; a signal that is always on is decoration" is a real recurring
+rule and this is its second sighting (the stocktake belief copy earlier today
+was the same class of defect — a channel saying something it didn't need to).
+Left for the next UI unit to confirm as a pattern before promoting it to an
+R-rule, rather than minting one off a single day.
+
+**Next up:** owner walks the new DORA_VERIFY section — the two-glyph card and
+the batch price chip are the two that most want eyes.
+
+---
+
 ## 2026-09-12 (second) — **Meal-planner batch: ~20 owner items, three of them real bugs**
 
 **Status: built and gated, NOT driven in the browser.** pytest **2384 passed**

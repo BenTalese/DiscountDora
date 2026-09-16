@@ -141,10 +141,14 @@ async function runProbe(force = false): Promise<boolean> {
         // the queue drain (which watches `apiReachable`) can run.
         online.value = true;
         if (!wasReachable) {
+            // Offline is READ-ONLY (owner decision 2026-08-23) — the write
+            // queue these three toasts were written for is gone, so none of
+            // them may promise a sync. Same correction as `OfflineBanner`'s
+            // copy, which was made at the time and left the toasts behind.
             Notify.create({
                 type: 'positive',
                 position: 'top',
-                message: "We're back online. Syncing any queued changes.",
+                message: "Back online — you can make changes again.",
                 timeout: 3000,
             });
         }
@@ -156,7 +160,7 @@ async function runProbe(force = false): Promise<boolean> {
                 type: 'warning',
                 position: 'top',
                 message:
-                    "Couldn't reach the server. We'll keep trying — stock changes and ticking things off your list still work, and will sync when we reconnect.",
+                    "Couldn't reach Dora. We'll keep trying — you can look around, but not make changes.",
                 timeout: 4000,
             });
         } else if (force) {
@@ -214,8 +218,7 @@ function onBrowserOffline() {
     Notify.create({
         type: 'warning',
         position: 'top',
-        message:
-            "You're offline. Stock changes will sync when you're back.",
+        message: "You're offline — you can look around, but not make changes.",
         timeout: 4000,
     });
 }

@@ -58,9 +58,14 @@ export type MealPlanEntry = {
     /** Owner 2026-09-12 — how many of the recipe's linked ingredients are
      *  missing right now. Server-owned, from the app's one cookability rule.
      *  Cards flag it only when this meal is actually cooked from ingredients
-     *  (see `showsMissingIngredients`) and only when it's > 0 — "you have
-     *  everything" is not news. */
+     *  (see `mealPlanEntryStatus`) — a leftovers day never asks the question. */
     missing_count: number;
+    /** Owner 2026-09-12 — what ONE COOK of this entry's linked batch costs
+     *  (the sum of the batch's own per-entry figures, so it can't drift from
+     *  the week total). The cook day's price chip prints this; its leftover
+     *  days print nothing, because the money is spent once. Null for a
+     *  standalone meal, with money off, or when the batch couldn't be priced. */
+    cook_batch_estimated_cost: number | null;
 };
 
 /** Owner 2026-09-05 — one day's planned cost, with the coverage that keeps it
@@ -121,6 +126,13 @@ export type MealPlanIngredient = {
 export type UnlinkedIngredient = {
     recipe_name: string;
     ingredient_name: string;
+    /** Owner 2026-09-12 — the planner highlights the meals an ingredient is
+     *  used in by recipe id, and the rail's rows show the amount the week
+     *  needs. A free-text row now carries both, so it can be the same row as
+     *  its linked neighbours. Quantity is scaled to the planned servings. */
+    recipe_id: string;
+    quantity: number | null;
+    unit: string | null;
 };
 
 /** Envelope returned by both the saved-plan `/ingredients` endpoint and the

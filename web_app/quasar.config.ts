@@ -71,6 +71,10 @@ export default defineConfig((ctx): any => {
             // `q-card flat bordered`, which is the one place the app's own
             // card language wasn't being spoken. Same precedent as above.
             'settingsCards.scss',
+            // 2026-09-12 — the meal card's provenance + price chips, drawn by
+            // both the desktop week chip and the phone day card. Same
+            // precedent as the four above.
+            'mealChips.scss',
         ],
 
         // https://github.com/quasarframework/quasar/tree/dev/extras

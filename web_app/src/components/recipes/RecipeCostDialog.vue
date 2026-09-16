@@ -106,7 +106,11 @@
     import BaseDialog from 'src/components/BaseDialog.vue';
     import { formatMoney } from 'src/composables/useMoney';
     import { formatQuantity } from 'src/helpers/formatQuantity';
+    import { requoteUnitPrice } from 'src/helpers/unitPriceDisplay';
+    import { useMeasurementSystem } from 'src/composables/useMeasurementSystem';
     import type { RecipeCostLine, RecipeCostUnpricedReason } from 'src/models/recipe';
+
+    const { system: measurementSystem } = useMeasurementSystem();
 
     const props = defineProps<{
         modelValue: boolean;
@@ -153,17 +157,21 @@
     }
 
     /** "$0.00 / g" is what a per-gram price rounds to in cents, and it reads
-     *  as free. Prices that fine are quoted per kilo or per litre in every
-     *  shop, so that's how they're shown here; anything coarser is left
-     *  alone. */
+     *  as free.
+     *
+     *  This used to flip to per-kilo/per-litre below a $0.05 threshold of its
+     *  own — a second, quieter answer to a question the domain already owns,
+     *  which meant the same product could read "/kg" here and "/100g" in the
+     *  YourPrices widget, and neither followed the install's measurement
+     *  system. It now goes through the shared convention (owner feedback
+     *  2026-09-13: match what real store websites show). */
     function unitPriceLabel(line: RecipeCostLine): string | null {
         if (line.unit_price === null || !line.priced_unit) return null;
-        const scaleTo: Record<string, string> = { g: 'kg', ml: 'L' };
-        const bigger = scaleTo[line.priced_unit];
-        if (bigger && line.unit_price < 0.05) {
-            return `${formatMoney(line.unit_price * 1000)} / ${bigger}`;
-        }
-        return `${formatMoney(line.unit_price)} / ${line.priced_unit}`;
+        const quoted = requoteUnitPrice(
+            line.unit_price, line.priced_unit, measurementSystem.value,
+        );
+        if (quoted === null) return `${formatMoney(line.unit_price)} / ${line.priced_unit}`;
+        return `${formatMoney(quoted.amount)} / ${quoted.unit}`;
     }
 
     const coveragePct = computed(() => {

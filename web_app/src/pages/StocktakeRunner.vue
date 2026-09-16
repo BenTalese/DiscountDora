@@ -131,14 +131,12 @@
                     <div class="text-caption dora-text-muted q-mt-xs">
                         Checked every {{ bandLabel(current.cadence_band) }}
                         · {{ current.overdue_days }} day{{ current.overdue_days === 1 ? '' : 's' }} overdue
-                        <q-icon :name="ICONS.help_outline" size="14px" class="q-ml-xs">
-                            <BaseTooltip>
-                                How often stocktake mode wants you to re-check this
-                                item (Weekly / Fortnightly / Monthly) and how far
-                                past the last check date you are. Cadence is set
-                                globally in Settings or per-item on the detail page.
-                            </BaseTooltip>
-                        </q-icon>
+                        <InfoTip label="What the cadence line means">
+                            How often stocktake mode wants you to re-check this
+                            item (Weekly / Fortnightly / Monthly) and how far
+                            past the last check date you are. Cadence is set
+                            globally in Settings or per-item on the detail page.
+                        </InfoTip>
                     </div>
 
                     <!-- Chunk 5 / D-1: the queue is ordered least-certain
@@ -347,6 +345,7 @@
 
 <script lang="ts" setup>
     import BaseTooltip from 'src/components/BaseTooltip.vue';
+    import InfoTip from 'src/components/help/InfoTip.vue';
     import { ICONS } from 'src/style/icons';
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';

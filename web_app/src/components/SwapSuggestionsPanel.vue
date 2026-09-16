@@ -5,33 +5,48 @@
         v-if="moneyEnabled && suggestions && suggestions.projected_over"
         flat
         bordered
-        class="swap-panel q-mt-md"
+        class="swap-panel q-mb-md"
     >
-        <q-card-section class="swap-panel__head">
-            <div class="row items-center no-wrap q-gutter-sm">
-                <q-icon :name="ICONS.warning" size="22px" color="negative" />
-                <div class="text-subtitle1">
-                    Over budget by {{ formatMoney(suggestions.overshoot) }} this week
-                </div>
-            </div>
-            <div class="swap-panel__figures">
-                <div>
-                    <span class="dora-text-muted">Est. week cost</span>
-                    <span class="swap-panel__amount">{{ formatMoney(suggestions.cost_per_week) }}</span>
-                </div>
-                <div v-if="suggestions.budget_amount !== null">
-                    <span class="dora-text-muted">Budget</span>
-                    <span class="swap-panel__amount">{{ formatMoney(suggestions.budget_amount) }}</span>
-                </div>
-            </div>
-            <div v-if="suggestions.candidates.length" class="swap-panel__lede">
-                <q-icon :name="ICONS.savings" size="16px" color="positive" class="q-mr-xs" />
+        <!-- Owner 2026-09-12 — *"no indication of going over budget… found it
+             by stumbling upon it. Should be more visible."* It was: this panel
+             rendered BELOW seven day cards, at the bottom of the week's own
+             scroller, so on any planned week you had to scroll past the whole
+             week to learn you couldn't afford it. It sits above the week now,
+             and its head is a warning banner rather than a card title with two
+             figure columns.
+
+             The figures themselves moved to the right rail's "Cost this week"
+             card, where the week's money already lives — *"the other info can
+             be in the right rail somehow"*. What's left here is the sentence
+             that needs to interrupt you, and the swaps behind a disclosure. -->
+        <button
+            type="button"
+            class="swap-panel__banner"
+            :aria-expanded="open"
+            @click="open = !open"
+        >
+            <q-icon :name="ICONS.warning" size="22px" class="swap-panel__warn" />
+            <span class="swap-panel__headline">
+                Over budget by {{ formatMoney(suggestions.overshoot) }} this week
+            </span>
+            <span v-if="suggestions.candidates.length" class="swap-panel__count">
                 {{ suggestions.candidates.length }}
                 {{ suggestions.candidates.length === 1 ? 'swap' : 'swaps' }}
-                could bring it back to
-                <strong>{{ formatMoney(suggestions.projected_after_applying_all) }}</strong>
-            </div>
-        </q-card-section>
+            </span>
+            <q-icon
+                :name="ICONS.expand_more"
+                size="20px"
+                class="swap-panel__chevron"
+                :class="{ 'swap-panel__chevron--open': open }"
+            />
+        </button>
+
+        <div v-if="open && suggestions.candidates.length" class="swap-panel__lede">
+            <q-icon :name="ICONS.savings" size="16px" color="positive" class="q-mr-xs" />
+            Swapping all {{ suggestions.candidates.length === 1 ? 'of it' : 'of them' }}
+            brings the week to
+            <strong>{{ formatMoney(suggestions.projected_after_applying_all) }}</strong>
+        </div>
 
         <!-- Just-applied undo banner (session-scoped) -->
         <q-banner v-if="lastLedgerId" dense class="swap-panel__undo">
@@ -49,7 +64,7 @@
         </q-banner>
 
         <!-- Candidate rows -->
-        <q-list v-if="suggestions.candidates.length" separator>
+        <q-list v-if="open && suggestions.candidates.length" separator>
             <q-item v-for="c in suggestions.candidates" :key="c.entry_id + c.to_recipe_id">
                 <q-item-section avatar>
                     <q-icon :name="ICONS.restaurant" color="savings-accent" />
@@ -75,17 +90,16 @@
         </q-list>
 
         <!-- Zero-state: over budget but nothing saves money -->
-        <q-card-section v-else class="swap-panel__zero dora-text-muted">
-            No swap saves you money this week — cutting from your shopping list may
-            be the only lever.
-            <div class="q-mt-sm">
-                <BaseButton
-                    variant="secondary"
-                    :icon="ICONS.shopping_cart"
-                    label="Open shopping lists"
-                    @click="router.push('/shopping-lists')"
-                />
-            </div>
+        <!-- Owner 2026-09-12 — the "Open shopping lists" button went with the
+             sentence that justified it: *"swaps are for cooking, and you would
+             remove meals, not go to shopping lists."* Dropping a meal is the
+             lever this panel can't pull for you, so it says so and stops. -->
+        <q-card-section
+            v-else-if="open"
+            class="swap-panel__zero dora-text-muted"
+        >
+            No swap saves you money this week — dropping a meal may be the only
+            lever left.
         </q-card-section>
     </q-card>
 
@@ -129,7 +143,6 @@
 
 <script lang="ts" setup>
     import { ref, watch } from 'vue';
-    import { useRouter } from 'vue-router';
     import { useQuasar } from 'quasar';
     import { ICONS } from 'src/style/icons';
     import { formatDate as formatLocaleDate } from 'src/composables/useDateFormat';
@@ -143,11 +156,15 @@
     } from 'src/services/api/mealPlanApiService';
 
     const props = defineProps<{ mealPlanId: string | null }>();
+
+    /** Collapsed on arrival: the banner is the part that has to interrupt you,
+     *  and a list of swaps above the week you are trying to read is a second
+     *  interruption you didn't ask for. */
+    const open = ref(false);
     // Emitted after a successful apply/undo so the parent reloads the week grid.
     const emit = defineEmits<{ (e: 'changed'): void }>();
 
     const $q = useQuasar();
-    const router = useRouter();
     const { moneyEnabled } = useMoneyEnabled();
     const api = new MealPlanApiService();
 
@@ -243,19 +260,52 @@
 </script>
 
 <style scoped lang="scss">
-    .swap-panel__head {
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
+    /* A warning banner, not a card title: tinted, one line, and the whole
+       thing toggles the swaps under it. The tint and the glyph carry the tone;
+       the words stay page ink (D-002 — full-strength negative ink on a tinted
+       fill is the contrast fail the app corrects everywhere else). */
+    .swap-panel {
+        border-color: var(--semantic-warning);
     }
-    .swap-panel__figures {
+    .swap-panel__banner {
         display: flex;
-        gap: 24px;
-        font-size: 0.9rem;
-        > div { display: flex; flex-direction: column; }
+        align-items: center;
+        gap: var(--space-2);
+        width: 100%;
+        min-height: 44px;
+        padding: var(--space-2);
+        background: var(--semantic-warning-soft);
+        border: 0;
+        color: var(--text-primary);
+        cursor: pointer;
+        font: inherit;
+        text-align: left;
     }
-    .swap-panel__amount { font-weight: 600; font-size: 1.05rem; }
-    .swap-panel__lede { font-size: 0.9rem; }
+    .swap-panel__banner:focus-visible {
+        outline: 2px solid var(--brand-primary);
+        outline-offset: -2px;
+    }
+    .swap-panel__warn { color: var(--semantic-warning); }
+    .swap-panel__headline {
+        flex: 1 1 auto;
+        font-size: calc(var(--font-size-md) * 1rem);
+        font-weight: 600;
+    }
+    .swap-panel__count {
+        flex: 0 0 auto;
+        color: var(--text-secondary);
+        font-size: calc(var(--font-size-sm) * 1rem);
+    }
+    .swap-panel__chevron {
+        flex: 0 0 auto;
+        color: var(--text-secondary);
+        transition: transform var(--motion-fast) var(--motion-ease);
+    }
+    .swap-panel__chevron--open { transform: rotate(180deg); }
+    .swap-panel__lede {
+        font-size: calc(var(--font-size-sm) * 1rem);
+        padding: var(--space-2);
+    }
     .swap-panel__undo {
         background: color-mix(in srgb, var(--savings-accent) 12%, transparent);
     }

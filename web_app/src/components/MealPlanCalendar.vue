@@ -86,8 +86,10 @@
                             <!-- Shared with the phone's day strip since
                                  2026-09-01 (see `MealPlanDayPips.vue`). B2 /
                                  D-013: a coloured pip is never the only signal
-                                 — the tooltip below names the meals, and
-                                 `aria-label` spells the day's status out. -->
+                                 — the tooltip below counts the day's meals
+                                 (owner 2026-09-12: a summary, not a line per
+                                 meal), and `aria-label` spells the day's status
+                                 out in full. -->
                             <MealPlanDayPips :pips="cell.pips" />
                             <BaseTooltip v-if="cell.tooltip" anchor="top middle" self="bottom middle">
                                 {{ cell.tooltip }}
@@ -110,6 +112,7 @@
     import { isoDate, localTodayIso, mondayOf, shiftDays } from 'src/helpers/weekDates';
     import { dayPips, type DayPip } from 'src/helpers/mealPlanDayPips';
     import type { MealPlanEntry } from 'src/models/mealPlan';
+    import { useBatchEnabled } from 'src/composables/useBatchEnabled';
     import { useMealPlanStore } from 'src/stores/mealPlanStore';
     import { computed, nextTick, ref, watch } from 'vue';
 
@@ -137,6 +140,7 @@
         { key: 'sun', letter: 'S' },
     ];
 
+    const { batchEnabled } = useBatchEnabled();
     const mealPlanStore = useMealPlanStore();
     const { mealPlans, today } = storeToRefs(mealPlanStore);
 
@@ -263,7 +267,7 @@
                     inMonth: iso.slice(0, 7) === month,
                     isToday: iso === todayIso.value,
                     status: dayStatus(iso),
-                    ...dayPips(entries),
+                    ...dayPips(entries, batchEnabled.value),
                     tooltip: dayTooltip(iso, entries),
                 });
             }
@@ -385,14 +389,24 @@
     /** §5 — hover NAMES the meals rather than reporting a status word. This is
      *  the reason to make days interactive at all: the calendar becomes a read
      *  surface, not only a picker. */
+    /**
+     * One line about the day, not a transcript of it.
+     *
+     * Owner 2026-09-12: *"the calendar day tooltips are too dense with text
+     * when many meals are planned — just put a summary."* A busy day printed a
+     * line per meal, so the hover card grew taller than the week it floated
+     * over and you had to *read* it to learn what the pips already showed. The
+     * counts are what a month view is for; the day itself is one click away.
+     */
     function dayTooltip(iso: string, entries: MealPlanEntry[]): string {
         if (!entries.length) return `${formatDate(iso)} — no meals planned`;
-        const lines = entries.map((e) => {
-            const short = !e.consumed_at && e.needs_cooking ? ' — needs cooking' : '';
-            const cooked = e.consumed_at ? ' — cooked' : '';
-            return `${e.slot} · ${e.recipe_name}${short}${cooked}`;
-        });
-        return `${formatDate(iso)}\n${lines.join('\n')}`;
+        const meals = `${entries.length} meal${entries.length === 1 ? '' : 's'}`;
+        const parts = [meals];
+        const toCook = entries.filter((e) => !e.consumed_at && e.needs_cooking).length;
+        if (toCook > 0) parts.push(`${toCook} to cook`);
+        const cooked = entries.filter((e) => e.consumed_at).length;
+        if (cooked > 0) parts.push(`${cooked} cooked`);
+        return `${formatDate(iso)} — ${parts.join(' · ')}`;
     }
 </script>
 

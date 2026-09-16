@@ -3,8 +3,8 @@
         type="button"
         class="rich-card"
         :class="[
+            `rich-card--trim-${status.trim}`,
             entry.consumed_at ? 'rich-card--consumed' : '',
-            shortfall && batchEnabled ? 'rich-card--shortfall' : '',
             highlight ? 'rich-card--highlight' : '',
         ]"
         :disabled="!!entry.consumed_at"
@@ -26,67 +26,79 @@
                      only statement of which meal this was, and the owner's read
                      of it was that *"a chip on the meal row is not very obvious
                      or easy to read for groupings of meals (based on slot)"*.
-                     Its one caller now groups the day under slot headings
+                     Its one caller groups the day under slot headings
                      (`MealPlanMobileFocus`), so the tag was restating the
-                     heading two lines above it in 0.68rem uppercase. The slot
-                     is still in `accessibleLabel`, where a screen reader has no
-                     heading to have just passed. -->
+                     heading two lines above it. The slot is still in
+                     `accessibleLabel`, where a screen reader has no heading to
+                     have just passed.
+
+                     Owner 2026-09-12 — provenance is a CHIP and carries no
+                     verdict colour (it is a fact about the plan), and the rest
+                     of the row runs rarest-shown → always-shown, left to right,
+                     so the servings count holds a column whatever its
+                     neighbours are doing. `mealChips.scss` +
+                     `helpers/mealPlanEntryStatus.ts`. -->
                 <span
                     v-if="linked"
-                    class="rich-card__cook"
-                    :class="{ 'rich-card__cook--leftover': !entry.is_cook_day }"
+                    class="meal-chip"
+                    :class="entry.is_cook_day ? 'meal-chip--cook' : 'meal-chip--leftover'"
                 >
                     <q-icon :name="ICONS.link" size="12px" />
                     {{ cookMarkerLabel }}
                 </span>
-                <!-- Owner 2026-09-04 — the fresh marker takes the linked-cook
-                     slot: both answer "how does this meal relate to the pool?",
-                     and they can never both be true. -->
-                <span v-else-if="fresh" class="rich-card__cook rich-card__cook--fresh">
+                <span v-else-if="fresh" class="meal-chip">
                     <q-icon :name="ICONS.cookFresh" size="12px" />
                     Fresh
                 </span>
-                <!-- Owner feedback 2026-09-03 — the sometimes-there glyph sits
-                     LEFT of the always-there servings count, so the counts line
-                     up down the day's cards. Same order as the desktop chip. -->
+                <!-- Owner 2026-09-12 — order by how often each thing is
+                     there: Dora's hunch is the rarest, then the price, then
+                     the status glyphs, then the always-present servings. -->
+                <q-icon
+                    v-if="entry.inference_hint"
+                    :name="ICONS.dora_voice"
+                    size="22px"
+                    class="rich-card__status"
+                    :class="entry.inference_hint === 'at_risk' ? 'text-warning' : 'text-positive'"
+                >
+                    <BaseTooltip max-width="280px">{{ inferenceTooltip }}</BaseTooltip>
+                </q-icon>
+                <span v-if="priceLabel" class="meal-chip meal-chip--price">{{ priceLabel }}</span>
                 <q-icon
                     v-if="entry.consumed_at"
                     :name="ICONS.check"
-                    size="14px"
-                    class="rich-card__status text-positive"
+                    size="22px"
+                    class="rich-card__status"
                 >
                     <BaseTooltip>Cooked</BaseTooltip>
                 </q-icon>
-                <q-icon
-                    v-else-if="shortfall && batchEnabled"
-                    :name="ICONS.chef_hat"
-                    size="14px"
-                    class="rich-card__status text-warning"
-                >
-                    <BaseTooltip>Needs cooking — pool is short</BaseTooltip>
-                </q-icon>
-                <span class="rich-card__servings">×{{ entry.servings }}</span>
-                <!-- Cookability, flagged only when it's a problem — see
-                     `showsMissingIngredients` for why there is no positive
-                     state and why a leftovers day never asks. -->
-                <span v-if="showsMissing" class="rich-card__missing">
-                    <q-icon :name="ICONS.add_shopping_cart" size="12px" />
-                    {{ entry.missing_count }} to buy
-                    <BaseTooltip>
-                        You're missing {{ entry.missing_count }} ingredient{{ entry.missing_count === 1 ? '' : 's' }} for this.
-                    </BaseTooltip>
-                </span>
+                <template v-else>
+                    <q-icon
+                        v-if="status.supply"
+                        :name="ICONS.chef_hat"
+                        size="22px"
+                        class="rich-card__status"
+                        :class="status.supply === 'ok' ? 'text-positive' : 'text-warning'"
+                    >
+                        <BaseTooltip>{{ supplyTooltip(entry) }}</BaseTooltip>
+                    </q-icon>
+                    <q-icon
+                        v-if="status.readiness"
+                        :name="ICONS.mealsPrepared"
+                        size="22px"
+                        class="rich-card__status"
+                        :class="status.readiness === 'ok' ? 'text-positive' : 'text-warning'"
+                    >
+                        <BaseTooltip>{{ readinessTooltip(entry, !!shortfall) }}</BaseTooltip>
+                    </q-icon>
+                </template>
                 <span v-if="entry.cook_time_minutes" class="rich-card__cook-time">
                     <q-icon :name="ICONS.timer" size="12px" />
                     {{ entry.cook_time_minutes }}m
                 </span>
-                <!-- Owner 2026-09-05 — what this meal costs at the servings
-                     it's planned for, so the week's total has visible parts.
-                     Money-gated install-wide: with money off the server sends
-                     no figure, so there is nothing to hide. -->
-                <span v-if="moneyEnabled && entry.estimated_cost !== null">
-                    {{ formatMoney(entry.estimated_cost) }}
-                </span>
+                <!-- A batch's cook day prices the whole cook (the servings its
+                     own chip states); its leftover days price nothing, because
+                     the money is spent once. -->
+                <span class="rich-card__servings">×{{ entry.servings }}</span>
             </div>
         </div>
 
@@ -113,7 +125,9 @@
     import MealPlanEntryMenu from 'src/components/MealPlanEntryMenu.vue';
     import { recipeImageUrl } from 'src/services/api/recipeApiService';
     import { formatMoney } from 'src/composables/useMoney';
-    import { showsMissingIngredients } from 'src/helpers/mealPlanEntryFlags';
+    import {
+        mealCardStatus, readinessTooltip, supplyTooltip,
+    } from 'src/helpers/mealPlanEntryStatus';
     import { useBatchEnabled } from 'src/composables/useBatchEnabled';
     import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
     import type { MealPlanEntry } from 'src/models/mealPlan';
@@ -142,20 +156,46 @@
         (e: 'fresh'): void;
     }>();
 
+    // FU-653 — Dora's belief about this meal, as a remark. It was on the
+    // desktop chip only until 2026-09-12; the two cards draw the same meal, so
+    // the phone was quietly missing a signal the week grid had (R-001).
+    const inferenceTooltip = computed(() => {
+        const names = (props.entry.inference_stock_item_names ?? []).join(', ');
+        return props.entry.inference_hint === 'at_risk'
+            ? `Dora thinks you may have run out of ${names} since you planned this.`
+            : `Recorded as missing ${names}, but Dora thinks you're back in stock — this may be cookable after all.`;
+    });
+
     // PROPOSAL_MEAL_PLANS_PART_2 — linked cook batch (Batch households only).
     const linked = computed(() => batchEnabled.value && !!props.entry.cook_batch_id);
     // Owner 2026-09-04 — cooked on the day, outside the pool. Batch households
     // only: where every meal is fresh, saying so about one of them is noise.
     const fresh = computed(() => batchEnabled.value && props.entry.cook_fresh);
-    const cookMarkerLabel = computed(() =>
-        props.entry.is_cook_day
-            ? `Cook · serves ${props.entry.cook_batch_total_servings ?? props.entry.servings}`
-            : 'Leftovers',
+    // Owner 2026-09-12 — "Cook day · 6 servings": the chip names the day's role
+    // first, then what that one cook produces.
+    const cookMarkerLabel = computed(() => {
+        if (!props.entry.is_cook_day) return 'Leftovers';
+        const serves = props.entry.cook_batch_total_servings ?? props.entry.servings;
+        return `Cook day · ${serves} serving${serves === 1 ? '' : 's'}`;
+    });
+
+    const status = computed(
+        () => mealCardStatus(props.entry, batchEnabled.value, props.shortfall),
     );
 
-    const showsMissing = computed(
-        () => showsMissingIngredients(props.entry, batchEnabled.value),
-    );
+    /** The price chip's text, or '' for no chip. A batch's cook day prices the
+     *  whole cook; its leftover days price nothing. Both figures are
+     *  server-owned — no money arithmetic here (R-003). */
+    const priceLabel = computed(() => {
+        if (!moneyEnabled.value) return '';
+        if (props.entry.cook_batch_id !== null) {
+            if (!props.entry.is_cook_day) return '';
+            return props.entry.cook_batch_estimated_cost === null
+                ? '' : formatMoney(props.entry.cook_batch_estimated_cost);
+        }
+        return props.entry.estimated_cost === null
+            ? '' : formatMoney(props.entry.estimated_cost);
+    });
 
     const thumbUrl = computed(() => recipeImageUrl(props.entry.recipe_id));
     const monogramLetter = computed(
@@ -209,12 +249,17 @@
     .rich-card:focus-visible {
         border-color: var(--q-primary);
     }
+    /* The trim rolls up the two status glyphs (see `mealPlanEntryStatus`):
+       green = all good and something still to do, grey = nothing required of
+       you (leftovers, or cooked), amber = one of the glyphs is amber. */
     .rich-card--consumed {
         opacity: 0.55;
-        border-left-color: var(--border-default);
     }
-    .rich-card--shortfall {
+    .rich-card--trim-alert {
         border-left-color: var(--q-warning);
+    }
+    .rich-card--trim-idle {
+        border-left-color: var(--border-strong);
     }
     .rich-card--highlight {
         outline: 2px solid var(--brand-primary);
@@ -222,8 +267,8 @@
     }
     .rich-card__thumb {
         flex: 0 0 auto;
-        width: 42px;
-        height: 42px;
+        width: 48px;
+        height: 48px;
         border-radius: 6px;
         overflow: hidden;
         background: var(--surface-sunken);
@@ -257,39 +302,26 @@
     }
     .rich-card__name {
         font-weight: 600;
-        font-size: 0.9rem;
-        line-height: 1.2;
+        font-size: calc(var(--font-size-md) * 1rem);
+        line-height: 1.25;
         word-break: break-word;
     }
+    /* Owner 2026-09-12 — the whole middle pane was reading a size or two under
+       the rest of the app (see `MealPlanEntryChip`); the phone card's meta line
+       was 0.72rem. */
     .rich-card__meta {
         display: flex;
         align-items: center;
         flex-wrap: wrap;
         gap: 6px 8px;
-        font-size: 0.72rem;
-        color: var(--text-muted);
+        font-size: calc(var(--font-size-sm) * 1rem);
+        color: var(--text-secondary);
     }
     .rich-card__servings {
         font-weight: 600;
     }
-    /* PROPOSAL_MEAL_PLANS_PART_2 — linked-cook marker (icon + text, D-014-safe). */
-    .rich-card__cook {
-        display: inline-flex;
-        align-items: center;
-        gap: 3px;
-        font-weight: 600;
-        color: var(--brand-primary);
-    }
-    .rich-card__cook--leftover {
-        color: var(--text-muted);
-        font-weight: 500;
-    }
-    /* Fresh is a deliberate state, not a shortage — secondary ink, never the
-       amber that means "the pool is short one of these". */
-    .rich-card__cook--fresh {
-        color: var(--text-secondary);
-        font-weight: 500;
-    }
+    /* The provenance + price chips are `mealChips.scss`, shared with the
+       desktop week chip. */
     .rich-card__cook-time {
         display: inline-flex;
         align-items: center;
@@ -305,16 +337,5 @@
        which is the column the 2026-09-03 alignment feedback established. */
     .rich-card__status {
         flex: 0 0 auto;
-    }
-    /* The one negative signal on the card. The tint rides the glyph, never the
-       words — full-strength warning ink is the D-002 contrast fail. */
-    .rich-card__missing {
-        display: inline-flex;
-        align-items: center;
-        gap: 3px;
-        color: var(--text-secondary);
-    }
-    .rich-card__missing .q-icon {
-        color: var(--semantic-warning);
     }
 </style>

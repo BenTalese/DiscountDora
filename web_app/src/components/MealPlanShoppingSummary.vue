@@ -133,18 +133,128 @@
                 @clear-hover="emit('clearHover')"
             />
         </MealPlanRailDisclosure>
+
+        <!-- Owner 2026-09-12 — *"are text ingredients shown in the missing and
+             all ingredients lists? They should be — visually separate though,
+             perhaps their own dropdown, only shown if there are some."*
+
+             They weren't, anywhere on this surface. The server has reported
+             them since 2026-08-27 (FU-505) and the add-to-list picker names
+             them, but the rail silently left them out of both lists — so a week
+             whose recipes were half paste-imported looked fully accounted for.
+
+             Their own disclosure rather than rows in the two above it, because
+             they are a different KIND of thing: the lists above are stock items
+             with a level and a cart, and these have neither. Listing them there
+             would mean rows that can't answer the question their neighbours
+             answer. It renders only when there are some, which is the one place
+             on this surface where a section may disappear — an empty one would
+             be a permanent invitation to fix something that isn't wrong. -->
+        <MealPlanRailDisclosure
+            v-if="focusedPlan && unlinked.length"
+            :icon="ICONS.link_off"
+            label="Free-text ingredients"
+            class="q-mt-sm"
+        >
+            <template #badges>
+                <MealPlanRailCount
+                    :count="unlinked.length"
+                    :label="`${unlinked.length} ingredients not linked to your pantry`"
+                />
+            </template>
+            <!-- Owner 2026-09-12 — the same row as the two lists above
+                 (R-001): hovering highlights the meals it comes from, and the
+                 caption names the amount the week needs. The level dot resolves
+                 to "Not tracked", which is the honest reading — there is no
+                 pantry item behind this row, which is the whole reason it is in
+                 its own section. No cart: it can't become a list line.
+                 The explanatory paragraph that sat here went with it; the
+                 heading and the dot say it. -->
+            <MealPlanIngredientRow
+                v-for="row in freeTextRows"
+                :key="row.key"
+                :ingredient="row.ingredient"
+                :note="row.recipeName"
+                :show-cart="false"
+                @hover="emit('hoverIngredient', row.ingredient)"
+                @clear-hover="emit('clearHover')"
+            />
+        </MealPlanRailDisclosure>
+
+        <!-- Owner 2026-09-12 — what the week's meals cost, moved off the status
+             banner above the week (which the owner cut as "repeats info readily
+             available elsewhere"). It is a **card, not a disclosure**: one
+             figure has nothing to collapse. Money-gated install-wide — with
+             money off the server sends no figure at all, so this isn't a hidden
+             empty state, it simply doesn't exist (R-029 / R-058).
+
+             The tooltip was three sentences; it is one. The coverage fraction
+             stays, because a week costed from half its meals must not read as a
+             cheap week. -->
+        <q-card
+            v-if="focusedPlan && moneyEnabled && estimatedCost !== null"
+            flat bordered
+            class="mp-shop__cost q-mt-sm"
+        >
+            <div class="mp-shop__cost-row">
+                <q-icon :name="ICONS.payments" size="18px" />
+                <span class="mp-shop__cost-label">Cost this week</span>
+                <span class="mp-shop__cost-value">
+                    {{ formatMoney(estimatedCost) }}
+                    <span v-if="costCountedMeals < costTotalMeals" class="dora-text-muted">
+                        ({{ costCountedMeals }}/{{ costTotalMeals }})
+                    </span>
+                </span>
+                <BaseTooltip>
+                    What this week's meals cost to make, at the planned
+                    servings<template v-if="costCountedMeals < costTotalMeals">
+                    — from {{ costCountedMeals }} of {{ costTotalMeals }} meals;
+                    the rest aren't priced</template>.
+                </BaseTooltip>
+            </div>
+
+            <!-- Owner 2026-09-13 — inside the card, under the week's figure.
+                 It was a caption below it on 09-12, which read as a note about
+                 the rail rather than as the other half of the same money
+                 question.
+
+                 It is the HOUSEHOLD's period budget — the same `/budget/status`
+                 the shopping lists and the builder's cap read (R-003) — not a
+                 per-week allowance. -->
+            <div
+                v-if="budgetStatus?.enabled && budgetStatus.remaining !== null"
+                class="mp-shop__budget"
+                :class="{ 'mp-shop__budget--over': budgetStatus.over_budget }"
+            >
+                <template v-if="budgetStatus.over_budget">
+                    {{ formatMoney(Math.abs(budgetStatus.remaining)) }} over
+                    {{ formatMoney(budgetStatus.amount ?? 0) }} budget
+                </template>
+                <template v-else>
+                    {{ formatMoney(budgetStatus.remaining) }} remaining of
+                    {{ formatMoney(budgetStatus.amount ?? 0) }} budget
+                </template>
+            </div>
+        </q-card>
+
     </div>
 </template>
 
 <script lang="ts" setup>
     import BaseButton from 'src/components/BaseButton.vue';
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
+    import { formatMoney } from 'src/composables/useMoney';
+    import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
     import MealPlanIngredientRow from 'src/components/MealPlanIngredientRow.vue';
     import MealPlanRailCount from 'src/components/MealPlanRailCount.vue';
     import MealPlanRailDisclosure from 'src/components/MealPlanRailDisclosure.vue';
     import { ICONS } from 'src/style/icons';
     import { LOW_STOCK_SEQUENCE, OUT_OF_STOCK_SEQUENCE } from 'src/helpers/stockStatus';
     import { useStockStatus } from 'src/composables/useStockStatus';
-    import type { MealPlan, MealPlanIngredient } from 'src/models/mealPlan';
+    import type { BudgetStatus } from 'src/services/api/budgetApiService';
+    import type {
+        MealPlan, MealPlanIngredient, UnlinkedIngredient,
+    } from 'src/models/mealPlan';
     import { computed } from 'vue';
 
     const props = defineProps<{
@@ -155,6 +265,20 @@
         needToBuy: MealPlanIngredient[];
         /** …of those, the ones not yet on any open list. */
         outstanding: MealPlanIngredient[];
+        /** FU-505 — ingredient rows with no linked stock item (paste-imported
+         *  and never matched). Reported by the server so this surface can name
+         *  them rather than quietly dropping them from both lists. */
+        unlinked: UnlinkedIngredient[];
+        /** Owner 2026-09-12 — the week's estimated cost, server-summed, with
+         *  the coverage that keeps it honest. Null when money features are off
+         *  or nothing could be priced. */
+        estimatedCost: number | null;
+        costCountedMeals: number;
+        costTotalMeals: number;
+        /** The household's period budget status (`/budget/status`), loaded once
+         *  by the page. Null when money features are off or it couldn't be
+         *  read — the cost card then simply stands alone. */
+        budgetStatus: BudgetStatus | null;
         generating: boolean;
     }>();
 
@@ -168,6 +292,30 @@
     // authority the rows' own dots use, so a row's colour and the count above
     // it cannot disagree.
     const { isMissing, isLowStock } = useStockStatus();
+    const { moneyEnabled } = useMoneyEnabled();
+
+    /**
+     * The free-text rows, shaped as the ingredient row the other two lists
+     * draw. The adapter is explicit rather than a second row component: what
+     * differs is the *data* (no stock item, so no level and no cart), not the
+     * layout, and the owner asked for the layout to be the same.
+     *
+     * `stock_item_id` is deliberately the empty string — there is no stock item,
+     * `useStockStatus` resolves it to no level, and the row renders "Not
+     * tracked". Nothing downstream looks it up, because the cart is off.
+     */
+    const freeTextRows = computed(() => props.unlinked.map((row, index) => ({
+        key: `${row.recipe_id}-${row.ingredient_name}-${index}`,
+        recipeName: row.recipe_name,
+        ingredient: {
+            stock_item_id: '',
+            stock_item_name: row.ingredient_name,
+            total_quantity: row.quantity,
+            unit: row.unit,
+            used_in_recipe_ids: [row.recipe_id],
+            is_optional: false,
+        } as MealPlanIngredient,
+    })));
 
     /** Only the very first calculation may say "Calculating…" — after that
      *  there is a previous answer worth keeping on screen. */
@@ -234,6 +382,40 @@
 </script>
 
 <style scoped>
+    /* One figure on one line — a card rather than a disclosure, because there
+       is nothing under it to reveal. */
+    .mp-shop__cost {
+        padding: var(--space-2);
+    }
+    .mp-shop__cost-row {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+        min-height: 32px;
+    }
+    .mp-shop__cost-label {
+        flex: 1 1 auto;
+        font-size: calc(var(--font-size-md) * 1rem);
+        font-weight: 500;
+    }
+    .mp-shop__cost-value {
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+    }
+    /* The period's budget, under the week's own figure inside the same card:
+       two facts about the same question, so one card — but two lines, because
+       they cover different spans. */
+    .mp-shop__budget {
+        padding-top: var(--space-1);
+        font-size: calc(var(--font-size-sm) * 1rem);
+        color: var(--text-secondary);
+        font-variant-numeric: tabular-nums;
+    }
+    .mp-shop__budget--over {
+        color: var(--text-primary);
+        font-weight: 600;
+    }
+
     .mp-shop__note {
         display: flex;
         align-items: center;

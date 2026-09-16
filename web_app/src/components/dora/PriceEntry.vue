@@ -94,7 +94,7 @@
             v-if="perUnitPreview"
             class="dora-bg-sunken dora-text-secondary q-pa-sm rounded-borders text-body2"
         >
-            ≈ <strong>{{ perUnitPreview }}</strong> per {{ unit }}
+            ≈ <strong>{{ perUnitPreview.amount }}</strong> per {{ perUnitPreview.unit }}
             <span v-if="isMultipack" class="dora-text-muted">
                 · {{ packCount }} × {{ perPackSize }}{{ unit }} = {{ totalMeasureDisplay }}{{ unit }} total
             </span>
@@ -124,6 +124,7 @@
     import { ICONS } from 'src/style/icons';
     import { SUPPORTED_PRICE_UNITS } from 'src/generated/units_table';
     import { useMeasurementSystem } from 'src/composables/useMeasurementSystem';
+    import { quoteUnitPrice } from 'src/helpers/unitPriceDisplay';
     import type { PriceEntryPrefill } from 'src/models/stockItemDetail';
     import type { Store } from 'src/models/store';
 
@@ -206,7 +207,7 @@
     // universal so `ea` / `dozen` / `pack` survive either way. The unit
     // already on the row is kept offered so editing an existing observation
     // can't silently re-unit it.
-    const { offeredUnits } = useMeasurementSystem();
+    const { offeredUnits, system: measurementSystem } = useMeasurementSystem();
     const unitOptions = computed(() => {
         const groups: Record<string, { canonical: string; label: string }[]> = {};
         for (const u of SUPPORTED_PRICE_UNITS) {
@@ -252,10 +253,24 @@
             && !!unit.value;
     });
 
+    /** The live "≈ $X per Y" line, quoted the way a shelf label would be.
+     *
+     *  Owner feedback 2026-09-13: this used to divide straight through and
+     *  render "≈ $0.01 per g" for a $3.50 500 g pack — a number that rounds to
+     *  nothing in cents and a denominator no shop prices in. `quoteUnitPrice`
+     *  applies the same convention the server uses everywhere else, so the
+     *  preview now reads "≈ $0.70 per 100g" and matches what the observation
+     *  will be quoted as once it is logged. */
     const perUnitPreview = computed(() => {
         if (!canSubmit.value) return null;
-        const per = (totalPrice.value as number) / (totalMeasure() as number);
-        return formatMoney(per);
+        const quoted = quoteUnitPrice(
+            totalPrice.value as number,
+            totalMeasure() as number,
+            unit.value,
+            measurementSystem.value,
+        );
+        if (quoted === null) return null;
+        return { amount: formatMoney(quoted.amount), unit: quoted.unit };
     });
 
     function onSubmit() {

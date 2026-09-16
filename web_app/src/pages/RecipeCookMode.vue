@@ -291,6 +291,13 @@
                         class="q-mt-sm timer-bar"
                     />
                 </q-card-section>
+
+                <!-- Owner feedback 2026-09-13: the notes belong to the step
+                     text, not to the gap below the nav buttons. Last band on
+                     the card, after the timer — the timer is about *this*
+                     step, the notes are about the recipe, so the step-specific
+                     thing stays closest to the step. -->
+                <CookNotesSection v-if="cookNotes" :notes="cookNotes" />
             </q-card>
 
             <!-- Owner feedback 2026-09-03: *"Could we make the buttons prev
@@ -330,21 +337,11 @@
                 />
             </div>
 
-            <!-- RD-29 — the cook's own personal notes, surfaced under the
-                 steps where they're handy mid-cook. Only shown when set. -->
-            <q-card
-                v-if="recipe.notes && recipe.notes.trim()"
-                flat
-                bordered
-                class="recipe-notes q-mb-md"
-            >
-                <q-card-section>
-                    <div class="row items-center q-gutter-xs q-mb-xs">
-                        <q-icon :name="ICONS.notes" size="18px" color="primary" />
-                        <span class="text-subtitle2">Your notes</span>
-                    </div>
-                    <div class="recipe-notes__body">{{ recipe.notes }}</div>
-                </q-card-section>
+            <!-- RD-29 — image mode has no step card for the notes band to hang
+                 off, so this is the one call site that supplies its own card.
+                 Step mode renders the same component inside `.step-card`. -->
+            <q-card v-if="isImageMode && cookNotes" flat bordered class="q-mb-md">
+                <CookNotesSection :notes="cookNotes" />
             </q-card>
 
             <!-- ingredients grouped by base stock location.
@@ -556,16 +553,42 @@
                 <div class="q-pt-sm">
                 <q-card flat bordered class="cook-card">
                 <q-list>
+                    <!-- Owner feedback 2026-09-13: *"Match highlight styling
+                         for current step from the all steps area with the
+                         ingredients and tools highlight. Prefer ingredients
+                         and tools highlight look."* This was Quasar's `active`
+                         prop, which only recolours the text — a fourth way of
+                         saying "this row is the one" on a surface that already
+                         had one. It wears `.cook-row--highlighted` now, the
+                         same tint-plus-accent-rule the ingredient and tool
+                         rows use.
+
+                         What it does NOT borrow is `.cook-row--dim`. Dimming
+                         the neighbours is right there — the highlight answers
+                         "which of these does this step need?", so the rest are
+                         noise. Here every other step is still something you
+                         read ahead to or back at, so dimming them would be
+                         dimming the list's whole purpose. `aria-current`
+                         carries what the `active` prop used to imply. -->
                     <q-item
                         v-for="(step, idx) in cookSteps"
                         :key="idx"
-                        :active="idx === currentStepIndex"
                         clickable
+                        :aria-current="idx === currentStepIndex ? 'step' : undefined"
                         @click="goToStep(idx)"
-                        :class="{ 'all-steps-row--sub': step.isSubStep }"
+                        :class="{
+                            'all-steps-row--sub': step.isSubStep,
+                            'cook-row--highlighted': idx === currentStepIndex,
+                        }"
                     >
                         <q-item-section avatar class="cook-row__avatar">
-                            <span class="all-steps-row__num">{{ idx + 1 }}</span>
+                            <!-- Owner feedback 2026-09-13: *"Use same number
+                                 circles styling as on the recipe view."* The
+                                 numeral chrome already lives in the shared
+                                 `css/recipeSteps.scss` for exactly this reason
+                                 (R-001) — cook mode was the one numbered step
+                                 list still drawing its own. -->
+                            <span class="dora-steps__num">{{ idx + 1 }}</span>
                         </q-item-section>
                         <q-item-section>
                             <!-- show the section header at the
@@ -764,6 +787,7 @@
     import BaseDialog from 'src/components/BaseDialog.vue';
     import CookStepProgress from 'src/components/recipes/CookStepProgress.vue';
     import RecipeCookModeImageView from 'src/components/recipes/RecipeCookModeImageView.vue';
+    import CookNotesSection from 'src/components/recipes/CookNotesSection.vue';
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';
     import { useCookingPolicy } from 'src/composables/useCookingPolicy';
@@ -830,6 +854,10 @@
     const isImageMode = computed(
         () => recipe.value?.steps_mode === 'image',
     );
+
+    /** The cook's own notes, or null. Both call sites gate on this, so the
+     *  "is there anything to show?" test is written once. */
+    const cookNotes = computed(() => recipe.value?.notes?.trim() || null);
 
     /** Owner feedback 2026-08-27 — *"how does cook mode pick which steps it
      *  will follow? I've got all 3 filled out and it's picking structured when
@@ -1797,6 +1825,14 @@
     .cook-section__title {
         color: var(--text-primary);
     }
+    // Owner feedback 2026-09-13: *"Add some gap between ingredients, tools and
+    // steps areas"*. The three expansion items were flush against each other,
+    // so three separate panels read as one striped block — which undercut the
+    // 09-01 pass that gave them a shared shape in the first place. Shared
+    // shape, separated objects.
+    .cook-section {
+        margin-bottom: var(--space-4);
+    }
     // calm cards for the section bodies. No mid-cook stock-level colour noise;
     // just legible names + quantities.
     .cook-card {
@@ -1806,14 +1842,12 @@
         background: var(--surface-component);
     }
     // Fixed avatar column so an ingredient quantity, a tool glyph and a step
-    // number all start their text at the same x.
+    // number all start their text at the same x. Sized to the shared numeral
+    // circle (34px) since 2026-09-13 — it is the widest of the three, and the
+    // column has to hold it without squashing it.
     .cook-row__avatar {
-        min-width: 32px;
+        min-width: 34px;
         padding-right: var(--space-2);
-    }
-    .all-steps-row__num {
-        font-variant-numeric: tabular-nums;
-        color: var(--text-secondary);
     }
     .tool-name {
         font-weight: 500;
@@ -1903,11 +1937,6 @@
     }
     .step-hint {
         line-height: 1.4;
-    }
-    // RD-29 — personal notes; preserve the user's line breaks.
-    .recipe-notes__body {
-        white-space: pre-wrap;
-        line-height: 1.5;
     }
     // Cook-mode header (owner feedback 2026-08-27, 08-28 and 09-03).
     //

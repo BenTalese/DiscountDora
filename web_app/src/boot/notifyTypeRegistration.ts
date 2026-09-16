@@ -28,6 +28,11 @@ Notify.registerType('info', {
     progress: true,
     classes: 'dora-toast--info'
 });
+// …but leaving `textColor` unset does NOT mean the toast has no text colour:
+// Quasar seeds every notification with `textColor: 'white'` before any type is
+// applied, so `.dora-toast--info` has to out-rank a `text-white !important`.
+// That's why its `color` carries `!important` in app.scss — see the comment
+// there. (Owner feedback 2026-09-13, the "blank blue info toast".)
 
 // `negative` is a Quasar palette *key*, not a literal — `themeService` maps it
 // to `--semantic-negative`, so this one already follows the theme. `white` is

@@ -47,14 +47,14 @@
                     :week-days="planner.weekDays.value"
                     :slot-names="planner.slotNames.value"
                     :entries-for="planner.dayEntries"
-                    :day-cost="planner.dayCost"
                     :is-past-day="planner.isPastDay"
                     :current-day-iso="planner.currentDayIso.value"
                     :week-range-label="planner.weekRangeLabel.value"
+                    :week-relative-label="planner.weekRelativeLabel.value"
                     :planned-count="plannedCount"
                     :can-save-current-week="canSaveCurrentWeek"
                     @entry-view="planner.goToRecipe"
-                    @entry-cook="planner.cookRecipe"
+                    @entry-cook="onEntryCook"
                     @entry-remove="planner.removeEntry"
                     @entry-adjust="planner.adjustEntryServings"
                     @entry-link="onEntryLink"
@@ -68,9 +68,20 @@
                     @duplicate-week="planner.confirmDuplicateToNextWeek"
                     @print="planner.printFocusedWeek"
                     @save-template="openSaveTemplate"
-                    @open-templates="templatesDrawerOpen = true"
+                    @open-templates="openApplyTemplate"
                     @clear-week="planner.confirmClearWeek"
-                />
+                >
+                    <!-- One over-budget warning, both breakpoints (owner
+                         2026-09-13). The panel is page-owned because it holds
+                         the plan id and the reload-after-apply; where it sits
+                         inside the phone's week is the mobile view's business. -->
+                    <template #alert>
+                        <SwapSuggestionsPanel
+                            :meal-plan-id="planner.focusedPlan.value?.meal_plan_id ?? null"
+                            @changed="onSwapApplied"
+                        />
+                    </template>
+                </MealPlanMobileFocus>
 
                 <!-- The week's consequences, on the phone. Owner feedback
                      2026-09-03: the collapsible card that used to live inside
@@ -84,23 +95,26 @@
                      per-ingredient rows and the full-demand disclosure. No
                      wrapper, no header restating what is inside it. -->
                 <div v-if="plannedCount > 0" class="planner-mobile-week q-mt-md">
-                    <MealPlanWeekStatus
-                        :planned-count="plannedCount"
-                        :shortfall-count="planner.needsCookingEntries.value.length"
-                        :fresh-count="planner.freshEntries.value.length"
-                        :outstanding-count="planner.needToBuyOutstanding.value.length"
-                        :on-list-count="planner.needToBuyOnList.value.length"
-                        :cook-by-label="planner.cookByLabel.value"
-                        :estimated-cost="planner.focusedPlan.value?.estimated_cost ?? null"
-                        :cost-counted-meals="planner.focusedPlan.value?.cost_counted_meals ?? 0"
-                        :cost-total-meals="planner.focusedPlan.value?.cost_total_meals ?? 0"
-                    />
+                    <!-- Owner 2026-09-12 — the week status banner is gone from
+                         both breakpoints: *"it feels like it just repeats info
+                         readily available elsewhere."* It did — the shortfall
+                         and to-buy cells restated what the meal cards and the
+                         rail's own counts say, per-meal and per-item rather
+                         than as a total. The two figures worth keeping moved to
+                         where they belong: the planned count into the week
+                         scroller, and the week's cost into its own small card
+                         under the rail's lists. -->
                     <MealPlanShoppingSummary
                         :focused-plan="planner.focusedPlan.value"
                         :ingredients-loading="planner.ingredientsLoading.value"
                         :ingredients="planner.ingredients.value"
                         :need-to-buy="planner.needToBuy.value"
                         :outstanding="planner.needToBuyOutstanding.value"
+                        :unlinked="planner.unlinkedIngredients.value"
+                        :estimated-cost="planner.focusedPlan.value?.estimated_cost ?? null"
+                        :cost-counted-meals="planner.focusedPlan.value?.cost_counted_meals ?? 0"
+                        :cost-total-meals="planner.focusedPlan.value?.cost_total_meals ?? 0"
+                        :budget-status="planner.budgetStatus.value"
                         :generating="planner.generating.value"
                         @add-to-list="planner.openAddToList"
                     />
@@ -157,14 +171,20 @@
                         :aria-expanded="false"
                         @click="openRail"
                     >
-                        <q-icon :name="ICONS.search" size="18px" />
+                        <!-- Owner 2026-09-12 — the magnifier went: the strip
+                             opens a recipe list, it isn't a search control, and
+                             the word beside it already says so. -->
                         <!-- L100 — "filter button changes based on filter
                              state": a dot when the list is narrowed, so the
                              collapsed rail still says something is filtered. -->
                         <span v-if="railFilterActive" class="rail-strip__dot" />
-                        <span class="rail-strip__label">
-                            Recipes · {{ planner.recipes.value.length }}
-                        </span>
+                        <!-- Owner 2026-09-12 — no count when collapsed: the
+                             strip is a 40px-wide invitation to open the rail,
+                             and a number on it is a fact you can do nothing
+                             with until you do. It reads in the open header
+                             instead, as the badge the two ingredient lists
+                             already use. -->
+                        <span class="rail-strip__label">Recipes</span>
                         <q-icon :name="ICONS.chevron_right" size="18px" />
                         <BaseTooltip anchor="center right" self="center left">
                             Show recipes
@@ -174,18 +194,33 @@
                     <!-- S2 / S3 — open. The picker owns browsing vs targeting;
                          the page owns only whether the rail is open. -->
                     <template v-else>
-                        <div class="rail-head">
-                            <BaseButton
-                                variant="icon"
-                                size="sm"
-                                :icon="ICONS.chevron_left"
-                                aria-label="Hide recipes"
-                                @click="railOpen = false"
-                            >
-                                <BaseTooltip>Hide recipes</BaseTooltip>
-                            </BaseButton>
+                        <!-- Owner 2026-09-12 — *"give 'Recipes' the same
+                             heading text as Missing this week and All
+                             ingredients, centre it on the column, and make the
+                             whole word plus the button clickable to
+                             collapse."* It was a 0.75rem secondary caption
+                             beside a separate icon button, so the only thing
+                             you could hit was the 32px chevron and the heading
+                             read smaller than the two disclosures beneath it.
+                             One button now, the chevron pinned left and the
+                             label centred in the column, wearing the
+                             disclosure's own label size. -->
+                        <button
+                            type="button"
+                            class="rail-head"
+                            aria-label="Hide recipes"
+                            :aria-expanded="true"
+                            @click="railOpen = false"
+                        >
+                            <q-icon :name="ICONS.chevron_left" size="20px" class="rail-head__chevron" />
                             <span class="rail-head__label">Recipes</span>
-                        </div>
+                            <MealPlanRailCount
+                                class="rail-head__count"
+                                :count="planner.recipes.value.length"
+                                :label="`${planner.recipes.value.length} recipes`"
+                            />
+                            <BaseTooltip>Hide recipes</BaseTooltip>
+                        </button>
                         <MealPlanRecipePicker
                             v-model:recipe-search="planner.recipeSearch.value"
                             class="planner-pane__fill"
@@ -227,10 +262,27 @@
                             >
                                 <BaseTooltip>Previous week</BaseTooltip>
                             </BaseButton>
+                            <!-- Owner 2026-09-12 — the range wears the
+                                 calendar's own heading voice (uppercase,
+                                 tracked), so the two things naming a period on
+                                 this page look like one family. The planned
+                                 count rides beside "in 2 weeks": it is the one
+                                 figure from the deleted status banner that says
+                                 something about the week you are *looking* at
+                                 rather than about its meals. -->
                             <div class="planner-toolbar__week">
-                                <div class="text-subtitle2">{{ planner.weekRangeLabel.value }}</div>
-                                <div class="text-caption dora-text-muted">
-                                    {{ planner.weekRelativeLabel.value }}
+                                <div class="planner-toolbar__range">
+                                    {{ planner.weekRangeLabel.value }}
+                                </div>
+                                <!-- Owner 2026-09-12 — the two halves split to
+                                     the two ends of the line rather than
+                                     running together behind a middot: "This
+                                     week" names where you are, the count
+                                     describes what's in it, and they answer
+                                     different questions. -->
+                                <div class="planner-toolbar__weekmeta text-caption dora-text-muted">
+                                    <span>{{ planner.weekRelativeLabel.value }}</span>
+                                    <span v-if="plannedCount > 0">{{ plannedCount }} planned</span>
                                 </div>
                             </div>
                             <!-- F17 asked for the next-week arrow *below* the
@@ -255,6 +307,46 @@
                             <!-- FU-304 closed 2026-07-07 — Direction A won; the
                                  A/B `BaseSegmented` toggle and the sibling
                                  `/meal-plans/board` page were retired. -->
+                            <!-- Owner feedback 2026-09-01 — "show all meal
+                                 slots feels like it should be always visible
+                                 (not in an overflow menu)". It is a *view*
+                                 switch over the week you are looking at, not a
+                                 week action like duplicate/print/clear, so
+                                 burying it among those was a category error as
+                                 well as a discoverability one.
+
+                                 Owner 2026-09-12 — it moved up here, left of
+                                 Build my week, when the status row it had been
+                                 sharing was deleted. Row 1 has the width for it
+                                 now that the status strip isn't below it. -->
+                            <q-toggle
+                                v-model="showAllSlots"
+                                dense
+                                size="sm"
+                                label="All slots"
+                                class="planner-toolbar__allslots q-mr-sm"
+                            >
+                                <BaseTooltip>
+                                    {{ showAllSlots
+                                        ? 'Showing every household meal slot on each day'
+                                        : 'Showing only slots with a meal planned' }}
+                                </BaseTooltip>
+                            </q-toggle>
+                            <!-- Owner 2026-09-13 — *"perhaps one apply
+                                 template button next to build my week"*.
+                                 Applying a saved week is a sibling of building
+                                 one: both fill an empty week in one move, and
+                                 the old route to it was a menu item three
+                                 levels from the thing it did. -->
+                            <BaseButton
+                                variant="secondary"
+                                :icon="ICONS.event_repeat"
+                                :label="compactToolbar ? undefined : 'Apply template'"
+                                class="q-mr-sm"
+                                @click="openApplyTemplate"
+                            >
+                                <BaseTooltip>Apply a saved template</BaseTooltip>
+                            </BaseButton>
                             <BaseButton
                                 variant="secondary"
                                 :icon="ICONS.dora_voice"
@@ -316,35 +408,23 @@
                                             </q-item-section>
                                             <q-item-section>Save week as template…</q-item-section>
                                         </q-item>
+                                        <!-- Owner 2026-09-13 — managing lives
+                                             here, out of the apply dialog:
+                                             renaming and deleting a template is
+                                             housekeeping, and it was sharing a
+                                             sheet with the one action you open
+                                             that sheet to perform. The
+                                             Templates page owns it (reversing
+                                             FU-308's 2026-07-07 placement,
+                                             deliberately — see that page). -->
                                         <q-item
                                             v-close-popup clickable
-                                            @click="templatesDrawerOpen = true"
+                                            @click="$router.push('/meal-plans/templates')"
                                         >
                                             <q-item-section avatar>
-                                                <q-icon :name="ICONS.event_repeat" />
+                                                <q-icon :name="ICONS.settings" />
                                             </q-item-section>
-                                            <!-- Owner feedback 2026-09-03 —
-                                             "browse + apply" named the drawer's
-                                             mechanics; "Apply template…" names
-                                             what you came for, and the drawer
-                                             still browses. -->
-                                        <q-item-section>Apply template…</q-item-section>
-                                        </q-item>
-
-                                        <q-separator />
-
-                                        <!-- U7 / F37 — the destructive action
-                                             keeps its label and its colour. -->
-                                        <q-item
-                                            v-close-popup clickable
-                                            :disable="!planner.focusedPlan.value"
-                                            class="text-negative"
-                                            @click="planner.confirmClearWeek"
-                                        >
-                                            <q-item-section avatar>
-                                                <q-icon :name="ICONS.delete_outline" color="negative" />
-                                            </q-item-section>
-                                            <q-item-section>Clear week</q-item-section>
+                                            <q-item-section>Manage templates…</q-item-section>
                                         </q-item>
                                     </q-list>
                                 </q-menu>
@@ -363,45 +443,6 @@
                              R-Phase 2 (U2 + H1) promoted this block; it now
                              lives in pinned chrome, which is what its own
                              comment always said it was for. -->
-                        <div class="planner-toolbar__statusrow">
-                            <MealPlanWeekStatus
-                                class="planner-toolbar__status"
-                                :planned-count="plannedCount"
-                                :shortfall-count="planner.needsCookingEntries.value.length"
-                                :fresh-count="planner.freshEntries.value.length"
-                                :outstanding-count="planner.needToBuyOutstanding.value.length"
-                                :on-list-count="planner.needToBuyOnList.value.length"
-                                :cook-by-label="planner.cookByLabel.value"
-                                :estimated-cost="planner.focusedPlan.value?.estimated_cost ?? null"
-                                :cost-counted-meals="planner.focusedPlan.value?.cost_counted_meals ?? 0"
-                                :cost-total-meals="planner.focusedPlan.value?.cost_total_meals ?? 0"
-                            />
-                            <!-- Owner feedback 2026-09-01 — "show all meal
-                                 slots feels like it should be always visible
-                                 (not in an overflow menu)". It is a *view*
-                                 switch over the week you are looking at, not a
-                                 week action like duplicate/print/clear, so
-                                 burying it among those was a category error as
-                                 well as a discoverability one: nothing else in
-                                 that menu changes what the day cards render.
-                                 It sits on the status row rather than row 1
-                                 because row 1 is already at its width budget
-                                 (§3.2 — <= 96px, nothing wraps to a third
-                                 line), and this row has slack. -->
-                            <q-toggle
-                                v-model="showAllSlots"
-                                dense
-                                size="sm"
-                                label="All slots"
-                                class="planner-toolbar__allslots"
-                            >
-                                <BaseTooltip>
-                                    {{ showAllSlots
-                                        ? 'Showing every household meal slot on each day'
-                                        : 'Showing only slots with a meal planned' }}
-                                </BaseTooltip>
-                            </q-toggle>
-                        </div>
                     </div>
 
                     <!-- The week itself — the only scrolling part of this
@@ -421,6 +462,17 @@
                          banner's wasn't adding an affordance, only a second
                          instance of one. -->
                     <div ref="weekScrollRef" class="planner-pane__scroll">
+                        <!-- FU-451 — budget-defense swaps. Renders itself only
+                             when money features are on AND the week is over
+                             budget. Owner 2026-09-12: it moved from BELOW the
+                             seven day cards to above them — at the bottom of
+                             the scroller it was something you found by
+                             accident, which is the wrong way to learn you can't
+                             afford the week. -->
+                        <SwapSuggestionsPanel
+                            :meal-plan-id="planner.focusedPlan.value?.meal_plan_id ?? null"
+                            @changed="onSwapApplied"
+                        />
                         <transition :name="planner.weekTransition.value" mode="out-in">
                             <div
                                 :key="planner.focusedMonday.value"
@@ -443,11 +495,9 @@
                                     :hovered-recipe-ids="planner.hoveredRecipeIds.value"
                                     :format-date="planner.formatDate"
                                     :show-all-slots="showAllSlots"
-                                    :nutrition="planner.dayNutrition(day.iso)"
-                                    :cost="planner.dayCost(day.iso)"
                                     @select-slot="(slot: string) => planner.selectSlot(day.iso, slot)"
                                     @entry-view="planner.goToRecipe"
-                                    @entry-cook="planner.cookRecipe"
+                                    @entry-cook="onEntryCook"
                                     @entry-remove="planner.removeEntry"
                                     @entry-adjust="planner.adjustEntryServings"
                                     @entry-link="onEntryLink"
@@ -458,12 +508,6 @@
                             </div>
                         </transition>
 
-                        <!-- FU-451 — budget-defense swaps (renders itself only when
-                             money features are on AND the week is over budget). -->
-                        <SwapSuggestionsPanel
-                            :meal-plan-id="planner.focusedPlan.value?.meal_plan_id ?? null"
-                            @changed="onSwapApplied"
-                        />
                     </div>
                 </div>
 
@@ -500,6 +544,11 @@
                             :ingredients="planner.ingredients.value"
                             :need-to-buy="planner.needToBuy.value"
                             :outstanding="planner.needToBuyOutstanding.value"
+                            :unlinked="planner.unlinkedIngredients.value"
+                            :estimated-cost="planner.focusedPlan.value?.estimated_cost ?? null"
+                            :cost-counted-meals="planner.focusedPlan.value?.cost_counted_meals ?? 0"
+                            :cost-total-meals="planner.focusedPlan.value?.cost_total_meals ?? 0"
+                            :budget-status="planner.budgetStatus.value"
                             :generating="planner.generating.value"
                             @add-to-list="planner.openAddToList"
                             @hover-ingredient="planner.hoverIngredient"
@@ -526,6 +575,18 @@
             @suggestions-requested="planner.loadSuggestions"
         />
 
+        <!-- Owner 2026-09-12 — *"does Cook now in the dropdown options pop up
+             the cookability warning like the recipe view does? It should."* It
+             did not: the planner pushed straight into cook mode. Same predicate
+             and same dialog as the recipe page and the cookbook, which is the
+             point of `helpers/cookModeGuard` existing — this is the third
+             surface it now serves rather than a third answer (R-003). -->
+        <CookModeGuardDialog
+            v-model="cookGuardOpen"
+            :recipe="cookGuardRecipe"
+            @start="startPlannedCook"
+        />
+
         <!-- FU-637 — "find a lighter option" for one meal. Opened from the
             meal's own menu; Dora never raises it herself. -->
         <MealPlanLighterDialog
@@ -535,15 +596,19 @@
             @swapped="onLighterSwapped"
         />
 
-        <!-- Templates drawer (R-Phase 5 / §9-E). Apply + manage in-place;
-            no page hop. Shared by both A and B pages. -->
-        <MealPlanTemplatesDrawer
-            v-model="templatesDrawerOpen"
+        <!-- Owner 2026-09-13 — one dialog that only applies. The old
+             `MealPlanTemplatesDrawer` (deleted) also saved the current week,
+             opened a nested recurring modal, renamed and deleted rows, and
+             linked out to the sets page; see the new component's header for the
+             full before/after. -->
+        <MealPlanApplyTemplateDialog
+            v-model="applyTemplateOpen"
             :templates="planner.templates.value"
-            :can-save-current-week="canSaveCurrentWeek"
-            @save-current-week="openSaveTemplate"
-            @apply-recurring="openRecurring"
+            :sets="planner.sets.value"
+            :focused-monday="planner.focusedMonday.value"
+            :applying="applyingTemplate"
             @apply-template="onTemplateApply"
+            @apply-recurring="onApplyRecurring"
         />
 
         <!-- Save the focused week as a template ─────────────────────── -->
@@ -610,34 +675,6 @@
              token gap, and the note gets its own space. `min-width: 360px` also
              went — a floor beats `max-width: 95vw` on a 320px phone, which is
              the FU-852 / builder-dialog lesson applied here. -->
-        <BaseDialog v-model="recurringOpen" title="Apply recurring" closable card-style="min-width: 0; width: min(420px, 94vw)">
-            <q-card-section class="q-pt-none recurring-form">
-                <q-select
-                    v-model="recurringSource"
-                    outlined dense
-                    :options="planner.recurringSourceOptions.value"
-                    emit-value map-options
-                    label="Template or rotating set"
-                />
-                <div class="recurring-form__dates">
-                    <q-input v-model="recurringStart" outlined dense type="date" label="From (week of)" />
-                    <q-input v-model="recurringEnd" outlined dense type="date" label="To (week of)" />
-                </div>
-                <div class="text-caption dora-text-muted recurring-form__note">
-                    Each week is forked from the template (a set rotates through its templates).
-                    Past days are skipped; up to 26 weeks.
-                </div>
-            </q-card-section>
-            <template #actions>
-                <BaseButton variant="ghost" label="Cancel" v-close-popup />
-                <BaseButton
-                    variant="primary" label="Apply"
-                    :loading="recurringApplying"
-                    :disable="!recurringSource || !recurringStart || !recurringEnd"
-                    @click="confirmRecurring"
-                />
-            </template>
-        </BaseDialog>
     </q-page>
 </template>
 
@@ -650,15 +687,17 @@
     import MealPlanFirstRun from 'src/components/MealPlanFirstRun.vue';
     import MealPlanMobileFocus from 'src/components/MealPlanMobileFocus.vue';
     import MealPlanPickerSheet from 'src/components/MealPlanPickerSheet.vue';
+    import MealPlanRailCount from 'src/components/MealPlanRailCount.vue';
     import MealPlanRecipePicker from 'src/components/MealPlanRecipePicker.vue';
     import MealPlanShoppingSummary from 'src/components/MealPlanShoppingSummary.vue';
     import AddToListDialog from 'src/components/shoppingList/AddToListDialog.vue';
+    import CookModeGuardDialog from 'src/components/recipes/CookModeGuardDialog.vue';
+    import { needsCookGuard } from 'src/helpers/cookModeGuard';
     import type { AddToListConfirm } from 'src/components/shoppingList/addToListTypes';
     import MealPlanSkeleton from 'src/components/MealPlanSkeleton.vue';
-    import MealPlanTemplatesDrawer from 'src/components/MealPlanTemplatesDrawer.vue';
+    import MealPlanApplyTemplateDialog from 'src/components/MealPlanApplyTemplateDialog.vue';
     import MealPlanLighterDialog from 'src/components/MealPlanLighterDialog.vue';
     import MealPlanWeekDayCard from 'src/components/MealPlanWeekDayCard.vue';
-    import MealPlanWeekStatus from 'src/components/MealPlanWeekStatus.vue';
     import MealPlanBuilderDialog from 'components/MealPlanBuilderDialog.vue';
     import SwapSuggestionsPanel from 'src/components/SwapSuggestionsPanel.vue';
     import { useMealPlanner } from 'src/composables/useMealPlanner';
@@ -666,13 +705,40 @@
     // FU-317 Chunk 5 — reconcile nudge line count.
     import { useReconcileQueue } from 'src/composables/useReconcileQueue';
     import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
-    import { shiftDays } from 'src/helpers/weekDates';
     import { useQuasar } from 'quasar';
     import type { MealPlanEntry } from 'src/models/mealPlan';
+    import type { Recipe } from 'src/models/recipe';
     import { useMicroFeedback } from 'src/composables/useMicroFeedback';
     import { computed, nextTick, ref, watch } from 'vue';
 
     const planner = useMealPlanner();
+
+    // Cook-mode entry from a planned meal's menu, guarded exactly as the
+    // cookbook and the recipe page guard theirs. The recipe comes from the
+    // rail's own list — the same objects the picker renders — so no extra
+    // fetch; `dirty` is never passed, since nothing here is an editable form.
+    const cookGuardOpen = ref(false);
+    const cookGuardRecipe = ref<Recipe | null>(null);
+    const cookGuardEntry = ref<MealPlanEntry | null>(null);
+
+    function onEntryCook(entry: MealPlanEntry) {
+        const recipe = planner.recipes.value.find(
+            (r) => r.recipe_id === entry.recipe_id,
+        ) ?? null;
+        if (needsCookGuard(recipe)) {
+            cookGuardRecipe.value = recipe;
+            cookGuardEntry.value = entry;
+            cookGuardOpen.value = true;
+            return;
+        }
+        planner.cookRecipe(entry);
+    }
+
+    /** The guard's "Start anyway" — it hands back no entry, so we kept it. */
+    function startPlannedCook() {
+        cookGuardOpen.value = false;
+        if (cookGuardEntry.value) planner.cookRecipe(cookGuardEntry.value);
+    }
     const { moneyEnabled } = useMoneyEnabled();
     const { total: reconcileTotal } = useReconcileQueue();
     const mealPlanStore = useMealPlanStore();
@@ -864,35 +930,12 @@
         }
     }
 
-    // ── Recurring-apply dialog (page-local UI state) ───────────────────────
-    const recurringOpen = ref(false);
-    const recurringSource = ref<string | null>(null);
-    const recurringStart = ref('');
-    const recurringEnd = ref('');
-    const recurringApplying = ref(false);
-
-    async function openRecurring() {
-        const ready = await planner.loadRecurringSources();
-        if (!ready) return;
-        recurringSource.value = planner.recurringSourceOptions.value[0]?.value ?? null;
-        recurringStart.value = planner.focusedMonday.value;
-        recurringEnd.value = shiftDays(planner.focusedMonday.value, 28); // default 4 weeks
-        recurringOpen.value = true;
-    }
-    async function confirmRecurring() {
-        if (!recurringSource.value || !recurringStart.value || !recurringEnd.value) return;
-        recurringApplying.value = true;
-        try {
-            const ok = await planner.applyRecurring({
-                source: recurringSource.value,
-                startMonday: recurringStart.value,
-                endMonday: recurringEnd.value,
-            });
-            if (ok) recurringOpen.value = false;
-        } finally {
-            recurringApplying.value = false;
-        }
-    }
+    // The standalone "Apply recurring" dialog and its five refs were deleted
+    // on 2026-09-13. Recurring is not a separate action — it is applying a
+    // template with a date range — so it is a toggle inside
+    // `MealPlanApplyTemplateDialog` and `onApplyRecurring` above is all the page
+    // still needs. The old flow reached it through a nested modal opened from a
+    // side sheet opened from a menu item.
 
     // ── Sequential builder (page-local open state) ─────────────────────────
     const builderOpen = ref(false);
@@ -958,13 +1001,42 @@
         void planner.separateCook(entry);
     }
 
-    // ── Templates drawer (R-Phase 5 / §9-E) ────────────────────────────────
-    const templatesDrawerOpen = ref(false);
+    // ── Apply a template (owner redesign, 2026-09-13) ──────────────────────
+    const applyTemplateOpen = ref(false);
+    const applyingTemplate = ref(false);
+
+    /** Loads the library before opening, so the dialog never renders its empty
+     *  state while a fetch is in flight. Templates and sets are both needed:
+     *  the dialog lists them together. */
+    async function openApplyTemplate() {
+        await planner.loadRecurringSources();
+        applyTemplateOpen.value = true;
+    }
+
     async function onTemplateApply(templateId: string) {
         const ok = await planner.warnBeforeReplaceWeek();
         if (!ok) return;
-        await planner.applyTemplate(templateId);
-        templatesDrawerOpen.value = false;
+        applyingTemplate.value = true;
+        try {
+            await planner.applyTemplate(templateId);
+            applyTemplateOpen.value = false;
+        } finally {
+            applyingTemplate.value = false;
+        }
+    }
+
+    async function onApplyRecurring(payload: { source: string; start: string; end: string }) {
+        applyingTemplate.value = true;
+        try {
+            const ok = await planner.applyRecurring({
+                source: payload.source,
+                startMonday: payload.start,
+                endMonday: payload.end,
+            });
+            if (ok) applyTemplateOpen.value = false;
+        } finally {
+            applyingTemplate.value = false;
+        }
     }
 </script>
 
@@ -1098,6 +1170,10 @@
             flex: 1 1 auto;
             min-height: 0;
             overflow-y: auto;
+            /* Owner 2026-09-12 — the first day card was sitting flush against
+               the toolbar's bottom edge, so the pinned chrome and the scrolling
+               week read as one block. */
+            padding-top: var(--space-3);
             padding-right: var(--space-4);
             /* Reserve the gutter so content doesn't jump width when a week
                crosses from non-scrolling to scrolling. */
@@ -1136,10 +1212,12 @@
         outline: 2px solid var(--brand-primary);
         outline-offset: 2px;
     }
+    /* Owner 2026-09-12 — the same size open or collapsed: it is the same
+       heading, turned on its side. */
     .rail-strip__label {
         writing-mode: vertical-rl;
         white-space: nowrap;
-        font-size: calc(var(--font-size-sm) * 1rem);
+        font-size: calc(var(--font-size-md) * 1rem);
         font-weight: 500;
     }
     /* L100 — "filter button changes based on filter state". */
@@ -1150,23 +1228,69 @@
         background: var(--brand-secondary-strong);
     }
 
+    /* The whole header is the collapse control (owner 2026-09-12), so it wears
+       the same 44px floor and hover the rail's disclosure headers do. */
     .rail-head {
+        position: relative;
         display: flex;
         align-items: center;
-        gap: var(--space-1);
+        justify-content: center;
+        width: 100%;
+        min-height: 44px;
         flex: 0 0 auto;
-        padding-bottom: var(--space-1);
+        padding: var(--space-1) var(--space-2);
+        background: transparent;
+        border: 0;
+        border-radius: var(--radius-md);
+        color: var(--text-primary);
+        cursor: pointer;
+        font: inherit;
+    }
+    .rail-head:hover,
+    .rail-head:focus-visible {
+        background: var(--surface-sunken);
+        outline: none;
+    }
+    .rail-head:focus-visible {
+        box-shadow: inset 0 0 0 2px var(--brand-primary);
+    }
+    /* Absolute so the label is centred on the COLUMN, not on the space left
+       over beside the chevron. */
+    .rail-head__chevron {
+        position: absolute;
+        left: var(--space-2);
+        color: var(--text-secondary);
     }
     .rail-head__label {
-        font-size: calc(var(--font-size-sm) * 1rem);
-        font-weight: 600;
-        color: var(--text-secondary);
+        font-size: calc(var(--font-size-md) * 1rem);
+        font-weight: 500;
+        line-height: 1.3;
+    }
+    /* Beside the centred label, not pinned to the edge: the pair reads as one
+       heading the way "All ingredients (12)" does. */
+    .rail-head__count {
+        margin-left: var(--space-1);
     }
 
     .planner-toolbar__week {
         margin-left: var(--space-2);
         margin-right: var(--space-2);
         line-height: 1.2;
+    }
+    /* Owner 2026-09-12 — the same voice as the calendar's month banner
+       (`.cal__month`), which is the other control on this page that names a
+       period. */
+    .planner-toolbar__weekmeta {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: var(--space-3);
+    }
+    .planner-toolbar__range {
+        font-size: calc(var(--font-size-md) * 1rem);
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
     }
     .planner-toolbar__statusrow {
         display: flex;
@@ -1192,33 +1316,6 @@
         display: flex;
         flex-direction: column;
         gap: var(--space-2);
-    }
-
-    /* The recurring-apply form: one column, one gap, and the note separated
-       from the fields it explains (see the template comment for what this
-       replaced). */
-    .recurring-form {
-        display: flex;
-        flex-direction: column;
-        gap: var(--space-3);
-    }
-    .recurring-form__dates {
-        display: flex;
-        gap: var(--space-3);
-    }
-    .recurring-form__dates > * {
-        flex: 1 1 0;
-        min-width: 0;
-    }
-    .recurring-form__note {
-        line-height: 1.35;
-    }
-    /* Two date fields side by side stop fitting well below ~340px of usable
-       width; they stack rather than squeeze their own labels (D-011). */
-    @media (max-width: 400px) {
-        .recurring-form__dates {
-            flex-direction: column;
-        }
     }
 
     /* FU-317 Chunk 5 — reconcile nudge above the planner. Text-link

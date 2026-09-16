@@ -104,7 +104,7 @@ const PREDICATES: Record<
 const LABELS: Record<RecipeFilterKey, string> = {
     suggests: 'Dora suggests',
     all: 'All',
-    cookable: 'Can cook now',
+    cookable: 'Cookable now',
     favourites: 'Favourites',
     not_lately: 'Not lately',
     regulars: 'Regulars',

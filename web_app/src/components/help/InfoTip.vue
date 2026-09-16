@@ -13,7 +13,20 @@
     -->
     <span class="info-tip" :aria-label="`More information: ${label}`" tabindex="0">
         <q-icon :name="ICONS.help_outline" size="18px" />
-        <BaseTooltip max-width="340px" :offset="[0, 6]" class="info-tip__tooltip">
+        <!-- Owner feedback 2026-09-13: *"the longer tooltip delay is good but
+             it's been applied too broadly. For info (?) chips specifically,
+             I'd expect those to be instant."* The 500 ms default exists so a
+             tap on a *button* doesn't flash its label on the way to doing the
+             thing the button does (see BaseTooltip). A (?) chip does nothing
+             else — reading the tip is the only reason to touch it — so there
+             is no action for a flash to interfere with, and the dwell is pure
+             latency on the one gesture the control is for. -->
+        <BaseTooltip
+            :delay="0"
+            max-width="340px"
+            :offset="[0, 6]"
+            class="info-tip__tooltip"
+        >
             <slot />
         </BaseTooltip>
     </span>

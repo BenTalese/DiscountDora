@@ -24,7 +24,27 @@
             :aria-label="decrementLabel"
             @click="step(-1)"
         />
-        <span class="num-stepper__value" aria-live="polite">{{ modelValue }}</span>
+        <!-- Owner 2026-09-12 — *"give it an input box same as the recipe
+             panel"*. The rail's cooked-count tile has been typeable since
+             2026-09-03 for the same reason: a number you can see and can't
+             change reads as broken, and typing 6 beats six taps. Opt-in, so the
+             call sites that are genuinely nudge-only keep a plain readout. -->
+        <input
+            v-if="editable"
+            class="num-stepper__value num-stepper__input"
+            type="number"
+            inputmode="numeric"
+            :min="min"
+            :max="max"
+            :value="modelValue"
+            :aria-label="label ?? 'Value'"
+            @click.stop
+            @focus="selectAll"
+            @keydown.enter.prevent="commit"
+            @keydown.esc.prevent="cancel"
+            @blur="commit"
+        >
+        <span v-else class="num-stepper__value" aria-live="polite">{{ modelValue }}</span>
         <BaseButton
             variant="icon"
             :dense="variant === 'inline'"
@@ -57,8 +77,11 @@
              *  so a caller that sets one gets sensible ones for free. */
             decrementLabel?: string | undefined;
             incrementLabel?: string | undefined;
+            /** Render the value as a typeable tile rather than a readout
+             *  (owner 2026-09-12). Enter/blur commits, Esc reverts. */
+            editable?: boolean | undefined;
         }>(),
-        { min: 0, variant: 'inline' },
+        { min: 0, variant: 'inline', editable: false },
     );
 
     const emit = defineEmits<{ (e: 'update:modelValue', value: number): void }>();
@@ -72,6 +95,30 @@
         let next = Math.max(props.min, current + delta);
         if (props.max !== undefined) next = Math.min(props.max, next);
         emit('update:modelValue', next);
+    }
+
+    function selectAll(event: FocusEvent) {
+        (event.target as HTMLInputElement | null)?.select();
+    }
+    /** Commit a typed value, clamped to the same bounds `step` honours. A
+     *  value this control can't use re-asserts the truth rather than leaving
+     *  the field showing it. */
+    function commit(event: Event) {
+        const input = event.target as HTMLInputElement;
+        const typed = Math.floor(Number(input.value));
+        if (!Number.isFinite(typed)) {
+            input.value = String(props.modelValue);
+            return;
+        }
+        let next = Math.max(props.min, typed);
+        if (props.max !== undefined) next = Math.min(props.max, next);
+        input.value = String(next);
+        if (next !== props.modelValue) emit('update:modelValue', next);
+    }
+    function cancel(event: Event) {
+        const input = event.target as HTMLInputElement;
+        input.value = String(props.modelValue);
+        input.blur();
     }
 
     const atMin = computed(() => props.modelValue <= (props.min ?? 0));
@@ -97,6 +144,40 @@
         text-align: center;
         font-variant-numeric: tabular-nums;
         color: var(--text-primary);
+    }
+    /* The typeable tile — the same shape the recipe rail's cooked-count wears
+       (`.mp-row__tile`), so the two numeric controls in the planner read as one
+       idea. Native spinners off: they'd duplicate the ± buttons beside them. */
+    .num-stepper__input {
+        width: 44px;
+        height: 32px;
+        flex: none;
+        padding: 0;
+        border: 1px solid transparent;
+        border-radius: var(--radius-md);
+        background: var(--surface-sunken);
+        font: inherit;
+        font-weight: 700;
+        cursor: text;
+        appearance: textfield;
+        -moz-appearance: textfield;
+    }
+    .num-stepper__input::-webkit-outer-spin-button,
+    .num-stepper__input::-webkit-inner-spin-button {
+        appearance: none;
+        margin: 0;
+    }
+    .num-stepper__input:hover {
+        border-color: var(--border-strong);
+    }
+    .num-stepper__input:focus-visible {
+        outline: 2px solid var(--brand-primary);
+        outline-offset: 2px;
+    }
+    @media (pointer: coarse) {
+        .num-stepper__input {
+            height: 44px;
+        }
     }
     .num-stepper--inline {
         gap: var(--space-1);

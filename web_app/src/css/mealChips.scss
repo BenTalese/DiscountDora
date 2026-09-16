@@ -1,0 +1,49 @@
+/*
+    The meal card's little labelled chips — shared by `MealPlanEntryChip`
+    (desktop week grid) and `MealPlanRichCard` (phone day), which draw the same
+    meal at two widths and must not drift (R-001). Same precedent as
+    `shoppingList.scss` / `dashboardCards.scss`.
+
+    Owner 2026-09-12: *"cook cards for multi-linked days should say 'cook day -
+    N servings' in a chip"* and *"price should be displayed in a chip so we know
+    how much a meal slot costs"*. Both are **facts about the plan** — where the
+    food comes from, and what it cost — so the chip carries no verdict colour.
+    Whether anything is *wrong* is said by the two status glyphs beside the meal
+    name and rolled up into the card's left trim; see
+    `helpers/mealPlanEntryStatus.ts` for that separation and why it exists.
+*/
+.meal-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 1px 8px;
+    border-radius: 999px;
+    background: var(--surface-sunken);
+    border: 1px solid var(--border-default);
+    color: var(--text-secondary);
+    font-size: calc(var(--font-size-xs) * 1rem);
+    font-weight: 600;
+    line-height: 1.7;
+    white-space: nowrap;
+}
+
+/* The cook day is the one day of a batch that asks something of you, so it
+   keeps the brand accent it has always had — as ink and border, never a fill
+   (D-002: the saturated colour stays out of the text channel). */
+.meal-chip--cook {
+    color: var(--accent-ink);
+    border-color: color-mix(in srgb, var(--brand-primary) 35%, var(--border-default));
+}
+
+/* Leftovers are grey, never a verdict colour (owner 2026-09-12). A day you eat
+   from a cook you already did is neither an all-clear nor a warning, and
+   painting it green put "this one's fine" next to "this one isn't" inside one
+   batch. */
+.meal-chip--leftover {
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+.meal-chip--price {
+    font-variant-numeric: tabular-nums;
+}

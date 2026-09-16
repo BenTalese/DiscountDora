@@ -172,6 +172,54 @@ export const UNIT_SYSTEMS: Readonly<Record<string, ReadonlyArray<MeasurementSyst
     "ft": ["imperial", "us"],
 };
 
+export interface DisplayDenominator {
+    /** What the denominator is called on a shelf label. */
+    readonly label: string;
+    /** Divide a price in the dimension's canonical price unit by this. */
+    readonly factor: number;
+}
+
+export interface DenominatorRule {
+    readonly full: DisplayDenominator;
+    readonly sub: DisplayDenominator;
+    /** Pack size, in the dimension's canonical price unit, at or above
+     *  which `full` takes over from `sub`. */
+    readonly flipAt: number;
+}
+
+export type PricingConvention = 'AU' | 'US';
+
+/** The dimension's **compute** denominator — what a per-unit price is
+ *  normalised to before a display rule is applied. */
+export const CANONICAL_PRICE_UNIT: Readonly<Record<string, string>> = {
+    "volume": "L",
+    "mass": "kg",
+    "count": "ea",
+};
+
+/** Count has no fractional convention either way, so it sits outside
+ *  the rule table. */
+export const COUNT_DENOMINATOR: DisplayDenominator = { label: "ea", factor: 1.0 };
+
+export const PRICE_DISPLAY_RULES: Readonly<Record<PricingConvention, Readonly<Record<string, DenominatorRule>>>> = {
+    "AU": {
+        "volume": { full: { label: "L", factor: 1.0 }, sub: { label: "100ml", factor: 10.0 }, flipAt: 1.0 },
+        "mass": { full: { label: "kg", factor: 1.0 }, sub: { label: "100g", factor: 10.0 }, flipAt: 1.0 },
+    },
+    "US": {
+        "volume": { full: { label: "qt", factor: 1.0566882094325938 }, sub: { label: "fl oz", factor: 33.81405650328842 }, flipAt: 0.946352946 },
+        "mass": { full: { label: "lb", factor: 2.2046226218487757 }, sub: { label: "oz", factor: 35.27399072294044 }, flipAt: 0.45359237 },
+    },
+};
+
+/** Which convention a measurement system prices by. Only the US
+ *  sells by the quart and the pound; the UK is metric on the shelf. */
+export const PRICING_CONVENTION_BY_SYSTEM: Readonly<Record<MeasurementSystem, PricingConvention>> = {
+    "metric": "AU",
+    "imperial": "AU",
+    "us": "US",
+};
+
 export const INGREDIENT_DENSITY_G_PER_ML: Readonly<Record<string, number>> = {
     "water": 1.0,
     "milk": 1.03,

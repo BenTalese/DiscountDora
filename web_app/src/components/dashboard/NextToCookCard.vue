@@ -46,7 +46,7 @@
              cooked a fortnight of dinners would read as broken. -->
         <div v-else-if="batchEnabled && hasPlannedMeals" class="dora-empty dora-empty-ok">
             <q-icon :name="ICONS.check_circle" size="20px" class="q-mr-sm" />
-            Nothing to cook — the pool covers what's planned.
+            Nothing to cook — you have ready servings for what's planned.
         </div>
         <div v-else class="dora-empty">
             Nothing planned for the next week.

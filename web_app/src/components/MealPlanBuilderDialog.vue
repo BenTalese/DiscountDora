@@ -151,19 +151,6 @@
 
                 <!-- ── Step 2 — Review ────────────────────────────────────── -->
                 <q-step :name="2" title="Review" :icon="ICONS.restaurant" :done="step > 2">
-                    <div class="row items-center q-mb-sm">
-                        <div class="text-subtitle2">
-                            {{ proposed.length }} meal{{ proposed.length === 1 ? '' : 's' }}
-                        </div>
-                        <q-space />
-                        <BaseButton
-                            variant="ghost" dense
-                            :icon="ICONS.refresh"
-                            label="Reshuffle"
-                            :loading="generatingProposal"
-                            @click="generate"
-                        />
-                    </div>
 
                     <div v-if="showShortfallHint" class="builder-hint">
                         <q-icon :name="ICONS.info" size="18px" class="builder-hint__icon" />
@@ -274,22 +261,6 @@
                                     >
                                         {{ reasonLabel(entry.reason_chip) }}
                                     </q-chip>
-                                    <!-- Cookability, flagged only when it's a
-                                         problem (owner call 2026-09-12). A meal
-                                         you can cook says nothing; one you
-                                         can't names the count, because that is
-                                         the number that decides whether it
-                                         stays on the plan. -->
-                                    <span
-                                        v-if="missingCount(entry) > 0"
-                                        class="builder-missing"
-                                    >
-                                        <q-icon :name="ICONS.add_shopping_cart" size="12px" />
-                                        {{ missingCount(entry) }} to buy
-                                        <BaseTooltip v-if="entry.missing_stock_item_names.length">
-                                            {{ entry.missing_stock_item_names.join(', ') }}
-                                        </BaseTooltip>
-                                    </span>
                                     <!-- The dollar figure is null unless the
                                          install has money on — the server
                                          stopped sending it otherwise (R-058),
@@ -327,12 +298,28 @@
                         </div>
                     </template>
 
-                    <BaseButton
-                        variant="secondary" dense class="q-mt-sm"
-                        :icon="ICONS.add"
-                        label="Add a meal"
-                        @click="openAdd"
-                    />
+                    <!-- Owner 2026-09-12 — the meal count went (the list is
+                         right there, and the Setup step already said how many
+                         it would plan), and Reshuffle came down here to sit
+                         opposite "Add a meal": both are "change what's in this
+                         proposal", so they belong on one row rather than at
+                         opposite ends of the step. -->
+                    <div class="row items-center q-mt-sm">
+                        <BaseButton
+                            variant="secondary" dense
+                            :icon="ICONS.add"
+                            label="Add a meal"
+                            @click="openAdd"
+                        />
+                        <q-space />
+                        <BaseButton
+                            variant="ghost" dense
+                            :icon="ICONS.refresh"
+                            label="Reshuffle"
+                            :loading="generatingProposal"
+                            @click="generate"
+                        />
+                    </div>
 
                     <!-- What you'll need (aggregate ingredient demand) -->
                     <q-separator class="q-my-md" />
@@ -687,15 +674,11 @@
         return REASON_LABELS[r] ?? '';
     }
 
-    // Cookability, counted from the cookbook rather than from the proposal: a
-    // manually added meal carries no `missing_stock_item_names` (the client
-    // builds that entry), and the recipe's own server-computed `missing_count`
-    // is the same number for both kinds of row (R-003). The names are only for
-    // the tooltip, so their absence costs nothing.
-    function missingCount(entry: DraftEntry): number {
-        const recipe = props.recipes.find((r) => r.recipe_id === entry.recipe_id);
-        return recipe ? recipe.missing_count : entry.missing_stock_item_names.length;
-    }
+    // A cookability marker lived on these rows for a few hours on 2026-09-12
+    // and was cut the same day (owner: *"I think it's just noise in the
+    // builder"*). It belongs on the planner's own cards, where you are looking
+    // at a committed week; here the "What you'll need" list below already
+    // aggregates exactly what the whole proposal is short of.
 
     // ── The add/swap picker's search ────────────────────────────────────────
     // The tray builder this used to call was retired on 2026-08-30 (Unit 2 of
@@ -1065,18 +1048,6 @@
         gap: var(--space-1) var(--space-2);
         font-size: calc(var(--font-size-sm) * 1rem);
         color: var(--text-secondary);
-    }
-    /* The one negative signal on the row. Amber ink is the D-002 contrast fail
-       the app corrects everywhere else, so the tint rides the glyph and the
-       words stay page ink. */
-    .builder-missing {
-        display: inline-flex;
-        align-items: center;
-        gap: 3px;
-        color: var(--text-primary);
-    }
-    .builder-missing .q-icon {
-        color: var(--semantic-warning);
     }
     .builder-reason {
         background: var(--surface-sunken);

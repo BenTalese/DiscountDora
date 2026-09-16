@@ -171,22 +171,34 @@ def display_denominator_for(
     Compute math is system-independent; only the rendered denominator changes.
     """
     if active_dim == COUNT:
-        return ("ea", 1.0)
-    if pricing_convention_for(system) == "US":
-        return _us_denominator(active_dim, latest_measure_in_canonical)
-    return _au_denominator(active_dim, latest_measure_in_canonical)
+        return (COUNT_DENOMINATOR.label, COUNT_DENOMINATOR.factor)
+    rule = PRICE_DISPLAY_RULES[pricing_convention_for(system)][active_dim]
+    chosen = rule.full if latest_measure_in_canonical >= rule.flip_at else rule.sub
+    return (chosen.label, chosen.factor)
 
 
-def _au_denominator(active_dim: str, measure_in_canonical: float) -> tuple[str, float]:
-    if active_dim == VOLUME:
-        if measure_in_canonical >= 1.0:
-            return ("L", 1.0)
-        return ("100ml", 10.0)
-    # MASS
-    if measure_in_canonical >= 1.0:
-        return ("kg", 1.0)
-    return ("100g", 10.0)
+@dataclass(frozen=True, slots=True)
+class DisplayDenominator:
+    """One shelf denominator: what it is called, and the number a price in the
+    dimension's :data:`CANONICAL_PRICE_UNIT` is divided by to land in it."""
+    label: str
+    factor: float
 
+
+@dataclass(frozen=True, slots=True)
+class DenominatorRule:
+    """The pair of denominators one convention uses for one dimension, and the
+    pack size (in the dimension's canonical unit) at which the larger one takes
+    over. Data rather than branches so `scripts/dump_units.py` can mirror the
+    rule to the SPA instead of the client restating it (R-003) — the price-entry
+    widget previews a denominator while you type, which can't round-trip."""
+    full: DisplayDenominator
+    sub: DisplayDenominator
+    flip_at: float
+
+
+# Count has no fractional convention either way, so it sits outside the table.
+COUNT_DENOMINATOR = DisplayDenominator("ea", 1.0)
 
 # US flip thresholds in the dimension's canonical unit:
 #   1 qt = 0.946 L (volume canonical)
@@ -195,22 +207,33 @@ def _au_denominator(active_dim: str, measure_in_canonical: float) -> tuple[str, 
 # `price / (qt-per-L)` = `price / 1.0567` ≈ `price × 0.946`.
 _US_FLIP_QT_L = 0.946352946
 _US_FLIP_LB_KG = 0.45359237
-_US_FACTOR_QT = 1.0 / _US_FLIP_QT_L          # qt per L  ≈ 1.0567
-_US_FACTOR_FL_OZ = 1000.0 / 29.5735           # fl oz per L  ≈ 33.8140
-_US_FACTOR_LB = 1.0 / _US_FLIP_LB_KG          # lb per kg  ≈ 2.2046
-_US_FACTOR_OZ = 1000.0 / 28.3495              # oz per kg  ≈ 35.2740
 
-
-def _us_denominator(active_dim: str, measure_in_canonical: float) -> tuple[str, float]:
-    if active_dim == VOLUME:
-        # 1 qt = 0.946 L. At-or-above 1 qt → /qt; below → /fl oz.
-        if measure_in_canonical >= _US_FLIP_QT_L:
-            return ("qt", _US_FACTOR_QT)
-        return ("fl oz", _US_FACTOR_FL_OZ)
-    # MASS — 1 lb = 0.4536 kg.
-    if measure_in_canonical >= _US_FLIP_LB_KG:
-        return ("lb", _US_FACTOR_LB)
-    return ("oz", _US_FACTOR_OZ)
+PRICE_DISPLAY_RULES: dict[str, dict[str, DenominatorRule]] = {
+    "AU": {
+        VOLUME: DenominatorRule(
+            full=DisplayDenominator("L", 1.0),
+            sub=DisplayDenominator("100ml", 10.0),
+            flip_at=1.0,
+        ),
+        MASS: DenominatorRule(
+            full=DisplayDenominator("kg", 1.0),
+            sub=DisplayDenominator("100g", 10.0),
+            flip_at=1.0,
+        ),
+    },
+    "US": {
+        VOLUME: DenominatorRule(
+            full=DisplayDenominator("qt", 1.0 / _US_FLIP_QT_L),      # qt per L ≈ 1.0567
+            sub=DisplayDenominator("fl oz", 1000.0 / 29.5735),        # fl oz per L ≈ 33.8140
+            flip_at=_US_FLIP_QT_L,
+        ),
+        MASS: DenominatorRule(
+            full=DisplayDenominator("lb", 1.0 / _US_FLIP_LB_KG),      # lb per kg ≈ 2.2046
+            sub=DisplayDenominator("oz", 1000.0 / 28.3495),           # oz per kg ≈ 35.2740
+            flip_at=_US_FLIP_LB_KG,
+        ),
+    },
+}
 
 
 # Practical price-entry picker whitelist. The conversion engine knows many

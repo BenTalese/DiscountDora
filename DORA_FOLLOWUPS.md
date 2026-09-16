@@ -39,6 +39,69 @@ long session summary. Distinct from the other logs:
 
 ---
 
+## [OPEN] FU-912 — an empty `web_app/PROJECT_STATE.md` is committed alongside the real one
+- **Raised:** 2026-09-13 (cook-mode batch — tripped over, not looked for)
+- **Type:** finding
+- **What:** `web_app/PROJECT_STATE.md` exists, is **0 bytes**, and is tracked
+  (last touched in `df0a2c19`, 2026-08-14). The real front door is
+  `PROJECT_STATE.md` at the repo root. A tool run from inside `web_app/` — which
+  is where every frontend command runs — resolves the relative path to the empty
+  one, reads nothing, and concludes the dashboard has been wiped. That is exactly
+  what happened this session before the absolute path was checked.
+- **Why deferred:** deleting a tracked file the owner may have created for a
+  reason is not something to do silently mid-batch, and it is one `git rm` once
+  confirmed.
+- **Recommended resolution:** now — confirm it is stray and `git rm` it.
+
+## [OPEN] FU-911 — `unit_price` on the product price axis is a *pack* price
+- **Raised:** 2026-09-13 (shelf-denominator batch)
+- **Type:** finding
+- **What:** on the product side, `unit_price` is `ProductOffer.price_now` — the
+  price of the pack, not a price per measure. It flows to
+  `PriceHistoryPage`'s headline and all-time-low figures (rendered with no
+  denominator, which is correct for a pack price) and, more consequentially, to
+  `threshold_unit_price`: a "tell me when it drops below $X" alert reads as a
+  per-unit threshold by its name and is a per-pack one in fact. Nothing renders
+  wrongly today; the name says something the value isn't, on the one axis where
+  per-unit and per-pack prices sit next to each other.
+- **Why deferred:** out of scope — the owner's report was about *displayed*
+  denominators, and these display correctly. Renaming crosses the DTO, the SPA
+  service types, the alert entity and a migration-backed column, which is its
+  own unit.
+- **Recommended resolution:** opportunistic — fold into the next piece of work
+  on the prices surface (it is naturally part of the **FU-703** keep/cut call).
+
+## [OPEN] FU-910 — `StockItemPriceHistoryDto.canonical_unit` carries the *display* unit
+- **Raised:** 2026-09-13 (shelf-denominator batch)
+- **Type:** finding
+- **What:** the field is named `canonical_unit` and commented "per canonical
+  unit (L / kg / ea)", but it is populated from
+  `build_stock_item_price_series`, which returns the **display** denominator —
+  so it can be `100g` or `100ml`, and under a US install `oz` or `fl oz`. The
+  points it labels are scaled to match, so the chart is right; only the name and
+  the comment are wrong. Spotted while tracing which surfaces already read
+  `display_denominator_for` (they all do — this one just mislabels the answer).
+- **Why deferred:** cosmetic, and renaming a DTO field is an API-shape change
+  that the SPA service type and the chart composable both follow. Not worth
+  bundling into a fix the owner was waiting on.
+- **Recommended resolution:** opportunistic — next time the price-history
+  endpoint is touched.
+
+## [OPEN] FU-909 — two implementations of the typeable count tile
+- **Raised:** 2026-09-12 (meal-planner feedback batch, sixth pass)
+- **Type:** finding
+- **What:** `NumberStepper` gained an `editable` tile so the meal menu's servings
+  control could be typed into; `MealPlanRecipeRow`'s cooked-count
+  (`.mp-row__tile` + `.mp-row__step`) has had its own since 2026-09-03. Same
+  control, same commit-on-Enter/blur behaviour, two stylesheets — exactly the
+  shape R-001 exists to stop.
+- **Why deferred:** converging them means porting the rail row's hover-hiding
+  (a list affordance the menu deliberately doesn't want) and its 30/44px sizing
+  into the shared component, i.e. re-skinning a control on a different surface
+  in the middle of a batch scoped to the planner's cards.
+- **Recommended resolution:** opportunistic — next time either control is
+  touched, or as a small unit of its own.
+
 ## [OPEN] FU-908 — every meal-plan fetch now loads the whole cookbook's cookability
 - **Raised:** 2026-09-12 (meal-planner feedback batch)
 - **Type:** finding

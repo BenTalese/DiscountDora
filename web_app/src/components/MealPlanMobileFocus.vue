@@ -5,7 +5,17 @@
             <BaseButton variant="icon" :icon="ICONS.arrow_back" @click="goPrevWeek">
                 <BaseTooltip>Previous week</BaseTooltip>
             </BaseButton>
-            <div class="mobile-focus__weeknav-label">{{ weekRangeLabel }}</div>
+            <!-- Owner 2026-09-13 — the same heading voice the desktop toolbar
+                 and the month grid use, and the same second line: where you are
+                 on the left, how full the week is on the right. The phone had a
+                 plain bold label and neither figure. -->
+            <div class="mobile-focus__weeknav-block">
+                <div class="mobile-focus__weeknav-label">{{ weekRangeLabel }}</div>
+                <div class="mobile-focus__weeknav-meta text-caption dora-text-muted">
+                    <span>{{ weekRelativeLabel }}</span>
+                    <span v-if="plannedCount > 0">{{ plannedCount }} planned</span>
+                </div>
+            </div>
             <BaseButton variant="icon" :icon="ICONS.arrow_forward" @click="goNextWeek">
                 <BaseTooltip>Next week</BaseTooltip>
             </BaseButton>
@@ -92,14 +102,33 @@
 
         <!-- FU-596 — flagship "Build my week" entry point. Dora's audience is
             mobile, so the auto-planner must be reachable here, not just on the
-            desktop toolbar. -->
-        <BaseButton
-            variant="primary"
-            class="full-width q-mt-sm"
-            :icon="ICONS.dora_voice"
-            label="Build my week"
-            @click="emit('openBuilder')"
-        />
+            desktop toolbar.
+
+            Owner 2026-09-13 — "Apply template" joins it, side by side and equal
+            width. They are the two ways to fill an empty week in one move, so
+            they read as a pair here exactly as they now do in the desktop
+            toolbar; applying was a menu item on the phone and a promoted button
+            on the desktop, which is the kind of difference nobody decided. -->
+        <div class="mobile-focus__weekactions q-mt-sm">
+            <BaseButton
+                variant="primary"
+                :icon="ICONS.dora_voice"
+                label="Build my week"
+                @click="emit('openBuilder')"
+            />
+            <BaseButton
+                variant="secondary"
+                :icon="ICONS.event_repeat"
+                label="Apply template"
+                @click="emit('openTemplates')"
+            />
+        </div>
+
+        <!-- Owner 2026-09-13 — the over-budget banner had no phone home at all;
+             it rendered inside the desktop week scroller only. The page fills
+             this slot with the same component, so there is one warning, placed
+             at the top of the week's content at both breakpoints. -->
+        <slot name="alert" />
 
         <!-- Day strip — 7 day buttons across the top. Today is highlighted;
             the focused day carries the primary accent. -->
@@ -143,20 +172,17 @@
         <div class="mobile-focus__day-header">
             <div>
                 <div class="text-h6 q-mb-none">{{ focusedDayLongLabel }}</div>
-                <!-- Owner 2026-09-05 — the day's cost joins the day's count.
-                     The desktop week card carries it in its own header cell;
-                     the phone has one caption line, so it rides there. Money-
-                     gated install-wide. -->
-                <div class="text-caption dora-text-muted">
-                    {{ focusedDayHumanCount }}<template v-if="focusedDayCostLabel">
-                        · {{ focusedDayCostLabel }}</template>
-                </div>
+                <!-- Owner 2026-09-12 — the day's cost rollup is gone here too:
+                     every meal carries its own price chip now, so the day's
+                     spend reads off the column and the coverage fraction is
+                     visible as the chips that aren't there. -->
+                <div class="text-caption dora-text-muted">{{ focusedDayHumanCount }}</div>
             </div>
             <q-badge
                 v-if="focusedDayIso === currentDayIso"
                 color="primary"
-                class="q-ml-sm"
-                label="Today"
+                class="q-ml-sm mobile-focus__today"
+                label="TODAY"
             />
         </div>
 
@@ -254,33 +280,32 @@
     import MealPlanDayPips from 'src/components/MealPlanDayPips.vue';
     import MealPlanRichCard from 'src/components/MealPlanRichCard.vue';
     import { ICONS } from 'src/style/icons';
-    import { formatMoney } from 'src/composables/useMoney';
-    import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
-    import type { MealPlanDayCost, MealPlanEntry } from 'src/models/mealPlan';
+    import { useBatchEnabled } from 'src/composables/useBatchEnabled';
+    import type { MealPlanEntry } from 'src/models/mealPlan';
     import type { WeekDay } from 'src/composables/useMealPlanner';
     import { dayPips } from 'src/helpers/mealPlanDayPips';
     import { keyedEntries } from 'src/helpers/mealPlanEntryKey';
     import { localTodayIso } from 'src/helpers/weekDates';
     import { computed, ref, watch } from 'vue';
 
+    const { batchEnabled } = useBatchEnabled();
+
     const props = defineProps<{
         weekDays: WeekDay[];
         slotNames: readonly string[];
         entriesFor: (dayIso: string) => MealPlanEntry[];
-        /** Owner 2026-09-05 — that day's server-summed cost, looked up by the
-         *  page the same way `entriesFor` is. */
-        dayCost: (dayIso: string) => MealPlanDayCost | null;
         isPastDay: (dayIso: string) => boolean;
         currentDayIso: string;
         weekRangeLabel: string;
+        /** "This week" / "in 2 weeks" — the same server-anchored label the
+         *  desktop toolbar shows beside the range. */
+        weekRelativeLabel: string;
         plannedCount: number;
         /** Gates "Save week as template…" on the same fact the desktop
          *  toolbar's copy of that item gates on (R-003 — one predicate, owned
          *  by the page). */
         canSaveCurrentWeek: boolean;
     }>();
-
-    const { moneyEnabled } = useMoneyEnabled();
 
     const emit = defineEmits<{
         (e: 'entryView', recipeId: string): void;
@@ -305,7 +330,7 @@
     /** Same coding as the desktop month grid, from the same helper: each
      *  entry's own server-owned `consumed_at` + `needs_cooking` (R-003). */
     function pipsFor(dayIso: string) {
-        return dayPips(props.entriesFor(dayIso));
+        return dayPips(props.entriesFor(dayIso), batchEnabled.value);
     }
 
     /** The pips' text alternative. A chip reading "M 15" with three coloured
@@ -342,11 +367,11 @@
     const focusedDayLongLabel = computed(() => {
         const day = props.weekDays.find((d) => d.iso === focusedDayIso.value);
         if (!day) return '';
-        return formatLocaleDate(day.iso, {
-            weekday: 'long',
-            day: 'numeric',
-            month: 'long',
-        });
+        // Owner 2026-09-13 — the weekday only. The week's range is two rows
+        // above and the day strip under it carries the numbers, so "Sunday 13
+        // September" was the third statement of the same date — the duplication
+        // that took the dates off the desktop day headers on 09-12.
+        return formatLocaleDate(day.iso, { weekday: 'long' });
     });
     const focusedDayHumanCount = computed(() => {
         const n = props.entriesFor(focusedDayIso.value).length;
@@ -354,29 +379,15 @@
         return `${n} meal${n === 1 ? '' : 's'} planned`;
     });
 
-    /** The day's estimated cost, with its coverage when some meals couldn't be
-     *  priced — a day costed from one of three meals must not read as a cheap
-     *  day. Empty string when there is nothing honest to say. */
-    const focusedDayCostLabel = computed(() => {
-        if (!moneyEnabled.value) return '';
-        const cost = props.dayCost(focusedDayIso.value);
-        if (!cost || cost.estimated_cost === null) return '';
-        const coverage = cost.counted_meals < cost.total_meals
-            ? ` (${cost.counted_meals}/${cost.total_meals})`
-            : '';
-        return `${formatMoney(cost.estimated_cost)}${coverage}`;
-    });
-
     function dayOfMonth(iso: string): number {
         return new Date(iso).getDate();
     }
 
     // `onListCount` / `weekStatusCaption` / `addToListLabel` lived here to feed
-    // the collapsible consequences card. All three went with it on 2026-09-03:
-    // the caption existed only to summarise a panel that was open by default,
-    // and the other two are `MealPlanWeekStatus`'s and
-    // `MealPlanShoppingSummary`'s own business now that the page renders those
-    // two directly.
+    // the collapsible consequences card. All three went with it on 2026-09-03;
+    // what survived of that summary was the week-status banner, and the owner
+    // deleted that too on 2026-09-12 as a restatement of the cards and the
+    // rail. `MealPlanShoppingSummary` owns what's left.
 
     /**
      * The focused day as one section per meal slot.
@@ -432,9 +443,34 @@
         gap: 6px;
         justify-content: center;
     }
+    .mobile-focus__weeknav-block {
+        flex: 1 1 auto;
+        min-width: 0;
+        text-align: center;
+    }
+    /* `.planner-toolbar__range` / `.cal__month`'s voice. */
     .mobile-focus__weeknav-label {
-        font-weight: 600;
-        font-size: 0.95rem;
+        font-size: calc(var(--font-size-md) * 1rem);
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+    }
+    .mobile-focus__weeknav-meta {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: var(--space-2);
+    }
+    /* Equal halves, so neither week-filling action reads as the smaller
+       option. They wrap rather than squeeze their labels below ~300px. */
+    .mobile-focus__weekactions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--space-2);
+    }
+    .mobile-focus__weekactions > * {
+        flex: 1 1 10rem;
+        min-width: 0;
     }
     .mobile-focus__day-strip {
         display: grid;
@@ -496,6 +532,10 @@
         display: flex;
         align-items: center;
         padding: 4px 0;
+    }
+    .mobile-focus__today {
+        letter-spacing: 0.06em;
+        font-weight: 700;
     }
     .mobile-focus__entries {
         display: flex;

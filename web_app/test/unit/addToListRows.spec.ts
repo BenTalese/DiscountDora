@@ -194,7 +194,10 @@ describe('rowsFromMealPlanIngredients', () => {
 
     it('maps the unlinked report into the dialog\'s shape', () => {
         expect(unlinkedFromMealPlan([
-            { recipe_name: 'Chilli', ingredient_name: 'a pinch of luck' },
+            {
+                recipe_name: 'Chilli', ingredient_name: 'a pinch of luck',
+                recipe_id: 'r-1', quantity: null, unit: null,
+            },
         ])).toEqual([
             { sourceName: 'Chilli', ingredientName: 'a pinch of luck' },
         ]);

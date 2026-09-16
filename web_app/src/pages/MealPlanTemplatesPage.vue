@@ -7,21 +7,86 @@
                 <BaseTooltip>Back to the planner</BaseTooltip>
             </BaseButton>
             <div class="q-ml-sm">
-                <div class="text-h6">Rotating template sets</div>
+                <div class="text-h6">Templates</div>
                 <div class="text-caption dora-text-muted">
-                    Ordered lists of templates that rotate week-to-week.
-                    Manage individual templates from the planner's
-                    <strong>Templates</strong> drawer.
+                    Saved weeks you can apply from the planner, and the sets
+                    that rotate through them.
                 </div>
             </div>
         </div>
 
-        <!-- FU-308 (2026-07-07) — the Templates section was retired
-             here. The planner's Templates drawer now owns Apply / Rename /
-             Clone / Delete / Save-current-week / Apply-recurring, and its
-             inline rename is a nicer surface than the old
-             `$q.dialog.prompt` this page used. This page is now
-             Sets-only. -->
+        <!-- **Owner 2026-09-13 — this reverses FU-308 (2026-07-07) on
+             purpose.** That change moved per-template rename/delete INTO the
+             planner's Templates drawer, on the reasoning that managing a
+             template belongs beside applying it. In use that made the drawer
+             four surfaces in one — the owner's verdict was *"genuinely terrible
+             and a little confusing"* — so the planner's dialog is now only
+             about applying, and housekeeping comes back here, reached from the
+             week menu's **Manage templates…**.
+
+             What FU-308 got right is kept: the rename is inline, not the
+             `$q.dialog.prompt` this page used before it. -->
+
+        <!-- ── Your templates ─────────────────────────────────────────── -->
+        <q-card flat bordered>
+            <q-card-section class="q-pb-xs">
+                <div class="text-subtitle1">Your templates</div>
+                <div class="text-caption dora-text-muted">
+                    Rename or delete them here; apply them from the planner.
+                </div>
+            </q-card-section>
+            <q-separator />
+            <div v-if="templates.length === 0" class="dora-text-muted q-pa-lg text-center">
+                No templates yet. Plan a week, then use
+                <strong>Save week as template</strong> in the planner's week menu.
+            </div>
+            <q-list v-else separator>
+                <q-item v-for="t in templates" :key="t.meal_plan_template_id">
+                    <q-item-section>
+                        <q-item-label v-if="renamingId !== t.meal_plan_template_id">
+                            {{ t.name }}
+                        </q-item-label>
+                        <q-item-label v-else>
+                            <q-input
+                                v-model="renameDraft"
+                                dense outlined autofocus
+                                @keyup.enter="confirmRename(t.meal_plan_template_id)"
+                                @keyup.esc="cancelRename"
+                            />
+                        </q-item-label>
+                        <q-item-label caption>
+                            {{ t.entry_count }} meal{{ t.entry_count === 1 ? '' : 's' }}
+                            <span v-if="t.description"> · {{ t.description }}</span>
+                        </q-item-label>
+                    </q-item-section>
+                    <q-item-section side>
+                        <div class="row items-center no-wrap q-gutter-xs">
+                            <template v-if="renamingId === t.meal_plan_template_id">
+                                <BaseButton
+                                    variant="ghost" dense label="Save"
+                                    :loading="renaming"
+                                    :disable="!renameDraft.trim()"
+                                    @click="confirmRename(t.meal_plan_template_id)"
+                                />
+                                <BaseButton variant="ghost" dense label="Cancel" @click="cancelRename" />
+                            </template>
+                            <template v-else>
+                                <BaseButton variant="icon" :icon="ICONS.edit" @click="startRename(t)">
+                                    <BaseTooltip>Rename</BaseTooltip>
+                                </BaseButton>
+                                <BaseButton
+                                    variant="danger-ghost" :icon="ICONS.delete_outline"
+                                    round dense
+                                    @click="confirmDeleteTemplate(t)"
+                                >
+                                    <BaseTooltip>Delete</BaseTooltip>
+                                </BaseButton>
+                            </template>
+                        </div>
+                    </q-item-section>
+                </q-item>
+            </q-list>
+        </q-card>
 
         <!-- ── Rotating sets ──────────────────────────────────────────── -->
         <q-card flat bordered>
@@ -147,11 +212,53 @@
         void router.push('/meal-plans');
     }
 
-    // FU-308 (2026-07-07) — per-template CRUD (rename / clone / delete)
-    // retired from this page; the planner's Templates drawer is now the
-    // single surface for those actions. `templates` is still loaded on
-    // mount because the set-editor's "Add a template" picker needs the
-    // list of available templates.
+    // ── Your templates (rename / delete) ─────────────────────────────────────
+    // Back on this page as of 2026-09-13 — see the template's note on why that
+    // reverses FU-308. Inline rename, as FU-308 introduced it.
+    const renamingId = ref<string | null>(null);
+    const renameDraft = ref('');
+    const renaming = ref(false);
+
+    function startRename(t: { meal_plan_template_id: string; name: string }) {
+        renamingId.value = t.meal_plan_template_id;
+        renameDraft.value = t.name;
+    }
+    function cancelRename() {
+        renamingId.value = null;
+        renameDraft.value = '';
+    }
+    async function confirmRename(id: string) {
+        const next = renameDraft.value.trim();
+        if (!next) return;
+        renaming.value = true;
+        try {
+            await templateStore.updateAsync(id, { name: next });
+            cancelRename();
+            $q.notify({ type: 'positive', position: 'bottom-right', message: 'Renamed.' });
+        } catch (err) {
+            $q.notify({
+                type: 'negative', position: 'bottom-right',
+                message: "Couldn't rename that template.",
+                caption: toastCaption(err),
+            });
+        } finally {
+            renaming.value = false;
+        }
+    }
+
+    function confirmDeleteTemplate(t: { meal_plan_template_id: string; name: string }) {
+        // A template a set rotates through is still deletable; the set keeps its
+        // slot and renders "(deleted template)", which `templateNameFor` has
+        // always handled.
+        $q.dialog({
+            title: 'Delete template',
+            message: `Delete the template "${t.name}"? Weeks you've already planned from it are unaffected.`,
+            cancel: true,
+            ok: { label: 'Delete', noCaps: true, color: 'negative' },
+        }).onOk(() => void run(
+            () => templateStore.deleteAsync(t.meal_plan_template_id), 'Deleted.',
+        ));
+    }
 
     // ── Sets ─────────────────────────────────────────────────────────────────
     const setEditorOpen = ref(false);

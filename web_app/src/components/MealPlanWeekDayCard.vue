@@ -25,53 +25,35 @@
                 size="18px"
                 class="q-mr-xs dora-text-muted"
             />
-            <div class="text-weight-bold">{{ day.label }}</div>
-            <div class="text-caption q-ml-sm dora-text-muted">{{ formatDate(day.iso) }}</div>
-            <q-badge v-if="isToday" color="primary" class="q-ml-sm" label="Today" />
+            <!-- Owner 2026-09-12 — the day name wears the auto builder's day-
+                 divider voice (uppercase, tracked, secondary ink), so the two
+                 places the app separates days speak the same way. It is a
+                 heading over a column of meals, not a row of content, and the
+                 old bold body text read as the first of them. -->
+            <!-- Owner 2026-09-12 — the date is gone: *"just show the day text,
+                 we know which dates by looking at the top of the page."* The
+                 toolbar names the week, and seven dates repeated under it were
+                 the widest thing in a narrow column. Still in the header's
+                 `aria-label` and in every tooltip that names a day, where there
+                 is no week banner to have just read. -->
+            <div class="day-card__name">{{ day.label }}</div>
+            <!-- Owner 2026-09-12 — caps. It is a marker, not a word in a
+                 sentence, and it sits beside a day name that is now uppercase
+                 itself. -->
+            <q-badge v-if="isToday" color="primary" class="q-ml-sm day-card__today" label="TODAY" />
             <!-- Collapsed, the header IS the card, so it has to say what the
                  day held — otherwise a folded past week reads as an empty one. -->
             <div v-if="collapsed" class="day-card__summary text-caption dora-text-muted">
                 {{ collapsedSummary }}
             </div>
             <q-space />
-            <!-- FU-637 — a serving of each meal planned for this day. Not an
-                 intake figure: the plan schedules food, not plates for named
-                 people. Shows the shortfall when some meals couldn't be
-                 counted, so a light-looking day can't be a half-counted one. -->
-            <div v-if="nutrition && nutrition.kcal_per_serving !== null" class="text-caption dora-text-muted">
-                {{ Math.round(nutrition.kcal_per_serving) }} kcal
-                <span v-if="nutrition.counted_meals < nutrition.total_meals">
-                    ({{ nutrition.counted_meals }}/{{ nutrition.total_meals }})
-                </span>
-                <BaseTooltip>
-                    One serving of each meal planned for {{ day.label }}<template
-                        v-if="nutrition.counted_meals < nutrition.total_meals"
-                    >, counting {{ nutrition.counted_meals }} of
-                    {{ nutrition.total_meals }} meals — the rest don't have a
-                    calorie figure yet</template>.
-                </BaseTooltip>
-            </div>
-            <!-- Owner 2026-09-05 — the day's cost sits where the day's calories
-                 do, because it is the same kind of fact under the same coverage
-                 rule. Money-gated install-wide; with money off the server sends
-                 no figure and the cell doesn't exist. -->
-            <div
-                v-if="moneyEnabled && cost && cost.estimated_cost !== null"
-                class="text-caption dora-text-muted q-ml-sm"
-            >
-                {{ formatMoney(cost.estimated_cost) }}
-                <span v-if="cost.counted_meals < cost.total_meals">
-                    ({{ cost.counted_meals }}/{{ cost.total_meals }})
-                </span>
-                <BaseTooltip>
-                    Estimated cost of {{ day.label }}'s meals at the servings
-                    they're planned for<template
-                        v-if="cost.counted_meals < cost.total_meals"
-                    >, counting {{ cost.counted_meals }} of
-                    {{ cost.total_meals }} meals — the rest have nothing priced
-                    yet</template>.
-                </BaseTooltip>
-            </div>
+            <!-- Owner 2026-09-13 — the per-day kcal cell is gone, following the
+                 per-day cost rollup out on 09-12 and for the same reason: it is
+                 a total you don't read, on a header you scan. Calories are
+                 decided on the recipe and shown on the meal, and the phone's
+                 day header never had this cell — so removing it also closes a
+                 desktop/mobile gap rather than opening one (FU-637's figure
+                 survives in the DTO and on the recipe surfaces). -->
         </component>
         <q-card-section v-if="!collapsed" class="q-pa-sm column q-gutter-xs">
             <!-- R-Phase 6 §4.6 — slot row is a real <button> so it's
@@ -190,18 +172,13 @@
 </template>
 
 <script lang="ts" setup>
-    import BaseTooltip from 'src/components/BaseTooltip.vue';
     import MealPlanEntryChip from 'components/MealPlanEntryChip.vue';
     // Content-identity keys, not `meal_plan_entry_id` — see the helper's note:
     // every save mints new entry ids, which remounted the chip mid-edit and
     // took its open menu with it.
     import { keyedEntries } from 'src/helpers/mealPlanEntryKey';
     import { ICONS } from 'src/style/icons';
-    import { formatMoney } from 'src/composables/useMoney';
-    import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
-    import type {
-        MealPlanDayCost, MealPlanDayNutrition, MealPlanEntry,
-    } from 'src/models/mealPlan';
+    import type { MealPlanEntry } from 'src/models/mealPlan';
     import type { WeekDay } from 'src/composables/useMealPlanner';
     import { computed, ref, watch } from 'vue';
 
@@ -229,15 +206,7 @@
          * minority sharing the view with days you can still act on.
          */
         collapsedByDefault?: boolean;
-        /** FU-637 — this day's server-summed calories. Null when nutrition is
-         *  off or nothing on the day could be counted. */
-        nutrition?: MealPlanDayNutrition | null;
-        /** Owner 2026-09-05 — this day's server-summed cost. Null when money
-         *  features are off or nothing on the day could be priced. */
-        cost?: MealPlanDayCost | null;
     }>();
-
-    const { moneyEnabled } = useMoneyEnabled();
 
     /* User-owned once the user touches it; re-seeded whenever the host's
        default changes — which is what a week change looks like from in here,
@@ -259,10 +228,12 @@
             ...props.otherEntries,
         ];
         if (!all.length) return 'nothing planned';
-        // Names, not a bare count: "2 meals" is exactly as uninformative as the
-        // folded card it is standing in for. Clamped by CSS, not by slicing —
-        // a truncated list is still a list, whereas "+1 more" is another count.
-        return all.map((e) => e.recipe_name).join(', ');
+        // Owner 2026-09-12 — a count, not the names. Folding is only offered
+        // for days already gone (`collapsedByDefault`), and reading back what
+        // you ate on Monday is not what the fold is for: it exists to get the
+        // past out of the way. The names were the 2026-09-0x reading of the
+        // same line, when the fold was thought of as a summary.
+        return `${all.length} meal${all.length === 1 ? '' : 's'}`;
     });
 
     /* The slot picked from the add-meal menu, held until the menu has finished
@@ -342,6 +313,17 @@
         color: inherit;
         text-align: left;
     }
+    .day-card__name {
+        font-size: calc(var(--font-size-sm) * 1rem);
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--text-secondary);
+    }
+    .day-card__today {
+        letter-spacing: 0.06em;
+        font-weight: 700;
+    }
     .day-card__head--toggle {
         cursor: pointer;
     }
@@ -397,11 +379,13 @@
     .day-card--has-target {
         border-color: var(--q-primary);
     }
+    /* Owner 2026-09-12 — part of the middle pane's type bump; 0.78rem beside a
+       1rem meal name read as a different app. */
     .slot-row__label {
         flex: 0 0 5.5rem;
-        font-size: 0.78rem;
+        font-size: calc(var(--font-size-sm) * 1rem);
         font-weight: 600;
-        padding-top: 4px;
+        padding-top: 6px;
         color: var(--text-secondary);
     }
     .slot-row__entries {

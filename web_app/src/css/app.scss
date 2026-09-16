@@ -79,7 +79,22 @@ body {
 // ten themes (and any future one) are covered without touching this file.
 .q-notification.dora-toast--info {
     background: var(--surface-elevated);
-    color: var(--text-primary);
+    // Owner feedback 2026-09-13: *"I saw a blank blue info toast when I was
+    // offline reconnecting."* Every info toast in the app had been rendering
+    // its message in invisible text since the B7/D-002 change — white on a
+    // 97%-lightness surface. It read as blank because the icon, the left spine
+    // and the progress bar (all `--semantic-info`) were the only things left
+    // to see; hence "blue". Only light themes were affected, which is why it
+    // survived this long.
+    //
+    // `!important` because Quasar seeds every notification with
+    // `textColor: 'white'` and emits it as the class `text-white`, which its
+    // own stylesheet declares `!important`. Nothing short of that wins, and
+    // the alternative (suppressing the seed from the registration) is a cast
+    // past `exactOptionalPropertyTypes`. This is the D-002 "toast ink follows
+    // the theme" rule being enforced against a library default, not a
+    // specificity shortcut.
+    color: var(--text-primary) !important;
     border-left: 3px solid var(--semantic-info);
     border-radius: var(--radius-md);
     box-shadow: var(--elevation-2);

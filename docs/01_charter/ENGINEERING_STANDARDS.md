@@ -3175,6 +3175,49 @@ one-off, or purely product/UX decisions (those go to the Charter check + worklog
 - **Established:** 2026-09-09 (`BaseTooltip`, 313 call sites across 81 files).
   Prior art it now generalises: `BaseButton`, `BaseDialog`, `BaseSelect`. See
   ADR-085.
+- **Amendment, 2026-09-13 — a wrapper default is a default, not a law.** The
+  wrapper's job is to make the *common* case right without 313 authors having to
+  think; it is not a ban on the prop. A call site may override it when the
+  control's semantics genuinely differ, and the override carries a comment
+  saying why. Worked example: `BaseTooltip`'s 500 ms dwell exists so a tap on a
+  **button** doesn't flash its label on the way to doing the button's job —
+  but `InfoTip`'s (?) chip has no other job, so the dwell is pure latency on the
+  only gesture the control has, and it sets `:delay="0"`. The signal that this
+  is a legitimate override rather than drift: it is set **in a shared component**
+  (so it is still one decision in one place), not sprayed across pages. The
+  violation signal above stands unchanged — "the same prop set to the same value
+  at more than ~3 call sites" is what distinguishes drift from a reasoned
+  exception.
+
+
+### R-089 — A domain convention the client must apply *before* a round-trip is codegen-mirrored, never restated
+- **Rule:** when the server owns a rule (R-003) but a client surface has to apply
+  it to a value the server has never seen — a live preview, an offline path, a
+  figure being typed — do **not** hand-write a second copy of the rule, and do
+  **not** contort the UI into a round-trip it can't afford. Make the rule *data*
+  on the Python side and emit it into `web_app/src/generated/` via the dump
+  script, then write a thin client reader over the generated constants.
+- **Why:** the two obvious options are both wrong. A hand-written copy is R-003
+  drift by construction and it *will* diverge — the recipe cost dialog's private
+  "flip to /kg below $0.05" threshold and the price-entry widget's no-flip-at-all
+  were two different answers to a question `units.display_denominator_for` had
+  already answered, and neither followed the install's measurement system. A
+  forced round-trip is worse UX for no correctness gain: you cannot ask the
+  server what a price you haven't logged yet should be quoted per.
+- **How to comply:** restructure the Python so the rule is a table plus a thin
+  function over it (branches can't be emitted; data can). Extend
+  `scripts/dump_units.py` — or the equivalent generator — with an emitter, and
+  re-run it; the output is checked in. The client reader lives in `helpers/`,
+  names the Python function it mirrors, and states in its header that it is a
+  reader and not a second copy. Sweep the existing hand-rolled copies in the same
+  change, or you have added a third convention rather than removed two.
+- **Violation signal:** a threshold, factor, or unit label typed into a `.vue`
+  or `.ts` file that also appears in `dora_api/domain/`; a client helper whose
+  comment explains a *domain* rule rather than pointing at one; a `src/generated/`
+  file edited by hand.
+- **Established:** 2026-09-13 (shelf-denominator convention: "$0.01 per g" →
+  "$0.70 per 100g"). Prior art it now generalises: the `units_table.ts` mirror
+  itself (B2), which had the mechanism but never stated the rule. See ADR-086.
 
 
 ### ADR-001 — Adopt engineering standards + mandatory explain-or-flag gate
@@ -5798,3 +5841,53 @@ A non-binding cookbook of solutions to recurring problems. Not rules — just a
   - The 500ms value is a first guess at the feel and is the one thing here that
     wants the owner's eye on a real phone. Logged in `DORA_VERIFY.md`.
 - **Rule promoted:** R-088.
+
+### ADR-086 — A convention the client must apply live is generated, not retyped (promotes R-089)
+- **Date / task:** 2026-09-13 (owner feedback: *"Log price and possibly other
+  areas I can't recall — shouldn't be displaying in such low amounts e.g.
+  '≈ $0.01 per g'. Stores always show per 100g, or per 100ml. Ensure we match
+  logical displays of pricing and units compared to real store websites."*)
+- **Status:** accepted
+- **Context:** the convention the owner is describing already existed and was
+  already correct: `units.display_denominator_for` quotes per 100g/100ml below a
+  full kilo or litre and per kg/L at or above it, switching to lb/oz and qt/fl oz
+  on a US install. Four server-rendered surfaces read it (the YourPrices widget,
+  the price chart axis, the offers sidecar, reports). The two surfaces the owner
+  was looking at did not, and they could not: `PriceEntry.vue` previews a per-unit
+  price *while you type*, and `RecipeCostDialog.vue` renders a price the cost DTO
+  ships in the linked product's own raw `size_unit`. Both had grown a private
+  answer instead — the entry widget divided straight through and printed
+  "$0.01 per g"; the cost dialog flipped to /kg below a $0.05 threshold of its
+  own, so the same product could read "/kg" in one place and "/100g" in another,
+  and neither followed the measurement system.
+- **Decision:** restructure the Python rule into a data table
+  (`PRICE_DISPLAY_RULES`, keyed convention × dimension, each row a full/sub
+  denominator pair plus the pack size at which the full one takes over) with the
+  existing function as a thin read over it; emit that table, `CANONICAL_PRICE_UNIT`
+  and the system→convention map into `units_table.ts` from `scripts/dump_units.py`;
+  add `helpers/unitPriceDisplay.ts` as a reader; point both surfaces at it and
+  delete the two private rules. Behaviour of `display_denominator_for` is byte-for-
+  byte unchanged — verified across both conventions, both dimensions and the flip
+  boundaries before and after.
+- **Alternatives considered:**
+  - *Hand-write the convention in TypeScript.* Rejected — R-003 drift by
+    construction, and the two rules being replaced are the evidence for what that
+    costs.
+  - *Add display fields to the recipe cost DTO and fix the dialog server-side.*
+    Genuinely correct for that one surface, and tempting because `unit_price` is
+    load-bearing for the cost math so it would have needed new fields rather than
+    a changed meaning. Rejected because it does nothing for the price-entry
+    preview — which is the surface the owner actually named — so the client would
+    still have needed the rule, and we'd have paid for both.
+  - *Round-trip the preview to the server on each keystroke.* Rejected; a
+    debounced network call to render a number we already have every input for.
+- **Consequences:**
+  - One convention, two languages, one source. A US install now gets /lb and /oz
+    in the entry preview and the cost breakdown, which it never did.
+  - The recipe cost dialog's numbers move: "$0.00 / g" spaghetti became
+    "$0.30 / 100g", and lines already quoted per kg / L / ea are untouched.
+    Confirmed against 27 real cost lines in the dense seed.
+  - `scripts/dump_units.py` gains an emitter; `units_table.ts` is regenerated and
+    stays checked in. Any later change to the convention is a Python edit plus a
+    re-run, and a stale mirror shows up as a diff.
+- **Rule promoted:** R-089.

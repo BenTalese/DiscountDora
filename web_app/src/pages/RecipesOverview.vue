@@ -131,9 +131,9 @@
                  doesn't gain a stray un-aligned glyph. -->
             <FilterChip v-model="cookableNowOnly" :icon="ICONS.chef_hat" active-color="positive">
                 Cookable now
-                <q-icon :name="ICONS.help_outline" size="14px" class="q-ml-xs">
-                    <BaseTooltip>Recipes where every ingredient is currently in stock.</BaseTooltip>
-                </q-icon>
+                <InfoTip label="What cookable now means">
+                    Recipes where every ingredient is currently in stock.
+                </InfoTip>
             </FilterChip>
             <!-- "Meals prepared" (was "Have meals in pool"): portions you've
                  already cooked ahead and can eat now. Only meaningful when the
@@ -524,6 +524,7 @@
 
 <script lang="ts" setup>
     import BaseTooltip from 'src/components/BaseTooltip.vue';
+    import InfoTip from 'src/components/help/InfoTip.vue';
     import { ICONS } from 'src/style/icons';
     import AppSpinner from 'src/components/AppSpinner.vue';
     import BaseButton from 'src/components/BaseButton.vue';

@@ -42,12 +42,18 @@
     border-radius: var(--radius-md, 6px);
 }
 
+// The fallback is load-bearing, not decoration: `--dora-step-num` is declared
+// on `.dora-steps`, and cook mode's "All steps" list uses the numeral on its
+// own inside a `q-item` (2026-09-13) — no `.dora-steps` ancestor to inherit
+// from, so without it both dimensions resolve to `auto` and the circle
+// collapses. Anything that wants a different size still declares the variable
+// on an ancestor and wins.
 .dora-steps__num {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: var(--dora-step-num);
-    height: var(--dora-step-num);
+    width: var(--dora-step-num, 34px);
+    height: var(--dora-step-num, 34px);
     border-radius: var(--radius-full, 50%);
     background: var(--brand-primary-soft);
     color: var(--brand-primary);

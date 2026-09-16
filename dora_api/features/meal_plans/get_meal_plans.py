@@ -112,6 +112,13 @@ class MealPlanEntryDto:
     # are not counted here for the same reason the cookbook doesn't count them:
     # "we don't know" is not "you're missing something".
     missing_count: int = 0
+    # Owner 2026-09-12 — what ONE COOK of this entry's linked batch costs: the
+    # sum of the batch's own per-entry figures, so it can't drift from the week
+    # total. The cook day's price chip prints this (it is the cost of the
+    # servings that card states it will produce) and the leftover days print
+    # nothing — the money is spent once. None for a standalone meal, and
+    # whenever the batch couldn't be priced.
+    cook_batch_estimated_cost: float | None = None
 
     @classmethod
     def from_entity(cls, entry: MealPlanEntry) -> 'MealPlanEntryDto':
@@ -504,11 +511,34 @@ class GetMealPlansHandler:
                 ))
             return rows
 
+        def _batch_costs(entries: list[MealPlanEntryDto]) -> dict:
+            """What one cook of each linked batch costs — the sum of its days'
+            own figures, so the cook day's chip and the week total can't
+            disagree (owner 2026-09-12: the card that says "Cook day · 6
+            servings" prices those six, and its leftover days price nothing,
+            because you spend the money once)."""
+            by_batch: dict = defaultdict(list)
+            for entry in entries:
+                if entry.cook_batch_id is not None and entry.estimated_cost is not None:
+                    by_batch[entry.cook_batch_id].append(entry.estimated_cost)
+            return {
+                batch_id: round(sum(costs), 2)
+                for batch_id, costs in by_batch.items() if costs
+            }
+
         hydrated = []
         for plan in plans:
             entries = [
                 dataclasses.replace(entry, estimated_cost = _entry_cost(entry))
                 for entry in plan.entries
+            ]
+            batch_costs = _batch_costs(entries)
+            entries = [
+                entry if entry.cook_batch_id is None else dataclasses.replace(
+                    entry,
+                    cook_batch_estimated_cost = batch_costs.get(entry.cook_batch_id),
+                )
+                for entry in entries
             ]
             priced = [e for e in entries if e.estimated_cost is not None]
             hydrated.append(dataclasses.replace(

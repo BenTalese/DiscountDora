@@ -11,6 +11,14 @@
  * coded short; the pool allocation is per entry (and per cook batch) and lives
  * on the server. The `overflow` half of the return went at the same time — the
  * "+N" label is gone from both hosts.
+ *
+ * Rewritten again 2026-09-12: the amber pip is the meal card's own trim
+ * roll-up, so it means "this meal needs you" on either axis — readiness OR
+ * ingredients. It showed only the readiness half, which left a day of meals you
+ * had no ingredients for reading as six green pips (owner: *"what does the
+ * calendar day pip show now that we've modified the rows?"*). The
+ * `batchEnabled` argument is what tells the shared rule whether the readiness
+ * axis exists for this household at all.
  */
 import { describe, expect, it } from 'vitest';
 
@@ -27,6 +35,10 @@ function entry(over: Partial<MealPlanEntry> = {}): MealPlanEntry {
         slot: 'Dinner',
         consumed_at: null,
         needs_cooking: false,
+        cook_fresh: false,
+        cook_batch_id: null,
+        is_cook_day: false,
+        missing_count: 0,
         ...over,
     } as unknown as MealPlanEntry;
 }
@@ -35,13 +47,21 @@ describe('pipForEntry', () => {
     it('codes a cooked meal as consumed even when it was flagged as needing a cook', () => {
         // `consumed_at` wins: the meal happened, so a cook shortfall against
         // that recipe is no longer this day's problem.
-        expect(pipForEntry(entry({ needs_cooking: true, consumed_at: '2026-09-01T18:00:00Z' })))
-            .toBe('consumed');
+        expect(pipForEntry(
+            entry({ needs_cooking: true, consumed_at: '2026-09-01T18:00:00Z' }), true,
+        )).toBe('consumed');
     });
 
     it("codes an uncooked meal from the entry's own verdict", () => {
-        expect(pipForEntry(entry({ needs_cooking: true }))).toBe('short');
-        expect(pipForEntry(entry({ needs_cooking: false }))).toBe('planned');
+        expect(pipForEntry(entry({ needs_cooking: true }), true)).toBe('short');
+        expect(pipForEntry(entry({ needs_cooking: false }), true)).toBe('planned');
+    });
+
+    it('also codes a meal you have no ingredients for as short (2026-09-12)', () => {
+        // The pip used to read only the readiness half, so a day you couldn't
+        // shop for looked identical to a day that was fine.
+        expect(pipForEntry(entry({ missing_count: 2 }), false)).toBe('short');
+        expect(pipForEntry(entry({ missing_count: 0 }), false)).toBe('planned');
     });
 
     it('codes two meals of the SAME recipe differently when only one is short', () => {
@@ -50,18 +70,18 @@ describe('pipForEntry', () => {
         // is amber.
         const covered = entry({ recipe_id: 'r-rice', needs_cooking: false });
         const short = entry({ recipe_id: 'r-rice', needs_cooking: true });
-        expect(dayPips([covered, short]).pips).toEqual(['planned', 'short']);
+        expect(dayPips([covered, short], true).pips).toEqual(['planned', 'short']);
     });
 });
 
 describe('dayPips', () => {
     it('is empty for a day with nothing planned', () => {
-        expect(dayPips([])).toEqual({ pips: [] });
+        expect(dayPips([], true)).toEqual({ pips: [] });
     });
 
     it('caps the row at the maximum and reports no remainder', () => {
         const entries = Array.from({ length: MAX_DAY_PIPS + 2 }, () => entry());
-        expect(dayPips(entries).pips).toHaveLength(MAX_DAY_PIPS);
+        expect(dayPips(entries, true).pips).toHaveLength(MAX_DAY_PIPS);
     });
 
     it('preserves entry order in the pips it keeps', () => {
@@ -69,7 +89,7 @@ describe('dayPips', () => {
             entry({ needs_cooking: true }),
             entry(),
             entry({ consumed_at: 'x' }),
-        ]);
+        ], true);
         expect(pips).toEqual(['short', 'planned', 'consumed']);
     });
 });

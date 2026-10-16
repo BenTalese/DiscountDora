@@ -87,7 +87,7 @@
     const tooltip = computed(() => {
         const thin = judgeable.value
             ? ''
-            : ' — worked out from only part of this recipe';
+            : ' (from only part of this recipe)';
         if (stars.value) {
             return `Health Star Rating ${stars.value.stars.toFixed(1)} of 5${thin}`;
         }

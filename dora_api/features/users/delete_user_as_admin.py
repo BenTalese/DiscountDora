@@ -96,7 +96,7 @@ def admin_delete_user(user_id: UUID):
         return not_found("User", user_id)
     if _Response.would_remove_last_admin:
         return business_rule_violation(
-            "Refusing to delete the last admin — promote someone else first."
+            "Can't delete the last admin. Promote someone else first."
         )
 
     audit_emit(

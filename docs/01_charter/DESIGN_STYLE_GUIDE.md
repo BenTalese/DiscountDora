@@ -696,6 +696,26 @@ Quasar's raw defaults (casing, sizing, shadows) unstyled.
 - **Established by:** owner misc feedback, 2026-09-03 (with FU-709's dark-page
   fix, which is what made the collision visible at all).
 
+### D-025 — No em dashes, and no explanatory tails
+- **Rule:** user-facing copy (labels, tooltips, toasts, dialogs, empty states,
+  help text, server messages, emails, assistant replies, seed data) never
+  contains an em dash (U+2014). And the clause an em dash usually introduces is
+  cut, not re-punctuated: a tooltip names the action, a toast states the
+  outcome, an empty state says it's empty. Consequences the user already
+  understands ("your pantry was already restocked when you finished") are not
+  narrated. An empty-value placeholder uses an en dash ("–").
+- **Why:** the owner would never write one, and they had spread across ~700
+  strings as a tell of machine-written copy, nearly always leading into a
+  hand-holding tail. Removed app-wide on 2026-09-27 after the owner had been
+  deleting them one at a time.
+- **Apply:** write the shortest sentence that lets the user act. Separators in
+  data labels use a colon, parentheses or " · ". The assistant's system prompt
+  tells the model the same thing.
+- **Violation signal:** "—" anywhere in a template, string literal, email
+  template or seed text; a tooltip longer than the control's name plus one
+  short clause.
+- **Established by:** owner feedback, 2026-09-27.
+
 ---
 
 ## Exemplars (the bar — protect these)

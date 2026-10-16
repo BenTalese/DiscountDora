@@ -208,3 +208,23 @@ body {
         }
     }
 }
+
+/* Dialogs stay inside the visible viewport when the on-screen keyboard is up
+   (2026-09-27). `--vv-inset-*` are published by `boot/keyboardInset.ts` and
+   read 0 everywhere except iOS with the keyboard open; see that file for why
+   Android needs nothing here. Offsets rather than padding: Quasar pads these
+   containers with `!important` per position, and moving the box leaves all of
+   that intact. */
+body .q-dialog__inner.fixed-full {
+    top: var(--vv-inset-top, 0px);
+    bottom: var(--vv-inset-bottom, 0px);
+}
+body .q-dialog__inner.fixed-bottom {
+    bottom: var(--vv-inset-bottom, 0px);
+}
+body .q-dialog__inner--minimized > div {
+    max-height: calc(100vh - 48px - var(--vv-inset-top, 0px) - var(--vv-inset-bottom, 0px));
+}
+body .q-dialog__inner--bottom > div {
+    max-height: calc(100vh - var(--vv-inset-top, 0px) - var(--vv-inset-bottom, 0px));
+}

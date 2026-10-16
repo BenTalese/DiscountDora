@@ -20,7 +20,6 @@
       "backup_storage_path",
       "batch_features_enabled",
       "currency",
-      "deals_email_enabled",
       "email_enabled",
       "expiring_soon_window_days",
       "household_headcount",
@@ -56,6 +55,7 @@
   },
   "auth_me": {
     "keys": [
+      "alert_discard_after_days",
       "assistant_ready",
       "buy_verdict_enabled",
       "daily_brief_enabled",

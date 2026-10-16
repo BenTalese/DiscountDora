@@ -121,6 +121,8 @@ class AuthenticatedUserDto:
     # Daily brief push opt-in (one evening notification: tomorrow's meals +
     # any shopping day that's due). Off by default like every other channel.
     daily_brief_enabled: bool
+    # Days after which this user's alerts are discarded; None = never.
+    alert_discard_after_days: int | None
 
     @classmethod
     def from_entity(
@@ -158,6 +160,7 @@ class AuthenticatedUserDto:
             assistant_ready=bool(active_provider is not None and active_provider.verified),
             show_assistant=bool(user.show_assistant),
             daily_brief_enabled=bool(user.daily_brief_enabled),
+            alert_discard_after_days=user.alert_discard_after_days,
         )
 
 

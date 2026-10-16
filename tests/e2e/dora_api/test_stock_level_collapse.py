@@ -7,10 +7,10 @@ restock *to Stocked* were still untested server-side:
     Stocked by default (L875), or to the restock-review override the user
     picked (L876's server half), resolved by status identity via
     `level_for_status`, never by display name.
-  - POST /alerts/<key>/action `mark_restocked` — the item's level becomes
-    Stocked (L877); the retired `acknowledge_stocktake` bumped the freshness
-    stamp WITHOUT touching the level (the contrast that proves restock is a
-    deliberate level write, not a side effect of acting on an alert).
+  - POST /alerts/<key>/action no longer takes `mark_restocked` (2026-10-15:
+    the essential-low row offers the level picker itself, which writes through
+    the stock-item endpoint) nor the older `acknowledge_stocktake`; both are
+    refused rather than silently accepted.
 
 The other collapse bullets already had homes: `review/complete`
 `{set_stocked, checked}` in `test_stocktake_router.py` (L878), the assistant
@@ -20,6 +20,7 @@ The other collapse bullets already had homes: `review/complete`
 (L879, added alongside this file). Modal options / onboarding copy /
 buy-verdict popover labels (L876-UI/882/883) are client renders — V-pack.
 """
+from datetime import date, timedelta
 from uuid import uuid4
 
 import pytest
@@ -170,49 +171,24 @@ def _alert_id_for(name: str) -> str:
     return alert["alert_id"]
 
 
-def test__alert_action__mark_restocked__sets_level_to_stocked(
-    levels_by_sequence, api
-):
-    # L877 — "Mark as restocked" on an alert flips the item to Stocked and
-    # bumps the freshness stamp. Ride an `expired` alert (past expiry fires
-    # regardless of level) with the item sitting at Out.
+@pytest.mark.parametrize("retired", ["acknowledge_stocktake", "mark_restocked"])
+def test__alert_action__retired_actions_are_refused(levels_by_sequence, api, retired):
+    # `acknowledge_stocktake` went with the `stocktake_overdue` kind at Step-0
+    # Q1; `mark_restocked` went 2026-10-15. Pinned as rejections rather than
+    # deleted outright: silently 204-ing an unknown action would be worse than
+    # refusing it.
+    today = date.fromisoformat(requests.get(f"{BASE}/meal-plans/today").json()["today"])
     resp = requests.post(STOCK_ITEMS, json={
-        "name": f"collapse-restock-{uuid4()}",
+        "name": f"collapse-{retired}-{uuid4()}",
         "stock_level_id": levels_by_sequence[OUT_OF_STOCK_SEQUENCE],
-        "expiry_date": "2020-01-01",
-    })
-    assert resp.status_code == 201, resp.text
-    item_id = resp.json()["stock_item_id"]
-    name = resp.json()["name"]
-    alert_id = _alert_id_for(name)
-
-    action = requests.post(
-        f"{BASE}/alerts/{alert_id}/action", json={"action": "mark_restocked"}
-    )
-
-    assert action.status_code == 204, action.text
-    after = _item_dto(item_id)
-    assert after["stock_level_sequence"] == STOCKED_SEQUENCE
-    assert after["stock_level_last_updated"] is not None
-
-
-def test__alert_action__acknowledge_stocktake__is_gone(levels_by_sequence, api):
-    # `acknowledge_stocktake` went with the `stocktake_overdue` kind at
-    # Step-0 Q1. Pinned as a rejection rather than deleted outright: it was a
-    # live action an old client may still post, and silently 204-ing an
-    # unknown action would be worse than refusing it.
-    resp = requests.post(STOCK_ITEMS, json={
-        "name": f"collapse-ack-{uuid4()}",
-        "stock_level_id": levels_by_sequence[OUT_OF_STOCK_SEQUENCE],
-        "expiry_date": "2020-01-01",
+        # Expired yesterday: inside the alert discard window, so it shows.
+        "expiry_date": (today - timedelta(days=1)).isoformat(),
     })
     assert resp.status_code == 201, resp.text
     item_id = resp.json()["stock_item_id"]
     alert_id = _alert_id_for(resp.json()["name"])
 
-    action = requests.post(
-        f"{BASE}/alerts/{alert_id}/action", json={"action": "acknowledge_stocktake"}
-    )
+    action = requests.post(f"{BASE}/alerts/{alert_id}/action", json={"action": retired})
 
     assert action.status_code == 422, action.text
     after = _item_dto(item_id)

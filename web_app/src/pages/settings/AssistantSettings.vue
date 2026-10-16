@@ -274,9 +274,8 @@
                     Cookbook hints
                     <InfoTip label="Cookbook hints">
                         Flags a recipe as at risk when Dora believes an
-                        ingredient has run out — and points out one you may be
-                        able to cook after all. Never changes whether a recipe
-                        counts as cookable, and never filters your cookbook.
+                        ingredient has run out, and points out one you may be
+                        able to cook after all.
                     </InfoTip>
                 </template>
                 <q-toggle
@@ -340,7 +339,7 @@
                 <template v-if="!moneyEnabled" #help>
                     <strong>
                         Needs money features, which are off for this
-                        install{{ isAdmin ? '' : ' — ask an admin to turn them on' }}.
+                        install{{ isAdmin ? '' : '. Ask an admin to turn them on' }}.
                     </strong>
                 </template>
                 <q-toggle
@@ -676,7 +675,7 @@
         await update(
             value
                 ? 'Dora will infer your stock levels.'
-                : 'Inference off — levels are now manual.',
+                : 'Inference off.',
             () => authStore.updateMeAsync({ inferred_pantry_enabled: value }),
         );
     }

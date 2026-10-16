@@ -4,8 +4,7 @@
             <q-card-section class="food-picker__head">
                 <div class="food-picker__title">Link {{ itemName }} to a food</div>
                 <div class="food-picker__sub dora-text-muted">
-                    Search by name, or type a barcode. Dora only saves the food you
-                    pick — nothing is linked without you.
+                    Search by name, or type a barcode.
                 </div>
             </q-card-section>
 
@@ -37,9 +36,8 @@
                 <div v-if="failedSources.length" class="food-picker__warning">
                     <q-icon :name="ICONS.warning" size="16px" />
                     <span>
-                        Couldn't reach {{ failedSources.join(', ') }} just now —
-                        it's often busy. Try again in a moment, or ask an admin to
-                        install the offline USDA food database, which always answers.
+                        Couldn't reach {{ failedSources.join(', ') }}. Try again in a
+                        moment, or install the offline food databases.
                     </span>
                 </div>
 
@@ -49,7 +47,7 @@
                 >
                     Nothing found for "{{ query }}".
                     <template v-if="!anySourceReady">
-                        No food source is set up yet — an admin can add one under
+                        No food source is set up yet. An admin can add one under
                         System → Nutrition.
                     </template>
                 </div>

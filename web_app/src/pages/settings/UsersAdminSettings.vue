@@ -259,8 +259,7 @@
             <q-card-section>
                 <div class="text-caption dora-text-muted">
                     Copy this one-time password and pass it to
-                    {{ generatedTargetName }} out-of-band — it's shown once.
-                    They can change it themselves after signing in.
+                    {{ generatedTargetName }}. It's only shown once.
                 </div>
             </q-card-section>
             <q-card-section>

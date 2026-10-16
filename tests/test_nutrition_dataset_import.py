@@ -215,7 +215,7 @@ def test__friendly_error__Forbidden__NamesTheHostThatBlocksDownloads():
 def test__friendly_error__NotFound__PointsAtTheDownloadsPage():
     from dora_api.features.nutrition.dataset_import import _friendly_error
 
-    assert "superseded" in _friendly_error("HTTP Error 404: Not Found")
+    assert "replaced" in _friendly_error("HTTP Error 404: Not Found")
 
 
 def test__default_urls__PointAtTheOriginNotTheAkamaiMirror():

@@ -48,7 +48,7 @@
                 await router.replace(`/shopping-lists/${drafts[0]!.shopping_list_id}`);
                 return;
             }
-            message.value = 'Multiple lists — pick one.';
+            message.value = 'You have more than one list. Pick one.';
             await router.replace('/shopping-lists');
         } catch {
             // Even on a fetch failure, the lists page is a sane fallback —

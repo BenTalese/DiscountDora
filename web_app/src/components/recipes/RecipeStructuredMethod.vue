@@ -56,7 +56,7 @@
                             type="button"
                             class="dora-steps__text rsm__text rsm__pick"
                             :aria-pressed="selectedStepId === step.client_id"
-                            :aria-label="`Step ${stepIndex + 1} — highlight the ingredients it uses`"
+                            :aria-label="`Highlight the ingredients step ${stepIndex + 1} uses`"
                             @click="onPick(step.client_id)"
                         >
                             {{ step.text || 'Empty step' }}
@@ -206,7 +206,7 @@
                                         type="button"
                                         class="dora-steps__text rsm__text rsm__pick"
                                         :aria-pressed="selectedStepId === sub.client_id"
-                                        :aria-label="`Sub-step ${subIndex + 1} of step ${stepIndex + 1} — highlight the ingredients it uses`"
+                                        :aria-label="`Highlight the ingredients sub-step ${subIndex + 1} of step ${stepIndex + 1} uses`"
                                         @click="onPick(sub.client_id)"
                                     >
                                         {{ sub.text || 'Empty sub-step' }}
@@ -334,8 +334,7 @@
         </ol>
 
         <p v-else class="rsm__empty">
-            No steps yet. Add one to link ingredients and tools to it and to get
-            per-step cook mode — or switch the step style to free text.
+            No steps yet.
         </p>
 
         <BaseButton

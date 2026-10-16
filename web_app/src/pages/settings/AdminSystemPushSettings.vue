@@ -19,10 +19,8 @@
             <SettingsSection>
                 <template #title>VAPID</template>
                 <template #description>
-                    Both halves must be set for real pushes to leave the box.
-                    Push notifications stay hidden across the app while
-                    both halves aren't configured (R-029 — respect the
-                    off-state; hide, don't nag).
+                    Both keys must be set for push notifications to work. Until
+                    then, push stays hidden across the app.
                 </template>
 
                 <SettingsRow label="Public key" stacked>
@@ -51,7 +49,7 @@
                     :label="privateKeyConfigured ? 'Private key (change)' : 'Private key'"
                     :help="privateKeyConfigured
                         ? 'A private key is stored. Enter a new one to replace it, or use Clear to remove.'
-                        : 'Encrypted at rest with DORA_SECRET_ENCRYPTION_KEY. Push sends stay in dry-run until this is set.'"
+                        : 'Encrypted at rest with DORA_SECRET_ENCRYPTION_KEY.'"
                     stacked
                 >
                     <div class="column q-gutter-sm">

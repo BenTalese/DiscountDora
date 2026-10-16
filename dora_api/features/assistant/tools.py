@@ -106,7 +106,7 @@ TOOL_SCHEMAS: list[dict] = [
             "description": (
                 "Search merchant products and deals across the household's "
                 "configured merchants, e.g. 'any specials on cheese?'. Do NOT "
-                "use for 'how do I search for products' — that's a how-to "
+                "use for 'how do I search for products'; that's a how-to "
                 "question."
             ),
             "parameters": {
@@ -143,12 +143,12 @@ TOOL_SCHEMAS: list[dict] = [
         "function": {
             "name": "suggest_recipes",
             "description": (
-                "Recommend what to cook — use for ideas, recommendations, or a "
+                "Recommend what to cook. Use for ideas, recommendations, or a "
                 "mood/craving ('something spicy', 'something light', 'what can I "
                 "make with what I have'). Translate moods into concrete recipe "
                 "terms in keywords (e.g. light -> 'salad soup', spicy -> 'curry chilli'). "
                 "Dietary asks like 'vegan dinner', 'gluten-free pasta', or 'free "
-                "from egg' map onto the tag/ingredient filter arguments — not "
+                "from egg' map onto the tag/ingredient filter arguments, not "
                 "keywords. Tags reflect what the recipe was tagged with by the "
                 "user, not a safety guarantee."
             ),
@@ -211,10 +211,10 @@ TOOL_SCHEMAS: list[dict] = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "amount": {"type": "string", "description": "Quantity to convert — accepts integers, decimals, fractions ('1/2'), or mixed ('1 1/2')."},
+                    "amount": {"type": "string", "description": "Quantity to convert. Accepts integers, decimals, fractions ('1/2'), or mixed ('1 1/2')."},
                     "from_unit": {"type": "string", "description": "Source unit. e.g. 'g', 'cup', 'us cup', 'tbsp', 'oz', 'c', 'f', 'gas mark', 'inch', 'cm', 'kj', 'kcal', 'pinch', 'dash'."},
                     "to_unit": {"type": "string", "description": "Target unit."},
-                    "ingredient": {"type": "string", "description": "Ingredient name (only needed for mass↔volume across solids — flour, sugar, butter, rice, etc.). Omit for pure volume↔volume or mass↔mass."},
+                    "ingredient": {"type": "string", "description": "Ingredient name (only needed for mass↔volume across solids: flour, sugar, butter, rice, etc.). Omit for pure volume↔volume or mass↔mass."},
                 },
                 "required": ["amount", "from_unit", "to_unit"],
             },
@@ -325,7 +325,7 @@ TOOL_SCHEMAS: list[dict] = [
         "function": {
             "name": "meals_shortfall",
             "description": (
-                "Recipes where planned servings exceed the pool — i.e. what "
+                "Recipes where planned servings exceed the pool, i.e. what "
                 "the user still needs to cook before those days arrive. Use "
                 "for 'what do I need to cook', 'what's the week short on', "
                 "'what should I batch-cook next'. No arguments."
@@ -338,7 +338,7 @@ TOOL_SCHEMAS: list[dict] = [
         "function": {
             "name": "recipes_using_item",
             "description": (
-                "Find recipes that use a specific stock item — useful for 'what "
+                "Find recipes that use a specific stock item. Useful for 'what "
                 "can I make with these strawberries before they go off'."
             ),
             "parameters": {
@@ -355,7 +355,7 @@ TOOL_SCHEMAS: list[dict] = [
         "function": {
             "name": "get_alerts",
             "description": (
-                "Return the things needing the user's attention right now — "
+                "Return the things needing the user's attention right now: "
                 "the same data behind the bell icon. Use for 'what needs "
                 "attention', 'anything urgent', 'what's wrong'."
             ),
@@ -374,7 +374,7 @@ TOOL_SCHEMAS: list[dict] = [
         "function": {
             "name": "stock_item_detail",
             "description": (
-                "Detailed snapshot of one stock item — level, location, expiry, "
+                "Detailed snapshot of one stock item: level, location, expiry, "
                 "flagged/open state, last stocktake, recipes that use it, "
                 "whether it's on a shopping list. Use for 'tell me about my "
                 "milk', 'how's the cheese looking'."
@@ -393,7 +393,7 @@ TOOL_SCHEMAS: list[dict] = [
         "function": {
             "name": "recipe_detail",
             "description": (
-                "Detailed snapshot of one recipe — ingredients with their "
+                "Detailed snapshot of one recipe: ingredients with their "
                 "in-stock status, cook time, difficulty, an instructions preview. "
                 "Use for 'tell me about carbonara', 'how do I make pad thai', "
                 "'what's in lasagne'."
@@ -412,7 +412,7 @@ TOOL_SCHEMAS: list[dict] = [
         "function": {
             "name": "shopping_list_contents",
             "description": (
-                "List the lines on a shopping list — what's on it, ticked vs "
+                "List the lines on a shopping list: what's on it, ticked vs "
                 "outstanding, with stock-level context. Use for 'what's on my "
                 "list', 'what do I still need at woolies'."
             ),
@@ -430,7 +430,7 @@ TOOL_SCHEMAS: list[dict] = [
         "function": {
             "name": "meal_detail",
             "description": (
-                "Detailed snapshot of one meal — the constituent recipes and "
+                "Detailed snapshot of one meal: the constituent recipes and "
                 "their cook times. Use for 'what's in the Sunday roast meal', "
                 "'tell me about my taco night meal'."
             ),
@@ -467,7 +467,7 @@ TOOL_SCHEMAS: list[dict] = [
         "function": {
             "name": "update_stock_level",
             "description": (
-                "Change the stock level of an item — use when the user reports "
+                "Change the stock level of an item. Use when the user reports "
                 "consuming, restocking, or otherwise re-evaluating an item's "
                 "stock (e.g. 'I just used the last milk', 'mark eggs as low', "
                 "'cheese is fully stocked again'). Levels include 'out', 'low', "
@@ -544,7 +544,7 @@ TOOL_SCHEMAS: list[dict] = [
         "function": {
             "name": "list_suggestions",
             "description": (
-                "Dora's current proposals for this user — generated from "
+                "Dora's current proposals for this user, generated from "
                 "pantry, budget, purchase cadence, and waste data. Use "
                 "for 'what do you suggest?', 'anything I should do?', "
                 "'review your suggestions'. Each item has a `kind` "
@@ -582,7 +582,7 @@ TOOL_SCHEMAS: list[dict] = [
         "function": {
             "name": "waste_insights",
             "description": (
-                "How often the user has been throwing food out, by item — "
+                "How often the user has been throwing food out, by item. "
                 "use for 'what am I wasting often?', 'what should I stop "
                 "buying?'. Sourced from voluntary 'Mark as wasted' taps "
                 "on each stock item's expiry menu; will report no data "
@@ -603,7 +603,7 @@ TOOL_SCHEMAS: list[dict] = [
             "name": "budget_status",
             "description": (
                 "Show the user's current grocery budget status across all "
-                "their shopping lists — spent this week/month, remaining, "
+                "their shopping lists: spent this week/month, remaining, "
                 "and whether they're tracking over or under. Returns "
                 "`enabled=false` when the user hasn't opted in to budget "
                 "tracking; the assistant should then point them at "
@@ -620,7 +620,7 @@ TOOL_SCHEMAS: list[dict] = [
             "name": "purchase_price_stats",
             "description": (
                 "Purchase history for a stock item across the user's "
-                "finished shopping lists — price stats (average / min / "
+                "finished shopping lists: price stats (average / min / "
                 "max / last paid, per-merchant breakdown) AND cadence "
                 "stats (how often they buy it, usual quantity, usual "
                 "merchant, days since last purchase). Use for 'what's the "
@@ -742,7 +742,7 @@ TOOL_SCHEMAS: list[dict] = [
         "function": {
             "name": "cook_recipe",
             "description": (
-                "Log that the user has just cooked a recipe — adds the "
+                "Log that the user has just cooked a recipe. Adds the "
                 "given number of meals to that recipe's pool. Use for "
                 "'I cooked 3 lasagnes', 'just batch-cooked fried rice', "
                 "'made two more portions'. Defaults to 1 if the user "
@@ -767,10 +767,10 @@ TOOL_SCHEMAS: list[dict] = [
             "name": "adjust_recipe_meals",
             "description": (
                 "Adjust the cooked-meals pool for a recipe by a signed "
-                "delta — positive to add (e.g. 'I found two more in "
+                "delta: positive to add (e.g. 'I found two more in "
                 "the freezer'), negative to remove (e.g. 'I ate one', "
                 "'the kids finished two'). Don't use for fresh cooks "
-                "— that's `cook_recipe`. Floors at 0; never goes "
+                "(that's `cook_recipe`). Floors at 0; never goes "
                 "negative."
             ),
             "parameters": {
@@ -839,13 +839,13 @@ TOOL_SCHEMAS: list[dict] = [
         "function": {
             "name": "meals_cooked_in_range",
             "description": (
-                "Recall what was actually cooked over a time window — a "
+                "Recall what was actually cooked over a time window: a "
                 "count of cooking sessions, meals-worth cooked, and the "
                 "top recipes by frequency. Use for 'what did we make "
                 "last month?', 'what did we cook last Christmas?', "
                 "'what are we eating a lot of lately?', 'how many "
                 "meals did I cook this year?'. Bases only on the "
-                "household's own CookEvent history — no invention."
+                "household's own CookEvent history. No invention."
             ),
             "parameters": {
                 "type": "object",
@@ -873,7 +873,7 @@ TOOL_SCHEMAS: list[dict] = [
                 "(dairy, meat, produce, etc.) over a window. Use for "
                 "'what did I spend on dairy this year?', 'where does my "
                 "grocery money actually go?', 'what's my biggest category?'. "
-                "Uses actual paid prices on finished shopping lists — "
+                "Uses actual paid prices on finished shopping lists. "
                 "the exact same figures Budget uses, not estimates."
             ),
             "parameters": {
@@ -901,7 +901,7 @@ TOOL_SCHEMAS: list[dict] = [
                 "category is inflating fastest?'. Requires a bounded "
                 "window (range=all not supported). Categories with zero "
                 "spend in the prior window are surfaced with a null "
-                "percentage — no fabricated 'up 100%' rates."
+                "percentage. No fabricated 'up 100%' rates."
             ),
             "parameters": {
                 "type": "object",
@@ -1321,7 +1321,7 @@ def convert_measurement(args: dict) -> list[dict]:
     temp_units = {"c", "celsius", "celcius", "f", "fahrenheit", "k", "kelvin"}
     if from_unit in temp_units or to_unit in temp_units:
         if from_unit not in temp_units or to_unit not in temp_units:
-            return [{"error": f"can't convert {from_unit} to {to_unit} — temperature must convert to temperature"}]
+            return [{"error": f"can't convert {from_unit} to {to_unit}: temperature must convert to temperature"}]
         result = _units.convert_temperature(amount, from_unit, to_unit)
         if result is None:
             return [{"error": f"can't convert {from_unit} to {to_unit}"}]
@@ -1870,12 +1870,12 @@ def shopping_list_contents(args: dict) -> list[dict]:
         shopping_list = lists[0]
     else:
         # Default to the inferred quick-add target (only when exactly one draft).
-        from dora_api.features.shopping_lists.primary_target_resolver import \
-            resolve_primary_target
+        from dora_api.features.shopping_lists.quick_add_target_resolver import \
+            resolve_quick_add_target
         active_lists = repo.get(ShoppingList).all(
             EntityField(ShoppingList, ShoppingList.Fields.STATUS).ne(SHOPPING_LIST_STATUS_DONE)
         )
-        outcome = resolve_primary_target(active_lists)
+        outcome = resolve_quick_add_target(active_lists)
         if outcome.kind != "single":
             return [{"status": "no_primary" if outcome.kind == "none" else "ambiguous"}]
         target = next(
@@ -2042,7 +2042,7 @@ def list_suggestions(_args: dict) -> list[dict]:
     if not rows:
         return [{
             "status": "no_suggestions",
-            "note": "Nothing to surface right now — pantry looks settled.",
+            "note": "Nothing to surface right now. Pantry looks settled.",
         }]
     return [{
         "status": "ok",
@@ -2102,7 +2102,7 @@ def expiry_rescue(args: dict) -> list[dict]:
         return [{
             "horizon_days": dto.horizon_days,
             "status": "nothing_at_risk",
-            "note": "No items are within the horizon — your fridge is safe.",
+            "note": "No items are within the horizon.",
         }]
     return [{
         "horizon_days": dto.horizon_days,
@@ -2498,7 +2498,7 @@ def compare_prices(args: dict) -> list[dict]:
         return [{
             "stock_item_name": item.name,
             "status": "no_linked_products",
-            "note": "No merchant products are linked to this stock item — link one on the item's detail page.",
+            "note": "No merchant products are linked to this stock item. Link one on the item's detail page.",
             "rows": [],
         }]
 
@@ -2586,7 +2586,7 @@ def recipe_for_occasion(args: dict) -> list[dict]:
         return [{
             "occasion": occasion,
             "status": "unknown_occasion",
-            "note": "No specific profile for that one — try 'kid-friendly', 'date night', 'comfort', 'quick', 'fancy', 'healthy', 'party', 'dessert'.",
+            "note": "No specific profile for that one. Try 'kid-friendly', 'date night', 'comfort', 'quick', 'fancy', 'healthy', 'party', 'dessert'.",
             "rows": [],
         }]
     # Wrap suggest_recipes with the profile's filters plus stock-aware ranking.

@@ -4,7 +4,8 @@ from uuid import UUID
 from flask import session
 from pydantic import BaseModel, ConfigDict, Field
 
-from dora_api.domain.entities.user import (ALLOWED_FONT_FAMILIES,
+from dora_api.domain.entities.user import (ALERT_DISCARD_DAY_OPTIONS,
+                                           ALLOWED_FONT_FAMILIES,
                                            ALLOWED_FONT_SIZES,
                                            ALLOWED_LLM_PROVIDERS,
                                            ALLOWED_THEMES,
@@ -95,6 +96,9 @@ class UpdateMeRequest(BaseModel):
     # null is ignored (leave untouched). Independent of `llm_enabled`.
     show_assistant: bool | None = None
     daily_brief_enabled: bool | None = None
+    # Days after which this user's alerts are discarded; null turns it off.
+    # Validated against ALERT_DISCARD_DAY_OPTIONS in the handler.
+    alert_discard_after_days: int | None = None
 
 
 class UpdateMeHandler:
@@ -242,6 +246,17 @@ class UpdateMeHandler:
         if "daily_brief_enabled" in _SetFields and request.daily_brief_enabled is not None:
             _User.daily_brief_enabled = request.daily_brief_enabled
 
+        # Explicit null is meaningful here (keep alerts forever), so presence
+        # in the body decides, not the value.
+        if "alert_discard_after_days" in _SetFields:
+            days = request.alert_discard_after_days
+            if days is not None and days not in ALERT_DISCARD_DAY_OPTIONS:
+                return None, (
+                    f"alert_discard_after_days must be one of "
+                    f"{list(ALERT_DISCARD_DAY_OPTIONS)} or null."
+                )
+            _User.alert_discard_after_days = days
+
         if "llm_provider" in _SetFields:
             provider = request.llm_provider
             if provider is not None:
@@ -264,8 +279,8 @@ class UpdateMeHandler:
             active = get_provider_config(self.repository, user_id, _User.llm_provider)
             if active is None or not active.verified:
                 return None, (
-                    f"{_User.llm_provider} isn't verified yet — test the "
-                    f"connection in Settings → Assistant before enabling AI mode."
+                    f"{_User.llm_provider} isn't verified yet. Test the "
+                    f"connection in Settings → Assistant first."
                 )
 
         self.repository.save_changes()

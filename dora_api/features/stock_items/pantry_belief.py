@@ -237,7 +237,7 @@ def compute_belief(inputs: BeliefInputs) -> PantryBelief:
             believed_band=_band_of(recorded),
             confidence=confidence,
             confidence_band=_confidence_band(confidence),
-            reason=f"Based on the last recorded level{stale_str} — not enough history to infer yet.",
+            reason=f"Based on the last recorded level{stale_str}. Not enough history yet.",
             is_inferred=True,
             differs_from_recorded=False,
         )
@@ -248,7 +248,7 @@ def compute_belief(inputs: BeliefInputs) -> PantryBelief:
         believed_band="stocked",
         confidence=0.1,
         confidence_band="low",
-        reason="Not sure yet — no purchases or checks on record.",
+        reason="Not sure yet. No purchases or checks on record.",
         is_inferred=True,
         differs_from_recorded=False,
     )

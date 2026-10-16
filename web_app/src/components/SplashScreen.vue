@@ -96,9 +96,7 @@
             $q.dialog({
                 title: 'Change instance URL',
                 message:
-                    "Point this app at a different Dora backend. Enter the "
-                    + "full URL you'd type in a browser — we'll add /api "
-                    + "automatically if you leave it off.",
+                    "Enter the URL of the Dora server you want to use.",
                 prompt: {
                     model: initial,
                     type: 'url',

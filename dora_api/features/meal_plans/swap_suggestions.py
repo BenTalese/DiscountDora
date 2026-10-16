@@ -609,7 +609,7 @@ def apply_swap(meal_plan_id: UUID):
     if entry is None:
         return not_found(MealPlanEntry.__name__, request.entry_id)
     if entry.consumed_at is not None:
-        return business_rule_violation("That meal has already been cooked — it can't be swapped.")
+        return business_rule_violation("That meal has already been cooked, so it can't be swapped.")
 
     from_recipe_id = entry.recipe.id if entry.recipe else None
     if (
@@ -617,7 +617,7 @@ def apply_swap(meal_plan_id: UUID):
         and from_recipe_id != request.expected_from_recipe_id
     ):
         # Stale card — the week drifted since the suggestion was fetched.
-        return conflict("This suggestion is out of date — refresh and try again.")
+        return conflict("This suggestion is out of date. Refresh and try again.")
 
     to_recipe = repo.get(Recipe).by_id(request.to_recipe_id)
     if to_recipe is None:

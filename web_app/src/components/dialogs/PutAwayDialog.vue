@@ -8,15 +8,14 @@
     >
         <q-card-section class="q-pb-none">
             <div class="text-caption dora-text-muted">
-                Physical checklist for stashing what you just bought. Tick a
-                group once you've put those items away. Nothing here is
-                saved — it's just to help you not forget a corner.
+                Tick a group once you've put those items away. Nothing here is
+                saved.
             </div>
         </q-card-section>
 
         <q-card-section v-if="tickedLines.length === 0">
             <q-banner rounded class="bg-grey-2">
-                Nothing to put away — no ticked lines on this list.
+                Nothing to put away.
             </q-banner>
         </q-card-section>
 
@@ -279,7 +278,7 @@
         } catch (err) {
             $q.notify({
                 type: 'negative',
-                message: 'Couldn\'t save the location — try again.',
+                message: 'Couldn\'t save the location. Try again.',
                 caption: String(err),
             });
         } finally {

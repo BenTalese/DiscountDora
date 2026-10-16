@@ -34,7 +34,7 @@
                 label="Tools"
                 :options="toolOptions"
                 emit-value map-options multiple use-chips clearable
-                hint="The recipe's tool list is the sum of these — it's what the cookbook filters on."
+                hint="The recipe's tool list is the sum of these."
             >
                 <template #prepend><q-icon :name="ICONS.blender" size="18px" /></template>
             </BaseSelect>

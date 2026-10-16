@@ -102,7 +102,6 @@ def configure_mappings(db: SQLAlchemy):
         # admin can turn off from Settings → System.
         # C-cross Chunk 1 — install-wide feature flags (proposal §2.6).
         Column("money_enabled", Boolean, nullable=False, server_default=false()),
-        Column("deals_email_enabled", Boolean, nullable=False, server_default=false()),
         # `products_enabled` column dropped (migration f1a2b3c4d5e6) —
         # products is a data-presence overlay (PROPOSAL_PRODUCTS_AS_OVERLAY).
         # Nutrition, install-wide (owner call 2026-08-14). Replaces the
@@ -464,7 +463,7 @@ def configure_mappings(db: SQLAlchemy):
         Column("is_ticked", Boolean, nullable=False, server_default=false()),
         Column("selected_product_id", UUIDType, ForeignKey("Product.id", ondelete="SET NULL"), nullable=True),
         Column("sequence", Integer, nullable=False, server_default="0"),
-        Column("added_via", String(32), nullable=False, server_default="manual"),
+        Column("is_auto_added", Boolean, nullable=False, server_default=false()),
         Column("added_at", DateTime(timezone=True), nullable=True),
         Column("picked_offer_price", Float, nullable=True),
         Column("list_price_at_pick", Float, nullable=True),
@@ -532,6 +531,9 @@ def configure_mappings(db: SQLAlchemy):
         Column("stock_item_id", UUIDType, ForeignKey("StockItem.id", ondelete="CASCADE"), nullable=False),
         Column("quantity", Integer, nullable=True),
         Column("sequence", Integer, nullable=False, server_default="0"),
+        Column("selected_product_id", UUIDType, ForeignKey("Product.id", ondelete="SET NULL"), nullable=True),
+        # Plain UUID, no FK, for the same reason as `ShoppingListLine`'s.
+        Column("preferred_buy_id", UUIDType, nullable=True),
     )
 
     # the m:n relation is asymmetric: many Products can satisfy
@@ -646,7 +648,6 @@ def configure_mappings(db: SQLAlchemy):
         Column("user_id", UUIDType, nullable=False),
         Column("alert_key", String(255), nullable=False),
         Column("created_at", DateTime(timezone=True), nullable=False),
-        Column("read_at", DateTime(timezone=True), nullable=True),
         Column("snoozed_until", DateTime(timezone=True), nullable=True),
         Column("dismissed_at", DateTime(timezone=True), nullable=True),
         # web-push delivery dedup. (The email-digest sibling
@@ -1194,6 +1195,7 @@ def configure_mappings(db: SQLAlchemy):
         # True; when False the SPA never mounts the assistant launcher.
         Column("show_assistant", Boolean, nullable=False, server_default=true()),
         Column("daily_brief_enabled", Boolean, nullable=False, server_default=false()),
+        Column("alert_discard_after_days", Integer, nullable=True, server_default="14"),
         # Chunk 6 / D-4 — per-user watermark for the stocktake Sweep phase.
         # Nullable: NULL means "never run a session", which the Sweep reads as
         # "show nothing" rather than "show everything ever excluded".
@@ -1346,6 +1348,7 @@ def configure_mappings(db: SQLAlchemy):
     Index("ix_ShoppingListLine_selected_product_id", _t["ShoppingListLine"].c.selected_product_id)
     Index("ix_ShoppingListLine_shopping_list_id", _t["ShoppingListLine"].c.shopping_list_id)
     Index("ix_ShoppingListLine_stock_item_id", _t["ShoppingListLine"].c.stock_item_id)
+    Index("ix_ShoppingListTemplateLine_selected_product_id", _t["ShoppingListTemplateLine"].c.selected_product_id)
     Index("ix_ShoppingListTemplateLine_stock_item_id", _t["ShoppingListTemplateLine"].c.stock_item_id)
     Index("ix_ShoppingListTemplateLine_template_id", _t["ShoppingListTemplateLine"].c.template_id)
     Index("ix_StockItem_stock_group_id", _t["StockItem"].c.stock_group_id)

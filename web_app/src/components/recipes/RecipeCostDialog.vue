@@ -9,7 +9,7 @@
         numbers: it's *what dominates the bill* and *how much of the recipe we
         could actually price*. So the priced ingredients are ranked, each with
         a share bar, and the unpriced ones are grouped by why we couldn't
-        price them rather than repeating "—" down a column.
+        price them rather than repeating "–" down a column.
     -->
     <BaseDialog
         v-model="open"
@@ -21,7 +21,7 @@
             <div class="rcost__totals">
                 <div class="rcost__total">
                     <span class="rcost__k">Estimated total</span>
-                    <span class="rcost__v">{{ total !== null ? formatMoney(total) : '—' }}</span>
+                    <span class="rcost__v">{{ total !== null ? formatMoney(total) : '–' }}</span>
                 </div>
                 <div v-if="perServing !== null" class="rcost__total">
                     <span class="rcost__k">Per serving</span>

@@ -75,12 +75,15 @@ def test__list__rejects_a_bad_key():
     ).status_code == 401
 
 
-def test__list__is_empty_for_a_source_with_no_store_mappings():
-    """A brand-new key has mapped nothing, so there is nothing it could
-    meaningfully refresh — better an empty list than names it can't use."""
+def test__list__carries_store_id_on_every_row_even_without_mappings():
+    """2026-10-15: a source can push by Dora store id, which has no mapping
+    row, so the list no longer hides unmapped stores. Every row names its
+    store by id; the caller skips what it can't scrape."""
     _, key = _mint_source()
 
-    assert _items(key) == []
+    items = _items(key)
+    assert items, "seeded scraped products are listed"
+    assert all(row["store_id"] for row in items)
 
 
 def test__list__returns_mapped_products_with_the_sources_own_store_name():

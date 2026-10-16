@@ -11,7 +11,7 @@ The badge counts the actionable set; FYI kinds are listed but never inflate it.
 A per-user `AlertPreference` can still disable a kind outright — "as quiet or
 noisy as they want" (feedback L441) — it just can't reclassify one.
 
-**Six kinds, deliberately.** Step-0 Q1 cut `out_of_stock`, `low_stock` and
+**Eight kinds, deliberately.** Step-0 Q1 cut `out_of_stock`, `low_stock` and
 `stocktake_overdue`: owner's rule is *"we want people to actually pay attention
 when there's a notification"*, and those three fired constantly on conditions
 already legible elsewhere — the row's own level band, and the stocktake runner's
@@ -19,8 +19,15 @@ queue. Do not re-add a kind for a condition that is already visible where the
 user is looking; that is the noise this registry exists to hold back.
 
 Kinds are emitted by `get_alerts.py`. The three stock kinds are per-item and feed
-the stock-overview attention rule; the three nudges are household-level and never
-touch a stock row.
+the stock-overview attention rule; the nudges are household-level and never touch
+a stock row; `price_drop` is per-user (a watch is one person's).
+
+**Every alert is one episode of its condition** (owner 2026-10-15: *"there should
+be well defined points when alerts will appear and not appear"*). Its key carries
+the fact that started it (an expiry date, the day a level changed, a planned shop
+date, a price observation), so it fires once, a dismissal holds for that episode,
+and the next episode is a new alert. Nothing re-fires as a day count ticks down.
+See `alert_key.py`.
 """
 
 SEVERITY_HIGH = "high"
@@ -42,7 +49,14 @@ SEVERITY_BY_KIND: dict[str, str] = {
     # ── Household-level nudges (no stock item) ──
     "no_planned_meals": SEVERITY_LOW,
     "shopping_day": SEVERITY_LOW,
+    # Owner 2026-10-15 — "Did you forget your shopping?": the planned shop day
+    # has passed and the list is still open. Split off `shopping_day`, which
+    # used to cover both and so shared one dismissal with it.
+    "shopping_overdue": SEVERITY_MEDIUM,
     "meal_reconcile_overdue": SEVERITY_LOW,
+    # A product the user watches reached their price (owner 2026-10-15; the
+    # `PriceAlert` rows existed since 2026-06 but nothing ever fired them).
+    "price_drop": SEVERITY_MEDIUM,
 }
 KNOWN_KINDS = frozenset(SEVERITY_BY_KIND)
 

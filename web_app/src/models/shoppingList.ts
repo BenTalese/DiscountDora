@@ -1,3 +1,5 @@
+import { ICONS } from 'src/style/icons';
+
 // Mirrors DTOs in dora_api/features/shopping_lists/.
 
 // single source of truth for where a list is in the
@@ -11,6 +13,17 @@ export function isListDone(status: ShoppingListStatus): boolean {
 
 export function isListShopping(status: ShoppingListStatus): boolean {
     return status === 'shopping';
+}
+
+/** The one glyph per list state, shared by the status pill, the rail and the
+ *  phone's list picker so the three can't drift (D-013: the state is never
+ *  colour alone). */
+export function listStatusIcon(status: ShoppingListStatus): string {
+    switch (status) {
+        case 'shopping': return ICONS.shopping_cart;
+        case 'done': return ICONS.check;
+        default: return ICONS.listDraft;
+    }
 }
 
 export type ShoppingListSummary = {
@@ -52,14 +65,36 @@ export type LineProductOffer = {
     is_selected: boolean;
 };
 
-export type AddedVia =
-    | 'manual'
-    | 'auto_low_stock'
-    | 'auto_essential'
-    | 'auto_flagged'
-    | 'auto_recipe'
-    | 'auto_meal_plan'
-    | 'auto_frequently_added';
+export type LinePreferredBuy = { preferred_buy_id: string; label: string };
+
+/** The "which one" choice a list row and a template line both carry. One
+ *  source per install, never both: offers with `features.products`, preferred
+ *  buys without. */
+export type LineChoice = {
+    itemName: string;
+    offers: LineProductOffer[];
+    preferredBuys: LinePreferredBuy[];
+    selectedProductId: string | null;
+    preferredBuyId: string | null;
+};
+
+export function hasLineChoices(choice: LineChoice, productsEnabled: boolean): boolean {
+    return productsEnabled ? choice.offers.length > 0 : choice.preferredBuys.length > 0;
+}
+
+/** Only an offer the user picked, never the cheapest-offer fallback, which
+ *  prices nothing and so must not look chosen. */
+export function pickedLineChoice(
+    choice: LineChoice,
+    productsEnabled: boolean,
+): { id: string; label: string } | null {
+    if (productsEnabled) {
+        const offer = choice.offers.find((o) => o.product_id === choice.selectedProductId);
+        return offer ? { id: offer.product_id, label: offer.name } : null;
+    }
+    const pb = choice.preferredBuys.find((p) => p.preferred_buy_id === choice.preferredBuyId);
+    return pb ? { id: pb.preferred_buy_id, label: pb.label } : null;
+}
 
 export type ShoppingListLine = {
     line_id: string;
@@ -76,8 +111,11 @@ export type ShoppingListLine = {
     is_ticked: boolean;
     selected_product_id: string | null;
     sequence: number;
-    /** X5 — provenance of how this line landed on the list. */
-    added_via: AddedVia;
+    /** True only when the low-stock trigger dropped this line here on its
+     *  own — nothing the user did put it on the list directly. Lines from
+     *  the New list dialog's auto-fill are False: the user picked those
+     *  sources. Clears when the user edits the line. */
+    is_auto_added: boolean;
     /** ISO timestamp when the line was added. */
     added_at: string | null;
     /** P2-02 — actual unit price the shopper typed in (override of the
@@ -95,6 +133,11 @@ export type ShoppingListLine = {
      *  standing `usual_store_id`. */
     planned_store_id: string | null;
     planned_store_name: string | null;
+    /** The stock item's standing "I always buy this here". Read only to *mark*
+     *  it in the store picker ("Coles (usual)"); the line's own choice is
+     *  `planned_store_id`, which is prefilled from this when the line is
+     *  added. */
+    usual_store_id: string | null;
     /** FU-227 chunk 5 (D3) — server-resolved per-item price suggestion for
      *  the till editor + its human source label ("from your last receipt" /
      *  "from Coles"). `null` when there's nothing to suggest. Display-only;
@@ -105,7 +148,7 @@ export type ShoppingListLine = {
     /** FU-215 — optional PreferredBuy hint on the line + the item's available
      *  labels for the picker. */
     preferred_buy_id?: string | null;
-    preferred_buys?: { preferred_buy_id: string; label: string }[];
+    preferred_buys?: LinePreferredBuy[];
     /** FU-448 — trim-to-budget optimiser (PROPOSAL_BUDGET_AWARE_LISTS §7.2).
      *  When true, this line was set aside by "Trim to fit" and renders under
      *  the collapsible Deferred-to-fit-budget section, not the active list.

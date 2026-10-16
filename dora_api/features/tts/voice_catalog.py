@@ -64,7 +64,7 @@ VOICE_CATALOG: tuple[VoiceDef, ...] = (
     VoiceDef(
         id="amy",
         label="Amy",
-        description="Warm, friendly American woman — Dora's default voice.",
+        description="Warm, friendly American woman. Dora's default voice.",
         gender="female",
         filename="en_US-amy-medium.onnx",
         hf_path="en/en_US/amy/medium/en_US-amy-medium",

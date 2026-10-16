@@ -149,12 +149,9 @@ def synthesize():
     if not piper or model is None:
         return jsonify({
             "error": "Piper is not configured",
-            "hint": "Install Piper — `pip install piper-tts` on Linux/macOS, or "
-                    "download the binary from github.com/rhasspy/piper/releases "
-                    "and set DORA_PIPER_BIN — then download a voice from Settings "
-                    "→ Voice (or run `python -m dora_api.features.tts.voice_provision "
-                    "amy` to prefetch the default). Shipped Docker / desktop "
-                    "builds bundle a default voice — only source installs need this.",
+            "hint": "Install Piper (`pip install piper-tts`, or the binary from "
+                    "github.com/rhasspy/piper/releases with DORA_PIPER_BIN set), "
+                    "then download a voice from Settings → Voice.",
         }), 503
 
     # Start from the voice's curated defaults, then let explicit request knobs

@@ -521,6 +521,33 @@ _INSIGHTS_WINDOW_MAX_DAYS = 365
 _MOST_RECENT_LIMIT = 10
 
 
+def _rank_buckets(events: list[StockItemWasteEvent]) -> list[dict]:
+    """Events grouped by item, most-wasted first.
+
+    Grouped by (stock_item_id, name): the name is the one captured at log time,
+    so renames don't merge buckets and deleted items still appear.
+    """
+    buckets: dict[tuple, dict] = {}
+    for event in events:
+        key = (event.stock_item_id, event.stock_item_name)
+        bucket = buckets.setdefault(key, {
+            "stock_item_id": str(event.stock_item_id) if event.stock_item_id else None,
+            "stock_item_name": event.stock_item_name,
+            "event_count": 0,
+            "last_occurred_at": None,
+        })
+        bucket["event_count"] += 1
+        if (
+            bucket["last_occurred_at"] is None
+            or event.occurred_at > datetime.fromisoformat(bucket["last_occurred_at"])
+        ):
+            bucket["last_occurred_at"] = event.occurred_at.isoformat()
+    return sorted(
+        buckets.values(),
+        key=lambda b: (-b["event_count"], b["stock_item_name"]),
+    )[:_MAX_ROWS]
+
+
 @WASTE_ROUTER.route("/insights", methods=["GET"])
 def get_waste_insights():
     """Returns {most_wasted, most_recent} over the given window.
@@ -546,29 +573,15 @@ def get_waste_insights():
     )
     events.sort(key=lambda e: e.occurred_at, reverse=True)
 
-    # Group by (stock_item_id, name) — the name is the denormalised
-    # one captured at log time so renames don't merge buckets and
-    # deleted items still appear.
-    buckets: dict[tuple, dict] = {}
-    for event in events:
-        key = (event.stock_item_id, event.stock_item_name)
-        bucket = buckets.setdefault(key, {
-            "stock_item_id": str(event.stock_item_id) if event.stock_item_id else None,
-            "stock_item_name": event.stock_item_name,
-            "event_count": 0,
-            "last_occurred_at": None,
-        })
-        bucket["event_count"] += 1
-        if (
-            bucket["last_occurred_at"] is None
-            or event.occurred_at > datetime.fromisoformat(bucket["last_occurred_at"])
-        ):
-            bucket["last_occurred_at"] = event.occurred_at.isoformat()
+    most_wasted = _rank_buckets(events)
 
-    most_wasted = sorted(
-        buckets.values(),
-        key=lambda b: (-b["event_count"], b["stock_item_name"]),
-    )[:_MAX_ROWS]
+    # The same ranking restricted to each reason, so the report's reason tiles
+    # can filter the list (owner, 2026-09-27) without the client re-counting
+    # events it never received.
+    most_wasted_by_reason = {
+        reason: _rank_buckets([e for e in events if e.reason == reason])
+        for reason in WASTE_REASON_VALUES
+    }
 
     # Per-reason counts. Every canonical reason is emitted even at zero, so
     # the client can render a fixed grid without hiding tiles the user
@@ -595,5 +608,6 @@ def get_waste_insights():
         "total_events": len(events),
         "by_reason": by_reason,
         "most_wasted": most_wasted,
+        "most_wasted_by_reason": most_wasted_by_reason,
         "most_recent": most_recent,
     })

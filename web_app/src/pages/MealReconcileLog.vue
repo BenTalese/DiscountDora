@@ -53,7 +53,7 @@
             <!-- Log, grouped by day (newest first) -->
             <div v-else class="log-list">
                 <div class="log-intro dora-text-muted-7">
-                    Auto mode is on — Dora assumes planned meals were cooked as
+                    Auto mode is on, so Dora assumes planned meals were cooked as
                     each day passes. This is the record of what she did.
                 </div>
 
@@ -99,7 +99,7 @@
                 <p>
                     Your install is in <strong>auto</strong> mode: as each day
                     passes, Dora assumes the meals you planned were cooked and
-                    drains the recipe pool for you — no confirming needed.
+                    drains the recipe pool for you.
                 </p>
                 <p>
                     This page is the record of what she did. Each row shows a
@@ -109,7 +109,7 @@
                     <dt>Logged as cooked</dt>
                     <dd>Dora assumed you cooked it as planned (the auto default).</dd>
                     <dt>Cooked / Cooked · N</dt>
-                    <dd>You confirmed it — as planned, or with a different amount.</dd>
+                    <dd>You confirmed it, as planned or with a different amount.</dd>
                     <dt>Not cooked</dt>
                     <dd>You marked that it didn't happen; the pool was put back.</dd>
                     <dt>Skipped</dt>

@@ -77,7 +77,10 @@ describe('ProportionBar', () => {
         });
         const [store, none] = bar.findAll('.proportion-bar__seg');
         expect(store!.attributes('style')).toContain('rgb(23, 136, 65)');
-        expect(none!.classes()).toContain('proportion-bar__seg--unassigned');
+        // `.dora-fill-unassigned` since 2026-09-17: the hatch moved to
+        // `colours.scss` so the shopping list's legend pip could wear the same
+        // treatment as the segment it labels.
+        expect(none!.classes()).toContain('dora-fill-unassigned');
         // Even when a colour is handed in, the unassigned segment refuses it —
         // the hatch is the channel, so it can't be mistaken for a real store.
         expect(none!.attributes('style') ?? '').not.toContain('rgb(1, 2, 3)');

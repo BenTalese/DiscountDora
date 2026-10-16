@@ -192,8 +192,8 @@
             >
                 <div class="dora-welcome-body">
                     <div class="dora-welcome-line">
-                        <strong>Welcome —</strong> you skipped the setup wizard.
-                        Finish in two minutes whenever you're ready.
+                        <strong>Welcome.</strong> You skipped the setup wizard.
+                        It takes about two minutes.
                     </div>
                     <div class="dora-welcome-actions">
                         <BaseButton
@@ -315,9 +315,8 @@
                  2026-09-04): *"that's quite odd … instead put that metric as the
                  link to go do meal reconciliation"*. A card whose whole body was
                  one button had to assert its own importance; the same queue is
-                 now the `plan_adherence` component of Kitchen health below, and
-                 that row links to `/meal-plans/reconcile`. The nudge on the
-                 meal-plans header is untouched — it's in context there. -->
+                 reached from the nudge on the meal-plans header, where it's in
+                 context. -->
 
             <!-- ───── Stock card (with donut) ────────────────────────────── -->
             <div
@@ -360,7 +359,7 @@
             >
                 <WhatsComingCard
                     :cells="calendarCells"
-                    :selected="selectedCalDate"
+                    :selected="effectiveCalDate"
                     :selected-day="selectedCalDay"
                     :failed="slotFailed('upcoming')"
                     @select="selectCalDate"
@@ -423,7 +422,7 @@
 
             <!-- §2.6: the `recipes`, `meals`, `shopping_lists` and `products`
                  counter cards were cut — raw totals answer no question the user
-                 has. `shopping_lists` merged into the primary-list card above
+                 has. `shopping_lists` merged into the list card above
                  (the "+N other lists" footer); cookable-tonight + the week-ahead
                  cover the recipe questions; product totals → the Money zone
                  widgets (Phase 4). -->
@@ -1288,7 +1287,7 @@
                 dow: DOW_LABELS[d.getDay()]!,
                 label:
                     `${formatRelativeDay(iso)}` +
-                    (marks.length > 0 ? ` — ${marks.join(', ')}` : ' — nothing on'),
+                    (marks.length > 0 ? `: ${marks.join(', ')}` : ': nothing on'),
                 isToday: iso === todayIso,
                 hasExpiry: !!day && day.expiries.length > 0,
                 hasShopping: !!day && day.shopping.length > 0,
@@ -1297,11 +1296,17 @@
         }
         return cells;
     });
+    /** A day is always shown, starting on today (owner, 2026-09-27). Tapping
+     *  a day moves the selection; there is no "nothing selected" state to
+     *  toggle back into. */
+    const effectiveCalDate = computed<string | null>(() =>
+        selectedCalDate.value ?? calendarCells.value.find((c) => c.isToday)?.iso ?? null
+    );
     const selectedCalDay = computed<UpcomingDay | null>(() =>
-        upcoming.value?.dates.find((d) => d.date === selectedCalDate.value) ?? null
+        upcoming.value?.dates.find((d) => d.date === effectiveCalDate.value) ?? null
     );
     function selectCalDate(iso: string) {
-        selectedCalDate.value = selectedCalDate.value === iso ? null : iso;
+        selectedCalDate.value = iso;
     }
     // FU-818 — `/alerts/upcoming` used to be lazy-loaded only when the opt-in
     // fortnight card was switched on (R-016). It is now the merged card's only

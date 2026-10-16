@@ -10,7 +10,7 @@
         class="rmic dora-chip--tint"
         :class="`dora-chip--tint-${tone}`"
         :type="hasSwaps ? 'button' : undefined"
-        :aria-label="`${label} — ${ingredientName}`"
+        :aria-label="`${label}: ${ingredientName}`"
     >
         <q-icon
             :name="state === 'ready' ? ICONS.swap_horiz : ICONS.warning"
@@ -151,7 +151,7 @@
                     ? 'Out of stock, but you have something you could use instead.'
                     : `Out of stock, but you have ${readyCount.value} things you could use instead.`;
             case 'swaps':
-                return 'Out of stock. There are recorded alternatives, but you\'d have to buy those too — tap to see them.';
+                return 'Out of stock. There are alternatives, but you\'d have to buy those too.';
             case 'out':
             default:
                 return 'Out of stock. No substitutes linked.';

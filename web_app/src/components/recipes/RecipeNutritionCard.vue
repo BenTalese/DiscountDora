@@ -73,7 +73,7 @@
                         </span>
                     </div>
                     <p class="dora-hsr__note">
-                        Score {{ rating.score }} — {{ rating.baseline_points }} baseline
+                        Score {{ rating.score }}: {{ rating.baseline_points }} baseline
                         point{{ s(rating.baseline_points) }} less
                         {{ rating.baseline_points - rating.score }} for what the dish
                         has going for it. Lower scores earn more stars.
@@ -90,8 +90,7 @@
                     </p>
                     <p class="dora-hsr__note">
                         Health Star Rating, calculated the way FSANZ publishes it,
-                        from the raw weight of the ingredients — a dish that reduces
-                        down or is made with water you haven't listed will differ.
+                        from the raw weight of the ingredients.
                     </p>
                 </div>
             </q-slide-transition>
@@ -131,7 +130,7 @@
                         </span>
                     </div>
                     <p class="dora-hsr__note">
-                        Score {{ nutriScore.score }} —
+                        Score {{ nutriScore.score }}:
                         {{ nutriScore.negative_points }} point{{
                             s(nutriScore.negative_points) }} against, less
                         {{ nutriScore.negative_points - nutriScore.score }} for what
@@ -150,8 +149,7 @@
                     <p class="dora-hsr__note">
                         Nutri-Score, calculated the way Santé publique France
                         publishes the 2023 algorithm, from the raw weight of the
-                        ingredients — the published method asks for the cooked
-                        weights, so a dish that reduces down will differ.
+                        ingredients.
                     </p>
                 </div>
             </q-slide-transition>
@@ -289,7 +287,7 @@
             actionLabel: '',
         },
         no_food: {
-            title: 'No food linked, so no figures to add up',
+            title: 'No food linked',
             canLink: true,
             actionLabel: 'Find a food',
         },
@@ -372,7 +370,7 @@
         const produce = fvnl === null
             ? ''
             : ` · ${Math.round(fvnl)}% fruit, veg, nuts or legumes`;
-        return `Health Star Rating — estimated${produce}`;
+        return `Health Star Rating (estimated)${produce}`;
     });
 
     /** The point ledger. Baseline points count against the recipe and
@@ -411,7 +409,7 @@
         const produce = fvl === null
             ? ''
             : ` · ${Math.round(fvl)}% fruit, veg or legumes`;
-        return `Nutri-Score — estimated${produce}`;
+        return `Nutri-Score (estimated)${produce}`;
     });
 
     /** The point ledger. Negative points count against the recipe and positive

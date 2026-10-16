@@ -5,6 +5,98 @@
              (effective date ascending — past at top, future at bottom). -->
         <div class="row no-wrap q-col-gutter-md">
             <div class="col" style="min-width: 0">
+                <!-- The picker sits **above** the toolbar on a phone
+                     (2026-09-17). The band below it acts on *this* list — add
+                     an item to it, set its shop day, save it as a template —
+                     so the control that chooses which list you are looking at
+                     has to come first; underneath, it read as one more list
+                     action. On a desktop the question is answered by the rail
+                     on the right, which is why this block is `lt-md` only. -->
+                <!-- Mobile list switcher (UX-v2 §3.2): same date-ordered
+                     continuum as the desktop rail, as a dropdown at the top
+                     of the page. It is now *only* a switcher — "New list" and
+                     "Manage templates…" were bookended around this menu, which
+                     is how both ended up hidden on the surface where they
+                     matter most; both are toolbar buttons now.
+
+                     Always rendered, including mid-shop. It used to vanish on
+                     the run face and be replaced by a "Switch list" toolbar
+                     button — the same capability wearing a different shape, in
+                     a different place, at the one moment the user is least able
+                     to go hunting for it. On mobile this dropdown is also the
+                     only place the list's name appears (the page title is
+                     desktop-only), so renaming lives here too — as part of the
+                     same control rather than a loose icon next to it
+                     (2026-09-17: *"the button element itself looks a bit meh
+                     and the edit pencil button doesn't feel like it belongs to
+                     it"*). One bordered field, the name reading from the left
+                     where a value belongs, the pencil a segment inside the
+                     same edge.
+
+                     "New list" came back into this menu on 2026-08-29 — but as
+                     a pinned first entry, not the bookend it used to be. The
+                     2026-08-26 removal was right that it was hidden here; what
+                     it got wrong was moving it next to "Add item", where the
+                     two reads as two ways to do one thing. This is the list of
+                     lists, so this is where you make one. -->
+                <div class="lt-md sld-picker q-mb-md">
+                    <BaseDropdown
+                        class="col sld-picker__pick"
+                        flat
+                        align="left"
+                        :icon="pickerIcon"
+                        :label="pickerLabel"
+                    >
+                        <!-- Not `dense`, for the same reason as the "Older
+                             lists" dialog: these are the rail's rows. -->
+                        <q-list class="scroll" style="max-height: 60vh">
+                            <q-item clickable v-close-popup class="sld-picker-new" @click="newListOpen = true">
+                                <q-item-section avatar>
+                                    <q-icon :name="ICONS.add" color="primary" />
+                                </q-item-section>
+                                <q-item-section class="text-primary text-weight-medium">
+                                    New list
+                                </q-item-section>
+                            </q-item>
+                            <q-separator />
+                            <ShoppingListRailItem
+                                v-for="s in railEntries"
+                                :key="s.shopping_list_id"
+                                :summary="s"
+                                :active="s.shopping_list_id === listId"
+                                v-close-popup
+                                @select="switchToList(s.shopping_list_id)"
+                            />
+                            <q-item
+                                v-if="olderDoneSummaries.length > 0"
+                                clickable
+                                v-close-popup
+                                @click="openOlderLists"
+                            >
+                                <q-item-section avatar>
+                                    <q-icon :name="ICONS.history" />
+                                </q-item-section>
+                                <q-item-section>
+                                    See older ({{ olderDoneSummaries.length }})
+                                </q-item-section>
+                            </q-item>
+                        </q-list>
+                    </BaseDropdown>
+                    <!-- Draft-only, same rule as the card's pencil: naming a
+                         list is part of writing it, not part of shopping it or
+                         of reading the receipt afterwards. -->
+                    <BaseButton
+                        v-if="planFace"
+                        variant="icon"
+                        class="sld-picker__rename"
+                        :icon="ICONS.edit"
+                        aria-label="Rename list"
+                        @click="startNameEdit"
+                    >
+                        <BaseTooltip>Rename</BaseTooltip>
+                    </BaseButton>
+                </div>
+
                 <!-- Toolbar. 2026-08-26 feedback rebuilt this to the Stock
                      overview shape, because "consistency is important" and
                      these two pages are the app's two list surfaces:
@@ -107,22 +199,18 @@
                         >
                             <BaseTooltip>Reusable lists you can start a shop from</BaseTooltip>
                         </BaseButton>
-                        <!-- Products-gated (2026-08-26 feedback). Offers only
-                             exist on the product axis, so on an install with
-                             no product data this button re-checks nothing and
-                             reports "0 lines checked" — a control whose only
-                             possible outcome is a no-op. -->
-                        <BaseButton
-                            v-if="productsEnabled"
-                            variant="secondary"
-                            :icon="ICONS.refresh"
-                            :label="compactToolbar ? undefined : 'Refresh deals'"
-                            aria-label="Refresh deals"
-                            :disable="!detail || detail.lines.length === 0"
-                            @click="onRefreshDeals"
-                        >
-                            <BaseTooltip>Re-check linked product offers</BaseTooltip>
-                        </BaseButton>
+                        <!-- "Refresh deals" was here, products-gated, until
+                             2026-09-17. It never fetched anything: it
+                             re-validated each line's stored offer selection
+                             and cleared the dead ones. But the detail read
+                             resolves every line's offer from the *currently
+                             linked* products and falls back to the cheapest,
+                             so an active list already shows current deals and
+                             this button changed nothing a user could see —
+                             while its name promised a scrape. The bookkeeping
+                             it did now happens when the link is actually
+                             broken (`unlink_product_from_stock_item`), which
+                             needs nobody to press anything. -->
                         <BaseButton
                             variant="secondary"
                             :icon="ICONS.print"
@@ -131,7 +219,7 @@
                             :disable="!detail || detail.lines.length === 0"
                             @click="onPrint"
                         >
-                            <BaseTooltip>Opens a printable view — print it or save it as a PDF</BaseTooltip>
+                            <BaseTooltip>Print or save as PDF</BaseTooltip>
                         </BaseButton>
                         <BaseButton
                             variant="secondary"
@@ -144,78 +232,6 @@
                             <BaseTooltip>Keep these items as a reusable snapshot</BaseTooltip>
                         </BaseButton>
                     </div>
-                </div>
-
-                <!-- Mobile list switcher (UX-v2 §3.2): same date-ordered
-                     continuum as the desktop rail, as a dropdown at the top
-                     of the page. It is now *only* a switcher — "New list" and
-                     "Manage templates…" were bookended around this menu, which
-                     is how both ended up hidden on the surface where they
-                     matter most; both are toolbar buttons now.
-
-                     Always rendered, including mid-shop. It used to vanish on
-                     the run face and be replaced by a "Switch list" toolbar
-                     button — the same capability wearing a different shape, in
-                     a different place, at the one moment the user is least able
-                     to go hunting for it. On mobile this dropdown is also the
-                     only place the list's name appears (the page title is
-                     desktop-only), so the pencil sits beside it.
-
-                     "New list" came back into this menu on 2026-08-29 — but as
-                     a pinned first entry, not the bookend it used to be. The
-                     2026-08-26 removal was right that it was hidden here; what
-                     it got wrong was moving it next to "Add item", where the
-                     two reads as two ways to do one thing. This is the list of
-                     lists, so this is where you make one. -->
-                <div class="lt-md row items-center no-wrap q-gutter-x-xs q-mb-md">
-                    <BaseDropdown
-                        class="col"
-                        outline
-                        :icon="ICONS.list_alt"
-                        :label="detail?.display_name ?? 'Pick a list'"
-                    >
-                        <q-list dense class="scroll" style="max-height: 60vh">
-                            <q-item clickable v-close-popup class="sld-picker-new" @click="newListOpen = true">
-                                <q-item-section avatar>
-                                    <q-icon :name="ICONS.add" color="primary" />
-                                </q-item-section>
-                                <q-item-section class="text-primary text-weight-medium">
-                                    New list
-                                </q-item-section>
-                            </q-item>
-                            <q-separator />
-                            <ShoppingListRailItem
-                                v-for="s in railEntries"
-                                :key="s.shopping_list_id"
-                                :summary="s"
-                                :active="s.shopping_list_id === listId"
-                                v-close-popup
-                                @select="switchToList(s.shopping_list_id)"
-                            />
-                            <q-item
-                                v-if="olderDoneSummaries.length > 0"
-                                clickable
-                                v-close-popup
-                                @click="openOlderLists"
-                            >
-                                <q-item-section avatar>
-                                    <q-icon :name="ICONS.history" />
-                                </q-item-section>
-                                <q-item-section>
-                                    See older ({{ olderDoneSummaries.length }})
-                                </q-item-section>
-                            </q-item>
-                        </q-list>
-                    </BaseDropdown>
-                    <BaseButton
-                        v-if="detail"
-                        variant="icon"
-                        :icon="ICONS.edit"
-                        aria-label="Rename list"
-                        @click="startNameEdit"
-                    >
-                        <BaseTooltip>Rename — leave blank to label by date</BaseTooltip>
-                    </BaseButton>
                 </div>
 
                 <q-banner v-if="loadError" class="text-negative q-mb-4 sl-panel sl-panel--error" dense>
@@ -264,6 +280,7 @@
                         @update:mode="groupBy = $event"
                         @update:amending="amending = $event"
                         @start-shopping="onStartShopping"
+                        @back-to-draft="onBackToDraft"
                         @finish="openFinishReview"
                         @put-away="putAwayOpen = true"
                     />
@@ -285,7 +302,7 @@
                         <div v-if="trimBanner.state === 'applied'" class="text-body2">
                             Trimmed
                             <strong>{{ fmtMoney(trimBanner.savedApplied) }}</strong>
-                            to fit —
+                            to fit.
                             <a
                                 href="#deferred-by-budget"
                                 class="text-primary"
@@ -298,8 +315,8 @@
                             <strong>
                                 Projected {{ fmtMoney(trimBanner.projectedTotal) }} ·
                                 budget remaining {{ fmtMoney(trimBanner.budgetTarget) }}
-                            </strong>
-                            — trim
+                            </strong>.
+                            Trim
                             <strong>{{ fmtMoney(trimBanner.overshoot) }}</strong>
                             to fit.
                             <div
@@ -307,8 +324,7 @@
                                 class="text-caption text-negative q-mt-xs"
                             >
                                 Trimmed everything safe. Still
-                                {{ fmtMoney(trimBanner.stillOver) }} over —
-                                this shop needs a hand from you.
+                                {{ fmtMoney(trimBanner.stillOver) }} over.
                             </div>
                         </div>
                         <template #action>
@@ -344,40 +360,44 @@
                             <div class="text-caption dora-text-muted q-mb-xs">
                                 Would trim {{ trimBanner.previewLines.length }} line{{ trimBanner.previewLines.length === 1 ? '' : 's' }}
                             </div>
-                            <q-list dense>
-                                <q-item
-                                    v-for="p in trimBanner.previewLines"
-                                    :key="p.line_id"
-                                >
-                                    <q-item-section>
-                                        <q-item-label>{{ p.name }}</q-item-label>
-                                        <q-item-label caption>
-                                            <q-chip dense square color="warning-soft" text-color="warning" class="q-mr-xs">
-                                                {{ p.reason_chip }}
-                                            </q-chip>
-                                            {{ fmtMoney(p.saved) }} saved
-                                        </q-item-label>
-                                    </q-item-section>
-                                    <q-item-section side>
-                                        <BaseButton
-                                            variant="ghost"
-                                            size="sm"
-                                            label="Keep"
-                                            @click="keepFromTrim(p.line_id)"
-                                        />
-                                    </q-item-section>
-                                </q-item>
-                            </q-list>
+                            <!-- Same shape as the deferred rows below, and for
+                                 the same reason: a reason chip is a sentence,
+                                 and `q-item-section side` will not wrap for
+                                 it. -->
+                            <div
+                                v-for="p in trimBanner.previewLines"
+                                :key="p.line_id"
+                                class="sld-deferred-row"
+                            >
+                                <div class="sld-deferred-row__main">
+                                    <div>{{ p.name }}</div>
+                                    <div class="text-caption dora-text-muted">
+                                        <span class="sld-deferred-reason">{{ p.reason_chip }}</span>
+                                        {{ fmtMoney(p.saved) }} saved
+                                    </div>
+                                </div>
+                                <BaseButton
+                                    variant="subtle"
+                                    label="Keep"
+                                    class="sld-deferred-row__action"
+                                    @click="keepFromTrim(p.line_id)"
+                                />
+                            </div>
                         </q-card-section>
                     </q-card>
 
                     <!-- FU-653 — Dora's suggestions, above the list and
                          visibly not part of it: chips you may tap to add,
-                         never lines that appeared on their own. The whole
-                         strip is dismissible for the session, because a
-                         suggestion you've considered and rejected shouldn't
-                         keep taking up the top of the page. Empty (and so
+                         never lines that appeared on their own. Empty (and so
                          absent) unless the user opted the shopping surface in.
+
+                         No dismiss (2026-09-17). The strip only exists because
+                         the household turned inference on for this surface, so
+                         a cross was a control for half-undoing a preference
+                         they set on purpose — and one that forgot by the next
+                         visit, since the hide was session-only. The switch in
+                         Settings is the real control; this is the feature
+                         doing what it was asked to do.
                     -->
                     <q-card
                         v-if="planFace && visibleSuggestions.length > 0"
@@ -387,15 +407,6 @@
                         <q-card-section class="q-pb-xs row items-center no-wrap q-gutter-xs">
                             <q-icon :name="ICONS.dora_voice" size="18px" />
                             <span class="text-subtitle2">Dora thinks you may be out of…</span>
-                            <q-space />
-                            <BaseButton
-                                variant="icon"
-                                :icon="ICONS.close"
-                                aria-label="Hide suggestions"
-                                @click="suggestionsDismissed = true"
-                            >
-                                <BaseTooltip>Hide these for now</BaseTooltip>
-                            </BaseButton>
                         </q-card-section>
                         <q-card-section class="q-pt-none">
                             <div class="row q-gutter-xs">
@@ -411,8 +422,7 @@
                                 >
                                     {{ s.name }}
                                     <BaseTooltip v-if="s.reason" max-width="280px">
-                                        {{ s.reason }} Nothing has been added — tap to put it
-                                        on this list.
+                                        {{ s.reason }}
                                     </BaseTooltip>
                                 </q-chip>
                             </div>
@@ -434,10 +444,8 @@
                          provenance) belongs to it and to no other face. -->
                     <q-card v-if="planFace && detail.lines.length === 0" flat class="sl-panel">
                         <q-card-section class="text-center dora-text-muted">
-                            No items yet. Use <strong>Quick add</strong> in the toolbar, or
-                            <router-link to="/stock" class="text-primary">
-                                cart-add from your stock list
-                            </router-link>.
+                            No items yet. Add using the toolbar here, or add from your
+                            stock list.
                         </q-card-section>
                     </q-card>
 
@@ -477,10 +485,7 @@
                                     :nested="isNestedChild(line)"
                                     :product-only="isProductOnly(line)"
                                     :price="priceForLine(line)"
-                                    :store-options="allStoreOptions"
-                                    :store-empty-text="plannedStoreEmptyText(line)"
-                                    :added-via-label="addedViaCaption(line)"
-                                    :chosen-product-id="chosenOfferFor(line)?.product_id ?? null"
+                                    :store-options="plannedStoreOptionsFor(line)"
                                     :class="lineDnd.bind(line).rowClass"
                                     v-bind="{
                                         ...lineDnd.bind(line).handleProps,
@@ -533,38 +538,35 @@
                         default-opened
                         class="q-mt-md sl-panel sl-panel--sunken"
                     >
-                        <q-list dense>
-                            <q-item
-                                v-for="line in deferredLines"
-                                :key="line.line_id"
-                            >
-                                <q-item-section>
-                                    <q-item-label>{{ line.stock_item_name }}</q-item-label>
-                                    <q-item-label caption>
-                                        <q-chip
-                                            v-if="line.deferred_reason"
-                                            dense
-                                            square
-                                            color="warning-soft"
-                                            text-color="warning"
-                                            class="q-mr-xs"
-                                        >
-                                            {{ line.deferred_reason }}
-                                        </q-chip>
-                                        {{ fmtMoney(priceOfLine(line)) }}
-                                    </q-item-label>
-                                </q-item-section>
-                                <q-item-section side>
-                                    <BaseButton
-                                        variant="ghost"
-                                        size="sm"
-                                        label="Add back"
-                                        :loading="addingBackLineIds.has(line.line_id)"
-                                        @click="addLineBackToActive(line.line_id)"
-                                    />
-                                </q-item-section>
-                            </q-item>
-                        </q-list>
+                        <!-- Hand-rolled rather than `q-item` + `q-item-section
+                             side` (2026-09-17). The side section doesn't wrap:
+                             at 375px the frozen reason is a full sentence
+                             ("Would put the week $12 over; the tin can wait.")
+                             and "Add back" printed straight across it. A row
+                             that can't fit its own contents on one line has to
+                             be allowed to become two. -->
+                        <div
+                            v-for="line in deferredLines"
+                            :key="line.line_id"
+                            class="sld-deferred-row"
+                        >
+                            <div class="sld-deferred-row__main">
+                                <div>{{ line.stock_item_name }}</div>
+                                <div class="text-caption dora-text-muted">
+                                    <span v-if="line.deferred_reason" class="sld-deferred-reason">
+                                        {{ line.deferred_reason }}
+                                    </span>
+                                    {{ fmtMoney(priceOfLine(line)) }}
+                                </div>
+                            </div>
+                            <BaseButton
+                                variant="subtle"
+                                label="Add back"
+                                class="sld-deferred-row__action"
+                                :loading="addingBackLineIds.has(line.line_id)"
+                                @click="addLineBackToActive(line.line_id)"
+                            />
+                        </div>
                     </q-expansion-item>
 
                     <!-- receipt-photo record-keeping. Visible only
@@ -595,7 +597,7 @@
                             v-if="(detail.attachments?.length ?? 0) === 0"
                             class="text-caption dora-text-muted"
                         >
-                            No receipts yet. Snap one (or pick one you've already taken) — no OCR, just kept on the list.
+                            No receipts yet.
                         </div>
                         <div v-else class="sld-receipt-strip row q-gutter-sm">
                             <div
@@ -647,7 +649,7 @@
                          Delete list also lives on each list's own ⋮ menu in
                          the rail / switcher — this is the one for the list
                          you're currently looking at. -->
-                    <div class="sld-danger-footer row items-center q-gutter-sm q-mt-lg q-pt-md">
+                    <div class="sld-danger-footer row items-center justify-center q-mt-lg q-pt-md">
                         <BaseButton
                             variant="ghost"
                             :icon="ICONS.playlist_remove"
@@ -797,7 +799,11 @@
             >
                 <template #prepend><q-icon :name="ICONS.search" /></template>
             </q-input>
-            <q-list dense class="scroll" style="max-height: 60vh; min-width: 280px">
+            <!-- Not `dense` (2026-09-17). `q-list dense` tightens every
+                 `q-item` inside it, so the same rail row rendered at one height
+                 in the rail and a squashed one here — the rows are the same
+                 component and should read the same wherever they are shown. -->
+            <q-list class="scroll" style="max-height: 60vh; min-width: 280px">
                 <ShoppingListRailItem
                     v-for="s in filteredOlderSummaries"
                     :key="s.shopping_list_id"
@@ -847,8 +853,7 @@
             </q-card-section>
             <q-card-section class="q-pt-none">
                 <div class="text-caption dora-text-muted">
-                    Leave it blank and this list labels itself by its shop day,
-                    or the day you created it — currently
+                    Leave it blank to use
                     <strong>{{ dateFallbackName }}</strong>.
                 </div>
             </q-card-section>
@@ -913,7 +918,17 @@
             :title="priceSheetLine?.stock_item_name ?? 'Price'"
             closable
         >
-            <q-card-section class="q-pt-none">
+            <q-card-section class="sld-price-sheet__body">
+                <!-- "Price each", not "Price per unit" (owner, 2026-09-17:
+                     *"What unit? I haven't told you and I can't see what
+                     you're assuming"*). The honest answer is that it was never
+                     a measurement unit: this value is the price of **one of
+                     them**, and the line total is it × quantity. Nothing here
+                     needs a gram or a litre — which is exactly why this sheet
+                     looks different from the *log a price* form, where the
+                     number becomes a price-per-100g observation in the item's
+                     history and a measure is unavoidable. Two records, two
+                     shapes; the label was the only thing lying about it. -->
                 <q-input
                     v-model.number="priceEditorDraft.price"
                     autofocus
@@ -922,23 +937,52 @@
                     inputmode="decimal"
                     step="0.01"
                     min="0"
-                    label="Price per unit"
+                    label="Price each"
                     :prefix="currencySymbol"
                     input-class="sld-price-sheet-input"
                     @keydown.enter.prevent="savePriceSheet"
                 />
-                <div
-                    v-if="priceSheetLine && priceSheetLine.actual_unit_price == null && priceSheetLine.prefill_source_label"
-                    class="text-caption dora-text-muted q-mt-xs"
-                >
-                    <q-icon :name="ICONS.info" size="14px" class="q-mr-xs" />
-                    Prefilled {{ priceSheetLine.prefill_source_label }}
+                <!-- The arithmetic said out loud, so "each" needs no
+                     explaining once you have typed a quantity above one. -->
+                <div v-if="priceSheetLineTotal" class="text-caption dora-text-muted sld-price-sheet__total">
+                    {{ priceEditorDraft.quantity ?? 1 }} × {{ fmtMoney(priceEditorDraft.price ?? 0) }}
+                    = <strong>{{ priceSheetLineTotal }}</strong>
                 </div>
+
+                <!-- Pulling an offer in is an *act*, not an assumption
+                     (2026-09-17). Offers stopped prefilling prices anywhere —
+                     an advertised number is the shop's claim, not your money —
+                     so this is the one place one becomes a price, by tapping
+                     it, at the shelf, where you can see whether it's true. -->
+                <div v-if="priceSheetOffers.length > 0" class="sld-price-sheet__offers">
+                    <div class="text-caption dora-text-muted">Seen at</div>
+                    <div class="row q-gutter-xs">
+                        <q-chip
+                            v-for="offer in priceSheetOffers"
+                            :key="offer.product_id"
+                            clickable
+                            outline
+                            dense
+                            @click="useOfferPrice(offer)"
+                        >
+                            <StoreLogo
+                                :name="offer.store_name"
+                                :store-id="offer.store_id"
+                                :height="16"
+                                :width="24"
+                                inline
+                            />
+                            {{ fmtMoney(offer.price_now ?? 0) }} at {{ offer.store_name }}
+                            <BaseTooltip>Use this as the price each</BaseTooltip>
+                        </q-chip>
+                    </div>
+                </div>
+
                 <!-- Stepper rather than a number field: a second keyboard on a
                      sheet that already has one open is a worse target than two
                      44px buttons (D-004), and quantities here are ±1 in
                      practice. -->
-                <div class="row items-center q-gutter-sm q-mt-md">
+                <div class="row items-center q-gutter-sm">
                     <span class="col dora-text-secondary">Quantity</span>
                     <BaseButton
                         variant="icon"
@@ -955,17 +999,24 @@
                         @click="priceEditorDraft.quantity = (priceEditorDraft.quantity ?? 1) + 1"
                     />
                 </div>
-                <q-select
+                <BaseSelect
                     v-if="allStoreOptions.length > 0"
                     v-model="priceEditorDraft.store_id"
                     :options="allStoreOptions"
-                    outlined
                     emit-value
                     map-options
                     clearable
                     label="Bought from"
-                    class="q-mt-sm"
-                />
+                >
+                    <template #option="{ opt, itemProps }">
+                        <q-item v-bind="itemProps">
+                            <q-item-section avatar style="min-width: 0; padding-right: 8px">
+                                <StoreLogo :name="opt.label" :store-id="opt.value" :height="20" :width="34" />
+                            </q-item-section>
+                            <q-item-section>{{ opt.label }}</q-item-section>
+                        </q-item>
+                    </template>
+                </BaseSelect>
             </q-card-section>
             <template #actions>
                 <BaseButton
@@ -1017,7 +1068,7 @@
                 <div class="text-body2 dora-text-muted">
                     {{
                         finishEntries.length === 0
-                            ? 'No items are ticked — the list is marked done and nothing is restocked.'
+                            ? 'No items are ticked, so nothing is restocked.'
                             : 'These ticked items will be restocked:'
                     }}
                 </div>
@@ -1049,8 +1100,7 @@
                         {{ untickedCount === 1 ? "isn't" : "aren't" }} ticked.
                         A finished list is a receipt, so
                         {{ untickedCount === 1 ? 'it' : 'they' }}
-                        can't stay on it — or cancel and tick
-                        {{ untickedCount === 1 ? 'it' : 'them' }} off after all.
+                        can't stay on it.
                     </span>
                 </q-banner>
                 <q-option-group
@@ -1075,8 +1125,7 @@
                     v-if="leftoverAction === 'move-existing' || leftoverAction === 'move-new'"
                     class="text-caption dora-text-muted q-mt-sm"
                 >
-                    Anything already on the target list is skipped — you won't
-                    get duplicates.
+                    Anything already on that list is skipped.
                 </div>
                 <div
                     v-else-if="leftoverAction === 'discard'"
@@ -1127,6 +1176,7 @@
     import NewListDialog from 'src/components/dialogs/NewListDialog.vue';
     import PutAwayDialog from 'src/components/dialogs/PutAwayDialog.vue';
     import ShoppingListRailItem from 'src/components/shoppingList/ShoppingListRailItem.vue';
+    import StoreLogo from 'src/components/StoreLogo.vue';
     import BuyVerdictApiService from 'src/services/api/buyVerdictApiService';
     import {
         invalidateBuyVerdict, primeBuyVerdicts,
@@ -1134,7 +1184,6 @@
     import { useBuyVerdictEnabled } from 'src/composables/useBuyVerdictEnabled';
     import { useBuyVerdictActions } from 'src/composables/useBuyVerdictActions';
     import { useQuasar } from 'quasar';
-    import { useFeatureFlags } from 'src/composables/useFeatureFlags';
     import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
     import { useMoney, formatMoney } from 'src/composables/useMoney';
     const { currencySymbol } = useMoney();
@@ -1145,8 +1194,10 @@
     import { useWakeLock } from 'src/composables/useWakeLock';
     import {
         chosenOfferFor,
+        listStatusIcon,
         priceOfLine,
         type InferredSuggestion,
+        type LineProductOffer,
         type ShoppingListDetail,
         type ShoppingListLine,
         type ShoppingListSummary
@@ -1179,10 +1230,6 @@
     const stockLevelStore = useStockLevelStore();
     const productStore = useProductStore();
     const { moneyEnabled } = useMoneyEnabled();
-    // Gates "Refresh deals" (2026-08-26 feedback) — offers live on the
-    // product axis, so with no product data that button's only possible
-    // outcome is "0 lines checked, nothing changed".
-    const { products: productsEnabled } = useFeatureFlags();
     // Phones drop every toolbar label and ride the icon alone, tooltip
     // carrying the name — same breakpoint and same reason as Stock overview's
     // `compactToolbar` (the row was eating a quarter of the screen).
@@ -1224,7 +1271,7 @@
     const nameDraft = ref('');
 
     // Group lines by nothing, by stock location or by chosen merchant.
-    // UX-v2 M2 revision: grouping is a *manual* view preference only —
+    // UX-v2 M2 revision: grouping is a *user-chosen* view preference only —
     // shopping does NOT default to location (stock location is where the
     // item lives at home, not where it sits on a shelf).
     //
@@ -1235,14 +1282,15 @@
     // groupBy is a *view* preference the user re-uses across lists; a
     // per-list scope would silently reset the moment they open a new
     // list, defeating the point.
-    // Four peer modes now (Location / Group / Store / Manual) — see
-    // `useLineSections`. "None" is gone: it was really "manual sequence order"
-    // wearing a name that implied absence, and keeping both would have made
-    // Manual look like a second no-op. Store moved here from the old toolbar
-    // segmented control; the auto-disable rule means a single-store list greys
-    // it out rather than showing one pointless section.
+    // Four peer modes (Location / Group / Store / None) — see
+    // `useLineSections`. The ungrouped mode was called "Manual" until
+    // 2026-09-17: it named the *mechanism* (your own sequence order) while
+    // every other member named what you're grouped by, so it read as a fourth
+    // grouping rather than the absence of one. Store moved here from the old
+    // toolbar segmented control; the auto-disable rule means a single-store
+    // list greys it out rather than showing one pointless section.
     const { groupBy } = useListState('shopping-list-detail', () => ({
-        groupBy: ref<SectionMode>('manual'),
+        groupBy: ref<SectionMode>('none'),
     }));
 
     // ── Lifecycle: start / finish ────────────────────────────────────
@@ -1258,7 +1306,7 @@
             $q.notify({
                 type: 'positive',
                 position: 'bottom-right',
-                message: 'Shopping started — tick items off as you grab them.',
+                message: 'Shopping started.',
             });
         } catch (err) {
             $q.notify({
@@ -1311,7 +1359,7 @@
             options.push({ label: 'Move them to another list', value: 'move-existing' });
         }
         options.push({ label: 'Move them to a new list', value: 'move-new' });
-        options.push({ label: "Discard them — I didn't want them", value: 'discard' });
+        options.push({ label: 'Discard them', value: 'discard' });
         return options;
     });
 
@@ -1423,7 +1471,7 @@
             $q.notify({
                 type: 'positive',
                 position: 'bottom-right',
-                message: `Shopping finished — ${result.items_restocked} item${
+                message: `Shopping finished. ${result.items_restocked} item${
                     result.items_restocked === 1 ? '' : 's'
                 } restocked.`,
             });
@@ -1440,16 +1488,16 @@
     }
 
     // ── Drag-to-reorder ───────────────────────────────────────────────
-    // Reordering only means something in Manual mode: in every other mode the
-    // section order is derived from a field, so dragging a row would either be
-    // ignored or silently rewrite a sequence the user can't see. `effectiveMode`
-    // rather than `groupBy`, so a stored preference pointing at an empty field
-    // (which falls back to manual) still gets the affordance.
+    // Reordering only means something when grouping is off: in every other
+    // mode the section order is derived from a field, so dragging a row would
+    // either be ignored or silently rewrite a sequence the user can't see.
+    // `effectiveMode` rather than `groupBy`, so a stored preference pointing at
+    // an empty field (which falls back to ungrouped) still gets the affordance.
     const canReorder = computed(() =>
         !!detail.value
             && detail.value.status !== 'done'
             && detail.value.status !== 'shopping'
-            && effectiveMode.value === 'manual'
+            && effectiveMode.value === 'none'
     );
 
     // R-022 — whole-row DnD via `useDragDropList`. `canDragStart` is gated
@@ -1513,10 +1561,10 @@
 
     // Sectioning for both faces. Mid-shop, ticked lines leave their section
     // entirely so the list shrinks as you shop; on the plan face they stay put
-    // and dim. `effectiveMode` falls back to manual when the stored preference
-    // points at a field this list doesn't populate.
+    // and dim. `effectiveMode` falls back to ungrouped when the stored
+    // preference points at a field this list doesn't populate.
     // `availableModes` is no longer read here: the overview card owns the
-    // "Order by" control and resolves availability for whichever face is
+    // "Group by" control and resolves availability for whichever face is
     // showing. This instance only sections.
     const {
         sections: lineSections,
@@ -1524,12 +1572,12 @@
         effectiveMode,
     } = useLineSections(baseLines, groupBy, {
         hideTicked: computed(() => detail.value?.status === 'shopping'),
-        // Plan face: store + manual only. The run face renders through
+        // Plan face: store + ungrouped only. The run face renders through
         // `ShoppingListRunFace`, which keeps all four.
         allowedModes: PLAN_SECTION_MODES,
     });
 
-    // Arrow reordering. Moves within the *visible* manual run rather than the
+    // Arrow reordering. Moves within the *visible* ungrouped run rather than the
     // raw `detail.lines` array, so a deferred-by-budget line sitting between
     // two visible rows can't swallow a press and make the row appear stuck.
     function isFirstLine(line: ShoppingListLine): boolean {
@@ -1883,6 +1931,17 @@
         store.summaries.find((s) => s.shopping_list_id === listId.value) ?? null,
     );
 
+    /** The picker reads the rail's summary while the next list's detail is in
+     *  flight (`load` clears `detail`), so switching lists shows the target's
+     *  glyph and name straight away instead of flashing a stand-in. */
+    const pickerIcon = computed(() => {
+        const status = detail.value?.status ?? currentSummary.value?.status;
+        return status ? listStatusIcon(status) : ICONS.list_alt;
+    });
+    const pickerLabel = computed(
+        () => detail.value?.display_name ?? currentSummary.value?.display_name ?? 'Pick a list',
+    );
+
     // No auto-scroll-to-selection any more: the rail is a plain list of about
     // eight rows that fits without scrolling, so there is nothing to scroll to.
 
@@ -2121,10 +2180,18 @@
     ]);
 
     // QuickAddSheet writes via shoppingListStore.refreshAsync but the
-    // per-list detail isn't part of that refresh — reload it locally
+    // per-list detail isn't part of that refresh — re-read it locally
     // whenever the sheet closes so a freshly-added line shows up.
+    //
+    // Quietly (2026-09-17). This was `load()`, which nulls `detail` so a
+    // *navigation* shows a skeleton instead of the list you just left — so
+    // adding an item flashed the whole page through the skeleton branch and
+    // the `FadeTransition` and back, for a change that adds one row to a list
+    // already on screen. That is the same defect `refreshAllQuietly()` was
+    // written for in August, when picking a shop day did it; the fix just
+    // never reached the sheet next to it.
     watch(quickAddOpen, (open, wasOpen) => {
-        if (wasOpen && !open) void load();
+        if (wasOpen && !open) void refreshAllQuietly();
     });
 
     // react to URL list-id changes. The merged overview-into-
@@ -2134,15 +2201,13 @@
     watch(listId, () => { void load(); });
 
     // ── FU-653: Dora's inferred suggestions ───────────────────────────
-    // Dismissal is deliberately in-memory only: the suggestion set changes as
-    // the belief does, so persisting "hidden" would need a per-item ledger and
-    // an expiry policy to answer "hidden until when?" — for a strip you can
-    // also just ignore, that's machinery for nothing. It comes back next visit.
-    const suggestionsDismissed = ref(false);
+    // No dismissal state any more (2026-09-17) — the strip is either something
+    // the household opted into or it isn't rendered at all, and a session-only
+    // hide was a third state in between that nothing remembered.
     const addingSuggestionId = ref<string | null>(null);
 
-    const visibleSuggestions = computed<InferredSuggestion[]>(() =>
-        suggestionsDismissed.value ? [] : (detail.value?.inferred_suggestions ?? []),
+    const visibleSuggestions = computed<InferredSuggestion[]>(
+        () => detail.value?.inferred_suggestions ?? [],
     );
 
     async function onAddSuggestion(suggestion: InferredSuggestion) {
@@ -2254,12 +2319,12 @@
         // Seed with the existing override, else the server-resolved prefill
         // (D3: prior receipt, else chosen offer — source-labelled), so the
         // common case is "confirm one number".
-        if (line.actual_unit_price != null) {
-            priceEditorDraft.price = line.actual_unit_price;
-        } else {
-            priceEditorDraft.price =
-                line.prefill_unit_price ?? chosenOfferFor(line)?.price_now ?? null;
-        }
+        // The server's money ladder (actual → picked offer → what you last
+        // paid) already names the best number, so the sheet reads it rather
+        // than re-ranking. The old `?? chosenOfferFor(line)` fallback let the
+        // *cheapest* offer prefill a price nobody picked, which 2026-09-17 had
+        // ruled out everywhere else.
+        priceEditorDraft.price = line.estimated_unit_price ?? null;
         // Seed from the server-resolved store, not just the offer's: since the
         // picker below widened to the resolved / last-paid stores, seeding only
         // from an offer left a products-free user looking at an option list with
@@ -2292,19 +2357,27 @@
         storesStore.stores.map((s) => ({ value: s.store_id, label: s.name })),
     );
 
-    /** What the target-store field reads when this line has no explicit choice.
+    /** The store options for one line: every store, with the item's standing
+     *  choice marked.
      *
-     *  Not blank: the ladder still resolves a store for the line (the item's
-     *  usual, where you last bought it, an offer's), and that is what the store
-     *  breakdown and Order-by → Store are already using — so a blank field
-     *  would contradict the rest of the page. "(default)" marks it as inherited
-     *  rather than chosen, which is the distinction the field would otherwise
-     *  lose. `emptyText` rather than `placeholder` because this select has no
-     *  real `<input>` — see BaseSelect's note; a placeholder never reaches it. */
-    function plannedStoreEmptyText(line: ShoppingListLine): string {
-        return line.resolved_store_name
-            ? `${line.resolved_store_name} (default)`
-            : 'Any store';
+     *  The empty option is **always "Any store"** (2026-09-17). It used to
+     *  rename itself to "<resolved store> (default)", which is exactly the
+     *  confusion the owner reported: the option that means *no store* was
+     *  displaying a store's name, so "Any store" and "the usual store" looked
+     *  like one setting with two names. The ladder still resolves a store for a
+     *  line that hasn't chosen one — but a line added for an item with a usual
+     *  store now carries it as a real `planned_store_id` (set server-side at
+     *  add time), so the picker has something true to show instead of
+     *  describing an inheritance. "(usual)" marks the standing choice in the
+     *  list, where it is a fact about the item rather than about this line. */
+    function plannedStoreOptionsFor(line: ShoppingListLine) {
+        return allStoreOptions.value.map((o) => ({
+            ...o,
+            // `name` for the row's caption, `label` for the menu — see the
+            // row's `storeLabel`.
+            name: o.label,
+            label: o.value === line.usual_store_id ? `${o.label} (usual)` : o.label,
+        }));
     }
 
     /** Writes the plan face's target store. Optimistic with a rollback, like
@@ -2360,11 +2433,23 @@
         if (priceEditorDraft.line_id !== line.line_id) return;
         const nextPrice = priceEditorDraft.price;
         const nextStore = priceEditorDraft.store_id;
-        // Empty/zero/negative input clears the override rather than storing
-        // a meaningless number. The backend rejects negatives anyway; this
-        // saves the round-trip.
+        // Empty/zero/negative input clears the *price* rather than storing a
+        // meaningless number. The backend rejects negatives anyway; this saves
+        // the round-trip.
         if (nextPrice == null || Number.isNaN(nextPrice) || nextPrice <= 0) {
-            await clearPriceOverride(line);
+            // ...but only the price. This used to call `clearPriceOverride`,
+            // which clears the price *and* the store — so picking "Bought
+            // from" on a line you hadn't priced saved nothing at all, and the
+            // row stayed in its old bucket under Order-by → Store. That is
+            // FU-769, reported in August as a refresh gap and confirmed live
+            // on 2026-09-17 to be this: the store never reached the server.
+            // Two fields, two decisions; a blank price is not an instruction
+            // about the store.
+            if (nextStore) {
+                await saveStoreOnly(line, nextStore);
+            } else {
+                await clearPriceOverride(line);
+            }
             return;
         }
         const previousPrice = line.actual_unit_price;
@@ -2425,6 +2510,65 @@
         await refreshDetailQuietly();
     }
 
+    /** Record where a line was bought without claiming what it cost.
+     *
+     *  The honest state for "I picked this up at Aldi but didn't note the
+     *  price": the store is a fact the user gave, the price is one they
+     *  didn't, and a price the user never typed must not survive as an
+     *  override. Optimistic like its siblings, and rolled back the same way.
+     */
+    async function saveStoreOnly(line: ShoppingListLine, storeId: string) {
+        const previousPrice = line.actual_unit_price;
+        const previousStore = line.purchased_store_id;
+        const previousStoreName = line.purchased_store_name;
+        line.actual_unit_price = null;
+        line.purchased_store_id = storeId;
+        line.purchased_store_name =
+            storeOptionsFor(line).find((o) => o.value === storeId)?.label ?? null;
+        try {
+            await api.updateLineAsync(listId.value, line.line_id, {
+                clear_actual_unit_price: true,
+                purchased_store_id: storeId,
+            });
+        } catch (err) {
+            line.actual_unit_price = previousPrice;
+            line.purchased_store_id = previousStore;
+            line.purchased_store_name = previousStoreName;
+            $q.notify({
+                type: 'negative',
+                position: 'bottom-right',
+                message: 'Could not save the store.',
+                caption: toastCaption(err),
+            });
+        }
+    }
+
+    /** The line's offers, only while they can still be acted on. A receipt is
+     *  a record: what a shop is advertising today has nothing to say about a
+     *  trip that already happened. */
+    const priceSheetOffers = computed(() => {
+        if (!priceSheetLine.value || detail.value?.status !== 'shopping') return [];
+        return priceSheetLine.value.offers.filter((o) => o.price_now != null);
+    });
+
+    /** Only once there is more than one of them — at quantity 1 the line total
+     *  and the price each are the same number, and printing it twice explains
+     *  nothing. */
+    const priceSheetLineTotal = computed(() => {
+        const price = priceEditorDraft.price;
+        const qty = priceEditorDraft.quantity ?? 1;
+        if (price == null || Number.isNaN(price) || price <= 0 || qty <= 1) return null;
+        return fmtMoney(price * qty);
+    });
+
+    function useOfferPrice(offer: LineProductOffer): void {
+        if (offer.price_now == null) return;
+        priceEditorDraft.price = offer.price_now;
+        // The offer names a store as surely as it names a price, and the two
+        // arriving together is the point — you are recording one purchase.
+        priceEditorDraft.store_id = offer.store_id;
+    }
+
     async function clearPriceSheet() {
         const line = priceSheetLine.value;
         if (!line) return;
@@ -2477,8 +2621,8 @@
     }
 
     async function onAdjustQuantity(line: ShoppingListLine, delta: number) {
-        const current = line.quantity ?? 0;
-        const next = Math.max(0, current + delta);
+        const current = line.quantity ?? 1;
+        const next = Math.max(1, current + delta);
         await setLineQuantity(line, next);
         // On the receipt face the quantity is part of the money: it multiplies
         // the line total, the store split and the harvested observation the
@@ -2533,6 +2677,10 @@
                     selected_product_id: next,
                 });
             }
+            // Picking an offer moves the line to the offer's store and prices
+            // its estimate; un-picking puts the old figure back. Both are the
+            // server's ladders (R-003), so re-read rather than guess.
+            await refreshDetailQuietly();
         } catch (err) {
             line.selected_product_id = previous;
             $q.notify({
@@ -2650,65 +2798,51 @@
         )
     );
 
-    /** The row's provenance caption, or null when the line was added by hand.
-     *  Folds the "is it worth saying?" test in with the wording so the row
-     *  template carries neither. */
-    function addedViaCaption(line: ShoppingListLine): string | null {
-        const via = line.added_via;
-        return via && via !== 'manual' ? addedViaLabel(via) : null;
-    }
-
-    function addedViaLabel(via: string): string {
-        switch (via) {
-            case 'auto_low_stock':
-                return 'auto: low stock';
-            case 'auto_essential':
-                return 'auto: essential';
-            case 'auto_flagged':
-                return 'auto: flagged';
-            case 'auto_recipe':
-                return 'auto: recipe';
-            case 'auto_meal_plan':
-                return 'auto: meal plan';
-            case 'auto_frequently_added':
-                return 'auto: often added';
-            default:
-                return via;
-        }
-    }
-
-    async function onRefreshDeals() {
-        try {
-            const result = await api.refreshDealsAsync(listId.value);
-            await load();
-            $q.notify({
-                type: 'positive',
-                position: 'bottom-right',
-                message:
-                    result.selections_cleared > 0
-                        ? `Refreshed. ${result.selections_cleared} stale selection${
-                              result.selections_cleared === 1 ? '' : 's'
-                          } cleared.`
-                        : `Refreshed. ${result.lines_checked} line${
-                              result.lines_checked === 1 ? '' : 's'
-                          } checked, nothing changed.`,
-            });
-        } catch (err) {
-            $q.notify({
-                type: 'negative',
-                position: 'bottom-right',
-                message: 'Could not refresh deals.',
-                caption: toastCaption(err),
-            });
-        }
-    }
-
     // Print pulls from the shared composable so every caller stays in
     // lockstep on URL shape. (CSV export was removed app-wide — §12 Q1.)
     const exportActions = useShoppingListExport();
 
     function onPrint() {
         exportActions.openPrintView(listId.value);
+    }
+
+    /** Undo for "I pressed Start shopping by accident" (2026-09-17).
+     *
+     *  Names the cost up front rather than in a toast afterwards: a draft has
+     *  no tick model, so going back clears every tick, and the count is the one
+     *  fact that decides whether the user wants to. With nothing ticked the
+     *  dialog is a plain confirmation instead of a warning about nothing.
+     */
+    async function onBackToDraft() {
+        const ticked = detail.value?.lines.filter((l) => l.is_ticked).length ?? 0;
+        const ok = await new Promise<boolean>((resolve) => {
+            $q.dialog({
+                title: 'Back to draft?',
+                message: ticked > 0
+                    ? `This list goes back to being a draft, and the ${ticked} item${ticked === 1 ? '' : 's'} you've ticked off ${ticked === 1 ? 'is' : 'are'} unticked. Nothing else changes.`
+                    : 'This list goes back to being a draft. Nothing else changes.',
+                ok: { label: 'Back to draft', noCaps: true },
+                cancel: { noCaps: true },
+            })
+                .onOk(() => resolve(true))
+                .onCancel(() => resolve(false))
+                .onDismiss(() => resolve(false));
+        });
+        if (!ok) return;
+        togglingProgress.value = true;
+        try {
+            await api.backToDraftAsync(listId.value);
+            await refreshAllQuietly();
+        } catch (err) {
+            $q.notify({
+                type: 'negative',
+                position: 'bottom-right',
+                message: 'Could not go back to draft.',
+                caption: toastCaption(err),
+            });
+        } finally {
+            togglingProgress.value = false;
+        }
     }
 
     async function onClearAll() {
@@ -2771,9 +2905,9 @@
         if (ticked > 0) {
             includeTicked = await new Promise<boolean>((resolve) => {
                 $q.dialog({
-                    title: `${ticked} ticked item${ticked === 1 ? '' : 's'} — include?`,
+                    title: `Include ${ticked} ticked item${ticked === 1 ? '' : 's'}?`,
                     message:
-                        `Include ticked items in the template? Most users want "no" here — ticked items are usually one-offs.`,
+                        'Ticked items are usually one-offs.',
                     ok: { label: 'Include ticked', noCaps: true },
                     cancel: { label: 'Skip ticked', noCaps: true },
                 })
@@ -2921,6 +3055,53 @@
        affordance. `gap` rather than `q-gutter-sm` because the gutter's
        negative margins fight `overflow-x`; children can't shrink past their
        own width or the row would squash the labels instead of scrolling. */
+    /* The phone's list picker: one field, two segments. It was an `outline`
+       dropdown with a centred label sitting beside a bare icon button, so the
+       name floated in the middle of a wide button and the pencil read as
+       unrelated chrome parked next to it. */
+    .sld-picker {
+        display: flex;
+        align-items: stretch;
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-lg);
+        background: var(--surface-component);
+        overflow: hidden;
+    }
+    .sld-picker__pick {
+        flex: 1 1 auto;
+        min-width: 0;
+        border-radius: 0;
+        min-height: 44px;
+    }
+    /* The label is the list's *name* — a value, not a button caption, so it
+       reads from the left and truncates rather than centring and ellipsising
+       from both ends. */
+    .sld-picker__pick :deep(.q-btn__content) {
+        justify-content: flex-start;
+        flex-wrap: nowrap;
+        min-width: 0;
+    }
+    .sld-picker__pick :deep(.block) {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        min-width: 0;
+        flex: 1 1 auto;
+        text-align: left;
+    }
+    /* The chevron sits at the field's right edge, beside the rename segment,
+       rather than trailing the name wherever it happens to end (2026-09-27). */
+    .sld-picker__pick :deep(.q-btn-dropdown__arrow) {
+        margin-left: auto;
+    }
+    /* Inside the same edge, divided by a hairline: a second segment of one
+       control rather than a second control. */
+    .sld-picker__rename {
+        flex: 0 0 auto;
+        border-radius: 0;
+        border-left: 1px solid var(--divider);
+        min-width: 48px;
+    }
     .sld-toolbar {
         margin-bottom: var(--space-4);
     }
@@ -2974,8 +3155,7 @@
     }
     /* The 300px above holds because of `min-width: 0`: a flex item defaults to
        `min-width: auto`, so the rail refused to shrink below the intrinsic width
-       of its widest row — a `row no-wrap` of name + "next up" badge + date
-       caption — and at 1280px measured 421px inside its 300px parent, pushing
+       of its widest row — and at 1280px measured 421px inside its 300px parent, pushing
        ~105px of horizontal scroll onto the whole page (the FU-578 #40 family).
        The row carries `.ellipsis` on the name, so it truncates once allowed to.
        `overflow-x: hidden` above is the second belt: the old `.sld-rail-scroll`
@@ -2984,8 +3164,12 @@
     /* Separated from the list by a rule rather than a card — these are exits,
        not content, and a bordered box would give them more presence than two
        destructive actions should have. */
+    /* Centred (2026-09-27), with `gap` rather than `q-gutter-sm`: the gutter
+       indents every child by a left margin, which pushed the pair 8px right
+       of centre. */
     .sld-danger-footer {
         border-top: 1px solid var(--divider);
+        gap: var(--space-2);
     }
     /* Plan-face row money: read-only, so it is type rather than a control —
        same size as the row's other captions, with the estimate's tilde carried
@@ -2998,6 +3182,55 @@
        menu is full width when opened. */
     .sld-plan-store {
         min-width: 132px;
+    }
+    /* Deferred-to-fit-budget rows. Wraps at a phone's width instead of
+       printing the action over the reason. */
+    .sld-deferred-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--space-2);
+        padding: var(--space-2) var(--space-4);
+    }
+    .sld-deferred-row + .sld-deferred-row {
+        border-top: 1px solid var(--divider);
+    }
+    .sld-deferred-row__main {
+        min-width: 0;
+        flex: 1 1 200px;
+    }
+    .sld-deferred-row__action {
+        flex: 0 0 auto;
+    }
+    /* Dora's frozen reason is a whole sentence — "Would put the week $12 over;
+       the tin can wait." It was inside a `q-chip`, and a chip does not wrap:
+       the text simply ran out of its own pill and printed underneath the
+       button beside it. Tinted text that wraps says the same thing and can be
+       as long as the sentence it is. */
+    .sld-deferred-reason {
+        color: var(--semantic-warning);
+        margin-right: var(--space-1);
+    }
+    /* One rhythm down the sheet. It had none: `q-card-section` brought its own
+       16px top padding which the field's own `q-pt-none` then cancelled, so the
+       price input sat flush against the title, then `q-mt-md` opened a 16px gap
+       before Quantity and `q-mt-sm` left 8px before the store — three different
+       spacings, none of them chosen. One gap, stated once. */
+    .sld-price-sheet__body {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-4);
+        padding-top: var(--space-2);
+    }
+    /* Hangs off the field it describes rather than starting a new block. */
+    .sld-price-sheet__total {
+        margin-top: calc(var(--space-4) * -1 + var(--space-1));
+    }
+    .sld-price-sheet__offers {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-1);
     }
     .sld-sheet-qty {
         min-width: 2ch;

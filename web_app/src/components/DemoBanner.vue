@@ -7,7 +7,7 @@
     <div v-if="demoMode" class="demo-banner" role="status">
         <q-icon name="visibility" size="18px" class="demo-banner__icon" />
         <span class="demo-banner__text">
-            Demo mode — this is sample data that resets periodically.
+            Demo mode. This sample data resets periodically.
         </span>
     </div>
 </template>

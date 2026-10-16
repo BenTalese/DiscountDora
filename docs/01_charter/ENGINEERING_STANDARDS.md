@@ -3220,6 +3220,119 @@ one-off, or purely product/UX decisions (those go to the Charter check + worklog
   itself (B2), which had the mechanism but never stated the rule. See ADR-086.
 
 
+### R-090 — A reserved grid track is computed from what it holds, never typed as a number
+- **Rule:** when a CSS grid reserves a fixed track for a known set of controls —
+  an action cell, a quantity cell, an icon gutter — express its width as
+  arithmetic over the control's own size token (`calc(var(--btn) * 3 + gap * 2)`),
+  not as the literal that happened to be right the day it was written. If the
+  control's size varies by media query, the *token* varies and the track follows.
+- **Why:** a typed literal is a snapshot of an invisible calculation, and nothing
+  re-runs it when the inputs move. `ShoppingListPlanRow` reserved `104px` for
+  three 36px buttons and two 4px gaps — 116px of content — so the first reorder
+  arrow rendered 12px outside its own column, on top of the money. It was
+  invisible on a desktop only because those buttons are `opacity: 0` until hover.
+  Then `BaseButton` grew its `pointer: coarse` floor (D-004, 36px → 44px) and the
+  same cell needed 140px on exactly the device where the arrows are never hidden:
+  the phone overlap the owner reported was the desktop bug, twice as bad, on the
+  surface that couldn't mask it. Neither change was wrong; the literal simply
+  could not hear about either.
+- **Also:** `grid-row: 1 / -1` is not "span every row" on a grid with no
+  `grid-template-rows`. Negative line numbers resolve against the *explicit*
+  grid, which for an all-implicit grid is one line long, so the declaration
+  collapses to a single row — pinning that row to the tallest spanning item and
+  padding every other cell with dead air (18px per row, here). Use
+  `grid-row: 1 / span N` past the row count; empty implicit rows have no height.
+- **How to comply:** name the control metric as a custom property on the row
+  (`--sl-act-btn`), redefine it in the media query that changes the control, and
+  derive every track that holds one from it. One place to change, one place to be
+  wrong.
+- **Violation signal:** a `px` literal in a `grid-template-columns` that is
+  divisible by a button size; a fixed track width and a `@media (pointer: coarse)`
+  block in the same stylesheet that don't reference each other; `grid-row` or
+  `grid-column` using `-1` on an axis with no explicit template.
+- **Established:** 2026-09-17 (shopping-list plan row: money printed over the
+  reorder arrows at 375px and, unseen, at 1440px). See ADR-087.
+
+
+### R-091 — A box being size-animated carries no padding, border or min-height
+- **Rule:** when a transition animates an element's `height` (or `max-height`)
+  to zero — `q-slide-transition`, a hand-rolled disclosure, an accordion — that
+  element must own **no** padding, border or `min-height`. Put them on an inner
+  wrapper. A caller styling the animated box instead of the inner one is the
+  violation, so the shared component should ship an inner element and say so.
+- **Why:** an element's height cannot go below its own padding and borders, so
+  the animation lands on the padding box and the remaining pixels disappear in
+  one frame when `display: none` arrives. Traced on the shopping list's overview
+  card: 199px → **29px** over ~250ms, a hold, then 29 → 0 instantly — and 29px
+  is exactly `padding-top: 12px + padding-bottom: 16px + 1px border`. The owner
+  had reported it three times as "a snap at the end which looks ugly… this keeps
+  recurring", which is what it looks like from the outside: every disclosure in
+  the app that a caller had padded did it, and none of them looked broken in
+  code review.
+- **How to comply:** `CollapsibleCard` renders `.collapsible-card__inner` inside
+  the animated `.collapsible-card__body`, and pins the body to `padding: 0;
+  border: none`. Style the inner. For a new component, animate a bare box and
+  give the slot its own padded wrapper.
+- **Violation signal:** padding or a border on the same element as a
+  `v-show`/`v-if` inside a slide/collapse transition; a disclosure that visibly
+  jumps at the end of its close; a caller's `:deep()` rule targeting the
+  animated node.
+- **Established:** 2026-09-17 (shopping-list overview card; the fix is in the
+  shared component so every caller inherits it). See ADR-088.
+
+
+### R-092 — A provenance stamp records how something arrived; it never stands in for current state
+- **Rule:** a column recording *how* or *why* a row came to exist — `added_via`,
+  `source`, `created_by`, `imported_from` — may be read to explain history. It
+  must **not** be read as a proxy for a fact that can change after the row is
+  written. If a decision asks "is this item low?", "is this needed soon?", "does
+  the user buy this often?", it reads the live signal, even when a stamp
+  correlates with the answer today.
+- **Why:** the stamp is frozen at insert; the fact it correlates with is not.
+  `trim_to_budget` decided three of its five tiers from `added_via`: a line
+  stamped `auto_low_stock` was offered as "N days' cover left" however long ago
+  that was and whatever the item's band is now, and "For <Recipe> on <Day>"
+  required the line be stamped `auto_recipe`/`auto_meal_plan` even though the
+  meal-demand map — right there in the same context object — is what actually
+  answers it. The gate quietly *excluded* correct candidates: a hand-added line
+  for a dinner five days out was never offered as a trim. Nothing looked wrong
+  in review, because the stamp names the same concept as the live signal.
+- **How to comply:** derive from the entity's current state or from the server's
+  own aggregate. Where no live signal exists, build one and share it rather than
+  reaching for the stamp — the habit ranking in
+  `features/shopping_lists/_frequently_added.py` was extracted for exactly this
+  (and de-duplicated `auto_generate`'s copy of the same query, R-003).
+- **Violation signal:** a comparison against a provenance constant inside logic
+  that also has the entity in hand; a conditional whose comment explains what
+  the stamp "means about" the item now; a stamp consulted anywhere outside a
+  history/audit read.
+- **Established:** 2026-09-19 (shopping-line provenance collapse; the enum the
+  stamps came from was deleted in the same unit). See ADR-089.
+
+### R-093 — A derived alert's key names the episode that started it
+- **Rule:** an alert that is computed from live state rather than stored (the
+  bell's kinds, push, any future channel) is identified by its subject **and**
+  the fact that began the current occurrence of its condition: the expiry date,
+  the day the level changed, the planned shop date, the price observation. Two
+  occurrences of the same condition must produce two keys; one occurrence must
+  produce the same key on every evaluation. Each alert also states when its
+  episode began (`started_on`), from that same fact.
+- **Why:** per-user decisions (snooze, dismiss) are stored against the key. With
+  a key of just `stock:<id>:expiring_soon`, dismissing this week's apples
+  silenced every later pack of apples for good, and `shopping_day` reused one key
+  for "your shop is in two days" and "your shop was two days ago", so dismissing
+  the reminder also hid the missed-shop nudge (owner 2026-10-15). A key that
+  carries a day count has the opposite fault: it re-fires every morning.
+- **How to comply:** build keys with `alert_key.py`'s helpers and put the
+  episode in the discriminator (`f"expiring_soon:{expiry_date}"`). A new kind
+  that has no natural episode (a weekly nudge) uses the window it is about.
+  Set `started_on` from the same fact; the discard window measures it.
+- **Violation signal:** a discriminator that is only the kind name; a key built
+  from a value that changes daily; a kind split from another that still shares
+  its key.
+- **Established:** 2026-10-15 (alerts rework). See ADR-090.
+
+
 ### ADR-001 — Adopt engineering standards + mandatory explain-or-flag gate
 - **Date / task:** 2026-06-06 (user request after repeated theme/component regressions)
 - **Status:** accepted
@@ -5891,3 +6004,132 @@ A non-binding cookbook of solutions to recurring problems. Not rules — just a
     stays checked in. Any later change to the convention is a Python edit plus a
     re-run, and a stale mirror shows up as a diff.
 - **Rule promoted:** R-089.
+
+
+### ADR-087 — Reserved grid tracks are derived from their contents (promotes R-090)
+- **Date / task:** 2026-09-17 (owner feedback on the shopping list: *"UI elements
+  overlapping terribly on mobile"*, *"in draft mode on mobile, price is on top of
+  the reorder controls"*, *"buttons looking too small for the elements around
+  them ... something is up"*)
+- **Status:** accepted
+- **Context:** three separate symptoms turned out to be one cause. The plan row's
+  action cell was `--sl-act-w: 104px`, holding three 36px icon buttons and two 4px
+  gaps: 116px. Measured on the seed at 1440px, the *Move up* arrow sat at x=968
+  against a cell starting at x=980 — already 12px outside its column, printing on
+  the money, and invisible only because the reveal-on-approach rule keeps those
+  buttons at `opacity: 0` until hover. A phone has no hover and `BaseButton` gives
+  it the D-004 44px floor, which takes the same cell to 140px in a 76px track. The
+  owner was seeing the honest version of a bug the desktop was hiding.
+  The third symptom — "buttons too small for the rows" — was the same arithmetic
+  read from the other end: the rows were tall because the cells inside them were
+  being pinned to the tallest spanning item by a `grid-row: 1 / -1` that silently
+  collapses to one row when a grid declares no `grid-template-rows`.
+- **Decision:** widths that hold controls are computed from the control's own size
+  token, and spanning uses `span N` rather than a negative line on an implicit
+  axis. Promoted to R-090 rather than fixed in place, because the same shape is
+  latent anywhere a row reserves an icon gutter and a media query resizes icons —
+  which, since the tap-target sweep, is every list row in the app.
+- **Consequences:** the plan row's action track is now
+  `calc(var(--sl-act-btn) * 3 + var(--space-1) * 2)` with `--sl-act-btn` redefined
+  under `pointer: coarse`, so the D-004 floor and the layout can no longer
+  disagree. A sweep of the other `/ -1` uses found six, all on the *column* axis
+  of grids that declare `grid-template-columns` — where negative lines are
+  well-defined — so no further changes were needed. The plan row also lost its
+  `.sl-row__main` wrapper: a single cell holding three stacked children cannot
+  hand any of them to a different column, which is why the phone layout could not
+  be fixed by resizing tracks alone.
+
+
+### ADR-088 — The animated box is bare; padding lives inside it (promotes R-091)
+- **Date / task:** 2026-09-17 (owner: *"This dropdown card has the same issue
+  most dropdowns have had in this app. There's a snap at the end which looks
+  ugly and not smooth (when collapsing). This keeps recurring."*)
+- **Status:** accepted
+- **Context:** measured rather than guessed, because "feels snappy" is exactly
+  the kind of report that gets fixed by changing an easing curve and staying
+  broken. Sampling the overview card's collapse frame by frame showed a clean
+  ease from 199px down to 29px and then a single-frame drop to zero. 29px is the
+  body's own `padding: 12px/16px` plus its 1px top border — `q-slide-transition`
+  animates `height`, and `height` cannot go below the padding box, so the last
+  29px were never animated at all; they vanished when `v-show` set
+  `display: none`. Every disclosure whose caller had padded the body had the
+  same defect, which is why the owner kept meeting it.
+- **Decision:** the animated element owns nothing with a size. `CollapsibleCard`
+  gained `.collapsible-card__inner`, pinned its `__body` to `padding: 0; border:
+  none`, and its one padding-applying caller moved its rule inward. Promoted to
+  R-091 rather than fixed locally: the trap is invisible in review, it recurs
+  per caller rather than per component, and the shared component is the only
+  place that can make it unreachable.
+- **Consequences:** the same collapse now eases 199 → 165 → … → 3 → 2 → 1 → 0
+  with no terminal jump. Callers that need a border on the disclosure edge (the
+  overview card does) put it on the inner element, which also means the border
+  fades with the content instead of surviving until the last frame.
+
+
+### ADR-089 — A per-row "why is this here" label is only worth storing when the user didn't cause it (promotes R-092)
+- **Date / task:** 2026-09-19 (owner, on seeing the shopping-list row: *"we don't
+  care for the source. that whole source thing needs to die. the only one i think
+  we care about is the manual vs auto-add from stock level change"*)
+- **Status:** accepted
+- **Context:** `ShoppingListLine.added_via` carried seven values — `manual` plus
+  six naming which auto-generate source produced the line — and the row rendered
+  each as a caption ("auto: low stock", "auto: recipe"). Two machines wrote them:
+  the `/auto-generate` endpoint, which runs because the user ticked sources in the
+  New list dialog, and the low-stock hook in `update_stock_item`, which fires on
+  its own. Both wrote `auto_low_stock`, so the field could not distinguish them.
+  On a generated list most rows carried a caption, each restating a choice the
+  user had made seconds earlier; two of the six values (`auto_recipe`,
+  `auto_meal_plan`) were unreachable from the UI entirely, and two more
+  (`auto_essential`, `auto_flagged`) were the same `is_essential` predicate under
+  two names.
+- **Decision:** keep the distinction the user cannot already see — "no action of
+  mine put this here" — and delete the rest. `added_via` becomes
+  `is_auto_added: bool`, written in exactly one place. The UI renders one mark
+  (Dora's burger) on those lines and nothing on any other. The dedupe priority
+  ladder that existed solely to arbitrate which caption won goes with it.
+- **Alternatives considered:**
+  - *Keep the enum with one auto value.* Rejected by the owner as keeping a shape
+    for its own sake. A two-state field is a boolean.
+  - *Keep per-source captions but reword them.* Rejected — the wording was never
+    the problem; the problem is that a generated list is mostly auto rows, so the
+    caption is noise at exactly the moment it is most frequent.
+  - *Keep `auto_recipe`/`auto_meal_plan` and render the recipe name.* Genuinely
+    the most useful label of the six, and considered at length — but no UI path
+    sets those sources (the dialog pre-seeds via `bulkAddToList`, which writes
+    `manual`), and the `detail` field carrying the name was never persisted. It
+    would have meant building a feature, not preserving one.
+- **Consequences:** three `trim_to_budget` tiers lost their input and were moved
+  onto live signals, which is the general lesson promoted as R-092 — and which
+  broadened tier 5 to catch hand-added lines for far-off meals that it had been
+  silently excluding. The stock-item history timeline drops its provenance prefix
+  and reads "Added to <list>"; nothing is lost, since the two informative values
+  were never written. Historical rows collapse to `False` in migration
+  `a1c7e4b9d2f6`: the ambiguity between the two writers is not recoverable, and
+  pre-release a wrong mark is worse than an absent one.
+
+### ADR-090 — Alerts are episodes: keyed by what started them, discarded by age (promotes R-093)
+- **Date / task:** 2026-10-15 (owner: *"there should be well defined points when
+  alerts will appear and not appear so we don't have hundreds of alerts
+  constantly churning"*, alongside "discard alerts older than X days")
+- **Status:** accepted
+- **Context:** alerts are derived on every read and never stored; only the user's
+  decisions are, keyed by a stable string. The keys named the subject and kind
+  only, so a decision outlived the occurrence it was made about. There was no
+  notion of an alert's age, so nothing could be discarded by it.
+- **Decision:** every key carries its episode (R-093) and every alert reports
+  `started_on`. A per-user `alert_discard_after_days` (7 / 14 / 30 / never,
+  default 14) drops alerts whose episode began earlier. Read state was removed:
+  dismiss is the one way to put an alert away. The missed shop day became its own
+  kind (`shopping_overdue`), and the long-unused `PriceAlert` rows now fire as
+  `price_drop`, keyed by the offer that crossed the threshold.
+- **Alternatives considered:**
+  - *Persist alerts as rows with first/last-seen.* Gives true ages, but turns a
+    read into a write and needs a sweeper to resolve rows. Every kind already has
+    a fact that dates its episode, so the derived model holds.
+  - *Clear decisions when the condition drops out.* Works for dismissal, but only
+    if something evaluates at the moment it drops out; the push job runs hourly,
+    the bell on demand. Keys that differ per episode need no clean-up to be right.
+- **Consequences:** interactions recorded against the old keys stop matching
+  (pre-release, left in place). Ledger rows for finished episodes accumulate; a
+  prune is logged as a follow-up rather than built.
+

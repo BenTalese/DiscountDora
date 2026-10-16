@@ -7,10 +7,10 @@ PATCH /api/stock-items/<id>.
         and needs_restock(new_level)             # new level is Low or Out
         and not needs_restock(previous_level)    # ...and it's a genuine transition
         and item not on ANY active list          # dedup — "the user already knows"
-        and resolve_primary_target == "single"   # exactly one DRAFT list
+        and resolve_quick_add_target == "single"   # exactly one DRAFT list
 
 On fire the PATCH returns **200** `{"auto_added": {"line_id", "shopping_list_id"}}`
-and the draft gains a line with `added_via="auto_low_stock"`; otherwise the
+and the draft gains a line with `is_auto_added=true`; otherwise the
 normal **204** and no line anywhere.
 
 The e2e browser spec (`web_app/e2e/auto-add-on-low.spec.ts`) pins only the
@@ -35,7 +35,6 @@ SHOPPING_LISTS = "http://localhost:5170/api/shopping-lists"
 STOCK_ITEMS = "http://localhost:5170/api/stock-items"
 STOCK_LEVELS = "http://localhost:5170/api/stock-levels"
 
-ADDED_VIA_AUTO_LOW_STOCK = "auto_low_stock"
 
 
 #region ---------------- fixtures / helpers ----------------
@@ -50,7 +49,7 @@ def levels_by_sequence():
 def fresh_state(api):
     # Clear every active list so each test controls the draft count exactly —
     # the seed leaves several active lists (and their lines) around, which
-    # would both skew `resolve_primary_target` and trip the dedup guard.
+    # would both skew `resolve_quick_add_target` and trip the dedup guard.
     # (`done` is /finish-only since FU-227 chunk 5, so DELETE the rest.)
     summaries = requests.get(SHOPPING_LISTS).json()
     for s in summaries:
@@ -98,7 +97,7 @@ def _assert_fired(resp, item_id: str, list_id: str) -> None:
     assert body["auto_added"]["shopping_list_id"] == list_id
     lines = _lines_for_item(list_id, item_id)
     assert len(lines) == 1
-    assert lines[0]["added_via"] == ADDED_VIA_AUTO_LOW_STOCK
+    assert lines[0]["is_auto_added"] is True
     assert lines[0]["line_id"] == body["auto_added"]["line_id"]
 
 
@@ -230,7 +229,7 @@ def test__auto_add__already_on_target_draft__does_not_fire(
     assert resp.status_code == 204, resp.text
     lines = _lines_for_item(draft, item)
     assert len(lines) == 1
-    assert lines[0]["added_via"] != ADDED_VIA_AUTO_LOW_STOCK
+    assert lines[0]["is_auto_added"] is False
 
 
 def test__auto_add__already_on_other_active_list__does_not_fire(

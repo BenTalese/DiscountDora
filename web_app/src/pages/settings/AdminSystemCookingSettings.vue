@@ -2,7 +2,7 @@
     <div class="settings-page">
         <SettingsPageHeader
             title="Cooking"
-            description="Household cooking settings, shared by everyone on this install — how many people you usually cook for, and whether the meal planner shows the batch-cooking tools."
+            description="How many people you usually cook for, and whether the meal planner shows batch-cooking tools. Shared by everyone."
             :icon="ICONS.restaurant"
         />
 
@@ -45,7 +45,7 @@
                      "shortfall"). Say what the user gets, not the mechanism. -->
                 <template #description>
                     <strong>Fresh</strong> keeps the meal planner as simple
-                    scheduling — one entry per meal. <strong>Batch</strong> is
+                    scheduling, one entry per meal. <strong>Batch</strong> is
                     for households that cook once and eat it across several
                     days: the planner tracks how many servings each cook makes,
                     tells you when you've planned more meals than you've cooked,

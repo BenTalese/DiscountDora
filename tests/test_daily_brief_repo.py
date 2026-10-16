@@ -139,7 +139,7 @@ def test__brief__names_tomorrows_meals_in_slot_order(repo):
 
     assert brief.is_empty is False
     # Breakfast (sequence 0) before Dinner (sequence 2).
-    assert brief.meal_line == "Tomorrow — Breakfast: Porridge; Dinner: Chicken curry."
+    assert brief.meal_line == "Tomorrow · Breakfast: Porridge; Dinner: Chicken curry."
     assert brief.body == brief.meal_line
 
 

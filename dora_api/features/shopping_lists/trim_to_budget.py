@@ -28,11 +28,7 @@ from dora_api.domain.entities.product_offer import ProductOffer
 from dora_api.domain.entities.recipe import Recipe
 from dora_api.domain.entities.recipe_ingredient import RecipeIngredient
 from dora_api.domain.entities.shopping_list import (ShoppingList,
-                                                    ShoppingListLine,
-                                                    ADDED_VIA_AUTO_FREQUENTLY_ADDED,
-                                                    ADDED_VIA_AUTO_LOW_STOCK,
-                                                    ADDED_VIA_AUTO_MEAL_PLAN,
-                                                    ADDED_VIA_AUTO_RECIPE)
+                                                    ShoppingListLine)
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.entities.user import User
 from dora_api.features.app_settings.clock import household_today
@@ -40,6 +36,8 @@ from dora_api.features.auth.register_user import SESSION_USER_ID_KEY
 from dora_api.features.budget.budget import (projected_unit_price,
                                              period_headroom)
 from dora_api.features.routers import SHOPPING_LIST_ROUTER
+from dora_api.features.shopping_lists._frequently_added import (
+    DEFAULT_FREQUENTLY_ADDED_LIMIT, frequently_added_id_set)
 from dora_api.features.shopping_lists._line_price import line_paid_unit_price
 from dora_api.domain.stock_status import is_low_stock, is_out_of_stock
 from dora_api.features.stock_items.get_buy_verdict import (BuyVerdictDto,
@@ -60,7 +58,7 @@ _LOGGER = logging.getLogger(__name__)
 # Fixed set. If a classification path can't produce one of these, the
 # line isn't a candidate.
 
-REASON_HABIT_CAN_WAIT       = "Habit — can wait"
+REASON_HABIT_CAN_WAIT       = "Habit, can wait"
 REASON_COVER_LEFT           = "{n} days' cover left"          # N filled in
 REASON_NOT_URGENT           = "Not urgent"
 REASON_ABOVE_USUAL_PRICE    = "Above your usual price"
@@ -138,6 +136,11 @@ class _Ctx:
     verdicts: Dict[UUID, BuyVerdictDto] = field(default_factory=dict)
     # Cached "days of cover" per stock_item_id. None means "unknown".
     cover_days: Dict[UUID, int | None] = field(default_factory=dict)
+    # Stock items the user buys habitually, by lifetime line count. Tier 1
+    # asks "is this a habit buy that can wait?" — which is a question about
+    # current behaviour, so it's answered from live history rather than from
+    # a provenance label frozen onto the line when it was created.
+    habit_item_ids: Set[UUID] = field(default_factory=set)
     repository: SqlAlchemyRepository | None = None
 
 
@@ -215,6 +218,9 @@ class TrimToBudgetHandler:
             stock_items_by_id=stock_items_by_id,
             offer_by_product_id=offer_by_product_id,
             demand=demand,
+            habit_item_ids=frequently_added_id_set(
+                self.repository.session, DEFAULT_FREQUENTLY_ADDED_LIMIT,
+            ),
             repository=self.repository,
         )
 
@@ -486,7 +492,7 @@ def _classify_lines(
             demand, ctx.today, SHORT_TERM_DEMAND_DAYS,
         )
         if (
-            line.added_via == ADDED_VIA_AUTO_FREQUENTLY_ADDED
+            item.id in ctx.habit_item_ids
             and not short_term_demand
             and band != "out"
         ):
@@ -494,10 +500,11 @@ def _classify_lines(
             continue
 
         # ── Tier 2 — low-stock with cover, no short-term demand ──────
-        if (
-            line.added_via == ADDED_VIA_AUTO_LOW_STOCK
-            and not short_term_demand
-        ):
+        # Reads the item's *current* band rather than the line's old
+        # "added because it was low" stamp: the stamp could be weeks stale
+        # by the time a budget trim runs, and this tier's whole question is
+        # how much cover is left right now.
+        if band == "low" and not short_term_demand:
             cover = _days_of_cover(ctx, item)
             if cover is None:
                 out.append((2, line, REASON_NOT_URGENT, saved))
@@ -524,10 +531,13 @@ def _classify_lines(
             out.append((4, line, REASON_OUT_NO_MEAL, saved))
             continue
 
-        # ── Tier 5 — recipe/meal-plan items scheduled ≥ 5 days out ────
+        # ── Tier 5 — items a meal needs, scheduled ≥ 5 days out ───────
+        # The demand lookup below is the real predicate; it used to be
+        # gated behind "was this line stamped auto_recipe/auto_meal_plan",
+        # which only ever excluded hand-added lines for the same far-off
+        # meal — items just as safe to defer.
         if (
-            line.added_via in (ADDED_VIA_AUTO_RECIPE, ADDED_VIA_AUTO_MEAL_PLAN)
-            and demand is not None
+            demand is not None
             and demand.earliest is not None
             and (demand.earliest - ctx.today).days >= FAR_OUT_MIN_DAYS
         ):

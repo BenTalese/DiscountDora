@@ -58,9 +58,8 @@
                     aria-hidden="true"
                 />
                 <span class="stock-row-legend__text">
-                    Dashed ring — this level may be out of date. Open the level
-                    picker and it says why: Dora disagrees with it, or it's due
-                    a stocktake count.
+                    Dashed ring: this level may be out of date. The level picker
+                    says why.
                 </span>
             </div>
 
@@ -71,19 +70,18 @@
             <div class="stock-row-legend__item row items-center no-wrap">
                 <span class="stock-row-legend__row-swatch stock-row-legend__row-swatch--alert" aria-hidden="true" />
                 <span class="stock-row-legend__text">
-                    Outlined — needs you. Something's expired or expiring soon,
-                    or an item you marked essential has run low or out.
+                    Outlined: expired or expiring soon, or an essential that's low
+                    or out.
                 </span>
             </div>
             <div class="stock-row-legend__item row items-center no-wrap">
                 <span class="stock-row-legend__row-swatch" aria-hidden="true" />
-                <span class="stock-row-legend__text">Plain — nothing to do.</span>
+                <span class="stock-row-legend__text">Plain: nothing to do.</span>
             </div>
             <div class="stock-row-legend__item row items-center no-wrap">
                 <span class="stock-row-legend__row-swatch stock-row-legend__row-swatch--dim" aria-hidden="true" />
                 <span class="stock-row-legend__text">
-                    Dimmed — out of stock, but you never marked it essential.
-                    Worth knowing, not worth chasing.
+                    Dimmed: out of stock, but not essential.
                 </span>
             </div>
             <div class="stock-row-legend__item row items-center no-wrap">

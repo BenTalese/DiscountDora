@@ -1,6 +1,6 @@
 <template>
     <!-- dashboard's kitchen-health card. Reads the composite +
-         five-component breakdown from `useDoraScore()`; renders each
+         per-component breakdown from `useDoraScore()`; renders each
          component in its own box.
 
          The `InfoTip` beside the title went on 2026-09-08 (*"I don't think we
@@ -21,7 +21,7 @@
 
         <div v-else-if="score.composite === null" class="dora-text-muted text-caption">
             Kitchen health appears once you've tracked a few stock
-            items — nothing to score yet.
+            items.
         </div>
 
         <template v-else>
@@ -41,25 +41,28 @@
                  traffic-light class, so plain CSS `stroke` works and there is
                  no `paletteToken` dependency to keep honest (FU-824). -->
             <div class="dora-score-hero">
-                <svg
-                    viewBox="0 0 36 36"
-                    class="dora-score-ring"
-                    role="img"
-                    :aria-label="`Kitchen health ${score.composite} out of 100, last ${score.window_days} days`"
-                >
-                    <circle class="dora-score-ring__track" cx="18" cy="18" r="15.915" />
-                    <circle
-                        class="dora-score-ring__arc"
-                        :class="barClass(score.composite)"
-                        cx="18"
-                        cy="18"
-                        r="15.915"
-                        :stroke-dasharray="`${score.composite} ${100 - score.composite}`"
-                    />
-                </svg>
-                <div class="dora-score-hero__figure" aria-hidden="true">
-                    <span class="dora-score-hero__number">{{ score.composite }}</span>
-                    <span class="dora-score-hero__scale">/100</span>
+                <div class="dora-score-hero__dial">
+                    <svg
+                        viewBox="0 0 36 36"
+                        class="dora-score-ring"
+                        role="img"
+                        :aria-label="`Kitchen health ${score.composite} out of 100, last ${score.window_days} days`"
+                    >
+                        <circle class="dora-score-ring__track" cx="18" cy="18" r="15.915" />
+                        <circle
+                            class="dora-score-ring__arc"
+                            :class="barClass(score.composite)"
+                            cx="18"
+                            cy="18"
+                            r="15.915"
+                            :stroke-dasharray="`${score.composite} ${100 - score.composite}`"
+                        />
+                    </svg>
+                    <!-- Just the number (owner, 2026-09-27: "we know it's out of
+                         100"). The ring already is the scale. -->
+                    <div class="dora-score-hero__figure" aria-hidden="true">
+                        <span class="dora-score-hero__number">{{ score.composite }}</span>
+                    </div>
                 </div>
                 <div class="dora-score-hero__caption">
                     <!-- The trend moved off the card header and under the ring.
@@ -164,13 +167,9 @@
      * per-row action links, and dormant signals rendering identically whatever
      * made them dormant. Each is annotated at its site in the template above.
      *
-     * One consequence worth stating plainly: **this card no longer links
-     * anywhere.** That includes the `plan_adherence` row, which since 09-04 was
-     * the replacement for the deleted "Reconcile past meals" card — the owner's
-     * *"put that metric as the link to go do meal reconciliation"*. The metric
-     * stays and the link goes, because the same batch's standing decision
-     * ("Remove them all I reckon") applies to it too; `/meal-plans/reconcile` is
-     * reachable from the meal-plans header nudge, which was never removed.
+     * **This card links nowhere.** The plan-adherence signal that stood in for
+     * the old "Reconcile past meals" card was cut on 2026-09-27;
+     * `/meal-plans/reconcile` is reachable from the meal-plans header nudge.
      */
     import { computed } from 'vue';
     import DashboardCard from 'src/components/dashboard/DashboardCard.vue';
@@ -231,12 +230,18 @@
        caption below it. A grid rather than absolute positioning so the ring's
        intrinsic size sets the block's height and the figure centres in it
        without magic offsets. */
+    /* Centred in the card (owner, 2026-09-27), with the trend and window on one
+       line under the ring rather than in a column beside it. */
     .dora-score-hero {
-        display: grid;
-        grid-template-columns: auto minmax(0, 1fr);
+        display: flex;
+        flex-direction: column;
         align-items: center;
-        gap: var(--space-4);
+        gap: var(--space-2);
         margin-bottom: var(--space-4);
+    }
+    .dora-score-hero__dial {
+        display: grid;
+        place-items: center;
     }
     .dora-score-ring {
         grid-area: 1 / 1;
@@ -265,31 +270,18 @@
        off so it never eats a tap meant for anything underneath. */
     .dora-score-hero__figure {
         grid-area: 1 / 1;
-        display: flex;
-        align-items: baseline;
-        justify-content: center;
-        gap: 1px;
         pointer-events: none;
     }
     .dora-score-hero__number {
-        /* A2's ladder tops out at `--font-size-3xl` (30px), which is where this
-           already was; the `/100` beside it is what lets the number stay that
-           size without the words "out of 100" taking a second line. */
+        /* A2's ladder tops out at `--font-size-3xl` (30px). */
         font-size: calc(var(--font-size-3xl) * 1rem);
         font-weight: 600;
         line-height: 1;
         color: var(--text-primary);
     }
-    .dora-score-hero__scale {
-        font-size: calc(var(--font-size-sm) * 1rem);
-        font-weight: 600;
-        color: var(--text-secondary);
-    }
     .dora-score-hero__caption {
-        grid-area: 1 / 2;
         display: flex;
-        flex-direction: column;
-        align-items: flex-start;
+        align-items: center;
         gap: var(--space-2);
     }
     .dora-score-hero__window {

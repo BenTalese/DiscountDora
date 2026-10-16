@@ -162,7 +162,7 @@
     });
     const reportHref = computed(() =>
         supportHref(channel.value, {
-            subject: `[Dora] Error — ${props.variant} on ${route.path}`,
+            subject: `[Dora] Error: ${props.variant} on ${route.path}`,
             body: reportBody.value,
         }),
     );

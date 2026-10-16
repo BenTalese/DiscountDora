@@ -22,9 +22,8 @@
                 <template #title>Stocktake</template>
                 <template #description>
                     Stocktake is the guided count that walks you through items
-                    Dora hasn't seen in a while. Turn it off and every
-                    stocktake control disappears from the app — nothing is
-                    deleted, and turning it back on restores the queue.
+                    Dora hasn't seen in a while. Turning it off hides it; nothing
+                    is deleted.
                 </template>
 
                 <SettingsRow label="Enabled">
@@ -71,10 +70,8 @@
                 <template #title>Auto self-tuning</template>
                 <template #description>
                     When on, Dora checks fast-moving items more often and
-                    stable ones less — driven by each item's stock-level
-                    history. Turn off to hold every item at the default
-                    cadence above. Essential items still move one band
-                    faster either way.
+                    stable ones less. Turn off to use the default cadence above
+                    for every item.
                 </template>
 
                 <SettingsRow label="Auto">

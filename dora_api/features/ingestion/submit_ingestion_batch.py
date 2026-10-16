@@ -24,6 +24,10 @@ Contract (PROPOSAL_INGESTION_API §2.2-§2.4):
   `IngestionStoreMapping`. Unknown names quarantine (record skipped
   with `store_not_mapped`); admin maps later via the API access page.
   Stores are **never auto-created**.
+- 2026-10-15: a producer that already knows Dora's stores (the companion reads
+  them from `GET /api/ingest/stores` and keeps its own provider → store map)
+  sends `store_id` instead of `store`. That skips the name mapping entirely; an
+  id that names no store is skipped with `store_unknown`.
 
 Per-record results follow the seed-style DTO: a bad record never fails
 the batch — `{ accepted: [...], skipped: [...], failed: [...] }`.
@@ -37,7 +41,7 @@ from typing import Literal
 from uuid import UUID, uuid4
 
 from flask import request
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from dora_api.domain.entities.idempotency_key import IdempotencyKey
 from dora_api.domain.entities.ingestion_source import IngestionSource
@@ -72,10 +76,11 @@ class _ProductIn(BaseModel):
 
     ref: str = Field(min_length=1, max_length=255)
     name: str = Field(min_length=1, max_length=255)
-    # producer pushes the store's external name as `store`. Was
-    # `merchant` pre-Phase-E; the rename also flows through to the SPA
-    # quarantine surface.
-    store: str = Field(min_length=1, max_length=255)
+    # Exactly one of these. `store` is the store's external name, resolved
+    # through the per-source mapping (was `merchant` pre-Phase-E); `store_id`
+    # is a Dora store id, for a producer that maps stores on its own side.
+    store: str | None = Field(default=None, min_length=1, max_length=255)
+    store_id: UUID | None = None
     brand: str | None = Field(default=None, max_length=255)
     size: str | None = Field(default=None, max_length=255)
     size_unit: str | None = Field(default=None, max_length=255)
@@ -90,6 +95,12 @@ class _ProductIn(BaseModel):
     merchant_stockcode: str | None = Field(default=None, max_length=255)
     web_url: str | None = Field(default=None, max_length=500)
     source: str | None = Field(default=None, max_length=64)
+
+    @model_validator(mode="after")
+    def _one_store(self) -> "_ProductIn":
+        if (self.store is None) == (self.store_id is None):
+            raise ValueError("Give exactly one of `store` or `store_id`.")
+        return self
 
 
 class _OfferIn(BaseModel):
@@ -278,12 +289,21 @@ class SubmitIngestionBatchHandler:
     # — record applicators —
 
     def _apply_product(self, ctx: _IngestionContext, raw: _ProductIn) -> None:
-        store, _mapping = self._resolve_store(ctx, raw.store)
-        if store is None:
-            ctx.result.skipped.append(_SkippedRecord(
-                kind="product", ref=raw.ref, reason="store_not_mapped",
-            ))
-            return
+        if raw.store_id is not None:
+            store = self.repository.get(Store).by_id(raw.store_id)
+            if store is None:
+                ctx.result.skipped.append(_SkippedRecord(
+                    kind="product", ref=raw.ref, reason="store_unknown",
+                ))
+                return
+        else:
+            assert raw.store is not None  # guaranteed by `_one_store`
+            store, _mapping = self._resolve_store(ctx, raw.store)
+            if store is None:
+                ctx.result.skipped.append(_SkippedRecord(
+                    kind="product", ref=raw.ref, reason="store_not_mapped",
+                ))
+                return
 
         # Dedupe: stockcode-first, name fallback. Source is provenance
         # only, NOT identity — same product pushed by two sources

@@ -1,7 +1,7 @@
 <template>
     <div class="settings-page">
         <SettingsPageHeader
-            title="Money &amp; budgets"
+            title="Budget"
             :icon="ICONS.savings"
             description="Set a shared grocery budget for the household. Dora tracks spend across every finished shopping list and surfaces dollar figures on recipes, lists, and the dashboard."
         />

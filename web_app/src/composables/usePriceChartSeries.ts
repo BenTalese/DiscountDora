@@ -7,16 +7,15 @@
  * price-history DTO — and carry the interpretation of it inside the drawing
  * code: an `offersAsContext` flag, an `hasOffers()` fallback deciding whether
  * observations were drawn at all, and a `your_prices` block it reached into for
- * the baseline. That was fine while one endpoint fed it. It now has four
+ * the baseline. That was fine while one endpoint fed it. It now has three
  * callers, two of which have nothing to do with products:
  *
  *   - `/price-history` (product offers, up to 5 series)
  *   - the stock item's "Full history" sheet (your observations ∪ offers)
- *   - Reports' **Price trends** card (product unit price over time)
  *   - Reports' **Item price movers** card (your own observations, one item)
  *
  * So the chart now takes a neutral shape (`PriceChartSeries`) and every payload
- * is mapped to it here — one module, four adapters, R-001. The chart draws; this
+ * is mapped to it here — one module, three adapters, R-001. The chart draws; this
  * decides what "primary", "context" and "baseline" mean for a given payload,
  * which is a question about the *data*, not about the pixels.
  *
@@ -29,7 +28,6 @@ import type {
     PriceHistorySeries,
     StockItemPriceHistory,
 } from 'src/services/api/priceHistoryApiService';
-import type { PriceTrendSeries } from 'src/services/api/reportsApiService';
 
 /** One plotted point. `marked` draws an emphasised dot — a deal, in practice. */
 export interface PriceChartPoint {
@@ -141,17 +139,3 @@ export function stockItemHistoryToChart(
     }];
 }
 
-/**
- * Reports' price-trends payload → chart series. The plainest of the four: a
- * name, a store and a list of `(date, unit_price)`, nothing subordinate.
- * The store rides in the series name because two stores can stock the same
- * product and the legend has to tell them apart.
- */
-export function trendSeriesToChart(series: PriceTrendSeries[]): PriceChartSeries[] {
-    return series.map((s) => ({
-        key: s.product_id,
-        name: s.store ? `${s.name} · ${s.store}` : s.name,
-        points: s.points.map((p) => ({ date: p.date, value: p.unit_price })),
-        baseline: null,
-    }));
-}

@@ -42,7 +42,7 @@
                 dense
                 class="sort-control__dir"
                 :icon="sortDir === 'asc' ? ICONS.arrow_upward : ICONS.arrow_downward"
-                :aria-label="`Sort ${directionLabel.toLowerCase()} — click to reverse`"
+                :aria-label="`Sort ${directionLabel.toLowerCase()}`"
                 @click.stop="toggleDirection"
             >
                 <BaseTooltip>{{ directionLabel }}</BaseTooltip>

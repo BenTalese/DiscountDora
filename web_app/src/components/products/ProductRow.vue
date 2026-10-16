@@ -58,7 +58,6 @@
                 v-if="product.store_name"
                 :name="product.store_name"
                 :store-id="product.store_id"
-                :has-image="false"
                 :height="14"
                 :width="24"
                 class="q-ml-sm gt-xs"
@@ -87,15 +86,9 @@
                 :selected-product-id="product.product_id"
                 @click.stop
             />
-            <!-- Icon-only here: every other control on this face is an
-                 icon, and a lone text button made the unlinked card the odd
-                 one out. The variant's tooltip still explains that this adds
-                 a product-only line, and linked-vs-unlinked is already
-                 carried by the chip above and the link button beside it. -->
             <AddToListButton
                 v-else
                 variant="inline-product"
-                label=""
                 :product-id="product.product_id"
                 @click.stop
             />

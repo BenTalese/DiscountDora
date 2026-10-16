@@ -41,6 +41,538 @@ next.
 
 ---
 
+## 2026-10-15: **Owner batch: ~90 items across 14 surfaces + companion**
+
+**Status: built, gated, mostly driven live; ledger close-out partial (usage limit).**
+pytest **2391 passed** (only the four FU-762 reds); vitest **744 / 66**;
+`vue-tsc` + `eslint src` clean. Companion: pytest 77 passed, `vue-tsc` clean.
+Driven on 5171/5174 + companion 5172/5175: shopping header (phone/desktop),
+My products (2-up, compact rows no overflow, price watch), bell (two button
+rows, price_drop, outside click), Notifications/API/email/reports, planner
+(budget line, affogato batch, slot menu info, mobile menu), verdict plan
+reason, stocktake wording, companion search/progress/cards/tray/logos/push.
+
+**Big pieces.**
+- Alerts: page removed; episode-keyed keys + `started_on`; per-user discard
+  window (default 14d); read state dropped (dismiss / dismiss-all); new kinds
+  `shopping_overdue`, `price_drop` (PriceAlert finally fires); kind toggles +
+  price watches on Settings → Notifications; bell refreshes on open. New
+  **R-093 / ADR-090**. Migration `e4b7c2a9f1d3` (also drops
+  `AppSetting.deals_email_enabled` and `AlertInteraction.read_at`).
+- Companion: MDI font never loaded (every ICONS icon blank). Push 502 = scrapers
+  send `price_was=0`, Dora rejected the batch (FU-918). Dora stores are now the
+  source of truth: `/api/ingest/stores` (+logo), ingest/link-status take
+  `store_id`, companion maps scraper → stores (name auto-match, Merchants page),
+  pushes by id. New card (original 2024 design), Dora-style filters, per-store
+  progress.
+- Planner: budget uses `/budget/status?on=<week>`; batch leftovers get
+  `cook_batch_pending`; tooltips count the batch. Juice amber is FU-915 (decision).
+- Stock detail: planned demand is a verdict reason (`plan` axis, +1 strength
+  when low/out); standalone card only with money off.
+
+**Decisions worth reviewing.** Product card track/untrack moved into the
+overflow menu (MP-8 button gone) to fit 2-up; unlinked products use the same
+cart button; Amend label shortens to "Done" while amending.
+
+**Close-out (2026-10-17):** CHANGELOG entry written, PROJECT_STATE stamp
+refreshed (full dashboard regeneration not run), committed and pushed (Dora
+branch `prototype/claude-upgrades`, companion `main`).
+
+**Next up:** FU-915 decision; regenerate PROJECT_STATE dashboard.
+
+---
+
+## 2026-10-14: **Shopping lists: header steps, picker flicker, templates**
+
+**Status: built, gated, driven live.** pytest shopping/template/product e2e
+**206 passed** plus migrations 67 (1 skip, 1 known xfail); five new tests in
+`test_shopping_list_template_choice.py`. vitest **747 / 66**, `vue-tsc` and
+`eslint` clean. Driven on 5171/5174 at Pixel 5 and 1440: zero horizontal
+overflow on all three card faces and the template editor; picker icon goes
+cart straight to tick on a switch (MutationObserver, no stand-in); Use on a card
+lands on the new list without opening the preview; a picked template offer
+arrives on the new list with its store.
+
+**Done.**
+- Picker flicker: `load()` nulls `detail`, so the picker fell back to
+  `list_alt`. It now reads the target's rail summary while the detail loads
+  (`pickerIcon` / `pickerLabel` in `ShoppingListDetail.vue`).
+- Overview card: identity row, then figures | ring (run only, 64px, 0.22) |
+  stacked actions; "Group by" moved full width below (four segments ran under
+  Finish on a phone). Buttons: draft Shop (cart); run Draft (draft glyph) over
+  Finish (tick); receipt Amend over Put away. Glyphs come from `listStatusIcon`.
+  "N left to pick" removed.
+- Templates page: header text and count removed; card tap opens a read-only
+  preview with Edit items + Use template; Use (icon + "Use") sits left of the
+  ellipsis, which lost its "Use template" entry. Editor card is
+  `width: 640px; max-width: 95vw` (the 480px floor overran phones), rows are a
+  grid with the name on its own line under 600px.
+- `LineChoicePicker.vue` extracted from `ShoppingListPlanRow` (R-001) with
+  `hasLineChoices` / `pickedLineChoice` in `models/shoppingList.ts`; the plan
+  row and the template editor both use it.
+- Backend: `ShoppingListTemplateLine` gains `selected_product_id` (FK SET NULL,
+  indexed) and `preferred_buy_id` (plain UUID, like `ShoppingListLine`);
+  migration `c3e8a5f1d7b4`. Template detail returns offers + preferred buys via
+  the new shared `build_line_offers` (R-003, lifted out of the list detail).
+  PATCH line validates the choice belongs to the item (422 otherwise).
+  Snapshot-from-list copies both; unlinking a product clears it on template
+  lines too.
+
+**Decisions worth reviewing.**
+- **Reverses the template entity's old "no product selection" rule** (deals
+  age badly). The owner asked for the list's dropdown in the editor, so the
+  choice is stored and re-validated at instantiate: a product no longer linked
+  or a deleted preferred buy is dropped silently.
+- **Instantiate now runs `apply_line_defaults`** and stamps `added_at`, like
+  every other add path. A carried offer sets the line's store; anything the
+  template left unset gets the usual memory (last choice, usual store). Before,
+  template lines got no defaults at all.
+- Amend keeps its "Done amending" toggle label; it is the widest button
+  (131px) and still fits at 393px.
+
+**Resolved:** FU-738 (lifecycle CTA no longer in any scrolling band).
+
+**ADR evaluation:** no new rule.
+
+**Next up:** nothing blocking.
+
+---
+
+## 2026-09-27 (last): **Dashboard: four owner items**
+
+**Status: built, gated, driven live.** Score + dashboard backend tests 46
+passed, vitest 747, `vue-tsc` and `eslint` clean. Driven at 375 and 1440:
+ring centre offset 0px from the card centre, number centred in the ring
+(0, -1px), no "/100", components are Waste / Budget / Freshness / Plan
+coverage, calendar opens on today and re-tapping keeps it selected.
+
+**Done.**
+- Kitchen health hero is a centred column: dial (SVG + number stacked in one
+  grid cell) over a one-line caption (trend chip + window).
+- Plan adherence removed end to end: enum key, inputs, scorer, the handler's
+  reconcile-queue gather and `_unresolved_among`, the SPA key, tests (the
+  `TestPlanAdherence` class and the closed-set assertions). The reconcile page
+  is still reached from the meal-plans header nudge. Two unused imports in
+  `get_dora_score.py` went with it (one was already unused). FU-870 updated:
+  the trend now moves on three signals.
+- What's coming: the page derives an effective date (the tapped day, else
+  today's cell); tapping no longer toggles off. The card shows the day title on
+  every day and "Nothing on." when it's empty; the "Tap a day with dots" hint is
+  gone.
+
+**Next up:** FU-914 still waiting on the owner.
+
+---
+
+## 2026-09-27 (later still): **Reports: six owner items**
+
+**Status: built, gated, driven live.** pytest reports + waste suites 66 passed
+(then the reports suite again after deletions), vitest **747 / 66** (two
+chart-adapter tests went with the adapter), `vue-tsc` and `eslint` clean.
+Driven on 5171/5174 at 375 (touch) and 1440: zero horizontal overflow on every
+range, picker width constant (301px phone / 347px desktop) across all six, the
+waste reason filter narrows the list and reports `aria-pressed`.
+
+**Done.**
+- Range label moved under the picker, one fixed format with the year always.
+  `/reports/range-window` now returns a start for "all" (earliest of lists,
+  cooks, level changes, waste, price observations), so every range names dates.
+  The test that pinned `start is None` for all-time now pins a real start.
+- Info tip: "and tracked store prices" removed.
+- Waste card: renamed `WasteCard.vue`; reason tiles are toggle buttons (44px,
+  focus ring, disabled at zero). `/waste/insights` gains
+  `most_wasted_by_reason`, ranked server-side per reason (new e2e test), so the
+  client never recounts events.
+- "Ran out before restocked" cut, and with it `/reports/keeps-running-out`,
+  its handler, `_level_id_as_of`, client types/method and tests. Resolves
+  **FU-869**.
+- Price changes: the coverage footnote removed.
+- Price trends cut: `PriceTrendsCard.vue`, `/reports/price-trends`, its handler,
+  client method/types, `trendSeriesToChart` and the page's product-search
+  plumbing. Unused imports in `reports.py` trimmed.
+
+**Not changed:** Waste still clamps to 365 days, so on 2y/5y/All time its
+caption says "last 365 days" under a wider label. That's the existing API cap,
+and the caption is honest about it.
+
+**Next up:** FU-914 (log-price denominator) still waiting on the owner.
+
+---
+
+## 2026-09-27 (later): **Em-dash sweep, camera over http, store logos, log-price question**
+
+**Status: built and gated; two browser checks owed.** pytest **2378 passed**
+with only the four FU-762 reds; vitest **749 / 66**; `vue-tsc` and
+`eslint src/` clean. Companion: 69 pytest passed (the FU-887 roundtrip test
+deselected), `vue-tsc` clean. Store logos driven live on 5171/5174 after
+uploading test logos (the seed has none).
+
+**Em dashes.** A scanner that strips comments found ~464 user-visible lines in
+the SPA and ~170 in the API. Rewritten by hand, cutting the explanatory tails,
+not just swapping punctuation: tooltips, toasts, empty states, help pages,
+settings copy, Dora's canned replies, the assistant's system prompt (which now
+also tells the model never to use them), emails, `offline.html`, food facts,
+seed data, and the companion SPA. Empty-value placeholders went from "—" to
+"–". **Left alone on purpose:** code comments, docstrings, log lines and
+developer-only errors (config asserts in `import_spreadsheet`,
+`bool_operation`), about 40 API lines. Seven unit tests and five backend tests
+pinned the old strings and were updated. New rule **D-025** in the design style
+guide; memory `feedback_no_em_dashes` saved. Along the way the retired
+"primary list" wording was removed from the bell dialog and Dora's chat copy
+(FU-854's behaviour change is still owed), and the Help page's scanning guide
+was rewritten to match the camera change.
+
+**Process note for next time:** three times I used a line-edit helper whose
+replacement token included words that already followed the dash, which doubled
+them ("Try try"). Caught and fixed each time, but use exact before/after pairs.
+
+**Camera.** `cameraAvailability.ts` no longer gates. The overlay always
+attempts the camera, shows a short warning on an insecure origin, and shows the
+explainer panel only after an attempt fails with no `mediaDevices`. The admin
+banner now warns instead of saying it won't work.
+
+**Store logos.** Root cause: three call sites passed `:has-image="false"`
+because their DTOs don't carry the flag. `StoreLogo` now resolves `has_image`
+(and the store id, by name if needed) from the stores store when the caller
+doesn't pass it, and gained an `inline` size. Logos added to the plan row's
+store caption and menu, the offer picker, the price sheet's Seen-at chips and
+Bought-from select, Price drops, Price history, and the custom product store
+select. Companion: merchants page avatar and search store chips use
+`MerchantLogo`.
+
+**Log price.** Answered, not built: the preview flips /100g to /kg by pack
+size, so two packs of one item can quote different units. Logged as **FU-914**
+with a recommendation (fixed /100g and /100ml) for the owner to decide.
+
+**Next up:** owner's call on FU-914; the DORA_VERIFY camera and copy checks.
+
+---
+
+## 2026-09-27: **Shopping lists: a 16-item phone pass**
+
+**Status: built, gated, driven live.** pytest **2380 passed** with only the four
+known FU-762 buy-verdict reds (the 5 `test_email_sender` errors in the full run
+were my `-p no:logging` flag starving `caplog`; 16/16 pass without it). vitest
+**749 / 66**, `vue-tsc` clean, `eslint` clean on every touched file. Six new e2e
+tests in `test_shopping_line_defaults.py`; `shoppingListRailItem.spec.ts`
+rewritten to the new row. Driven on 5171/5174 at 375 (Pixel 5, touch) and 1440.
+
+**Decisions worth reviewing.**
+- **Picked offers price the line again, reversing half of 09-17.** The owner
+  asked that picking an offer "override the price shown" and un-picking restore
+  it. Ladder is now actual → **picked** offer → historic → none. The
+  cheapest-offer fallback still prices nothing, and nothing records spend until
+  a price is entered in shop mode, so the 09-17 spend rule holds. Picking an
+  offer also writes the offer's store to `planned_store_id` server-side;
+  un-picking leaves the store.
+- **Offers vs preferred buys follow `features.products`**, the same gate the
+  stock page uses: products on → the name dropdown lists offers; off →
+  preferred buys. Never both.
+- **`_line_defaults.apply_line_defaults`** is now the single place a new line's
+  planned store / preferred buy / picked offer are decided (add-line,
+  quick-add, auto-generate, low-stock trigger). Memory = the item's most recent
+  earlier line, so a cleared choice stays cleared. Side effect: quick-add now
+  prefills the usual store, which it never did. Identity-map trap hit on the
+  way (the handler's earlier `by_id` left `StockItem.products` noload-empty,
+  FU-872's shape); avoided by relying on the unlink handler's invariant that a
+  line's `selected_product_id` is always a linked product.
+- **Quantity floor is 1** on client and server (`ge=1` on add + update).
+- **Keyboard:** `interactive-widget=resizes-content` (Android) plus
+  `boot/keyboardInset.ts` publishing `--vv-inset-*` from `visualViewport`, with
+  `app.scss` offsetting `.q-dialog__inner` (iOS). App-wide, covers raw
+  `q-dialog`s too. Not testable headless, so it is in DORA_VERIFY.
+- **Kept:** "You saved" on the receipt and "Trip total" mid-shop (owner only
+  flagged the draft's "Saving"). The run and receipt cards use the same
+  figure layout as the draft.
+
+**Answers owed to the owner (in the reply, not in code):** the price sheet is
+"Price each": the shelf ticket's big number for one item, not per 100g (label
+fixed 09-17); custom products exist (09-08); preferred buys are the no-products
+stand-in, so yes, mutually exclusive, and now the list agrees.
+
+**Verified and deleted from DORA_VERIFY:** "The burger sits right" (09-19):
+seen at 1440 (mark beside name, verdict at the far end) and 375 (mark beside
+name, verdict under the quantity), no collision with the chevron.
+
+**Known trade-off:** on a phone the name gets ~141px on line one because the
+price spans the reorder+delete tracks; long offer names truncate. Fine by the
+owner's sketch; revisit if he flags it.
+
+**ADR evaluation:** no new rule. "An invisible control must be `display:none`,
+not `opacity:0`" is a candidate if it recurs a second time.
+
+**Next up:** nothing blocking; DORA_VERIFY "2026-09-27 phone pass" is the
+outstanding browser work.
+
+---
+
+## 2026-09-19 — **Line provenance: seven values become one boolean**
+
+**Status: built and green; browser-pass owed.** pytest **2379 passed** with only
+the four known FU-762 buy-verdict reds, vitest **749 / 66 files**, `vue-tsc`
+clean, `eslint` clean on every touched file. `test_migrations` green — single
+head, upgrade-from-empty clean. Not yet driven live; four checks parked in
+`DORA_VERIFY.md` under "Shopping lists — the auto-added mark (2026-09-19)".
+
+**What the owner asked for.** The conversation started as a design question —
+"what are the sources, and what are better ways to show auto-added items?" — and
+converged on deleting the question instead. The reasoning, in his words:
+auto-generate *is* the path where you asked for a whole list, so stamping each
+row with which source produced it tells you what you just typed into the dialog.
+The only distinction worth a visual is **"nothing the user did put this here"**,
+which is exactly one writer: the low-stock trigger in `update_stock_item`.
+He then rejected keeping a one-value enum "just because that was the original
+code shape", and asked for the retired "flagged" and "primary list" vocabulary
+to be obliterated wherever it still appeared.
+
+**Done.**
+- `ShoppingListLine.added_via` (str, 7 values) → `is_auto_added` (bool).
+  Migration `a1c7e4b9d2f6`. Historical rows collapse to False — `auto_low_stock`
+  was written by *both* machines and nothing on the row distinguishes them, so a
+  faithful backfill isn't possible; pre-release, a wrong mark is worse than none.
+- `PROVENANCE_PRIORITY` / `_PRIORITY_INDEX` / `_Candidate` / `_Candidate.detail`
+  deleted from `auto_generate.py`. Dedupe is now `setdefault`.
+  `test_auto_generate_priority.py` deleted with the ladder it tested.
+- `sources.flagged` → `sources.essentials`. It always queried `is_essential`;
+  there has never been a flag column. Dialog copy fixed to match.
+- **The wand → the burger** on `ShoppingListPlanRow`, on `is_auto_added` lines
+  only, with the verdict chip pushed right. Closes half of FU-864 (which is
+  narrowed to `DraftShopCard` alone); the wand correctly keeps the AI-mode
+  marker, and a stock-level rule involves no model.
+- **"primary list" swept.** The stored flag died in P6-01 but the vocabulary
+  outlived it: `primary_target_resolver.py` → `quick_add_target_resolver.py`,
+  `resolve_primary_target` → `resolve_quick_add_target`, the route
+  `/shopping-lists/primary/lines` → `/quick-add/lines`, SPA `isPrimary` →
+  `isQuickAddTarget`, and — the real bug — Dora's own copy told the user to
+  *"Set one as primary so I know where to drop new additions"*, a feature that
+  no longer exists. Also removed: a module docstring advertising
+  `POST /append-low-stock-essentials`, an endpoint with no route and no caller.
+
+**The judgement call worth reviewing.** `trim_to_budget` scored three of its
+five tiers off `added_via`, which I only found because an earlier grep truncated
+at 20 lines — worth remembering. Two substituted cleanly and read *better*:
+tier 2 now uses the item's live stock band, tier 5 the meal-demand map, both of
+which answer the tier's actual question instead of trusting a label frozen weeks
+earlier. Tier 1 ("habit — can wait") had no other signal, so rather than delete a
+working feature I extracted `_frequently_added.py` — one ranking query now shared
+with `auto_generate`, where it had been duplicated (R-003).
+
+**This changed behaviour, deliberately:** tier 5 used to require the line be
+stamped `auto_recipe`/`auto_meal_plan`, so a hand-added line for a meal five days
+out was never offered as a trim even though it's just as deferrable. It is now.
+`test_tier1_not_applied_when_meal_booked_soon` was asserting `out == []` and now
+pins tier 5 with the reason string; the new comment records why.
+
+**Next up:** nothing blocking. The browser-pass in `DORA_VERIFY.md` is the only
+outstanding work on this. FU-913 (the two overlapping essentials sources in the
+New list dialog) is the natural follow-on if he wants the source picker tidied.
+
+---
+
+## 2026-09-17 (later) — **Shopping lists: a 24-item owner pass, and the collapse snap that wasn't a curve**
+
+**Status: built, gated, AND driven live.** pytest **2389 passed** with only the
+four known FU-762 buy-verdict reds, vitest **749 / 66 files**, `vue-tsc`,
+`eslint src/`, `quasar build` clean. Driven on the isolated 5171/5174 pair at
+**1440 and 375**. Three tests added (back-to-draft ×2, the offer/spend rule),
+three updated to the new contracts.
+
+**The headline is a three-line CSS fix with an app-wide reach.** The owner has
+reported the same thing at least three times: *"there's a snap at the end which
+looks ugly and not smooth (when collapsing). This keeps recurring."* Sampled
+frame by frame rather than re-tuned by feel: the card eases **199px → 29px over
+~250ms, holds, then drops 29 → 0 in one frame**. 29px is the body's own
+`padding: 12px/16px` + its 1px border — `q-slide-transition` animates `height`,
+and height cannot go below the padding box, so the last 29px were never animated
+at all. They vanished when `v-show` set `display: none`. Every disclosure whose
+*caller* had padded the body did this, which is exactly why it kept coming back.
+The animated box is now bare and the padding sits on a new
+`.collapsible-card__inner` (**R-091 / ADR-088**). Re-measured: 199 → 165 → … → 3
+→ 2 → 1 → 0.
+
+**The offers decision went further than my options offered, and the owner was
+right.** I asked whether to stop offers pricing lines in planning only or
+everywhere; he picked everywhere, and added the mechanism: *"force the user to
+enter a price, and there's the option of selecting an offer to fill the price in
+shop mode via the price modal."* He had also spotted the bug underneath it —
+clicking an offer chip does nothing to the price, because the estimate ladder
+puts purchase history **above** offers, so committing to an offer changed
+nothing visible on any line he had ever bought. So: the offer rung left the
+ladder, the tick-time and finish-time snapshots are gone, and the price sheet
+grew a **Seen at** chip that fills the price (and its store) when tapped.
+Consequence he accepted up front: a list you never price records no spend.
+
+**That broke five Reports tests, which was the point of running them.** Two
+surfaces degraded correctly on their own — spend-by-store and usage stats
+already coalesce `actual_unit_price` with the snapshot and count unpriced ticked
+lines as coverage rather than dropping them. The **savings-captured** report did
+not: it filtered on `picked_offer_price IS NOT NULL`, so it would have gone
+permanently empty. Rather than let a whole card die quietly, finishing still
+freezes the offer's **RRP** (`list_price_at_pick`) on lines that carry a price
+the user entered — context for their number, not a substitute for it — and the
+report measures against `actual_unit_price`. Savings now mean something
+stronger than before: measured against what you actually paid. `_spend_seeding`
+was updated so a seeded "purchase" records a price the way a real one does, and
+a new test pins the rule that an offer alone records no spend (a silent, and
+flatteringly *larger*, failure mode).
+
+**Two defects I introduced and caught in the live pass**, both worth recording
+because both looked fine in the diff: the caret's absolute-positioning rule
+targeted `.sl-overview > .collapsible-card__caret` when the caret is a child of
+the *header*, so it stopped being positioned at all and fell to the bottom-left
+of the band; and turning the run face's `v-else-if` chain into two `v-if`s
+orphaned the final `v-else`, which put **Put away** on drafts.
+
+**The rest, briefly.** The summary card's caret stopped taking a column (it was
+shortening every full-width block in the header by 44px while the rows below ran
+full width). *Order by* → **Group by**, and `manual` → `none` through the type,
+the labels, the persisted preference and the specs — every other mode names what
+you're grouped by, so "Manual" named the mechanism. A receipt lost its
+duplicated `$X Spent` headline, its rename pencil, and the standalone "Where you
+spent it" card that made the panel jump position when a list finished. The row
+name became the preferred-buy picker (retiring "Buy hint", a control whose name
+nobody could decode) and stopped linking to the stock item; the provenance
+captions under the price and on the caption line went. The store picker's empty
+option is always **Any store** — it used to render "<resolved store> (default)",
+which is the whole reason "any" and "usual" read as one setting — with the usual
+store marked `(usual)` in the menu only, and prefilled onto new lines
+server-side so the row shows a real choice. Add-to-list lost its second step,
+its stars and its explainer, and keeps frequent-first ordering *under a filter*,
+which it previously abandoned the moment you typed. The price sheet says **Price
+each** (it was never a measurement unit — the value is the price of one, and the
+log-price form differs because an observation genuinely needs a measure) and
+prints the line total. Rail rows wear the status pill's three glyphs, a quiet
+"next up", and one count grammar. **Back to draft** is new, with a server
+endpoint that unticks everything and refuses a finished list.
+
+**Not verified (in `DORA_VERIFY.md`):** the name-dropdown and Seen-at chips on a
+real coarse-pointer phone, and the new flush/receipt card in the dark themes.
+
+**Next up:** owner walks the verify items. **FU-780** (this page is still 3,000+
+lines, R-001) is now the obvious next unit — two batches have landed on it and
+the surface is as fresh as it will get.
+
+**Open questions for user:** none blocking. One thing worth his eye: with offers
+no longer pricing anything, a products install's *planning* totals will read
+lower and the "N items with no price yet" count higher until prices are entered
+— by design, but it is a visible change in the numbers.
+
+---
+
+## 2026-09-17 — **Shopping lists: a nine-item owner UI batch (overlaps, card-in-card, receipt polish)**
+
+**Status: built, gated, AND driven live.** pytest **2386 passed** with only the
+four known FU-762 buy-verdict reds (unchanged, still not ours), vitest **749 /
+66 files**, `vue-tsc`, `eslint src/`, `quasar build` clean. Driven on the
+isolated 5171/5174 pair (`data/scratch-verify.db`, money + products on; the
+owner's :5170 was never started) at **1440 and 375**. No new components; the
+plan row lost one wrapper.
+
+**The owner's report was "too many minor points to write down — look yourself",
+with eleven bullets attached.** Three of them turned out to be the same defect.
+
+**1. The action cell was smaller than its contents, and had been all along.**
+`--sl-act-w: 104px` held three 36px icon buttons and two 4px gaps — 116px.
+Measured before touching anything: on *Full Cream Milk* at 1440px the **Move up
+arrow rendered at x=968 against a cell starting at x=980**, i.e. 12px outside
+its own column, printing on the money. Invisible on a desktop only because
+reveal-on-approach keeps those buttons at `opacity: 0`. A phone has no hover and
+`BaseButton` gives it the D-004 44px floor, which takes the same cell to 140px
+in a 76px track — so *"in draft mode on mobile, price is on top of the reorder
+controls"* was the desktop bug, twice as bad, on the one surface that couldn't
+mask it. Widths are now arithmetic over `--sl-act-btn`, which the coarse-pointer
+query redefines (**R-090 / ADR-087**).
+
+**2. `grid-row: 1 / -1` does not mean "span every row".** Negative line numbers
+resolve against the *explicit* grid; this grid declares no `grid-template-rows`,
+so all rows are implicit, the explicit grid is one line long, and the
+declaration collapses to a single row — pinning row 1 to the 44px quantity tile
+and adding **18px of dead air above every caption**. That is the other half of
+*"buttons looking too small for the elements around them ... something is up"*:
+the rows were tall for a reason that had nothing to do with their contents.
+`span 3` fixes it; desktop rows went 134px → 102/104px with the overlap gone and
+the money column finally landing on one x (it was drifting 850/869 by row,
+because the track was `auto`).
+
+**3. The phone row is two lines now, and the wrapper had to go.** At 375px the
+name cell measured **123px holding 219px of content** — `q-btn`-based store and
+buy-hint menus don't shrink — so the caption ran straight across the price.
+`.sl-row__main` was a box holding three stacked children inside *one* grid cell,
+and a wrapper can't hand its children to a different column, so the row is flat
+and every cell is placed explicitly (the shape `ShoppingListReceiptRow` already
+used). Line one is quantity + name + delete; price, caption and offers go below
+across the full width, reorder rides the caption's line. Captions truncate
+instead of wrapping to three lines, offers scroll sideways, and the ± stepper
+now *widens* the row rather than floating over the item's name and off the left
+edge — a reflow you asked for is not the class of motion bug that float
+prevented (hover, which a phone doesn't have). Rows: 149/185px → 139/152px, and
+nothing overlaps at either width.
+
+**4. The card-in-card was a selector leak.** `StoreSpendCard` is itself a
+`CollapsibleCard`, and the overview card styled `:deep(.collapsible-card__header)`
+— *any* header underneath — so the hero gradient band and its padding were being
+painted a second time inside its own body. Direct-child selectors, plus a
+`flush` variant (no border, no radius, no surface, caption-sized heading), and it
+reads as a region of the card it sits in. Its key also gained a swatch for **No
+store set**, which had none: the hatch moved out of `ProportionBar`'s scoped
+block into `.dora-fill-unassigned` so the pip and the segment it labels cannot
+drift (Reports' own no-store bucket can adopt it — FU-843).
+
+**5. The page flash was a one-line fix with a comment already describing it.**
+Closing the quick-add sheet called `load()`, which nulls `detail` so a
+*navigation* shows a skeleton — the page has had `refreshAllQuietly()` since
+August, written when picking a shop day did exactly this, and the fix never
+reached the sheet beside it.
+
+**6. "Refresh deals" is gone, and the owner's instinct was right.** He asked why
+it wasn't automatic; it turns out it was never a refresh. The handler only
+cleared `selected_product_id` values whose product was no longer linked, and the
+detail read already resolves each line's offer from the *currently linked*
+products and falls back to cheapest — so an active list was always showing
+current deals and the button changed nothing visible, while its name promised a
+scrape. Endpoint, handler, client method, type and toolbar button deleted
+(pre-release, no shim); the bookkeeping moved into
+`unlink_product_from_stock_item`, where the fact actually changes, which also
+stops a selection reviving if the same product is linked again later.
+
+**7. FU-769 reproduced, and the August hypothesis was wrong.** It was filed as a
+suspected *refresh* gap. Driven live: the store never reached the server at all
+(`purchased_store_name: null` after a hard reload). `savePriceEditor`
+short-circuits on a blank price into `clearPriceOverride`, which clears the price
+**and** the store — so "Bought from" only saved if you also typed a price. Split
+into two decisions (`saveStoreOnly`); verified Baby Spinach moving Woolworths →
+Aldi with no reload. **FU-805** was closed in passing while rebuilding that row:
+"estimated, no price entered" now reads "estimated from your last receipt".
+
+**Also:** the overview card lost ~40% of its padding (225px → slimmer at 1440,
+~390px on a phone) and its control row stops drawing a divider across 900px of
+empty space on the receipt face; the phone list picker moved **above** the
+toolbar (the toolbar acts on *this* list) and became one bordered field with the
+pencil as a segment; the receipt dropped its row dividers (it was using leaders
+*and* rules — the leader is the device) and gained document margins; the
+deferred-to-budget reason left its `q-chip`, which cannot wrap, and so had been
+printing under the "Add back" button; `PriceEntryPrefillDto` gained
+`observed_at`, so the log-price dialog says *when* ("Prefilled from your last
+receipt · 17/09/2026") and is titled with the item's name alone.
+
+**Tests:** two added, both pinning server contracts a client can't re-derive —
+`observed_at` on the prefill, and the unlink-clears-selection cleanup (invisible
+by design, so a regression would be silent). One vitest updated for the hatch
+class rename. No Playwright specs added, per the stance.
+
+**Not verified (in `DORA_VERIFY.md`):** a real coarse-pointer phone, the armed
+stepper's reflow on touch, and the flush store card + hatched pip in the two
+dark themes.
+
+**Next up:** owner walks the three verify items. **FU-780** (`ShoppingListDetail.vue`
+is 3,000+ lines, R-001) was deliberately *not* folded in — it would have doubled
+this diff and made the visual changes unreviewable — but the surface is fresh now
+and it is the obvious next unit on this page.
+
+**Open questions for user:** none blocking.
+
+---
+
 ## 2026-09-13 — **Cook mode: four-item owner batch (notes band, step highlight, numerals, gaps)**
 
 **Status: built, gated, AND driven live.** vitest **749 / 66 files**, `vue-tsc`,

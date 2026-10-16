@@ -1493,7 +1493,7 @@
                     message: `Imported "${imported.name}".`,
                     caption: unmatchedCount === 0
                         ? `${matchedCount} ingredient${matchedCount === 1 ? '' : 's'} matched.`
-                        : `${matchedCount} matched · ${unmatchedCount} unlinked — link them later from the recipe.`,
+                        : `${matchedCount} matched · ${unmatchedCount} unlinked.`,
                 });
             }
             if (newId) void router.push(`/cookbook/${newId}`);

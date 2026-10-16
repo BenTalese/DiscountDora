@@ -26,7 +26,17 @@
                     size="18px"
                     class="dora-buy-verdict-card__icon"
                 />
-                <span class="dora-buy-verdict-card__headline">{{ headline }}</span>
+                <span class="dora-buy-verdict-card__headline">
+                    {{ headline }}
+                    <!-- The planned-meals card's sentence, folded in (owner
+                         2026-10-15). Said in the header so it isn't hidden
+                         behind the caret: the plan is the reason that tends
+                         to matter most. -->
+                    <span v-if="planReason" class="dora-buy-verdict-card__plan">
+                        <q-icon :name="ICONS.event" size="14px" />
+                        {{ planReason.label }}
+                    </span>
+                </span>
             </button>
             <!-- Feedback 2026-09-01: the cart action used to be a plain
                  primary button that always read "add", so a card on an item
@@ -169,6 +179,10 @@
 
     const actionLabel = computed(() => props.verdict?.one_tap_action.label ?? '');
 
+    const planReason = computed(
+        () => props.verdict?.reasons.find((r) => r.axis === 'plan') ?? null,
+    );
+
     // The action is icon-only now, so every kind needs a glyph. `add_to_list`
     // is rendered by `AddToListButton` (which picks its own cart glyph from
     // list state); its entry stays so the map is total over the action union.
@@ -268,6 +282,18 @@
     .dora-buy-verdict-card__headline {
         font-weight: 600;
         font-size: 1rem;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        text-align: left;
+    }
+    .dora-buy-verdict-card__plan {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--space-1);
+        font-weight: 400;
+        font-size: calc(var(--font-size-sm) * 1rem);
+        color: var(--text-secondary);
     }
     /* The whole summary line is the disclosure control, so it has to be a
        real button: keyboard-reachable, and wide enough that a thumb lands on

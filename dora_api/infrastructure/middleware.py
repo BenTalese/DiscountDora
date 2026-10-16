@@ -60,6 +60,10 @@ PUBLIC_ENDPOINTS = frozenset({
     # PF-7: the saved-product list a source pulls before refreshing offers.
     # Bearer-authed like its siblings.
     "ingest_list_products",
+    # Dora's stores and their logos, for a source that maps its own scrapers
+    # onto them (2026-10-15). Bearer-authed like its siblings.
+    "ingest_list_stores",
+    "ingest_store_image",
 })
 
 

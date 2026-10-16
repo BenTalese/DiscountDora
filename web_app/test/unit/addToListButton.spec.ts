@@ -141,7 +141,7 @@ describe('AddToListButton — row variant (default)', () => {
         expect(wrapper.find('.q-icon').classes()).toContain('mdi-cart');
         expect(wrapper.find('button').classes()).toContain('text-primary');
         expect(wrapper.find('button').attributes('aria-label'))
-            .toBe('On your list — click to remove');
+            .toBe('On your list. Click to remove');
     });
 
     it('uses the accent colour for a non-target draft list', () => {
@@ -150,7 +150,7 @@ describe('AddToListButton — row variant (default)', () => {
 
         expect(wrapper.find('button').classes()).toContain('text-accent');
         expect(wrapper.find('button').attributes('aria-label'))
-            .toBe('On a list — click to remove');
+            .toBe('On a list. Click to remove');
     });
 
     it('escalates to the attention checkout icon when on multiple lists', () => {
@@ -160,7 +160,7 @@ describe('AddToListButton — row variant (default)', () => {
         expect(wrapper.find('.q-icon').classes()).toContain('mdi-cart-check');
         expect(wrapper.find('button').classes()).toContain('text-severity-attention');
         expect(wrapper.find('button').attributes('aria-label'))
-            .toBe('On multiple lists — click to manage');
+            .toBe('On more than one list');
     });
 
     it('click on "none" adds via the single-item flow', async () => {

@@ -5,10 +5,10 @@ shopping list (or merged into an existing one). Templates carry no
 ticked/archived/primary state — they're just a name + a set of stock
 items with default quantities.
 
-Per-line product selection (`selected_product_id`) is intentionally
-omitted from templates: deals shift, and saving "I bought the Coles one
-last time" into a template tends to age badly. The instantiated list
-falls back to the cheapest-available-offer auto-pick at use time.
+A line can carry the same "which one" choice a shopping-list line does: a
+picked offer (`selected_product_id`, products installs) or a preferred buy
+(`preferred_buy_id`, everyone else). Both are copied onto the new list at
+instantiate time, provided they still apply to the item then.
 """
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -24,12 +24,16 @@ class ShoppingListTemplateLine(BaseEntity):
     stock_item_id: UUID
     quantity: int | None = 1
     sequence: int = 0
+    selected_product_id: UUID | None = None
+    preferred_buy_id: UUID | None = None
 
     class Fields(BaseEntity.Fields):
         TEMPLATE_ID = "template_id"
         STOCK_ITEM_ID = "stock_item_id"
         QUANTITY = "quantity"
         SEQUENCE = "sequence"
+        SELECTED_PRODUCT_ID = "selected_product_id"
+        PREFERRED_BUY_ID = "preferred_buy_id"
 
 
 @dataclass

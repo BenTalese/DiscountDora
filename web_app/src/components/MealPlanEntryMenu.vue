@@ -30,7 +30,14 @@
                  its pair until hover, which is a list affordance; inside an
                  opened menu there is nothing to keep quiet for). -->
             <q-item>
-                <q-item-section>Servings</q-item-section>
+                <q-item-section>
+                    <q-item-label>Servings</q-item-label>
+                    <!-- Owner 2026-10-15: what stands behind the number, the
+                         same facts the recipe page's pool line gives. -->
+                    <q-item-label v-if="servingsInfo" caption class="entry-menu__info">
+                        {{ servingsInfo }}
+                    </q-item-label>
+                </q-item-section>
                 <q-item-section side>
                     <NumberStepper
                         :model-value="entry.servings"
@@ -41,7 +48,7 @@
                         @click.stop
                         @update:model-value="(v: number) => emit('adjust', v - entry.servings)"
                     >
-                        <BaseTooltip>Servings — removes the meal at 0</BaseTooltip>
+                        <BaseTooltip>Servings (0 removes the meal)</BaseTooltip>
                     </NumberStepper>
                 </q-item-section>
             </q-item>
@@ -118,7 +125,9 @@
     import { ICONS } from 'src/style/icons';
     import NumberStepper from 'src/components/NumberStepper.vue';
     import { useBatchEnabled } from 'src/composables/useBatchEnabled';
+    import { supplyTooltip } from 'src/helpers/mealPlanEntryStatus';
     import type { MealPlanEntry } from 'src/models/mealPlan';
+    import { useRecipeStore } from 'src/stores/recipeStore';
     import { computed } from 'vue';
 
     const { batchEnabled } = useBatchEnabled();
@@ -147,4 +156,26 @@
     // meaningful for a batch household.
     const linked = computed(() => batchEnabled.value && !!props.entry.cook_batch_id);
     const fresh = computed(() => batchEnabled.value && props.entry.cook_fresh);
+
+    /** A batch household sees the recipe's cooked servings and how many the
+     *  plan has claimed (server figures off the recipe); a fresh household,
+     *  where nothing is cooked ahead, sees whether it can be made. */
+    const recipeStore = useRecipeStore();
+    const servingsInfo = computed<string>(() => {
+        if (props.entry.consumed_at) return '';
+        if (!batchEnabled.value || props.entry.cook_fresh) return supplyTooltip(props.entry);
+        const recipe = recipeStore.recipes.find((r) => r.recipe_id === props.entry.recipe_id);
+        if (!recipe) return '';
+        const cooked = `${recipe.available_meals} cooked`;
+        if (recipe.committed_meals === 0) return cooked;
+        const short = recipe.committed_meals - recipe.available_meals;
+        if (short > 0) return `${cooked} · plan needs ${short} more`;
+        return `${cooked} · ${recipe.committed_meals} planned · ${recipe.unallocated_meals} free`;
+    });
 </script>
+
+<style scoped>
+    .entry-menu__info {
+        white-space: nowrap;
+    }
+</style>

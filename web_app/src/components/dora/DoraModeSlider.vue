@@ -76,8 +76,8 @@
             return reason;
         }
         return props.modelValue
-            ? 'AI mode on — tap to switch to Basic.'
-            : 'Basic mode on — tap to switch to AI.';
+            ? 'AI mode on. Tap to switch to Basic.'
+            : 'Basic mode on. Tap to switch to AI.';
     });
 
     function onToggle() {

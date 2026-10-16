@@ -1,7 +1,7 @@
 """20260612_drop_shopping_list_is_primary
 
 P6-01 Chunk 2. Drops `ShoppingList.is_primary` — "primary" is now inferred
-from DRAFT-count at read time (see primary_target_resolver.py), so the stored
+from DRAFT-count at read time (see quick_add_target_resolver.py), so the stored
 flag is dead weight.
 
 Pre-release, so no dual-read shim: the backend no longer reads or writes the

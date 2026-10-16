@@ -71,7 +71,7 @@
             <q-card-section class="mp-shop__note">
                 <template v-if="!focusedPlan">
                     <span class="text-caption dora-text-muted">
-                        No meals planned for this week yet — tap a day's slot, then a recipe.
+                        No meals planned for this week yet.
                     </span>
                 </template>
                 <!-- Owner feedback 2026-09-03 — *"don't like how the 'x of x
@@ -208,8 +208,8 @@
                 <BaseTooltip>
                     What this week's meals cost to make, at the planned
                     servings<template v-if="costCountedMeals < costTotalMeals">
-                    — from {{ costCountedMeals }} of {{ costTotalMeals }} meals;
-                    the rest aren't priced</template>.
+ (from {{ costCountedMeals }} of {{ costTotalMeals }} meals;
+                    the rest aren't priced)</template>.
                 </BaseTooltip>
             </div>
 
@@ -221,19 +221,18 @@
                  It is the HOUSEHOLD's period budget — the same `/budget/status`
                  the shopping lists and the builder's cap read (R-003) — not a
                  per-week allowance. -->
+            <!-- Owner 2026-10-15 — *"$220 of $220 even when there are planned
+                 meals"*. It was the period's remaining budget, which only moves
+                 when a list is finished, so planned meals never touched it. It
+                 now measures this week's meals against what is left, in the
+                 budget period the week falls in (the planner asks
+                 `/budget/status?on=<week>`). -->
             <div
-                v-if="budgetStatus?.enabled && budgetStatus.remaining !== null"
+                v-if="budgetLine"
                 class="mp-shop__budget"
-                :class="{ 'mp-shop__budget--over': budgetStatus.over_budget }"
+                :class="{ 'mp-shop__budget--over': budgetLine.over }"
             >
-                <template v-if="budgetStatus.over_budget">
-                    {{ formatMoney(Math.abs(budgetStatus.remaining)) }} over
-                    {{ formatMoney(budgetStatus.amount ?? 0) }} budget
-                </template>
-                <template v-else>
-                    {{ formatMoney(budgetStatus.remaining) }} remaining of
-                    {{ formatMoney(budgetStatus.amount ?? 0) }} budget
-                </template>
+                {{ budgetLine.text }}
             </div>
         </q-card>
 
@@ -287,6 +286,32 @@
         (e: 'hoverIngredient', ing: MealPlanIngredient): void;
         (e: 'clearHover'): void;
     }>();
+
+    /** The meals' cost against what is left of the budget period. Display
+     *  arithmetic over two server figures (the week's cost and the period's
+     *  remaining), nothing re-derived. */
+    const budgetLine = computed<{ text: string; over: boolean } | null>(() => {
+        const status = props.budgetStatus;
+        const cost = props.estimatedCost;
+        if (!status?.enabled || status.remaining === null || cost === null) return null;
+        const period = status.period === 'monthly' ? 'month' : 'week';
+        if (status.remaining <= 0) {
+            return {
+                text: `Budget already ${formatMoney(Math.abs(status.remaining))} over this ${period}`,
+                over: true,
+            };
+        }
+        if (cost > status.remaining) {
+            return {
+                text: `${formatMoney(cost - status.remaining)} more than the ${formatMoney(status.remaining)} left this ${period}`,
+                over: true,
+            };
+        }
+        return {
+            text: `${formatMoney(cost)} of the ${formatMoney(status.remaining)} left this ${period}`,
+            over: false,
+        };
+    });
 
     // R-003 — the level split reads the app-wide stock composable, the same
     // authority the rows' own dots use, so a row's colour and the count above

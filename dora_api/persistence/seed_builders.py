@@ -27,8 +27,7 @@ from dora_api.domain.entities.product_historic_offer import ProductHistoricOffer
 from dora_api.domain.entities.product_offer import ProductOffer
 from dora_api.domain.entities.recipe import Recipe
 from dora_api.domain.entities.recipe_ingredient import RecipeIngredient
-from dora_api.domain.entities.shopping_list import (ADDED_VIA_MANUAL,
-                                                    ShoppingListLine)
+from dora_api.domain.entities.shopping_list import ShoppingListLine
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.entities.stock_item_price_observation import \
     StockItemPriceObservation
@@ -234,7 +233,7 @@ class SeedBuilders:
                   selected_product=None, actual_unit_price=None, purchased_store=None,
                   **kw):
         """`kw` carries the line columns only the dense seed exercises —
-        provenance (`added_via` / `added_at`), the planning-vs-recording store
+        provenance (`is_auto_added` / `added_at`), the planning-vs-recording store
         split (`planned_store`, R-063), the preferred-buy hint, and the
         budget-defer pair. Defaulted rather than positional so the existing
         call sites in both seeds stay unchanged (R-003 — one builder, not a
@@ -249,7 +248,7 @@ class SeedBuilders:
             selected_product_id=selected_product.id if selected_product else None,
             actual_unit_price=actual_unit_price,
             purchased_store_id=purchased_store.id if purchased_store else None,
-            added_via=kw.get("added_via", ADDED_VIA_MANUAL),
+            is_auto_added=kw.get("is_auto_added", False),
             added_at=kw.get("added_at"),
             planned_store_id=_planned_store.id if _planned_store else None,
             preferred_buy_id=kw.get("preferred_buy_id"),

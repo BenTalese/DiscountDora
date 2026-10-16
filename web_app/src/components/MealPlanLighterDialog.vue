@@ -100,8 +100,7 @@
     });
 
     const emptyMessage = computed(() =>
-        'Nothing lighter to suggest — every alternative Dora can compare is either '
-        + 'heavier, already on this week\'s plan, or a recipe your household has never cooked.',
+        'Nothing lighter to suggest.',
     );
 
     /** Server vocabulary → copy. The chip is decided at rank time and frozen;

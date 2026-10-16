@@ -127,7 +127,6 @@ class WasteEventDto:
 @dataclass(frozen=True, slots=True)
 class ListAddEventDto:
     added_at: datetime
-    added_via: str
     shopping_list_id: UUID
     shopping_list_name: str
 
@@ -223,6 +222,11 @@ class PriceEntryPrefillDto:
     store_id: UUID | None
     store_name: str | None
     source_label: str
+    # When that observation was made. The label already says *where* the
+    # prefill came from; without a date it can't say whether it is from
+    # Tuesday or from March, which is the difference between confirming the
+    # number and re-checking it (owner, 2026-09-17).
+    observed_at: datetime
 
 
 # populated by `build_your_prices_for_item`. R-003: every
@@ -611,7 +615,6 @@ class GetStockItemDetailHandler:
             _ListAdds = [
                 ListAddEventDto(
                     added_at = l.added_at,
-                    added_via = l.added_via,
                     shopping_list_id = l.shopping_list_id,
                     shopping_list_name = _ListNameLookup.get(l.shopping_list_id, '(deleted list)'),
                 )
@@ -825,6 +828,7 @@ class GetStockItemDetailHandler:
                 store_id=_Latest.store_id,
                 store_name=_StoreNamesById.get(_Latest.store_id) if _Latest.store_id is not None else None,
                 source_label=_SourceLabel,
+                observed_at=_Latest.observed_at,
             )
 
         # server-derived baseline + signal (R-003: client

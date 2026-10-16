@@ -201,11 +201,13 @@ a.sl-row__name:hover {
 }
 
 /* ── Phone ────────────────────────────────────────────────────────────
-   `auto` sizes to content, and the prefill caption ("from your last receipt")
-   is longer than the figure above it — so the money column was claiming
-   ~130px and starving the name into a 483px row. The caption goes (it is in
-   the price editor, which is where you'd act on it) and the column is capped
-   to the figure. */
+   Only the rhythm and the type scale are shared at this width. The money
+   column's phone behaviour used to live here too — capped to 5.5rem with its
+   prefill caption hidden — but that was a workaround for *one* face: the plan
+   row's name column was being starved by a money column sized to "from your
+   last receipt". The plan row doesn't carry money on the name's line any more
+   (see its own phone block), so the clamp belonged to the face that still
+   needs it, and moved to `ShoppingListReceiptRow`. */
 @media (max-width: 599px) {
     .sl-row {
         column-gap: var(--space-2);
@@ -217,12 +219,5 @@ a.sl-row__name:hover {
     .sl-row__name,
     .sl-row__amount {
         font-size: calc(var(--font-size-md) * 1rem);
-    }
-    .sl-row__money {
-        min-width: 0;
-        max-width: 5.5rem;
-    }
-    .sl-row__amountnote {
-        display: none;
     }
 }

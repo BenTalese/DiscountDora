@@ -142,8 +142,7 @@ def resolve_food_endpoint():
     _Food = resolve_food(_Repository, _Setting, _Source, _Ref)
     if _Food is None:
         return bad_request(
-            "That food couldn't be fetched from its source — it may have been "
-            "removed, or the source may be switched off."
+            "That food couldn't be fetched from its source."
         )
     return ok({
         "id": str(_Food.id),

@@ -1,5 +1,9 @@
 <template>
-    <p v-if="sentence" class="reports-lede">{{ sentence }}</p>
+    <!-- Owner 2026-10-15: in a card like the rest of the page, so the first thing
+         you read is a finding rather than loose text above the cards. -->
+    <DashboardCard v-if="sentence" :icon="ICONS.insights" title="Summary">
+        <p class="reports-lede">{{ sentence }}</p>
+    </DashboardCard>
 </template>
 
 <script lang="ts" setup>
@@ -22,7 +26,9 @@
      * spent $0.00 across 0 shops" is worse than a page that gets on with it.
      */
     import { computed } from 'vue';
+    import { ICONS } from 'src/style/icons';
     import { formatMoney } from 'src/composables/useMoney';
+    import DashboardCard from 'src/components/dashboard/DashboardCard.vue';
     import type {
         ReportRange,
         SpendYoYResponse,
@@ -71,7 +77,7 @@
         if (yoy && yoy.delta_pct !== null && PRIOR_WORDS[props.range]) {
             const direction = yoy.delta_pct >= 0 ? 'more' : 'less';
             parts.push(
-                ` — ${Math.abs(yoy.delta_pct)}% ${direction} than ${PRIOR_WORDS[props.range]}`,
+                `, ${Math.abs(yoy.delta_pct)}% ${direction} than ${PRIOR_WORDS[props.range]}`,
             );
         }
         parts.push('.');
@@ -92,7 +98,8 @@
 
 <style scoped lang="scss">
     .reports-lede {
-        margin: var(--space-2) 0 0;
+        margin: 0;
+        padding: var(--space-1) var(--space-1) var(--space-2);
         max-width: 70ch;
         font-size: calc(var(--font-size-lg) * 1rem);
         line-height: 1.45;

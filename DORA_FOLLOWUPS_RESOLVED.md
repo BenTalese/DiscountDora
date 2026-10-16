@@ -10,6 +10,115 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-854 — The Alerts bell still hands out the retired "primary list" dead end
+- **Raised:** 2026-09-03 (cook-mode owner batch, item 5)
+- **Type:** finding
+- **What:** the owner's report was cook mode's finish-modal cart button ("there
+  should be **no other instance** of this old button in the app"). That one is
+  fixed. Sweeping for the same *class* of defect found one survivor:
+  `AlertsBell.vue:183` — the "Add N low/out items to primary list" footer
+  button reads `shoppingListStore.quickAddTargetListId`, which is non-null only
+  when exactly ONE draft list exists, and otherwise raises a dialog titled
+  **"No primary list"** telling the user to "set a primary shopping list
+  first". Primary lists were retired in C-7 Chunk 2; with two drafts open (the
+  dense seed's normal state) the bell's bulk shortcut is simply unusable.
+- **Why deferred:** it is a different surface and a different control — a
+  labelled bulk button, not the icon cart the owner reported — and the fix
+  (`AddToListButton variant="bulk"`, which resolves the target by prompting)
+  changes what the bell's footer *does*, not just how it reads. Doing it
+  silently inside a cook-mode batch would have shipped an unverified behaviour
+  change to Alerts. The label copy also needs a call: "add N to a list" vs
+  naming the resolved list.
+- **Recommended resolution:** now — it's a ~10-line swap plus one browser pass,
+  and it is the last known instance of the pattern the owner asked to be rid of.
+- **State 2026-09-27:** the dialog's copy no longer says "primary list" (it now
+  says the shortcut needs exactly one draft). The behaviour change is still owed.
+- **Resolved 2026-10-15:** the bell's footer buttons were removed (owner: "remove the two buttons down the bottom of the alert pop up panel"). Each essential-low row now carries the shared `AddToListButton`, which resolves its own target list.
+
+
+## [RESOLVED] FU-738 — The lifecycle CTA is the button that scrolls off the shopping-list toolbar
+- **Raised:** 2026-08-26 (shopping-list feedback batch)
+- **Type:** finding (needs an owner call).
+- **What:** the rebuilt toolbar is a sideways-scrolling band, as asked ("horizontal
+  scrollable toolbar, no overflow menu"). With the full set on — New list · Add
+  item · Bulk select · Templates · Refresh deals · Export · Start shopping — it
+  needs ~1000px, and at 1280px the lists rail leaves the main column ~948px. So
+  the band scrolls, and the button clipped at the right edge is **the lifecycle
+  CTA**, the most important one on the page.
+- **Why deferred:** it is the requested behaviour working correctly, not a bug,
+  and every fix is a design trade: pin the CTA outside the scroller, put it first,
+  or let the band wrap on desktop and scroll only on phones. That's an owner call,
+  not an implementation detail.
+- **Recommended resolution:** now-ish — one decision, then a few lines. Worth
+  pairing with the `DORA_VERIFY` walk, since it's most obvious at desktop widths.
+- **State (2026-10-14):** resolved. The lifecycle buttons left the toolbar band for the overview card on 2026-08-29, and on 2026-10-14 they became two stacked buttons pinned to the card's right edge (back on top, forward below), so nothing that matters scrolls off.
+
+
+## [RESOLVED] FU-869 — `/reports/keeps-running-out` lost its dashboard caller
+- **Raised:** 2026-09-04 (dashboard feedback batch)
+- **Type:** leftover (R-057 contract inventory)
+- **What:** Restock radar was rebuilt on the new `/dashboard/restock-radar`, so
+  `reportsApi.getKeepsRunningOutAsync` no longer has a dashboard caller. **The
+  endpoint is NOT orphaned** — the reports page still calls it with its own range
+  — so this is an inventory note, not a deletion candidate. Logged because R-057
+  is explicit that a replaced surface's contracts get checked rather than
+  assumed, and because the reports page is now its *only* consumer, which changes
+  who owns its shape.
+- **Recommended resolution:** opportunistic — confirm at the next reports-page
+  visit that the range-passing behaviour is still what that page wants.
+- **State 2026-09-27:** resolved by deletion. The owner cut "Ran out before restocked" from Reports, which was the endpoint's last caller, so `/reports/keeps-running-out` and its tests were removed (price-trends went the same way).
+
+## [RESOLVED] FU-769 — Changing a line's store reportedly doesn't move it between store groups
+- **Raised:** 2026-08-28 (shopping-list feedback batch 1)
+- **Type:** finding
+- **What:** owner reports that setting "Bought from" on a line leaves it in its old
+  bucket under **Order by → Store**. A static read says it should work: the price
+  editor writes `purchased_store_id`, which is **rung 1** of the server's store
+  ladder (`get_shopping_list_detail.py:591`), and the grouping key is
+  `resolved_store_name` (`useLineSections.ts:69`), so a refetch ought to re-bucket
+  the row. Did **not** reproduce in the read — but the report came from real usage
+  and the plausible failure is a *refresh* gap (the popover's save path patches the
+  line optimistically and may not refetch the detail), which a code read is bad at
+  seeing.
+- **Why deferred:** batch 1 was deletions + the tick model; this sits on the store
+  work in batch 3, which rebuilds the same editor anyway.
+- **Recommended resolution:** **confirm in browser** — set a store on a draft line
+  with Order-by=Store active and watch whether the row moves without a reload. Fold
+  into batch 3 (`planned_store_id`).
+- **Resolved 2026-09-17 (shopping-list UI batch):** reproduced live, and the
+  August hypothesis was wrong — it is not a refresh gap. `savePriceEditor`
+  short-circuited on a blank price straight into `clearPriceOverride`, which
+  clears the price *and* the store, so a store picked on a line the user hadn't
+  priced never reached the server at all (`purchased_store_name: null` after a
+  hard reload, not just a stale view). Split into two decisions: a blank price
+  clears the price, and a chosen store is saved via the new `saveStoreOnly`.
+  Verified on the isolated pair at 1440 — Baby Spinach moved Woolworths → Aldi
+  with no reload, the server reports `purchased=Aldi`, and the price stayed
+  null.
+
+## [RESOLVED] FU-805 — receipt line reads "estimated, no price entered" while showing a price
+- **Raised:** 2026-09-01 (v4 chunk 3 — shopping-list receipt face)
+- **Type:** finding
+- **What:** On the receipt face, a line whose `estimate_source` is `historic`
+  renders the caption "estimated, no price entered" *and* an amount (e.g.
+  "~$3.00"). Both halves are true from the code's point of view — the price is
+  an estimate carried over, and the user never typed one — but read together
+  they contradict each other. Pre-existing copy (baseline E3), carried across
+  chunk 3 verbatim rather than reworded, because rewording it is a copy decision
+  and not this chunk's call.
+- **Why deferred:** scope discipline; the "~" prefix already carries the
+  estimate signal, so the caption may want to be dropped rather than reworded,
+  and that's a decision, not a fix.
+- **Recommended resolution:** now-ish — it is one line of copy and the owner is
+  looking at this surface. Suggested: drop the clause entirely and let "~" do
+  the work, or say "estimated from what you last paid".
+- **Resolved 2026-09-17 (shopping-list UI batch):** took the second suggested
+  option. The caption now reads "estimated from your last receipt" — the
+  server's own `prefill_source_label` rather than a clause asserting no price
+  exists next to a price — and falls back to a bare "estimated" when the line
+  has no provenance label. The "~" on the amount still carries the signal on
+  its own.
+
 ## [RESOLVED] FU-796 — `.page-counts-footer` overflows a 375px viewport by 8px on /my-products
 - **Raised:** 2026-08-31 (recipe-view feedback batch — the "where else?" sweep)
 - **Type:** finding

@@ -57,7 +57,7 @@
 .dora-bg-info-soft     { background-color: var(--semantic-info-soft) !important; }
 
 // ── FU-313 severity + alert taxonomy (2026-07-06) ────────────────────
-// Utility classes matching the graded-severity / alert-kind / lifecycle
+// Utility classes matching the graded-severity / lifecycle
 // tokens in tokens.scss. Named without the `dora-` prefix on purpose:
 // Quasar's `color` prop generates class names as `bg-<name>` /
 // `text-<name>`, so a template `<q-avatar :color="severity-critical">`
@@ -69,12 +69,7 @@
 .bg-severity-medium   { background-color: var(--severity-medium) !important;   color: white !important; }
 .bg-severity-low      { background-color: var(--severity-low) !important;      color: white !important; }
 .bg-severity-attention { background-color: var(--severity-attention) !important; color: white !important; }
-.bg-alert-kind-out-of-stock      { background-color: var(--alert-kind-out-of-stock) !important;      color: white !important; }
-.bg-alert-kind-stocktake-overdue { background-color: var(--alert-kind-stocktake-overdue) !important; color: white !important; }
-.bg-alert-kind-no-planned-meals  { background-color: var(--alert-kind-no-planned-meals) !important;  color: white !important; }
-.bg-alert-kind-shopping-day      { background-color: var(--alert-kind-shopping-day) !important;      color: white !important; }
 .bg-savings-accent               { background-color: var(--savings-accent) !important;               color: white !important; }
-.bg-alert-history-read     { background-color: var(--alert-history-read) !important;     color: white !important; }
 .bg-lifecycle-bought         { background-color: var(--lifecycle-bought) !important;         color: white !important; }
 .bg-lifecycle-expiry-changed { background-color: var(--lifecycle-expiry-changed) !important; color: white !important; }
 .bg-lifecycle-cleared        { background-color: var(--lifecycle-cleared) !important;        color: white !important; }
@@ -85,12 +80,7 @@
 .text-severity-medium   { color: var(--severity-medium) !important; }
 .text-severity-low      { color: var(--severity-low) !important; }
 .text-severity-attention { color: var(--severity-attention) !important; }
-.text-alert-kind-out-of-stock      { color: var(--alert-kind-out-of-stock) !important; }
-.text-alert-kind-stocktake-overdue { color: var(--alert-kind-stocktake-overdue) !important; }
-.text-alert-kind-no-planned-meals  { color: var(--alert-kind-no-planned-meals) !important; }
-.text-alert-kind-shopping-day      { color: var(--alert-kind-shopping-day) !important; }
 .text-savings-accent               { color: var(--savings-accent) !important; }
-.text-alert-history-read     { color: var(--alert-history-read) !important; }
 .text-lifecycle-bought         { color: var(--lifecycle-bought) !important; }
 .text-lifecycle-expiry-changed { color: var(--lifecycle-expiry-changed) !important; }
 .text-lifecycle-cleared        { color: var(--lifecycle-cleared) !important; }
@@ -196,4 +186,30 @@
     border-color: var(--border-default);
 
     .q-icon { color: var(--text-muted); }
+}
+
+// The catch-all bucket's fill — "No store set", "Uncategorised". A *texture*
+// rather than a colour, because the fills it sits beside are partly
+// logo-derived brand colours: arbitrary, and free to be grey themselves, so
+// no single neutral can be guaranteed to separate from them. A hatch also
+// says the right thing — unallocated, rather than one more store.
+//
+// Shared as of 2026-09-17. It lived inside `ProportionBar`'s scoped block, so
+// the legend beside the bar could not reach it and simply rendered no swatch
+// at all for the unassigned bucket — the bar said "this slice exists" and its
+// own key said nothing (owner: *"should have a dot/pip for the no store line,
+// same styling as the bar"*). One declaration, both marks, and Reports' own
+// no-store bucket can adopt it without a third copy (FU-843).
+//
+// Both stripe colours are theme tokens, so it inverts correctly — dark
+// stripes on grey in light themes, light stripes on grey in dark ones. Colour
+// still carries the message for anyone who sees it; it no longer carries it
+// alone (D-001).
+.dora-fill-unassigned {
+    background-color: var(--border-strong);
+    background-image: repeating-linear-gradient(
+        135deg,
+        transparent 0 3px,
+        var(--surface-component) 3px 5px
+    );
 }

@@ -18,13 +18,8 @@
                 <div class="scan-target" :class="{ flash: flashKind }" :data-flash="flashKind" />
             </div>
 
-            <!-- ── Camera-unavailable explainer ─────────────────────────
-                 2026-08-15: this case is a *situation*, not a failure — the
-                 browser is withholding the camera API because the page isn't
-                 on a secure origin. It gets a readable panel where the
-                 viewfinder would be (with the fix named) rather than a
-                 one-line red error squeezed into the top bar, and the manual
-                 barcode box directly below stays fully usable. -->
+            <!-- Camera-unavailable explainer. Only after a start attempt found
+                 no camera API; the manual barcode box below stays usable. -->
             <div v-if="cameraUnavailable" class="scan-unavailable">
                 <div class="scan-unavailable__card">
                     <q-icon :name="ICONS.info_outline" size="28px" class="q-mb-sm" />
@@ -75,6 +70,9 @@
                     <span v-else-if="cameraError" class="scan-error">{{ cameraError }}</span>
                     <span v-else-if="!cameraReady">Starting camera…</span>
                     <span v-else>Point at a barcode or QR</span>
+                    <div v-if="cameraWarning && !cameraReady && !cameraUnavailable" class="scan-warning">
+                        {{ cameraWarning }}
+                    </div>
                 </div>
                 <div class="scan-actions">
                     <BaseButton
@@ -129,8 +127,8 @@
 <script lang="ts" setup>
     import BaseButton from 'src/components/BaseButton.vue';
     import {
-        getCameraAvailability,
-        type CameraAvailability,
+        explainCameraFailure, insecureContextWarning,
+        type CameraUnavailable,
     } from 'src/helpers/cameraAvailability';
     import { ICONS } from 'src/style/icons';
     import type { BrowserMultiFormatReader, IScannerControls } from '@zxing/browser';
@@ -165,11 +163,11 @@
     const videoRef = ref<HTMLVideoElement | null>(null);
     const cameraReady = ref(false);
     const cameraError = ref<string | null>(null);
-    // Set when the camera can't be opened for environmental reasons (non-secure
-    // origin, or no camera API at all) rather than because a start attempt
-    // failed. Kept separate from `cameraError` so the two can be presented
-    // differently: this one is an explanation, that one is a fault.
-    const cameraUnavailable = ref<Exclude<CameraAvailability, { kind: 'available' }> | null>(null);
+    // Set when a start attempt found no camera API at all (usually plain http).
+    // Kept separate from `cameraError` so it gets the explainer panel rather
+    // than a one-line fault.
+    const cameraUnavailable = ref<CameraUnavailable | null>(null);
+    const cameraWarning = insecureContextWarning();
     const flashKind = ref<'' | 'good' | 'bad'>('');
     const manualValue = ref('');
     const torchSupported = ref(false);
@@ -219,20 +217,6 @@
         cameraReady.value = false;
         torchOn.value = false;
         cameraUnavailable.value = null;
-        // 2026-08-15 mobile bug report: "can't access property getUserMedia,
-        // navigator.mediaDevices is undefined". That isn't a camera failure —
-        // browsers only expose `navigator.mediaDevices` in a secure context,
-        // so it's simply absent when the app is reached over plain http on a
-        // LAN address (the normal self-host case). zxing then threw a
-        // TypeError that fell through to the generic branch below and told the
-        // user to check a camera that was never the problem. Ask the shared
-        // authority instead of probing here, so the admin toggle that turns
-        // scanning on gives the identical diagnosis.
-        const availability = getCameraAvailability();
-        if (availability.kind !== 'available') {
-            cameraUnavailable.value = availability;
-            return;
-        }
         try {
             const { BrowserMultiFormatReader } = await import('@zxing/browser');
             codeReader = new BrowserMultiFormatReader();
@@ -265,6 +249,11 @@
                 | undefined;
             torchSupported.value = Boolean(caps?.torch);
         } catch (err) {
+            const unavailable = explainCameraFailure();
+            if (unavailable) {
+                cameraUnavailable.value = unavailable;
+                return;
+            }
             const message = err instanceof Error ? err.message : String(err);
             // NotAllowedError / NotFoundError land here. Surface a friendly
             // hint rather than the raw browser exception name.
@@ -498,6 +487,11 @@
     .scan-status {
         font-size: 14px;
         text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+    }
+    .scan-warning {
+        margin-top: 4px;
+        font-size: 12px;
+        color: var(--semantic-warning);
     }
     .scan-error { color: #ffb4ab; }
     .scan-actions { display: flex; gap: 4px; }

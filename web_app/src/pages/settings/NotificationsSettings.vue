@@ -16,6 +16,78 @@
             listing what it can deliver as child rows.
         -->
 
+        <!-- In-app alerts (owner 2026-10-15). Moved here from the Alerts page,
+             which was removed: which kinds reach your bell, how long an alert
+             lives, and the price watches you have set. -->
+        <SettingsSection>
+            <template #title>In-app alerts</template>
+
+            <SettingsRow inline>
+                <template #label>
+                    Discard alerts after
+                    <InfoTip label="Discard alerts after">
+                        An alert drops out of your bell this long after the
+                        thing it is about started, as if you had dismissed it.
+                    </InfoTip>
+                </template>
+                <q-select
+                    :model-value="currentUser.alert_discard_after_days"
+                    :options="discardOptions"
+                    option-value="value"
+                    option-label="label"
+                    emit-value
+                    map-options
+                    outlined
+                    dense
+                    class="deals-day-select"
+                    @update:model-value="onDiscardChange"
+                />
+            </SettingsRow>
+
+            <SettingsRow v-for="pref in visiblePrefs" :key="pref.kind" inline>
+                <template #label>
+                    <span class="row items-center no-wrap q-gutter-x-sm">
+                        <q-icon :name="iconFor(pref.kind)" size="18px" class="dora-text-secondary" />
+                        <span>{{ kindLabel(pref.kind) }}</span>
+                    </span>
+                </template>
+                <q-toggle
+                    :model-value="pref.enabled"
+                    :disable="prefBusy.has(pref.kind)"
+                    :aria-label="`Alert me about ${kindTheme(pref.kind)}`"
+                    @update:model-value="(v: boolean) => onToggleKind(pref.kind, v)"
+                />
+            </SettingsRow>
+
+            <template v-if="moneyEnabled && watches.length > 0">
+                <div class="settings-page__subhead">Price watches</div>
+                <q-list separator class="watch-list">
+                    <q-item v-for="watch in watches" :key="watch.price_alert_id">
+                        <q-item-section>
+                            <q-item-label>{{ watch.product_name }}</q-item-label>
+                            <q-item-label caption>
+                                {{ watch.store_name }} · at or below
+                                {{ formatMoney(watch.threshold_unit_price) }}
+                            </q-item-label>
+                        </q-item-section>
+                        <q-item-section side>
+                            <BaseButton
+                                variant="danger-icon"
+                                :icon="ICONS.delete_outline"
+                                :aria-label="`Stop watching ${watch.product_name}`"
+                                :loading="removingWatch === watch.price_alert_id"
+                                @click="onRemoveWatch(watch)"
+                            >
+                                <BaseTooltip>Stop watching</BaseTooltip>
+                            </BaseButton>
+                        </q-item-section>
+                    </q-item>
+                </q-list>
+            </template>
+        </SettingsSection>
+
+        <hr class="settings-divider" />
+
         <!-- Push. VAPID-gated install-wide; also needs the browser to support
              web push and the user to have subscribed *this* device. -->
         <SettingsSection>
@@ -169,9 +241,8 @@
                                  actually built (FU-789) rather than left as
                                  copy describing a mail nobody had written. -->
                             <InfoTip label="Compact format">
-                                One line per deal — name, price, discount,
-                                store. Off sends a card per deal with the brand,
-                                size and what you save spelled out in dollars.
+                                One line per deal: name, price, discount and
+                                store. Off sends a card per deal.
                             </InfoTip>
                         </template>
                         <q-toggle
@@ -201,6 +272,15 @@
     import InfoTip from 'src/components/help/InfoTip.vue';
     import BaseButton from 'src/components/BaseButton.vue';
     import AuthApiService from 'src/services/api/authApiService';
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
+    import { formatMoney } from 'src/composables/useMoney';
+    import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
+    import { useReconcilePolicy } from 'src/composables/useReconcilePolicy';
+    import { iconFor, kindTheme, type AlertKind } from 'src/models/alert';
+    import { useAlertPrefsStore } from 'src/stores/alertPrefsStore';
+    import { useAlertStore } from 'src/stores/alertStore';
+    import PriceHistoryApiService, { type PriceAlert } from 'src/services/api/priceHistoryApiService';
+    import { onMounted } from 'vue';
 
     const authStore = useAuthStore();
     const { currentUser } = storeToRefs(authStore);
@@ -293,6 +373,85 @@
         }
     }
 
+    // ── In-app alerts ──────────────────────────────────────────────────
+    const alertPrefsStore = useAlertPrefsStore();
+    const alertStore = useAlertStore();
+    const { moneyEnabled } = useMoneyEnabled();
+    const { autoDrain } = useReconcilePolicy();
+
+    const discardOptions = [
+        { value: 7, label: '7 days' },
+        { value: 14, label: '14 days' },
+        { value: 30, label: '30 days' },
+        { value: null, label: 'Never' },
+    ];
+
+    /** The kinds worth a toggle on this install. The reconcile nudge only
+     *  exists when meals aren't reconciled automatically, and a price watch
+     *  only fires with money features on, so their toggles follow suit. */
+    const visiblePrefs = computed(() => alertPrefsStore.prefs.filter((p) => {
+        if (p.kind === 'meal_reconcile_overdue') return !autoDrain.value;
+        if (p.kind === 'price_drop') return moneyEnabled.value;
+        return true;
+    }));
+
+    function kindLabel(kind: AlertKind): string {
+        const theme = kindTheme(kind);
+        return theme ? theme.charAt(0).toUpperCase() + theme.slice(1) : kind;
+    }
+
+    const prefBusy = ref<Set<string>>(new Set());
+    async function onToggleKind(kind: AlertKind, enabled: boolean) {
+        prefBusy.value = new Set([...prefBusy.value, kind]);
+        try {
+            await update(
+                enabled ? 'Alerts turned on.' : 'Alerts turned off.',
+                () => alertPrefsStore.setEnabled(kind, enabled),
+            );
+            await alertStore.refreshAsync();
+        } finally {
+            const next = new Set(prefBusy.value);
+            next.delete(kind);
+            prefBusy.value = next;
+        }
+    }
+
+    async function onDiscardChange(value: number | null) {
+        await update('Alert discard window updated.', () =>
+            authStore.updateMeAsync({ alert_discard_after_days: value }),
+        );
+        await alertStore.refreshAsync();
+    }
+
+    const priceHistoryApi = new PriceHistoryApiService();
+    const watches = ref<PriceAlert[]>([]);
+    const removingWatch = ref<string | null>(null);
+    async function loadWatches() {
+        if (!moneyEnabled.value) return;
+        try {
+            watches.value = (await priceHistoryApi.listAlertsAsync()).items;
+        } catch {
+            watches.value = [];
+        }
+    }
+    async function onRemoveWatch(watch: PriceAlert) {
+        removingWatch.value = watch.price_alert_id;
+        try {
+            await priceHistoryApi.deleteAlertAsync(watch.price_alert_id);
+            watches.value = watches.value.filter((w) => w.price_alert_id !== watch.price_alert_id);
+            notifySuccess(`Stopped watching ${watch.product_name}.`);
+        } catch (err) {
+            notifyError("Couldn't remove the price watch.", err);
+        } finally {
+            removingWatch.value = null;
+        }
+    }
+
+    onMounted(() => {
+        void alertPrefsStore.refreshAsync();
+        void loadWatches();
+    });
+
     async function onPushToggle(value: boolean) {
         try {
             if (value) {
@@ -323,6 +482,16 @@
         font-size: 0.8125rem;
         line-height: 1.4;
         margin-top: 4px;
+    }
+    .settings-page__subhead {
+        margin-top: var(--space-3);
+        font-size: calc(var(--font-size-sm) * 1rem);
+        font-weight: 600;
+        color: var(--text-secondary);
+    }
+    .watch-list {
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-md);
     }
     .settings-divider {
         border: 0;

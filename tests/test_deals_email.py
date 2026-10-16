@@ -102,7 +102,7 @@ def test__format_money__falls_back_to_the_iso_code_rather_than_guessing():
 
 
 def test__format_money__renders_a_missing_price_as_a_dash_not_zero():
-    assert format_money(None, "AUD") == "—"
+    assert format_money(None, "AUD") == "–"
 
 
 # ── Deal lines ──────────────────────────────────────────────────────────

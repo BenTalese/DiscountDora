@@ -22,13 +22,8 @@ NOW = datetime(2026, 7, 4, 12, 0, 0)
 
 
 def _healthy_inputs(**overrides) -> DoraScoreInputs:
-    """A fully-scored, healthy household — all five signals apply and
-    all five are at 100. Override individual fields per test.
-
-    `manual_reconcile=True` so plan adherence *is* scored by default: the
-    fixture's job is a household where every component applies, and in
-    auto-drain mode adherence is deliberately excluded (see
-    `TestPlanAdherence`).
+    """A fully-scored, healthy household: all four signals apply and
+    all four are at 100. Override individual fields per test.
     """
     base = dict(
         now=NOW,
@@ -37,9 +32,6 @@ def _healthy_inputs(**overrides) -> DoraScoreInputs:
         budget_over_pct=-0.10,  # 10% UNDER budget
         expired_item_count=0,
         total_items_with_expiry=15,
-        past_planned_meals=20,
-        unresolved_past_meals=0,
-        manual_reconcile=True,
         upcoming_planned_meals=10,
         upcoming_cookable_meals=10,
     )
@@ -74,13 +66,12 @@ class TestMoneyGate:
         dto = compute_score(_healthy_inputs(money_enabled=False))
         assert DoraScoreComponentKey.BUDGET not in _keys(dto)
 
-    def test__money_off__other_four_signals_still_scored(self):
+    def test__money_off__other_three_signals_still_scored(self):
         # R-058's test: with the flag off, what remains must still be correct.
         dto = compute_score(_healthy_inputs(money_enabled=False))
         assert _keys(dto) == {
             DoraScoreComponentKey.WASTE,
             DoraScoreComponentKey.FRESHNESS,
-            DoraScoreComponentKey.PLAN_ADHERENCE,
             DoraScoreComponentKey.PLAN_COVERAGE,
         }
         assert dto.composite == 100
@@ -116,7 +107,7 @@ class TestMoneyGate:
 
 @pytest.mark.unit
 class TestComposite:
-    def test__all_five_at_100_gives_100(self):
+    def test__all_four_at_100_gives_100(self):
         dto = compute_score(_healthy_inputs())
         assert dto.composite == 100
         assert all(c.score == 100 for c in dto.components)
@@ -134,7 +125,6 @@ class TestComposite:
         dto = compute_score(_healthy_inputs(
             has_budget=False, budget_over_pct=None,
             total_items_with_expiry=0, expired_item_count=0,
-            past_planned_meals=0, unresolved_past_meals=0,
             upcoming_planned_meals=0, upcoming_cookable_meals=0,
             waste_event_count=0,
         ))
@@ -143,7 +133,6 @@ class TestComposite:
         # 100 from that one.
         assert dto.composite == 100
         assert _component(dto, DoraScoreComponentKey.FRESHNESS).score is None
-        assert _component(dto, DoraScoreComponentKey.PLAN_ADHERENCE).score is None
         assert _component(dto, DoraScoreComponentKey.PLAN_COVERAGE).score is None
         assert _component(dto, DoraScoreComponentKey.BUDGET).score is None
 
@@ -242,56 +231,6 @@ class TestFreshness:
 # ── Run-outs ─────────────────────────────────────────────────────────
 
 @pytest.mark.unit
-class TestPlanAdherence:
-    """Of the planned meals that came due in the window, how many are settled.
-
-    Replaced `TestRunouts` (owner review, 2026-09-04). Run-outs scored "you ran
-    out of something that wasn't on a list", which only fires for households
-    that log consumption — it graded logging, not the kitchen.
-    """
-
-    def test__auto_drain_excludes_component(self):
-        """Dora settles past meals herself in auto mode, so there is no
-        adherence to grade. Excluded, not 100 — a component that reads perfect
-        for everyone is exactly the fluff this review was cutting."""
-        dto = compute_score(_healthy_inputs(manual_reconcile=False))
-        component = _component(dto, DoraScoreComponentKey.PLAN_ADHERENCE)
-        assert component.score is None
-        assert "settles past meals for you" in component.reason
-
-    def test__no_meals_came_due_excludes_component(self):
-        dto = compute_score(_healthy_inputs(past_planned_meals=0))
-        assert _component(dto, DoraScoreComponentKey.PLAN_ADHERENCE).score is None
-
-    def test__everything_settled_scores_100(self):
-        dto = compute_score(_healthy_inputs(
-            past_planned_meals=12, unresolved_past_meals=0,
-        ))
-        assert _component(dto, DoraScoreComponentKey.PLAN_ADHERENCE).score == 100
-
-    def test__half_unresolved_scores_50(self):
-        dto = compute_score(_healthy_inputs(
-            past_planned_meals=10, unresolved_past_meals=5,
-        ))
-        assert _component(dto, DoraScoreComponentKey.PLAN_ADHERENCE).score == 50
-
-    def test__nothing_settled_scores_0(self):
-        dto = compute_score(_healthy_inputs(
-            past_planned_meals=8, unresolved_past_meals=8,
-        ))
-        assert _component(dto, DoraScoreComponentKey.PLAN_ADHERENCE).score == 0
-
-    def test__more_unresolved_than_due_clamps_at_0(self):
-        """Defensive: the two counts come from separate queries, so a race
-        (the sweep writing a receipt mid-gather) could in principle make the
-        numerator exceed the denominator. It must not produce a negative."""
-        dto = compute_score(_healthy_inputs(
-            past_planned_meals=3, unresolved_past_meals=9,
-        ))
-        assert _component(dto, DoraScoreComponentKey.PLAN_ADHERENCE).score == 0
-
-
-@pytest.mark.unit
 class TestPlanCoverage:
     """Of the meals planned for the week ahead, how many the pantry can cook.
 
@@ -339,9 +278,9 @@ class TestRetiredComponents:
         assert not hasattr(DoraScoreComponentKey, "RUNOUTS")
         assert not hasattr(DoraScoreComponentKey, "STOCKTAKE")
 
-    def test__exactly_five_keys(self):
+    def test__exactly_four_keys(self):
         assert {k.value for k in DoraScoreComponentKey} == {
-            "waste", "budget", "freshness", "plan_adherence", "plan_coverage",
+            "waste", "budget", "freshness", "plan_coverage",
         }
 
 

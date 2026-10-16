@@ -11,7 +11,7 @@
                 A stock row speaks four things, and only four: the
                 <strong>level box</strong> (its colour, and whether its edge is
                 dashed), the <strong>row treatment</strong> (outlined, plain or
-                dimmed — one scale, not three signals), the
+                dimmed), the
                 <strong>essential edge stripe</strong>, and the
                 <strong>expiry button</strong> (with the open/sealed toggle
                 beside it). The same rules also drive the
@@ -44,7 +44,7 @@
             <h6 class="q-mt-lg q-mb-sm">Row outline</h6>
             <p class="text-body2 q-mb-sm dora-text-secondary">
                 An outlined row needs you. There's one outline, and it means
-                one thing — three conditions turn it on:
+                one thing. Three conditions turn it on:
             </p>
 
             <q-list bordered separator class="rounded-borders">
@@ -65,22 +65,19 @@
 
             <p class="text-body2 q-mt-sm dora-text-secondary">
                 That's the same set the <em>Needs attention</em> count and its
-                filter chip use, and the same set the bell counts — one rule,
-                worked out in one place, so the highlighting and the numbers
-                can't tell you different things. Turning a kind off under
-                Alerts turns off its outline too.
+                filter chip use, and the same set the bell counts. Turning a
+                kind off under Settings → Notifications turns off its outline
+                too.
             </p>
 
             <!-- ── Essential ──────────────────────────────────────── -->
             <h6 class="q-mt-lg q-mb-sm">Essential items</h6>
             <p class="text-body2 q-mb-sm dora-text-secondary">
                 Items you mark <strong>essential</strong> get a stripe down the
-                left edge of the row. (There's no flag button on the row —
-                essential is set-and-forget, on the item's own page.)
-                Essentials are the ONLY items whose stock level
-                drives an outline — a non-essential item running Low or Out
-                is silent, because the level square already says so and Dora
-                shouldn't be loud about things you didn't say mattered.
+                left edge of the row. You set it on the item's own page.
+                Essentials are the only items whose stock level drives an
+                outline. A non-essential item running Low or Out stays quiet,
+                because the level square already says so.
             </p>
             <q-card flat bordered class="dora-attention-essential-sample">
                 <q-card-section class="row items-center">
@@ -94,10 +91,8 @@
             <p class="text-body2 q-mb-sm dora-text-secondary">
                 An item is <strong>faded</strong> when it's Out of stock
                 <em>and</em> not flagged essential. The fade quietly says
-                "depleted, you don't need to act on it" — your eye skips
-                them when scanning for what to do next. Out essentials
-                stay full opacity so the loudest "go restock" signal
-                isn't quieted by the fade.
+                "depleted, nothing to do". Out essentials stay full
+                opacity.
             </p>
 
             <!-- ── The dashed level box (D-5) ─────────────────────────
@@ -115,9 +110,8 @@
             <p class="text-body2 q-mb-sm dora-text-secondary">
                 One marker, one meaning: <strong>this number might be out of
                 date</strong>. The level's colour still tells you what's
-                recorded — the dashes only say don't bet the week on it. Open
-                the picker and its header says which of the two reasons
-                applies:
+                recorded. Open the picker and its header says which of the two
+                reasons applies:
             </p>
             <q-list bordered separator class="rounded-borders">
                 <q-item>
@@ -126,15 +120,14 @@
                     </q-item-section>
                     <q-item-section>
                         <q-item-label class="text-weight-medium">
-                            "Dora thinks…" — she disagrees with the level
+                            "Dora thinks…": she disagrees with the level
                         </q-item-label>
                         <q-item-label caption>
                             Dora works out what you probably have from your
                             purchases, how often you rebuy, and what you've
-                            cooked. She never changes your recorded level —
-                            that stays the source of truth — and when she
-                            agrees with you she says nothing at all. Turn the
-                            hint off in Settings → Assistant.
+                            cooked. She never changes your recorded level, and
+                            says nothing when she agrees with it. Turn the hint
+                            off in Settings → Assistant.
                         </q-item-label>
                     </q-item-section>
                 </q-item>
@@ -152,8 +145,7 @@
                             picker, or walk the whole queue from the Stocktake
                             button, which carries the number due. That button
                             <strong>glows only when one of the items due is
-                            flagged essential</strong> — otherwise it waits
-                            quietly with its count.
+                            flagged essential</strong>.
                         </q-item-label>
                     </q-item-section>
                 </q-item>
@@ -162,7 +154,7 @@
             <!-- ── Expiry + open (Chunk 4) ────────────────────────────── -->
             <h6 class="q-mt-lg q-mb-sm">The expiry button</h6>
             <p class="text-body2 q-mb-sm dora-text-secondary">
-                Its <strong>colour</strong> is the expiry date — green fine,
+                Its <strong>colour</strong> is the expiry date: green fine,
                 amber soon, red gone, grey none set. Tap it to set a date, push
                 one by a day or a fortnight, clear it, or log the item as
                 waste. Next to it, the <strong>open / in-use</strong> toggle:
@@ -243,10 +235,10 @@
     type CheatRow = { state: string; band: 0 | 1 | 2 };
     const cheatRows: CheatRow[] = [
         { state: 'Stocked, no expiry issue', band: 1 },
-        { state: 'Low — not essential', band: 1 },
-        { state: 'Low — essential', band: 0 },
-        { state: 'Out — not essential', band: 2 },
-        { state: 'Out — essential', band: 0 },
+        { state: 'Low, not essential', band: 1 },
+        { state: 'Low, essential', band: 0 },
+        { state: 'Out, not essential', band: 2 },
+        { state: 'Out, essential', band: 0 },
         { state: 'Expiring inside your window (any item)', band: 0 },
         { state: 'Expired (any item)', band: 0 },
         // Attention wins over the dim: expired is something to act on, so

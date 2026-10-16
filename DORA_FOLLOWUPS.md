@@ -39,6 +39,118 @@ long session summary. Distinct from the other logs:
 
 ---
 
+## [OPEN] FU-920 — `MealPlanRailCount` is now the app's general count circle under a planner name
+- **Raised:** 2026-10-15 (owner batch, shopping lists: "a circle with a number in it consistent with elsewhere")
+- **Type:** leftover
+- **What:** the run face's "Collected" header reuses `MealPlanRailCount`, the
+  count circle the planner rail introduced. It is now used outside the planner,
+  so the name misleads (R-001: a shared component is named for what it is).
+  Rename to `CountBadge` (or similar) and move it out of the `MealPlan*` family.
+- **Why deferred:** a rename across seven call sites is unrelated churn in a
+  feedback batch.
+- **Recommended resolution:** opportunistic.
+
+## [OPEN] FU-919 — Dora's name-based store mapping is now unused by the companion
+- **Raised:** 2026-10-15 (companion store mapping moved companion-side)
+- **Type:** finding
+- **What:** the companion now pushes by Dora `store_id` and keeps its own
+  scraper → store map. `IngestionStoreMapping`, the quarantine path and the
+  "Store mappings" section on Dora's API access page only serve producers that
+  push by name. None exist besides the companion. Decide whether to keep the
+  name path for third-party producers or remove it (and the API page section).
+- **Why deferred:** it is a contract decision (PROPOSAL_INGESTION_API), not a
+  cleanup.
+- **Recommended resolution:** owner decision, later during Phase 2.
+
+## [OPEN] FU-918 — Companion "Push failed (502)" reported; root cause found, confirm with real data
+- **Raised:** 2026-10-15 (owner batch, product search)
+- **Type:** finding
+- **What:** the owner saw a 502 saving a product. Static read found a definite
+  cause: Woolworths, Coles and IGA report "no was-price" as `0`, Dora's ingest
+  requires `price_was > 0`, so the whole batch was rejected with a 400 and the
+  companion reported every non-4xx/5xx failure as a bare 502. Fixed (payload
+  normalised, 4xx bodies surfaced) and a real Woolworths push was driven to
+  Dora successfully. The owner's exact product was not reproduced, and a 502 can
+  also mean Dora unreachable (now reported with the real reason).
+- **Why deferred:** reported defect; per CLAUDE.md it stays open until seen
+  fixed against the owner's own setup.
+- **Recommended resolution:** confirm in browser on the owner's companion.
+
+## [OPEN] FU-917 — `PriceAlert` carries a dead column and a misleading name
+- **Raised:** 2026-10-15 (price watches now fire as the `price_drop` alert)
+- **Type:** leftover
+- **What:** `last_fired_at` was meant for a worker that never existed and is
+  still written by nothing (the alert's episode key does the "fire once" job
+  now). `threshold_unit_price` is compared with the product's shelf
+  `price_now`, which is what both the explorer and the new watch dialog ask
+  for, so the column name says "unit" when it means "shelf price". Drop the
+  first and rename the second (see FU-911 / FU-914 for the unit-price muddle).
+- **Why deferred:** a schema change outside the batch's scope.
+- **Recommended resolution:** with FU-914.
+
+## [OPEN] FU-916 — Alert interaction rows for finished episodes are never pruned
+- **Raised:** 2026-10-15 (alerts rework, ADR-090)
+- **Type:** deferred job
+- **What:** alert keys now carry their episode (R-093), so every expiry date,
+  level change and shop date that a user snoozed or dismissed leaves an
+  `AlertInteraction` row that will never match again. Harmless for correctness,
+  unbounded over years. A nightly job could delete rows whose key no longer
+  matches any live alert and that are older than the longest discard window.
+- **Why deferred:** no measurable cost yet.
+- **Recommended resolution:** opportunistic, or when the table passes ~10k rows.
+
+## [OPEN] FU-915 — A standalone no-cook meal in a batch household reads as "needs cooking" (amber)
+- **Raised:** 2026-10-15 (owner: *"I add juice and yoghurt to the meal plan and
+  it still highlights as yellow on the left edge"*)
+- **Type:** finding (needs a decision)
+- **What:** in a batch household a meal that isn't part of a batch is expected
+  to come from cooked portions. Juice has none, so the pool model says it needs
+  cooking and the readiness glyph (the fridge) and the card's edge turn amber.
+  Driven live on the scratch instance: `Orange juice` → `needs_cooking: true`,
+  `entry-chip--trim-alert`. Nothing is broken; the model just has no notion of a
+  meal you don't cook. The existing "Cook fresh" option on the meal's menu takes
+  it out of the pool and clears the amber.
+- **Options:** (a) leave it, and the answer is "mark it Cook fresh";
+  (b) a recipe-level "no cooking needed" flag that always behaves as cook-fresh;
+  (c) readiness stops colouring the edge, so amber only ever means "you can't
+  make this". (c) is the smallest change but reverses the 2026-09-12 rule that
+  amber also means "still has to be cooked".
+- **Recommended resolution:** owner decision, now.
+
+## [OPEN] FU-914: pick one per-unit denominator for log price and comparisons
+- **Raised:** 2026-09-27 (owner question: "for log price I wonder if we over-corrected")
+- **Type:** finding, needs a decision
+- **What:** the log-price preview (`PriceEntry.vue` via `quoteUnitPrice`) flips
+  its denominator by the pack being typed: /100g below 1 kg, /kg at or above
+  (`units.display_denominator_for`, mirrored by R-089). So logging a 500 g and a
+  2 kg pack of the same item quotes them in different units, while the item's
+  price history picks one denominator from its *latest* observation. Two prices
+  you want to compare can land in two units.
+- **Recommendation:** quote a fixed /100g and /100ml everywhere Dora compares
+  prices (the default Australian shelf-tag unit, so it matches most labels),
+  keep /ea for counts, and leave the US convention alone. Option B: keep the
+  flip, but decide it once per stock item rather than per pack.
+- **Why deferred:** it changes an established rule (R-089's convention) across
+  price history, recipe costs and the log sheet; the owner asked a question
+  rather than giving a call.
+- **Recommended resolution:** now, once the owner picks A or B.
+
+## [OPEN] FU-913 — `auto-generate` still offers two essentials sources that overlap
+- **Raised:** 2026-09-19 (provenance simplification)
+- **Type:** finding
+- **What:** `AutoGenerateSources` now has `essentials` (every essential item,
+  any stock level) and `essentials_only_for_low` (essentials that are low/out).
+  Renaming the former off `flagged` made the overlap visible: ticking both is
+  the same as ticking `essentials` alone, and the New list dialog presents them
+  as two unrelated checkboxes ("All your essentials, however much is left" and
+  "...but only the essentials among them"). Nothing is broken; the option set
+  just doesn't read as one coherent choice.
+- **Why deferred:** R-007. Redesigning the dialog's source picker is a UX call,
+  not a rename, and the owner hasn't asked for it.
+- **Recommended resolution:** opportunistic — next time the New list dialog is
+  open for other reasons. Likely shape: one "essentials" control with a
+  low/out-only modifier, rather than two peer checkboxes.
+
 ## [OPEN] FU-912 — an empty `web_app/PROJECT_STATE.md` is committed alongside the real one
 - **Raised:** 2026-09-13 (cook-mode batch — tripped over, not looked for)
 - **Type:** finding
@@ -689,19 +801,7 @@ long session summary. Distinct from the other logs:
 - **Recommended resolution:** when the trend arrow is next revisited — decide
   whether to (a) leave it, (b) exclude forward-looking components from the trend
   explicitly rather than incidentally, or (c) drop the arrow.
-
-## [OPEN] FU-869 — `/reports/keeps-running-out` lost its dashboard caller
-- **Raised:** 2026-09-04 (dashboard feedback batch)
-- **Type:** leftover (R-057 contract inventory)
-- **What:** Restock radar was rebuilt on the new `/dashboard/restock-radar`, so
-  `reportsApi.getKeepsRunningOutAsync` no longer has a dashboard caller. **The
-  endpoint is NOT orphaned** — the reports page still calls it with its own range
-  — so this is an inventory note, not a deletion candidate. Logged because R-057
-  is explicit that a replaced surface's contracts get checked rather than
-  assumed, and because the reports page is now its *only* consumer, which changes
-  who owns its shape.
-- **Recommended resolution:** opportunistic — confirm at the next reports-page
-  visit that the range-passing behaviour is still what that page wants.
+- **State 2026-09-27:** plan adherence was cut, so the arrow now moves on three trailing signals (waste, budget, freshness); plan coverage still cancels out. The finding stands.
 
 ## [OPEN] FU-868 — Two dashboard cards were never seen with their feature gate OFF
 - **Raised:** 2026-09-04 (dashboard feedback batch — browser walk)
@@ -752,9 +852,13 @@ long session summary. Distinct from the other logs:
 - **Recommended resolution:** opportunistic — next time anything touches
   `app.scss` or the theming layer. Cheap, cosmetic, low risk.
 
-## [OPEN] FU-864 — Two "Dora does this for you" actions still wear the wand, not the burger
+## [OPEN] FU-864 — *Draft my shop* still wears the wand, not the burger
 - **Raised:** 2026-09-03 (meal-planner owner batch)
 - **Type:** follow-up
+- **Narrowed 2026-09-19:** the second site,
+  `components/shoppingList/ShoppingListPlanRow.vue`'s 12px inline hint, is
+  **done** — the provenance rework replaced that wand+caption with a single
+  `dora_voice` burger on auto-added lines. Only `DraftShopCard.vue` is left.
 - **What:** the owner asked for *"the consistent Dora burger icon"* on **Build my
   week**, which revised the wand/burger split recorded in `style/icons.ts`
   ("wand = an action she performs; burger = an opinion she holds"). The revised
@@ -763,15 +867,14 @@ long session summary. Distinct from the other logs:
   flipped (toolbar, empty-week banner, phone, the builder's step icon and its
   primary button). Two sites did **not**, because they are outside this batch's
   surface: `components/dashboard/DraftShopCard.vue` (*Draft my shop* — the
-  dashboard's exact counterpart to Build my week) and
-  `components/shoppingList/ShoppingListPlanRow.vue`'s 12px inline hint.
+  dashboard's exact counterpart to Build my week).
   `auto_awesome` legitimately keeps the AI-mode marker (`DoraModeSlider`,
   `DoraHelpPage`, `SetupAdminPage`), where it means "a model is involved", not
   "Dora".
 - **Why deferred:** R-007. The dashboard is a surface the owner reviewed and
   signed off visually across six chunks; changing its card icon now is an
   unasked visual edit to signed-off work, and it is one line whenever he wants it.
-- **Recommended resolution:** now-ish — one line each, but it is the owner's call
+- **Recommended resolution:** now-ish — one line, but it is the owner's call
   whether *Draft my shop* should match *Build my week*. Ask before sweeping.
 
 ## [OPEN] FU-863 — A cook batch straddling today loses its link when only one forward day is left
@@ -937,28 +1040,6 @@ long session summary. Distinct from the other logs:
   lever is FU-856 (record `pack_count = 1`) rather than reverting the rule.
 - **Recommended resolution:** when the owner has walked a costed recipe and said
   whether the narrower coverage reads acceptably.
-
-## [OPEN] FU-854 — The Alerts bell still hands out the retired "primary list" dead end
-- **Raised:** 2026-09-03 (cook-mode owner batch, item 5)
-- **Type:** finding
-- **What:** the owner's report was cook mode's finish-modal cart button ("there
-  should be **no other instance** of this old button in the app"). That one is
-  fixed. Sweeping for the same *class* of defect found one survivor:
-  `AlertsBell.vue:183` — the "Add N low/out items to primary list" footer
-  button reads `shoppingListStore.quickAddTargetListId`, which is non-null only
-  when exactly ONE draft list exists, and otherwise raises a dialog titled
-  **"No primary list"** telling the user to "set a primary shopping list
-  first". Primary lists were retired in C-7 Chunk 2; with two drafts open (the
-  dense seed's normal state) the bell's bulk shortcut is simply unusable.
-- **Why deferred:** it is a different surface and a different control — a
-  labelled bulk button, not the icon cart the owner reported — and the fix
-  (`AddToListButton variant="bulk"`, which resolves the target by prompting)
-  changes what the bell's footer *does*, not just how it reads. Doing it
-  silently inside a cook-mode batch would have shipped an unverified behaviour
-  change to Alerts. The label copy also needs a call: "add N to a list" vs
-  naming the resolved list.
-- **Recommended resolution:** now — it's a ~10-line swap plus one browser pass,
-  and it is the last known instance of the pattern the owner asked to be rid of.
 
 ## [OPEN] FU-853 — Cook mode's timer chime is blocked by the app's own CSP
 - **Raised:** 2026-09-03 (cook-mode owner batch — observed, not reported)
@@ -1483,23 +1564,6 @@ long session summary. Distinct from the other logs:
 - **Recommended resolution:** opportunistic — next time `useShortcut` /
   `ShortcutsCheatsheet` is open. Cheap alternative if that never happens: gate
   the two registrations on the run face.
-
-## [OPEN] FU-805 — receipt line reads "estimated, no price entered" while showing a price
-- **Raised:** 2026-09-01 (v4 chunk 3 — shopping-list receipt face)
-- **Type:** finding
-- **What:** On the receipt face, a line whose `estimate_source` is `historic`
-  renders the caption "estimated, no price entered" *and* an amount (e.g.
-  "~$3.00"). Both halves are true from the code's point of view — the price is
-  an estimate carried over, and the user never typed one — but read together
-  they contradict each other. Pre-existing copy (baseline E3), carried across
-  chunk 3 verbatim rather than reworded, because rewording it is a copy decision
-  and not this chunk's call.
-- **Why deferred:** scope discipline; the "~" prefix already carries the
-  estimate signal, so the caption may want to be dropped rather than reworded,
-  and that's a decision, not a fix.
-- **Recommended resolution:** now-ish — it is one line of copy and the owner is
-  looking at this surface. Suggested: drop the clause entirely and let "~" do
-  the work, or say "estimated from what you last paid".
 
 ## [OPEN] FU-802 — the planner's rail row is still the third copy of the list-row chrome (see FU-791)
 - **Raised:** 2026-09-01 (meal-planner owner batch)
@@ -2096,24 +2160,6 @@ long session summary. Distinct from the other logs:
 - **Recommended resolution:** opportunistic, and only if a third surface needs a
   kcal figure. Supersedes the kcal half of **FU-747**; cites **R-001**.
 
-## [OPEN] FU-769 — Changing a line's store reportedly doesn't move it between store groups
-- **Raised:** 2026-08-28 (shopping-list feedback batch 1)
-- **Type:** finding
-- **What:** owner reports that setting "Bought from" on a line leaves it in its old
-  bucket under **Order by → Store**. A static read says it should work: the price
-  editor writes `purchased_store_id`, which is **rung 1** of the server's store
-  ladder (`get_shopping_list_detail.py:591`), and the grouping key is
-  `resolved_store_name` (`useLineSections.ts:69`), so a refetch ought to re-bucket
-  the row. Did **not** reproduce in the read — but the report came from real usage
-  and the plausible failure is a *refresh* gap (the popover's save path patches the
-  line optimistically and may not refetch the detail), which a code read is bad at
-  seeing.
-- **Why deferred:** batch 1 was deletions + the tick model; this sits on the store
-  work in batch 3, which rebuilds the same editor anyway.
-- **Recommended resolution:** **confirm in browser** — set a store on a draft line
-  with Order-by=Store active and watch whether the row moves without a reload. Fold
-  into batch 3 (`planned_store_id`).
-
 ## [OPEN] FU-768 — Four surfaces still treat "line has a price" as "line was bought"
 - **Raised:** 2026-08-28 (shopping-list feedback batch 1)
 - **Type:** finding
@@ -2574,22 +2620,6 @@ Resolved entries carry one extra line, and live in `DORA_FOLLOWUPS_RESOLVED.md`:
   combination was never looked at deliberately.
 - **Recommended resolution:** now-ish — folds into [[FU-729]]'s real-device walk,
   which is already owed for exactly these two faces.
-
-## [OPEN] FU-738 — The lifecycle CTA is the button that scrolls off the shopping-list toolbar
-- **Raised:** 2026-08-26 (shopping-list feedback batch)
-- **Type:** finding (needs an owner call).
-- **What:** the rebuilt toolbar is a sideways-scrolling band, as asked ("horizontal
-  scrollable toolbar, no overflow menu"). With the full set on — New list · Add
-  item · Bulk select · Templates · Refresh deals · Export · Start shopping — it
-  needs ~1000px, and at 1280px the lists rail leaves the main column ~948px. So
-  the band scrolls, and the button clipped at the right edge is **the lifecycle
-  CTA**, the most important one on the page.
-- **Why deferred:** it is the requested behaviour working correctly, not a bug,
-  and every fix is a design trade: pin the CTA outside the scroller, put it first,
-  or let the band wrap on desktop and scroll only on phones. That's an owner call,
-  not an implementation detail.
-- **Recommended resolution:** now-ish — one decision, then a few lines. Worth
-  pairing with the `DORA_VERIFY` walk, since it's most obvious at desktop widths.
 
 ## [OPEN] FU-737 — The preview pane could not paint this session; screenshots and Quasar popups were unverifiable
 - **Raised:** 2026-08-23 (recipe-view feedback batch)

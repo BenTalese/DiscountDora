@@ -14,9 +14,7 @@
             </template>
             <div class="text-body2">
                 <strong>Amending this receipt.</strong>
-                Price, store and quantity only — your pantry was already
-                restocked when you finished, and correcting the record here
-                doesn't restock anything again.
+                You can change price, store and quantity.
             </div>
             <template #action>
                 <BaseButton variant="ghost" label="Done" @click="emit('stop-amend')" />
@@ -77,16 +75,11 @@
             </div>
         </div>
 
-        <!-- Where the money went. Same card as the plan face, past tense —
-             the numbers are the same aggregate, only the trip has happened.
-             Collapsible on every width now, and starting closed on every width:
-             it used to open expanded above `md`, which was the app's one
-             disclosure that didn't (FU-783). -->
-        <StoreSpendCard
-            class="q-mt-sm"
-            tense="receipt"
-            :buckets="detail.totals.by_store"
-        />
+        <!-- "Where you spent it" is gone from here (2026-09-17). It lives in
+             the overview card's disclosure, which is where the plan and shop
+             faces have always shown it — rendering it as a standalone card
+             below the sheet meant the same panel jumped to a different part of
+             the page when a list finished. -->
     </div>
 </template>
 
@@ -108,7 +101,6 @@
     import { ICONS } from 'src/style/icons';
     import BaseButton from 'src/components/BaseButton.vue';
     import ShoppingListReceiptRow from 'src/components/shoppingList/ShoppingListReceiptRow.vue';
-    import StoreSpendCard from 'src/components/shoppingList/StoreSpendCard.vue';
     import { formatMoney } from 'src/composables/useMoney';
     import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
     import type { ShoppingListDetail, ShoppingListLine } from 'src/models/shoppingList';
@@ -155,18 +147,28 @@
         overflow: hidden;
     }
 
+    /* A docket has margins. The itemisation used to run 8px from the sheet's
+       top edge and sit on the same inline padding as a list row, which is what
+       made a *document* read as a bordered list that happened to have dots in
+       it. The extra room is the cheapest thing on this face and the most of
+       what "polished" means here. */
     .sl-receipt-lines {
-        padding-block: var(--space-2);
+        padding-block: var(--space-4);
     }
 
     /* Under the itemisation, above its own rule — where a total goes on a
        document. Same four-track idea as the row, collapsed to three. */
+    /* The total's own tracks are the row's, minus the multiplier: label,
+       leader, amount. Its leader therefore starts and ends where every line's
+       does, so the figures stack in one column and the dots run along one
+       margin — the thing that makes a column of numbers read as a sum rather
+       than as four more entries. */
     .sl-receipt-total {
         display: grid;
         grid-template-columns: max-content minmax(var(--space-6), 1fr) auto;
         align-items: end;
         column-gap: var(--space-3);
-        padding: var(--space-3) var(--space-4);
+        padding: var(--space-4);
         border-top: 1px dashed var(--border-strong);
     }
     .sl-receipt-total__label {

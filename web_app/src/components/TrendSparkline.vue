@@ -10,7 +10,7 @@
         <polyline :points="polyline" fill="none" :stroke="strokeColour" stroke-width="1.5" />
         <circle :cx="lastPoint.x" :cy="lastPoint.y" r="2" :fill="strokeColour" />
     </svg>
-    <span v-else class="text-caption dora-text-muted">—</span>
+    <span v-else class="text-caption dora-text-muted">–</span>
 </template>
 
 <script lang="ts" setup>

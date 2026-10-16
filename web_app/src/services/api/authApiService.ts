@@ -79,6 +79,8 @@ export type UpdateMeCommand = {
     show_assistant?: boolean;
     /** Daily brief push opt-in. See AuthenticatedUser. */
     daily_brief_enabled?: boolean;
+    /** Days after which alerts are discarded (7 / 14 / 30), or null for never. */
+    alert_discard_after_days?: number | null;
 };
 export type ChangePasswordCommand = {
     current_password: string;

@@ -105,7 +105,7 @@ def encrypt(plaintext: str) -> bytes:
     f = _fernet()
     if f is None:
         raise EncryptionUnavailable(
-            f"{_ENV_VAR} isn't configured — secrets can't be saved encrypted."
+            f"{_ENV_VAR} isn't configured, so secrets can't be saved."
         )
     return f.encrypt(plaintext.encode("utf-8"))
 
@@ -117,12 +117,12 @@ def decrypt(ciphertext: bytes) -> str:
     f = _fernet()
     if f is None:
         raise EncryptionUnavailable(
-            f"{_ENV_VAR} isn't configured — saved secrets can't be decrypted."
+            f"{_ENV_VAR} isn't configured, so saved secrets can't be decrypted."
         )
     try:
         return f.decrypt(ciphertext).decode("utf-8")
     except InvalidToken as exc:
         raise EncryptionFailed(
-            "Saved secret couldn't be decrypted — the encryption key "
+            "Saved secret couldn't be decrypted. The encryption key "
             "may have been rotated. Re-enter the value in Settings."
         ) from exc

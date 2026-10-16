@@ -12,6 +12,6 @@ matters — the UI and assistant tools both say so explicitly.
 """
 
 RECIPE_TAG_DISCLAIMER = (
-    "Tags reflect what the recipe was tagged with — a planning aid, not "
-    "a substitute for reading the ingredient list when food safety matters."
+    "Tags are a planning aid. Check the ingredient list when food safety "
+    "matters."
 )

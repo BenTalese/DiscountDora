@@ -73,7 +73,7 @@ export function resolveScanLevelOutcome(
     // `unknown` — not in Dora at all.
     return {
         stockItemId: null,
-        message: 'Not a recognised item — add it to your pantry first.',
+        message: 'Not a recognised item. Add it to your pantry first.',
         ok: false,
     };
 }

@@ -667,6 +667,7 @@ export function useMealPlanner() {
         // for a URL nobody has bookmarked is the kind of shim that outlives its
         // reason.
         void router.replace({ query: { ...route.query, week: next } });
+        void loadBudgetStatus();
     });
     function onKeydown(e: KeyboardEvent) {
         const t = e.target as HTMLElement | null;
@@ -748,7 +749,10 @@ export function useMealPlanner() {
     async function loadBudgetStatus() {
         if (!moneyEnabled.value) { budgetStatus.value = null; return; }
         try {
-            budgetStatus.value = await budgetApi.getStatusAsync();
+            // The period containing the week on screen, not today's: a week
+            // two weeks out is measured against its own (as yet unspent)
+            // budget (owner 2026-10-15).
+            budgetStatus.value = await budgetApi.getStatusAsync(focusedMonday.value);
         } catch {
             // A budget we can't read is not worth interrupting the planner for;
             // the card simply shows the week's cost without it.
@@ -951,7 +955,7 @@ export function useMealPlanner() {
             });
             await refreshAfterMutation();
             if (result.added_count === 0) {
-                $q.notify({ type: 'info', position: 'bottom-right', message: 'Nothing added — those days are in the past.' });
+                $q.notify({ type: 'info', position: 'bottom-right', message: 'Nothing added. Those days are in the past.' });
                 return;
             }
             let message = `Added ${result.added_count} meal${result.added_count === 1 ? '' : 's'}.`;
@@ -1024,7 +1028,7 @@ export function useMealPlanner() {
         if (upcoming.length === 0) {
             $q.notify({
                 type: 'warning', position: 'bottom-right',
-                message: 'No upcoming meals to add — pick a future day first.',
+                message: 'No upcoming meals to add.',
             });
             throw new Error('no upcoming entries');
         }
@@ -1068,7 +1072,7 @@ export function useMealPlanner() {
         if (commands.length === 0) {
             $q.notify({
                 type: 'info', position: 'bottom-right',
-                message: 'Nothing to duplicate — this week has no meals to carry forward.',
+                message: 'This week has no meals to duplicate.',
             });
             return;
         }

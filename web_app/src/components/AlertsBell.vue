@@ -13,81 +13,80 @@
             </BaseTooltip>
         </BaseButton>
 
-        <q-dialog v-model="open" position="right" full-height seamless>
+        <!-- Not `seamless`: the backdrop is what lets a tap outside close the
+             panel (owner 2026-10-15). It is also the only alerts surface now
+             that the Alerts page is gone, so it lists everything. -->
+        <q-dialog v-model="open" position="right" full-height>
             <q-card class="alerts-panel column no-wrap" flat>
-                <q-card-section class="row items-center q-pb-none">
+                <q-card-section class="row items-center q-pb-sm">
                     <q-icon :name="ICONS.notifications" size="22px" class="q-mr-sm" />
-                    <div class="col">
-                        <div class="text-h6">What needs your attention</div>
-                        <div class="text-caption dora-text-muted">
-                            <span v-if="totalCount === 0 && snoozedCount === 0">
-                                All quiet. Good work.
-                            </span>
-                            <span v-else>
-                                {{ alerts.actionable_count }} need action ·
-                                {{ alerts.fyi_count }} FYI
-                                <span v-if="snoozedCount > 0"> · {{ snoozedCount }} snoozed</span>
-                            </span>
-                        </div>
-                    </div>
-                    <BaseButton variant="icon" :icon="ICONS.refresh" :loading="loading" @click="refresh" />
-                    <BaseButton variant="icon" :icon="ICONS.close" @click="open = false" />
+                    <div class="col text-h6">What needs your attention</div>
+                    <BaseButton
+                        v-if="totalCount > 0"
+                        variant="ghost"
+                        dense
+                        :icon="ICONS.done_all"
+                        label="Dismiss all"
+                        :loading="dismissingAll"
+                        @click="onDismissAll"
+                    />
+                    <BaseButton variant="icon" :icon="ICONS.close" aria-label="Close" @click="open = false" />
                 </q-card-section>
 
-                <q-separator class="q-mt-sm" />
+                <q-separator />
 
                 <q-banner v-if="loadError" class="dora-bg-negative-soft text-negative q-ma-md" dense rounded>
                     {{ loadError }}
                 </q-banner>
 
-                <!-- ── Peek: top few rows (shared AlertRow, slim) ────────── -->
                 <div class="alerts-panel-list col scroll">
                     <q-list separator>
                         <AlertRow
-                            v-for="alert in peekItems"
+                            v-for="alert in alerts.items"
                             :key="alert.alert_id"
                             :alert="alert"
                             :busy="busyAlertId === alert.alert_id"
-                            slim
-                            @open="goToItem(alert)"
+                            @open="goTo(linkFor(alert))"
+                            @navigate="goTo"
                             @action="(action) => applyAction(alert, action)"
-                            @toggle-read="(read) => toggleRead(alert, read)"
+                            @set-level="(levelId) => setLevel(alert, levelId)"
+                            @snooze="alertStore.snoozeAlert(alert.alert_id)"
+                            @dismiss="alertStore.dismissAlert(alert.alert_id)"
                         />
                     </q-list>
 
-                    <div v-if="hiddenCount > 0" class="text-caption dora-text-muted q-pa-sm text-center">
-                        + {{ hiddenCount }} more on the Alerts page
+                    <div
+                        v-if="!loading && totalCount === 0"
+                        class="column items-center dora-text-muted q-py-lg"
+                    >
+                        <q-icon :name="ICONS.check_circle" size="48px" color="positive" />
+                        <div class="q-mt-sm">Nothing to do right now.</div>
                     </div>
 
-                    <q-item v-if="!loading && totalCount === 0 && snoozedCount === 0">
-                        <q-item-section class="text-center dora-text-muted q-py-lg">
-                            <q-icon :name="ICONS.check_circle" size="48px" color="positive" />
-                            <div class="q-mt-sm">Nothing to do right now.</div>
-                        </q-item-section>
-                    </q-item>
+                    <!-- The snoozed set, collapsed: it is the one place to undo a
+                         snooze now the page has gone. -->
+                    <q-expansion-item
+                        v-if="snoozedCount > 0"
+                        :icon="ICONS.snooze"
+                        :label="`Snoozed (${snoozedCount})`"
+                        header-class="dora-text-secondary"
+                    >
+                        <q-list separator>
+                            <AlertRow
+                                v-for="alert in alerts.snoozed"
+                                :key="alert.alert_id"
+                                :alert="alert"
+                                :busy="busyAlertId === alert.alert_id"
+                                @open="goTo(linkFor(alert))"
+                                @navigate="goTo"
+                                @action="(action) => applyAction(alert, action)"
+                                @set-level="(levelId) => setLevel(alert, levelId)"
+                                @unsnooze="alertStore.unsnoozeAlert(alert.alert_id)"
+                                @dismiss="alertStore.dismissAlert(alert.alert_id)"
+                            />
+                        </q-list>
+                    </q-expansion-item>
                 </div>
-
-                <!-- ── Footer: bulk shortcut + jump to the hub ───────────── -->
-                <q-separator />
-                <q-card-section class="dora-bg-elevated q-py-sm column q-gutter-sm">
-                    <BaseButton
-                        v-if="lowOrOutStockItemIds.length > 0"
-                        :icon="ICONS.add_shopping_cart"
-                        :label="`Add ${lowOrOutStockItemIds.length} low/out item${
-                            lowOrOutStockItemIds.length === 1 ? '' : 's'
-                        } to primary list`"
-                        class="full-width"
-                        :loading="addingAll"
-                        @click="addAllLowOrOutToPrimary"
-                    />
-                    <BaseButton
-                        variant="secondary"
-                        :icon="ICONS.open_in_new"
-                        label="Open Alerts"
-                        class="full-width"
-                        @click="openHub"
-                    />
-                </q-card-section>
             </q-card>
         </q-dialog>
     </div>
@@ -97,31 +96,25 @@
     import BaseTooltip from 'src/components/BaseTooltip.vue';
     import BaseButton from 'src/components/BaseButton.vue';
     import { ICONS } from 'src/style/icons';
-    import { useQuasar } from 'quasar';
-    import { useShoppingListActions } from 'src/composables/useShoppingListActions';
     import AlertRow from 'src/components/AlertRow.vue';
     import { linkFor, type Alert } from 'src/models/alert';
     import { useAlertActions } from 'src/composables/useAlertActions';
     import { useAlertStore } from 'src/stores/alertStore';
-    import { useShoppingListStore } from 'src/stores/shoppingListStore';
-    import { computed, onMounted, onUnmounted, ref } from 'vue';
-    import { useRouter } from 'vue-router';
+    import { useStockItemStore } from 'src/stores/stockItemStore';
+    import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
+    import { useRoute, useRouter } from 'vue-router';
 
-    // The bell is a fast PEEK + jump (C-9.3): the top few rows + the bulk
-    // shortcut, then "Open Alerts" → the hub page, which owns the rich
-    // management/history/snoozed surfaces. Rows are the shared AlertRow (R-001)
-    // so the bell and page never diverge.
-    const PEEK_LIMIT = 5;
-
-    const $q = useQuasar();
+    // The bell is the whole alerts surface (owner 2026-10-15: the Alerts page
+    // was cut once its toggles moved to Settings and its rows gained the
+    // buttons they needed). Rows are the shared AlertRow (R-001).
+    const route = useRoute();
     const router = useRouter();
     const alertStore = useAlertStore();
-    const shoppingListStore = useShoppingListStore();
-    const { addItems } = useShoppingListActions();
+    const stockItemStore = useStockItemStore();
     const { busyAlertId, applyAction } = useAlertActions();
 
     const open = ref(false);
-    const addingAll = ref(false);
+    const dismissingAll = ref(false);
 
     const alerts = computed(() => alertStore.alerts);
     const loading = computed(() => alertStore.loading);
@@ -130,11 +123,8 @@
     const totalCount = computed(() => alertStore.totalCount);
     const snoozedCount = computed(() => alertStore.snoozedCount);
 
-    const peekItems = computed<Alert[]>(() => alerts.value.items.slice(0, PEEK_LIMIT));
-    const hiddenCount = computed(() => Math.max(0, alerts.value.items.length - peekItems.value.length));
-
     const bellIcon = computed(() =>
-        badgeCount.value > 0 ? 'notifications_active' : 'notifications'
+        badgeCount.value > 0 ? ICONS.notifications_active : ICONS.notifications,
     );
     const bellColor = computed(() => {
         if (alerts.value.high_count > 0) return 'negative';
@@ -142,67 +132,49 @@
         return undefined;
     });
 
-    // Stock items currently flagged low/out (de-duplicated) for the bulk-add.
-    const lowOrOutKinds = new Set<string>(['low_stock', 'out_of_stock', 'essential_low']);
-    const lowOrOutStockItemIds = computed<string[]>(() => [
-        ...new Set(
-            alerts.value.items
-                .filter((a) => lowOrOutKinds.has(a.kind))
-                .map((a) => a.stock_item_id)
-                .filter((id): id is string => id !== null),
-        ),
-    ]);
+    // The level picker on a shortage row reads the item's current level from
+    // the stock store, so make sure it is there when the panel opens.
+    // Opening the panel also refreshes it: between polls something may have
+    // changed elsewhere in the app (a price watch set, a level changed).
+    watch(open, (isOpen) => {
+        if (!isOpen) return;
+        void stockItemStore.ensureLoadedAsync();
+        void alertStore.refreshAsync();
+    });
 
-    async function refresh() {
-        await alertStore.refreshAsync();
-    }
+    // A push notification (and any old `/alerts` link) lands on `?alerts=open`.
+    watch(
+        () => route.query.alerts,
+        (value) => {
+            if (value !== 'open') return;
+            open.value = true;
+            const { alerts: _drop, ...rest } = route.query;
+            void router.replace({ query: rest });
+        },
+        { immediate: true },
+    );
 
-    function goToItem(alert: Alert) {
-        const link = linkFor(alert);
+    function goTo(link: string | null) {
         if (!link) return;
         open.value = false;
         void router.push(link);
     }
 
-    function openHub() {
-        open.value = false;
-        void router.push('/alerts');
+    async function setLevel(alert: Alert, levelId: string) {
+        if (!alert.stock_item_id) return;
+        await stockItemStore.updateStockLevelAsync({
+            stock_item_id: alert.stock_item_id,
+            stock_level_id: levelId,
+        });
+        await alertStore.refreshAsync();
     }
 
-    // The single in-context action kept on the peek row (mark-restocked /
-    // push-expiry) is routed through the shared useAlertActions composable
-    // (FU-521) so the bell, hub, and dashboard behave identically.
-
-    async function toggleRead(alert: Alert, read: boolean) {
-        if (read) await alertStore.markRead(alert.alert_id);
-        else await alertStore.markUnread(alert.alert_id);
-    }
-
-    async function addAllLowOrOutToPrimary() {
-        const ids = lowOrOutStockItemIds.value;
-        if (ids.length === 0) return;
-        const primary = shoppingListStore.quickAddTargetListId;
-        if (!primary) {
-            $q.dialog({
-                title: 'No primary list',
-                message:
-                    'Set a primary shopping list first — the bell uses it for the bulk-add shortcut.',
-                ok: { label: 'Open lists', color: 'primary', noCaps: true },
-                cancel: { noCaps: true },
-            }).onOk(() => {
-                open.value = false;
-                void router.push('/shopping-lists');
-            });
-            return;
-        }
-        addingAll.value = true;
+    async function onDismissAll() {
+        dismissingAll.value = true;
         try {
-            await addItems(
-                primary,
-                ids.map((stock_item_id) => ({ stock_item_id })),
-            );
+            await alertStore.dismissAllAsync();
         } finally {
-            addingAll.value = false;
+            dismissingAll.value = false;
         }
     }
 

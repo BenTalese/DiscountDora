@@ -24,7 +24,6 @@ class AppSettingsDto:
     # buy-verdict oracle toggle.
     # C-cross Chunk 1 — install-wide feature flags (proposal §2.6).
     money_enabled: bool
-    deals_email_enabled: bool
     # Nutrition, install-wide: `off` | `simple` | `complex`, plus complex-mode
     # source config. Replaced `nutrition_enabled` + the per-user mode + the
     # dead `nutrition_db_source` seam (2026-08-14).
@@ -99,7 +98,6 @@ def _to_dto(setting) -> AppSettingsDto:  # noqa: ANN001 — duck-typed AppSettin
             getattr(setting, "nutrition_rating_scheme", RATING_SCHEME_NONE)
             or RATING_SCHEME_NONE),
         money_enabled=bool(setting.money_enabled),
-        deals_email_enabled=bool(setting.deals_email_enabled),
         nutrition_mode=setting.nutrition_mode or NUTRITION_MODE_OFF,
         nutrition_usda_api_key=setting.nutrition_usda_api_key or "",
         nutrition_off_lookup_enabled=bool(setting.nutrition_off_lookup_enabled),

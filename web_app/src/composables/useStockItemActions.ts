@@ -104,7 +104,7 @@ export function useStockItemActions() {
                 const choice = await new Promise<string | null>((resolve) => {
                     $q.dialog({
                         title: 'Which list?',
-                        message: 'You have multiple draft lists — pick one.',
+                        message: 'You have more than one draft list. Pick one.',
                         options: {
                             type: 'radio',
                             model: outcome.result === 'ambiguous'

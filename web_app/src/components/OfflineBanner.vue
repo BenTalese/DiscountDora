@@ -40,8 +40,8 @@
     // nothing more. Two variants because the distinction is actionable: your
     // own connection is your problem to fix, an unreachable server is Dora's.
     const message = computed(() => {
-        if (!online.value) return "You're offline — you can look around, but not make changes.";
-        if (!apiReachable.value) return "Can't reach Dora — you can look around, but not make changes.";
+        if (!online.value) return "You're offline. You can look around, but not make changes.";
+        if (!apiReachable.value) return "Can't reach Dora. You can look around, but not make changes.";
         return '';
     });
 </script>

@@ -112,8 +112,8 @@ const LABELS: Record<RecipeFilterKey, string> = {
 
 const DISABLED_REASONS: Record<Exclude<RecipeFilterKey, 'suggests' | 'all'>, string> = {
     cookable: "Nothing's cookable from stock right now.",
-    favourites: 'No favourites yet — tap the heart on a recipe.',
-    not_lately: "Nothing's gone stale — you've cooked everything recently.",
+    favourites: 'No favourites yet.',
+    not_lately: "You've cooked everything recently.",
     regulars: "Nothing's been planned more than once yet.",
 };
 

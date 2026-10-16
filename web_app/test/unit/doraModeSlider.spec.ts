@@ -36,7 +36,7 @@ describe('DoraModeSlider', () => {
         expect(wrapper.attributes('role')).toBe('switch');
         expect(wrapper.attributes('aria-checked')).toBe('true');
         expect(wrapper.find('.tooltip-stub').text())
-            .toBe('AI mode on — tap to switch to Basic.');
+            .toBe('AI mode on. Tap to switch to Basic.');
     });
 
     it('renders the Basic position as unchecked with the flip tooltip', () => {
@@ -45,7 +45,7 @@ describe('DoraModeSlider', () => {
         expect(wrapper.classes()).toContain('dora-mode-slider--basic');
         expect(wrapper.attributes('aria-checked')).toBe('false');
         expect(wrapper.find('.tooltip-stub').text())
-            .toBe('Basic mode on — tap to switch to AI.');
+            .toBe('Basic mode on. Tap to switch to AI.');
     });
 
     it('tap emits the flipped value both ways', async () => {

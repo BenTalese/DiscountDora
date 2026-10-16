@@ -98,8 +98,7 @@
             v-else-if="open"
             class="swap-panel__zero dora-text-muted"
         >
-            No swap saves you money this week — dropping a meal may be the only
-            lever left.
+            No swap saves you money this week.
         </q-card-section>
     </q-card>
 
@@ -178,9 +177,9 @@
     const previewAfterCost = ref(0);
 
     const CHIP_LABELS: Record<RecipeSwapCandidate['reason_chip'], string> = {
-        cheaper_recipe_cookable: 'Cheaper — uses stock you have',
-        cheaper_recipe_similar: 'Cheaper — same style meal',
-        cheaper_recipe_household_fav: "Cheaper — you've cooked it before",
+        cheaper_recipe_cookable: 'Cheaper, uses stock you have',
+        cheaper_recipe_similar: 'Cheaper, same style of meal',
+        cheaper_recipe_household_fav: "Cheaper, and you've cooked it before",
     };
     function chipLabel(chip: RecipeSwapCandidate['reason_chip']): string {
         return CHIP_LABELS[chip] ?? 'Cheaper option';

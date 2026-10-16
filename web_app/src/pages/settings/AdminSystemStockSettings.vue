@@ -54,13 +54,9 @@
                     />
                 </SettingsRow>
 
-                <!-- 2026-08-15: tell the operator here, not at the viewfinder.
-                     Browsers withhold the camera API on a non-secure origin, so
-                     on a plain-http self-host the Scan button switches on and
-                     then can't open a camera. Shown only when it's actually
-                     true of the browser reading this page (so an admin on
-                     localhost, or in the app, sees nothing), and only once
-                     scanning is on. -->
+                <!-- A warning, not a block (2026-09-27): most browsers withhold
+                     the camera on plain http, but not all. Shown only when the
+                     page reading it is on http, and only once scanning is on. -->
                 <q-banner
                     v-if="scanningDraft && cameraInsecure"
                     dense
@@ -71,12 +67,9 @@
                         <q-icon :name="ICONS.info_outline" />
                     </template>
                     <div class="text-body2">
-                        <strong>Camera scanning won't work in this browser.</strong>
-                        You're reading this over a plain <code>http://</code>
-                        address, and browsers only hand out camera access over a
-                        secure connection. To scan with a camera, use the
-                        <strong>Dashy Dora Android app</strong> (it scans against
-                        any instance) or serve Dora over HTTPS.
+                        This page is on plain <code>http://</code>, so some
+                        browsers won't allow the camera. The Android app and
+                        HTTPS always work.
                     </div>
                 </q-banner>
             </SettingsSection>
@@ -98,7 +91,7 @@
     import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
     import DoraSegmented, { type DoraSegmentedOption } from 'src/components/settings/DoraSegmented.vue';
     import InfoTip from 'src/components/help/InfoTip.vue';
-    import { cameraBlockedByInsecureContext } from 'src/helpers/cameraAvailability';
+    import { insecureContextWarning } from 'src/helpers/cameraAvailability';
     import { useFeatureFlags } from 'src/composables/useFeatureFlags';
     import { useScanningEnabled } from 'src/composables/useScanningEnabled';
 
@@ -136,7 +129,7 @@
     // Same authority the scan overlay consults, so the warning here and the
     // explainer there can't drift apart (R-003). Evaluated once — the page's
     // origin can't change under it.
-    const cameraInsecure = cameraBlockedByInsecureContext();
+    const cameraInsecure = insecureContextWarning() !== null;
 
     async function onScanningToggle(value: boolean) {
         try {

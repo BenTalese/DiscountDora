@@ -191,7 +191,7 @@
             </template>
 
             <div v-if="recipes.length === 0" class="dora-text-muted text-center q-py-md">
-                No recipes yet — create some in the Cookbook.
+                No recipes yet. Create some in the Cookbook.
             </div>
             <div
                 v-else-if="visibleRecipes.length === 0"

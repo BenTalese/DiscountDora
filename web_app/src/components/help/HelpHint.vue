@@ -16,7 +16,7 @@
         variant="icon"
         dense
         :icon="ICONS.help_outline"
-        :aria-label="`What is this? — ${topic}`"
+        :aria-label="`What is ${topic}?`"
         :to="{ path: '/help', query: { q: topic } }"
     >
         <BaseTooltip>Read the "{{ topic }}" guide</BaseTooltip>

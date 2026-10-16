@@ -16,11 +16,13 @@ Endpoints:
       bar's "Move to list" action. One request for the whole selection,
       not one per line (the FU-713/714 shape).
 
-  POST /api/shopping-lists/<id>/refresh-deals
-      Re-runs the cheapest-offer auto-pick for every line on the list,
-      clearing any stale `selected_product_id` if a cheaper option now
-      exists. Doesn't touch lines where the user has *explicitly* selected
-      an offer that's still available.
+  (`/refresh-deals` was removed 2026-09-17. It re-validated each line's
+   `selected_product_id` and cleared the ones whose product was no longer
+   linked — but the detail read already resolves every line's offer from the
+   currently linked products and falls back to the cheapest, so the list was
+   never showing a dead deal and the endpoint only tidied a column nobody
+   read. The tidy now happens where the fact changes, in
+   `stock_items/unlink_product_from_stock_item.py`.)
 
   POST /api/shopping-lists/<id>/clear
       Deletes every line on the list. The list itself stays.
@@ -195,89 +197,6 @@ def _move_error_response(
             "Cannot move items to an archived list. Unarchive it first."
         )
     return None
-
-
-# ───── Refresh deals ──────────────────────────────────────────────────────
-
-@dataclass(slots=True)
-class RefreshDealsResponse:
-    not_found: bool = False
-    lines_checked: int = 0
-    selections_cleared: int = 0
-
-
-class RefreshDealsHandler:
-    """Cleans up stale `selected_product_id` values.
-
-    Background: when a user picks a specific merchant offer, that selection
-    can go stale (the product gets unlinked, the merchant disappears, etc).
-    Rather than pull fresh prices on demand (we'd need to hit the merchant
-    API per product), we lean on the existing scraping pipeline and just
-    re-validate each line's selection here:
-
-      - If the selected product is still linked to the stock item: keep.
-      - Otherwise: clear the selection so the line falls back to "cheapest
-        currently linked".
-
-    A future iteration could trigger a fresh push per product, but that
-    crosses into ingestion-producer territory and is out of scope here.
-    """
-
-    def __init__(self, repository: Repository) -> None:
-        self.repository = repository
-
-    def handle(self, shopping_list_id: UUID) -> RefreshDealsResponse:
-        lst = self.repository.get(ShoppingList).by_id(shopping_list_id)
-        if lst is None:
-            return RefreshDealsResponse(not_found=True)
-
-        lines: List[ShoppingListLine] = self.repository.get(ShoppingListLine).all(
-            EntityField(ShoppingListLine, "shopping_list_id").eq(shopping_list_id)
-        )
-        if not lines:
-            return RefreshDealsResponse(lines_checked=0)
-
-        stock_item_ids = list({l.stock_item_id for l in lines})
-        items: List[StockItem] = (
-            self.repository.get(StockItem)
-            .include(StockItem.Fields.PRODUCTS)
-            .all(EntityField(StockItem, "id").in_(stock_item_ids))
-        )
-        items_by_id = {i.id: i for i in items}
-
-        cleared = 0
-        for line in lines:
-            if line.selected_product_id is None:
-                continue
-            item = items_by_id.get(line.stock_item_id)
-            still_linked = bool(
-                item
-                and any(p.id == line.selected_product_id for p in (item.products or []))
-            )
-            if not still_linked:
-                line.selected_product_id = None
-                cleared += 1
-
-        self.repository.save_changes()
-        return RefreshDealsResponse(
-            lines_checked=len(lines), selections_cleared=cleared
-        )
-
-
-@SHOPPING_LIST_ROUTER.route("/<uuid:shopping_list_id>/refresh-deals", methods=["POST"])
-def refresh_deals(shopping_list_id: UUID):
-    _Logger = logging.getLogger(__name__)
-    _Response = RefreshDealsHandler(SqlAlchemyRepository()).handle(shopping_list_id)
-    if _Response.not_found:
-        return not_found("ShoppingList", shopping_list_id)
-    _Logger.info(
-        f"Refreshed deals on list {shopping_list_id}: "
-        f"checked {_Response.lines_checked}, cleared {_Response.selections_cleared}"
-    )
-    return ok({
-        "lines_checked": _Response.lines_checked,
-        "selections_cleared": _Response.selections_cleared,
-    })
 
 
 # ───── Clear all lines ────────────────────────────────────────────────────

@@ -39,6 +39,7 @@ function entry(over: Partial<MealPlanEntry>): MealPlanEntry {
         inference_hint: null,
         inference_stock_item_names: [],
         needs_cooking: false,
+        cook_batch_pending: false,
         cook_fresh: false,
         estimated_cost: null,
         missing_count: 0,
@@ -138,8 +139,29 @@ describe('tooltips', () => {
 
     it('never says "pool" — it is an internal word for the cooked portions', () => {
         const short = readinessTooltip(entry({ servings: 2 }), true);
-        expect(short).toBe('Needs cooking — short by 2 ready servings');
+        expect(short).toBe('Needs cooking: 2 servings');
         expect(readinessTooltip(entry({}), false)).not.toMatch(/pool/i);
         expect(short).not.toMatch(/pool/i);
+    });
+
+    // Owner 2026-10-15, the affogato report: a 2+2 batch with nothing cooked
+    // said "short by 2" on its cook day and "a cooked serving is ready" on its
+    // leftovers day.
+    it('counts the whole batch on its cook day', () => {
+        const cookDay = entry({
+            servings: 2, cook_batch_id: 'b1', is_cook_day: true, cook_batch_total_servings: 4,
+        });
+        expect(readinessTooltip(cookDay, true)).toBe('Needs cooking: 4 servings for the batch');
+    });
+
+    it('does not call an uncooked batch\'s leftovers ready', () => {
+        const leftovers = entry({
+            servings: 2, cook_batch_id: 'b1', is_cook_day: false,
+            cook_batch_total_servings: 4, cook_batch_pending: true,
+        });
+        expect(readinessTooltip(leftovers, false)).not.toMatch(/ready/i);
+        const status = mealCardStatus(leftovers, BATCH_HOUSEHOLD, false);
+        expect(status.readiness).toBe('pending');
+        expect(status.trim).toBe('idle');
     });
 });

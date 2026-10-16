@@ -12,6 +12,7 @@ import { ICONS } from 'src/style/icons';
 export function axisIcon(axis: BuyVerdictReason['axis']): string {
     if (axis === 'price') return ICONS.price_check ?? 'mdi-cash-check';
     if (axis === 'need') return ICONS.inventory_2 ?? 'mdi-package-variant-closed';
+    if (axis === 'plan') return ICONS.event;
     return ICONS.delete_outline ?? 'mdi-delete-outline';
 }
 

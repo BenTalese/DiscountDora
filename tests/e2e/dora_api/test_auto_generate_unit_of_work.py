@@ -17,10 +17,10 @@ LISTS = f"{BASE}/shopping-lists"
 AUTO = f"{LISTS}/auto-generate"
 
 
-def test__auto_generate__flagged_source__commits_list_and_lines_together(api):
-    # Seed a flagged stock item that will be picked up by the flagged source.
+def test__auto_generate__essentials_source__commits_list_and_lines_together(api):
+    # Seed an essential stock item that the essentials source will pick up.
     stock_level_id = requests.get(f"{BASE}/stock-levels").json()["items"][0]["stock_level_id"]
-    name = f"FU-512 flagged {uuid4().hex[:8]}"
+    name = f"FU-512 essential {uuid4().hex[:8]}"
     create = requests.post(f"{BASE}/stock-items", json={
         "name": name,
         "stock_level_id": stock_level_id,
@@ -33,7 +33,7 @@ def test__auto_generate__flagged_source__commits_list_and_lines_together(api):
     try:
         resp = requests.post(AUTO, json={
             "name": f"FU-512 auto {uuid4()}",
-            "sources": {"flagged": True},
+            "sources": {"essentials": True},
         })
         assert resp.status_code == 200, resp.text
         body = resp.json()
@@ -44,7 +44,7 @@ def test__auto_generate__flagged_source__commits_list_and_lines_together(api):
         detail = requests.get(f"{LISTS}/{generated_list_id}")
         assert detail.status_code == 200, detail.text
         assert any(l.get("stock_item_id") == stock_item_id for l in detail.json()["lines"]), \
-            "the flagged stock item should have landed on the generated list"
+            "the essential stock item should have landed on the generated list"
     finally:
         if generated_list_id:
             requests.delete(f"{LISTS}/{generated_list_id}")

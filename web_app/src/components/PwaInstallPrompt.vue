@@ -31,10 +31,8 @@
         caption
         class="dora-text-secondary"
     >
-        Installing needs a secure connection. This Dora is being served over
-        plain <strong>http://</strong>, and no browser offers the install
-        prompt there — put her behind HTTPS (a reverse proxy with a
-        certificate is the usual way) and the button appears.
+        Installing needs HTTPS. This Dora is on plain
+        <strong>http://</strong>.
     </q-item-label>
     <q-item-label v-else caption class="dora-text-secondary">
         Install isn't available in this browser. Try Chrome on Android,
@@ -69,7 +67,7 @@
         } else if (outcome === 'dismissed') {
             $q.notify({
                 type: 'info', position: 'bottom-right',
-                message: 'Install cancelled — open this page again any time to install.',
+                message: 'Install cancelled.',
             });
         }
     }

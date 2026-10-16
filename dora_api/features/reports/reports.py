@@ -16,12 +16,6 @@ Endpoints:
   GET /api/reports/most-bought-items?range=...&limit=10
       Top stock items by archived-list appearances.
 
-  GET /api/reports/keeps-running-out?limit=10
-      Items most often "Out of Stock" at the moment they hit a list.
-
-  GET /api/reports/price-trends?product_ids=<csv>&range=...
-      Per-product unit price series; up to 5 products at once.
-
   GET /api/reports/savings-captured?range=...
       Aggregated picked-vs-RRP savings across archived lists.
 
@@ -33,9 +27,9 @@ Conventions:
 - `range=all` is accepted everywhere a range is and means "no lower bound".
 - **Money endpoints refuse when the install has money off** (R-058, FU-816).
   Every report that answers in dollars — stock value, spend by store, savings,
-  spend by category, year-over-year, price trends — gates on
+  spend by category, year-over-year — gates on
   `money_features_enabled` and returns 403. The count-based reports
-  (most-bought, keeps-running-out, meals-cooked) are ungated, which is why the
+  (most-bought, meals-cooked) are ungated, which is why the
   page survives with money off rather than disappearing from the nav.
 - Prices use the moment-of-pick snapshot pair on ShoppingListLine
   (picked_offer_price, list_price_at_pick) added in migration c6e9f4a82d15.
@@ -45,7 +39,7 @@ Conventions:
   noted in the response so the frontend can render the caveat.
 """
 import logging
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List
 from uuid import UUID
@@ -63,14 +57,13 @@ from dora_api.domain.entities.shopping_list import (SHOPPING_LIST_STATUS_DONE,
                                                     ShoppingListLine)
 from dora_api.domain.entities.cook_event import CookEvent
 from dora_api.domain.entities.recipe import Recipe
-from dora_api.domain.entities.stock_group import StockGroup
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.entities.stock_level import StockLevel
 from dora_api.domain.entities.stock_level_change import StockLevelChange
 from dora_api.domain.entities.stock_item_price_observation import StockItemPriceObservation
+from dora_api.domain.entities.stock_item_waste_event import StockItemWasteEvent
 from dora_api.domain import units
-from dora_api.domain.stock_status import (StockStatus, get_stock_item_unit_cost_at,
-                                          level_for_status)
+from dora_api.domain.stock_status import get_stock_item_unit_cost_at
 from dora_api.features.app_settings.access import money_features_enabled
 from dora_api.features.shopping_lists._line_price import resolve_store_id
 from dora_api.features.stock_items.your_prices import (
@@ -141,6 +134,23 @@ def _range_days(raw: str | None) -> int | None:
     return _RANGE_DAYS.get(token, 30)
 
 
+def _earliest_activity(repository: Repository) -> datetime | None:
+    """The oldest dated record any report on the page reads from."""
+    session = repository.session
+    candidates = [
+        session.execute(select(func.min(column))).scalar()
+        for column in (
+            ShoppingList.created_at,
+            CookEvent.occurred_at,
+            StockLevelChange.changed_at,
+            StockItemWasteEvent.occurred_at,
+            StockItemPriceObservation.observed_at,
+        )
+    ]
+    found = [c for c in candidates if c is not None]
+    return min(found, key=lambda d: d.replace(tzinfo=None)) if found else None
+
+
 @REPORTS_ROUTER.route("/range-window", methods=["GET"])
 def range_window():
     """The dates a range token actually resolves to, plus its length in days.
@@ -162,11 +172,14 @@ def range_window():
     raw = request.args.get("range", "30d")
     since = _parse_range(raw)
     now = datetime.now(timezone.utc)
+    # "All time" starts at the household's earliest record, so the label can
+    # name real dates on every range (owner, 2026-09-27: "just show the dates
+    # it covers always so the UI doesn't shift around"). None only on an
+    # install with no history at all.
+    start = since if since is not None else _earliest_activity(SqlAlchemyRepository())
     return ok({
         "range": raw,
-        # None for "all time" — there is no start date to name, and inventing
-        # the epoch would be worse than saying nothing.
-        "start": since.date().isoformat() if since is not None else None,
+        "start": start.date().isoformat() if start is not None else None,
         "end": now.date().isoformat(),
         # `_range_days` returns None for "all"; the waste report clamps to 365
         # itself and reports the window it actually used, so the client hands it
@@ -678,276 +691,6 @@ def most_bought_items():
     })
 
 
-# ───── 4. Keeps running out ───────────────────────────────────────────────
-
-@dataclass(slots=True)
-class KeepsRunningOutRow:
-    stock_item_id: UUID
-    name: str
-    times_out_when_added: int
-
-
-class KeepsRunningOutHandler:
-    """Stock items most often at 'Out of Stock' at the moment they were
-    added to a list. Walks the StockLevelChange history per item to
-    resolve "what level was this when added_at happened", and tallies the
-    out-of-stock occurrences.
-
-    Lines without an `added_at` (legacy rows from before X5) are skipped
-    rather than guessed.
-
-    `since` bounds which *adds* count (REPORTS_PAGE_REVIEW.md §3.5 / D7). The
-    endpoint used to take no range at all while the card sat directly under a
-    control that said "30 days", so it answered an all-time question under a
-    bounded label. The level *history* is still walked in full — resolving
-    "what level was this on the day it was added" needs the changes before the
-    window, or an item whose last level change predates the range resolves to
-    nothing.
-    """
-
-    def __init__(self, repository: Repository) -> None:
-        self.repository = repository
-
-    def handle(self, limit: int, since: datetime | None = None) -> List[KeepsRunningOutRow]:
-        session = self.repository.session
-
-        out_level = level_for_status(
-            self.repository.get(StockLevel).all(), StockStatus.OUT_OF_STOCK
-        )
-        if out_level is None:
-            return []
-
-        # Every (item, added_at) pair across history. We don't filter by
-        # archived; "added when out" is the signal we want even on lists
-        # the user never finished.
-        add_query = select(
-            ShoppingListLine.stock_item_id,
-            ShoppingListLine.added_at,
-        ).where(ShoppingListLine.added_at.isnot(None))
-        if since is not None:
-            add_query = add_query.where(ShoppingListLine.added_at >= since)
-        add_rows = session.execute(add_query).all()
-        if not add_rows:
-            return []
-
-        # Group by item.
-        adds_by_item: Dict[UUID, list] = {}
-        for stock_item_id, added_at in add_rows:
-            adds_by_item.setdefault(stock_item_id, []).append(added_at)
-
-        # Pull level history for those items, ordered asc.
-        level_rows = session.execute(
-            select(
-                StockLevelChange.stock_item_id,
-                StockLevelChange.changed_at,
-                StockLevelChange.stock_level_id,
-            ).where(StockLevelChange.stock_item_id.in_(list(adds_by_item.keys())))
-            .order_by(StockLevelChange.changed_at.asc())
-        ).all()
-        changes_by_item: Dict[UUID, list] = {}
-        for stock_item_id, changed_at, level_id in level_rows:
-            changes_by_item.setdefault(stock_item_id, []).append((changed_at, level_id))
-
-        # Items' current level, used as the fallback for adds that
-        # predate any change-log entry. `.include(STOCK_LEVEL)` is
-        # load-bearing (FU-527): `stock_level` is lazy="noload", so without
-        # it the `_level_id_as_of` fallback read `item.stock_level` as None
-        # and silently dropped every item with no change-log history from the
-        # keeps-running-out tally.
-        items = self.repository.get(StockItem).include(
-            StockItem.Fields.STOCK_LEVEL
-        ).all(
-            EntityField(StockItem, "id").in_(list(adds_by_item.keys()))
-        )
-        items_by_id = {i.id: i for i in items}
-
-        scores: Dict[UUID, int] = {}
-        for item_id, timestamps in adds_by_item.items():
-            for added_at in timestamps:
-                level_id = _level_id_as_of(
-                    item_id, added_at, changes_by_item, items_by_id
-                )
-                if level_id == out_level.id:
-                    scores[item_id] = scores.get(item_id, 0) + 1
-
-        out_rows: List[KeepsRunningOutRow] = []
-        for item_id, count in scores.items():
-            item = items_by_id.get(item_id)
-            if item is None:
-                continue
-            out_rows.append(KeepsRunningOutRow(
-                stock_item_id=item.id,
-                name=item.name,
-                times_out_when_added=count,
-            ))
-        out_rows.sort(key=lambda r: (-r.times_out_when_added, r.name.lower()))
-        return out_rows[:limit]
-
-
-def _level_id_as_of(
-    item_id: UUID,
-    when: datetime,
-    changes_by_item: Dict[UUID, list],
-    items_by_id: Dict[UUID, StockItem],
-) -> UUID | None:
-    history = changes_by_item.get(item_id, [])
-    last_level_id = None
-    for changed_at, level_id in history:
-        if changed_at and changed_at > when:
-            break
-        last_level_id = level_id
-    if last_level_id is not None:
-        return last_level_id
-    # Fallback: the item's *current* level (best we can do for adds that
-    # happened before the change log started).
-    item = items_by_id.get(item_id)
-    return item.stock_level.id if item and item.stock_level else None
-
-
-@REPORTS_ROUTER.route("/keeps-running-out", methods=["GET"])
-def keeps_running_out():
-    try:
-        _Limit = max(1, min(int(request.args.get("limit", "10")), 50))
-    except (TypeError, ValueError):
-        _Limit = 10
-    # Unlike its siblings this endpoint defaults to **all time**, not 30 days.
-    # The other reports have always been range-bounded; this one never took a
-    # range at all, and the dashboard's restock radar calls it without one. An
-    # omitted param therefore keeps the old meaning, and only a caller that
-    # asks for a window gets one — Reports now does, because its card sits
-    # under the range picker.
-    _Raw = request.args.get("range")
-    _Since = _parse_range(_Raw) if _Raw else None
-    _Rows = KeepsRunningOutHandler(SqlAlchemyRepository()).handle(_Limit, _Since)
-    return ok({
-        "range": _Raw or "all",
-        "rows": [asdict(r) for r in _Rows],
-    })
-
-
-# ───── 5. Price trends ────────────────────────────────────────────────────
-
-@dataclass(slots=True)
-class PricePoint:
-    date: str
-    unit_price: float
-
-
-@dataclass(slots=True)
-class PriceTrendSeries:
-    product_id: UUID
-    name: str
-    store: str
-    points: List[PricePoint] = field(default_factory=list)
-
-
-class PriceTrendsHandler:
-    MAX_PRODUCTS = 5
-
-    def __init__(self, repository: Repository) -> None:
-        self.repository = repository
-
-    def handle(
-        self,
-        product_ids: List[UUID],
-        since: datetime | None,
-    ) -> List[PriceTrendSeries]:
-        if not product_ids:
-            return []
-        product_ids = product_ids[: self.MAX_PRODUCTS]
-        session = self.repository.session
-
-        products = self.repository.get(Product).include(Product.Fields.STORE).all(
-            EntityField(Product, "id").in_(product_ids)
-        )
-        products_by_id = {p.id: p for p in products}
-
-        # Current + historic offers for the requested products.
-        current_rows = session.execute(
-            select(
-                ProductOffer._product_id,  # noqa: SLF001
-                ProductOffer.offered_on,
-                ProductOffer.price_now,
-            ).where(ProductOffer._product_id.in_(product_ids))
-        ).all()
-        historic_rows = session.execute(
-            select(
-                ProductHistoricOffer._product_id,  # noqa: SLF001
-                ProductHistoricOffer.offered_on,
-                ProductHistoricOffer.price_now,
-            ).where(ProductHistoricOffer._product_id.in_(product_ids))
-        ).all()
-
-        points_by_product: Dict[UUID, List[PricePoint]] = {}
-        for pid, offered_on, price_now in list(current_rows) + list(historic_rows):
-            if offered_on is None or price_now is None:
-                continue
-            # FU-813 — `offered_on` is `DateTime(timezone=True)`, but SQLite does
-            # not preserve tzinfo, so it comes back naive while `since` is aware.
-            # Comparing them raised `TypeError` — a 500 on every bounded range,
-            # invisible on Postgres and invisible to the suite, whose only seeded
-            # price-trends test passed `range=all` (the branch where `since` is
-            # None and this comparison never runs). Every sibling handler coerces
-            # first (see `_price_as_of`); this one was missed.
-            offered_on = _as_utc(offered_on)
-            if since is not None and offered_on is not None and offered_on < since:
-                continue
-            points_by_product.setdefault(pid, []).append(
-                PricePoint(date=offered_on.date().isoformat(), unit_price=float(price_now))
-            )
-
-        out: List[PriceTrendSeries] = []
-        for pid in product_ids:
-            product = products_by_id.get(pid)
-            if product is None:
-                continue
-            points = sorted(points_by_product.get(pid, []), key=lambda p: p.date)
-            out.append(PriceTrendSeries(
-                product_id=pid,
-                name=product.name,
-                store=product.store.name if product.store else "Unknown",
-                points=points,
-            ))
-        return out
-
-
-@REPORTS_ROUTER.route("/price-trends", methods=["GET"])
-def price_trends():
-    # Money, not products: a household with no products gets an empty series
-    # (honest, and the card says so), but one that has opted out of money must
-    # not be handed a dollar axis at all.
-    if _money_off():
-        return forbidden(MONEY_DISABLED_DETAIL)
-    raw_ids = request.args.get("product_ids", "")
-    product_ids: List[UUID] = []
-    for chunk in raw_ids.split(","):
-        chunk = chunk.strip()
-        if not chunk:
-            continue
-        try:
-            product_ids.append(UUID(chunk))
-        except ValueError:
-            return bad_request(
-                "Invalid product_ids",
-                detail=f"'{chunk}' is not a UUID.",
-            )
-
-    _Since = _parse_range(request.args.get("range"))
-    _Series = PriceTrendsHandler(SqlAlchemyRepository()).handle(product_ids, _Since)
-    return ok({
-        "range": request.args.get("range", "30d"),
-        "series": [
-            {
-                "product_id": s.product_id,
-                "name": s.name,
-                "store": s.store,
-                "points": [asdict(p) for p in s.points],
-            }
-            for s in _Series
-        ],
-    })
-
-
 # ───── 6. Savings captured ────────────────────────────────────────────────
 
 @dataclass(slots=True)
@@ -961,10 +704,17 @@ class SavingsListBreakdown:
 
 
 class SavingsCapturedHandler:
-    """Aggregate savings = list_price_at_pick − picked_offer_price, per
-    archived list with snapshot data. Lines without the RRP snapshot
-    contribute zero to savings but still count toward picked_total
-    (so the "total spent" matches spend-by-store)."""
+    """Aggregate savings = list_price_at_pick − what the user actually paid,
+    per archived list with snapshot data.
+
+    The paid side was `picked_offer_price` — the chosen offer's price, frozen
+    at finish — until 2026-09-17, when offers stopped setting prices anywhere
+    in the app. It reads `actual_unit_price` now, which means this report says
+    something stronger than it used to: a saving is measured against a price
+    the user typed, not against another number the shop supplied. Lines with no
+    entered price contribute nothing here, exactly as they contribute nothing
+    to spend-by-store. Legacy rows keep their old snapshot and still count,
+    which is why the paid side coalesces rather than switching outright."""
 
     def __init__(self, repository: Repository) -> None:
         self.repository = repository
@@ -986,12 +736,18 @@ class SavingsCapturedHandler:
             select(
                 ShoppingListLine.shopping_list_id,
                 ShoppingListLine.quantity,
-                ShoppingListLine.picked_offer_price,
+                func.coalesce(
+                    ShoppingListLine.actual_unit_price,
+                    ShoppingListLine.picked_offer_price,
+                ),
                 ShoppingListLine.list_price_at_pick,
             ).where(
                 ShoppingListLine.shopping_list_id.in_(list_ids),
                 ShoppingListLine.is_ticked == True,  # noqa: E712
-                ShoppingListLine.picked_offer_price.isnot(None),
+                func.coalesce(
+                    ShoppingListLine.actual_unit_price,
+                    ShoppingListLine.picked_offer_price,
+                ).isnot(None),
             )
         ).all()
 
@@ -1637,7 +1393,7 @@ def spend_year_over_year():
     raw = request.args.get("range", "1y")
     days = _range_days(raw)
     if days is None:
-        return bad_request("range=all is not supported for spend-year-over-year — pick a bounded window.")
+        return bad_request("range=all is not supported for spend-year-over-year. Pick a bounded window.")
     now = datetime.now(timezone.utc)
     current_since = now - timedelta(days=days)
     previous_since = now - timedelta(days=days * 2)

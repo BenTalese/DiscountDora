@@ -325,15 +325,19 @@
             <!-- Two shapes, one data path — the compact branch is the same
                  `filteredProducts` the grid renders (the cookbook's shape). -->
             <div v-else-if="viewMode === 'grid'" key="prod-grid" class="row q-col-gutter-md">
+                <!-- Owner 2026-10-15: two to a row on a phone (one card was the
+                     whole screen). -->
                 <div
                     v-for="product in filteredProducts"
                     :key="product.product_id"
-                    class="col-12 col-sm-6 col-md-4 col-lg-3"
+                    class="col-6 col-md-4 col-lg-3"
                 >
                     <ProductCard
                         :product="product"
                         :bulk-mode="bulkMode"
                         :selected="selectedIds.has(product.product_id)"
+                        :watch-threshold="watchByProduct.get(product.product_id)?.threshold_unit_price ?? null"
+                        @watch-price="openWatch(product)"
                         @toggle-select="toggleSelect(product.product_id)"
                         @open-stock-item="goToStockItem"
                         @link="openLinkDialog(product)"
@@ -345,7 +349,10 @@
                 </div>
             </div>
 
-            <div v-else key="prod-rows" class="column q-gutter-sm">
+            <!-- `no-wrap`: Quasar's `.column` wraps, and in a wrapping column
+                 each row sizes to its content, which pushed a long name's row
+                 past a phone's edge (owner 2026-10-15). -->
+            <div v-else key="prod-rows" class="column no-wrap q-gutter-sm">
                 <ProductRow
                     v-for="product in filteredProducts"
                     :key="product.product_id"
@@ -438,25 +445,15 @@
                             </q-item-label>
                         </q-item-section>
                         <q-item-section side>
-                            <div class="row q-gutter-xs">
-                                <BaseButton
-                                    variant="icon"
-                                    color="primary"
-                                    :icon="ICONS.search"
-                                    aria-label="Find a product"
-                                    @click="searchForOrphan()"
-                                >
-                                    <BaseTooltip>Find a product</BaseTooltip>
-                                </BaseButton>
-                                <BaseButton
-                                    variant="icon"
-                                    :icon="ICONS.open_in_new"
-                                    aria-label="Open stock item"
-                                    @click="goToStockItem(item.stock_item_id)"
-                                >
-                                    <BaseTooltip>Open stock item</BaseTooltip>
-                                </BaseButton>
-                            </div>
+                            <BaseButton
+                                variant="icon"
+                                color="primary"
+                                :icon="ICONS.search"
+                                aria-label="Find a product"
+                                @click="searchForOrphan()"
+                            >
+                                <BaseTooltip>Find a product</BaseTooltip>
+                            </BaseButton>
                         </q-item-section>
                     </q-item>
                 </q-list>
@@ -464,6 +461,13 @@
         </BaseDialog>
 
         <CustomProductDialog v-model="customOpen" @created="loadAll" />
+
+        <ProductPriceWatchDialog
+            v-model="watchOpen"
+            :product="watchTarget"
+            :watch="watchTarget ? (watchByProduct.get(watchTarget.product_id) ?? null) : null"
+            @saved="loadWatches"
+        />
 
         <!-- ── Link-to-stock-item dialog ────────────────────────────────── -->
         <BaseDialog
@@ -517,6 +521,8 @@
     import CustomProductDialog from 'src/components/products/CustomProductDialog.vue';
     import ProductCard from 'src/components/products/ProductCard.vue';
     import ProductRow from 'src/components/products/ProductRow.vue';
+    import ProductPriceWatchDialog from 'src/components/products/ProductPriceWatchDialog.vue';
+    import PriceHistoryApiService, { type PriceAlert } from 'src/services/api/priceHistoryApiService';
     import FadeTransition from 'src/components/transitions/FadeTransition.vue';
     import { useFilterPanelExpanded } from 'src/composables/useFilterPanelExpanded';
     import { useListState } from 'src/composables/useListState';
@@ -578,12 +584,36 @@
                 stockItemStore.ensureLoadedAsync(),
                 stockLevelStore.ensureLoadedAsync(),
                 shoppingListStore.refreshAsync(),
+                loadWatches(),
             ]);
         } catch (err) {
             loadError.value = `Could not load: ${describeApiError(err)}`;
         } finally {
             loading.value = false;
         }
+    }
+
+    // ── Price watches (owner 2026-10-15) ────────────────────────────────
+    // The user's own watches, keyed by product so each card can say whether
+    // it has one. Money-gated on the server like every price surface.
+    const priceHistoryApi = new PriceHistoryApiService();
+    const watches = ref<PriceAlert[]>([]);
+    const watchByProduct = computed(
+        () => new Map(watches.value.map((w) => [w.product_id, w])),
+    );
+    const watchOpen = ref(false);
+    const watchTarget = ref<Product | null>(null);
+    async function loadWatches(): Promise<void> {
+        try {
+            watches.value = (await priceHistoryApi.listAlertsAsync()).items;
+        } catch {
+            // Non-critical: cards just show no watch.
+            watches.value = [];
+        }
+    }
+    function openWatch(product: Product): void {
+        watchTarget.value = product;
+        watchOpen.value = true;
     }
 
     // ── Filters ─────────────────────────────────────────────────────────
@@ -792,7 +822,7 @@
             $q.notify({
                 type: 'info',
                 position: 'bottom-right',
-                message: 'Nothing to add — selected on-deal products need a linked stock item.',
+                message: 'Nothing to add. Those products need a linked stock item.',
             });
             return;
         }
@@ -878,7 +908,7 @@
             $q.notify({
                 type: 'info',
                 position: 'bottom-right',
-                message: 'Nothing to change — none of those are being tracked.',
+                message: 'None of those are being tracked.',
             });
             return;
         }

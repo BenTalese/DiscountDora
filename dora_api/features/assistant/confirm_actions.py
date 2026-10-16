@@ -102,7 +102,7 @@ def _resolve_single_item(name: str) -> dict[str, Any] | StockItem:
         return matches[0]
     return {
         "status": "ambiguous",
-        "summary": f"A few items match \"{name}\" — which one?",
+        "summary": f"A few items match \"{name}\". Which one?",
         "candidates": [_stock_item_candidate(m) for m in matches[:_MAX_CANDIDATES]],
     }
 
@@ -153,7 +153,7 @@ def propose_update_stock_level(args: dict) -> dict[str, Any]:
         return {
             "type": "update_stock_level",
             "status": "invalid",
-            "summary": f"I'm not sure what level to set {item.name} to — try 'out', 'low', 'sufficient', or 'well stocked'.",
+            "summary": f"I'm not sure what level to set {item.name} to. Try 'out', 'low', 'sufficient', or 'well stocked'.",
             "candidates": [],
         }
     previous = item.stock_level.name if item.stock_level else "(unknown)"
@@ -186,12 +186,12 @@ def commit_update_stock_level(payload: dict[str, Any]) -> dict[str, Any]:
         stock_item_id=UUID(payload["stock_item_id"]),
     )
     if response.stock_item_not_found:
-        return {"ok": False, "message": "I lost track of that item — maybe it was deleted."}
+        return {"ok": False, "message": "I lost track of that item. Maybe it was deleted."}
     if response.stock_level_not_found:
         return {"ok": False, "message": "That stock level doesn't exist anymore."}
     return {
         "ok": True,
-        "message": f"Done — {payload['stock_item_name']} is now {payload['new_level_name']}.",
+        "message": f"Done. {payload['stock_item_name']} is now {payload['new_level_name']}.",
     }
 
 
@@ -233,9 +233,9 @@ def commit_mark_opened(payload: dict[str, Any]) -> dict[str, Any]:
         stock_item_id=UUID(payload["stock_item_id"]),
     )
     if response.stock_item_not_found:
-        return {"ok": False, "message": "I lost track of that item — maybe it was deleted."}
+        return {"ok": False, "message": "I lost track of that item. Maybe it was deleted."}
     state = "opened" if payload["is_open"] else "closed"
-    return {"ok": True, "message": f"Done — {payload['stock_item_name']} marked as {state}."}
+    return {"ok": True, "message": f"Done. {payload['stock_item_name']} marked as {state}."}
 
 
 # ── push_expiry ────────────────────────────────────────────────────────
@@ -272,8 +272,8 @@ def propose_push_expiry(args: dict) -> dict[str, Any]:
         return {
             "type": "push_expiry", "status": "invalid",
             "summary": (
-                f"That's more than {_MAX_EXPIRY_PUSH_DAYS // 365} years — "
-                f"give me a sensible number of days."
+                f"That's more than {_MAX_EXPIRY_PUSH_DAYS // 365} years. "
+                f"Give me a sensible number of days."
             ),
             "candidates": [],
         }
@@ -286,7 +286,7 @@ def propose_push_expiry(args: dict) -> dict[str, Any]:
     return {
         "type": "push_expiry",
         "status": "ready",
-        "summary": f"Push {item.name}'s expiry {direction} {delta} — from {base_phrase} to {new_expiry.isoformat()}?",
+        "summary": f"Push {item.name}'s expiry {direction} {delta}, from {base_phrase} to {new_expiry.isoformat()}?",
         "payload": {
             "stock_item_id": str(item.id),
             "stock_item_name": item.name,
@@ -304,7 +304,7 @@ def commit_push_expiry(payload: dict[str, Any]) -> dict[str, Any]:
     )
     if response.stock_item_not_found:
         return {"ok": False, "message": "I lost track of that item."}
-    return {"ok": True, "message": f"Done — {payload['stock_item_name']} now expires {payload['new_expiry']}."}
+    return {"ok": True, "message": f"Done. {payload['stock_item_name']} now expires {payload['new_expiry']}."}
 
 
 # ── tick_shopping_line / untick ───────────────────────────────────────
@@ -326,7 +326,7 @@ def propose_tick_shopping_line(args: dict) -> dict[str, Any]:
     primary = _primary_list(repo)
     if primary is None:
         return {"type": "tick_shopping_line", "status": "invalid",
-                "summary": "You don't have a primary shopping list set yet — set one on the Shopping Lists page.",
+                "summary": "I add to your draft list, and that only works when you have exactly one.",
                 "candidates": []}
 
     # Find lines on the primary list whose stock item name matches.
@@ -358,7 +358,7 @@ def propose_tick_shopping_line(args: dict) -> dict[str, Any]:
         return {
             "type": "tick_shopping_line",
             "status": "ambiguous",
-            "summary": f"A few \"{name}\" entries on your list — which?",
+            "summary": f"A few \"{name}\" entries on your list. Which?",
             "candidates": [
                 {
                     "line_id": str(line.id),
@@ -372,7 +372,7 @@ def propose_tick_shopping_line(args: dict) -> dict[str, Any]:
     item = item_by_id[line.stock_item_id]
     if untick and not line.is_ticked:
         return {"type": "tick_shopping_line", "status": "invalid",
-                "summary": f"{item.name} isn't ticked yet — nothing to untick.",
+                "summary": f"{item.name} isn't ticked yet.",
                 "candidates": []}
     if not untick and line.is_ticked:
         return {"type": "tick_shopping_line", "status": "invalid",
@@ -404,7 +404,7 @@ def commit_tick_shopping_line(payload: dict[str, Any]) -> dict[str, Any]:
     if response.line_not_found:
         return {"ok": False, "message": "That line's not on the list anymore."}
     verb = "ticked" if payload["is_ticked"] else "unticked"
-    return {"ok": True, "message": f"Done — {verb} {payload['stock_item_name']}."}
+    return {"ok": True, "message": f"Done. {verb} {payload['stock_item_name']}."}
 
 
 # ── move_item ──────────────────────────────────────────────────────────
@@ -437,7 +437,7 @@ def propose_move_item(args: dict) -> dict[str, Any]:
         return {
             "type": "move_item",
             "status": "ambiguous",
-            "summary": f"A few locations match \"{dest_name}\" — which one?",
+            "summary": f"A few locations match \"{dest_name}\". Which one?",
             "candidates": [
                 {"location_id": str(l.id), "name": l.name, "kind": l.kind}
                 for l in locations[:_MAX_CANDIDATES]
@@ -473,7 +473,7 @@ def commit_move_item(payload: dict[str, Any]) -> dict[str, Any]:
         return {"ok": False, "message": "I lost track of that item."}
     if response.destination_not_found:
         return {"ok": False, "message": "That destination doesn't exist anymore."}
-    return {"ok": True, "message": f"Done — moved {payload['stock_item_name']} to {payload['destination_name']}."}
+    return {"ok": True, "message": f"Done. Moved {payload['stock_item_name']} to {payload['destination_name']}."}
 
 
 # Chunk 2 removed `set_primary_list` — "primary" is now inferred from DRAFT
@@ -538,14 +538,14 @@ def propose_plan_meal_for_date(args: dict) -> dict[str, Any]:
         return {
             "type": "plan_meal_for_date",
             "status": "ambiguous",
-            "summary": f"A few meals match \"{name}\" — which?",
+            "summary": f"A few meals match \"{name}\". Which?",
             "candidates": [{"recipe_id": str(r.id), "name": r.name} for r in recipes[:_MAX_CANDIDATES]],
         }
     recipe = recipes[0]
     plan = _plan_covering(repo, scheduled)
     if plan is None:
         return {"type": "plan_meal_for_date", "status": "not_found",
-                "summary": "You don't have a meal plan to add to — set one up on the Meal Plans page first.",
+                "summary": "You don't have a meal plan to add to yet.",
                 "candidates": []}
     return {
         "type": "plan_meal_for_date",
@@ -600,7 +600,7 @@ def commit_plan_meal_for_date(payload: dict[str, Any]) -> dict[str, Any]:
         return {"ok": False, "message": "Can't plan a meal in the past."}
     return {
         "ok": True,
-        "message": f"Done — {payload['meal_name']} planned for {payload['slot'].lower()} on {payload['scheduled_for']}.",
+        "message": f"Done. {payload['meal_name']} planned for {payload['slot'].lower()} on {payload['scheduled_for']}.",
     }
 
 
@@ -629,7 +629,7 @@ def propose_add_recipe_to_list(args: dict) -> dict[str, Any]:
         return {
             "type": "add_recipe_to_list",
             "status": "ambiguous",
-            "summary": f"A few recipes match \"{name}\" — which?",
+            "summary": f"A few recipes match \"{name}\". Which?",
             "candidates": [{"recipe_id": str(r.id), "name": r.name} for r in recipes[:_MAX_CANDIDATES]],
         }
     recipe = recipes[0]
@@ -664,7 +664,7 @@ def propose_add_recipe_to_list(args: dict) -> dict[str, Any]:
 
     if not candidates:
         msg = (
-            f"Nothing missing for {recipe.name} — you're cookable right now."
+            f"Nothing missing for {recipe.name}. You can cook it now."
             if missing_only
             else f"{recipe.name} has no tracked ingredients to add."
         )
@@ -720,7 +720,7 @@ def commit_add_recipe_to_list(payload: dict[str, Any]) -> dict[str, Any]:
     detail = ", ".join(bits) if bits else "nothing changed"
     return {
         "ok": added > 0 or already > 0,
-        "message": f"Done — {detail} on {payload['list_name']}.",
+        "message": f"Done. {detail} on {payload['list_name']}.",
     }
 
 
@@ -753,7 +753,7 @@ def propose_cook_recipe(args: dict) -> dict[str, Any]:
         return {
             "type": "cook_recipe",
             "status": "ambiguous",
-            "summary": f"A few recipes match \"{name}\" — which?",
+            "summary": f"A few recipes match \"{name}\". Which?",
             "candidates": [{"recipe_id": str(r.id), "name": r.name} for r in recipes[:_MAX_CANDIDATES]],
         }
     recipe = recipes[0]
@@ -815,7 +815,7 @@ def propose_adjust_recipe_meals(args: dict) -> dict[str, Any]:
     delta = _coerce_signed_int(args.get("delta"))
     if delta is None or delta == 0:
         return {"type": "adjust_recipe_meals", "status": "invalid",
-                "summary": "I need a non-zero delta — e.g. -1 for 'I ate one' or +2 for 'I have two more'.",
+                "summary": "I need a non-zero amount, e.g. -1 for 'I ate one' or +2 for 'I have two more'.",
                 "candidates": []}
 
     repo = SqlAlchemyRepository()
@@ -827,7 +827,7 @@ def propose_adjust_recipe_meals(args: dict) -> dict[str, Any]:
         return {
             "type": "adjust_recipe_meals",
             "status": "ambiguous",
-            "summary": f"A few recipes match \"{name}\" — which?",
+            "summary": f"A few recipes match \"{name}\". Which?",
             "candidates": [{"recipe_id": str(r.id), "name": r.name} for r in recipes[:_MAX_CANDIDATES]],
         }
     recipe = recipes[0]
@@ -897,7 +897,7 @@ def propose_trim_list_to_budget(_args: dict) -> dict[str, Any]:
     if user_id is None:
         return {
             "type": "trim_list_to_budget", "status": "invalid",
-            "summary": "I can't see who's asking — try refreshing.",
+            "summary": "I can't see who's asking. Try refreshing.",
             "candidates": [],
         }
     handler = TrimToBudgetHandler(SqlAlchemyRepository())
@@ -914,8 +914,8 @@ def propose_trim_list_to_budget(_args: dict) -> dict[str, Any]:
         return {
             "type": "trim_list_to_budget", "status": "invalid",
             "summary": (
-                "You haven't set a grocery budget yet — Settings → Money "
-                "is the place to turn it on."
+                "You haven't set a grocery budget yet. Turn it on in "
+                "Settings → Money."
             ),
             "candidates": [],
         }
@@ -924,7 +924,7 @@ def propose_trim_list_to_budget(_args: dict) -> dict[str, Any]:
             "type": "trim_list_to_budget", "status": "invalid",
             "summary": (
                 f"\"{primary.name}\" is already inside your "
-                f"${preview.budget_target:.2f} remaining — nothing to trim."
+                f"${preview.budget_target:.2f} remaining, so nothing to trim."
             ),
             "candidates": [],
         }
@@ -935,7 +935,7 @@ def propose_trim_list_to_budget(_args: dict) -> dict[str, Any]:
             "summary": (
                 f"\"{primary.name}\" is ${preview.overshoot:.2f} over budget "
                 f"but everything on it is either essential or booked for a "
-                f"meal soon — nothing safe to cut."
+                f"meal soon, so nothing is safe to cut."
             ),
             "candidates": [],
         }
@@ -980,13 +980,13 @@ def commit_trim_list_to_budget(payload: dict[str, Any]) -> dict[str, Any]:
     tail = ""
     if result.still_over > 0:
         tail = (
-            f" Still ${result.still_over:.2f} over — I've cut everything "
+            f" Still ${result.still_over:.2f} over. I've cut everything "
             f"that was safe."
         )
     return {
         "ok": True,
         "message": (
-            f"Done — trimmed ${saved:.2f} off "
+            f"Done. Trimmed ${saved:.2f} off "
             f"\"{payload['list_name']}\" ({n} item"
             f"{'' if n == 1 else 's'} moved to Deferred).{tail}"
         ),

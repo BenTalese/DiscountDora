@@ -9,11 +9,11 @@
                     variant="icon"
                     size="sm"
                     :icon="ICONS.remove"
-                    :disable="(line.quantity ?? 0) <= 0"
+                    :disable="(line.quantity ?? 1) <= 1"
                     aria-label="One fewer"
                     @click="emit('adjust-quantity', -1)"
                 />
-                <span class="sl-rcpt__qtyvalue">{{ line.quantity ?? '—' }}</span>
+                <span class="sl-rcpt__qtyvalue">{{ line.quantity ?? '–' }}</span>
                 <BaseButton
                     variant="icon"
                     size="sm"
@@ -114,7 +114,7 @@
      *  typed — on a receipt, the difference between "what it cost" and "what
      *  we think it cost" is the whole point of the document. */
     const lineAmount = computed(() => {
-        if (props.line.estimated_unit_price == null) return '—';
+        if (props.line.estimated_unit_price == null) return '–';
         const prefix = props.line.estimate_source === 'actual' ? '' : '~';
         return `${prefix}${formatMoney(priceOfLine(props.line))}`;
     });
@@ -136,8 +136,15 @@
         const parts: string[] = [];
         const store = props.line.purchased_store_name ?? props.line.resolved_store_name;
         if (store) parts.push(store);
+        // FU-805 — this said "estimated, no price entered" on a line that was
+        // showing a price, which reads as a contradiction: the figure is right
+        // there. The honest statement is where the figure came from, and the
+        // server already names that rung of the ladder. The `~` on the amount
+        // is the same claim in one character.
         if (props.line.estimate_source !== 'actual' && props.line.estimated_unit_price != null) {
-            parts.push('estimated, no price entered');
+            parts.push(props.line.prefill_source_label
+                ? `estimated ${props.line.prefill_source_label}`
+                : 'estimated');
         }
         return parts;
     });
@@ -153,6 +160,20 @@
         --sl-rcpt-lead: 2.25rem;
         align-items: end;
         padding-block: var(--space-2);
+    }
+    /* No divider. The shared skeleton gives every row an inset rule, which is
+       right for the two faces that are lists of things you act on — but this
+       face already ties a name to its amount with a dotted leader, and a
+       document that uses *both* reads as neither: a ruled table with stray
+       dots in it. The leader is the device; the rule goes (2026-09-17).
+
+       What separates two lines on a docket is space, so the rows get a little
+       more of it in exchange. */
+    .sl-rcpt + .sl-rcpt::before {
+        content: none;
+    }
+    .sl-rcpt + .sl-rcpt {
+        padding-top: var(--space-3);
     }
     .sl-rcpt--amending {
         --sl-rcpt-lead: 104px;
@@ -209,9 +230,13 @@
         font-variant-numeric: tabular-nums;
     }
 
+    /* Hangs directly under the name rather than a caption's default 2px
+       below it — on a document the store is part of the same entry, not a
+       second line of its own. */
     .sl-rcpt__caption {
         grid-column: 2 / 4;
         grid-row: 2;
+        margin-top: 0;
     }
     .sl-rcpt__unit {
         grid-column: 4;
@@ -229,10 +254,19 @@
         }
         /* The unit price is the one number a phone receipt can lose: the line
            amount above it is the figure being read, and "each" is derivable
-           from the multiplier. The shared skeleton already hides
-           `.sl-row__amountnote` here — this keeps the row at two tracks. */
+           from the multiplier. Stated here as of 2026-09-17 — it used to ride
+           on a blanket `.sl-row__amountnote { display: none }` in the shared
+           sheet, which was really the plan row's problem and left with it. */
+        .sl-rcpt__unit {
+            display: none;
+        }
         .sl-rcpt__caption {
             grid-column: 2 / -1;
+        }
+        /* The amount is the only thing in this track and the leader pays for
+           the gap, so it never needs more room than the figure. */
+        .sl-rcpt__money {
+            max-width: 5.5rem;
         }
     }
 </style>

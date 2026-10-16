@@ -80,7 +80,6 @@ export function useFeatureFlags() {
         // opt-in only), so there's nothing for the server to publish.
         money: computed(() => readFlag('money')),
         nutrition: computed(() => readFlag('nutrition')),
-        dealsEmail: computed(() => readFlag('deals_email')),
         // true when DORA_SMTP_USERNAME is set on the backend.
         // Consumed by NotificationsSettings (the settings screen that owns
         // the per-user email opt-in — R-029 carve-out; the disabled toggle

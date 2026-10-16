@@ -103,10 +103,7 @@ export type CardId =
 //                        every remaining card in this batch.
 //
 //   `reconcile_pending`  Reconcile past meals   — a bare button card. Meal
-//                        reconciliation is now the `plan_adherence` component
-//                        of Kitchen health, and *that* row is the link to go and
-//                        do it: a metric that explains why you'd bother, instead
-//                        of a nag that doesn't.
+//                        reconciliation lives on the meal-plans header nudge.
 
 export type CardGate = 'money' | 'products';
 

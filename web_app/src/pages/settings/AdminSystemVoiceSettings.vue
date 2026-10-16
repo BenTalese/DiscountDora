@@ -2,7 +2,7 @@
     <div class="settings-page">
         <SettingsPageHeader
             title="Voice (Piper TTS)"
-            description="Where the server finds Piper — the offline engine that gives Dora a natural spoken voice in chat and cook mode. Shipped desktop and Docker builds fill these in automatically; you only need to touch this page on a source install, or to point at a custom binary or voice folder."
+            description="Where the server finds Piper, the offline engine behind Dora's voice. Desktop and Docker builds set this automatically."
             :icon="ICONS.record_voice_over"
         />
 
@@ -14,25 +14,21 @@
             <SettingsSection>
                 <template #title>How Dora's voice works</template>
                 <template #description>
-                    Two layers, set in two places — this page is only the first.
+                    The engine is set here. Each person picks their voice in
+                    their own Voice settings.
                 </template>
 
                 <ul class="voice-intro">
                     <li>
                         <strong>The engine (here).</strong> Piper is a small,
                         offline neural text-to-speech that runs on the server's
-                        CPU — no cloud calls. The settings below tell the server
-                        where the Piper program and its voice models live. If
-                        Piper can't be found, Dora falls back to the browser's
-                        built-in voice, so she's never silent.
+                        CPU. If Piper can't be found, Dora uses the browser's
+                        built-in voice.
                     </li>
                     <li>
-                        <strong>The voice (elsewhere).</strong> Which voice each
-                        person hears — and the download of extra voices — lives
-                        on the per-user
+                        <strong>The voice.</strong> Picked per person on
                         <router-link to="/settings/voice">Voice
-                        settings</router-link> page, not here. This page is
-                        install-wide plumbing; that page is personal choice.
+                        settings</router-link>.
                     </li>
                 </ul>
             </SettingsSection>
@@ -42,9 +38,7 @@
                 <template #description>
                     The path to the <code>piper</code> executable on the server.
                     Leave blank to search the system <code>PATH</code> (which
-                    works after <code>pip install piper-tts</code>). Desktop and
-                    Docker builds ship Piper and set this for you — leave it
-                    blank there.
+                    works after <code>pip install piper-tts</code>).
                 </template>
 
                 <SettingsRow label="Executable path" stacked>
@@ -61,10 +55,7 @@
                 <template #title>Voice models folder</template>
                 <template #description>
                     The folder holding the pre-shipped <code>.onnx</code> voice
-                    files. Blank is normal — the server already knows where the
-                    bundled voices live (next to the app, or inside a desktop /
-                    Docker build). Only set this to point at a custom folder of
-                    voices you've placed yourself.
+                    files. Leave blank unless you use a custom folder.
                 </template>
 
                 <SettingsRow label="Bundled voice folder" stacked>

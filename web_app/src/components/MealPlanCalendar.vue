@@ -383,7 +383,7 @@
         consumed: 'all cooked',
     };
     function dayTitle(cell: CalCell): string {
-        return `${formatDate(cell.iso)} — ${STATUS_LABEL[cell.status]}`;
+        return `${formatDate(cell.iso)}: ${STATUS_LABEL[cell.status]}`;
     }
 
     /** §5 — hover NAMES the meals rather than reporting a status word. This is
@@ -399,14 +399,14 @@
      * counts are what a month view is for; the day itself is one click away.
      */
     function dayTooltip(iso: string, entries: MealPlanEntry[]): string {
-        if (!entries.length) return `${formatDate(iso)} — no meals planned`;
+        if (!entries.length) return `${formatDate(iso)}: no meals planned`;
         const meals = `${entries.length} meal${entries.length === 1 ? '' : 's'}`;
         const parts = [meals];
         const toCook = entries.filter((e) => !e.consumed_at && e.needs_cooking).length;
         if (toCook > 0) parts.push(`${toCook} to cook`);
         const cooked = entries.filter((e) => e.consumed_at).length;
         if (cooked > 0) parts.push(`${cooked} cooked`);
-        return `${formatDate(iso)} — ${parts.join(' · ')}`;
+        return `${formatDate(iso)}: ${parts.join(' · ')}`;
     }
 </script>
 

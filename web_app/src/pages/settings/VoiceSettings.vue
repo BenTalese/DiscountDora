@@ -68,22 +68,15 @@
             <SettingsNotice v-if="!voiceOutputAvailable" title="Nothing here can speak">
                 Your browser reports no installed text-to-speech voices, and
                 Dora's own neural voice isn't installed on this server either,
-                so there is no engine left to read her replies. Installing the
-                neural voice server-side fixes it for every browser — see
-                "Dora's voice" below.
+                so nothing can read her replies. See "Dora's voice" below.
             </SettingsNotice>
             <SettingsNotice
                 v-else-if="!browserVoiceUsable"
                 tone="info"
                 title="Using Dora's neural voice"
             >
-                Your browser has no text-to-speech voices installed, so the
-                device voice is unavailable here — Dora uses her own neural
-                voice instead, which sounds the same in every browser. This is
-                the usual state on Firefox (it only speaks through voices the
-                operating system gives it — SAPI on Windows,
-                <code>speech-dispatcher</code> on Linux, nothing at all on
-                Android) and on some hardened or minimal Linux setups.
+                Your browser has no text-to-speech voices installed, so Dora
+                uses her own neural voice.
             </SettingsNotice>
         </SettingsSection>
 

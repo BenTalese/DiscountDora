@@ -109,7 +109,7 @@ export function useRecipeDisplay(recipe: () => Recipe): RecipeDisplay {
     const costTooltip = computed(() => {
         const r = recipe();
         return `Based on ${r.estimated_cost_priced_count} of `
-            + `${r.estimated_cost_total_count} ingredients — the rest aren't priced yet.`;
+            + `${r.estimated_cost_total_count} ingredients. The rest aren't priced yet.`;
     });
 
     const metaLine = computed(() => {

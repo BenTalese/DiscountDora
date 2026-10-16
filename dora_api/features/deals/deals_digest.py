@@ -91,10 +91,10 @@ class DealsDigest:
 
 def format_money(amount: float | None, currency: str) -> str:
     """Two decimal places, prefixed with the install's currency symbol or its
-    ISO code. `None` renders as an em dash rather than "0.00" — a missing
+    ISO code. `None` renders as a dash rather than "0.00" — a missing
     price is not a free product."""
     if amount is None:
-        return "—"
+        return "–"
     symbol = _CURRENCY_SYMBOLS.get((currency or "").upper())
     if symbol:
         return f"{symbol}{amount:.2f}"

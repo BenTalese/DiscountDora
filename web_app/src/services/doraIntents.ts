@@ -100,7 +100,10 @@ export type ShoppingListSnapshot = {
     id: string;
     name: string;
     itemCount: number;
-    isPrimary: boolean;
+    /** The draft a quick-add would land on. Inferred from draft count on the
+     *  server, not a flag the user sets — the settable "primary list" was
+     *  dropped in P6-01. */
+    isQuickAddTarget: boolean;
 };
 
 export type MealPlanSnapshot = {
@@ -151,7 +154,7 @@ const PAGE_HELP: { match: (path: string) => boolean; summary: string; mood: Dora
     {
         match: (p) => p === '/' || p === '',
         summary:
-            "You're on the dashboard — pantry health, the next meals up, the bits that need a poke. Click any card to dive in.",
+            "You're on the dashboard: pantry health, the next meals up, the bits that need a poke.",
         mood: 'happy',
     },
     {
@@ -181,13 +184,13 @@ const PAGE_HELP: { match: (path: string) => boolean; summary: string; mood: Dora
     {
         match: (p) => p === '/meal-plans',
         summary:
-            "Plan the week ahead. Drag a recipe onto a day — past days lock themselves and drain the recipe's available-meals pool. The 'needs cooking' banner tells you when you're short.",
+            "Plan the week ahead. Drag a recipe onto a day.",
         mood: 'happy',
     },
     {
         match: (p) => p === '/shopping-lists',
         summary:
-            "Your shopping lists. Set one as primary so I know where to drop new additions, then add items from the pantry, recipes, or just by typing.",
+            "Your shopping lists. Add items from the pantry, from recipes, or just by typing.",
         mood: 'happy',
     },
     {
@@ -199,13 +202,13 @@ const PAGE_HELP: { match: (path: string) => boolean; summary: string; mood: Dora
     {
         match: (p) => p === '/help/dora',
         summary:
-            "My very own help page! Modes, intents, AI tools, faces, tips — basically my entire deal. Brag-y of me.",
+            "My very own help page! Modes, AI tools, faces and tips. Basically my entire deal.",
         mood: 'super_excited',
     },
     {
         match: (p) => p === '/help',
         summary:
-            "You're already here! Guides by area, the full changelog, and me — at your service. Mostly.",
+            "You're already here! Guides by area, the full changelog, and me.",
         mood: 'excited',
     },
 ];
@@ -264,7 +267,7 @@ const JOKES = [
 ];
 
 const COMPLIMENT_REPLIES = [
-    "Aww — you're the best! That made my little burger heart flip.",
+    "Aww, you're the best! That made my little burger heart flip.",
     "Eeeee thank you! I'm going to think about that for the rest of the day.",
     "You're too kind! Filing that under 'reasons to keep tracking your milk'.",
     "Stoppppp 🥹 (I love it actually, please continue).",
@@ -288,7 +291,7 @@ const INSULT_REPLIES = [
 // rather than pointing at the issue tracker — a generic "didn't understand"
 // isn't a bug report (the report_issue intent handles real ones).
 const FALLBACK_REPLIES = [
-    "Didn't quite catch that one. Try a quick action below, or rephrase — I'm a burger, not a mind reader. (Yet.)",
+    "Didn't quite catch that one. Try a quick action below, or rephrase. I'm a burger, not a mind reader.",
     "Hmm, drawing a blank on that one. Could be I'm having a moment, or it's a feature I haven't learned yet. Try rephrasing and I'll have another crack.",
     "Not sure what you're after there. The quick actions below might point you the right way, or open Help.",
     "I tried to parse that and got a Blue Screen Of Burger. Could you rephrase?",
@@ -492,10 +495,10 @@ function tryConvert(text: string): string | null {
         const result = crossConvert(qty, from, to, ingredient);
         if (result === null) {
             if (from.dimension !== to.dimension && !ingredient) {
-                return `Need an ingredient to bridge ${fromRaw} and ${toRaw} — try "how many ${toRaw} in a ${fromRaw} of flour".`;
+                return `I need an ingredient to go from ${fromRaw} to ${toRaw}. Try "how many ${toRaw} in a ${fromRaw} of flour".`;
             }
             if (from.dimension !== to.dimension && ingredient) {
-                return `I don't have a density for "${ingredient}" — try a common bakers' staple (flour, sugar, butter, rice, oats, chocolate chips…).`;
+                return `I don't have a density for "${ingredient}". Try a baking staple like flour, sugar, butter, rice or oats.`;
             }
             return null;
         }
@@ -519,10 +522,10 @@ function tryConvert(text: string): string | null {
     // Gas mark special-case: lookup table both directions.
     if (isGasMark(fromTok)) {
         const c = gasMarkToC(valueStr!);
-        if (c === null) return `Gas mark ${valueStr} isn't on the scale — try 1/4, 1/2, or 1–9.`;
+        if (c === null) return `Gas mark ${valueStr} isn't on the scale. Try 1/4, 1/2, or 1 to 9.`;
         const to = findUnit(toTok);
         if (!to || to.dimension !== 'temperature') {
-            return `Gas marks convert to temperature — try °C or °F.`;
+            return `Gas marks convert to temperature. Try °C or °F.`;
         }
         const result = to.fromBase(c);
         return `Gas mark ${valueStr} ≈ ${Math.round(result)} ${toTok}.`;
@@ -540,7 +543,7 @@ function tryConvert(text: string): string | null {
     const to = findUnit(toTok) ?? findUnit(toTok.replace(/s$/, ''));
     if (!from || !to) return null;
     if (from.dimension !== to.dimension) {
-        return `Those don't quite match up — ${fromRaw} is ${from.dimension}, ${toRaw} is ${to.dimension}. Apples and oranges. Or grams and millilitres.`;
+        return `Those don't match up: ${fromRaw} is ${from.dimension}, ${toRaw} is ${to.dimension}.`;
     }
     const result = to.fromBase(from.toBase(value));
     const rounded = formatResult(result);
@@ -964,7 +967,7 @@ export async function runIntent(
         case 'whats_new': {
             const versionInfo = context.fetchVersion ? await context.fetchVersion() : null;
             const updateBit = versionInfo?.updateAvailable
-                ? ` There's also a newer version (${versionInfo.latest}) on offer — release notes are a click away.`
+                ? ` There's also a newer version (${versionInfo.latest}) available.`
                 : '';
             return {
                 text: `You're on Dashy Dora ${versionInfo?.current ?? 'an unknown version'}. The Help page has the full changelog; recent highlights include the assistant (that's me, the burger), the locations heatmap, and per-user preferences.${updateBit}`,
@@ -1029,7 +1032,7 @@ export async function runIntent(
 
         case 'guides': {
             return {
-                text: "The guides live on Help — by area (stock, locations, recipes, shopping, admin). Want me to take you?",
+                text: "The guides are on the Help page. Want me to take you?",
                 mood: 'searching',
                 navigateTo: { path: '/help', label: 'Open the guides' },
             };
@@ -1037,7 +1040,7 @@ export async function runIntent(
 
         case 'stuck': {
             return {
-                text: "No drama — being lost is just the first step of finding things. Tell me what you're trying to do in plain English (\"add a stock item\", \"plan dinner\"), or head to the guides for the whole shebang.",
+                text: "No drama. Tell me what you're trying to do (\"add a stock item\", \"plan dinner\"), or head to the guides.",
                 mood: 'happy',
                 navigateTo: { path: '/help', label: 'Take me to the guides' },
                 suggestions: ['show_around', 'how_do_i'],
@@ -1046,7 +1049,7 @@ export async function runIntent(
 
         case 'how_do_i': {
             return {
-                text: "Tell me what you're trying to do (plain English works — \"add a stock item\", \"plan dinner\", \"reset a password\") and I'll point at the right page. Or browse the guides.",
+                text: "Tell me what you're trying to do (\"add a stock item\", \"plan dinner\") and I'll point at the right page.",
                 mood: 'searching',
                 navigateTo: { path: '/help', label: 'Browse guides by area' },
             };
@@ -1100,7 +1103,7 @@ export async function runIntent(
             const stock = context.getStock?.() ?? [];
             if (stock.length === 0) {
                 return {
-                    text: "Pantry's empty — or hasn't loaded yet. Add some stock items to give me something to fuss over.",
+                    text: "Pantry's empty, or hasn't loaded yet.",
                     mood: 'confused',
                     navigateTo: { path: '/stock', label: 'Open Stock' },
                 };
@@ -1150,7 +1153,7 @@ export async function runIntent(
                     mood: 'super_excited',
                 };
             }
-            const summary = expiring.slice(0, 6).map((x) => `• ${x.s.name} — ${expiryPhrase(x.s.expiryDate)}`).join('\n');
+            const summary = expiring.slice(0, 6).map((x) => `• ${x.s.name}: ${expiryPhrase(x.s.expiryDate)}`).join('\n');
             const worst = expiring[0]!.d!;
             return {
                 text: `${expiring.length} item${expiring.length === 1 ? '' : 's'} expiring soon:\n\n${summary}${expiring.length > 6 ? `\n\n…and ${expiring.length - 6} more.` : ''}`,
@@ -1179,12 +1182,12 @@ export async function runIntent(
                 return {
                     text: item.locationName
                         ? `${item.name} lives in ${item.locationName}.`
-                        : `${item.name} doesn't have a location set yet — it's a free-range item.`,
+                        : `${item.name} doesn't have a location set yet.`,
                     mood: 'confident',
                     navigateTo: { path: `/stock/${item.id}`, label: 'Open item' },
                 };
             }
-            const lines = matches.slice(0, 5).map((m) => `• ${m.name}${m.locationName ? ` — ${m.locationName}` : ' — (no location)'}`).join('\n');
+            const lines = matches.slice(0, 5).map((m) => `• ${m.name}${m.locationName ? `: ${m.locationName}` : ' (no location)'}`).join('\n');
             return {
                 text: `A few "${query}" candidates:\n\n${lines}${matches.length > 5 ? `\n\n…and ${matches.length - 5} more.` : ''}`,
                 mood: 'searching',
@@ -1236,7 +1239,7 @@ export async function runIntent(
             const queryDisplay = tokens.join(' + ');
             if (matches.length === 0) {
                 return {
-                    text: `No recipe matching ${queryDisplay}. Could be one to add — or try a broader term.`,
+                    text: `No recipe matching ${queryDisplay}. Try a broader term.`,
                     mood: 'confused',
                     navigateTo: { path: '/cookbook', label: 'Browse cookbook' },
                 };
@@ -1244,7 +1247,7 @@ export async function runIntent(
             if (matches.length === 1) {
                 const r = matches[0]!;
                 return {
-                    text: `Got one: ${r.name}${r.cookTimeMinutes ? ` — ${r.cookTimeMinutes} min cook` : ''}${r.cuisine ? ` · ${r.cuisine}` : ''}.`,
+                    text: `Got one: ${r.name}${r.cookTimeMinutes ? `, ${r.cookTimeMinutes} min cook` : ''}${r.cuisine ? ` · ${r.cuisine}` : ''}.`,
                     mood: 'confident',
                     navigateTo: { path: `/cookbook/${r.id}`, label: 'Open recipe' },
                 };
@@ -1280,12 +1283,12 @@ export async function runIntent(
             const top = scored.slice(0, 3);
             const lines = top.map((x) =>
                 x.ready
-                    ? `• ${x.r.name} — you've got everything 👨‍🍳`
-                    : `• ${x.r.name} — ${x.have}/${x.total} ingredients in`,
+                    ? `• ${x.r.name}: you've got everything`
+                    : `• ${x.r.name}: ${x.have}/${x.total} ingredients in`,
             ).join('\n');
             const allReady = top.every((x) => x.ready);
             return {
-                text: `Here's the shortlist:\n\n${lines}\n\n${allReady ? "Pick one and I'll have a small party." : "Nothing's quite there — closest one wins, or check what's missing."}`,
+                text: `Here's the shortlist:\n\n${lines}\n\n${allReady ? "Pick one and I'll have a small party." : "Nothing's quite there. The closest one is first."}`,
                 mood: allReady ? 'super_excited' : 'lightbulb',
                 navigateTo: { path: '/cookbook', label: 'Open Cookbook' },
                 suggestions: ['expiring', 'shopping_list_status'],
@@ -1301,10 +1304,10 @@ export async function runIntent(
                     navigateTo: { path: '/shopping-lists', label: 'Open Shopping Lists' },
                 };
             }
-            const primary = lists.find((l) => l.isPrimary) ?? lists[0]!;
+            const target = lists.find((l) => l.isQuickAddTarget) ?? lists[0]!;
             const total = lists.reduce((sum, l) => sum + l.itemCount, 0);
             return {
-                text: `${lists.length} list${lists.length === 1 ? '' : 's'} on the go, ${total} item${total === 1 ? '' : 's'} total. Primary is "${primary.name}" with ${primary.itemCount}.`,
+                text: `${lists.length} list${lists.length === 1 ? '' : 's'} on the go, ${total} item${total === 1 ? '' : 's'} total. New adds land on "${target.name}", which has ${target.itemCount}.`,
                 mood: total === 0 ? 'cute' : 'searching',
                 navigateTo: { path: '/shopping-lists', label: 'Open Shopping Lists' },
                 suggestions: ['low_stock', 'expiring'],
@@ -1318,7 +1321,7 @@ export async function runIntent(
             // mutation can't live in this pure handler). If we're reached,
             // the message carried no parseable item.
             return {
-                text: "Sure — what should I add? Try \"add milk\" or \"add eggs and bread\".",
+                text: "Sure, what should I add? Try \"add milk\" or \"add eggs and bread\".",
                 mood: 'searching',
                 suggestions: ['shopping_list_status', 'low_stock'],
             };
@@ -1346,7 +1349,7 @@ export async function runIntent(
             const result = rawText ? tryConvert(rawText) : null;
             if (!result) {
                 return {
-                    text: "Couldn't parse that as a conversion. Try something like \"200g to oz\" or \"1 cup to ml\" — I do volume, mass, and temperature.",
+                    text: "Couldn't parse that as a conversion. Try something like \"200g to oz\" or \"1 cup to ml\".",
                     mood: 'confused',
                 };
             }
@@ -1361,7 +1364,7 @@ export async function runIntent(
             if (!result) {
                 return {
                     text: query
-                        ? `I don't have a stock substitute for "${query}" off the top of my head — try the AI mode if it's on, or search a recipe site. Sorry, friend.`
+                        ? `I don't have a stock substitute for "${query}" off the top of my head. Try AI mode if it's on.`
                         : "Substitute for what? Name the missing ingredient and I'll suggest swaps.",
                     mood: 'sad',
                 };
@@ -1380,10 +1383,10 @@ export async function runIntent(
             });
             if (href) {
                 const introsWithChannel = [
-                    "Oh no — sorry about that. Jot down what you did and what you expected, then hit the button below to send it in.",
+                    "Oh no, sorry about that. Jot down what you did and what you expected, then send it in below.",
                     "Bugs! My one weakness (other than soggy buns). Note the steps + what you expected and file it below.",
                     "Appreciate the heads-up. Capture the details so they don't get lost, then use the button to report it properly.",
-                    "Noted! Steps to reproduce + what you expected = chef's kiss — pop them in a report below.",
+                    "Noted! Steps to reproduce and what you expected, in a report below.",
                 ];
                 return {
                     text: pick(introsWithChannel),
@@ -1395,10 +1398,10 @@ export async function runIntent(
             // Dormant install — no channel configured. Acknowledge and point at
             // Help; no external link to offer.
             const intros = [
-                "Oh no — sorry about that. Hit Help for the guides; if it's a real bug, jot down what happened so it can be looked at properly.",
+                "Oh no, sorry about that. If it's a real bug, jot down what happened.",
                 "Bugs! My one weakness (other than soggy buns). Note the steps + what you expected and pass it on to whoever's running this Dora instance.",
                 "Appreciate the heads-up. Help has the troubleshooting guides; for anything that smells like a real defect, capture the details so they don't get lost.",
-                "Noted! Steps to reproduce + what you expected = chef's kiss — write them down and they'll get the attention they deserve.",
+                "Noted! Write down the steps to reproduce and what you expected.",
             ];
             return {
                 text: pick(intros),

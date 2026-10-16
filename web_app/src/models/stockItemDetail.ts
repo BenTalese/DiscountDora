@@ -74,7 +74,6 @@ export type WasteEvent = {
 
 export type ListAddEvent = {
     added_at: string; // ISO datetime
-    added_via: string;
     shopping_list_id: string;
     shopping_list_name: string;
 };
@@ -157,6 +156,10 @@ export type PriceEntryPrefill = {
     store_name: string | null;
     /** Short human chip ("from your last log" / "from your last receipt"). */
     source_label: string;
+    /** When that observation was made. The label says where the number came
+     *  from; this says when, which is what tells you whether to confirm it or
+     *  re-check it. */
+    observed_at: string;
 };
 
 // server-derived baseline + signal (R-003). The widget
@@ -212,8 +215,7 @@ export type StockItemDetail = {
      *  out (the common case). */
     waste_events?: WasteEvent[];
     /** C-1b.5 / INV-7 — past shopping-list adds for this item (any list
-     *  status), newest first, capped on the server. The History tab
-     *  humanises `added_via` ("auto: low stock" / "auto: recipe" / …). */
+     *  status), newest first, capped on the server. */
     recent_list_adds?: ListAddEvent[];
     /** 2026-06-30 — three new history-tab feeds: what you actually bought,
      *  which cooked recipes consumed this ingredient, and every expiry

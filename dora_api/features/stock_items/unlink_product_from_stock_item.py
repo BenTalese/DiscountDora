@@ -1,7 +1,10 @@
 import logging
 from dataclasses import dataclass
+from typing import List
 from uuid import UUID
 
+from dora_api.domain.entities.shopping_list import ShoppingListLine
+from dora_api.domain.entities.shopping_list_template import ShoppingListTemplateLine
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.features.routers import STOCK_ITEM_ROUTER
 from dora_api.infrastructure.api_response import no_content, not_found
@@ -37,6 +40,34 @@ class UnlinkProductFromStockItemHandler:
             return UnlinkProductResponse(link_not_found = True)
 
         _StockItem.products.remove(_Match)
+
+        # Any live shopping-list line pointing at this product as its chosen
+        # offer is now pointing at something that is no longer on the menu, so
+        # the selection is cleared here — at the moment the fact changes.
+        #
+        # This is what "Refresh deals" used to do, on demand, from a toolbar
+        # button (removed 2026-09-17). Two things were wrong with that: the
+        # button's name promised fresh prices it never fetched, and a user had
+        # to know to press it. The detail read has always resolved each line's
+        # offer from the *currently linked* products and fallen back to the
+        # cheapest, so the list was never actually showing a dead deal — the
+        # stale column was invisible bookkeeping. Cleaning it at the source
+        # means it also can't come back to life if the same product is linked
+        # again later, which the button could not have prevented either.
+        _Lines: List[ShoppingListLine] = self.repository.get(ShoppingListLine).all(
+            EntityField(ShoppingListLine, "selected_product_id").eq(product_id)
+            & EntityField(ShoppingListLine, "stock_item_id").eq(stock_item_id)
+        )
+        for line in _Lines:
+            line.selected_product_id = None
+        # Template lines carry the same choice, and the same rule holds.
+        _TemplateLines: List[ShoppingListTemplateLine] = self.repository.get(ShoppingListTemplateLine).all(
+            EntityField(ShoppingListTemplateLine, ShoppingListTemplateLine.Fields.SELECTED_PRODUCT_ID).eq(product_id)
+            & EntityField(ShoppingListTemplateLine, ShoppingListTemplateLine.Fields.STOCK_ITEM_ID).eq(stock_item_id)
+        )
+        for template_line in _TemplateLines:
+            template_line.selected_product_id = None
+
         self.repository.save_changes()
         return UnlinkProductResponse()
 

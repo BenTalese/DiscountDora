@@ -74,8 +74,7 @@
                         <div class="text-body2 dora-text-secondary">
                             I keep your pantry, shopping and cooking in one
                             place so the weekly shop stops feeling like
-                            detective work. Let's get you set up — takes
-                            about a minute.
+                            detective work. Setup takes about a minute.
                         </div>
                     </div>
                 </q-card-section>
@@ -121,7 +120,7 @@
                     <div class="text-h6 q-mb-sm">You're the admin</div>
                     <div class="text-body2 dora-text-secondary q-mb-md">
                         First user on a fresh install gets the admin role
-                        automatically — so all the global settings (stores,
+                        automatically, so all the global settings (stores,
                         stock levels, user management) are unlocked for you
                         out of the gate. There's nothing to change here, but
                         a couple of pointers:
@@ -300,14 +299,14 @@ Toilet paper, Toiletries, Bathroom"
                                 <div class="text-caption dora-text-muted">
                                     <template v-if="pasteRowsParsed.length > 0">
                                         {{ pasteRowsParsed.length }} row{{ pasteRowsParsed.length === 1 ? '' : 's' }}
-                                        ready — added on Finish.
+                                        ready, added on Finish.
                                     </template>
                                     <template v-else-if="pasteRowsText.trim().length > 0">
                                         Every row needs at least a name.
                                     </template>
                                     <template v-else>
                                         Group + location are optional. Unknown names create
-                                        an item without a group/location — you can fix it later.
+                                        an item without a group or location.
                                     </template>
                                 </div>
                                 <BaseButton
@@ -350,8 +349,7 @@ Toilet paper, Toiletries, Bathroom"
                                     three pantry items it needs) and schedules
                                     it for dinner this week, so the cookbook +
                                     planner aren't empty on first open.
-                                    Everything's plain — rename or delete it
-                                    like any other entry.
+                                    Rename or delete it like any other entry.
                                 </div>
                             </div>
                             <q-checkbox v-model="form.seedDemo" @click.stop />
@@ -424,8 +422,8 @@ Toilet paper, Toiletries, Bathroom"
                 <q-card-section>
                     <div class="text-h6 q-mb-sm">Add your first stock item</div>
                     <div class="text-body2 dora-text-secondary q-mb-md">
-                        Pick something obvious — a staple you always have on
-                        hand. You can add the rest in batches later.
+                        Pick a staple you always have on hand. You can add the
+                        rest later.
                     </div>
                     <q-form @submit.prevent="onAddFirstItem" class="q-gutter-md">
                         <q-input
@@ -482,7 +480,7 @@ Toilet paper, Toiletries, Bathroom"
                         class="rounded-borders q-mt-md"
                     >
                         <q-item-label header class="q-pb-xs">
-                            Added ({{ draftItems.length }}) — saved when you finish
+                            Added ({{ draftItems.length }}), saved when you finish
                         </q-item-label>
                         <q-item v-for="(item, idx) in draftItems" :key="idx">
                             <q-item-section>
@@ -681,7 +679,7 @@ Toilet paper, Toiletries, Bathroom"
     });
 
     // ── Finish flow-cards (C-5.6) — persona-relevant key areas, each a
-    // jump-in + a link to the help guides (FU-015: Alerts → /alerts). Copy
+    // jump-in + a link to the help guides. Copy
     // kept factual; the sell-copy honesty pass is FU-184.
     const flowCards = computed(() => {
         const cards: {
@@ -693,7 +691,7 @@ Toilet paper, Toiletries, Bathroom"
             help?: string;
         }[] = [
             { path: '/stock', shortTitle: 'Stock', title: 'Your pantry',
-              description: 'Everything you keep, with levels, locations and expiry — your home base.',
+              description: 'Everything you keep, with levels, locations and expiry.',
               icon: ICONS.inventory_2, help: '/help' },
             { path: '/cookbook', shortTitle: 'Recipes', title: 'Cookbook & cook mode',
               description: 'See what you can cook from what’s in, then cook it step by step.',
@@ -704,9 +702,6 @@ Toilet paper, Toiletries, Bathroom"
             { path: '/shopping-lists', shortTitle: 'Shopping', title: 'Shopping lists',
               description: 'Auto-built from what’s low or out; finish a shop and your stock refills.',
               icon: ICONS.shopping_cart, help: '/help' },
-            { path: '/alerts', shortTitle: 'Alerts', title: 'Alerts',
-              description: 'The bell flags what’s expiring, low or out — with one-tap actions.',
-              icon: ICONS.notifications_active, help: '/help' },
         ];
         // Show everything — price history is available whenever the user turns
         // on spend tracking in Settings (FU-210: no onboarding flag gating).
@@ -717,7 +712,7 @@ Toilet paper, Toiletries, Bathroom"
         });
         cards.push({
             path: '/settings/voice', shortTitle: 'voice', title: "Pick Dora's voice",
-            description: "Dora has a natural neural voice for chat replies and cook-mode steps — pick a voice (or stick with the browser default) and download a sample.",
+            description: "Pick a voice for Dora's chat replies and cook mode.",
             icon: ICONS.record_voice_over,
         });
         cards.push({
@@ -1125,7 +1120,7 @@ Toilet paper, Toiletries, Bathroom"
         $q.notify({
             type: 'positive',
             position: 'bottom-right',
-            message: `Queued ${n} row${n === 1 ? '' : 's'} — saved when you finish.`,
+            message: `Queued ${n} row${n === 1 ? '' : 's'}, saved when you finish.`,
         });
     }
 
@@ -1248,7 +1243,7 @@ Toilet paper, Toiletries, Bathroom"
         $q.notify({
             type: 'positive',
             position: 'bottom-right',
-            message: 'Added — saved when you finish.',
+            message: 'Added. Saved when you finish.',
         });
     }
 

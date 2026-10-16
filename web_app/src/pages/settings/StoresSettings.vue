@@ -256,7 +256,7 @@
         $q.dialog({
             title: `Delete ${store.name}?`,
             message:
-                "Stock items and shopping-list lines that referenced this store will keep working — their reference is just cleared. Products linked to this store would be orphaned and the delete will be rejected.",
+                "Stock items and shopping-list lines using this store will have it cleared. A store with linked products can't be deleted.",
             cancel: { noCaps: true },
             ok: { label: 'Delete', color: 'negative', noCaps: true, flat: true },
         }).onOk(() => {

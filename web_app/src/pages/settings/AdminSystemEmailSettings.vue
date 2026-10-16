@@ -2,7 +2,7 @@
     <div class="settings-page">
         <SettingsPageHeader
             title="Email"
-            description="Whether this install sends email at all, how it connects to a mail server, and what Dora sends."
+            description="Whether this install sends email, and how it connects to a mail server."
             :icon="ICONS.mark_email_read"
         />
 
@@ -19,9 +19,7 @@
             <SettingsSection>
                 <template #title>Email subsystem</template>
                 <template #description>
-                    Turn this off if the install should never send email. When
-                    off, the alerts digest, verification and reset flows fall
-                    back to logging the link server-side.
+                    Turn this off if the install should never send email.
                 </template>
 
                 <SettingsRow label="Email enabled">
@@ -32,20 +30,27 @@
                 </SettingsRow>
             </SettingsSection>
 
-            <SettingsSection>
-                <template #title>Setting up Gmail</template>
-                <template #description>
-                    Google no longer accepts your regular login here — you
-                    need an <strong>App Password</strong> (16 characters)
+            <!-- Owner 2026-10-15: a one-off how-to, collapsed so it stops
+                 standing between the toggle and the SMTP fields. -->
+            <CollapsibleCard header-toggles reveals="Gmail steps" class="gmail-card">
+                <template #header>
+                    <div class="gmail-card__title">
+                        <q-icon :name="ICONS.google" size="18px" />
+                        <span>Setting up Gmail</span>
+                    </div>
+                </template>
+
+                <p class="gmail-note">
+                    Gmail needs an <strong>App Password</strong> (16 characters)
                     tied to 2-Step Verification. Once you have one, fill in
                     the SMTP fields below.
-                </template>
+                </p>
 
                 <ol class="gmail-steps">
                     <li>
                         Turn on <strong>2-Step Verification</strong> on your
                         Google Account (Security → 2-Step Verification).
-                        Required — App Passwords can't be created without it.
+                        App Passwords need it.
                     </li>
                     <li>
                         Open the App Passwords page, create one named
@@ -73,8 +78,8 @@
                     you've pasted your account password instead of the App
                     Password. Free Gmail caps at ~500 recipients/day; fine
                     for a personal self-host, not a public multi-user
-                    install — for that, use a transactional provider
-                    (Postmark, Resend, SES).
+                    install. For that, use a provider like Postmark, Resend or
+                    SES.
                 </p>
 
                 <div class="gmail-cta">
@@ -86,15 +91,12 @@
                         target="_blank"
                     />
                 </div>
-            </SettingsSection>
+            </CollapsibleCard>
 
             <SettingsSection>
                 <template #title>SMTP</template>
                 <template #description>
-                    Reached via TLS when the toggle below is on. Username
-                    identifies the mailbox transactional emails are sent from;
-                    leave blank to keep the sender in dry-run mode (links
-                    logged, no real send).
+                    The mail server Dora sends through.
                 </template>
 
                 <SettingsRow label="Host" stacked>
@@ -153,7 +155,7 @@
                     :label="passwordConfigured ? 'Password (change)' : 'Password'"
                     :help="passwordConfigured
                         ? 'A password is stored. Enter a new one to replace it, or use Clear to remove.'
-                        : 'Encrypted at rest with DORA_SECRET_ENCRYPTION_KEY. Leave blank to keep the sender in dry-run mode.'"
+                        : 'Encrypted at rest with DORA_SECRET_ENCRYPTION_KEY.'"
                     stacked
                 >
                     <div class="row items-center q-gutter-sm">
@@ -191,10 +193,7 @@
                 <template #title>Links in emails</template>
                 <template #description>
                     Dora needs to know its own address to write links into
-                    verification and password-reset emails. Leave it blank and
-                    Dora uses the address the request came in on, which is right
-                    for most self-hosts — set it when Dora sits behind a proxy
-                    or the mail should point somewhere else.
+                    verification and password-reset emails.
                 </template>
 
                 <SettingsRow label="Public URL" stacked>
@@ -209,33 +208,6 @@
                 </SettingsRow>
             </SettingsSection>
 
-            <!-- Owner 2026-09-03 — the weekly deals mail used to be a row on
-                 the Features page, which read as though all of Dora's email
-                 hung off it. It doesn't: `email_enabled` above is the email
-                 subsystem, this is one scheduled mail. It lives here so the two
-                 are visibly separate, and its InfoTip names the *other*
-                 dependency — no ingested product data, no deals to send. -->
-            <SettingsSection>
-                <template #title>Weekly deals email</template>
-
-                <SettingsRow inline>
-                    <template #label>
-                        Send the weekly deals email
-                        <InfoTip label="Weekly deals email">
-                            A per-user weekly summary of what's on special and
-                            what's running low. It draws entirely on ingested
-                            product data, so with product data ingestion off (or
-                            no products yet) there is nothing to send. Each
-                            person subscribes themselves under
-                            Settings &rarr; Notifications.
-                        </InfoTip>
-                    </template>
-                    <q-toggle
-                        v-model="draft.deals_email_enabled"
-                        @update:model-value="() => onSaveField('deals_email_enabled')"
-                    />
-                </SettingsRow>
-            </SettingsSection>
         </template>
     </div>
 </template>
@@ -253,12 +225,11 @@
     import SettingsRow from 'src/components/settings/SettingsRow.vue';
     import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
     import EncryptionKeyBanner from 'src/components/settings/EncryptionKeyBanner.vue';
-    import InfoTip from 'src/components/help/InfoTip.vue';
-    import { useFeatureFlags } from 'src/composables/useFeatureFlags';
+    import CollapsibleCard from 'src/components/CollapsibleCard.vue';
 
     type EmailField = 'email_enabled' | 'smtp_host' | 'smtp_port'
         | 'smtp_username' | 'smtp_from' | 'smtp_use_tls'
-        | 'deals_email_enabled' | 'public_url';
+        | 'public_url';
 
     const $q = useQuasar();
     const { isAdmin } = storeToRefs(useAuthStore());
@@ -273,15 +244,9 @@
         smtp_username: '',
         smtp_from: '',
         smtp_use_tls: true,
-        deals_email_enabled: false,
         public_url: '',
     });
     const draft = reactive({ ...saved });
-
-    // `deals_email` is published as a health flag, so a flip has to invalidate
-    // the cached `/api/health` answer or every consumer keeps the old value
-    // until a reload.
-    const { refresh: featureFlags$refresh } = useFeatureFlags();
 
     const publicUrlHasError = computed(() => {
         const value = (draft.public_url ?? '').trim();
@@ -313,7 +278,6 @@
             const result = await api.updateAsync({ [field]: value });
             (saved as Record<EmailField, unknown>)[field] = result[field];
             resetDrafts();
-            if (field === 'deals_email_enabled') await featureFlags$refresh();
             $q.notify({
                 type: 'positive', position: 'bottom-right',
                 message: 'Email settings saved.',
@@ -360,7 +324,6 @@
         saved.smtp_username = s.smtp_username;
         saved.smtp_from = s.smtp_from;
         saved.smtp_use_tls = s.smtp_use_tls;
-        saved.deals_email_enabled = s.deals_email_enabled;
         saved.public_url = s.public_url;
         passwordConfigured.value = s.smtp_password_configured;
         resetDrafts();
@@ -416,4 +379,18 @@
         color: var(--text-primary);
     }
     .gmail-cta { display: flex; }
+    .gmail-card {
+        margin-bottom: var(--space-4);
+        :deep(.collapsible-card__body) {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-3);
+        }
+    }
+    .gmail-card__title {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+        font-weight: 600;
+    }
 </style>

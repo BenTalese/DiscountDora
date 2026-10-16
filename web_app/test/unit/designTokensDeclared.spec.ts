@@ -39,7 +39,9 @@ const CSS_DIR = join(SRC, 'css');
  *   • `--dora-base-font-size` — written by `themeService.ts:412` for the
  *     user's font-size preference (and referenced with a `16px` fallback).
  */
-const RUNTIME_DECLARED = [/^--q-/, /^--dora-base-font-size$/];
+// `--vv-inset-*` are the on-screen keyboard's overlap, measured from
+// `visualViewport` by `boot/keyboardInset.ts` — a runtime fact, never a token.
+const RUNTIME_DECLARED = [/^--q-/, /^--dora-base-font-size$/, /^--vv-inset-(top|bottom)$/];
 
 /**
  * Pre-existing undeclared tokens, enumerated so this suite can be **green and

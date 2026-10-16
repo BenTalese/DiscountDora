@@ -286,7 +286,8 @@ def test__get_waste_insights__RepeatOffender__RankedByEventCount(api):
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert set(body.keys()) == {
-        "window_days", "total_events", "by_reason", "most_wasted", "most_recent",
+        "window_days", "total_events", "by_reason", "most_wasted",
+        "most_wasted_by_reason", "most_recent",
     }
     # Per-reason counts: every canonical reason key is present (zero-filled
     # so the client can render a fixed reason grid without gaps).
@@ -307,6 +308,29 @@ def test__get_waste_insights__RepeatOffender__RankedByEventCount(api):
     assert ranked.index(repeat["stock_item_id"]) < ranked.index(once["stock_item_id"])
     # most_recent is newest-first and ungrouped.
     assert body["most_recent"][0]["event_id"] == newest
+
+
+def test__get_waste_insights__ByReason__RanksOnlyThatReasonsEvents(api):
+    token = _token()
+    levels = _levels_by_sequence()
+    item = make_stock_item(stock_level_id=levels[0], name=f"{token} spinach")
+    _log_event(item["stock_item_id"], "spoiled")
+    _log_event(item["stock_item_id"], "spoiled")
+    _log_event(item["stock_item_id"], "expired")
+
+    body = requests.get(INSIGHTS).json()
+
+    by_reason = body["most_wasted_by_reason"]
+    assert set(by_reason.keys()) == {
+        "expired", "spoiled", "did_not_like", "overbought", "other",
+    }
+    spoiled = {b["stock_item_id"]: b for b in by_reason["spoiled"]}
+    expired = {b["stock_item_id"]: b for b in by_reason["expired"]}
+    assert spoiled[item["stock_item_id"]]["event_count"] == 2
+    assert expired[item["stock_item_id"]]["event_count"] == 1
+    assert item["stock_item_id"] not in {
+        b["stock_item_id"] for b in by_reason["did_not_like"]
+    }
 
 
 def test__get_waste_insights__WindowOutOfRange__Clamped(api):

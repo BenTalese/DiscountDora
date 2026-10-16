@@ -7,6 +7,7 @@ live together in one file. Endpoints:
   GET    /api/shopping-list-templates/<id>        — full detail with lines
   POST   /api/shopping-list-templates             — create (optionally with lines)
   PATCH  /api/shopping-list-templates/<id>        — rename
+  PATCH  /api/shopping-list-templates/<id>/lines/<line_id> (quantity, offer, preferred buy)
   DELETE /api/shopping-list-templates/<id>
   POST   /api/shopping-list-templates/<id>/lines  — add a line
   DELETE /api/shopping-list-templates/<id>/lines/<line_id>
@@ -21,6 +22,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from dora_api.domain.entities.preferred_buy import PreferredBuy
+from dora_api.domain.entities.product import Product
 from dora_api.domain.entities.shopping_list import (ShoppingList,
                                                     ShoppingListLine)
 from dora_api.domain.entities.shopping_list_template import (
@@ -28,6 +31,10 @@ from dora_api.domain.entities.shopping_list_template import (
 )
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.features.routers import SHOPPING_LIST_TEMPLATE_ROUTER
+from dora_api.features.shopping_lists._line_defaults import apply_line_defaults
+from dora_api.features.shopping_lists.get_shopping_list_detail import (
+    LinePreferredBuyDto, LineProductOfferDto, build_line_offers,
+)
 from dora_api.infrastructure.api_response import (business_rule_violation,
                                                   created, no_content,
                                                   not_found, ok)
@@ -47,6 +54,11 @@ class TemplateLineDto:
     stock_item_name: str
     quantity: int | None
     sequence: int
+    selected_product_id: UUID | None
+    preferred_buy_id: UUID | None
+    # The same choices the list row's picker offers (`ShoppingListLineDto`).
+    offers: List[LineProductOfferDto] = field(default_factory=list)
+    preferred_buys: List[LinePreferredBuyDto] = field(default_factory=list)
 
 
 @dataclass(frozen=True, slots=True)
@@ -120,15 +132,24 @@ class GetTemplateDetailHandler:
         )
         lines.sort(key=lambda l: (l.sequence, l.id))
 
-        # Resolve stock item names in one batch so we don't N+1.
+        # Resolve stock items, their offers and preferred buys in one batch
+        # each so we don't N+1.
         stock_item_ids = list({l.stock_item_id for l in lines})
         items: dict[UUID, StockItem] = {}
+        preferred_buys: dict[UUID, List[PreferredBuy]] = {}
         if stock_item_ids:
             items = {
-                i.id: i for i in self.repository.get(StockItem).all(
-                    EntityField(StockItem, "id").in_(stock_item_ids)
-                )
+                i.id: i for i in self.repository.get(StockItem)
+                .include("products")
+                    .then_include("store")
+                .include("products")
+                    .then_include("current_offer")
+                .all(EntityField(StockItem, "id").in_(stock_item_ids))
             }
+            for pb in self.repository.get(PreferredBuy).all(
+                EntityField(PreferredBuy, PreferredBuy.Fields.STOCK_ITEM_ID).in_(stock_item_ids)
+            ):
+                preferred_buys.setdefault(pb.stock_item_id, []).append(pb)
 
         line_dtos = [
             TemplateLineDto(
@@ -138,6 +159,16 @@ class GetTemplateDetailHandler:
                     if l.stock_item_id in items else "(missing item)",
                 quantity = l.quantity,
                 sequence = l.sequence,
+                selected_product_id = l.selected_product_id,
+                preferred_buy_id = l.preferred_buy_id,
+                offers = build_line_offers(items.get(l.stock_item_id), l.selected_product_id),
+                preferred_buys = sorted(
+                    (
+                        LinePreferredBuyDto(preferred_buy_id = pb.id, label = pb.label)
+                        for pb in preferred_buys.get(l.stock_item_id, [])
+                    ),
+                    key=lambda d: d.label.lower(),
+                ),
             )
             for l in lines
         ]
@@ -393,16 +424,20 @@ def delete_template_line(template_id: UUID, line_id: UUID):
     return no_content()
 
 
-# ───── Update template line (quantity) ───────────────────────────────────
+# ───── Update template line (quantity, offer, preferred buy) ─────────────
 
 class UpdateTemplateLineRequest(BaseModel):
+    """Omitted fields are left alone; an explicit null clears."""
     model_config = ConfigDict(extra="forbid")
     quantity: int | None = Field(default=None, ge=0)
+    selected_product_id: UUID | None = None
+    preferred_buy_id: UUID | None = None
 
 
 @dataclass(slots=True)
 class UpdateTemplateLineResponse:
     not_found: bool = False
+    invalid_choice: str | None = None
 
 
 class UpdateTemplateLineHandler:
@@ -418,8 +453,28 @@ class UpdateTemplateLineHandler:
         line: ShoppingListTemplateLine | None = self.repository.get(ShoppingListTemplateLine).by_id(line_id)
         if line is None or line.template_id != template_id:
             return UpdateTemplateLineResponse(not_found=True)
-        if "quantity" in request.model_fields_set:
+        set_fields = request.model_fields_set
+        if "quantity" in set_fields:
             line.quantity = request.quantity
+        if "selected_product_id" in set_fields:
+            if request.selected_product_id is not None:
+                item: StockItem | None = self.repository.get(StockItem).include("products").by_id(
+                    line.stock_item_id
+                )
+                linked = {str(p.id) for p in (item.products if item else None) or []}
+                if str(request.selected_product_id) not in linked:
+                    return UpdateTemplateLineResponse(
+                        invalid_choice="That product isn't linked to this item.",
+                    )
+            line.selected_product_id = request.selected_product_id
+        if "preferred_buy_id" in set_fields:
+            if request.preferred_buy_id is not None:
+                pb: PreferredBuy | None = self.repository.get(PreferredBuy).by_id(request.preferred_buy_id)
+                if pb is None or str(pb.stock_item_id) != str(line.stock_item_id):
+                    return UpdateTemplateLineResponse(
+                        invalid_choice="That preferred buy isn't one of this item's.",
+                    )
+            line.preferred_buy_id = request.preferred_buy_id
 
         # Bump the template's updated_at so summaries sort sensibly.
         template: ShoppingListTemplate | None = self.repository.get(ShoppingListTemplate).by_id(template_id)
@@ -439,6 +494,8 @@ def update_template_line(template_id: UUID, line_id: UUID):
     )
     if _Response.not_found:
         return not_found("ShoppingListTemplateLine", line_id)
+    if _Response.invalid_choice:
+        return business_rule_violation(_Response.invalid_choice)
     _Logger.debug(f"Updated template line {line_id} on template {template_id}")
     return no_content()
 
@@ -462,9 +519,12 @@ class InstantiateTemplateHandler:
     """Creates a new ShoppingList from the template's lines.
 
     Stock items that have since been deleted are silently skipped (we'd
-    otherwise blow up creating a line pointing at a missing FK). Selected
-    products are intentionally not carried — see the template entity
-    docstring for the reasoning.
+    otherwise blow up creating a line pointing at a missing FK). A line's
+    picked offer and preferred buy carry over while they still apply to the
+    item: the offer's product is still linked, the preferred buy still
+    exists. A carried offer also sets the line's planned store, as picking
+    one on the list does. Anything left unset gets the usual new-line
+    defaults (`apply_line_defaults`).
     """
 
     def __init__(self, repository: Repository) -> None:
@@ -486,25 +546,49 @@ class InstantiateTemplateHandler:
         )
         template_lines.sort(key=lambda l: l.sequence)
 
-        # Bulk-check which stock items still exist so we skip orphans.
-        existing_ids: set[UUID] = set()
+        # Bulk-load the stock items (skipping orphans) with their linked
+        # products, and the live preferred buys, so the carried choices can be
+        # checked without a query per line.
+        items: dict[UUID, StockItem] = {}
+        live_preferred_buys: set[UUID] = set()
         if template_lines:
-            existing = self.repository.get(StockItem).all(
-                EntityField(StockItem, "id").in_([l.stock_item_id for l in template_lines])
-            )
-            existing_ids = {i.id for i in existing}
+            item_ids = [l.stock_item_id for l in template_lines]
+            items = {
+                i.id: i for i in self.repository.get(StockItem)
+                .include("products")
+                    .then_include("store")
+                .all(EntityField(StockItem, "id").in_(item_ids))
+            }
+            live_preferred_buys = {
+                pb.id for pb in self.repository.get(PreferredBuy).all(
+                    EntityField(PreferredBuy, PreferredBuy.Fields.STOCK_ITEM_ID).in_(item_ids)
+                )
+            }
 
-        added = 0
-        for idx, tl in enumerate(template_lines):
-            if tl.stock_item_id not in existing_ids:
+        new_lines: List[ShoppingListLine] = []
+        for tl in template_lines:
+            item = items.get(tl.stock_item_id)
+            if item is None:
                 continue
-            self.repository.add(ShoppingListLine(
+            offer: Product | None = next(
+                (p for p in item.products or [] if p.id == tl.selected_product_id), None,
+            )
+            new_lines.append(ShoppingListLine(
                 shopping_list_id = new_list.id,
                 stock_item_id = tl.stock_item_id,
                 quantity = tl.quantity,
-                sequence = idx,
+                sequence = len(new_lines),
+                selected_product_id = offer.id if offer else None,
+                planned_store_id = offer.store.id if offer else None,
+                preferred_buy_id = (
+                    tl.preferred_buy_id if tl.preferred_buy_id in live_preferred_buys else None
+                ),
+                added_at = now,
             ))
-            added += 1
+        apply_line_defaults(self.repository, new_lines)
+        for line in new_lines:
+            self.repository.add(line)
+        added = len(new_lines)
         # FU-512 unit-of-work: single commit. `new_list` still persists even
         # when every template line points at a deleted stock item (added==0).
         self.repository.save_changes()
@@ -580,6 +664,8 @@ class SnapshotFromListHandler:
                 stock_item_id = sl.stock_item_id,
                 quantity = sl.quantity if sl.quantity is not None else 1,
                 sequence = idx,
+                selected_product_id = sl.selected_product_id,
+                preferred_buy_id = sl.preferred_buy_id,
             ))
             added += 1
         # FU-512 unit-of-work: single commit.

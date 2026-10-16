@@ -77,7 +77,7 @@
                         :name="ICONS.chef_hat"
                         size="22px"
                         class="rich-card__status"
-                        :class="status.supply === 'ok' ? 'text-positive' : 'text-warning'"
+                        :class="statusToneClass(status.supply)"
                     >
                         <BaseTooltip>{{ supplyTooltip(entry) }}</BaseTooltip>
                     </q-icon>
@@ -86,7 +86,7 @@
                         :name="ICONS.mealsPrepared"
                         size="22px"
                         class="rich-card__status"
-                        :class="status.readiness === 'ok' ? 'text-positive' : 'text-warning'"
+                        :class="statusToneClass(status.readiness)"
                     >
                         <BaseTooltip>{{ readinessTooltip(entry, !!shortfall) }}</BaseTooltip>
                     </q-icon>
@@ -126,7 +126,7 @@
     import { recipeImageUrl } from 'src/services/api/recipeApiService';
     import { formatMoney } from 'src/composables/useMoney';
     import {
-        mealCardStatus, readinessTooltip, supplyTooltip,
+        mealCardStatus, readinessTooltip, statusToneClass, supplyTooltip,
     } from 'src/helpers/mealPlanEntryStatus';
     import { useBatchEnabled } from 'src/composables/useBatchEnabled';
     import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
@@ -163,7 +163,7 @@
         const names = (props.entry.inference_stock_item_names ?? []).join(', ');
         return props.entry.inference_hint === 'at_risk'
             ? `Dora thinks you may have run out of ${names} since you planned this.`
-            : `Recorded as missing ${names}, but Dora thinks you're back in stock — this may be cookable after all.`;
+            : `Recorded as missing ${names}, but Dora thinks you're back in stock.`;
     });
 
     // PROPOSAL_MEAL_PLANS_PART_2 — linked cook batch (Batch households only).

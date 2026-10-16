@@ -2,7 +2,7 @@
     <div class="settings-page">
         <SettingsPageHeader
             title="Nutrition"
-            description="How much nutrition detail Dora tracks. This is install-wide — one setting for the whole household, not per person."
+            description="How much nutrition detail Dora tracks, for the whole household."
             :icon="ICONS.monitor_heart"
         />
 
@@ -28,8 +28,8 @@
                 v-if="mode === 'complex' && !anyAvailable"
                 class="settings-page__note dora-text-muted"
             >
-                Complex is on, but nothing can answer a lookup yet — download a
-                food dataset below, or allow Open Food Facts.
+                Complex is on, but there's no food source yet. Download a
+                dataset below, or allow Open Food Facts.
             </div>
             <!-- Deliberately a *separate* condition from the one above. Open
                  Food Facts alone satisfies "something can answer a lookup", so
@@ -41,9 +41,8 @@
                 v-else-if="mode === 'complex' && !hasLocalDataset"
                 class="settings-page__note dora-text-muted"
             >
-                Manual search works, but Dora can't <em>suggest</em> foods yet —
-                auto-matching only reads a downloaded dataset, never the web.
-                Install one below to switch suggestions on.
+                Manual search works, but Dora can't <em>suggest</em> foods until
+                a dataset is downloaded below.
             </div>
         </SettingsSection>
 
@@ -53,20 +52,16 @@
             <SettingsSection>
                 <template #title>Food datasets</template>
                 <template #description>
-                    Downloaded once and searched offline. USDA data is public
-                    domain, so it stays on your server with no strings attached.
-                    Best for generic ingredients — "banana", "flour" — which is
-                    what recipes actually name.
+                    Downloaded once and searched offline. Best for generic
+                    ingredients like "banana" and "flour".
                     <br /><br />
                     <!-- Stated here because this is the only screen that can
                          fix it: auto-matching reads the local catalogue and
                          nothing else, so without a dataset it silently suggests
                          nothing and reads as broken. -->
                     <strong>Auto-matching and suggestions need this.</strong>
-                    Dora can only suggest a food for a stock item by matching its
-                    name against data held here — she never calls out to the
-                    internet for that, because it runs across the whole pantry at
-                    once. Until a dataset is installed,
+                    Dora suggests foods by matching names against data held here.
+                    Until a dataset is installed,
                     <router-link
                         to="/settings/kitchen-setup/nutrition-matching"
                         class="settings-page__link"
@@ -128,10 +123,7 @@
                 <template #description>
                     An at-a-glance verdict on a recipe, using one of the
                     front-of-pack schemes you'd see on a package. Pick whichever
-                    you actually recognise — both work anywhere, and neither is
-                    on unless you choose it. Needs complex nutrition: a rating is
-                    worked out from the foods your ingredients are linked to, so
-                    there's nothing to score without them.
+                    you recognise. Needs complex nutrition.
                 </template>
 
                 <SettingsRow
@@ -186,7 +178,7 @@
 
                 <SettingsRow
                     label="Open Food Facts"
-                    help="Looks up packaged products by barcode. Needs no key, but does reach the internet — turn it off on an offline install."
+                    help="Looks up packaged products by barcode over the internet."
                 >
                     <q-toggle
                         :model-value="offLookupEnabled"
@@ -311,14 +303,14 @@
                 // "0.0 MB of 3.7 MB" reads worse than the plain verb.
                 if (done <= 0) return 'Downloading…';
                 return total > 0
-                    ? `Downloading — ${formatMb(done)} of ${formatMb(total)}`
-                    : `Downloading — ${formatMb(done)} so far`;
+                    ? `Downloading ${formatMb(done)} of ${formatMb(total)}`
+                    : `Downloading, ${formatMb(done)} so far`;
             }
             case 'parsing': {
                 const rows = source.rows_done ?? 0;
                 // No total to offer; the count alone is what proves it's moving.
                 return rows > 0
-                    ? `Reading the data — ${rows.toLocaleString()} rows`
+                    ? `Reading the data, ${rows.toLocaleString()} rows`
                     : 'Reading the data…';
             }
             case 'saving': {

@@ -52,7 +52,7 @@ export function useBuyVerdictActions() {
             Notify.create({
                 type: 'negative',
                 position: 'bottom-right',
-                message: "Couldn't find the most-stocked band — check Settings → Stock levels.",
+                message: "Couldn't find the most-stocked level. Check Settings → Stock levels.",
                 timeout: 4000,
             });
             return false;

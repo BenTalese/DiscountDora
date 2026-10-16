@@ -79,6 +79,11 @@ class MealPlanEntryDto:
     # entry when the household's cook-style is "fresh" (the pool doesn't exist,
     # so nothing can be short of it).
     needs_cooking: bool = False
+    # Owner 2026-10-15 (affogato): a leftovers day of a batch whose cook is
+    # still uncovered. The leftovers day itself never needs cooking, but it
+    # must not claim a cooked serving is waiting either: nothing is made until
+    # the cook day happens. Only ever true on a non-cook day of a batch.
+    cook_batch_pending: bool = False
     # Owner 2026-09-04 — *"I batch cook and freeze lunches for the week, but
     # dinner with the parents on Saturday is fresh."* This meal is cooked on
     # its day and stands outside the cooked-portion pool, so it is never
@@ -689,9 +694,26 @@ class GetMealPlansHandler:
             # `_apply_cook_batch_view`, so it is the reading that knows better.
             return entry.cook_batch_id is None or entry.is_cook_day
 
+        # The batches whose cook is still owed: every leftovers day of one is
+        # waiting on it rather than sitting on a ready portion.
+        pending_batches = {
+            entry.cook_batch_id
+            for plan in plans
+            for entry in plan.entries
+            if entry.cook_batch_id is not None and verdict(entry)
+        }
+
         return [
             dataclasses.replace(plan, entries=[
-                dataclasses.replace(entry, needs_cooking=verdict(entry))
+                dataclasses.replace(
+                    entry,
+                    needs_cooking=verdict(entry),
+                    cook_batch_pending=(
+                        entry.cook_batch_id in pending_batches
+                        and not entry.is_cook_day
+                        and entry.consumed_at is None
+                    ),
+                )
                 for entry in plan.entries
             ])
             for plan in plans

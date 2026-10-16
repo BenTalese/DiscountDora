@@ -62,7 +62,7 @@ export function useRecipeExport() {
                 ? {
                     type: 'negative',
                     position: 'bottom-right',
-                    message: 'Your browser blocked the print tab — allow pop-ups for Dora and try again.',
+                    message: 'Your browser blocked the print tab. Allow pop-ups for Dora and try again.',
                 }
                 : {
                     type: 'negative',

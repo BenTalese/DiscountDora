@@ -89,7 +89,7 @@
                     ingredient{{ unlinkedRows.length === 1 ? " isn't" : "s aren't" }}
                     linked to your pantry, so
                     {{ unlinkedRows.length === 1 ? 'it' : 'they' }}
-                    can't go on a list — add
+                    can't go on a list. Add
                     {{ unlinkedRows.length === 1 ? 'it' : 'them' }}
                     by hand, or link
                     {{ unlinkedRows.length === 1 ? 'it' : 'them' }}

@@ -1465,8 +1465,8 @@
     );
     const scanActionCaption = computed(() =>
         scanAction.value.kind === 'open'
-            ? 'Each scan opens that item — the scanner then closes.'
-            : 'Keep scanning — each item is set to this level.',
+            ? 'Scan an item to open it.'
+            : 'Each item you scan is set to this level.',
     );
 
     function isCurrentScanAction(action: ScanAction): boolean {
@@ -1511,7 +1511,7 @@
             });
             overlay?.pushResult(outcome.message, 'good');
         } catch {
-            overlay?.pushResult('Lookup failed — try again.', 'bad');
+            overlay?.pushResult('Lookup failed. Try again.', 'bad');
         }
     }
 

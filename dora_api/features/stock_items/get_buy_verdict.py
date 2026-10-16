@@ -65,6 +65,9 @@ from dora_api.features.stock_items._level_access import resolve_levels_by_item
 from dora_api.features.stock_items.pantry_belief import (
     PantryBelief, gather_beliefs_for_items,
 )
+from dora_api.features.stock_items.planned_demand import (
+    URGENCY_BLOCKING, URGENCY_WATCH, PlannedDemand, gather_planned_demand,
+)
 from dora_api.infrastructure.api_response import forbidden, not_found, ok
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
@@ -141,6 +144,9 @@ _MAX_STRENGTH = 3
 # Keyed by the need axis's own signal, not its band, so there is nothing to
 # translate between here and `_need_axis`. `thin_data` is absent and scores 0.
 _STRENGTH_BY_NEED_SIGNAL = {"out_of_stock": 2, "low_stock": 1, "stocked": 0}
+# A planned meal that needs an item you're short of lifts the buy by one; one
+# that needs something you have changes nothing (owner 2026-10-15).
+_PLAN_STRENGTH_MODIFIER = {URGENCY_WATCH: 1, URGENCY_BLOCKING: 1}
 _PRICE_STRENGTH_MODIFIER = {"cheapest_3mo": 1, "above_usual": -1}
 _WASTE_STRENGTH_MODIFIER = {"wastes_often": -2, "wastes_sometimes": -1}
 
@@ -159,7 +165,7 @@ _CYCLE_CV_MAX = 0.5
 
 @dataclass(frozen=True, slots=True)
 class VerdictReasonDto:
-    axis: str      # "price" | "need" | "waste"
+    axis: str      # "price" | "need" | "waste" | "plan"
     signal: str    # see PROPOSAL §2.3
     label: str
     detail: Optional[str] = None
@@ -259,6 +265,11 @@ class _AxisInputs:
     # paid less recently). Demotes a price-driven `buy` to `wait` and
     # surfaces the honesty reason. See `deals/deal_quality.py`.
     fake_markdown: bool = False
+    # Owner 2026-10-15 — the stock page's planned-meals card belonged in here:
+    # *"should be part of the buy verdict, no?"*. What the upcoming plan wants
+    # of this item (`planned_demand.py`, the same allocation the planner reads).
+    # None when nothing planned uses it.
+    planned_demand: Optional[PlannedDemand] = None
 
 
 # ── Per-axis composers — pure, testable ───────────────────────────────
@@ -506,8 +517,8 @@ def _wait_hint(inputs: _AxisInputs) -> Optional[WaitHintDto]:
     return WaitHintDto(
         until=next_low.isoformat(),
         reason=(
-            f"Your usual low lands ~every {int(round(median_gap))} days — "
-            f"expect the next around {next_low.strftime('%b %d')}."
+            f"Your usual low lands ~every {int(round(median_gap))} days. "
+            f"Expect the next around {next_low.strftime('%b %d')}."
         ),
     )
 
@@ -531,13 +542,43 @@ def _need_strength(inputs: _AxisInputs, need_signal: str) -> int:
     return base
 
 
+def _plan_axis(inputs: _AxisInputs) -> Optional[VerdictReasonDto]:
+    """The planned-meals reason, or None when nothing upcoming needs it.
+
+    It is a fact about the user's own plan, not evidence about the shelf, so it
+    never costs confidence and never decides direction on its own. It adds to
+    strength only when the recorded level says the plan is at risk (see
+    `_PLAN_STRENGTH_MODIFIER`): a planned meal that needs something you're Low
+    or Out of is more reason to buy than the shortage alone.
+    """
+    demand = inputs.planned_demand
+    if demand is None or demand.planned_meals <= 0:
+        return None
+    n = demand.needed_meals if demand.needed_meals > 0 else demand.planned_meals
+    one = n == 1
+    meals = f"{n} planned meal{'' if one else 's'}"
+    if demand.urgency == URGENCY_BLOCKING:
+        label = f"{meals} can't be cooked without it"
+    elif demand.urgency == URGENCY_WATCH:
+        label = f"{meals} {'needs' if one else 'need'} it, and you're low"
+    else:
+        label = f"{meals} {'uses' if one else 'use'} it"
+    return VerdictReasonDto(
+        axis="plan",
+        signal=f"planned_{demand.urgency}",
+        label=label,
+        detail=demand.reason or None,
+    )
+
+
 def compose_verdict(inputs: _AxisInputs) -> BuyVerdictDto:
     price_reason, price_signal = _price_axis(inputs)
     need_reason,  need_signal  = _need_axis(inputs)
     waste_reason, waste_signal = _waste_axis(inputs)
+    plan_reason = _plan_axis(inputs)
 
     reasons: list[VerdictReasonDto] = []
-    for r in (need_reason, price_reason, waste_reason):
+    for r in (plan_reason, need_reason, price_reason, waste_reason):
         if r is not None:
             reasons.append(r)
 
@@ -545,12 +586,13 @@ def compose_verdict(inputs: _AxisInputs) -> BuyVerdictDto:
 
     # Three thin axes collapse to a single explicit "not enough history"
     # reason so the user sees one honest message rather than a wall of blanks.
+    # The plan reason survives it: it is about the plan, not about history.
     if len(thin) == 3:
         return BuyVerdictDto(
             verdict="unsure",
             confidence="low",
             strength=0,
-            reasons=[VerdictReasonDto(
+            reasons=([plan_reason] if plan_reason is not None else []) + [VerdictReasonDto(
                 axis="need",
                 signal="thin_data",
                 label="Not enough history yet",
@@ -565,6 +607,8 @@ def compose_verdict(inputs: _AxisInputs) -> BuyVerdictDto:
     strength = _need_strength(inputs, need_signal)
     strength += _PRICE_STRENGTH_MODIFIER.get(price_signal, 0)
     strength += _WASTE_STRENGTH_MODIFIER.get(waste_signal, 0)
+    if inputs.planned_demand is not None:
+        strength += _PLAN_STRENGTH_MODIFIER.get(inputs.planned_demand.urgency, 0)
     if inputs.fake_markdown:
         strength -= 1
     strength = max(0, min(_MAX_STRENGTH, strength))
@@ -636,7 +680,7 @@ def _step_down(confidence: str) -> str:
 
 def _pick_action(verdict: str, inputs: _AxisInputs) -> OneTapActionDto:
     if verdict == "buy":
-        return OneTapActionDto(kind="add_to_list", label="Add to primary list")
+        return OneTapActionDto(kind="add_to_list", label="Add to list")
     if verdict == "skip":
         if inputs.is_on_open_list:
             return OneTapActionDto(kind="remove_from_list", label="Remove from list")
@@ -754,6 +798,14 @@ def gather_verdict_inputs_for_items(
     beliefs = gather_beliefs_for_items(repository, items)
     levels_by_item = resolve_levels_by_item(repository, items)
     fake_markdown_items = _items_with_fake_markdown(repository, item_ids)
+    demand_by_item = gather_planned_demand(
+        repository,
+        recorded_by_item={
+            item_id: level.sequence
+            for item_id, level in levels_by_item.items()
+            if level is not None
+        },
+    )
 
     out: dict[UUID, _AxisInputs] = {}
     for item in items:
@@ -786,6 +838,7 @@ def gather_verdict_inputs_for_items(
             tz=tz,
             belief=beliefs.get(item.id),
             fake_markdown=item.id in fake_markdown_items,
+            planned_demand=demand_by_item.get(item.id),
         )
     return out
 

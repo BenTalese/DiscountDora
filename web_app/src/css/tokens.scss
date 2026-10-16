@@ -220,18 +220,9 @@
        "on multiple lists" hint, the stock-item lifecycle "Opened" entry. */
     --severity-attention: light-dark(hsl(26 100% 50%), hsl(26 90% 62%));    /* was amber-9 */
 
-    /* Categorical alert-kind accents — the ones that don't collapse into
-       the severity ladder. Each carries a stable per-kind identity for
-       summary boxes + row badges. */
-    --alert-kind-out-of-stock:       light-dark(hsl(291 64% 42%), hsl(291 60% 68%));  /* was purple-5 */
-    --alert-kind-stocktake-overdue:  light-dark(hsl(200 18% 40%), hsl(200 18% 62%));  /* was blue-grey-6 */
-    --alert-kind-no-planned-meals:   light-dark(hsl(174 100% 27%), hsl(174 55% 58%)); /* was teal-6 */
-    --alert-kind-shopping-day:       light-dark(hsl(231 48% 48%),  hsl(231 55% 70%)); /* was indigo-5 */
+    /* The per-kind alert accents went with the alerts page's summary boxes
+       (2026-10-15); rows colour by severity. */
     --savings-accent:                light-dark(hsl(142 60% 32%),  hsl(142 45% 55%)); /* savings green — swap panels, dashboard */
-
-    /* Alert-history chip states — snoozed reuses severity-medium (still
-       active), read is a distinct muted blue-grey. */
-    --alert-history-read: light-dark(hsl(200 18% 52%), hsl(200 12% 62%));   /* was blue-grey-5 */
 
     /* Stock-item lifecycle timeline accents — categorical, one per
        event kind so the item's purchase → use → open → expiry trail

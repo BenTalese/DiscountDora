@@ -23,14 +23,14 @@
             <q-card-section>
                 <p class="q-mb-sm">
                     Dora is the little burger icon in the bottom-right. Click her
-                    any time to chat — ask about your pantry, get recipe ideas,
+                    any time to chat. Ask about your pantry, get recipe ideas,
                     convert measurements, find substitutes, or just say hi.
                 </p>
                 <p class="q-mb-none">
                     She works in two modes. <strong>Basic mode</strong> is always
                     on and uses a hand-written rule engine. <strong>AI mode</strong>
                     layers a local large language model on top for natural-language
-                    understanding — you set that up in Settings → System.
+                    understanding. Set it up in Settings → Assistant.
                 </p>
             </q-card-section>
         </q-card>
@@ -124,7 +124,7 @@
         <div class="text-h6 q-mb-sm">What AI mode unlocks</div>
         <p class="text-caption dora-text-muted q-mb-md">
             When AI is active, Dora picks the right tool from your phrasing. You
-            don't need to memorise these — just ask naturally.
+            don't need to memorise these.
         </p>
         <q-list bordered separator class="q-mb-lg rounded-borders">
             <q-item v-for="tool in aiTools" :key="tool.name">
@@ -275,21 +275,21 @@
         { name: 'search_stock', description: 'Free-form pantry lookup with filters (low only, expiring soon, by location).', examples: ['do I have any milk', "what's in the fridge", 'flagged items'], icon: 'inventory_2' },
         { name: 'search_products', description: 'Search products across the configured stores.', examples: ['cheese at woolies', 'pasta on special'], icon: ICONS.storefront },
         { name: 'search_recipes', description: 'Direct recipe lookup by name, cuisine, difficulty, or cook time.', examples: ['easy italian dinners under 30 minutes', 'favourite curries'], icon: ICONS.menu_book },
-        { name: 'suggest_recipes', description: 'Recommendations — translates moods ("something spicy", "something light") into searches.', examples: ['something cosy for tonight', 'what can I make with what I have'], icon: ICONS.lightbulb },
+        { name: 'suggest_recipes', description: 'Turns moods like "something spicy" into recipe searches.', examples: ['something cosy for tonight', 'what can I make with what I have'], icon: ICONS.lightbulb },
         { name: 'convert_measurement', description: 'Volume / mass / temperature. Density-aware for flour, sugar, butter, rice, etc.', examples: ['how many grams in a cup of flour', '180c to f'], icon: ICONS.straighten },
         { name: 'suggest_substitution', description: 'Curated ingredient swaps for ~25 common pantry items.', examples: ['what can I use instead of buttermilk', 'no eggs'], icon: ICONS.swap_horiz },
         { name: 'whats_expiring', description: 'Stock items inside a horizon (default 7 days).', examples: ["what's about to go off", 'use by today', 'expiring this week'], icon: ICONS.event },
         { name: 'find_deals', description: 'On-special products, sorted by % discount.', examples: ['any specials right now', 'cheap meat this week'], icon: ICONS.local_offer },
         { name: 'pantry_health', description: 'High-level pantry snapshot in one line.', examples: ["how's my pantry", 'pantry status'], icon: ICONS.monitor_heart },
         { name: 'meal_plan_for_date', description: 'What\'s scheduled for a date or range.', examples: ["what's for dinner tomorrow", "what's the plan for friday"], icon: ICONS.calendar_month },
-        { name: 'recipes_using_item', description: 'Reverse lookup — recipes that use a stock item.', examples: ['what can I make with these strawberries', 'recipes using mince'], icon: ICONS.restaurant_menu },
+        { name: 'recipes_using_item', description: 'Recipes that use a stock item.', examples: ['what can I make with these strawberries', 'recipes using mince'], icon: ICONS.restaurant_menu },
         { name: 'add_to_shopping_list', description: 'Add items to the primary list. Asks back when ambiguous; never auto-creates new stock items.', examples: ['add 3 apples and some milk', 'add bread to the list'], icon: ICONS.add_shopping_cart },
         { name: 'get_alerts', description: 'The bell-icon data: expired / expiring soon / low / out / stocktake overdue. Sortable by severity or kind.', examples: ['what needs attention', "anything urgent", 'show me the high-severity alerts'], icon: ICONS.notifications_active },
-        { name: 'stock_item_detail', description: 'Full snapshot of one item — level, location, expiry, flagged/open, recipes that use it, whether it\'s on a list.', examples: ['tell me about my milk', "how's the cheese looking"], icon: 'inventory_2' },
-        { name: 'recipe_detail', description: 'Full snapshot of one recipe — ingredients with stock status, cook time, instructions preview, can-make-now flag.', examples: ['tell me about carbonara', "what's in lasagne", 'how do I make pad thai'], icon: ICONS.menu_book },
-        { name: 'shopping_list_contents', description: 'Lines on a shopping list — ticked vs outstanding, with stock-level context. Defaults to the primary list.', examples: ["what's on my list", "what's outstanding on the woolies list"], icon: ICONS.list_alt },
+        { name: 'stock_item_detail', description: 'One item\'s level, location, expiry, recipes and list status.', examples: ['tell me about my milk', "how's the cheese looking"], icon: 'inventory_2' },
+        { name: 'recipe_detail', description: 'One recipe\'s ingredients, stock status, cook time and whether you can make it now.', examples: ['tell me about carbonara', "what's in lasagne", 'how do I make pad thai'], icon: ICONS.menu_book },
+        { name: 'shopping_list_contents', description: 'What\'s on a shopping list, ticked and outstanding.', examples: ["what's on my list", "what's outstanding on the woolies list"], icon: ICONS.list_alt },
         { name: 'meal_detail', description: 'A meal\'s constituent recipes and their cook times.', examples: ['what recipes are in the Sunday roast meal', 'tell me about taco night'], icon: ICONS.restaurant },
-        { name: 'find_location', description: 'A location\'s contents — pass `urgent_only` to filter to items needing attention.', examples: ["what's in the fridge", 'anything urgent in the pantry'], icon: ICONS.place },
+        { name: 'find_location', description: 'What\'s in a location, optionally just the urgent items.', examples: ["what's in the fridge", 'anything urgent in the pantry'], icon: ICONS.place },
         { name: 'update_stock_level', description: 'Set an item\'s level (out / low / stocked). Confirm card before commit.', examples: ['I just used the last milk', 'mark eggs as low', 'cheese is fully stocked again'], icon: ICONS.tune },
         { name: 'mark_opened', description: 'Mark an item as opened (or closed via `closed: true`). Confirm card before commit.', examples: ['I opened the milk', 'closed the pasta sauce'], icon: ICONS.lock_open },
         { name: 'push_expiry', description: 'Shift an item\'s expiry by N days (positive or negative). Confirm card before commit.', examples: ['push the bread expiry by 3 days', 'add a week to the milk'], icon: ICONS.event_repeat },
@@ -317,7 +317,7 @@
 
     const tips = [
         { title: 'Quick-action chips refresh', icon: ICONS.refresh, body: 'The three suggestion chips in the chat are a random sample. Hit the refresh button next to them to see a different set.' },
-        { title: 'Compliment her', icon: ICONS.favorite, body: '"thanks dora", "love you", or "good bot" trigger a kawaii sparkle reaction. She remembers nothing — she just likes it.' },
+        { title: 'Compliment her', icon: ICONS.favorite, body: '"thanks dora", "love you", or "good bot" trigger a kawaii sparkle reaction. She just likes it.' },
         { title: 'Hover the launcher', icon: ICONS.pan_tool, body: "The burger icon bobs when you hover and wiggles when you click. She also takes a 1-minute nap if you don't interact." },
         { title: 'Basic mode works offline', icon: ICONS.cloud_off, body: 'If AI mode is down, the chat falls back to Basic mode automatically. The "AI / Basic" chip at the top tells you which is active.' },
         { title: 'Page-aware replies', icon: ICONS.place, body: 'Ask "what can I do here?" on any page and Dora gives you a contextual rundown of that screen.' },

@@ -2,7 +2,7 @@
     <router-link
         to="/"
         class="dora-brand row items-center no-wrap"
-        aria-label="Dashy Dora — home"
+        aria-label="Dashy Dora home"
         @click="onBrandClick"
     >
         <q-avatar square size="44px" class="dora-brand-mascot">

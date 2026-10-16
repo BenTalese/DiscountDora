@@ -40,7 +40,7 @@
             </div>
             <div class="belief-card__meta dora-text-muted">
                 <template v-if="belief.differs_from_recorded">
-                    This differs from your recorded level — a quick check helps.
+                    This differs from your recorded level.
                 </template>
                 <template v-else>
                     This agrees with your recorded level.

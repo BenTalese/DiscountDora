@@ -86,7 +86,7 @@ function load(): Promise<void> {
  *  need to guard the common "no price yet" case. */
 export function formatMoney(amount: number | null | undefined): string {
     if (amount === null || amount === undefined || !Number.isFinite(amount)) {
-        return '—';
+        return '–';
     }
     return getFormatter().format(amount);
 }

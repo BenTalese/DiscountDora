@@ -273,7 +273,7 @@ def _fetch(url: str, tmp_path: Path, expected_sha256: str | None, on_progress=No
         if total == 0:
             raise ValueError("empty download")
         if expected_sha256 and hasher.hexdigest() != expected_sha256:
-            raise ValueError("checksum mismatch — download discarded")
+            raise ValueError("Checksum mismatch, download discarded")
     except BaseException:
         # Any failure — network blip, ceiling exceeded, checksum mismatch,
         # caller cancellation — drops the orphan so the next attempt isn't

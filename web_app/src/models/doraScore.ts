@@ -12,10 +12,9 @@ export type DoraScoreComponentKey =
     // Owner review 2026-09-04 — `runouts` and `stocktake` were cut. Both
     // measured how diligently the app was used rather than how the kitchen was
     // doing (FU-835 had already said so about stocktake). Their replacements
-    // are outcomes: did the meals you planned get settled, and can your pantry
-    // cook the week you planned. The reasoning lives in full on the server's
+    // is an outcome: can your pantry cook the week you planned. Plan adherence
+    // was cut on 2026-09-27. The reasoning lives on the server's
     // `DoraScoreComponentKey`, which this mirrors.
-    | 'plan_adherence'
     | 'plan_coverage';
 
 export type DoraScoreComponent = {

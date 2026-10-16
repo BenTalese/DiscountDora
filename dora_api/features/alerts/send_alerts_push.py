@@ -195,7 +195,9 @@ def _payload_for(alert: AlertDto) -> dict[str, object]:
         "detail": alert.detail,
         "stock_item_id": str(alert.stock_item_id) if alert.stock_item_id else None,
         "target_id": alert.target_id,
-        "url": "/alerts",
+        # The alerts page is gone (owner 2026-10-15); the SPA opens the bell
+        # panel on `?alerts=open`. Hash route: the SPA runs in hash mode.
+        "url": "/#/?alerts=open",
     }
 
 

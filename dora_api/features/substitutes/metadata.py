@@ -64,7 +64,7 @@ def validate_metadata(meta: SubstituteMetadata) -> str | None:
         return None
     if set_count != 4:
         return (
-            "Ratio is incomplete — provide quantity + unit for both sides, "
+            "Ratio is incomplete. Give a quantity and unit for both sides, "
             "or leave the whole ratio blank."
         )
 

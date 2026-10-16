@@ -148,7 +148,7 @@ async function runProbe(force = false): Promise<boolean> {
             Notify.create({
                 type: 'positive',
                 position: 'top',
-                message: "Back online — you can make changes again.",
+                message: "Back online.",
                 timeout: 3000,
             });
         }
@@ -160,7 +160,7 @@ async function runProbe(force = false): Promise<boolean> {
                 type: 'warning',
                 position: 'top',
                 message:
-                    "Couldn't reach Dora. We'll keep trying — you can look around, but not make changes.",
+                    "Couldn't reach Dora. You can look around, but not make changes.",
                 timeout: 4000,
             });
         } else if (force) {
@@ -218,7 +218,7 @@ function onBrowserOffline() {
     Notify.create({
         type: 'warning',
         position: 'top',
-        message: "You're offline — you can look around, but not make changes.",
+        message: "You're offline. You can look around, but not make changes.",
         timeout: 4000,
     });
 }

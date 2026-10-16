@@ -38,7 +38,7 @@ const http = new AxiosHttpClient();
  *  turns the next report into a one-line diagnosis. */
 export function describeQrFailure(error: unknown): string {
     if (error instanceof PopupBlockedError) {
-        return 'Your browser blocked the print tab — allow pop-ups for Dora and try again.';
+        return 'Your browser blocked the print tab. Allow pop-ups for Dora and try again.';
     }
     if (error instanceof NormalisedApiError) {
         if (error.isNetworkError) {
@@ -58,7 +58,7 @@ export function describeQrFailure(error: unknown): string {
             const detail = error.details as { title?: string } | null;
             const title = typeof detail?.title === 'string' ? detail.title : '';
             if (title.toLowerCase().startsWith('endpoint')) {
-                return `This server has no QR endpoint at ${error.url} (404) — its API is older than this page. Restart or update the Dora server${ref}.`;
+                return `This server has no QR endpoint at ${error.url} (404). Update the Dora server${ref}.`;
             }
             return `That stock item no longer exists on the server (404)${ref}.`;
         }

@@ -108,7 +108,6 @@
                 </a>
             </div>
 
-            <p v-if="coverageLine" class="pm-note">{{ coverageLine }}</p>
         </template>
 
         <!-- B9 — an empty state that names the one action that fills it, and
@@ -195,39 +194,6 @@
             + `${WINDOW_WORDS[props.range]}.`;
     });
 
-    /** R-041 — the aggregate says what it was built from, and here that matters
-     *  more than usual: the reason this card looks thin is almost always that
-     *  most items have a single logged price, which is a fact about the data,
-     *  not about the prices. */
-    const coverageLine = computed(() => {
-        const single = props.movers?.items_with_one_observation ?? 0;
-        const mixed = props.movers?.items_with_mixed_units ?? 0;
-        const steady = props.movers?.items_unchanged ?? 0;
-        const parts: string[] = [];
-        if (steady > 0) {
-            // Worth saying rather than omitting: "nothing else moved" is the
-            // reassuring half of the answer, and it is why the two lists are
-            // shorter than the pantry.
-            parts.push(
-                `${steady} other${steady === 1 ? '' : 's'} held steady`,
-            );
-        }
-        if (single > 0) {
-            parts.push(
-                `${single} item${single === 1 ? '' : 's'} `
-                + `${single === 1 ? 'has' : 'have'} only one logged price, so `
-                + `${single === 1 ? "it can't" : "they can't"} show a change yet`,
-            );
-        }
-        if (mixed > 0) {
-            parts.push(
-                `${mixed} ${mixed === 1 ? 'was' : 'were'} logged in mixed units, `
-                + 'so only the latest unit is compared',
-            );
-        }
-        return parts.length > 0 ? `${parts.join('; ')}.` : null;
-    });
-
     const emptyLine = computed(() => {
         const single = props.movers?.items_with_one_observation ?? 0;
         if (single > 0) {
@@ -235,11 +201,9 @@
             // can't answer this question yet. Saying "log a price" when you
             // already logged one reads as if the app lost it.
             return `${single} of your items ${single === 1 ? 'has' : 'have'} a `
-                + 'logged price, but none has two in this range yet — a second '
-                + 'reading is what turns a price into a change.';
+                + 'logged price, but none has two in this range yet.';
         }
-        return 'Log what you paid for a couple of items — or finish a shopping '
-            + "list with prices on it — and I'll show you what's drifting.";
+        return 'Log what you paid for a couple of items to see what\'s drifting.';
     });
 
     function signed(pct: number): string {
@@ -419,10 +383,5 @@
         outline: 2px solid var(--focus-ring);
         outline-offset: 2px;
         border-radius: var(--radius-sm);
-    }
-    .pm-note {
-        margin: var(--space-3) 0 0;
-        color: var(--text-secondary);
-        font-size: calc(var(--font-size-sm) * 1rem);
     }
 </style>

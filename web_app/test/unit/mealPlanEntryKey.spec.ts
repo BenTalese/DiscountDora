@@ -24,6 +24,7 @@ function entry(over: Partial<MealPlanEntry>): MealPlanEntry {
         inference_hint: null,
         inference_stock_item_names: [],
         needs_cooking: false,
+        cook_batch_pending: false,
         cook_fresh: false,
         estimated_cost: null,
         missing_count: 0,

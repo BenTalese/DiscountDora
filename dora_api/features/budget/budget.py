@@ -22,7 +22,12 @@ no matter which list it was on.
 "Projected" = same calculation but for active (non-archived) lists, using
 the chosen offer's current price_now. Lets the dashboard show "if you
 finish this shop you'll be at $X" without committing to numbers we can't
-defend (offers can drift between now and finish).
+defend (offers can drift between now and finish). Only lists whose shop day
+falls in the period count toward it (owner 2026-10-15): a list planned for
+next week is next week's money. See `counts_toward_period`.
+
+`?on=YYYY-MM-DD` asks about the period containing that date rather than
+today's, which is how the meal planner prices the week it is showing.
 
 **Shared arithmetic** — `period_bounds(today, period)`, `period_spent(...)`,
 and `period_headroom(on_date, repository)` are the only functions authorised
@@ -36,7 +41,7 @@ from datetime import date, datetime, time, timedelta, timezone
 from typing import Any
 from uuid import UUID
 
-from flask import session
+from flask import request, session
 from pydantic import BaseModel, ConfigDict, Field
 
 from dora_api.domain.entities.product import Product
@@ -193,6 +198,25 @@ def projected_unit_price(
     return None
 
 
+def counts_toward_period(
+    planned_shop_date: date | None,
+    period_start: date,
+    period_end: date,
+    today: date,
+) -> bool:
+    """Whether an open list's spend belongs to the period `[start, end)`.
+
+    A list dated inside the period belongs to it. In the *current* period an
+    undated list belongs too (it could be shopped any day now), and so does
+    one whose date has already passed without being finished: it is still
+    money about to be spent. A later period only gets the lists dated in it.
+    """
+    if planned_shop_date is not None and period_start <= planned_shop_date < period_end:
+        return True
+    is_current = period_start <= today < period_end
+    return is_current and (planned_shop_date is None or planned_shop_date < period_start)
+
+
 # ── Status ───────────────────────────────────────────────────────────────
 
 @dataclass(frozen=True, slots=True)
@@ -212,7 +236,7 @@ class GetBudgetStatusHandler:
     def __init__(self, repository: Repository) -> None:
         self.repository = repository
 
-    def handle(self) -> BudgetStatusDto | None:
+    def handle(self, on_date: date | None = None) -> BudgetStatusDto | None:
         setting = get_or_create_app_setting(self.repository)
 
         # Compute boundaries even when the feature is off — the dashboard
@@ -221,7 +245,7 @@ class GetBudgetStatusHandler:
         # calendar boundary, not server-local.
         today = household_today(self.repository)
         period = _budget_period(setting)
-        start, end = period_bounds(today, period)
+        start, end = period_bounds(on_date or today, period)
 
         # Spent = archived lines in the window. Extracted to the shared
         # `period_spent` helper so the trim-to-budget optimiser reads the
@@ -231,9 +255,12 @@ class GetBudgetStatusHandler:
         # Projected still lives here — dashboard-only. Walks active lists'
         # lines, adding one more rung (current offer of the selected
         # product) beyond the archived ladder.
-        active = self.repository.get(ShoppingList).all(
-            EntityField(ShoppingList, ShoppingList.Fields.STATUS).ne(SHOPPING_LIST_STATUS_DONE)
-        )
+        active = [
+            lst for lst in self.repository.get(ShoppingList).all(
+                EntityField(ShoppingList, ShoppingList.Fields.STATUS).ne(SHOPPING_LIST_STATUS_DONE)
+            )
+            if counts_toward_period(lst.planned_shop_date, start, end, today)
+        ]
         active_ids = [l.id for l in active]
         active_lines: list[ShoppingListLine] = []
         if active_ids:
@@ -300,7 +327,14 @@ def get_budget_status():
     user_id = _current_user_id()
     if user_id is None:
         return unauthorized()
-    dto = GetBudgetStatusHandler(SqlAlchemyRepository()).handle()
+    on_raw = request.args.get("on")
+    on_date: date | None = None
+    if on_raw:
+        try:
+            on_date = date.fromisoformat(on_raw)
+        except ValueError:
+            return bad_request("`on` must be a date (YYYY-MM-DD).")
+    dto = GetBudgetStatusHandler(SqlAlchemyRepository()).handle(on_date)
     if dto is None:
         return unauthorized()
     _Logger.debug(

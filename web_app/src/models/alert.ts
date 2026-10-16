@@ -7,10 +7,10 @@ export type AlertSeverity = 'high' | 'medium' | 'low';
 // badge, 'fyi' is shown but never counted into it.
 export type AlertTier = 'actionable' | 'fyi';
 
-// Six kinds. `out_of_stock`, `low_stock` and `stocktake_overdue` were cut in
+// Eight kinds. `out_of_stock`, `low_stock` and `stocktake_overdue` were cut in
 // the Step-0 alerts assessment (IMPL_PLAN_STOCK_SIGNAL_CONSOLIDATION.md) —
 // they fired constantly on conditions already legible on the stock row or in
-// the stocktake runner.
+// the stocktake runner. `shopping_overdue` and `price_drop` joined 2026-10-15.
 export type AlertKind =
     // per-item — these three ARE the stock-overview attention rule.
     | 'expired'
@@ -19,24 +19,31 @@ export type AlertKind =
     // household-level nudges (no stock item).
     | 'no_planned_meals'
     | 'shopping_day'
-    | 'meal_reconcile_overdue';
+    | 'shopping_overdue'
+    | 'meal_reconcile_overdue'
+    // per-user: a watched product reached its price.
+    | 'price_drop';
 
 export type Alert = {
-    // Stable scoped key `<scope>:<id>:<kind>` — opaque to the client; posted
-    // back to the read/snooze/dismiss endpoints. (Named alert_id for history.)
+    // Stable scoped key `<scope>:<id>:<variant>:<episode>` — opaque to the
+    // client; posted back to the snooze/dismiss endpoints.
     alert_id: string;
     kind: AlertKind;
     severity: AlertSeverity;
     // Stock-scoped alerts carry the owning item; C-9.4 non-stock kinds null these.
     stock_item_id: string | null;
     stock_item_name: string | null;
-    // Deep-link target id for non-stock kinds (e.g. the shopping list uuid).
+    // Deep-link target id for non-stock kinds (the shopping list uuid, or the
+    // product for `price_drop`).
     target_id: string | null;
     message: string;
     detail: string | null;
     related_date: string | null;
+    /** ISO date the condition began. What the discard window measures. */
+    started_on: string | null;
+    /** A raw money amount the alert is about (price_drop's price). */
+    amount: number | null;
     // Per-user interaction overlay (C-9.1, server-derived).
-    read: boolean;
     snoozed_until: string | null;
     // Derived from `severity` server-side: high/medium → 'actionable' (badge),
     // low → 'fyi'. A label, not a second source — don't recompute it here.
@@ -74,24 +81,6 @@ export type UpdateAlertPrefCommand = {
     enabled?: boolean;
 };
 
-// Alert history (C-9.3) — the audit trail of the user's decisions, mirrors
-// AlertHistoryEntryDto from dora_api/features/alerts/get_alert_history.py.
-export type AlertHistoryState = 'dismissed' | 'snoozed' | 'read';
-
-export type AlertHistoryEntry = {
-    alert_key: string;
-    kind: string;
-    label: string;
-    state: AlertHistoryState;
-    at: string;
-    stock_item_id: string | null;
-    snoozed_until: string | null;
-};
-
-export type AlertHistory = {
-    entries: AlertHistoryEntry[];
-};
-
 // Upcoming "this fortnight" timeline (C-9.6) — mirrors UpcomingDto from
 // dora_api/features/alerts/get_upcoming.py. A server-owned aggregation (R-003);
 // the client only renders the grid + per-category dots.
@@ -117,23 +106,33 @@ export type Upcoming = {
 
 export type AlertAction =
     | 'reset_expiry'
-    | 'extend_expiry'
-    | 'mark_restocked';
+    | 'extend_expiry';
 
 export type AlertActionOption = { action: AlertAction; label: string; icon: string };
+
+/** A button on an alert's top row that navigates rather than writes. */
+export type AlertNavOption = { label: string; icon: string; to: (alert: Alert) => string | null };
 
 // The per-kind presentation contract. Every AlertKind has exactly one row —
 // `Record<AlertKind, …>` makes TS reject a new kind that forgets one (FU-521:
 // this is what was missing when `meal_reconcile_overdue` was added on the
 // backend and five separate switch sites silently fell through). Add a kind =
 // extend the union + add one row here; the accessors below need no edit.
+//
+// An alert row has two rows of buttons (owner 2026-10-15): the top acts on the
+// thing the alert is about, the bottom on the alert (snooze, dismiss). The
+// top row is built from `actions` (server writes), `nav` (a jump to where the
+// thing is handled) and `stockControls` (the level picker and the cart, for a
+// shortage).
 export type AlertKindMeta = {
-    icon: string;      // panel row / avatar icon
-    color: string;     // categorical accent for summary boxes (class-suffix)
+    icon: string;      // row avatar icon
     theme: string;     // plain-language label, e.g. "expiring soon"
-    actions: AlertActionOption[];  // inline actions this kind offers (empty = nav-only nudge)
-    // Deep-link for the non-stock nudge kinds. Stock kinds omit it and fall back
-    // to the item route in `linkFor`. A function because `shopping_day` needs the id.
+    actions: AlertActionOption[];
+    nav?: AlertNavOption;
+    /** Offer the stock level picker + add-to-list on the row. */
+    stockControls?: boolean;
+    // Where tapping the row goes. Stock kinds omit it and fall back to the
+    // item route in `linkFor`.
     link?: (alert: Alert) => string;
 };
 
@@ -142,21 +141,25 @@ const EXPIRY_ACTIONS: AlertActionOption[] = [
     { action: 'extend_expiry', label: 'Push 7 days', icon: ICONS.event_repeat },
     { action: 'reset_expiry', label: 'Clear expiry', icon: ICONS.event_busy },
 ];
-const RESTOCK_ACTIONS: AlertActionOption[] = [
-    { action: 'mark_restocked', label: 'Mark restocked', icon: ICONS.inventory },
-];
-// Colours: some kinds intentionally reuse severity-ladder tokens where the
-// semantic overlaps (expired ⇒ critical, expiring_soon ⇒ medium, essential_low
-// ⇒ high); the rest have their own categorical accents.
-// `meal_reconcile_overdue` reuses the FYI-tier low accent (a dedicated token
-// could be added if its visual identity needs one).
+// Owner 2026-10-15: an expiring ingredient's useful question is "what can I
+// cook with it?", so the row jumps to the cookbook filtered to it.
+const RECIPES_USING: AlertNavOption = {
+    label: 'Recipes', icon: ICONS.menu_book,
+    to: (a) => (a.stock_item_id ? `/cookbook?usesStockItem=${a.stock_item_id}` : null),
+};
+const listLink = (a: Alert) => (a.target_id ? `/shopping-lists/${a.target_id}` : '/shopping-lists');
+const OPEN_LIST: AlertNavOption = { label: 'Open list', icon: ICONS.shopping_cart, to: listLink };
+const priceLink = (a: Alert) => (a.target_id ? `/price-history?product_id=${a.target_id}` : '/price-history');
+
 export const ALERT_KIND_META: Record<AlertKind, AlertKindMeta> = {
-    expired:                { icon: ICONS.event_busy,           color: 'severity-critical',            theme: 'expired',            actions: EXPIRY_ACTIONS },
-    expiring_soon:          { icon: ICONS.schedule,             color: 'severity-medium',              theme: 'expiring soon',      actions: EXPIRY_ACTIONS },
-    essential_low:          { icon: ICONS.priority_high,        color: 'severity-high',                theme: 'essential low',      actions: RESTOCK_ACTIONS },
-    no_planned_meals:       { icon: ICONS.restaurant,           color: 'alert-kind-no-planned-meals',  theme: 'meals to plan',      actions: [], link: () => '/meal-plans' },
-    shopping_day:           { icon: ICONS.shopping_cart,        color: 'alert-kind-shopping-day',      theme: 'shopping day',       actions: [], link: (a) => (a.target_id ? `/shopping-lists/${a.target_id}` : '/shopping-lists') },
-    meal_reconcile_overdue: { icon: ICONS.playlist_add_check,   color: 'severity-low',                 theme: 'meals to reconcile', actions: [], link: () => '/meal-plans/reconcile' },
+    expired:                { icon: ICONS.event_busy,         theme: 'expired',             actions: EXPIRY_ACTIONS, nav: RECIPES_USING },
+    expiring_soon:          { icon: ICONS.schedule,           theme: 'expiring soon',       actions: EXPIRY_ACTIONS, nav: RECIPES_USING },
+    essential_low:          { icon: ICONS.priority_high,      theme: 'essential low',       actions: [], stockControls: true },
+    no_planned_meals:       { icon: ICONS.restaurant,         theme: 'meals to plan',       actions: [], nav: { label: 'Plan meals', icon: ICONS.restaurant, to: () => '/meal-plans' }, link: () => '/meal-plans' },
+    shopping_day:           { icon: ICONS.shopping_cart,      theme: 'shopping day',        actions: [], nav: OPEN_LIST, link: listLink },
+    shopping_overdue:       { icon: ICONS.shopping_cart,      theme: 'forgotten shopping',  actions: [], nav: OPEN_LIST, link: listLink },
+    meal_reconcile_overdue: { icon: ICONS.playlist_add_check, theme: 'meals to reconcile',  actions: [], nav: { label: 'Reconcile', icon: ICONS.playlist_add_check, to: () => '/meal-plans/reconcile' }, link: () => '/meal-plans/reconcile' },
+    price_drop:             { icon: ICONS.trending_down,      theme: 'price drops',         actions: [], nav: { label: 'Price history', icon: ICONS.show_chart, to: priceLink }, link: priceLink },
 };
 
 // Icon per kind so the panel rows render consistently. The `?.` fallbacks in
@@ -182,42 +185,17 @@ export function colorFor(severity: AlertSeverity): string {
     return 'severity-low';
 }
 
-// Per-kind accent colour (C-9.3) — a stable visual identity per kind for the
-// summary boxes (L224), distinct from the severity-driven row avatar above.
-export function colorForKind(kind: AlertKind): string {
-    return ALERT_KIND_META[kind]?.color ?? '';
-}
-
-// Plain-language theme for the summary boxes, e.g. "5 expiring soon".
+// Plain-language name for a kind, as the Settings toggles list it.
 export function kindTheme(kind: AlertKind): string {
     return ALERT_KIND_META[kind]?.theme ?? '';
 }
 
-// Same mapping, for callers holding a bare `string` rather than an `AlertKind`
-// — history rows carry the kind as text because a stored row can outlive its
-// kind (a dismissed alert of a kind since removed from the union). Falls back
-// to humanising the raw key so an unrecognised kind still reads as words
-// instead of vanishing. One authority for kind labels either way: a hand-rolled
-// `kind.replace('_', ' ')` in AlertsPage printed "out of_stock" (replace only
-// swaps the first underscore) while the manage panel two blocks up read
-// "out of stock" from the meta.
-export function kindLabel(kind: string): string {
-    return ALERT_KIND_META[kind as AlertKind]?.theme ?? kind.replace(/_/g, ' ');
-}
-
-// The two count tiers (C-9.2). Actionable drives the badge; FYI is shown but
-// uncounted. Used for the hub's tier group headers + the manage panel.
-export function tierLabel(tier: AlertTier): string {
-    return tier === 'actionable' ? 'Needs action' : 'FYI';
-}
-
-// Actions the user can take inline. The set varies by alert kind — e.g.
-// "Mark restocked" makes no sense for an expiry alert. Nav-only nudges return [].
+// Server-side writes the user can take inline. Nav-only nudges return [].
 export function actionsFor(kind: AlertKind): AlertActionOption[] {
     return ALERT_KIND_META[kind]?.actions ?? [];
 }
 
-// Where opening an alert (row click / "View in context") navigates. The C-9.4
+// Where tapping an alert row navigates. The C-9.4
 // nudges deep-link to their surface via the META `link`; stock kinds fall back
 // to the item. Routing lives client-side (presentation); the server only
 // supplies the ids.

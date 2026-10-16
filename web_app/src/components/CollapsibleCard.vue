@@ -7,11 +7,11 @@
                  sort control and the face's primary action) cannot also be one
                  big click target — the outer button would swallow their taps. -->
             <component
-                :is="headerToggles ? 'button' : 'div'"
-                :type="headerToggles ? 'button' : undefined"
+                :is="leadIsButton ? 'button' : 'div'"
+                :type="leadIsButton ? 'button' : undefined"
                 class="collapsible-card__lead"
-                :class="{ 'collapsible-card__lead--button': headerToggles }"
-                :aria-expanded="headerToggles ? expanded : undefined"
+                :class="{ 'collapsible-card__lead--button': leadIsButton }"
+                :aria-expanded="leadIsButton ? expanded : undefined"
                 @click="onLeadClick"
             >
                 <slot name="header" :expanded="expanded" />
@@ -47,14 +47,28 @@
              A non-collapsible card skips the transition entirely: it never
              opens or closes, so animating it is a measurement with nothing to
              measure — and `q-slide-transition` measures its content on every
-             layout pass, including while nested inside a closed parent. -->
+             layout pass, including while nested inside a closed parent.
+
+             **The padding lives on `__inner`, never on `__body`.** That is the
+             whole fix for the closing snap (2026-09-17). `q-slide-transition`
+             animates `height`, and an element's height cannot go below its own
+             padding and borders — so a body padded 12px/16px with a 1px rule
+             slid smoothly down to **29px**, sat there, and then lost the last
+             29px in a single frame when `v-show` set `display: none`. Traced
+             frame by frame on the overview card: 199 → 29px over ~250ms, then
+             29 → 0 instantly. Anything the animation can't collapse has to sit
+             *inside* the box being animated. -->
         <q-slide-transition v-if="collapsible">
             <div v-show="expanded" class="collapsible-card__body">
-                <slot />
+                <div class="collapsible-card__inner">
+                    <slot />
+                </div>
             </div>
         </q-slide-transition>
         <div v-else class="collapsible-card__body">
-            <slot />
+            <div class="collapsible-card__inner">
+                <slot />
+            </div>
         </div>
     </div>
 </template>
@@ -110,6 +124,12 @@
         `${expanded.value ? 'Hide' : 'Show'} ${props.reveals}`
     );
 
+    /** A card that can't close has nothing for its header to toggle, so the
+     *  header stays a plain `div`. It was rendering a `<button aria-expanded>`
+     *  whose handler returned immediately — a control announced to a screen
+     *  reader that does nothing when pressed. */
+    const leadIsButton = computed(() => props.headerToggles && props.collapsible);
+
     /** The lead renders as a `div` when it isn't a toggle, and a `div`'s click
      *  still fires — so the guard lives here rather than in the binding. */
     function onLeadClick(): void {
@@ -164,6 +184,14 @@
         background: none;
         color: var(--text-secondary);
         cursor: pointer;
+    }
+    /* The animated box owns nothing that has a size of its own — no padding, no
+       border, no min-height — so `height: 0` really is zero. A caller that needs
+       either puts it on `__inner` (or on its own content); one that puts it back
+       here reintroduces the snap. */
+    .collapsible-card__body {
+        padding: 0;
+        border: none;
     }
     .collapsible-card__lead--button:focus-visible,
     .collapsible-card__caret:focus-visible {

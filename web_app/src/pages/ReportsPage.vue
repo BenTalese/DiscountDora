@@ -16,20 +16,25 @@
                     :spendYoY="spendYoY"
                 />
             </div>
+            <!-- The dates sit on their own line under the picker, in one fixed
+                 format on every range (owner, 2026-09-27). Beside it they made
+                 the page scroll sideways on a phone, and on "All time", which
+                 had no dates, the picker grew into the gap they left. -->
             <div class="reports-range">
-                <BaseSegmented
-                    v-model="range"
-                    :options="RANGE_OPTIONS"
-                    dense
-                    @update:model-value="loadAll"
-                />
-                <span v-if="windowLabel" class="reports-window">{{ windowLabel }}</span>
-                <q-icon :name="ICONS.info" size="18px" class="reports-caveat">
-                    <BaseTooltip>
-                        Built from your archived shopping lists, stock history and
-                        tracked store prices.
-                    </BaseTooltip>
-                </q-icon>
+                <div class="reports-range__row">
+                    <BaseSegmented
+                        v-model="range"
+                        :options="RANGE_OPTIONS"
+                        dense
+                        @update:model-value="loadAll"
+                    />
+                    <q-icon :name="ICONS.info" size="18px" class="reports-caveat">
+                        <BaseTooltip>
+                            Built from your archived shopping lists and stock history.
+                        </BaseTooltip>
+                    </q-icon>
+                </div>
+                <span class="reports-window">{{ windowLabel }}</span>
             </div>
         </header>
 
@@ -51,15 +56,11 @@
                 />
             </div>
 
-            <WasteAndRunOutsCard
+            <WasteCard
                 :waste="waste"
-                :keeps-out="keepsOut"
                 :waste-failed="slotFailed('waste')"
-                :run-outs-failed="slotFailed('keepsOut')"
                 :waste-loading="loading.waste"
-                :run-outs-loading="loading.keepsOut"
-                @retry-waste="loadWaste"
-                @retry-run-outs="loadKeepsOut"
+                @retry="loadWaste"
             />
 
             <KitchenMemoryCard
@@ -93,20 +94,6 @@
                 />
             </div>
 
-            <!-- Needs money AND products: the chart is products by definition,
-                 and it answers in dollars. -->
-            <div v-if="productMoneyEnabled" class="reports-grid__wide">
-                <PriceTrendsCard
-                    :price-trends="priceTrends"
-                    :product-options="productOptions"
-                    :selected-product-ids="selectedProductIds"
-                    :loading="loading.priceTrends"
-                    :failed="slotFailed('priceTrends')"
-                    @retry="loadPriceTrends"
-                    @select="onProductSelection"
-                    @filter="filterProducts"
-                />
-            </div>
         </div>
     </q-page>
 </template>
@@ -120,10 +107,12 @@
      *
      * `REPORTS_PAGE_REVIEW.md` §5: eleven widgets answered four questions, and
      * three of them were the same query sliced three ways. The card set is now
-     * question-led — where did my money go (Spend), what am I mismanaging (Waste
-     * & run-outs), what do we actually eat (Kitchen memory), what am I paying
-     * more for (Price changes), is this worth buying (Price trends) — plus a
-     * lede sentence that gives the answer before the instruments do.
+     * question-led: where did my money go (Spend), what do I throw out (Waste),
+     * what do we actually eat (Kitchen memory), what am I paying more for
+     * (Price changes), plus a lede sentence that gives the answer first.
+     *
+     * **Cut 2026-09-27:** Price trends (the product chart; better read on My
+     * Products and the stock item page) and the run-outs half of Waste.
      *
      * **Added in chunk 4:** Price changes, the report §5 called the largest
      * missing widget on the page — the everyday user's own
@@ -150,19 +139,15 @@
     import BaseSegmented from 'src/components/BaseSegmented.vue';
     import ItemPriceMoversCard from 'src/components/reports/ItemPriceMoversCard.vue';
     import KitchenMemoryCard from 'src/components/reports/KitchenMemoryCard.vue';
-    import PriceTrendsCard from 'src/components/reports/PriceTrendsCard.vue';
     import ReportsLede from 'src/components/reports/ReportsLede.vue';
     import SpendCard from 'src/components/reports/SpendCard.vue';
-    import WasteAndRunOutsCard from 'src/components/reports/WasteAndRunOutsCard.vue';
-    import ProductApiService from 'src/services/api/productApiService';
+    import WasteCard from 'src/components/reports/WasteCard.vue';
     import { paletteToken } from 'src/composables/useThemePalette';
     import { useFeatureFlags } from 'src/composables/useFeatureFlags';
     import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
     import ReportsApiService, {
-        type KeepsRunningOutResponse,
         type StoreSpendResponse,
         type MostBoughtResponse,
-        type PriceTrendsResponse,
         type ItemPriceMoversResponse,
         type RangeWindow,
         type ReportRange,
@@ -176,10 +161,6 @@
 
     const reportsApi = new ReportsApiService();
     const wasteApi = new WasteApiService();
-    // The picker searches the catalogue server-side rather than filtering a
-    // hydrated page in the browser, so there is no shared client-side product
-    // collection left to keep in sync.
-    const productApi = new ProductApiService();
 
     const RANGE_OPTIONS: { label: string; value: ReportRange }[] = [
         { label: '30 days', value: '30d' },
@@ -212,9 +193,7 @@
     const loading = ref({
         storeSpend: false,
         mostBought: false,
-        keepsOut: false,
         savings: false,
-        priceTrends: false,
         mealsCooked: false,
         spendByCategory: false,
         spendYoY: false,
@@ -228,9 +207,7 @@
 
     const storeSpend = ref<StoreSpendResponse | null>(null);
     const mostBought = ref<MostBoughtResponse | null>(null);
-    const keepsOut = ref<KeepsRunningOutResponse | null>(null);
     const savings = ref<SavingsCapturedResponse | null>(null);
-    const priceTrends = ref<PriceTrendsResponse | null>(null);
     const mealsCooked = ref<MealsCookedResponse | null>(null);
     const spendByCategory = ref<SpendByCategoryResponse | null>(null);
     // YoY only accepts bounded windows; on "All time" we skip the fetch and the
@@ -297,29 +274,6 @@
             || slotFailed('spendByCategory')
             || slotFailed('spendYoY'),
     );
-
-    const selectedProductIds = ref<string[]>([]);
-    const productOptions = ref<{ label: string; value: string }[]>([]);
-
-    // FU-668, third instance. This used to filter the product store's hydrated
-    // first page in the browser, and `GET /products` is paginated at 50, so
-    // product 51 onward was unsearchable with nothing on screen saying so. The
-    // needle goes to the server now. Store name is no longer part of the match
-    // (it lives on the Store row, not the Product) — the one capability traded
-    // for seeing the whole catalogue.
-    async function filterProducts(input: string, doneFn: (cb: () => void) => void) {
-        let matches: { label: string; value: string }[] = [];
-        try {
-            const page = await productApi.searchAsync(input, 20);
-            matches = page.items.map((p) => ({
-                label: `${p.name} · ${p.store_name}`,
-                value: p.product_id,
-            }));
-        } catch (err) {
-            console.warn('product search failed', err);
-        }
-        doneFn(() => { productOptions.value = matches; });
-    }
 
     /** Categorical colour for a bucket with no colour of its own — a stock
      *  group, in practice. Deterministic so a group keeps its hue between
@@ -388,13 +342,6 @@
             mostBought.value = await reportsApi.getMostBoughtAsync(range.value);
         });
     }
-    async function loadKeepsOut() {
-        // Passes the page's range now (§3.5 / D7) — the card sat under a control
-        // saying "30 days" while counting all history, forever.
-        await loadSlot('keepsOut', async () => {
-            keepsOut.value = await reportsApi.getKeepsRunningOutAsync(10, range.value);
-        });
-    }
     async function loadMealsCooked() {
         await loadSlot('mealsCooked', async () => {
             mealsCooked.value = await reportsApi.getMealsCookedAsync(range.value, 10);
@@ -411,25 +358,18 @@
             rangeWindow.value = await reportsApi.getRangeWindowAsync(range.value);
         });
     }
-    /** "3 Aug – 2 Sep", so "30 days" names the thirty it means. Nothing for
-     *  "all time", which has no start date worth printing.
-     *
-     *  The year is included **only when the window crosses one**, which is not
-     *  a nicety: without it the 1-year range rendered "2 Sept – 2 Sept", so the
-     *  control meant to make the window concrete said the window was a single
-     *  day. Caught by switching ranges in the browser. */
+    /** The dates the range covers, always in full ("3 Aug 2026 – 2 Sep
+     *  2026"), so the label is the same shape on every range and the header
+     *  doesn't move when you switch. "All time" starts at the household's
+     *  earliest record, from the server. A non-breaking space keeps the line
+     *  from reflowing while the window loads. */
     const windowLabel = computed(() => {
         const w = rangeWindow.value;
-        if (!w || !w.start) return null;
-        const start = new Date(`${w.start}T00:00:00`);
-        const end = new Date(`${w.end}T00:00:00`);
-        const spansYears = start.getFullYear() !== end.getFullYear();
-        const fmt = (d: Date) => d.toLocaleDateString(undefined, {
-            day: 'numeric',
-            month: 'short',
-            ...(spansYears ? { year: 'numeric' } : {}),
+        if (!w || !w.start) return '\u00a0';
+        const fmt = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString(undefined, {
+            day: 'numeric', month: 'short', year: 'numeric',
         });
-        return `${fmt(start)} – ${fmt(end)}`;
+        return `${fmt(w.start)} – ${fmt(w.end)}`;
     });
 
     async function loadWaste() {
@@ -449,29 +389,6 @@
         });
     }
 
-    async function loadPriceTrends() {
-        if (!productMoneyEnabled.value) { priceTrends.value = null; return; }
-        if (selectedProductIds.value.length === 0) {
-            priceTrends.value = null;
-            return;
-        }
-        await loadSlot('priceTrends', async () => {
-            priceTrends.value = await reportsApi.getPriceTrendsAsync(
-                selectedProductIds.value, range.value,
-            );
-        });
-    }
-    function onProductSelection(ids: string[]) {
-        selectedProductIds.value = ids;
-        void loadPriceTrends();
-    }
-    async function loadProductsCatalogue() {
-        if (!productMoneyEnabled.value) return;
-        // Seeds the picker before the user types. Empty needle ⇒ the server's
-        // first page, same as any other search.
-        await filterProducts('', (assign) => assign());
-    }
-
     // No page-level error banner: each card records its own failure, so the
     // reader can see exactly which parts of the page to trust. A banner over the
     // whole grid said "something here is wrong" without saying what, while the
@@ -486,11 +403,9 @@
             loadSpendYoY(),
             loadSavings(),
             loadMostBought(),
-            loadKeepsOut(),
             loadMealsCooked(),
             loadWaste(),
             loadItemMovers(),
-            loadPriceTrends(),
         ]);
     }
 
@@ -513,12 +428,9 @@
     watch(productMoneyEnabled, (on) => {
         if (!on) return;
         void loadSavings();
-        void loadPriceTrends();
-        void loadProductsCatalogue();
     });
 
     onMounted(() => {
-        void loadProductsCatalogue();
         void loadAll();
     });
 </script>
@@ -540,8 +452,16 @@
     .reports-title-block { flex: 1; min-width: 280px; }
     .reports-range {
         display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: var(--space-1);
+        max-width: 100%;
+    }
+    .reports-range__row {
+        display: flex;
         align-items: center;
         gap: var(--space-2);
+        max-width: 100%;
     }
     .reports-caveat { color: var(--text-secondary); }
     .reports-window {

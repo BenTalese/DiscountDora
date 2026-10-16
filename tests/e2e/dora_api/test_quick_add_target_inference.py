@@ -1,6 +1,6 @@
 """P6-01 Chunk 2 — DRAFT-count primary-target inference.
 
-Verifies the rules behind POST /api/shopping-lists/primary/lines now that the
+Verifies the rules behind POST /api/shopping-lists/quick-add/lines now that the
 stored `is_primary` flag is gone:
 
   - 0 draft lists  -> result="no_draft"
@@ -23,7 +23,7 @@ from dora_api.features.stock_items.create_stock_item import \
 SHOPPING_LISTS = "http://localhost:5170/api/shopping-lists"
 STOCK_ITEMS = "http://localhost:5170/api/stock-items"
 STOCK_LEVELS = "http://localhost:5170/api/stock-levels"
-QUICK_ADD = f"{SHOPPING_LISTS}/primary/lines"
+QUICK_ADD = f"{SHOPPING_LISTS}/quick-add/lines"
 MEMBERSHIP = f"{SHOPPING_LISTS}/membership"
 
 

@@ -320,6 +320,11 @@ export const ICONS = {
     // Domain
     stockItem: 'mdi-package-variant-closed',
     shoppingList: 'mdi-cart',
+    // A list still being written (2026-09-27). It wore the pencil, which sat
+    // beside the rename pencil in the list picker and read as a second edit
+    // button. A clipboard is "a list you're putting together" and nothing else
+    // in Dora uses it.
+    listDraft: 'mdi-clipboard-text-outline',
     cartAdd: 'mdi-cart-plus',
     cartRemove: 'mdi-cart-remove',
     expiry: 'mdi-clock-alert-outline',
@@ -363,11 +368,10 @@ export const ICONS = {
     // control carries one so the strip scans as a set (D-005).
     sort: 'mdi-sort',
     difficulty: 'mdi-speedometer',
-    // `mdi-format-list-numbered` (used until 2026-08-19) reads as an ordered
-    // list — i.e. recipe *steps*, which is what the owner saw. A count of
-    // ingredients isn't ordered; `mdi-counter` says "how many" without
-    // borrowing the steps metaphor.
-    ingredientCount: 'mdi-counter',
+    // Not `mdi-format-list-numbered` (reads as recipe steps) and not
+    // `mdi-counter` (an odometer, owner 2026-10-15). A carrot is an ingredient
+    // and nothing else in the app uses it.
+    ingredientCount: 'mdi-carrot',
     collection: 'mdi-bookmark-multiple',
     location: 'mdi-map-marker',
     // 2026-08-20 — the stock-level filter's glyph (D-005: every control in a

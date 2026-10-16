@@ -11,12 +11,13 @@ Three things shape the response:
   this" — it is not merely a display filter. Honouring it here is what gives
   the flag a real cost and keeps a deselected product from burning scrape
   budget forever.
-* **`store` is the *external* name this source uses**, not Dora's store name.
-  The write side resolves external → `Store` per source via
-  `IngestionStoreMapping`; the read side must mirror that or the caller gets
-  back names it can't act on. Products whose store this source has no mapping
-  for are omitted — the caller could not scrape them anyway, and inventing a
-  name would be worse than silence.
+* **Every row carries `store_id`** (2026-10-15), and `store` is the external
+  name this source maps that store from when it has one, else Dora's own name
+  for it. A producer that keeps its own provider → store map (the companion)
+  decides by `store_id` which rows it can refresh; one that relies on name
+  mapping reads `store` as before. Products at stores the caller can't scrape
+  are its to skip: the list no longer hides them, because a store reached by
+  id has no mapping row to find them through.
 * **Source-agnostic body (R-005).** Nothing in the response mentions the
   caller. Two sources with the same mappings see the same list.
 
@@ -61,6 +62,7 @@ class _IngestableProduct:
     product_id: str
     name: str
     store: str
+    store_id: str
     merchant_stockcode: str | None
     brand: str | None
     size: str | None
@@ -76,8 +78,13 @@ class GetIngestableProductsHandler:
         self, source: IngestionSource, *, limit: int, offset: int,
     ) -> list[_IngestableProduct]:
         external_by_store = self._external_names_for(source)
-        if not external_by_store:
-            return []
+        store_table = db.metadata.tables["Store"]
+        dora_name_by_store: dict[UUID, str] = {
+            row["id"]: row["name"]
+            for row in db.session.execute(
+                select(store_table.c.id, store_table.c.name)
+            ).mappings().all()
+        }
 
         product_table = db.metadata.tables["Product"]
         rows = db.session.execute(
@@ -97,7 +104,6 @@ class GetIngestableProductsHandler:
                 # Offering it to a producer would at best waste a request and
                 # at worst have it matched against something else entirely.
                 product_table.c.is_custom.is_(False),
-                product_table.c.store_id.in_(external_by_store.keys()),
             )
             .order_by(product_table.c.name)
             .limit(limit)
@@ -108,7 +114,11 @@ class GetIngestableProductsHandler:
             _IngestableProduct(
                 product_id=str(row["id"]),
                 name=row["name"],
-                store=external_by_store[row["store_id"]],
+                store=(
+                    external_by_store.get(row["store_id"])
+                    or dora_name_by_store.get(row["store_id"], "")
+                ),
+                store_id=str(row["store_id"]),
                 merchant_stockcode=row["merchant_stockcode"],
                 brand=row["brand"],
                 size=row["size"],

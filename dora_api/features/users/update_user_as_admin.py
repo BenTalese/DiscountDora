@@ -155,7 +155,7 @@ def admin_update_user(user_id: UUID):
         )
     if _Response.would_remove_last_admin:
         return business_rule_violation(
-            "Refusing to remove the last admin — promote someone else first."
+            "Can't remove the last admin. Promote someone else first."
         )
     if _Response.would_deactivate_self:
         return business_rule_violation(
@@ -163,7 +163,7 @@ def admin_update_user(user_id: UUID):
         )
     if _Response.would_deactivate_last_admin:
         return business_rule_violation(
-            "Refusing to deactivate the last admin — promote someone else first."
+            "Can't deactivate the last admin. Promote someone else first."
         )
 
     _Logger.info(f"Admin updated user {user_id}")

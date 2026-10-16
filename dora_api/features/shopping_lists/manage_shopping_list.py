@@ -1,8 +1,8 @@
 """Create / update / delete / archive / copy / finish for ShoppingList.
 
 Bundled into one file because most of these handlers are 10-20 lines and
-they share the "primary list is unique" invariant — keeping them together
-makes that contract obvious. Finish + copy live here too because they're
+they share the list-status lifecycle (draft → shopping → done) — keeping
+them together makes that contract obvious. Finish + copy live here too because they're
 shopping-list-scoped actions, not line-scoped.
 """
 import logging
@@ -13,8 +13,9 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
 from dora_api.domain.entities.shopping_list import (
-    SHOPPING_LIST_STATUS_DONE, SHOPPING_LIST_STATUS_SHOPPING,
-    SHOPPING_LIST_STATUS_VALUES, ShoppingList, ShoppingListLine)
+    SHOPPING_LIST_STATUS_DONE, SHOPPING_LIST_STATUS_DRAFT,
+    SHOPPING_LIST_STATUS_SHOPPING, SHOPPING_LIST_STATUS_VALUES, ShoppingList,
+    ShoppingListLine)
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.entities.stock_level import StockLevel
 from dora_api.domain.stock_status import StockStatus, level_for_status
@@ -155,7 +156,7 @@ def update_shopping_list(shopping_list_id: UUID):
         )
     if _Response.done_via_finish:
         return business_rule_violation(
-            "A list becomes done by finishing it — POST /finish (which "
+            "A list becomes done by finishing it: POST /finish (which "
             "snapshots prices and restocks), not PATCH status=done."
         )
     _Logger.info(f"Updated shopping list {shopping_list_id}")
@@ -227,16 +228,21 @@ class FinishShoppingListHandler:
             & EntityField(ShoppingListLine, ShoppingListLine.Fields.IS_TICKED).eq(True)
         )
 
-        # N6: ensure every ticked line has a price snapshot. Normally
-        # captured at tick time, but a line ticked before this feature
-        # existed (or in a flow that bypasses the standard update path)
-        # would arrive here without one. Snapshot now so reports include
-        # the list.
+        # Finishing no longer back-fills a *price* from the shop's offer
+        # (2026-09-17). It used to, so that every finished list contributed
+        # something to reports — but what it contributed was an advertised
+        # price the user had never confirmed, recorded as money they spent. A
+        # list finished with no prices entered now records no spend, which is
+        # the owner's call and the honest one: "that's up to the user".
+        #
+        # The offer's **RRP** is still frozen, on lines that carry a price the
+        # user entered: that is what "you saved $4 against the shelf price"
+        # is measured from, and it is context for their number rather than a
+        # replacement for it.
         from dora_api.features.shopping_lists.manage_shopping_list_lines import \
-            snapshot_offer_price
+            snapshot_offer_rrp
         for line in ticked_lines:
-            if line.picked_offer_price is None:
-                snapshot_offer_price(self.repository, line)
+            snapshot_offer_rrp(self.repository, line)
 
         # Resolve the restock target once, by status identity, not name.
         all_levels = self.repository.get(StockLevel).all()
@@ -391,6 +397,70 @@ class StartShoppingHandler:
         lst.status = SHOPPING_LIST_STATUS_SHOPPING
         self.repository.save_changes()
         return StartShoppingResponse()
+
+
+# ───── Back to draft ──────────────────────────────────────────────────────
+# The reverse of Start shopping, added 2026-09-17 (owner: *"No way to go back
+# to draft mode from shop mode? Sometimes there are accidents."*). It is not
+# the old /stop "pause" endpoint coming back: that existed because UX-v2 had a
+# separate shop *surface* to exit from, and it left a half-shopped list in a
+# state of its own. This is an undo for pressing the wrong button.
+#
+# **It unticks everything**, and the client says so before calling. A draft has
+# no tick model at all — the picker shows a plain item count for a draft and a
+# ratio only once shopping starts — so ticks have nowhere to live on the other
+# side of this transition. Keeping them hidden would leave a draft quietly
+# holding state the user can neither see nor edit, which is worse than the
+# honest reset.
+#
+# A finished list is still final: `done` is not reversible here, because the
+# restock it drove has already moved stock and undoing that is a different
+# (and much larger) question than "I mis-tapped".
+
+@dataclass(slots=True)
+class BackToDraftResponse:
+    not_found: bool = False
+    archived: bool = False
+    unticked_count: int = 0
+
+
+class BackToDraftHandler:
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
+
+    def handle(self, shopping_list_id: UUID) -> BackToDraftResponse:
+        lst: ShoppingList | None = self.repository.get(ShoppingList).by_id(shopping_list_id)
+        if lst is None:
+            return BackToDraftResponse(not_found=True)
+        if lst.is_done:
+            return BackToDraftResponse(archived=True)
+
+        lines: list[ShoppingListLine] = self.repository.get(ShoppingListLine).all(
+            EntityField(ShoppingListLine, "shopping_list_id").eq(shopping_list_id)
+            & EntityField(ShoppingListLine, ShoppingListLine.Fields.IS_TICKED).eq(True)
+        )
+        for line in lines:
+            line.is_ticked = False
+        lst.status = SHOPPING_LIST_STATUS_DRAFT
+        self.repository.save_changes()
+        return BackToDraftResponse(unticked_count=len(lines))
+
+
+@SHOPPING_LIST_ROUTER.route("/<uuid:shopping_list_id>/back-to-draft", methods=["POST"])
+def back_to_draft(shopping_list_id: UUID):
+    _Logger = logging.getLogger(__name__)
+    _Response = BackToDraftHandler(SqlAlchemyRepository()).handle(shopping_list_id)
+    if _Response.not_found:
+        return not_found("ShoppingList", shopping_list_id)
+    if _Response.archived:
+        return business_rule_violation(
+            "A finished list can't go back to draft."
+        )
+    _Logger.info(
+        f"List {shopping_list_id} returned to draft "
+        f"({_Response.unticked_count} lines unticked)"
+    )
+    return ok({"unticked_count": _Response.unticked_count})
 
 
 @SHOPPING_LIST_ROUTER.route("/<uuid:shopping_list_id>/start", methods=["POST"])

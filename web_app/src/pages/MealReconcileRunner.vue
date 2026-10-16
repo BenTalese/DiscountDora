@@ -211,7 +211,7 @@
             <q-card-section class="runner-help">
                 <p>
                     Dora walks you through past-day meals from your plan
-                    that haven't been confirmed yet — one at a time,
+                    that haven't been confirmed yet, one at a time,
                     oldest first. For each entry you have five options:
                 </p>
                 <dl>
@@ -219,7 +219,7 @@
                     <dd>You made it as planned. The cooked count and pool
                         are correct.</dd>
                     <dt>Different portions</dt>
-                    <dd>You made a different amount — say 3 instead of 2.
+                    <dd>You made a different amount, say 3 instead of 2.
                         Dora reflows the pool.</dd>
                     <dt>Cooked later</dt>
                     <dd>You made it, but on a later day. Dora records the
@@ -228,7 +228,7 @@
                     <dd>The meal didn't happen. Dora puts the pool back
                         the way it was.</dd>
                     <dt>Skip for now</dt>
-                    <dd>Not sure yet — the entry stays in the queue for
+                    <dd>Not sure yet. The entry stays in the queue for
                         next time.</dd>
                 </dl>
                 <p class="dora-text-muted-7">

@@ -31,8 +31,7 @@
             <q-icon :name="ICONS.shopping_cart" size="60px" class="q-mb-sm" />
             <div class="text-h6">No shopping lists yet.</div>
             <div class="q-mt-md">
-                Get started by creating your first list — empty, from a
-                template, or auto-filled from your stock.
+                Start one empty, from a template, or filled from your stock.
             </div>
             <div class="q-mt-md">
                 <BaseButton

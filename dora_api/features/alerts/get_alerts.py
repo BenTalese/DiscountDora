@@ -45,8 +45,13 @@ from dora_api.domain.entities.shopping_list import (SHOPPING_LIST_STATUS_DONE,
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.stock_status import (effective_expiring_soon_window,
                                           is_out_of_stock)
+from dora_api.domain.entities.price_alert import PriceAlert
+from dora_api.domain.entities.product import Product
+from dora_api.domain.entities.user import User
 from dora_api.features.alerts.alert_key import (list_alert_key, meal_alert_key,
+                                                product_alert_key,
                                                 stock_alert_key)
+from dora_api.features.app_settings.access import money_features_enabled
 from dora_api.features.alerts.alert_kinds import (SEVERITY_HIGH, SEVERITY_LOW,
                                                   SEVERITY_MEDIUM,
                                                   SEVERITY_ORDER,
@@ -106,9 +111,18 @@ class AlertDto:
     target_id: str | None = None
     # ISO date string (if relevant — e.g. expiry alerts include the date).
     related_date: str | None = None
-    # Per-user interaction overlay (C-9.1). `read` reflects this user; for an
-    # active (non-snoozed) alert `snoozed_until` is None.
-    read: bool = False
+    # ISO date the alert's episode began (owner 2026-10-15): the day an item
+    # entered its expiry window, the day a level changed, the day after a
+    # missed shop. It is what "discard alerts older than N days" measures, so
+    # every kind sets it from the fact that started the condition rather than
+    # from when somebody first looked.
+    started_on: str | None = None
+    # A raw money amount the alert is about (price_drop's current price). The
+    # server never formats currency (D-006); the client renders it.
+    amount: float | None = None
+    # Per-user interaction overlay (C-9.1). For an active (non-snoozed) alert
+    # `snoozed_until` is None. There is no read state: dismiss is the one way
+    # to put an alert away (owner 2026-10-15).
     snoozed_until: str | None = None
     # Derived tier: 'actionable' (counts toward the badge) or 'fyi'. A label
     # for the client's convenience — `severity` is the authority (Step-0 Q3).
@@ -189,20 +203,22 @@ class GetAlertsHandler:
             # ── Expiry ─────────────────────────────────────────────────
             if item.expiry_date is not None:
                 days_remaining = (item.expiry_date - today).days
+                expiry_iso = item.expiry_date.isoformat()
                 if is_expired(item, today):
                     raw.append(AlertDto(
-                        alert_id = stock_alert_key(item.id, "expired"),
+                        alert_id = stock_alert_key(item.id, f"expired:{expiry_iso}"),
                         kind = "expired",
                         severity = SEVERITY_HIGH,
                         stock_item_id = item.id,
                         stock_item_name = item.name,
                         message = f"{item.name} has expired",
                         detail = f"Expired {abs(days_remaining)} {pluralize(days_remaining, 'day')} ago.",
-                        related_date = item.expiry_date.isoformat(),
+                        related_date = expiry_iso,
+                        started_on = expiry_iso,
                     ))
                 elif is_expiring_soon(item, today, window):
                     raw.append(AlertDto(
-                        alert_id = stock_alert_key(item.id, "expiring_soon"),
+                        alert_id = stock_alert_key(item.id, f"expiring_soon:{expiry_iso}"),
                         kind = "expiring_soon",
                         severity = SEVERITY_MEDIUM,
                         stock_item_id = item.id,
@@ -213,7 +229,8 @@ class GetAlertsHandler:
                             if days_remaining == 0
                             else f"Expires in {days_remaining} {pluralize(days_remaining, 'day')}."
                         ),
-                        related_date = item.expiry_date.isoformat(),
+                        related_date = expiry_iso,
+                        started_on = (item.expiry_date - timedelta(days=window)).isoformat(),
                     ))
 
             # ── Stock level ────────────────────────────────────────────
@@ -223,9 +240,15 @@ class GetAlertsHandler:
             # says it. Non-essential + out still *dims and sinks* the row
             # (D-8) — that's a treatment read off the level, not an alert.
             if is_essential_low(item):
+                # The episode is the level change that made it low or out, so
+                # a restock and a later run-out is a new alert.
+                level_since = (
+                    item.stock_level_last_updated.date().isoformat()
+                    if item.stock_level_last_updated is not None else today.isoformat()
+                )
                 if is_out_of_stock(item.stock_level):
                     raw.append(AlertDto(
-                        alert_id = stock_alert_key(item.id, "essential_out"),
+                        alert_id = stock_alert_key(item.id, f"essential_out:{level_since}"),
                         kind = "essential_low",
                         severity = SEVERITY_HIGH,
                         stock_item_id = item.id,
@@ -234,19 +257,21 @@ class GetAlertsHandler:
                         # DR-4 (FU-578 #17): action-neutral — the bell offers
                         # both "Mark restocked" (per row) and "Add to list"
                         # (footer), so the copy shouldn't prescribe one.
-                        detail = "Out of stock and flagged as essential — worth restocking.",
+                        detail = "Out of stock and essential.",
                         related_date = None,
+                        started_on = level_since,
                     ))
                 else:
                     raw.append(AlertDto(
-                        alert_id = stock_alert_key(item.id, "essential_low"),
+                        alert_id = stock_alert_key(item.id, f"essential_low:{level_since}"),
                         kind = "essential_low",
                         severity = SEVERITY_HIGH,
                         stock_item_id = item.id,
                         stock_item_name = item.name,
                         message = f"Essential {item.name} is low",
-                        detail = "Time to restock — flagged as essential.",
+                        detail = "Essential and running low.",
                         related_date = None,
+                        started_on = level_since,
                     ))
 
         # ── Stocktake overdue: deliberately NOT an alert ───────────────
@@ -264,6 +289,9 @@ class GetAlertsHandler:
         raw.extend(self._shopping_day_alerts(today))
         # ── FU-317 Chunk 4 — meal-plan reconcile overdue ───────────────
         raw.extend(self._meal_reconcile_overdue_alerts(today))
+        # ── Price watches (per user) ───────────────────────────────────
+        if user_id is not None:
+            raw.extend(self._price_drop_alerts(user_id))
 
         # ── Per-user overlay (C-9.1 interactions + C-9.2 preferences) ───
         # One bounded fetch each of this user's interactions + preferences,
@@ -279,6 +307,11 @@ class GetAlertsHandler:
                 EntityField(AlertPreference, AlertPreference.Fields.USER_ID).eq(user_id)
             )
             preferences = {row.kind: row for row in preference_rows}
+
+        # Owner 2026-10-15 — "discard alerts older than X days". An alert whose
+        # episode began before the cutoff is dropped from every list and count,
+        # as if dismissed. Per user; None means keep everything.
+        discard_before = self._discard_cutoff(user_id, today)
 
         active: List[AlertDto] = []
         snoozed: List[AlertDto] = []
@@ -296,17 +329,21 @@ class GetAlertsHandler:
             # therefore cannot disagree about what "actionable" means.
             tier = TIER_ACTIONABLE if is_actionable(alert.severity) else TIER_FYI
 
+            if (
+                discard_before is not None and alert.started_on is not None
+                and alert.started_on < discard_before
+            ):
+                continue  # older than the user's discard window
             interaction = interactions.get(alert.alert_id)
             if interaction is not None and interaction.dismissed_at is not None:
                 continue  # dismissed → hidden everywhere
             snooze_until = _active_snooze_until(interaction, now)
-            read = interaction is not None and interaction.read_at is not None
             if snooze_until is not None:
                 snoozed.append(replace(
-                    alert, tier=tier, read=read, snoozed_until=snooze_until.isoformat()
+                    alert, tier=tier, snoozed_until=snooze_until.isoformat()
                 ))
                 continue
-            active.append(replace(alert, tier=tier, read=read, snoozed_until=None))
+            active.append(replace(alert, tier=tier, snoozed_until=None))
             # Severity counts feed the "X high · Y medium · Z low" caption; the
             # tier split feeds the badge (so a promoted low kind bumps it).
             if alert.severity == SEVERITY_HIGH:
@@ -365,6 +402,8 @@ class GetAlertsHandler:
                 f"{next_sunday.strftime('%a %d %b')}) has nothing on the plan yet."
             ),
             related_date = next_monday.isoformat(),
+            # Raised for the coming week during this one.
+            started_on = (next_monday - timedelta(days=7)).isoformat(),
         )]
 
     def _meal_reconcile_overdue_alerts(self, today: date) -> List[AlertDto]:
@@ -388,22 +427,25 @@ class GetAlertsHandler:
             severity = SEVERITY_LOW,
             message = f"{signal.unresolved_count} past meals need confirming",
             detail = (
-                f"Oldest is {signal.oldest_days_back} {pluralize(signal.oldest_days_back, 'day')} back — "
-                f"a quick pass keeps your pool honest."
+                f"Oldest is {signal.oldest_days_back} {pluralize(signal.oldest_days_back, 'day')} back."
             ),
             related_date = head_iso,
+            started_on = head_iso,
         )]
 
     def _shopping_day_alerts(self, today: date) -> List[AlertDto]:
-        """One FYI nudge per not-yet-done list whose planned shop date is
-        within reach. Upcoming window is the next `SHOPPING_DAY_WINDOW_DAYS`
-        (today inclusive); overdue (planned date already passed, list still
-        not done) also alerts so the bell mirrors the in-page banner's
-        "today / tomorrow / overdue" tinting (FU-074). Reads the existing
-        `planned_shop_date` (P6-01) — no schema. Clears when the list flips
-        to done. One alert per list, keyed by `list_alert_key` — the same
-        key is reused whether the list is upcoming or overdue, so user
-        snooze/dismiss decisions persist as the date rolls past."""
+        """Two kinds off one read of the open lists with a planned shop date.
+
+        * `shopping_day` (FYI): the date is today or within the next
+          `SHOPPING_DAY_WINDOW_DAYS`.
+        * `shopping_overdue` (owner 2026-10-15, "Did you forget your
+          shopping?"): the date has passed and the list is still in draft or
+          shop mode.
+
+        Both are keyed on the list **and** its planned date, so moving the date
+        is a new episode, and the two kinds never share a dismissal (they used
+        to be one kind on one key, so dismissing the reminder also silenced the
+        missed-shop nudge). Clears when the list is finished."""
         horizon = today + timedelta(days=SHOPPING_DAY_WINDOW_DAYS)
         lists: List[ShoppingList] = self.repository.get(ShoppingList).all(
             EntityField(ShoppingList, ShoppingList.Fields.PLANNED_SHOP_DATE)
@@ -413,40 +455,95 @@ class GetAlertsHandler:
         )
         out: List[AlertDto] = []
         for lst in lists:
-            days = (lst.planned_shop_date - today).days
+            planned = lst.planned_shop_date
+            planned_iso = planned.isoformat()
+            days = (planned - today).days
             if days < 0:
-                # Overdue: planned shop day already passed and the list still
-                # isn't done. Bump severity so it sorts above plain upcoming
-                # nudges. Since Step-0 Q3 that also promotes it to the
-                # actionable tier and onto the bell badge — deliberate, and the
-                # honest consequence of severity being the only importance
-                # scale: if it's important enough to sort above the others, it
-                # is important enough to count. An upcoming shop day stays low
-                # and stays off the badge.
                 overdue = -days
                 when = "yesterday" if overdue == 1 else f"{overdue} days ago"
-                message = f"Shopping day was {when}: {lst.display_name}"
-                detail = "Mark it done or move the date."
-                severity = SEVERITY_MEDIUM
-            else:
-                when = (
-                    "today" if days == 0
-                    else "tomorrow" if days == 1
-                    else f"in {days} days"
-                )
-                message = f"Shopping day {when}: {lst.display_name}"
-                detail = "Open the list to get ready."
-                severity = SEVERITY_LOW
+                out.append(AlertDto(
+                    alert_id = list_alert_key(lst.id, f"shopping_overdue:{planned_iso}"),
+                    kind = "shopping_overdue",
+                    severity = SEVERITY_MEDIUM,
+                    message = "Did you forget your shopping?",
+                    detail = f"{lst.display_name} was planned for {when}.",
+                    target_id = str(lst.id),
+                    related_date = planned_iso,
+                    started_on = (planned + timedelta(days=1)).isoformat(),
+                ))
+                continue
+            when = (
+                "today" if days == 0
+                else "tomorrow" if days == 1
+                else f"in {days} days"
+            )
             out.append(AlertDto(
-                alert_id = list_alert_key(lst.id, "shopping_day"),
+                alert_id = list_alert_key(lst.id, f"shopping_day:{planned_iso}"),
                 kind = "shopping_day",
-                severity = severity,
-                message = message,
-                detail = detail,
+                severity = SEVERITY_LOW,
+                message = f"Shopping day {when}: {lst.display_name}",
+                detail = "Open the list to get ready.",
                 target_id = str(lst.id),
-                related_date = lst.planned_shop_date.isoformat(),
+                related_date = planned_iso,
+                started_on = (planned - timedelta(days=SHOPPING_DAY_WINDOW_DAYS)).isoformat(),
             ))
         return out
+
+    def _price_drop_alerts(self, user_id: UUID) -> List[AlertDto]:
+        """One alert per watched product whose current price is at or below the
+        user's threshold. The episode is the offer that crossed it: a new
+        price observation at or under the line is a new alert; a price that
+        stays put is the same one, so it fires once.
+
+        Money-gated like every price surface (R-029): with money off, no watch
+        fires. `PriceAlert.threshold_unit_price` is compared with the product's
+        shelf `price_now`, which is what the watch dialog asks for."""
+        if not money_features_enabled(self.repository):
+            return []
+        watches: List[PriceAlert] = self.repository.get(PriceAlert).all(
+            EntityField(PriceAlert, PriceAlert.Fields.USER_ID).eq(user_id)
+        )
+        if not watches:
+            return []
+        threshold_by_product = {w.product_id: float(w.threshold_unit_price) for w in watches}
+        products: List[Product] = (
+            self.repository.get(Product)
+            .include(Product.Fields.CURRENT_OFFER)
+            .include(Product.Fields.STORE)
+            .all(EntityField(Product, "id").in_(list(threshold_by_product)))
+        )
+        out: List[AlertDto] = []
+        for product in products:
+            offer = product.current_offer
+            if offer is None or offer.price_now is None:
+                continue
+            price = float(offer.price_now)
+            if price <= 0 or price > threshold_by_product[product.id]:
+                continue
+            seen_on = offer.offered_on.date().isoformat() if offer.offered_on else None
+            store = product.store.name if product.store is not None else None
+            out.append(AlertDto(
+                alert_id = product_alert_key(product.id, f"price_drop:{offer.id}"),
+                kind = "price_drop",
+                severity = SEVERITY_MEDIUM,
+                message = f"{product.name} hit your price",
+                detail = f"At {store}." if store else None,
+                target_id = str(product.id),
+                related_date = seen_on,
+                started_on = seen_on,
+                amount = price,
+            ))
+        return out
+
+    def _discard_cutoff(self, user_id: UUID | None, today: date) -> str | None:
+        """ISO date before which this user's alerts are discarded, or None."""
+        if user_id is None:
+            return None
+        user: User | None = self.repository.get(User).by_id(user_id)
+        days = user.alert_discard_after_days if user is not None else None
+        if not days:
+            return None
+        return (today - timedelta(days=int(days))).isoformat()
 
 @ALERT_ROUTER.route("", methods=["GET"])
 def get_alerts():

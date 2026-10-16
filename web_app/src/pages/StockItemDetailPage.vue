@@ -94,7 +94,10 @@
                          Silent unless the upcoming plan actually wants this
                          item; see the card for why it is here and not on the
                          overview row. -->
-                    <PlannedDemandCard :demand="plannedDemand" class="q-mb-md" />
+                    <!-- Owner 2026-10-15: planned meals are a reason to buy, so
+                         they live inside the verdict. The card stands alone only
+                         where there is no verdict (money features off). -->
+                    <PlannedDemandCard v-if="!buyVerdict" :demand="plannedDemand" class="q-mb-md" />
                     <BuyVerdictCard
                         v-if="buyVerdict"
                         :verdict="buyVerdict"
@@ -163,7 +166,7 @@
                                                             :sequence="detailLevelSequence"
                                                             dot-class="q-mr-sm"
                                                         />
-                                                        {{ detail.stock_level_name ?? '—' }}
+                                                        {{ detail.stock_level_name ?? '–' }}
                                                     </span>
                                                 </template>
                                                 <q-list dense>
@@ -210,7 +213,7 @@
                                             clearable
                                             dense
                                             borderless
-                                            placeholder="—"
+                                            placeholder="–"
                                             @filter="filterLocations"
                                             @clear="onClearLocation"
                                             @update:model-value="onChangeLocation"
@@ -236,7 +239,7 @@
                                             clearable
                                             dense
                                             borderless
-                                            :display-value="form.stock_group_id ? undefined : '—'"
+                                            :display-value="form.stock_group_id ? undefined : '–'"
                                             @clear="onClearGroup"
                                             @update:model-value="onChangeGroup"
                                         />
@@ -254,7 +257,7 @@
                                             clearable
                                             dense
                                             borderless
-                                            :display-value="form.usual_store_id ? undefined : '—'"
+                                            :display-value="form.usual_store_id ? undefined : '–'"
                                             @update:model-value="onChangeUsualStore"
                                         >
                                             <!-- Feedback 2026-08-08: show each store's logo
@@ -493,7 +496,7 @@
                                                 aria-label="Set expiry date"
                                                 @click="expiryDialogOpen = true"
                                             >
-                                                {{ detail.expiry_date || '—' }}
+                                                {{ detail.expiry_date || '–' }}
                                             </button>
                                             <q-space />
                                             <!-- Feedback 2026-08-08: Clear sits at the left
@@ -667,7 +670,7 @@
                                 <span>Preferred buys</span>
                                 <q-icon :name="ICONS.info_outline" size="14px" class="dora-text-muted">
                                     <BaseTooltip max-width="320px">
-                                        What you actually buy for this — e.g.
+                                        What you actually buy for this, e.g.
                                         “Vitasoy Oat Milky 1L”.
                                     </BaseTooltip>
                                 </q-icon>
@@ -760,12 +763,11 @@
                                     :stock-item-id="stockItemId"
                                     :item-name="detail.name"
                                     @submit="addObservation"
-                                />
+                                >
                                 <q-list
                                     v-if="priceObservations.length"
                                     separator
-                                    bordered
-                                    class="rounded-borders q-mb-sm"
+                                    class="dora-your-prices__list"
                                 >
                                     <q-item
                                         v-for="obs in priceObservations"
@@ -794,6 +796,7 @@
                                         </q-item-section>
                                     </q-item>
                                 </q-list>
+                                </YourPricesWidget>
                             </template>
                         </div>
                     </div>
@@ -853,7 +856,6 @@
                                     <StoreLogo
                                         :name="prod.store_name"
                                         :store-id="prod.store_id"
-                                        :has-image="false"
                                         :height="20"
                                         :width="34"
                                         class="q-mr-sm"
@@ -1168,7 +1170,7 @@
                                         caption
                                         class="dora-text-muted"
                                     >
-                                        (from product: {{ bc.product_name ?? '—' }})
+                                        (from product: {{ bc.product_name ?? '–' }})
                                     </q-item-label>
                                 </q-item-section>
                                 <q-item-section side>
@@ -1278,9 +1280,7 @@
                      the panel edge — q-pl-lg gives the icon column real air. -->
                 <q-tab-panel name="history" class="q-pl-lg">
                     <div v-if="lifecycleEvents.length === 0" class="dora-text-muted text-caption q-pa-md">
-                        Nothing logged for this item yet — once you change
-                        its stock level, add it to a list, mark it open or
-                        log waste, it'll show up here.
+                        Nothing logged for this item yet.
                     </div>
                     <q-timeline v-else color="primary">
                         <q-timeline-entry
@@ -2240,7 +2240,7 @@
             const detail = err.details as { title?: string } | null;
             const title = typeof detail?.title === 'string' ? detail.title : '';
             if (title.toLowerCase().startsWith('endpoint')) {
-                return `This server has no barcode endpoint at ${err.url} — its API is older than this page. Restart or update the Dora server.`;
+                return `This server has no barcode endpoint at ${err.url}. Update the Dora server.`;
             }
         }
         return describeApiError(err) || 'Could not add barcode.';
@@ -2344,18 +2344,6 @@
         icon: string;
         color: string;
     };
-    const ADDED_VIA_LABELS: Record<string, string> = {
-        manual: 'Added manually',
-        auto_low_stock: 'Auto-added: low stock',
-        auto_essential: 'Auto-added: essential',
-        auto_flagged: 'Auto-added: essential',
-        auto_recipe: 'Auto-added from a recipe',
-        auto_meal_plan: 'Auto-added from meal plan',
-        auto_frequently_added: 'Auto-added: frequently added',
-    };
-    function humaniseAddedVia(via: string): string {
-        return ADDED_VIA_LABELS[via] ?? 'Added to a list';
-    }
     const lifecycleEvents = computed<LifecycleEvent[]>(() => {
         const d = detail.value;
         if (!d) return [];
@@ -2403,12 +2391,12 @@
             });
         }
 
-        // Past list-adds — list name + provenance ("auto: low stock").
+        // Past list-adds — which list, and when.
         for (const a of d.recent_list_adds ?? []) {
             out.push({
                 id: `add-${a.added_at}-${a.shopping_list_id}`,
                 at: a.added_at,
-                title: `${humaniseAddedVia(a.added_via)} → ${a.shopping_list_name}`,
+                title: `Added to ${a.shopping_list_name}`,
                 icon: ICONS.shopping_cart,
                 color: 'accent',
             });
@@ -2461,7 +2449,7 @@
             let title: string;
             let body: string | null = null;
             let color: string;
-            const fmt = (iso: string | null) => (iso ? iso : '—');
+            const fmt = (iso: string | null) => (iso ? iso : '–');
             if (e.kind === 'cleared') {
                 title = 'Cleared expiry';
                 body = e.previous_expiry_date
@@ -2573,7 +2561,7 @@
                     $q.dialog({
                         title: 'Still used by recipes',
                         message:
-                            `<p>Can't delete this stock item — it's an ingredient on ${blocked.length} recipe(s):</p>` +
+                            `<p>Can't delete this stock item. It's an ingredient in ${blocked.length} recipe(s):</p>` +
                             `<ul>${lines}</ul>` +
                             `<p>Remove it from those recipes first, then try again.</p>`,
                         html: true,

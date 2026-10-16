@@ -24,8 +24,7 @@ same seams:
     row either — if the companion tool pushes data at 07:20 the mail should
     still go out on the next tick within the hour.
 
-The gate chain, outermost first: SMTP configured → the install's
-`deals_email_enabled` flag → the household send hour → per-user opt-in, active
+The gate chain, outermost first: SMTP configured → the household send hour → per-user opt-in, active
 account and a *verified* address → this user's chosen weekday → a non-empty
 digest.
 """
@@ -86,12 +85,6 @@ def send_deals_email(
 
             repository = SqlAlchemyRepository()
             setting = get_or_create_app_setting(repository)
-            if not setting.deals_email_enabled:
-                # Install-wide off switch (Settings → Admin → Email). The
-                # per-user opt-ins stay on their rows untouched, so turning the
-                # install flag back on resumes everyone's existing choice.
-                return 0
-
             local_now = now.astimezone(household_timezone(repository))
             if not is_deals_hour(local_now.hour):
                 return 0
@@ -219,7 +212,7 @@ def _text_body(digest: DealsDigest, unsubscribe_url: str) -> str:
     building it from the same `DealLine`s means it cannot disagree with the
     HTML about a price."""
     rows = [
-        f"- {line.name} ({line.size}) — {line.price_now} "
+        f"- {line.name} ({line.size}): {line.price_now} "
         f"was {line.price_was}, {line.discount_percent}% off at {line.store_name}"
         for line in digest.lines
     ]

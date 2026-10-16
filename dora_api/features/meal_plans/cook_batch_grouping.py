@@ -48,7 +48,7 @@ def validate_cook_groups(entry_requests) -> Optional[str]:
         if any(getattr(m, "cook_fresh", False) for m in members):
             return "A meal cooked fresh on the day can't also be part of a cook batch."
         if len(members) < 2:
-            return "A cook batch must cover at least two days — otherwise it's just a single meal."
+            return "A cook batch must cover at least two days."
         if len({m.recipe_id for m in members}) > 1:
             return "A cook batch must use a single recipe across all its days."
         if len({m.slot for m in members}) > 1:

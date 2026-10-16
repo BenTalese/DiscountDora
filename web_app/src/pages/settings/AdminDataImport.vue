@@ -72,7 +72,7 @@
             <SettingsSection>
                 <template #title>Pick a sheet</template>
                 <template #description>
-                    This workbook has more than one sheet — choose which to import.
+                    This workbook has more than one sheet. Choose which to import.
                 </template>
                 <q-option-group
                     v-model="selectedSheet"
@@ -161,7 +161,7 @@
                                         :key="target"
                                         :class="row[target] === null ? 'dora-text-muted' : ''"
                                     >
-                                        {{ row[target] ?? '—' }}
+                                        {{ row[target] ?? '–' }}
                                     </td>
                                 </tr>
                             </tbody>
@@ -191,7 +191,7 @@
                 </SettingsRow>
                 <SettingsRow
                     label="Create missing groups"
-                    help="Same idea for groups. Levels are never auto-created — pick the name."
+                    help="Same, for groups. Levels are never created automatically."
                 >
                     <q-toggle v-model="options.create_missing_groups" />
                 </SettingsRow>

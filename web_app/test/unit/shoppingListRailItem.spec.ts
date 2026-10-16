@@ -3,8 +3,8 @@
  * FU-520 component layer — ShoppingListRailItem.
  *
  * One row of the shopping-lists rail (UX-v2 §3.1): status icon, the
- * server-resolved display name, the "next up" marker and the effective-date
- * caption. Quasar chrome mounts for real (pattern from stockLevelDot /
+ * server-resolved display name and an item-count chip (2026-09-27: the date
+ * caption and the "next up" marker went). Quasar chrome mounts for real (pattern from stockLevelDot /
  * addToListButton specs).
  *
  * The four copy/delete kebab cases were deleted on 2026-08-28 along with the
@@ -48,32 +48,31 @@ function mountRow(summary: ShoppingListSummary, active = false) {
 }
 
 describe('ShoppingListRailItem', () => {
-    it('renders the display name and the ticked-count caption', () => {
+    it('renders the display name and the item count as a chip', () => {
         const wrapper = mountRow(summaryOf());
 
         expect(wrapper.text()).toContain('Weekly shop');
-        expect(wrapper.text()).toContain('2/5 ticked');
+        const chip = wrapper.find('.sl-rail-item__count');
+        expect(chip.text()).toBe('5');
+        expect(chip.attributes('aria-label')).toBe('5 items');
     });
 
-    it('shows a plain item count on a draft, not a ticked ratio', () => {
-        // A draft can no longer hold ticks (2026-08-28), so "0/5 ticked" there
-        // was a progress reading that could only ever say zero.
-        const wrapper = mountRow(summaryOf({ status: 'draft', line_count: 5, ticked_count: 0 }));
+    it('omits the count chip on an empty list', () => {
+        const wrapper = mountRow(summaryOf({ status: 'draft', line_count: 0, ticked_count: 0 }));
 
-        expect(wrapper.text()).toContain('5 items');
-        expect(wrapper.text()).not.toContain('ticked');
+        expect(wrapper.find('.sl-rail-item__count').exists()).toBe(false);
     });
 
-    it('singularises the draft item count', () => {
+    it('singularises the count label', () => {
         const wrapper = mountRow(summaryOf({ status: 'draft', line_count: 1, ticked_count: 0 }));
 
-        expect(wrapper.text()).toContain('1 item');
-        expect(wrapper.text()).not.toContain('1 items');
+        expect(wrapper.find('.sl-rail-item__count').attributes('aria-label')).toBe('1 item');
     });
 
-    it('shows the "next up" badge only when flagged', () => {
-        expect(mountRow(summaryOf({ is_next_up: false })).text()).not.toContain('next up');
-        expect(mountRow(summaryOf({ is_next_up: true })).text()).toContain('next up');
+    it('never shows a "next up" marker or a date caption', () => {
+        const wrapper = mountRow(summaryOf({ is_next_up: true }));
+        expect(wrapper.text()).not.toContain('next up');
+        expect(wrapper.text()).not.toMatch(/2026|10\/07/);
     });
 
     it('colours the status icon by status (shopping → positive)', () => {

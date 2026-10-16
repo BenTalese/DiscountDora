@@ -6,10 +6,10 @@ import { computed, readonly, ref } from 'vue';
 const api = new AlertApiService();
 
 // Server now owns "what counts" (C-9.1): alert conditions are derived live
-// and the user's read/snooze/dismiss decisions are persisted in
+// and the user's snooze/dismiss decisions are persisted in
 // AlertInteraction, so the badge, list, snoozed set, and (later) channels
 // all read one server-derived truth. The store is a thin cache shared across
-// the header bell, the alerts page, and Dora's "what needs my attention?"
+// the header bell and Dora's "what needs my attention?"
 // intent — no client-side recompute of counts or snooze (R-003).
 const EMPTY: Alerts = {
     items: [],
@@ -59,16 +59,10 @@ export const useAlertStore = defineStore('alert', () => {
         await api.dismissAsync(alertId);
         await refreshAsync();
     };
-    const markRead = async (alertId: string) => {
-        await api.markReadAsync(alertId);
-        await refreshAsync();
-    };
-    const markUnread = async (alertId: string) => {
-        await api.markUnreadAsync(alertId);
-        await refreshAsync();
-    };
-    const markAllRead = async () => {
-        await api.markAllReadAsync();
+    // No read state (owner 2026-10-15): dismiss is the one way to put an
+    // alert away, and "Dismiss all" replaces "Mark all read".
+    const dismissAllAsync = async () => {
+        await api.dismissAllAsync();
         await refreshAsync();
     };
 
@@ -89,9 +83,7 @@ export const useAlertStore = defineStore('alert', () => {
         snoozeAlert,
         unsnoozeAlert,
         dismissAlert,
-        markRead,
-        markUnread,
-        markAllRead,
+        dismissAllAsync,
         snoozedUntil,
     };
 });

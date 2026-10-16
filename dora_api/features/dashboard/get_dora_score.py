@@ -34,19 +34,11 @@ from dora_api.domain.dora_score import (
     window_start,
 )
 from dora_api.domain.entities.meal_plan_entry import MealPlanEntry
-from dora_api.domain.entities.meal_plan_reconcile_receipt import \
-    MealPlanReconcileReceipt
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.entities.stock_item_waste_event import StockItemWasteEvent
-from dora_api.domain.entities.user import User
 from dora_api.features.app_settings.access import money_features_enabled
 from dora_api.features.app_settings.clock import household_today
 from dora_api.features.budget.budget import GetBudgetStatusHandler
-# The reconcile feature owns what "still pending" means and whether the
-# household reconciles by hand; plan adherence reads both rather than
-# re-deriving either.
-from dora_api.features.meal_plans.reconcile import (_auto_drain_enabled,
-                                                    _pending_states)
 from dora_api.features.recipes.get_recipes import load_recipe_cookability
 from dora_api.features.routers import DASHBOARD_ROUTER
 from dora_api.infrastructure.api_response import ok, unauthorized
@@ -173,7 +165,7 @@ class GetDoraScoreHandler:
         # returns a live budget for a money-off install. Calling it
         # unconditionally here meant the composite was weighted by money data
         # the household had opted out of, and the card rendered a Budget row
-        # linking to /settings/money. Same shape as the buy verdict's gate
+        # linking to /settings/budget. Same shape as the buy verdict's gate
         # (`get_buy_verdict.py`, ADR-055): the reasoning is gated at the
         # gather, not just suppressed at the render.
         money_enabled = money_features_enabled(self.repository)
@@ -206,32 +198,6 @@ class GetDoraScoreHandler:
         # its other readers (pantry belief, the stock-item history); nothing is
         # orphaned by this.
 
-        # ── Plan adherence ────────────────────────────────────────
-        # Of the meals planned inside the window whose day has passed, how many
-        # are still unresolved on the reconcile queue.
-        #
-        # Both counts are window-scoped so the ratio compares like with like —
-        # `reconcile_overdue_signal` counts the whole backlog, which is the
-        # right number for an overdue *nudge* and the wrong one for a rate. The
-        # definition of "pending" is not re-invented here: `_pending_states` +
-        # `_auto_drain_enabled` are imported from the reconcile feature, so a
-        # change to what counts as settled moves this score with it (R-003).
-        manual_reconcile = not _auto_drain_enabled()
-        past_planned_meals = 0
-        unresolved_past_meals = 0
-        if manual_reconcile:
-            mpe_scheduled = EntityField(
-                MealPlanEntry, MealPlanEntry.Fields.SCHEDULED_FOR,
-            )
-            past_entries: list[MealPlanEntry] = self.repository.get(MealPlanEntry).all(
-                mpe_scheduled.gte(start.date()) & mpe_scheduled.lt(end.date())
-            )
-            past_planned_meals = len(past_entries)
-            if past_entries:
-                unresolved_past_meals = self._unresolved_among(
-                    [e.id for e in past_entries]
-                )
-
         return DoraScoreInputs(
             now=now,
             waste_event_count=waste_event_count,
@@ -239,45 +205,10 @@ class GetDoraScoreHandler:
             budget_over_pct=budget_over_pct,
             expired_item_count=expired_item_count,
             total_items_with_expiry=total_items_with_expiry,
-            past_planned_meals=past_planned_meals,
-            unresolved_past_meals=unresolved_past_meals,
-            manual_reconcile=manual_reconcile,
             upcoming_planned_meals=upcoming_planned_meals,
             upcoming_cookable_meals=upcoming_cookable_meals,
             money_enabled=money_enabled,
         )
-
-    def _unresolved_among(self, entry_ids: list[UUID]) -> int:
-        """How many of these entries' *latest* receipts are still pending.
-
-        Latest-per-entry, not any-receipt: an entry that was disputed and then
-        settled has two receipts, and counting the old one would keep it
-        unresolved forever. The `(created_at, id)` ordering matches
-        `_latest_receipt` in the reconcile feature (FU-529), so both surfaces
-        agree on which receipt is current.
-
-        An entry with **no** receipt at all is not counted: the sweep writes
-        one when the day passes, so no receipt means the sweep hasn't run for
-        that day yet — Dora's lag, not the household's.
-        """
-        pending = set(_pending_states(_auto_drain_enabled()))
-        receipts: list[MealPlanReconcileReceipt] = self.repository.get(
-            MealPlanReconcileReceipt
-        ).all(
-            EntityField(
-                MealPlanReconcileReceipt,
-                MealPlanReconcileReceipt.Fields.MEAL_PLAN_ENTRY_ID,
-            ).in_(entry_ids)
-        )
-        latest: dict[UUID, MealPlanReconcileReceipt] = {}
-        for receipt in receipts:
-            current = latest.get(receipt.meal_plan_entry_id)
-            if current is None or (receipt.created_at, str(receipt.id)) > (
-                current.created_at, str(current.id)
-            ):
-                latest[receipt.meal_plan_entry_id] = receipt
-        return sum(1 for r in latest.values() if r.state in pending)
-
 
 def _current_user_id() -> UUID | None:
     raw = session.get("user_id")

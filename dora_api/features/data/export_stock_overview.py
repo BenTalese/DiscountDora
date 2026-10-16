@@ -100,8 +100,8 @@ _PRINT_TEMPLATE = """<!doctype html>
                     <div class="item-notes">{{ item.notes }}</div>
                   {% endif %}
                 </td>
-                <td>{{ item.stock_level.name if item.stock_level else '—' }}</td>
-                <td>{{ item.expiry_date.isoformat() if item.expiry_date else '—' }}</td>
+                <td>{{ item.stock_level.name if item.stock_level else '–' }}</td>
+                <td>{{ item.expiry_date.isoformat() if item.expiry_date else '–' }}</td>
               </tr>
             {% endfor %}
           </tbody>

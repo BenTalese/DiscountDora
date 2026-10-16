@@ -101,7 +101,7 @@
             void router.replace('/');
         } catch (err) {
             const message = err instanceof Error ? err.message : 'Could not reach that instance.';
-            errorMessage.value = 'Could not reach that instance — check the URL and your connection.';
+            errorMessage.value = 'Could not reach that server. Check the URL and your connection.';
             console.warn('BackendSetup probe failed', message);
         } finally {
             submitting.value = false;

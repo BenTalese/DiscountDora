@@ -2,7 +2,7 @@
     <div class="settings-page">
         <SettingsPageHeader
             title="API access"
-            description="Bearer keys for authenticated sources that push data into Dora. Always-on; not tied to any feature being enabled."
+            description="Bearer keys for authenticated sources that push data into Dora."
             :icon="ICONS.key"
         >
             <template #actions>
@@ -86,32 +86,39 @@
                             </span>
                         </q-item-label>
                     </q-item-section>
-                    <q-item-section side>
-                        <div class="row q-gutter-xs items-center" @click.stop>
-                            <BaseButton
-                                variant="ghost"
-                                dense
-                                :icon="src.enabled ? ICONS.lock : ICONS.lock_open"
-                                :label="src.enabled ? 'Disable' : 'Enable'"
-                                :loading="togglingId === src.id"
-                                @click="onToggle(src)"
-                            />
-                            <BaseButton
-                                variant="ghost"
-                                dense
-                                :icon="ICONS.edit"
-                                label="Rename"
-                                @click="openRename(src)"
-                            />
-                            <BaseButton
-                                variant="danger-ghost"
-                                dense
-                                :icon="ICONS.delete"
-                                label="Revoke"
-                                :loading="revokingId === src.id"
-                                @click="onRevoke(src)"
-                            />
-                        </div>
+                    <!-- Owner 2026-10-15: three labelled buttons in the side
+                         section squeezed the label column to a word per line on
+                         a phone. One overflow menu at every width. -->
+                    <q-item-section side @click.stop>
+                        <BaseButton
+                            variant="icon"
+                            :icon="ICONS.more_vert"
+                            :loading="togglingId === src.id || revokingId === src.id"
+                            :aria-label="`Actions for ${src.label}`"
+                        >
+                            <q-menu auto-close anchor="bottom right" self="top right">
+                                <q-list dense style="min-width: 180px">
+                                    <q-item clickable @click="onToggle(src)">
+                                        <q-item-section avatar>
+                                            <q-icon :name="src.enabled ? ICONS.lock : ICONS.lock_open" size="18px" />
+                                        </q-item-section>
+                                        <q-item-section>{{ src.enabled ? 'Disable' : 'Enable' }}</q-item-section>
+                                    </q-item>
+                                    <q-item clickable @click="openRename(src)">
+                                        <q-item-section avatar>
+                                            <q-icon :name="ICONS.edit" size="18px" />
+                                        </q-item-section>
+                                        <q-item-section>Rename</q-item-section>
+                                    </q-item>
+                                    <q-item clickable @click="onRevoke(src)">
+                                        <q-item-section avatar>
+                                            <q-icon :name="ICONS.delete_outline" size="18px" color="negative" />
+                                        </q-item-section>
+                                        <q-item-section class="text-negative">Revoke</q-item-section>
+                                    </q-item>
+                                </q-list>
+                            </q-menu>
+                        </BaseButton>
                     </q-item-section>
                 </template>
 
@@ -124,14 +131,14 @@
                             Each store name the source pushes must be
                             mapped to one of your Dora stores. Pushes
                             against an unmapped name are skipped and
-                            surface here as pending — they never
-                            auto-create a store.
+                            show here as pending.
                         </div>
 
                         <q-list dense>
                             <q-item
                                 v-for="m in mappingsBySource[src.id] ?? []"
                                 :key="m.id"
+                                class="mapping-row"
                             >
                                 <q-item-section>
                                     <q-item-label>
@@ -157,8 +164,8 @@
                                         </span>
                                     </q-item-label>
                                 </q-item-section>
-                                <q-item-section side>
-                                    <div class="row q-gutter-xs items-center">
+                                <q-item-section side class="mapping-row__assign">
+                                    <div class="row q-gutter-xs items-center no-wrap">
                                         <q-select
                                             :model-value="m.store_id"
                                             :options="storeOptions"
@@ -170,7 +177,7 @@
                                             outlined
                                             clearable
                                             label="Store"
-                                            style="min-width: 200px"
+                                            class="mapping-row__select"
                                             @update:model-value="(value: string | null) => onAssign(src.id, m, value)"
                                         />
                                         <BaseButton
@@ -230,8 +237,8 @@
                     autofocus
                 />
                 <div class="text-caption dora-text-muted q-mt-sm">
-                    Free-text; only you see it. The key itself is shown
-                    once after you create it — copy it then.
+                    Only you see this. The key is shown once, when you
+                    create it.
                 </div>
             </q-card-section>
             <template #actions>
@@ -538,6 +545,24 @@
     .settings-list {
         border-top: 1px solid color-mix(in srgb, var(--text-primary) 8%, transparent);
         border-bottom: 1px solid color-mix(in srgb, var(--text-primary) 8%, transparent);
+    }
+    .mapping-row__select {
+        min-width: 200px;
+    }
+    @media (max-width: 599px) {
+        .mapping-row {
+            flex-wrap: wrap;
+        }
+        .mapping-row__assign {
+            flex: 1 1 100%;
+            padding-left: 0;
+            margin-top: var(--space-2);
+            align-items: stretch;
+        }
+        .mapping-row__select {
+            min-width: 0;
+            flex: 1 1 auto;
+        }
     }
     .reveal-readout :deep(input) {
         font-family: var(--font-mono, monospace);

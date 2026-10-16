@@ -6,6 +6,269 @@ semver — major bumps signal schema or breaking-config changes.
 ## [Unreleased]
 
 ### Changed
+- **Alerts, reworked (2026-10-15).** The Alerts page is gone: the bell lists
+  everything, closes when you tap outside it, and keeps snoozed alerts in their
+  own section. Each alert has two rows of buttons, one for the thing it is
+  about (push or clear an expiry, find recipes using it, change the stock
+  level, add it to a list, open the list) and one for the alert (snooze,
+  dismiss). "Mark as read" is gone; "Dismiss all" replaces "Mark all read". An
+  alert now fires once per occurrence: dismissing this pack of apples' expiry
+  doesn't silence the next pack, and nothing re-fires as the days count down.
+  Alerts older than your chosen window (7, 14 or 30 days, or never) drop out.
+  New: "Did you forget your shopping?" when a list's shop day has passed, and
+  price drop alerts, which you can now set from a product card in My products.
+  Which alerts you get, the discard window and your price watches live in
+  Settings → Notifications.
+- **Companion product search (2026-10-15).** Icons render (the icon font was
+  never loaded). Saving a product that isn't on special no longer fails with a
+  502, and a failed save says why. The search shows how far through it is, store
+  by store. Cards follow the original design (image on white, the save heart on
+  its edge, a yellow SAVE badge) and open the product on the store's site. The
+  filters look like Dora's, the compare tray is tidied, and the mascot sits
+  centred. Your Dora stores are now the companion's stores: each supermarket is
+  matched to them by name on first run, you assign the rest on the Merchants
+  page (one supermarket can feed several stores), and their logos show.
+- **Meal planner (2026-10-15).** The budget line compares this week's meals
+  with what's left of the budget for the week shown. A batch's cook day says
+  how many servings the whole batch needs, and its leftover days no longer
+  claim a cooked serving is ready. The servings control in a meal's menu says
+  how many are cooked and planned. On a phone, Apply template appears once and
+  Manage templates is in the menu.
+- **Shopping list header, slimmer (2026-10-15).** The figures sit level with the
+  chevron with their labels above, the status pill moves to the bottom left
+  beside one Group by dropdown and side-by-side buttons, and mid-shop progress
+  is a bar with the count inside. Picked items are "Collected", counted in a
+  circle. Lists made from a template show in the list picker straight away.
+- **My products (2026-10-15).** Cards sit two to a row on a phone with a
+  larger name; tracking, price history, delete and the new price alert are in
+  each card's menu. Compact rows no longer scroll sideways, unlinked products
+  get the same cart button, and the stock items without products list drops
+  its open button.
+- **Elsewhere (2026-10-15).** Dashboard budget only counts open lists due in
+  the period. Planned meals are now part of a stock item's buy verdict. Your
+  prices is restyled. Stocktake drops "but is currently" when Dora and you
+  agree, and its progress bar follows the theme. Reports opens with a Summary
+  card. Settings: Money is now Budget; the Email page folds Gmail setup away,
+  loses the dry-run wording, and the weekly deals email sends whenever email is
+  set up and you've subscribed (the admin toggle is gone). API access fits a
+  phone; the audit log drops Source. Cook mode, cookbook and recipe view copy
+  and icon tweaks.
+
+- **Shopping list header and templates (2026-10-14).** The list card's steps
+  are two stacked buttons on its right edge: a draft shows Shop; mid-shop,
+  Draft sits above Finish; a finished list shows Amend above Put away. Each
+  wears the icon of the state it leads to. The progress ring is bigger and sits
+  beside them, and "N left to pick" is gone. Switching lists on a phone no
+  longer flashes a placeholder icon in the picker. Templates: tap a card to see
+  what's on it and use it from there, or tap Use on the card directly. The
+  page header text is gone. Editing a template's items fits a phone, and each
+  item has the same offer or preferred-buy picker as a list row; using the
+  template carries those choices onto the new list.
+
+- **Dashboard tidy (2026-09-27).** Kitchen health's ring is centred in its card
+  with just the number inside it (no "/100"), and the trend sits on one line
+  underneath. "Plan adherence" is gone from Kitchen health, so the score is now
+  waste, budget, freshness and whether you can cook the week ahead. What's
+  coming always shows a day, starting on today; an empty day says "Nothing on."
+
+- **Reports, trimmed (2026-09-27).** The range picker's dates now sit on their
+  own line under it, always in full ("3 Aug 2026 – 2 Sep 2026"), including "All
+  time", which now starts at your earliest record. The header no longer shifts
+  when you switch ranges or scrolls sideways on a phone. Tap a reason on the
+  Waste card to see just the items thrown out for that reason; tap it again to
+  clear. Removed: "Ran out before you restocked", the Price trends chart (read
+  prices on My Products and the stock item page), the footnote under Price
+  changes, and "tracked store prices" from the info tip.
+
+- **Plainer words everywhere (2026-09-27).** Around 700 tooltips, messages,
+  empty states, help paragraphs, emails and Dora's replies were rewritten
+  without em dashes, and most lost a trailing explanation you didn't need.
+  Dora's AI mode is told not to use them either. Empty values now show "–".
+- **The camera always tries (2026-09-27).** Scanning no longer refuses to open
+  the camera on a plain http address. It shows a short warning and tries
+  anyway; the "needs a secure connection" panel only appears if the browser
+  actually says no. The admin scanning setting now warns rather than says it
+  won't work.
+- **Store logos show up where stores do (2026-09-27).** The stock item's
+  Products tab and the product cards were drawing a letter even for stores with
+  a logo. Logos now also appear in the shopping list's store picker and each
+  row's store, the offer picker, the price sheet, Price drops, Price history
+  and the custom product store picker. In the companion app, the merchants page
+  and the search page's store filter show logos too.
+
+- **Shopping lists, reworked for the phone (2026-09-27).** A draft row on a
+  phone is now two lines: quantity, name and price on top; store, reorder and
+  delete underneath, with Dora's Buy/Wait chip tucked under the quantity. The
+  invisible +/− buttons either side of the quantity are gone on touch screens;
+  they were still live, so tapping next to the number changed it. Tap the
+  number to type one instead. Quantities can't go below 1 any more (delete the
+  line to have none).
+- **Pick an offer from the item's name (2026-09-27).** On an install with
+  products, the name's dropdown lists the item's offers rather than preferred
+  buys (the stock page already shows one or the other, never both), and the
+  offer chips under each row are gone. Picking an offer moves the line to that
+  shop and prices it at the offer; picking the plain item again brings the old
+  price back. An offer you haven't picked still prices nothing.
+- **A new line remembers what you chose last time (2026-09-27).** Add milk and
+  it arrives with the preferred buy (or the offer) you picked for milk on your
+  last list, plus that offer's shop. Clearing the choice is remembered too.
+  Quick-add now also fills in the item's usual shop, which it never did.
+- **The list card leads with three figures (2026-09-27).** Estimated cost, shop
+  day and item count sit side by side at the same size ("Today", "Tomorrow", a
+  weekday, or the date, with no more "(overdue)"). With money off the item count
+  leads and isn't repeated. Removed as noise: "Created …", "From what you last
+  paid", the draft's "Saving", and "$X more at A than B" in the store breakdown.
+  The card's shop-day check also no longer names the wrong day before 10am.
+- **List picker (2026-09-27).** Each list shows just its name, with its item
+  count as a chip at the end (none when empty); the "next up" marker is gone.
+  The phone's picker wears the list's status icon, with its chevron beside the
+  rename pencil. Drafts now use a clipboard icon instead of a pencil, which read
+  as a second edit button.
+- **Add item skips what's already on the list (2026-09-27).** The search sheet
+  hides items already on the list you're adding to, so an item disappears as
+  you add it.
+- **Dialogs stay above the keyboard (2026-09-27).** Bottom sheets and dialogs
+  on iPhone now sit inside the visible area when the keyboard is up; Android is
+  told to resize the page for the keyboard.
+- Clear all items / Delete list are centred under the list.
+
+- **A list says which items you didn't ask for (2026-09-19).** Every
+  auto-generated line used to carry a caption naming the source that produced
+  it — "auto: low stock", "auto: essential", "auto: recipe", six variants in
+  all. On a generated list that is most rows, restating the sources you had
+  ticked in the New list dialog seconds earlier. All six are gone. One mark
+  survives, and only where something genuinely happened without you: when an
+  item drops to Low or Out and Dora puts it on your draft on her own, the row
+  gets her burger beside the name. Editing the line clears it. The buy-verdict
+  chip moved to the far end of that row to make space. In the New list dialog,
+  "Items flagged as always-include" is now **"All your essentials, however much
+  is left"** — there was never a separate flag; it always meant your essentials.
+- **Trimming to budget reads today's pantry, not the line's history
+  (2026-09-19).** Three of the five trim tiers decided from a label frozen onto
+  a line when it was created. "N days' cover left" now reads the item's current
+  stock band, and "For <Recipe> on <Day>" reads the meal plan — so an item you
+  added by hand for a dinner five days out is now offered as a trim, where
+  before only auto-added lines were. "Habit — can wait" ranks your actual
+  lifetime buying history instead.
+- **Disclosures close smoothly (2026-09-17).** Every collapsing card in the app
+  eased down to its own padding and then dropped the last ~29px in a single
+  frame — the "snap" at the end of a close. A slide transition animates height,
+  and height can't go below the padding box, so those pixels were never
+  animated. The padding moved inside the animated box; the close now reaches
+  zero.
+- **Shopping list, second owner pass (2026-09-17).** The summary card stopped
+  reserving a column for its caret, so the figure, the date and the controls
+  reach the card's edge like everything else. **"Order by" is now "Group by"**,
+  and its ungrouped option says **None** instead of "Manual" — every other
+  option names what you're grouped by, so that one named the mechanism. A
+  finished list drops the big "$X Spent" (the receipt below totals itself),
+  loses the rename pencil, and shows **"Where you spent it" in the same place
+  every other face shows it** — inside the card, rather than jumping to its own
+  panel below the sheet. Renaming is draft-only now, on both breakpoints.
+- **Rows say one thing each (2026-09-17).** The item name *is* the preferred-buy
+  picker — a subtle chevron offering the item or one of its saved buys, absent
+  entirely when it has none — which retires the undecodable "Buy hint" control
+  beside it. The name no longer links to the stock item. Gone from every row:
+  the "from your last receipt" note under the price, and the "last paid at
+  Northside Farmers Market" caption.
+- **The store picker means what it says (2026-09-17).** The top option is always
+  **Any store** — it used to rename itself to "Woolworths (default)", which is
+  why "any" and "usual" looked like one setting. The item's standing choice is
+  marked **(usual)** in the menu, and a new line is prefilled with it, so the
+  row shows a real choice rather than describing an inheritance.
+- **Add to list is one tap (2026-09-17).** Renamed from "Quick add to list".
+  Tapping an item adds it — the second screen asking for a quantity and a store
+  offer is gone, along with the explanation caption and the frequently-added
+  stars. Ordering stays frequent-then-low/out, and now keeps that order while
+  you're filtering instead of falling back to alphabetical.
+- **The price editor says what it's asking for (2026-09-17).** "Price per unit"
+  is now **Price each** — it was never a measurement unit; the value is the
+  price of one of them, and the line total (`3 × $1.35 = $4.05`) is printed
+  under it. The sheet's three different vertical gaps became one.
+- **List picker rows (2026-09-17).** Draft / shopping / done wear the same three
+  glyphs as the status pill — pencil, cart, check — so the rail and the card
+  stop disagreeing, and Start shopping wears the cart it puts you into. Counts
+  read "5 items" on every status rather than "3/5 ticked" on some. "Next up" is
+  a quiet marker instead of a filled badge, and the Older-lists dialog's rows
+  are the same height as the rail's.
+
+### Added
+- **Back to draft (2026-09-17).** Started a shop by accident? A list can go back
+  to being a draft. It unticks everything — a draft has no tick model to return
+  them to — and says how many before it does. A finished list stays final.
+
+### Removed
+- **Offers no longer set prices, anywhere (2026-09-17).** An advertised price is
+  what a shop is asking today, not money you spent — but it was seeding line
+  estimates, and finishing a list froze it onto every ticked line as spend the
+  user had never confirmed. Offers are now purely informational chips ("$3.10 at
+  Woolworths"), and the price editor gains an explicit **Seen at** chip that
+  fills the price when you tap it. A list you never priced records no spend,
+  which is the honest outcome. Savings still work: the shelf RRP is kept as
+  context and measured against the price *you* entered.
+- **The dismiss cross on Dora's suggestions (2026-09-17).** The strip only
+  appears because the household turned inference on, so a per-session hide was a
+  control for half-undoing a preference — and it forgot by the next visit.
+
+### Changed
+- **Shopping lists: the overlaps, and the padding around them (2026-09-17).**
+  On a phone, a draft row printed its price on top of the reorder arrows. The
+  action cell reserved 104px for 116px of buttons — 140px once a touch device
+  applies the 44px tap floor — so the arrows spilled out of their own column;
+  on a desktop the same bug was invisible because those buttons are hidden
+  until you hover. Phone rows are now two lines: quantity, name and delete on
+  the first, the price with its caption and any offers below. The caption's
+  menus truncate instead of wrapping to three lines, and the ± stepper widens
+  the row instead of floating over the item's name and off the screen edge.
+- **"Where you'll spend it" is part of the card it lives in (2026-09-17).** It
+  was drawing its own border, its own corners and its own gradient header band
+  *inside* the overview card's body — a card inside a card, with two headings
+  40px apart. It's now a captioned region of that card, and the heading is a
+  small label rather than a 44px bar. Every bucket in its key carries a swatch,
+  including **No store set**, which had none: the hatch from the bar it labels.
+- **The list picker leads on a phone (2026-09-17).** It sits above the toolbar
+  now — the toolbar acts on *this* list, so choosing which list comes first —
+  and reads as one control: the name left-aligned in a bordered field with the
+  rename pencil as a segment inside the same edge, rather than a centred button
+  with a loose icon parked beside it.
+- **Adding an item no longer flashes the whole page (2026-09-17).** Closing the
+  quick-add sheet re-read the list the way a *navigation* does, blanking the
+  page to a skeleton and fading it back in to add one row.
+- **The receipt reads as a document (2026-09-17).** Its rows were using dotted
+  leaders *and* list dividers at once; the leaders are the device, so the rules
+  went and the lines got the space a docket gives them. The itemisation has
+  proper margins, and a line whose price is an estimate says "estimated from
+  your last receipt" instead of "estimated, no price entered" next to a price.
+- **The overview card is smaller (2026-09-17).** Same facts, less padding: it
+  was 225px on a desktop and ~390px on a phone for a draft carrying one figure
+  and two controls. On a finished list its control row no longer draws a
+  divider across 900px of empty space to hold two right-aligned buttons.
+- **Logging a price says when you last logged one (2026-09-17).** The dialog is
+  titled with the item's name once you've picked one — it was "Log a price ·
+  Beef Mince" — and the prefill line now reads "Prefilled from your last
+  receipt · 17/09/2026" rather than leaving you to guess whether that was
+  yesterday or in March.
+
+### Fixed
+- **Setting "Bought from" with no price saved nothing (2026-09-17).** In the
+  price sheet, choosing a store on a line you hadn't priced discarded the store
+  along with the blank price, so the row never moved between store groups under
+  *Order by → Store*. The two fields are now two decisions: a blank price
+  clears the price, and the store you picked is saved.
+- **The deferred-to-budget rows printed their action over their reason
+  (2026-09-17).** Dora's frozen explanation is a sentence, and it was inside a
+  chip, which cannot wrap — so on a phone it ran out of its own pill and under
+  the "Add back" button.
+
+### Removed
+- **"Refresh deals" (2026-09-17).** It never fetched anything: it re-validated
+  each line's stored offer selection and cleared the dead ones. But the list
+  already resolves every line's offer from the currently linked products and
+  falls back to the cheapest, so an active list was always showing current
+  deals and the button changed nothing you could see — while its name promised
+  a scrape. The bookkeeping now happens when a product is actually unlinked.
+
+### Changed
 - **Cook mode's four panels stopped arguing with each other (2026-09-13).**
   *Your notes* was a bordered card floating below the Prev/Repeat/Next row; it's
   now a collapsed band hanging off the bottom of the step card, the same way the

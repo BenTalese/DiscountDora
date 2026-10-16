@@ -90,7 +90,7 @@ _COMMON_PASSWORDS: frozenset[str] = frozenset({
 
 PASSWORD_RULES_DOC = (
     f"Passwords must be at least {MIN_PASSWORD_LENGTH} characters. "
-    "Longer is safer — a memorable passphrase of a few words is fine. "
+    "A passphrase of a few words is fine. "
     "Avoid common passwords like ‘password123’ or ‘qwerty’."
 )
 
@@ -127,7 +127,7 @@ def validate_password(value: str) -> str | None:
     if value.lower() in _COMMON_PASSWORDS:
         return (
             "That password appears on public breach lists. Pick something "
-            "less common — a short phrase you'd remember works well."
+            "less common."
         )
     return None
 

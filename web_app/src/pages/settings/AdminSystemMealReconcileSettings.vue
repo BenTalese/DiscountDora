@@ -2,7 +2,7 @@
     <div class="settings-page">
         <SettingsPageHeader
             title="Meal reconciliation"
-            description="How Dora handles past-day meal-plan entries — assume they were cooked (and just keep a log), or hold them pending for you to confirm."
+            description="Whether Dora assumes past meals were cooked, or asks you to confirm them."
             :icon="ICONS.event_note"
         />
 
@@ -14,13 +14,9 @@
             <SettingsSection>
                 <template #title>Assume past-day meals were cooked</template>
                 <template #description>
-                    When on, past-day plan entries are silently marked cooked
-                    at the day-roll and the recipe pool drains automatically —
-                    Dora keeps a read-only <strong>log</strong> of what she did,
-                    and doesn't nag you to confirm anything. When off, past-day
-                    entries stay pending and land on the reconcile page for you
-                    to confirm each — Cooked, Different portions, Cooked later,
-                    or Didn't cook.
+                    When on, past meals are marked cooked automatically and Dora
+                    keeps a <strong>log</strong>. When off, they wait on the
+                    reconcile page for you to confirm.
                 </template>
 
                 <SettingsRow label="Auto-drain">
@@ -37,12 +33,10 @@
                 <template #title>{{ autoDrainDraft ? 'Meal log' : 'Reconcile past meals' }}</template>
                 <template #description>
                     <template v-if="autoDrainDraft">
-                        See what Dora did with past-day meals. Everyone can open
-                        this — it isn't admin-only.
+                        See what Dora did with past meals. Open to everyone.
                     </template>
                     <template v-else>
-                        Walk any past-day entries that haven't been confirmed.
-                        Everyone can open this — it isn't admin-only.
+                        Confirm past meals. Open to everyone.
                     </template>
                 </template>
 

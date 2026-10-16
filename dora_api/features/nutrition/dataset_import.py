@@ -207,7 +207,7 @@ def _run_import(source: str, url: str) -> None:
         )
         if not foods:
             raise ValueError(
-                "The download contained no usable foods — check the URL points "
+                "The download contained no usable foods. Check the URL points "
                 "at a FoodData Central *CSV* bundle."
             )
 
@@ -232,14 +232,14 @@ def _run_import(source: str, url: str) -> None:
 def _friendly_error(message: str) -> str:
     if "HTTP Error 404" in message:
         return (
-            "That release URL returned 404 — it has probably been superseded. "
+            "That release URL returned 404, so it has probably been replaced. "
             "Grab the current CSV link from fdc.nal.usda.gov/download-datasets "
             "and paste it in as a custom URL."
         )
     if "HTTP Error 403" in message:
         return (
             "The download was refused (403). If you pasted a custom URL, check "
-            "it points at fdc.nal.usda.gov — the www.usda.gov mirror blocks "
+            "it points at fdc.nal.usda.gov. The www.usda.gov mirror blocks "
             "automated downloads."
         )
     if "urlopen error" in message or "timed out" in message.lower():
@@ -363,7 +363,7 @@ def parse_fdc_csv_zip(payload: bytes, source: str, on_rows=None):  # noqa: ANN00
     food_nutrient_member = _member(archive, "food_nutrient.csv")
     if not (food_member and nutrient_member and food_nutrient_member):
         raise ValueError(
-            "Not a FoodData Central CSV bundle — expected food.csv, nutrient.csv "
+            "Not a FoodData Central CSV bundle. Expected food.csv, nutrient.csv "
             "and food_nutrient.csv inside the archive."
         )
 

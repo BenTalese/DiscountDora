@@ -3,7 +3,7 @@ import AxiosHttpClient from './axiosHttpClient';
 /** P8-05 — one axis-worth of reasoning behind a buy verdict. See
  *  `PROPOSAL_BUY_VERDICT_ORACLE.md` §2.1 for the full signal table. */
 export interface BuyVerdictReason {
-    axis: 'price' | 'need' | 'waste';
+    axis: 'price' | 'need' | 'waste' | 'plan';
     signal: string;
     label: string;
     detail?: string | null;

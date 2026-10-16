@@ -98,9 +98,7 @@
                             <BaseTooltip>
                                 {{ listening ? 'Stop listening.' : 'Listen for hands-free commands.' }}
                                 Turns on the mic so next / previous / repeat / pause navigate
-                                cook mode without touching the screen. Independent of Sous
-                                Chef — you can listen without narration or narrate without
-                                listening.
+                                cook mode without touching the screen.
                             </BaseTooltip>
                         </BaseButton>
                         <!-- Owner feedback 2026-08-28: *"Would it be better to only
@@ -132,7 +130,7 @@
                                                 <q-item-section>
                                                     <div class="row items-baseline q-gutter-xs">
                                                         <span class="text-weight-medium">{{ cmd.label }}</span>
-                                                        <span class="text-caption dora-text-muted">— {{ cmd.does }}</span>
+                                                        <span class="text-caption dora-text-muted">{{ cmd.does }}</span>
                                                     </div>
                                                 </q-item-section>
                                             </q-item>
@@ -455,12 +453,16 @@
                                             </BaseButton>
                                         </template>
                                     </div>
+                                    <!-- Owner 2026-10-15: the note read as a second quantity
+                                         (same caption grey, same size). Italic behind a note
+                                         glyph, so it reads as an aside about the ingredient. -->
                                     <q-item-label
                                         v-if="row.ingredient.notes"
                                         caption
-                                        class="dora-text-muted"
+                                        class="ingredient-note"
                                     >
-                                        {{ row.ingredient.notes }}
+                                        <q-icon :name="ICONS.notes" size="14px" />
+                                        <span>{{ row.ingredient.notes }}</span>
                                     </q-item-label>
                                     <!-- Owner feedback 2026-09-01: *"If there's
                                          a note or conversion info for a
@@ -619,7 +621,7 @@
             </q-card-section>
             <q-card-section v-else class="q-pt-sm">
                 <div class="text-caption dora-text-muted q-mb-sm">
-                    Just for this cook — your saved recipe won't change.
+                    Just for this cook.
                 </div>
                 <!-- when the substitute carries a note or ratio,
                      surface it next to the chip so the cook has the hint
@@ -692,7 +694,7 @@
              bottom. -->
         <BaseDialog v-model="finishDialogOpen" title="Finished cooking?" closable card-style="min-width: 360px; max-width: 720px">
             <q-card-section v-if="finishRows.length === 0" class="dora-text-muted">
-                This recipe has no ingredients to adjust — tap "Done" to log the cook.
+                This recipe has no ingredients to adjust.
             </q-card-section>
             <q-card-section v-else class="q-pt-none">
                 <div class="text-body2 q-mb-sm">
@@ -1572,10 +1574,13 @@
                 type: 'positive',
                 position: 'bottom-right',
                 timeout: 4000,
-                message:
-                    mealsCooked === 0
-                        ? 'All eaten — hope it was good.'
-                        : `You saved ${mealsCooked} meal${mealsCooked === 1 ? '' : 's'} — enjoy.`,
+                // A fresh household never sets aside meals, so "all eaten" only
+                // makes sense where saving some was an option.
+                message: !batchEnabled.value
+                    ? 'Enjoy your meal.'
+                    : mealsCooked === 0
+                        ? 'All eaten. Hope it was good.'
+                        : `You saved ${mealsCooked} meal${mealsCooked === 1 ? '' : 's'}.`,
                 icon: ICONS.check_circle,
             });
             finishDialogOpen.value = false;
@@ -1929,6 +1934,17 @@
     // The swapped-in substitute's conversion + note, under the row it applies
     // to. Secondary ink rather than muted: it is an instruction you act on,
     // not a footnote.
+    .ingredient-note {
+        display: flex;
+        align-items: baseline;
+        gap: var(--space-1);
+        font-style: italic;
+        color: var(--text-secondary);
+        .q-icon {
+            align-self: center;
+            flex: 0 0 auto;
+        }
+    }
     .ingredient-swaphint {
         display: flex;
         align-items: center;

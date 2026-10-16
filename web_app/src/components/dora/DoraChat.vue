@@ -70,7 +70,7 @@
                 <q-icon :name="ICONS.warning" size="18px" />
             </template>
             <div class="text-caption">
-                <strong>AI mode unavailable — using basic mode.</strong>
+                <strong>AI mode unavailable. Using basic mode.</strong>
                 <div v-if="aiUnavailableReason" class="dora-text-secondary">
                     {{ aiUnavailableReason }}
                 </div>
@@ -255,7 +255,7 @@
                                     Couldn't find “{{ item.query }}”
                                 </template>
                                 <template v-else-if="item.status === 'too_many'">
-                                    Too many matches for “{{ item.query }}” — be more specific
+                                    Too many matches for “{{ item.query }}”
                                 </template>
                                 <template v-else>
                                     Which “{{ item.query }}”?
@@ -1033,7 +1033,7 @@
                 id: l.shopping_list_id,
                 name: l.display_name,
                 itemCount: l.line_count,
-                isPrimary: l.shopping_list_id === shoppingListStore.quickAddTargetListId,
+                isQuickAddTarget: l.shopping_list_id === shoppingListStore.quickAddTargetListId,
             })),
             getMealPlan: () => {
                 const plans = mealStore.mealPlans;
@@ -1048,7 +1048,7 @@
                     .filter((e) => e.scheduled_for >= today)
                     .sort((a, b) => a.scheduled_for.localeCompare(b.scheduled_for))
                     .slice(0, 5)
-                    .map((e) => `${e.scheduled_for} — ${e.recipe_name} (×${e.servings})`);
+                    .map((e) => `${e.scheduled_for}: ${e.recipe_name} (×${e.servings})`);
                 const lastDate = live.entries.length
                     ? live.entries.map((e) => e.scheduled_for).sort().at(-1)!
                     : live.start_date;
@@ -1237,7 +1237,7 @@
         } catch (err) {
             message.done = false;
             pushDoraMessage({
-                text: `I couldn't update the list — ${describeApiError(err)}`,
+                text: `I couldn't update the list. ${describeApiError(err)}`,
                 mood: 'sad',
             });
         } finally {
@@ -1262,7 +1262,7 @@
         } catch (err) {
             message.done = false;
             pushDoraMessage({
-                text: `Couldn't pull that off — ${describeApiError(err)}`,
+                text: `Couldn't pull that off. ${describeApiError(err)}`,
                 mood: 'sad',
             });
         } finally {
@@ -1300,7 +1300,7 @@
             pushDoraMessage(reply);
         } catch (err) {
             pushDoraMessage({
-                text: `Something went wrong while answering — ${describeApiError(err)}`,
+                text: `Something went wrong while answering. ${describeApiError(err)}`,
                 mood: 'sad',
             });
         } finally {
@@ -1354,7 +1354,7 @@
             }
             case 'add_to_list': {
                 pushDoraMessage({
-                    text: 'On it — adding to your primary list.',
+                    text: 'On it, adding to your list.',
                     mood: 'excited',
                 });
                 await stockActions.addToList(action.stockItemId);
@@ -1419,7 +1419,7 @@
             const name = recipe?.name ?? 'this recipe';
             if (missing.length === 0) {
                 pushDoraMessage({
-                    text: `Nothing's missing for ${name} — you're cookable right now.`,
+                    text: `Nothing's missing for ${name}. You can cook it right now.`,
                     mood: 'excited',
                 });
             } else {
@@ -1448,7 +1448,7 @@
             const name = recipe?.name ?? 'this recipe';
             if (missing.length === 0) {
                 pushDoraMessage({
-                    text: `Nothing missing for ${name} — your pantry is on it.`,
+                    text: `Nothing missing for ${name}.`,
                     mood: 'happy',
                 });
                 return;
@@ -1470,9 +1470,9 @@
                 missing.map((m) => ({ stock_item_id: m.id })),
             );
             pushDoraMessage({
-                text: `Done — added ${missing.length} missing ingredient${
+                text: `Done. Added ${missing.length} missing ingredient${
                     missing.length === 1 ? '' : 's'
-                } from ${name} to your primary list.`,
+                } from ${name} to your list.`,
                 mood: 'excited',
             });
         } finally {
@@ -1503,7 +1503,7 @@
             const queries = extractAddToListItems(text);
             if (queries.length === 0) {
                 pushDoraMessage({
-                    text: "Sure — what should I add? Try \"add milk\" or \"add eggs and bread\".",
+                    text: "Sure, what should I add? Try \"add milk\" or \"add eggs and bread\".",
                     mood: 'searching',
                 });
                 return;
@@ -1511,7 +1511,7 @@
             const primary = shoppingListStore.quickAddTargetListId;
             if (!primary) {
                 pushDoraMessage({
-                    text: "You don't have a primary shopping list set yet — pick one and I'll drop items straight onto it.",
+                    text: "I add to your draft list, and that only works when you have exactly one.",
                     mood: 'sad',
                     navigateTo: { path: '/shopping-lists', label: 'Open shopping lists' },
                 });
@@ -1540,7 +1540,7 @@
             }
             if (ambiguous.length) {
                 parts.push(
-                    `"${ambiguous.join('", "')}" matched more than one pantry item, so I didn't want to guess — open Stock and add the exact one.`,
+                    `"${ambiguous.join('", "')}" matched more than one pantry item, so I didn't want to guess. Add the exact one from Stock.`,
                 );
             }
             if (notFound.length) {
@@ -1558,7 +1558,7 @@
             });
         } catch (err) {
             pushDoraMessage({
-                text: `I couldn't update the list — ${describeApiError(err)}`,
+                text: `I couldn't update the list. ${describeApiError(err)}`,
                 mood: 'sad',
             });
         } finally {

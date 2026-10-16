@@ -4,8 +4,9 @@ Used by the stock overview to colour the cart button per row (already on the
 quick-add target, on another list, on multiple unticked lists, etc) without
 loading every list's lines client-side.
 
-Chunk 2: the "quick-add target" is now inferred from DRAFT count (resolver),
-not a stored primary flag. `quick_add_target_list_id` is non-null only when
+Chunk 2: the "quick-add target" is inferred from DRAFT count (resolver);
+the user never marks a list as their main one. `quick_add_target_list_id`
+is non-null only when
 exactly one DRAFT exists.
 """
 import logging
@@ -17,8 +18,8 @@ from dora_api.domain.entities.shopping_list import (SHOPPING_LIST_STATUS_DONE,
                                                     ShoppingList,
                                                     ShoppingListLine)
 from dora_api.features.routers import SHOPPING_LIST_ROUTER
-from dora_api.features.shopping_lists.primary_target_resolver import \
-    resolve_primary_target
+from dora_api.features.shopping_lists.quick_add_target_resolver import \
+    resolve_quick_add_target
 from dora_api.infrastructure.api_response import ok
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
@@ -62,7 +63,7 @@ class GetMembershipHandler:
         active_lists: List[ShoppingList] = self.repository.get(ShoppingList).all(
             EntityField(ShoppingList, ShoppingList.Fields.STATUS).ne(SHOPPING_LIST_STATUS_DONE)
         )
-        outcome = resolve_primary_target(active_lists)
+        outcome = resolve_quick_add_target(active_lists)
         quick_add_target_id = outcome.target_list_id if outcome.kind == "single" else None
         active_ids = {l.id for l in active_lists}
 

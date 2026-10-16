@@ -172,7 +172,7 @@
                     {{ hover.bySeries[s.key]?.value !== undefined
                         && hover.bySeries[s.key]?.value !== null
                         ? formatMoney(hover.bySeries[s.key]!.value!)
-                        : '—' }}
+                        : '–' }}
                 </span>
                 <q-icon
                     v-if="hover.bySeries[s.key]?.marked"

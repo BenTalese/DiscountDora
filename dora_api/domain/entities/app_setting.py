@@ -114,7 +114,10 @@ class AppSetting(BaseEntity):
     # switch off the planned-demand signal. Meal planning is core; there was
     # nothing to turn off. Column dropped in migration a7c3e5d19f2b.
     money_enabled: bool = False
-    deals_email_enabled: bool = False
+    # `deals_email_enabled` removed 2026-10-15 (owner): the weekly deals mail
+    # sends whenever email is set up and the person has opted in, so an
+    # install-wide switch on top of the per-user one only hid it. Column
+    # dropped in migration e4b7c2a9f1d3.
     # `products_enabled` removed —
     # products is now a *data-presence* overlay. `features.products` is derived
     # server-side from whether any `Product` row exists (see health_check), not
@@ -314,7 +317,6 @@ class AppSetting(BaseEntity):
         SCANNING_ENABLED = "scanning_enabled"
         NUTRITION_RATING_SCHEME = "nutrition_rating_scheme"
         MONEY_ENABLED = "money_enabled"
-        DEALS_EMAIL_ENABLED = "deals_email_enabled"
         NUTRITION_MODE = "nutrition_mode"
         NUTRITION_USDA_API_KEY = "nutrition_usda_api_key"
         NUTRITION_OFF_LOOKUP_ENABLED = "nutrition_off_lookup_enabled"

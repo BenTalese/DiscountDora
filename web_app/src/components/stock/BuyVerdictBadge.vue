@@ -6,6 +6,7 @@
         :icon="badgeIcon"
         clickable
         square
+        :aria-label="`Dora's verdict: ${badgeLabel}`"
     >
         {{ badgeLabel }}
         <q-menu

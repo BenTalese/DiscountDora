@@ -253,15 +253,14 @@
                             <p>
                                 Dashy Dora is built by one person as a side
                                 project. Bug reports and feature requests are
-                                welcome and every one gets read — but replies can
+                                welcome and every one gets read, but replies can
                                 take days or weeks. There's no on-call and no
                                 support team; just someone doing this in evenings
                                 and weekends.
                             </p>
                             <p>
                                 If a family member set up this Dora for you, ask
-                                them first — most problems are quicker to solve
-                                locally.
+                                them first.
                             </p>
                             <p v-if="hasChannel">
                                 Otherwise, use the
@@ -347,31 +346,31 @@
                 {
                     title: 'Track expiry and flag essentials',
                     summary:
-                        'In a stock item detail page, set an expiry date — Dora surfaces upcoming expiries on the Locations heatmap. Flag essentials so they always show up first.',
+                        'Set an expiry date on a stock item and Dora shows it in upcoming expiries. Mark essentials so they always show up first.',
                     path: '/stock',
                 },
                 {
                     title: 'What the colours and outlines mean',
                     summary:
-                        'When a row outlines amber or red, when an item is dimmed, and what "Needs attention" actually counts — one page of the rules with swatches and a cheat sheet.',
+                        'When a row outlines amber or red, when an item is dimmed, and what "Needs attention" counts.',
                     dialog: 'attention-rules',
                 },
                 {
                     title: 'The "Dora thinks…" hint',
                     summary:
-                        'Dora quietly infers what you actually have — a coarse Out / Low / Stocked belief worked out from your purchases, how often you rebuy, and what you\'ve cooked, decayed by time since the last real signal. It never changes your recorded level; that stays the source of truth for shopping and cooking. She only speaks up when it\'s worth it: when her belief differs from what you recorded, the item\'s coloured level box picks up an amber ring — open the level picker and its header tells you what she thinks, why, and how sure she is, so a quick check sets things straight. When she agrees with you she stays silent. Turn the hint off entirely in Settings → Assistant.',
+                        'Dora infers what you actually have: a rough Out / Low / Stocked belief worked out from your purchases, how often you rebuy, and what you\'ve cooked, decayed by time since the last real signal. It never changes your recorded level; that stays the source of truth for shopping and cooking. She only speaks up when it\'s worth it: when her belief differs from what you recorded, the item\'s level box gets a dashed ring, and the level picker says what she thinks and why. When she agrees with you she stays silent. Turn the hint off entirely in Settings → Assistant.',
                     path: '/stock',
                 },
                 {
                     title: 'The Buy / Wait / Skip ring on the cart button',
                     summary:
-                        'Dora can tell you whether an item is worth buying right now, using only your own history — what you\'ve paid for it before, how fast you get through it, and how often it ends up thrown away. No outside data, no crowd pricing. The answer rides the cart button as a coloured ring: green for "worth buying now", amber for "might be worth waiting", red for "probably skip". Hover it for the headline, the reasons behind it, and how confident she is. When she isn\'t confident enough to be useful there\'s no ring at all — she\'d rather say nothing than guess. Turn it off in Settings → Admin → System ("Should I buy?" oracle).',
+                        'Dora can tell you whether an item is worth buying right now, using only your own history: what you\'ve paid for it before, how fast you get through it, and how often it ends up thrown away. No outside data, no crowd pricing. The answer rides the cart button as a coloured ring: green for "worth buying now", amber for "might be worth waiting", red for "probably skip". Hover it for the headline, the reasons behind it, and how confident she is. When she isn\'t confident she says nothing. Turn it off in Settings → Admin → System ("Should I buy?" oracle).',
                     path: '/stock',
                 },
                 {
                     title: 'Scanning barcodes and QR labels',
                     summary:
-                        'When scanning is switched on (Settings → Admin → System), the Stock page grows a Scan button: point it at a product barcode to jump straight to the matching stock item, or at one of Dora\'s own printed QR labels. It is navigation only — scanning never looks up live prices. One thing to know if you use Dora on your phone: web browsers only allow camera access over a secure connection, so if you reach your instance at a plain http:// address the camera cannot open, and the scanner will tell you so and offer you a box to type the barcode into instead. Two ways round it — use the Dashy Dora Android app, which scans against any instance, or serve Dora over HTTPS. QR label printing and typing a barcode by hand work either way.',
+                        'When scanning is switched on (Settings → Admin → System), the Stock page grows a Scan button: point it at a product barcode to jump straight to the matching stock item, or at one of Dora\'s own printed QR labels. Scanning never looks up live prices. Most browsers only allow the camera over HTTPS, so on a plain http:// address the camera may not open. If it doesn\'t, use the Android app, serve Dora over HTTPS, or type the barcode.',
                     path: '/stock',
                 },
                 // 2026-08-24 feedback: these three carry prose that used to sit
@@ -383,19 +382,19 @@
                 {
                     title: 'Barcodes',
                     summary:
-                        "A barcode on a stock item is the product's real EAN-13 or UPC-A — the 13 or 12 digits printed underneath the barcode on the packet. Type it into the Scanning tab, or hit Scan on the Stock page and point the camera at the packet. Scanning a registered code then opens that item. Dora never looks the number up online, so any code you can read off a packet works, and one code belongs to one item. Codes listed as \"(from product: …)\" came along with a linked Product rather than being registered here, so they're removed from the Product, not from the stock item.",
+                        "A barcode on a stock item is the product's real EAN-13 or UPC-A: the 13 or 12 digits printed underneath the barcode on the packet. Type it into the Scanning tab, or hit Scan on the Stock page and point the camera at the packet. Scanning a registered code then opens that item. Dora never looks the number up online, so any code you can read off a packet works, and one code belongs to one item. Codes listed as \"(from product: …)\" came along with a linked Product rather than being registered here, so they're removed from the Product, not from the stock item.",
                     path: '/stock',
                 },
                 {
                     title: 'QR label',
                     summary:
-                        "Dora's own printable label for a stock item, shown in the Scanning tab. Scanning it opens that item's page — handy on a decanted jar or a tub with no packaging left. It is not the product's real EAN/UPC barcode: those identify a Product and are managed further down the same tab. Print a single label from the tab, or a whole batch under Settings → Kitchen setup → QR labels.",
+                        "Dora's own printable label for a stock item, shown in the Scanning tab. Scanning it opens that item's page, which is handy on a decanted jar. It is not the product's real EAN/UPC barcode: those identify a Product and are managed further down the same tab. Print a single label from the tab, or a whole batch under Settings → Kitchen setup → QR labels.",
                     path: '/stock',
                 },
                 {
                     title: 'Substitutes',
                     summary:
-                        "List the items that can stand in for one another, on a stock item's Substitutes tab. Notes you add show on the substitute list and in cook mode when swapping, so \"1:1 in soups, but don't use in baking\" reaches you at the moment you'd get it wrong. Add a ratio when the swap isn't 1:1 — cook mode displays it so you don't have to do the maths in your head. A swap made in cook mode is temporary and applies to that session only; it never rewrites the recipe.",
+                        "List the items that can stand in for one another, on a stock item's Substitutes tab. Notes you add show on the substitute list and in cook mode when swapping, so \"1:1 in soups, but don't use in baking\" reaches you at the moment you'd get it wrong. Add a ratio when the swap isn't 1:1 and cook mode shows it. A swap made in cook mode is temporary and applies to that session only; it never rewrites the recipe.",
                     path: '/stock',
                 },
                 {
@@ -420,7 +419,7 @@
                     details: [
                         {
                             kind: 'para',
-                            text: 'A run has up to three parts. First, anything Dora is fairly sure about — agree in one tap from where you are sitting, or untick it to look yourself. Then the walk, one item at a time. Last, a tidy-up of anything that has dropped out of the rotation since your last run. Any part with nothing in it is skipped silently.',
+                            text: 'A run has up to three parts. First, anything Dora is fairly sure about: agree in one tap, or untick it to check yourself. Then the walk, one item at a time. Last, a tidy-up of anything that has dropped out of the rotation since your last run. Any part with nothing in it is skipped silently.',
                         },
                         {
                             kind: 'para',
@@ -431,8 +430,8 @@
                             terms: [
                                 { term: 'Still correct', definition: "The level's right. Resets the check clock." },
                                 { term: 'Change level', definition: 'Pick a new level. Also resets the check clock.' },
-                                { term: 'Skip', definition: "Not this time — the item drops out of this run and isn't asked about again until the next one. Nothing is recorded." },
-                                { term: 'Push 3 days', definition: 'Not now — Dora stops asking about this item for three days. Doesn\'t count as a check.' },
+                                { term: 'Skip', definition: "Not this time. Nothing is recorded." },
+                                { term: 'Push 3 days', definition: 'Dora stops asking about this item for three days. Doesn\'t count as a check.' },
                                 { term: 'Mute', definition: "Stop asking about this item entirely. You can un-mute later from the item's detail page." },
                             ],
                         },
@@ -519,11 +518,11 @@
                     details: [
                         {
                             kind: 'para',
-                            text: "Dora has two ways to speak. Her own neural voice is generated on the server and played back as ordinary audio, so it works in every browser that can play sound — Firefox, Chrome, Safari, Edge, on desktop and mobile alike. It is the default, and it sounds the same everywhere.",
+                            text: "Dora has two ways to speak. Her own neural voice is generated on the server and played back as ordinary audio, so it works in every browser. It is the default.",
                         },
                         {
                             kind: 'para',
-                            text: "The other way is your browser's built-in text-to-speech, and that is the one with gaps. A browser can only speak with voices the operating system gives it, so the API can be present while the voice list is empty — in which case nothing is said and no error is raised. Firefox is the common case: it speaks through SAPI on Windows, needs speech-dispatcher installed on Linux, and has no synthesis at all on Android.",
+                            text: "The other way is your browser's built-in text-to-speech, and that is the one with gaps. A browser can only speak with voices the operating system gives it, so the voice list can be empty, and then nothing is said. Firefox is the common case: it speaks through SAPI on Windows, needs speech-dispatcher installed on Linux, and has no synthesis at all on Android.",
                         },
                         {
                             kind: 'para',
@@ -539,11 +538,11 @@
                 {
                     title: 'Set up AI mode (per account)',
                     summary:
-                        "Go to Settings > Assistant. Pick a provider — Ollama (local LLM you run yourself, no API key), or OpenAI / Anthropic / Google Gemini (paid hosted APIs, bring your own key). For Ollama: enter the base URL (e.g. http://localhost:11434) + a tool-capable model like qwen2.5:7b. For paid providers: paste your API key + pick a model. Use Test connection to verify before turning AI mode on. Off by default.",
+                        "Go to Settings > Assistant. Pick a provider: Ollama (a local model you run yourself, no API key), or OpenAI / Anthropic / Google Gemini (paid hosted APIs, bring your own key). For Ollama: enter the base URL (e.g. http://localhost:11434) + a tool-capable model like qwen2.5:7b. For paid providers: paste your API key + pick a model. Use Test connection to verify before turning AI mode on. Off by default.",
                     path: '/settings/assistant',
                 },
                 {
-                    title: 'AI mode says "unavailable" — why?',
+                    title: 'Why does AI mode say "unavailable"?',
                     summary:
                         "The chat panel shows an \"AI mode unavailable\" banner when you've turned AI on but the configured LLM didn't respond. Common causes: your Ollama server isn't running; the API key is wrong; the model name is mistyped; or the backend can't reach the URL (see network topology below). Click Retry on the banner after fixing it, or hit Test connection in Settings > Assistant first to find the issue before turning AI on.",
                 },
@@ -555,7 +554,7 @@
                 {
                     title: "Paid providers: API-key encryption (DORA_SECRET_ENCRYPTION_KEY)",
                     summary:
-                        "AI mode is per-account — there's no install-wide master switch; each person just configures it on Settings > Assistant. For paid providers (OpenAI / Anthropic / Gemini), the install needs the environment variable DORA_SECRET_ENCRYPTION_KEY set so your API key can be stored encrypted at rest — until it is, the Assistant page shows a warning and can generate a key for you to paste into the environment. Generate one from a shell with: python -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\". Ollama-only installs don't need the env var. Rotating the key invalidates every saved key; users re-enter on next save.",
+                        "AI mode is per account. Each person sets it up on Settings > Assistant. For paid providers (OpenAI / Anthropic / Gemini), the install needs the environment variable DORA_SECRET_ENCRYPTION_KEY set so your API key can be stored encrypted. Until it is, the Assistant page shows a warning and can generate a key for you. Generate one from a shell with: python -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\". Ollama-only installs don't need the env var. Rotating the key invalidates every saved key; users re-enter on next save.",
                     path: '/settings/assistant',
                 },
             ],
@@ -571,7 +570,7 @@
     const { channel, hasChannel } = useSupportChannel();
     const reportHref = computed(() =>
         supportHref(channel.value, {
-            subject: `[Dora] Bug — v${versionInfo.value?.current_version ?? 'unknown'}`,
+            subject: `[Dora] Bug, v${versionInfo.value?.current_version ?? 'unknown'}`,
             body: `\n\n---\nDora ${versionInfo.value?.current_version ?? 'unknown'} · ${route.path}`,
         }),
     );

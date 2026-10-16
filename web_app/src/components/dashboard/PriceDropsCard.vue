@@ -25,7 +25,7 @@
                 <div class="dora-deal-text">
                     <div class="dora-deal-name">{{ row.name }}</div>
                     <div class="dora-deal-meta">
-                        {{ row.store_name }}
+                        <StoreLogo :name="row.store_name" :height="16" :width="24" inline />{{ row.store_name }}
                         <span v-if="row.linked_stock_item_id">
                             ·
                             <router-link
@@ -47,8 +47,7 @@
             </li>
         </ul>
         <div v-else class="dora-empty">
-            Nothing at a new low right now — I'll flag one when a tracked product
-            drops.
+            Nothing at a new low right now.
         </div>
     </DashboardCard>
 </template>
@@ -69,6 +68,7 @@
     import DashboardCard from 'src/components/dashboard/DashboardCard.vue';
     import CardLoadError from 'src/components/dashboard/CardLoadError.vue';
     import ProductThumb from 'src/components/products/ProductThumb.vue';
+    import StoreLogo from 'src/components/StoreLogo.vue';
     import type { PriceDropRow } from 'src/services/api/reportsApiService';
 
     withDefaults(

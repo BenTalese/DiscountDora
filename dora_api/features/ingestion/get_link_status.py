@@ -33,7 +33,7 @@ from dataclasses import asdict, dataclass
 from uuid import UUID
 
 from flask import request
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy import select
 
 from dora_api.app import db
@@ -64,9 +64,18 @@ class _LookupItem(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     ref: str = Field(min_length=1, max_length=255)
-    store: str = Field(min_length=1, max_length=255)
+    # Exactly one, matching `/api/ingest`'s product identity: the external
+    # name (resolved through this source's mapping) or a Dora store id.
+    store: str | None = Field(default=None, min_length=1, max_length=255)
+    store_id: UUID | None = None
     merchant_stockcode: str | None = Field(default=None, max_length=255)
     name: str | None = Field(default=None, max_length=255)
+
+    @model_validator(mode="after")
+    def _one_store(self) -> "_LookupItem":
+        if (self.store is None) == (self.store_id is None):
+            raise ValueError("Give exactly one of `store` or `store_id`.")
+        return self
 
 
 class _LinkStatusRequest(BaseModel):
@@ -110,7 +119,10 @@ class GetLinkStatusHandler:
                 ))
                 continue
 
-            store_id = self._resolve_store_id(source, item.store, store_cache)
+            store_id = (
+                item.store_id if item.store_id is not None
+                else self._resolve_store_id(source, item.store or "", store_cache)
+            )
             if store_id is None:
                 results.append(_LinkStatusResult(
                     ref=item.ref, product_id=None,

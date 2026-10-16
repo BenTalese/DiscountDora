@@ -693,3 +693,53 @@ def test__non_price_reasons__carry_no_amounts():
             continue
         assert reason.amount_last is None
         assert reason.amount_usual is None
+
+
+# ── Planned demand joins the verdict (owner 2026-10-15) ────────────────
+
+def _demand(urgency: str, planned: int = 3, covered: int = 0):
+    from dora_api.features.stock_items.planned_demand import PlannedDemand
+    return PlannedDemand(
+        planned_meals=planned, covered_meals=covered, needed_meals=planned - covered,
+        earliest_needed=_today() + timedelta(days=2), recipe_names=["Fried rice"],
+        urgency=urgency, reason="3 planned meals coming up need this: Fried rice.",
+    )
+
+
+def test__planned_meals__are_a_reason_and_come_first():
+    verdict = compose_verdict(_rich_history_inputs(planned_demand=_demand("none")))
+    assert verdict.reasons[0].axis == "plan"
+    assert verdict.reasons[0].label == "3 planned meals use it"
+    assert verdict.reasons[0].detail.startswith("3 planned meals")
+
+
+def test__planned_meals_against_a_stocked_item__change_nothing_else():
+    plain = compose_verdict(_rich_history_inputs())
+    planned = compose_verdict(_rich_history_inputs(planned_demand=_demand("none")))
+    assert (planned.verdict, planned.strength, planned.confidence) == (
+        plain.verdict, plain.strength, plain.confidence,
+    )
+
+
+def test__planned_meals_against_a_low_item__lift_the_buy():
+    plain = compose_verdict(_rich_history_inputs(stock_level_band="low"))
+    planned = compose_verdict(_rich_history_inputs(
+        stock_level_band="low", planned_demand=_demand("watch"),
+    ))
+    assert planned.strength == plain.strength + 1
+    assert planned.reasons[0].label == "3 planned meals need it, and you're low"
+
+
+def test__planned_meals_against_an_out_item__name_the_blocker():
+    planned = compose_verdict(_rich_history_inputs(
+        stock_level_band="out", planned_demand=_demand("blocking", planned=1),
+    ))
+    assert planned.verdict == "buy"
+    assert planned.reasons[0].label == "1 planned meal can't be cooked without it"
+
+
+def test__planned_meals_survive_thin_history():
+    thin = _AxisInputs(today=_today(), planned_demand=_demand("none"))
+    verdict = compose_verdict(thin)
+    assert verdict.verdict == "unsure"
+    assert verdict.reasons[0].axis == "plan"

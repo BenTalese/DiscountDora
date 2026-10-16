@@ -22,7 +22,7 @@
                 :value="progress"
                 rounded
                 size="6px"
-                color="warning"
+                color="primary"
                 class="col q-mx-md"
             />
             <!-- Owner, 2026-09-01: the tiny "Reviewing" / "Tidying up" caption
@@ -197,7 +197,7 @@
                     >
                         <div class="runner-change-level__stack">
                             <div class="runner-change-level__level">
-                                {{ current.stock_level_name ?? '—' }}
+                                {{ current.stock_level_name ?? '–' }}
                             </div>
                             <div class="runner-change-level__hint">(change)</div>
                         </div>

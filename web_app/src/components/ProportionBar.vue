@@ -4,7 +4,7 @@
             v-for="seg in resolved"
             :key="seg.key"
             class="proportion-bar__seg"
-            :class="{ 'proportion-bar__seg--unassigned': seg.isUnassigned }"
+            :class="{ 'dora-fill-unassigned': seg.isUnassigned }"
             :style="{ width: `${seg.width}%`, background: seg.isUnassigned ? undefined : seg.colour }"
         >
             <BaseTooltip v-if="seg.label">{{ seg.label }}</BaseTooltip>
@@ -97,30 +97,9 @@
         height: 100%;
         min-width: 2px;
     }
-    /* The catch-all: a themed grey, hatched.
-       (Moved verbatim with the bar — the reasoning is what makes it a hatch.)
-
-       The grey alone is `--border-strong`, the neutral every theme defines to
-       be seen against a surface — which is right in light themes and measurably
-       wrong in dark ones. Measured against the store fills either side of it:
-       3.55:1 in Pesto light, but **1.19:1** in Pesto Dark and **1.02:1** in
-       Cherry Cola Dark, i.e. the same lightness as its neighbour. That isn't
-       fixable by picking a better grey, because the fills it competes with are
-       partly *logo-derived brand colours* — arbitrary, and free to be grey
-       themselves. No single neutral can be guaranteed to separate from them.
-
-       So the segment is distinguished by **texture**, which no neighbouring
-       colour can collide with, and which says the right thing: a hatch reads as
-       unallocated rather than as one more store. Both stripe colours are theme
-       tokens, so it inverts correctly — dark stripes on grey in light themes,
-       light stripes on grey in dark ones. Colour is still carrying the message
-       for anyone who sees it, but it is no longer carrying it alone (D-001). */
-    .proportion-bar__seg--unassigned {
-        background-color: var(--border-strong);
-        background-image: repeating-linear-gradient(
-            135deg,
-            transparent 0 3px,
-            var(--surface-component) 3px 5px
-        );
-    }
+    /* The unassigned segment's hatch is `.dora-fill-unassigned` in
+       `src/css/colours.scss` as of 2026-09-17 — the shopping list's legend
+       needed the same treatment on its pip and could not reach a scoped rule.
+       The reasoning for it being a texture rather than a colour lives with the
+       declaration. */
 </style>

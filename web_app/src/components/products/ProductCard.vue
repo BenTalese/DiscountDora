@@ -49,7 +49,7 @@
             </div>
 
             <q-card-section class="q-py-sm col">
-                <div class="text-subtitle2 ellipsis-2-lines">{{ product.name }}</div>
+                <div class="product-card__name ellipsis-2-lines">{{ product.name }}</div>
                 <div class="text-caption dora-text-muted">
                     <span v-if="product.brand">{{ product.brand }}</span>
                     <span v-if="product.brand && product.size"> · </span>
@@ -64,17 +64,20 @@
                         {{ formatMoney(product.price_was ?? 0) }}
                     </span>
                 </div>
+                <div v-if="watchThreshold != null" class="product-card__watch">
+                    <q-icon :name="ICONS.price_check" size="14px" />
+                    Alert at {{ formatMoney(watchThreshold) }}
+                </div>
                 <div class="text-caption dora-text-muted row items-center">
                     <StoreLogo
                         v-if="product.store_name"
                         :name="product.store_name"
                         :store-id="product.store_id"
-                        :has-image="false"
                         :height="14"
                         :width="24"
                         class="q-mr-xs"
                     />
-                    {{ product.store_name || '—' }}
+                    {{ product.store_name || '–' }}
                 </div>
             </q-card-section>
         </component>
@@ -107,26 +110,22 @@
             >
                 Custom
                 <BaseTooltip>
-                    You added this by hand — Dora won't change or refresh it.
+                    You added this by hand, so Dora won't refresh it.
                 </BaseTooltip>
             </q-chip>
         </q-card-section>
 
         <q-separator class="q-mt-sm" />
-        <!-- ── Actions: fully flattened, no overflow menu (OD-1) ────────
-             Delete is pushed past the q-space so it never sits beside
-             add-to-list, and is danger-ghost rather than a peer of the
-             neutral icons. -->
+        <!-- Owner 2026-10-15: two cards to a row on a phone. Five 44px targets
+             no longer fit a half-width card, so the two everyday actions stay
+             on the face and the rest sit behind one overflow (D-004 holds for
+             every target that remains). -->
         <q-card-actions class="product-card__actions items-center">
             <ProductLinkButton
                 :linked="!!product.linked_stock_item_id"
                 :stock-item-name="product.linked_stock_item_name"
                 @link="emit('link')"
                 @unlink="emit('unlink')"
-            />
-            <ProductActiveButton
-                :active="product.is_active"
-                @toggle="emit('toggle-active')"
             />
             <AddToListButton
                 v-if="product.linked_stock_item_id"
@@ -135,34 +134,52 @@
                 :selected-product-id="product.product_id"
                 @click.stop
             />
-            <!-- Icon-only here: every other control on this face is an
-                 icon, and a lone text button made the unlinked card the odd
-                 one out. The variant's tooltip still explains that this adds
-                 a product-only line, and linked-vs-unlinked is already
-                 carried by the chip above and the link button beside it. -->
             <AddToListButton
                 v-else
                 variant="inline-product"
-                label=""
                 :product-id="product.product_id"
                 @click.stop
             />
-            <BaseButton
-                variant="icon"
-                :icon="ICONS.show_chart"
-                aria-label="View price history"
-                @click.stop="emit('price-history')"
-            >
-                <BaseTooltip>View price history</BaseTooltip>
-            </BaseButton>
             <q-space />
             <BaseButton
-                variant="danger-icon"
-                :icon="ICONS.delete"
-                aria-label="Delete product"
-                @click.stop="emit('delete')"
+                variant="icon"
+                :icon="ICONS.more_vert"
+                :aria-label="`More for ${product.name}`"
+                @click.stop
             >
-                <BaseTooltip>Delete product</BaseTooltip>
+                <q-menu auto-close anchor="bottom right" self="top right">
+                    <q-list dense style="min-width: 200px">
+                        <q-item clickable @click="emit('toggle-active')">
+                            <q-item-section avatar>
+                                <q-icon :name="ICONS.search" size="18px" />
+                            </q-item-section>
+                            <q-item-section>
+                                {{ product.is_active ? 'Stop tracking prices' : 'Track prices' }}
+                            </q-item-section>
+                        </q-item>
+                        <q-item clickable @click="emit('watch-price')">
+                            <q-item-section avatar>
+                                <q-icon :name="ICONS.price_check" size="18px" />
+                            </q-item-section>
+                            <q-item-section>
+                                {{ watchThreshold != null ? 'Change price alert' : 'Alert me on a price drop' }}
+                            </q-item-section>
+                        </q-item>
+                        <q-item clickable @click="emit('price-history')">
+                            <q-item-section avatar>
+                                <q-icon :name="ICONS.show_chart" size="18px" />
+                            </q-item-section>
+                            <q-item-section>Price history</q-item-section>
+                        </q-item>
+                        <q-separator />
+                        <q-item clickable @click="emit('delete')">
+                            <q-item-section avatar>
+                                <q-icon :name="ICONS.delete_outline" size="18px" color="negative" />
+                            </q-item-section>
+                            <q-item-section class="text-negative">Delete product</q-item-section>
+                        </q-item>
+                    </q-list>
+                </q-menu>
             </BaseButton>
         </q-card-actions>
     </q-card>
@@ -184,7 +201,6 @@
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseTooltip from 'src/components/BaseTooltip.vue';
     import DiscountChip from 'src/components/chips/DiscountChip.vue';
-    import ProductActiveButton from 'src/components/products/ProductActiveButton.vue';
     import ProductLinkButton from 'src/components/products/ProductLinkButton.vue';
     import ProductThumb from 'src/components/products/ProductThumb.vue';
     import StoreLogo from 'src/components/StoreLogo.vue';
@@ -196,6 +212,8 @@
         product: Product;
         bulkMode: boolean;
         selected: boolean;
+        /** The user's price-watch threshold on this product, if they set one. */
+        watchThreshold?: number | null;
     }>();
 
     const emit = defineEmits<{
@@ -205,6 +223,7 @@
         (e: 'unlink'): void;
         (e: 'toggle-active'): void;
         (e: 'price-history'): void;
+        (e: 'watch-price'): void;
         (e: 'delete'): void;
     }>();
 
@@ -274,8 +293,22 @@
     .product-card__top--linked {
         cursor: pointer;
     }
-    .product-card__top--linked:hover .text-subtitle2 {
+    .product-card__top--linked:hover .product-card__name {
         text-decoration: underline;
+    }
+    /* Owner 2026-10-15: a step up from subtitle2, which read small once the
+       card stopped spanning the phone's full width. */
+    .product-card__name {
+        font-size: calc(var(--font-size-md) * 1rem);
+        font-weight: 600;
+        line-height: 1.3;
+    }
+    .product-card__watch {
+        display: flex;
+        align-items: center;
+        gap: var(--space-1);
+        font-size: calc(var(--font-size-xs) * 1rem);
+        color: var(--text-secondary);
     }
 
     /* `flex: 0 0 auto` keeps the square media out of the card's height
@@ -317,11 +350,9 @@
         text-decoration: line-through;
     }
 
-    /* One row, no wrapping — the same rule as `FilterRow` and
-       `stock-toolbar__actions`: a control band that reflows changes the card's
+    /* One row, no wrapping: a control band that reflows changes the card's
        height, and in a grid of equal-height cards that ripples to every
-       sibling. At 375px five 44px targets plus gaps fit a ~311px card, so
-       there is nothing to wrap in practice. */
+       sibling. Three 44px targets fit a half-width card at 375px. */
     .product-card__actions {
         flex-wrap: nowrap;
         gap: var(--space-1);

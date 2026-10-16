@@ -64,7 +64,7 @@
                             <template #no-option>
                                 <q-item>
                                     <q-item-section class="text-caption dora-text-muted">
-                                        No matches — use "Create new".
+                                        No matches. Use "Create new".
                                     </q-item-section>
                                 </q-item>
                             </template>

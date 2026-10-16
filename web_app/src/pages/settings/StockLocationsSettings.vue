@@ -2,7 +2,7 @@
     <div class="settings-page">
         <SettingsPageHeader
             title="Stock locations"
-            description="Where things live. Zones at the top (e.g. Pantry), areas inside (e.g. Top shelf), sections inside those (e.g. Left). Items can attach at any level — use whatever structure fits your needs."
+            description="Where things live. Zones (e.g. Pantry), areas inside them (e.g. Top shelf), and sections inside those (e.g. Left). Items can go at any level."
             :icon="ICONS.place"
         >
             <template #actions>
@@ -51,8 +51,7 @@
         <div v-if="!loading && tree.length === 0" class="settings-empty">
             <q-icon :name="ICONS.place" size="40px" class="settings-empty__icon" />
             <p class="settings-empty__line">
-                Nothing mapped out yet. Start with a zone — a room, a cupboard, a fridge,
-                whatever you'd name out loud — and add areas inside it only if you want them.
+                Nothing mapped out yet. Start with a zone, like a room, cupboard or fridge.
             </p>
             <BaseButton :icon="ICONS.add" label="New zone" @click="onAddChild(null, 'zone')" />
         </div>
@@ -246,7 +245,7 @@
         }
         if (subtreeItems > 0) {
             messageParts.push(
-                `${subtreeItems} item${subtreeItems === 1 ? '' : 's'} stored here will become unassigned — the items themselves stay in your stock.`
+                `${subtreeItems} item${subtreeItems === 1 ? '' : 's'} stored here will become unassigned. The items stay in your stock.`
             );
         }
         if (messageParts.length === 0) {

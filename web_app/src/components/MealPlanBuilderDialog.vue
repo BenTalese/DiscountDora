@@ -127,11 +127,9 @@
                             label="Keep the week under budget"
                         />
                         <div class="text-caption dora-text-muted q-mt-xs">
-                            Counts what the meals cost to make — the value of
-                            every ingredient they use, whether or not it's
-                            already in your pantry — against what's left of this
-                            period's budget. The next step also shows what
-                            you'd have to buy.
+                            Counts the full cost of the meals, including what's
+                            already in your pantry, against what's left of this
+                            period's budget.
                         </div>
                     </div>
 
@@ -157,14 +155,14 @@
                         <div>
                             Dora planned {{ lastBuildPlaced }} of the {{ lastBuildRequested }}
                             meals you picked. Each meal uses a different recipe, and there
-                            weren’t enough to fill them all — so some days are still empty.
+                            weren’t enough to fill them all, so some days are still empty.
                             Add more recipes, choose fewer days or meals, or tick
                             <strong>Same meals every day</strong> to reuse recipes.
                         </div>
                     </div>
 
                     <div v-if="proposed.length === 0" class="dora-text-muted text-center q-py-md text-caption">
-                        No meals yet — reshuffle, or add your own below.
+                        No meals yet. Reshuffle, or add your own below.
                     </div>
 
                     <template v-for="group in groupedByDay" :key="group.iso">
@@ -403,7 +401,7 @@
                         </div>
                     </div>
                     <div v-else class="column q-gutter-sm items-start">
-                        <div class="text-subtitle2">All set — {{ proposed.length }} meal(s) planned.</div>
+                        <div class="text-subtitle2">All set: {{ proposed.length }} meal(s) planned.</div>
                         <!-- Owner feedback 2026-08-27 — hands off to the same
                              picker the planner and the recipe page use, rather
                              than sweeping the week into a new list unseen. -->
@@ -584,7 +582,7 @@
         use_up_stock: 'Leans on meals you can cook now and stock that’s expiring soon.',
         variety: 'Spreads cuisines and picks things you haven’t had in a while.',
         favourites: 'Favourites and meals you cook often.',
-        surprise: 'A mixed bag — mostly things you haven’t had lately.',
+        surprise: 'A mixed bag, mostly things you haven’t had lately.',
     };
     const emphasisHint = computed(() => emphasisHints[emphasis.value]);
 
@@ -617,7 +615,7 @@
     // The review step still lets the user move a meal to another day, but only
     // to a day that can actually hold one.
     const dayOptions = computed(() =>
-        upcomingDays.value.map((d) => ({ label: `${d.label} — ${props.formatDate(d.iso)}`, value: d.iso })),
+        upcomingDays.value.map((d) => ({ label: `${d.label}, ${props.formatDate(d.iso)}`, value: d.iso })),
     );
 
     const canGenerate = computed(
@@ -770,7 +768,7 @@
             $q.notify({
                 type: 'negative',
                 position: 'bottom-right',
-                message: "Couldn't build a plan just now — try again.",
+                message: "Couldn't build a plan. Try again.",
             });
         } finally {
             generatingProposal.value = false;

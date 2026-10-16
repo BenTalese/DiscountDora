@@ -10,7 +10,8 @@ const api = new AlertApiService();
 /**
  * The one place the "user taps an inline alert action" mutation lives: the
  * applyAction API call + refresh + success/error toast + per-row busy state.
- * Every alert surface (bell peek, /alerts hub, dashboard card) composes this so
+ * Every alert surface composes this (the bell is the only one since the alerts
+ * page went, 2026-10-15) so
  * the toast + error handling can't drift apart again (FU-521 / R-003) — the bug
  * that motivated it was the dashboard silently swallowing both toasts while the
  * bell + hub toasted "Done.".

@@ -32,7 +32,7 @@
                 {{ items.length }} item{{ items.length === 1 ? '' : 's' }}
                 {{ items.length === 1 ? 'hasn\'t' : "haven't" }} moved in a while, so
                 {{ items.length === 1 ? "it's" : "they're" }} out of the stocktake
-                rotation. Nothing's been deleted — this is just a chance to tidy up.
+                rotation. Nothing's been deleted.
             </div>
         </div>
 

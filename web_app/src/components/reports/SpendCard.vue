@@ -48,8 +48,7 @@
                 </ul>
             </div>
             <CardEmpty v-else :icon="ICONS.storefront">
-                No completed shopping lists in this range — finish a list to see
-                your spend break down by store.
+                No completed shopping lists in this range.
             </CardEmpty>
         </template>
 

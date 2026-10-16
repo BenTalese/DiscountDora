@@ -20,6 +20,7 @@ export default defineConfig((ctx): any => {
         // https://v2.quasar.dev/quasar-cli-vite/boot-files
         boot: [
             'quasarScreen',
+            'keyboardInset',
             'fonts',
             'globalErrorHandler',
             'i18n',

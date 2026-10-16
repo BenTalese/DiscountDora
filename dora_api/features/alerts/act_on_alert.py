@@ -5,7 +5,10 @@ alert means changing the underlying state so it doesn't re-fire:
 
   - reset_expiry: clear `expiry_date` on the linked stock item
   - extend_expiry: push `expiry_date` forward by 7 days
-  - mark_restocked: set the stock level to "Stocked"
+
+(`mark_restocked` went 2026-10-15: the essential-low row now offers the stock
+level picker itself, which writes through the stock-item endpoint like every
+other level change, plus the shared cart button.)
 
 (`acknowledge_stocktake` was removed with the `stocktake_overdue` kind at
 Step-0 Q1 — it was that kind's only action, and "I looked at it" belongs in
@@ -18,14 +21,12 @@ C-9.4+) have no act_on_alert actions yet.
 """
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
 
 from dora_api.domain.entities.stock_item import StockItem
-from dora_api.domain.entities.stock_level import StockLevel
-from dora_api.domain.stock_status import StockStatus, level_for_status
 from dora_api.features.alerts.alert_key import SCOPE_STOCK, parse_alert_key
 from dora_api.features.routers import ALERT_ROUTER
 from dora_api.infrastructure.api_response import (bad_request,
@@ -39,7 +40,6 @@ from dora_api.infrastructure.ports import Repository
 
 ACTION_RESET_EXPIRY = "reset_expiry"
 ACTION_EXTEND_EXPIRY = "extend_expiry"
-ACTION_MARK_RESTOCKED = "mark_restocked"
 
 
 class AlertActionRequest(BaseModel):
@@ -70,13 +70,6 @@ class AlertActionHandler:
             from dora_api.features.app_settings.clock import household_today
             base = item.expiry_date or household_today(self.repository)
             item.expiry_date = base + timedelta(days=7)
-        elif action == ACTION_MARK_RESTOCKED:
-            stocked = level_for_status(
-                self.repository.get(StockLevel).all(), StockStatus.STOCKED
-            )
-            if stocked is not None:
-                item.stock_level = stocked
-            item.stock_level_last_updated = datetime.now(timezone.utc)
         else:
             return AlertActionResponse(invalid_action=True)
 

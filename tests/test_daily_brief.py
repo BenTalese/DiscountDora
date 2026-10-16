@@ -77,7 +77,7 @@ def test__meal_line__lists_meals_in_slot_order():
         _STANDARD_ORDER,
         week_has_entries=True,
     )
-    assert line == "Tomorrow — Breakfast: Porridge; Dinner: Chicken curry."
+    assert line == "Tomorrow · Breakfast: Porridge; Dinner: Chicken curry."
 
 
 def test__meal_line__unknown_slot_sorts_last():
@@ -88,7 +88,7 @@ def test__meal_line__unknown_slot_sorts_last():
         _STANDARD_ORDER,
         week_has_entries=True,
     )
-    assert line == "Tomorrow — Breakfast: Porridge; Elevenses: Scones."
+    assert line == "Tomorrow · Breakfast: Porridge; Elevenses: Scones."
 
 
 # ── The cap ─────────────────────────────────────────────────────────────
@@ -101,7 +101,7 @@ def test__meal_line__caps_named_meals_and_counts_the_rest():
         _Entry("Snack", "Apple"),
     ]
     line = format_meal_line(entries, _STANDARD_ORDER, week_has_entries=True)
-    assert line == "Tomorrow — Breakfast: Porridge; Lunch: Soup; Dinner: Curry; +1 more."
+    assert line == "Tomorrow · Breakfast: Porridge; Lunch: Soup; Dinner: Curry; +1 more."
     assert line.count(";") == MAX_NAMED_MEALS
 
 

@@ -169,7 +169,6 @@ def _feature_flags(setting) -> dict[str, bool]:
                 getattr(setting, "nutrition_rating_scheme", RATING_SCHEME_NONE)
                 or RATING_SCHEME_NONE)
             flags["money"] = bool(setting.money_enabled)
-            flags["deals_email"] = bool(setting.deals_email_enabled)
             # Nutrition is install-wide now (2026-08-14). `nutrition` keeps its
             # boolean meaning for the many gates that only ask "is it on at
             # all"; `nutrition_mode` carries the depth for the surfaces that

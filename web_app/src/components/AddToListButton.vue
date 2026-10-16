@@ -22,19 +22,18 @@
          C-7 Chunk 3 — anchored on `productId` rather than `stockItemId`;
          used on the My Products row so unlinked products can be added
          to a draft list as their own product-only line. -->
-    <BaseButton
+    <!-- Owner 2026-10-15: drawn as the row cart, not a smaller ghost button
+         of its own. Linked or not, a product's cart is the same control. -->
+    <RowActionButton
         v-if="variant === 'inline-product'"
-        variant="ghost"
-        dense
-        size="sm"
         :icon="ICONS.add_shopping_cart"
-        :label="label ?? 'Add as product'"
         :loading="busy"
         :disable="!productId"
+        aria-label="Add to a draft list"
         @click.stop="onInlineProductClick"
     >
-        <BaseTooltip>Add a product-only line to a draft list</BaseTooltip>
-    </BaseButton>
+        <BaseTooltip>Add to a draft list</BaseTooltip>
+    </RowActionButton>
 
     <!-- ── Bulk variant ─────────────────────────────────────────────────
          Resolves the target ONCE for the whole batch via the existing
@@ -270,16 +269,16 @@
         // drafts, so the copy says "a list", not "a draft list".
         switch (cartState.value) {
             case 'on_target':
-                return 'On your list — click to remove';
+                return 'On your list. Click to remove';
             case 'on_other':
                 // Owner 2026-09-03: "'On another list' makes no sense in this
                 // context". Right — "another" is a comparison, and outside the
                 // shopping-list surface there is no first list to compare
                 // against: on a recipe row the only fact is that the item is
                 // already on *a* list.
-                return 'On a list — click to remove';
+                return 'On a list. Click to remove';
             case 'on_multiple':
-                return 'On multiple lists — click to manage';
+                return 'On more than one list';
             case 'none':
             default:
                 return 'Add to a list';

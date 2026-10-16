@@ -41,7 +41,7 @@
                 <q-chip v-if="recipe.servings" dense :icon="ICONS.people">
                     Serves {{ recipe.servings }}
                 </q-chip>
-                <!-- A count, so `ingredientCount` (counter) — the same glyph
+                <!-- A count, so `ingredientCount` (carrot), the same glyph
                      as the "Ingredient count ≤" filter. `ingredients`
                      (food-variant) stays on the Ingredients *picker*, which is
                      about which items, not how many. -->

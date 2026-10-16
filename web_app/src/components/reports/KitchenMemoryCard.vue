@@ -70,7 +70,7 @@
                             :style="{ height: `${col.heightPct}%` }"
                         >
                             <BaseTooltip>
-                                {{ col.date }} — {{ col.cookCount }}
+                                {{ col.date }}: {{ col.cookCount }}
                                 cook{{ col.cookCount === 1 ? '' : 's' }}
                             </BaseTooltip>
                         </span>
@@ -206,7 +206,7 @@
         if (!m || m.cook_count === 0) return 'Nothing cooked in this range yet.';
         const parts = [
             `You cooked ${m.cook_count} time${m.cook_count === 1 ? '' : 's'} `
-            + `${WINDOW_WORDS[props.range]} — ${m.meals_total} meals`,
+            + `${WINDOW_WORDS[props.range]}: ${m.meals_total} meals`,
         ];
         if (m.distinct_recipes > 0) {
             parts.push(
@@ -346,7 +346,7 @@
         gap: var(--space-3);
         padding: var(--space-2) var(--space-3);
         /* D-004 tap-target floor — see the sibling note in
-           `WasteAndRunOutsCard`. Every row is a link. */
+           `WasteCard`. Every row is a link. */
         min-height: 44px;
         background: var(--surface-sunken);
         border-radius: var(--radius-md);
@@ -360,7 +360,7 @@
         white-space: nowrap;
     }
     a.km-list__name:hover { text-decoration: underline; }
-    /* A6 — see the sibling note in `WasteAndRunOutsCard`. */
+    /* A6 — see the sibling note in `WasteCard`. */
     .km-list__name:focus-visible {
         outline: 2px solid var(--focus-ring);
         outline-offset: 2px;

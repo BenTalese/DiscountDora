@@ -22,6 +22,92 @@ top-to-bottom.
 
 ---
 
+## Owner batch 2026-10-15 (not driven live)
+- [ ] Cook mode, fresh household: Finish says "Enjoy your meal."; an ingredient note reads italic behind a note glyph.
+- [ ] Dashboard budget: a list dated next week is not in "still to buy on your open lists".
+- [ ] Weekly deals email sends with SMTP set up and you subscribed (no admin toggle any more).
+- [ ] Push notification click opens the app with the bell panel open.
+- [ ] Companion on your real config: scrapers auto-match your Dora stores; logos show; saving a product works (FU-918).
+
+## Cross-cutting: camera over http, copy sweep (2026-09-27)
+
+- [ ] **Camera over http.** On a phone, open Scan from `http://<lan-ip>`: the
+      camera is attempted with a small warning in the top bar, and the
+      explainer panel only appears if the browser really refuses.
+- [ ] **Copy reads right.** Skim a few tooltips and empty states on Stock,
+      Shopping lists and Settings: no em dashes, nothing cut off mid-thought.
+
+---
+
+## Shopping lists: the 2026-09-27 phone pass (16 items)
+
+Built, gated and driven at 375 (touch) and 1440 on the scratch pair. What a
+headless Chromium can't show:
+
+- [ ] **Keyboard vs bottom sheet, iPhone.** Open Add item and the shop-mode
+      price sheet; focus the field. The sheet sits above the keyboard, header
+      visible, nothing clipped.
+- [ ] **Keyboard vs bottom sheet, Android Chrome.** Same two sheets; confirm
+      the page doesn't jump or leave a gap when the keyboard closes.
+- [ ] **Money off.** With money off, a draft's card reads *N Items to buy ·
+      Shop day*. The count appears once.
+- [ ] **Remembered choice.** Pick a preferred buy (products off) or an offer
+      (products on) for an item, finish or delete that list, add the item to a
+      new list. The choice is already there.
+
+---
+
+## Shopping lists — the auto-added mark (2026-09-19)
+
+Code-complete and green (2379 backend / 749 SPA); not yet seen on screen.
+
+- [ ] **Nothing else is marked.** Build a list via New list → auto-fill (low/out
+      + essentials + frequently added): every line comes back unmarked.
+- [ ] **The mark clears on edit.** Change quantity or pick an offer on a marked
+      line — the glyph goes and stays gone after a reload.
+- [ ] **`--accent-mark` at 14px holds contrast** in Pesto Dark and Cherry Cola
+      Dark (D-002 grades icons at 3:1).
+
+---
+
+## Shopping lists — the 2026-09-17 second pass (24 items)
+
+Driven live at 1440 and 375. What that run can't settle:
+
+- [ ] **The name dropdown on a phone.** An item with preferred buys renders its
+      name as a menu (chevron + hover wash). Confirm the tap target is
+      comfortable and the chevron reads as "there's a choice" rather than as
+      chrome, at 44px touch sizing.
+- [ ] **"Seen at" in a real shop.** Mid-shop, open a line's price sheet and tap
+      an offer chip — price and store should both fill. This is now the only
+      way an offer becomes money, so it wants one real walk.
+- [ ] **Dark themes, receipt face.** "Where you spent it" now renders flush
+      inside the summary card on the receipt too. Check Pesto Dark and Cherry
+      Cola Dark.
+
+---
+
+## Shopping lists — the 2026-09-17 UI batch
+
+Driven live at 1440 and 375 on the isolated pair (no overlaps, no page
+flash, store-group move confirmed). What a headless desktop can't settle:
+
+- [ ] **A real phone, coarse pointer.** Icon buttons jump 36px → 44px under
+      `pointer: coarse`, which is the input the new row arithmetic is sized
+      for and the one Chromium headless never reports. Open a draft: the name
+      shouldn't wrap under its own Buy chip, and nothing should sit on the
+      price.
+- [ ] **Tap the quantity tile on a draft row.** First tap arms the ± stepper —
+      the row should widen to hold it, not float it over the item's name or off
+      the left edge.
+- [ ] **Dark themes.** The store breakdown is now flush inside the overview
+      card (no border, no band of its own) and the **No store set** key is a
+      hatched pip. Check Pesto Dark and Cherry Cola Dark: the region should
+      still read as a region, and the pip should be distinguishable from the
+      store dots beside it at 8px.
+
+---
+
 ## Cookbook + recipe view — the 2026-09-09 five-item batch
 
 Built and gated (pytest 2349, vitest 720, `vue-tsc`, `eslint src/`,
@@ -1800,11 +1886,9 @@ list; the "Organise ingredients" panel is gone):
       warn tier, cheat sheet has one Row-treatment column, essential swatch matches the row.
 
 ## Alerts + Stock: Step-0 cuts and the one attention rule (2026-08-20)
-- [ ] Bell/alerts page show only expired, expiring-soon, essential-low + the three nudges.
-- [ ] Manage panel: on/off toggle per kind, no Needs-action/FYI picker, weight shown as text.
+- [ ] Settings → Notifications: one on/off toggle per kind, no Needs-action/FYI picker.
 - [ ] Switch a kind off → its stock rows lose their outline too, and the footer count drops.
 - [ ] Change the expiring-soon window in settings → row outlines move with the bell.
-- [ ] Alerts page → view-in-stock lands on a filter whose count matches the number tapped.
 - [ ] One outline colour only; no amber-outline-around-amber-Low-square rows.
 - [ ] Non-essential out-of-stock: dim, no outline, not counted.
 - [ ] Settings → Notifications has no alerts-email-digest section.
@@ -3301,42 +3385,26 @@ unlabelled icon-buttons — FU-578's a11y bucket.)*
 
 ## Alerts & notifications
 
-### Price-watch panel hides on per-user money opt-out (FU-604 fix) — origin FU-604
-- [ ] Install money flag ON, then set your own account's money features **off** (Settings): the Alerts hub's **Price watch** (armed subscriptions) panel disappears — previously it stayed until the whole install disabled money. Turning your money features back on restores it.
-
-### Alerts page refetches on open (FU-597 fix) — origin FU-597
-- [ ] Resolve an alert from elsewhere (plan next week's meals to clear "no meals planned", or restock a low item), then open **Alerts**: the resolved row and its count are gone **without** hitting Refresh (the page used to render a stale feed until manually refreshed).
+### Price watches hide on per-user money opt-out — origin FU-604
+- [ ] Money on for the install, off for your account: Settings → Notifications shows no price watches and no Price drops toggle; turning it back on restores both.
 
 ### Alerts C-9.1 — spine — remaining browser smoke — origin FU-183
 - [ ] **C-9.2:** the admin **Expiring-soon window** field's own save path (type a value + Save in the UI). (Verified 2026-07-22: the setting round-trips server-side 7→2→7 and reshapes the feed — expiring_soon 13→2, badge follows; **disabling a kind** removes its 11 rows from the list; **demote/promote** moved `expired` between tiers with exact accounting — actionable 34↔23, FYI 18↔29, badge tracking. UI-typing half is blocked by the Quasar synthetic-input limitation, not by a defect.)
-- [ ] **C-9.3:** dark-mode sweep of the hub. (Verified 2026-07-22: hub renders — summary tiles, tiered active list, Manage panel, collapsible History; bell is a slim peek with top rows + bulk-add + "Open Alerts"; shared `AlertRow` actions work from both; History lists dismiss/snooze/read with stock name resolved — **found + fixed a copy bug there: `out_of_stock` rendered "out of_stock"**. **Bell/page DO diverge — see [[FU-597]]:** the page only refetches when the store is empty, so it can show a stale feed all session.)
-- [ ] **C-9.5 price watch — residuals:** the **last-alerted** timestamp on a watch that has actually *fired* (armed one never fired); and driving the **arm** UI itself (per-product "Notify me below" q-input didn't render/take in the hidden pane — armed via the API the button calls). *(Verified live 2026-07-23: empty-state; armed→panel lists product·merchant·"notify below $2.50"; View→explorer deep-linked to the product; Remove→gone+"Price watch removed."; hidden when the INSTALL money flag is off. Per-user-vs-install gating → [[FU-604]].)*
-- [ ] **C-9.6:** empty-state; "refresh works". (Verified 2026-07-22: mini-calendar renders; per-category dots for expiry/shopping/meal; out-of-window at opacity 0.35; today ringed in primary; clicking a day selects it and expands the detail list; all three link targets navigate — expiry → `/stock/:id`, shopping → `/shopping-lists/:id`, meal → `/cookbook/:recipe_id`. **Dots survive theme switch but shopping and meal are the SAME colour in Pesto — [[FU-598]]**.)
 
 ### Cross-app undo after push-expiry (fixes 2026-07-10) — origin FU-357
-- [ ] From the **Dashboard's dashboard-card push-expiry action** (i.e. the push-expiry rendered on the Dashboard alerts card, not just the bell) → toast now reads **"Done."** (this used to be silent — fixed 2026-07-10). Confirm the toast fires on Dashboard, Bell peek, and `/alerts` page — all three surfaces should behave identically.
-- [ ] Push expiry via bell/dashboard/`/alerts`, then navigate to the stock item detail page → **Clear** its expiry → no stale toast reappears, the expiry field reads empty, and no undo affordance fires against the cleared field. (Static read confirmed: no undo exists on the push_expiry path anywhere in the SPA. This step is the last belt-and-braces check.)
+- [ ] From the **Dashboard's dashboard-card push-expiry action** (i.e. the push-expiry rendered on the Dashboard alerts card, not just the bell) → toast now reads **"Done."** (this used to be silent — fixed 2026-07-10). Confirm the toast fires on Dashboard and the bell, and both behave identically.
+- [ ] Push expiry via bell/dashboard, then navigate to the stock item detail page → **Clear** its expiry → no stale toast reappears, the expiry field reads empty, and no undo affordance fires against the cleared field. (Static read confirmed: no undo exists on the push_expiry path anywhere in the SPA. This step is the last belt-and-braces check.)
 
 ### fake-markdown buy verdict — origin FU-450
 *(FU-602 resolved 2026-07-24 — the `good_deal` alert + "Good & great/Great only" deal-band control were a **deliberate descope**: the deal-quality band feeds the buy-verdict only, no separate naggy alert. Those two bullets deleted; the buy-verdict half below stands.)*
 - [ ] **fake markdown.** For a product where the merchant claims a "special" (was > now) but you've logged paying *less* recently (price observations below the special) → the item's **Buy Verdict** card shows "Markdown looks inflated — you've paid less than this 'special' recently" and a price-driven `buy` reads as **wait**. An out-of-stock item stays **buy** (need wins) but still shows the inflated-markdown reason.
 - [ ] **Money off** → no fake-markdown demotion (buy-verdict card absent).
 
-### C-9.7 alerts email digest — origin FU-205
-- [ ] Heading + caption of the "Alerts email digest" card read cleanly across all themes. (Verified 2026-07-22: the card renders directly after Weekly deals — **note the checklist says Settings → Preferences; it actually lives on Settings → Notifications**, doc drift from a settings-tree reorganisation.)
-- [ ] **SMTP-gating (R-014), the ON half:** with `DORA_SMTP_USERNAME` set + restart the toggle enables, the caption hides, and `GET /api/health` shows `features.email_smtp_configured: true`. (Verified 2026-07-22: the OFF half — toggle disabled with "Email isn't set up on this install yet — ask an admin to configure SMTP and this toggle will unlock." and health `false`.)
-- [ ] Opt-in round-trip: master toggle on → toast → cadence select appears (Daily default); switch Weekly → day select; pick a day; reload survives. Network panel: master sends `{alerts_email_enabled, alerts_email_cadence}` together; later edits send single changed field
-- [ ] `GET /api/auth/me` returns `alerts_email_enabled`, `alerts_email_cadence`, `alerts_email_day` on user payload
-- [ ] Real SMTP send: real env + opted-in + an expired stock item → trigger job → inbox receives digest with actionable item in "Needs action", "Open Alerts" button linking to `<DORA_PUBLIC_URL>/alerts`, plain-text fallback
-- [ ] Dedup: trigger again → no second email; mark item not-expired/delete → trigger → no email + `last_emailed_at` clears; re-add same name → trigger → fresh email
-- [ ] Weekly day gating: cadence=weekly, day=Monday; non-Monday → trigger → no email; Monday → email lands
-- [ ] Schedule fires: confirm `alerts_digest` job in APScheduler's job list (07:00 CronTrigger)
-
 ### C-9.8 web-push channel — origin FU-206
 *Prereq: generate VAPID keys per FU-207*
 - [ ] Set VAPID env, restart → toggle enabled, caption hides; health flag true; key endpoint returns the public key
 - [ ] Subscribe flow: toggle on → browser permission prompt → allow → toast → toggle stays on, caption "This device is subscribed…". DevTools → Application → Service Workers: SW at `/push-sw.js` registered + activated
-- [ ] Receive: create expired stock item → trigger `send_alerts_push()` → OS notification "Dashy Dora — <name> has expired". Click → focuses an existing Dora tab on `/alerts` (or opens new one)
+- [ ] Receive: create expired stock item → trigger `send_alerts_push()` → OS notification "Dashy Dora — <name> has expired". Click → focuses an existing Dora tab (or opens one) with the bell panel open
 - [ ] Dedup: trigger again → no second notification. Mark item not-expired → trigger → no notification + `last_pushed_at` clears. Re-add expired → trigger → fresh notification
 - [ ] Multi-device: subscribe a second browser (e.g. mobile Chrome on same LAN) → trigger → both buzz
 - [ ] Permission denied: fresh profile, deny prompt → caption "Notifications are blocked…"; toggle stays off; subscribe button greys
@@ -3621,7 +3689,7 @@ Verified live via DOM/computed-style (structure + forced-dark confirmed); these 
 - [ ] **C-5.5:** seed step renders 5 starter packs; ticking a pack header selects all items (tri-state when partial); expanding lets you tick individual items
 - [ ] First-item step's group/location pickers offer names (defaults + pack groups + existing); queued items in slim added list (removable)
 - [ ] Finish: ticked pack items + first items pre-located, no duplicates on re-run
-- [ ] **C-5.6:** final step shows confetti (suppressed under reduced-motion); OnboardingLoop recap (no autoplay, tappable); persona-relevant flow-cards Open each area + link to guides; Alerts card → `/alerts` (FU-015)
+- [ ] **C-5.6:** final step shows confetti (suppressed under reduced-motion); OnboardingLoop recap (no autoplay, tappable); persona-relevant flow-cards Open each area + link to guides (the Alerts card went with the page, 2026-10-15)
 - [ ] Finish / "Open X" completes onboarding (router guard clears)
 
 ### Onboarding de-persona — remaining items — origin FU-210
@@ -3645,7 +3713,7 @@ Verified live via DOM/computed-style (structure + forced-dark confirmed); these 
 ### Assistant honours configurable expiring-soon window — origin FU-187
 - [ ] Settings → app settings: change `expiring_soon_window_days` from 7 to 3 (or via PATCH `/api/app-settings`)
 - [ ] Ask Dora "what's expiring soon?" → only items within 3 days are listed (matching the alerts list and the location heatmap)
-- [ ] Ask Dora the pantry summary → "expiring soon" count agrees with the alerts page
+- [ ] Ask Dora the pantry summary → "expiring soon" count agrees with the bell
 - [ ] Reset window to 7 → assistant agrees again
 
 ### Onboarding sell-copy honesty (P3 Honest gate) — origin FU-184

@@ -40,6 +40,10 @@ export type MealPlanEntry = {
      *  RECIPE in the shortfall set?" test, which lit every entry of a short
      *  recipe. Always false when the household's cook-style is "fresh". */
     needs_cooking: boolean;
+    /** A leftovers day of a batch whose cook is still owed: not something to
+     *  cook today, but no portion is waiting yet either. Never true on a cook
+     *  day. Server-owned off the same pool allocation as `needs_cooking`. */
+    cook_batch_pending: boolean;
     /** Owner feedback 2026-09-04 — *"I batch cook and freeze lunches for the
      *  week, but dinner with the parents on Saturday is fresh."* This meal is
      *  cooked on its day and stands outside the cooked-portion pool: it is

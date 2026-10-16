@@ -31,7 +31,18 @@ import type { MealPlanEntry } from 'src/models/mealPlan';
  * two breakpoints cannot drift (R-001).
  */
 
-export type StatusTone = 'ok' | 'alert';
+/** `pending` is a leftovers day whose batch hasn't been cooked yet: nothing to
+ *  do on this day, but no portion is waiting either (owner 2026-10-15). */
+export type StatusTone = 'ok' | 'alert' | 'pending';
+
+/** The ink for a status glyph: green fine, amber not, muted for waiting. */
+export function statusToneClass(tone: StatusTone): string {
+    switch (tone) {
+        case 'ok': return 'text-positive';
+        case 'alert': return 'text-warning';
+        case 'pending': return 'dora-text-muted';
+    }
+}
 
 /** Nothing-to-do (grey) · fine (green) · something's wrong (amber). */
 export type TrimTone = 'idle' | 'ok' | 'alert';
@@ -88,9 +99,11 @@ export function mealCardStatus(
         : null;
     // `cook_fresh` meals never ask the pool for anything, so the fridge would
     // be answering a question they don't pose.
-    const readiness: StatusTone | null = batchEnabled && !entry.cook_fresh
-        ? (needsCooking ? 'alert' : 'ok')
-        : null;
+    let readiness: StatusTone | null = null;
+    if (batchEnabled && !entry.cook_fresh) {
+        if (entry.cook_batch_pending) readiness = 'pending';
+        else readiness = needsCooking ? 'alert' : 'ok';
+    }
 
     if (supply === 'alert' || readiness === 'alert') {
         return { supply, readiness, trim: 'alert' };
@@ -119,7 +132,13 @@ export function supplyTooltip(entry: MealPlanEntry): string {
  *  it is an internal word for the cooked portions, and the user's question is
  *  simply whether there's a serving ready. */
 export function readinessTooltip(entry: MealPlanEntry, needsCooking: boolean): string {
+    if (entry.cook_batch_pending) return 'Leftovers from this batch, which still has to be cooked';
     if (!needsCooking) return 'A cooked serving is ready for this';
-    const n = entry.servings;
-    return `Needs cooking — short by ${n} ready serving${n === 1 ? '' : 's'}`;
+    // A batch is cooked as one, so its cook day is short the whole yield, not
+    // just its own day's servings (owner 2026-10-15, the affogato report).
+    const n = entry.cook_batch_id !== null
+        ? (entry.cook_batch_total_servings ?? entry.servings)
+        : entry.servings;
+    const what = entry.cook_batch_id !== null ? ' for the batch' : '';
+    return `Needs cooking: ${n} serving${n === 1 ? '' : 's'}${what}`;
 }

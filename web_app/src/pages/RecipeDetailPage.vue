@@ -140,15 +140,15 @@
                     <div v-if="!headerEditing" class="rn__facts">
                         <div class="rn__fact">
                             <span class="rn__factk"><q-icon :name="ICONS.people" size="14px" />Serves</span>
-                            <span class="rn__factv">{{ form.servings ?? '—' }}</span>
+                            <span class="rn__factv">{{ form.servings ?? '–' }}</span>
                         </div>
                         <div class="rn__fact">
                             <span class="rn__factk"><q-icon :name="ICONS.prepTime" size="14px" />Prep</span>
-                            <span class="rn__factv">{{ form.prep_time_minutes ? form.prep_time_minutes + ' min' : '—' }}</span>
+                            <span class="rn__factv">{{ form.prep_time_minutes ? form.prep_time_minutes + ' min' : '–' }}</span>
                         </div>
                         <div class="rn__fact">
                             <span class="rn__factk"><q-icon :name="ICONS.cookTime" size="14px" />Cook</span>
-                            <span class="rn__factv">{{ form.cook_time_minutes ? form.cook_time_minutes + ' min' : '—' }}</span>
+                            <span class="rn__factv">{{ form.cook_time_minutes ? form.cook_time_minutes + ' min' : '–' }}</span>
                         </div>
                         <div v-if="totalMinutes !== null" class="rn__fact">
                             <span class="rn__factk"><q-icon :name="ICONS.timer" size="14px" />Total</span>
@@ -156,11 +156,11 @@
                         </div>
                         <div class="rn__fact">
                             <span class="rn__factk"><q-icon :name="ICONS.difficulty" size="14px" />Difficulty</span>
-                            <span class="rn__factv">{{ form.difficulty || '—' }}</span>
+                            <span class="rn__factv">{{ form.difficulty || '–' }}</span>
                         </div>
                         <div class="rn__fact">
                             <span class="rn__factk"><q-icon :name="ICONS.schedule" size="14px" />When</span>
-                            <span class="rn__factv">{{ form.time_of_day || '—' }}</span>
+                            <span class="rn__factv">{{ form.time_of_day || '–' }}</span>
                         </div>
                         <div v-if="headlineKcal !== null" class="rn__fact">
                             <span class="rn__factk">
@@ -327,7 +327,7 @@
                         variant="secondary"
                         :icon="ICONS.add_shopping_cart"
                         :label="compact ? undefined : addMissingLabel"
-                        :aria-label="`${addMissingLabel} — the ingredients you're missing`"
+                        :aria-label="`${addMissingLabel}: the ingredients you're missing`"
                         @click="onAddMissingToList"
                     >
                         <BaseTooltip v-if="compact">{{ addMissingLabel }}</BaseTooltip>
@@ -513,7 +513,7 @@
                                         @keydown.space.prevent="onIngredientRowActivate(String(row.client_id))"
                                     >
                                         <span class="rn__qty">
-                                            {{ formatQuantity(row.quantity, row.unit) || '—' }}
+                                            {{ formatQuantity(row.quantity, row.unit) || '–' }}
                                         </span>
                                         <span class="rn__ingname">
                                             <span class="rn__ingtext">{{ ingredientLabel(row) }}</span>
@@ -780,7 +780,7 @@
                                     <p class="dora-steps__body dora-steps__text">{{ line }}</p>
                                 </li>
                             </ol>
-                            <p v-else class="rn__empty">No instructions yet — tap the pencil to write them.</p>
+                            <p v-else class="rn__empty">No instructions yet.</p>
                         </template>
 
                         <!-- Photo steps. Both faces read the *form's* list, not
@@ -960,7 +960,7 @@
                                     <span>
                                         {{ recipe.updated_at
                                             ? formatDate(recipe.updated_at)
-                                            : 'Not edited since it was added' }}
+                                            : '–' }}
                                     </span>
                                 </div>
                             </div>
@@ -994,7 +994,7 @@
                                     <q-item-section>
                                         <q-item-label>{{ recipe.name }}</q-item-label>
                                         <q-item-label caption>
-                                            {{ recipe.created_at ? `Created ${formatDate(recipe.created_at)}` : 'Created — unknown' }}
+                                            {{ recipe.created_at ? `Created ${formatDate(recipe.created_at)}` : 'Created date unknown' }}
                                         </q-item-label>
                                     </q-item-section>
                                     <q-item-section side>
@@ -1010,7 +1010,7 @@
                                     <q-item-section>
                                         <q-item-label>{{ sib.name }}</q-item-label>
                                         <q-item-label caption>
-                                            {{ sib.created_at ? `Created ${formatDate(sib.created_at)}` : 'Created — unknown' }}
+                                            {{ sib.created_at ? `Created ${formatDate(sib.created_at)}` : 'Created date unknown' }}
                                         </q-item-label>
                                     </q-item-section>
                                     <q-item-section side>
@@ -1455,7 +1455,7 @@
         if (saveBlockers.value.length > 0) {
             stepErrorsShown.value = emptySteps.value.length > 0;
             saveState.value = 'error';
-            saveMessage.value = `Not saved — ${saveBlockers.value.join(', and ')}.`;
+            saveMessage.value = `Not saved: ${saveBlockers.value.join(', and ')}.`;
             return;
         }
         stepErrorsShown.value = false;
@@ -2090,7 +2090,7 @@
                 type: 'positive',
                 position: 'bottom-right',
                 message: 'New version created.',
-                caption: 'Both versions are equal peers — pick either when scheduling.',
+                caption: 'Pick either one when planning.',
             });
             if (newId) void router.push(`/cookbook/${newId}`);
         } catch (err) {

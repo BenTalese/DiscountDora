@@ -148,7 +148,7 @@ def generate_over_budget(repository: SqlAlchemyRepository, user_id: UUID | None)
         severity=SEVERITY_HIGH,
         title="You're over budget this " + dto.period.replace("ly", ""),
         body=(
-            f"Spent ${dto.spent:.2f} of your ${dto.amount:.2f} target — "
+            f"Spent ${dto.spent:.2f} of your ${dto.amount:.2f} target, "
             f"${over_by:.2f} over."
         ),
         reason=(
@@ -405,7 +405,7 @@ def generate_pantry_check(
             dedup_key=str(item_id),
             severity=SEVERITY_LOW,
             title=f"Still have {name}?",
-            body=f"I think it's {belief.believed_band} — {why_decision}. A quick check keeps me honest.",
+            body=f"I think it's {belief.believed_band}: {why_decision}.",
             reason=(
                 f"{belief.reason} Confidence is {belief.confidence_band}, and "
                 f"{why_decision}, so a one-tap confirm resolves the uncertainty "
@@ -449,7 +449,7 @@ def generate_reconcile_meals_pending(
         title=f"{signal.unresolved_count} past meals need confirming",
         body=(
             f"Oldest is {signal.oldest_days_back} {pluralize(signal.oldest_days_back, 'day')} back. "
-            "A quick pass keeps your pool honest — no rush."
+            "No rush."
         ),
         reason=(
             f"You have {signal.unresolved_count} past-day meal-plan entries "

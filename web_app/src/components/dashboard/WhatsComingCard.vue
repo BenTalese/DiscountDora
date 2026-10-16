@@ -50,57 +50,57 @@
                  so "Expiring" is keyed to the red pip you just tapped; and each
                  entry becomes an obvious tappable row with the qualifier (slot /
                  level) demoted to a chip rather than more sentence. -->
-            <div v-if="selectedDay" class="dora-cal-detail">
+            <div v-if="selected" class="dora-cal-detail">
                 <div class="dora-cal-detail-date">
-                    {{ formatRelativeDay(selectedDay.date) }}
+                    {{ formatRelativeDay(selected) }}
                 </div>
-                <div v-if="selectedDay.meals.length > 0" class="dora-cal-group">
-                    <div class="dora-cal-group-label">
-                        <span class="dora-cal-dot dot-meal" />Meals
+                <div v-if="!hasEntries" class="dora-cal-hint">Nothing on.</div>
+                <template v-else-if="selectedDay">
+                    <div v-if="selectedDay.meals.length > 0" class="dora-cal-group">
+                        <div class="dora-cal-group-label">
+                            <span class="dora-cal-dot dot-meal" />Meals
+                        </div>
+                        <router-link
+                            v-for="(m, i) in selectedDay.meals"
+                            :key="`${m.recipe_id}-${m.slot}-${i}`"
+                            class="dora-cal-item"
+                            :to="`/cookbook/${m.recipe_id}`"
+                        >
+                            <span class="dora-cal-item__name">{{ m.recipe_name }}</span>
+                            <span class="dora-cal-slot">{{ m.slot }}</span>
+                        </router-link>
                     </div>
-                    <router-link
-                        v-for="(m, i) in selectedDay.meals"
-                        :key="`${m.recipe_id}-${m.slot}-${i}`"
-                        class="dora-cal-item"
-                        :to="`/cookbook/${m.recipe_id}`"
-                    >
-                        <span class="dora-cal-item__name">{{ m.recipe_name }}</span>
-                        <span class="dora-cal-slot">{{ m.slot }}</span>
-                    </router-link>
-                </div>
-                <div v-if="selectedDay.expiries.length > 0" class="dora-cal-group">
-                    <div class="dora-cal-group-label">
-                        <span class="dora-cal-dot dot-expiry" />Expiring
+                    <div v-if="selectedDay.expiries.length > 0" class="dora-cal-group">
+                        <div class="dora-cal-group-label">
+                            <span class="dora-cal-dot dot-expiry" />Expiring
+                        </div>
+                        <router-link
+                            v-for="e in selectedDay.expiries"
+                            :key="e.stock_item_id"
+                            class="dora-cal-item"
+                            :to="`/stock/${e.stock_item_id}`"
+                        >
+                            <span class="dora-cal-item__name">{{ e.name }}</span>
+                        </router-link>
                     </div>
-                    <router-link
-                        v-for="e in selectedDay.expiries"
-                        :key="e.stock_item_id"
-                        class="dora-cal-item"
-                        :to="`/stock/${e.stock_item_id}`"
-                    >
-                        <span class="dora-cal-item__name">{{ e.name }}</span>
-                    </router-link>
-                </div>
-                <div v-if="selectedDay.shopping.length > 0" class="dora-cal-group">
-                    <div class="dora-cal-group-label">
-                        <span class="dora-cal-dot dot-shopping" />Shopping
+                    <div v-if="selectedDay.shopping.length > 0" class="dora-cal-group">
+                        <div class="dora-cal-group-label">
+                            <span class="dora-cal-dot dot-shopping" />Shopping
+                        </div>
+                        <router-link
+                            v-for="s in selectedDay.shopping"
+                            :key="s.list_id"
+                            class="dora-cal-item"
+                            :to="`/shopping-lists/${s.list_id}`"
+                        >
+                            <span class="dora-cal-item__name">{{ s.name }}</span>
+                        </router-link>
                     </div>
-                    <router-link
-                        v-for="s in selectedDay.shopping"
-                        :key="s.list_id"
-                        class="dora-cal-item"
-                        :to="`/shopping-lists/${s.list_id}`"
-                    >
-                        <span class="dora-cal-item__name">{{ s.name }}</span>
-                    </router-link>
-                </div>
-            </div>
-            <div v-else class="dora-cal-hint">
-                Tap a day with dots to see what's on.
+                </template>
             </div>
         </template>
         <div v-else class="dora-empty">
-            Nothing scheduled in the next fortnight — enjoy the calm.
+            Nothing scheduled in the next fortnight.
             <router-link class="dora-empty-cta" to="/meal-plans">Plan a week →</router-link>
         </div>
     </DashboardCard>
@@ -129,6 +129,7 @@
      * builds `cells` (it needs the household's local-date logic and the shared
      * `parseLocalIso`), so this component renders and emits.
      */
+    import { computed } from 'vue';
     import { ICONS } from 'src/style/icons';
     import { formatRelativeDay } from 'src/composables/useDateFormat';
     import DashboardCard from 'src/components/dashboard/DashboardCard.vue';
@@ -156,16 +157,23 @@
         hasMeal: boolean;
     };
 
-    withDefaults(
+    const props = withDefaults(
         defineProps<{
             /** All fourteen, built by the page. */
             cells: CalendarCell[];
+            /** Always a day once the cells exist: today until you tap another. */
             selected: string | null;
+            /** Null when nothing is scheduled on `selected`. */
             selectedDay: UpcomingDay | null;
             failed?: boolean;
         }>(),
         { failed: false },
     );
+
+    const hasEntries = computed(() => {
+        const d = props.selectedDay;
+        return !!d && (d.meals.length + d.expiries.length + d.shopping.length) > 0;
+    });
 
     const emit = defineEmits<{
         (e: 'select', iso: string): void;

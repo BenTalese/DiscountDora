@@ -50,13 +50,13 @@
             </div>
             <div class="demand-card__meta dora-text-muted">
                 <template v-if="demand.urgency === 'blocking'">
-                    You've recorded this as out — the meal can't be cooked until it's back.
+                    You've recorded this as out.
                 </template>
                 <template v-else-if="demand.urgency === 'watch'">
-                    You've recorded this as low — it may not stretch that far.
+                    You've recorded this as low, so it may not stretch that far.
                 </template>
                 <template v-else>
-                    You've got this in, so nothing to do — it's here for the count.
+                    You've got this in.
                 </template>
             </div>
         </div>
@@ -84,7 +84,7 @@
         const noun = n === 1 ? 'meal' : 'meals';
         return d.needed_meals > 0
             ? `${n} planned ${noun} need this`
-            : `${n} planned ${noun} — all covered`;
+            : `${n} planned ${noun}, all covered`;
     });
 </script>
 

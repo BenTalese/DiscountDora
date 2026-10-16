@@ -173,7 +173,7 @@
             emit('imported', imported);
         } catch (err) {
             error.value =
-                'Could not import. The paste might not include enough recipe structure — try a different site or copy just the recipe portion.';
+                'Could not import. Try a different site, or copy just the recipe.';
             console.warn('Import failed', err);
         } finally {
             importing.value = false;

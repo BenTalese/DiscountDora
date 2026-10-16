@@ -31,9 +31,7 @@
                     This page wandered off
                 </div>
                 <div class="lost-sub">
-                    Dora can't find what you were after — broken link, typo,
-                    or something that used to live here. Head home and try
-                    again from there.
+                    Dora can't find that page.
                 </div>
             </q-card-section>
 

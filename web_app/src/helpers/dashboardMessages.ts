@@ -17,7 +17,7 @@ export const WEEKDAY_WELCOMES: Record<number, string[]> = {
     0: [
         "Sunday calm. A good day to glance at the week and let me do the worrying.",
         "Lazy Sunday? Same. But future-you will thank present-you for a quick plan.",
-        "Sunday roast or Sunday reset — either way, the pantry's in good hands.",
+        "Sunday roast or Sunday reset, the pantry's in good hands.",
         "The week hasn't started yet. Breathe. Then maybe peek at what's running low.",
         "Sundays are for leftovers and loose ends. Let's tidy the kitchen plan.",
     ],
@@ -25,14 +25,14 @@ export const WEEKDAY_WELCOMES: Record<number, string[]> = {
     1: [
         "New week, fresh start. Let's see what needs topping up.",
         "Monday! I've already counted the milk so you don't have to.",
-        "Mondays are easier with a plan — and I happen to have one ready.",
+        "Mondays are easier with a plan. I happen to have one ready.",
         "Coffee first, then conquering the shopping list. I'll wait.",
         "A tidy week begins with a tidy pantry. Shall we?",
     ],
     // 2 — Tuesday
     2: [
         "Tuesday momentum. The hard part (Monday) is behind us.",
-        "Still early in the week — perfect time to use up what's fresh.",
+        "Still early in the week. Good time to use up what's fresh.",
         "Taco Tuesday is a suggestion, not a rule. But I'm not stopping you.",
         "Quietly humming along. Anything in the fridge giving you side-eye yet?",
         "Two days in, going strong. Let's not let anything expire on my watch.",
@@ -40,14 +40,14 @@ export const WEEKDAY_WELCOMES: Record<number, string[]> = {
     // 3 — Wednesday
     3: [
         "Midweek already. Half the groceries gone, half the week to go.",
-        "Hump day. The pantry's holding up — let's keep it that way.",
+        "Hump day. The pantry's holding up.",
         "Wednesday check-in: anything worth cooking before it turns?",
         "Right in the thick of it. A good day to plan the back half of the week.",
         "Midweek is when the good intentions wobble. I've got your back.",
     ],
     // 4 — Thursday
     4: [
-        "Thursday — the weekend's practically waving at you.",
+        "Thursday. The weekend's practically waving at you.",
         "Almost there. Let's make sure nothing's lurking past its use-by.",
         "One more push. Maybe plan something nice for the weekend?",
         "Thursday's a sneaky-good day for a quick deal hunt.",
@@ -58,12 +58,12 @@ export const WEEKDAY_WELCOMES: Record<number, string[]> = {
         "Friday! You've earned something tasty this weekend.",
         "Weekend's at the door. What are we cooking?",
         "Friday energy. Let's burn down that shopping list before the fun starts.",
-        "TGIF. Treat yourself — within budget, obviously. I'm watching.",
+        "TGIF. Treat yourself, within budget. I'm watching.",
         "End of the week. A good time to plan the weekend's feasts.",
     ],
     // 6 — Saturday: the big shop, cooking day
     6: [
-        "Saturday — prime shopping day. Got your list ready?",
+        "Saturday, prime shopping day. Got your list ready?",
         "Big-shop energy today. Let me show you what's on special.",
         "Weekend cooking time. The pantry's your playground.",
         "Saturday markets and full trolleys. Let's do this properly.",
@@ -143,7 +143,7 @@ export const HINTS: Hint[] = [
     // Cook-session-only substitution is the single most hidden thing in cook
     // mode — the swap doesn't touch the recipe, which is exactly why people
     // don't try it.
-    { text: "Out of something mid-cook? Swap in a substitute — it only applies to this cook." },
+    { text: "Out of something mid-cook? Swap in a substitute for just that cook." },
 
     // ── Meal plans ───────────────────────────────────────────────────────
     { text: "A meal plan entry's servings can exceed the recipe's; quantities scale." },
@@ -157,7 +157,7 @@ export const HINTS: Hint[] = [
     { text: "Setting your default shopping list makes the cart button one-tap." },
     { text: "Linking a product to a stock item lets me track its price over time.", gate: 'products' },
     // Was "Your saved products power the deals card" — that card is gone.
-    { text: "Saved products feed the Price drops card — save the ones you actually buy.", gate: 'products' },
+    { text: "Save the products you actually buy to see their price drops.", gate: 'products' },
     { text: "Set a grocery budget and I'll quietly track spend against it for you.", gate: 'money' },
 
     // ── Getting around ───────────────────────────────────────────────────
@@ -165,7 +165,7 @@ export const HINTS: Hint[] = [
     { text: "Show, hide and reorder your dashboard cards from the Cards menu." },
     // The cheatsheet is the discoverability surface for the whole keyboard
     // layer, and nothing on screen points at it.
-    { text: "Press ? anywhere for the keyboard shortcuts — 'g s' for stock, 'g l' for lists." },
+    { text: "Press ? anywhere for the keyboard shortcuts." },
     // The bell and the dashboard cards answer different questions; people
     // assume the bell is the only place things surface.
     { text: "The bell is your alerts; the cards below are what to do about them." },

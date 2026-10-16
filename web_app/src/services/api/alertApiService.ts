@@ -1,6 +1,5 @@
 import type {
     AlertAction,
-    AlertHistory,
     AlertPrefs,
     Alerts,
     Upcoming,
@@ -23,14 +22,8 @@ export default class AlertApiService {
     // ── Per-user interaction state (C-9.1) ─────────────────────────────
     // alertId is the scoped key; it carries ':' but no '/', so it's a single
     // path segment server-side (matching the existing action endpoint).
-    markReadAsync = async (alertId: string): Promise<void> =>
-        await this.httpClient.post<void, undefined>(`/alerts/${alertId}/read`, undefined);
-
-    markUnreadAsync = async (alertId: string): Promise<void> =>
-        await this.httpClient.post<void, undefined>(`/alerts/${alertId}/unread`, undefined);
-
-    markAllReadAsync = async (): Promise<void> =>
-        await this.httpClient.post<void, undefined>('/alerts/read-all', undefined);
+    dismissAllAsync = async (): Promise<void> =>
+        await this.httpClient.post<void, undefined>('/alerts/dismiss-all', undefined);
 
     snoozeAsync = async (alertId: string, days = 7): Promise<void> =>
         await this.httpClient.post<void, { days: number }>(
@@ -53,10 +46,6 @@ export default class AlertApiService {
 
     updatePrefAsync = async (command: UpdateAlertPrefCommand): Promise<AlertPrefs> =>
         await this.httpClient.patch<AlertPrefs, UpdateAlertPrefCommand>('/alerts/prefs', command);
-
-    // ── History (C-9.3) — the ledger audit trail for the hub's History section.
-    getHistoryAsync = async (limit = 50): Promise<AlertHistory> =>
-        await this.httpClient.get<AlertHistory>(`/alerts/history?limit=${limit}`);
 
     // ── Upcoming "this fortnight" timeline (C-9.6) — server-aggregated dated
     // events (expiries / planned shopping / meal-plan days) over the next N days.

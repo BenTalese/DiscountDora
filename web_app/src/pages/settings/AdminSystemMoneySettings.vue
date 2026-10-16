@@ -17,9 +17,7 @@
                         Money &amp; budgets
                         <InfoTip label="Money and budgets">
                             Turns on recipe cost estimates, shopping-list totals,
-                            price history and budget tracking. With it off Dora
-                            still runs the kitchen — it just never shows a
-                            dollar figure.
+                            price history and budget tracking.
                         </InfoTip>
                     </template>
                     <q-toggle
@@ -35,7 +33,7 @@
 <script lang="ts" setup>
     // Owner 2026-09-03 — the Features page was dissolved and its switches sent
     // to the surfaces they govern. Money got a page of its own under Kitchen
-    // features rather than a row on the personal `/settings/money` budget page,
+    // features rather than a row on the personal `/settings/budget` page,
     // because that page is itself hidden when this flag is off: the switch
     // would have been the one control you can't reach once you've used it.
     import { ICONS } from 'src/style/icons';

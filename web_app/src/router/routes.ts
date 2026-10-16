@@ -89,10 +89,10 @@ const routes: RouteRecordRaw[] = [
             { path: 'price-history', component: () => import('pages/PriceHistoryPage.vue'), meta: { title: 'Price History' } },
             { path: 'my-products', component: () => import('pages/MyProductsPage.vue'), meta: { title: 'My Products' } },
             { path: 'help', component: () => import('pages/HelpPage.vue'), meta: { title: 'Help' } },
-            // minimal alerts list, reuses alertStore (same
-            // data as the header bell). The full alerts control centre is
-            // the C-wave design brief.
-            { path: 'alerts', component: () => import('pages/AlertsPage.vue'), meta: { title: 'Alerts' } },
+            // The alerts page was removed 2026-10-15 (owner): the bell panel
+            // is the whole surface and the per-kind toggles live in Settings →
+            // Notifications. Old links open the bell instead.
+            { path: 'alerts', redirect: { path: '/', query: { alerts: 'open' } } },
             { path: 'help/dora', component: () => import('pages/DoraHelpPage.vue'), meta: { title: 'About Dora' } },
             // A8 + 2026-06-12 migration — recipe routes all live under
             // `/cookbook` (the cookbook is the page; a recipe is an
@@ -248,9 +248,9 @@ const routes: RouteRecordRaw[] = [
                         meta: { title: 'Notifications' }
                     },
                     {
-                        path: 'money',
-                        component: () => import('pages/settings/MoneySettings.vue'),
-                        meta: { title: 'Money' }
+                        path: 'budget',
+                        component: () => import('pages/settings/BudgetSettings.vue'),
+                        meta: { title: 'Budget' }
                     },
                     {
                         path: 'voice',

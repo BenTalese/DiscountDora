@@ -338,13 +338,19 @@ def _decode_data_url(blob: bytes | None) -> tuple[str, bytes] | None:
     return match.group("mime"), raw
 
 
+def decode_store_image(store: Store) -> tuple[str, bytes] | None:
+    """(mime, bytes) for a store's logo, or None. Shared by this route and
+    the bearer-authed `/api/ingest/stores/<id>/image` (one decoder, R-003)."""
+    return _decode_data_url(getattr(store, "image", None))
+
+
 @STORE_ROUTER.route("/<uuid:store_id>/image", methods=["GET"])
 def get_store_image(store_id):
     repository = SqlAlchemyRepository()
     store = repository.get(Store).by_id(store_id)
     if store is None:
         return not_found(Store.__name__, store_id)
-    decoded = _decode_data_url(getattr(store, "image", None))
+    decoded = decode_store_image(store)
     if decoded is None:
         return not_found(Store.__name__, store_id)
     mime, raw = decoded

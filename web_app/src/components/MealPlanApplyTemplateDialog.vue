@@ -182,7 +182,7 @@
 
     const explainer = computed(() => (
         repeat.value
-            ? 'Each week is forked from the template — a set rotates through its templates. Past days are skipped; up to 26 weeks.'
+            ? 'A set rotates through its templates week by week. Past days are skipped; up to 26 weeks.'
             : 'The template’s meals are added to the week you’re viewing. Past days are skipped.'
     ));
 

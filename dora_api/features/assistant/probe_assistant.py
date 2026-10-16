@@ -145,7 +145,7 @@ class ProbeAssistantHandler:
             if not api_key:
                 return ProbeAssistantResponse(
                     available=False,
-                    reason=f"{provider} needs an API key — paste one or save it first.",
+                    reason=f"{provider} needs an API key. Paste one or save it first.",
                 )
 
         base_url = (request.base_url or "").strip() or (row.base_url if row else None)
@@ -227,7 +227,7 @@ def probe_assistant():
             _RATE_SCOPE, _PROBES_PER_MINUTE, subject=_Subject,
         )
         return business_rule_violation(
-            f"Too many probes — try again in {retry_after}s.",
+            f"Too many probes. Try again in {retry_after}s.",
         )
 
     request: ProbeAssistantRequest = get_request_body()

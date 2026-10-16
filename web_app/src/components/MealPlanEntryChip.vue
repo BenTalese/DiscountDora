@@ -85,7 +85,7 @@
                         :name="ICONS.chef_hat"
                         size="22px"
                         class="entry-chip__status"
-                        :class="status.supply === 'ok' ? 'text-positive' : 'text-warning'"
+                        :class="statusToneClass(status.supply)"
                     >
                         <BaseTooltip>{{ supplyTooltip(entry) }}</BaseTooltip>
                     </q-icon>
@@ -94,7 +94,7 @@
                         :name="ICONS.mealsPrepared"
                         size="22px"
                         class="entry-chip__status"
-                        :class="status.readiness === 'ok' ? 'text-positive' : 'text-warning'"
+                        :class="statusToneClass(status.readiness)"
                     >
                         <BaseTooltip>{{ readinessTooltip(entry, !!shortfall) }}</BaseTooltip>
                     </q-icon>
@@ -125,7 +125,7 @@
     import { ICONS } from 'src/style/icons';
     import MealPlanEntryMenu from 'src/components/MealPlanEntryMenu.vue';
     import {
-        mealCardStatus, readinessTooltip, supplyTooltip,
+        mealCardStatus, readinessTooltip, statusToneClass, supplyTooltip,
     } from 'src/helpers/mealPlanEntryStatus';
     import { formatMoney } from 'src/composables/useMoney';
     import { useBatchEnabled } from 'src/composables/useBatchEnabled';
@@ -163,7 +163,7 @@
         const names = (props.entry.inference_stock_item_names ?? []).join(', ');
         return props.entry.inference_hint === 'at_risk'
             ? `Dora thinks you may have run out of ${names} since you planned this.`
-            : `Recorded as missing ${names}, but Dora thinks you're back in stock — this may be cookable after all.`;
+            : `Recorded as missing ${names}, but Dora thinks you're back in stock.`;
     });
 
     // PROPOSAL_MEAL_PLANS_PART_2 — a linked cook batch (one cook, several days).

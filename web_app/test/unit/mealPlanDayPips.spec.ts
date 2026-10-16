@@ -35,6 +35,7 @@ function entry(over: Partial<MealPlanEntry> = {}): MealPlanEntry {
         slot: 'Dinner',
         consumed_at: null,
         needs_cooking: false,
+        cook_batch_pending: false,
         cook_fresh: false,
         cook_batch_id: null,
         is_cook_day: false,

@@ -95,7 +95,7 @@ export function extractFieldErrors(err: unknown): ExtractedErrors {
 export function describeApiError(err: unknown): string {
     const extracted = extractFieldErrors(err);
     if (Object.keys(extracted.fieldErrors).length > 0) {
-        return "Couldn't save — check the highlighted fields.";
+        return "Couldn't save. Check the highlighted fields.";
     }
     return extracted.generalError || '';
 }

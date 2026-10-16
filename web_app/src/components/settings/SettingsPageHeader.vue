@@ -75,4 +75,18 @@
         align-items: center;
         gap: 8px;
     }
+    /* On a phone the actions drop under the heading. Beside it they took the
+       width and wrapped the title and description a word per line (owner
+       2026-10-15, on the API access page). */
+    @media (max-width: 599px) {
+        .settings-page-header {
+            flex-wrap: wrap;
+        }
+        .settings-page-header__heading {
+            flex: 1 1 100%;
+        }
+        .settings-page-header__actions {
+            margin-left: auto;
+        }
+    }
 </style>

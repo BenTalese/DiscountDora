@@ -22,7 +22,6 @@ import { describe, expect, it } from 'vitest';
 import {
     productSeriesToChart,
     stockItemHistoryToChart,
-    trendSeriesToChart,
 } from 'src/composables/usePriceChartSeries';
 import type {
     PriceHistorySeries,
@@ -149,23 +148,3 @@ describe('stockItemHistoryToChart', () => {
     });
 });
 
-describe('trendSeriesToChart', () => {
-    it('names the series by product and store, because two stores stock the same thing', () => {
-        const [s] = trendSeriesToChart([{
-            product_id: 'p9',
-            name: 'Rolled Oats 1kg',
-            store: 'Woolworths',
-            points: [{ date: '2026-08-01', unit_price: 2.4 }],
-        }]);
-        expect(s!.name).toBe('Rolled Oats 1kg · Woolworths');
-        expect(s!.points).toEqual([{ date: '2026-08-01', value: 2.4 }]);
-        expect(s!.baseline).toBeNull();
-    });
-
-    it('leaves the name alone when there is no store on the row', () => {
-        const [s] = trendSeriesToChart([{
-            product_id: 'p9', name: 'Rolled Oats 1kg', store: '', points: [],
-        }]);
-        expect(s!.name).toBe('Rolled Oats 1kg');
-    });
-});

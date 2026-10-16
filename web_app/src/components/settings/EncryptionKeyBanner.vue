@@ -57,7 +57,7 @@
                     />
                 </div>
                 <p class="enc-banner__text enc-banner__text--muted enc-banner__generated-note">
-                    Not saved anywhere — Dora didn't store this. Paste it into
+                    Dora didn't store this. Paste it into
                     <code>DORA_SECRET_ENCRYPTION_KEY</code> in your environment
                     and restart. Keep it safe: rotating the key later makes
                     every previously-saved secret unreadable (each has to be
@@ -115,7 +115,7 @@
             $q.notify({
                 type: 'negative',
                 position: 'bottom-right',
-                message: 'Could not copy — select the key and copy it manually.',
+                message: 'Could not copy. Select the key and copy it manually.',
             });
         }
     }

@@ -1,5 +1,5 @@
 <template>
-    <nav class="rail" aria-label="Onboarding progress — jump to any step">
+    <nav class="rail" aria-label="Onboarding progress">
         <template v-for="(section, sIdx) in sections" :key="section.key">
             <span v-if="sIdx > 0" class="rail-divider" aria-hidden="true"></span>
             <div class="rail-section">

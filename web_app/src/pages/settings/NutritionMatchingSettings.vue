@@ -26,10 +26,8 @@
                         matches.
                     </div>
                     <div class="text-caption dora-text-secondary q-mt-xs">
-                        Auto-matching and suggestions read the food database held
-                        on this install — they never call out to the internet,
-                        because they run across your whole pantry at once.
-                        Download it and this page fills in by itself.
+                        Suggestions need the food database downloaded on this
+                        install.
                         <template v-if="!isAdmin">
                             Ask an admin to set it up under Settings → Admin →
                             System → Nutrition.
@@ -100,7 +98,7 @@
                                     {{ item.suggestion.name }}
                                 </span>
                                 <span class="dora-text-muted">
-                                    —
+                                    ·
                                     <template v-if="item.suggestion.kcal_per_100g !== null">
                                         {{ Math.round(item.suggestion.kcal_per_100g) }} kcal / 100g ·
                                     </template>

@@ -120,7 +120,7 @@ def build_reason(
     else:
         # No tail, so the last comma becomes an "and": "A and B", not "A, B".
         what = " and ".join(named)
-    head = f"{_plural(planned_meals, 'planned meal')} coming up need this — {what}"
+    head = f"{_plural(planned_meals, 'planned meal')} coming up need this: {what}"
     if covered_meals > 0:
         head += f"; {covered_meals} already covered by a cooked batch"
     if earliest_needed is not None:

@@ -7,9 +7,8 @@
     >
         <q-card-section class="q-pb-none">
             <div class="text-caption dora-text-muted">
-                For a shop Dora can't check automatically — a butcher, a market
-                stall, a supermarket the product search doesn't cover. Dora will
-                keep this exactly as you type it and never overwrite it.
+                For a shop Dora can't check automatically, like a butcher or a
+                market stall.
             </div>
         </q-card-section>
 
@@ -35,7 +34,18 @@
                 dialog-title="Store"
                 :error="!!errors.storeName"
                 :error-message="errors.storeName"
-            />
+            >
+                <template #option="{ opt, itemProps }">
+                    <q-item v-bind="itemProps">
+                        <q-item-section avatar style="min-width: 0; padding-right: 8px">
+                            <StoreLogo :name="opt.label" :height="20" :width="34" />
+                        </q-item-section>
+                        <q-item-section>
+                            <q-item-label>{{ opt.label }}</q-item-label>
+                        </q-item-section>
+                    </q-item>
+                </template>
+            </BaseSelect>
             <!-- The endpoint refuses to auto-create stores (they're
                  user-curated in Settings), so say where to add one rather than
                  letting the save fail with a validation error. -->
@@ -99,6 +109,7 @@
     import BaseDialog from 'src/components/BaseDialog.vue';
     import BaseSelect from 'src/components/BaseSelect.vue';
     import MoneyInput from 'src/components/MoneyInput.vue';
+    import StoreLogo from 'src/components/StoreLogo.vue';
     import ProductApiService from 'src/services/api/productApiService';
     import StoresApiService from 'src/services/api/storesApiService';
     import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';

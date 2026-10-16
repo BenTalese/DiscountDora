@@ -99,6 +99,8 @@ export type WasteInsights = {
     total_events: number;
     by_reason: Record<WasteReason, number>;
     most_wasted: MostWastedRow[];
+    /** The same ranking per reason, for the report's reason filter. */
+    most_wasted_by_reason: Record<WasteReason, MostWastedRow[]>;
     most_recent: MostRecentRow[];
 };
 

@@ -77,9 +77,9 @@
         }
         switch (expiryToneFor(props.soonestDate)) {
             case 'expired':
-                return `${n} at-risk ${noun}. The soonest already expired (${props.soonestDate}) — open the recipe to see which.`;
+                return `${n} at-risk ${noun}. The soonest already expired (${props.soonestDate}).`;
             case 'soon':
-                return `${n} at-risk ${noun}. The soonest goes off ${props.soonestDate} — open the recipe to see which.`;
+                return `${n} at-risk ${noun}. The soonest goes off ${props.soonestDate}.`;
             default:
                 return `${n} at-risk ${noun}. The soonest goes off ${props.soonestDate}.`;
         }

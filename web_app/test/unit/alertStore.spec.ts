@@ -19,9 +19,7 @@ const m = vi.hoisted(() => ({
     snoozeAsync: vi.fn(),
     clearSuppressionAsync: vi.fn(),
     dismissAsync: vi.fn(),
-    markReadAsync: vi.fn(),
-    markUnreadAsync: vi.fn(),
-    markAllReadAsync: vi.fn(),
+    dismissAllAsync: vi.fn(),
 }));
 
 vi.mock('src/services/api/alertApiService', () => ({
@@ -30,9 +28,7 @@ vi.mock('src/services/api/alertApiService', () => ({
         snoozeAsync = m.snoozeAsync;
         clearSuppressionAsync = m.clearSuppressionAsync;
         dismissAsync = m.dismissAsync;
-        markReadAsync = m.markReadAsync;
-        markUnreadAsync = m.markUnreadAsync;
-        markAllReadAsync = m.markAllReadAsync;
+        dismissAllAsync = m.dismissAllAsync;
     },
 }));
 
@@ -47,7 +43,8 @@ function alert(id: string, overrides: Partial<Alert> = {}): Alert {
         message: 'Milk is low',
         detail: null,
         related_date: null,
-        read: false,
+        started_on: null,
+        amount: null,
         snoozed_until: null,
         tier: 'actionable',
         ...overrides,
@@ -74,7 +71,7 @@ beforeEach(() => {
     m.getAlertsAsync.mockResolvedValue(payload());
     for (const fn of [
         m.snoozeAsync, m.clearSuppressionAsync, m.dismissAsync,
-        m.markReadAsync, m.markUnreadAsync, m.markAllReadAsync,
+        m.dismissAllAsync,
     ]) fn.mockResolvedValue(undefined);
 });
 
@@ -162,21 +159,17 @@ describe('alertStore — mutation-then-refresh contract', () => {
         expect(m.snoozeAsync).toHaveBeenCalledWith('A1', 30);
     });
 
-    it('each mutation hits its endpoint then refreshes (dismiss/unsnooze/read/unread/all-read)', async () => {
+    it('each mutation hits its endpoint then refreshes (dismiss/unsnooze/dismiss-all)', async () => {
         const store = useAlertStore();
 
         await store.dismissAlert('A1');
         await store.unsnoozeAlert('A1');
-        await store.markRead('A1');
-        await store.markUnread('A1');
-        await store.markAllRead();
+        await store.dismissAllAsync();
 
         expect(m.dismissAsync).toHaveBeenCalledWith('A1');
         expect(m.clearSuppressionAsync).toHaveBeenCalledWith('A1');
-        expect(m.markReadAsync).toHaveBeenCalledWith('A1');
-        expect(m.markUnreadAsync).toHaveBeenCalledWith('A1');
-        expect(m.markAllReadAsync).toHaveBeenCalledTimes(1);
-        expect(m.getAlertsAsync).toHaveBeenCalledTimes(5); // one refresh per mutation
+        expect(m.dismissAllAsync).toHaveBeenCalledTimes(1);
+        expect(m.getAlertsAsync).toHaveBeenCalledTimes(3); // one refresh per mutation
     });
 
     it('a failed mutation propagates, does NOT refresh, and leaves local state untouched', async () => {

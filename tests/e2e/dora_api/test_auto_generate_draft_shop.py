@@ -61,7 +61,7 @@ def test__auto_generate__create_new_honours_the_explicit_name(api):
     try:
         resp = requests.post(AUTO, json={
             "name": list_name,
-            "sources": {"flagged": True},
+            "sources": {"essentials": True},
         })
         assert resp.status_code == 200, resp.text
         body = resp.json()

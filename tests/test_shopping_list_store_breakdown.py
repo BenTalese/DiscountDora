@@ -34,7 +34,7 @@ def _line(
         is_ticked = ticked,
         selected_product_id = None,
         sequence = 0,
-        added_via = "manual",
+        is_auto_added = False,
         added_at = None,
         actual_unit_price = None,
         purchased_store_id = None,

@@ -35,7 +35,7 @@
                 outlined
                 dense
                 label="Template"
-                :hint="templateOptions.length === 0 ? 'No saved templates — save a list as a template from any list\'s menu.' : ''"
+                :hint="templateOptions.length === 0 ? 'No saved templates yet.' : ''"
             />
             <q-select
                 v-if="form.startFrom === 'recipe'"
@@ -71,12 +71,12 @@
             <q-checkbox
                 v-model="form.source_essentials_only_for_low"
                 :disable="!form.source_low_or_out"
-                label="...but only flagged essentials among them"
+                label="...but only the essentials among them"
                 class="q-ml-md"
             />
             <q-checkbox
-                v-model="form.source_flagged"
-                label="Items flagged as always-include"
+                v-model="form.source_essentials"
+                label="All your essentials, however much is left"
             />
             <q-checkbox
                 v-model="form.source_frequently_added"
@@ -120,7 +120,7 @@
                 outlined
                 dense
                 label="Add to existing list"
-                :hint="mergeOptions.length === 0 ? 'No active lists yet — switch back to Create new.' : ''"
+                :hint="mergeOptions.length === 0 ? 'No active lists yet.' : ''"
             />
         </q-card-section>
         <template #actions>
@@ -211,7 +211,7 @@
         plannedShopDate: '' as string,
         source_low_or_out: false,
         source_essentials_only_for_low: false,
-        source_flagged: false,
+        source_essentials: false,
         source_frequently_added: false,
         targetMode: 'new' as TargetMode,
         mergeIntoListId: null as string | null,
@@ -239,7 +239,7 @@
         if (form.targetMode === 'merge' && !form.mergeIntoListId) return false;
         const hasAutoFill =
             form.source_low_or_out
-            || form.source_flagged
+            || form.source_essentials
             || form.source_frequently_added;
         const hasStartContent = form.startFrom !== 'empty';
         if (form.targetMode === 'merge' && !hasAutoFill && !hasStartContent) return false;
@@ -259,7 +259,7 @@
             form.plannedShopDate = '';
             form.source_low_or_out = props.presetLowOrOut;
             form.source_essentials_only_for_low = false;
-            form.source_flagged = false;
+            form.source_essentials = false;
             form.source_frequently_added = false;
             form.targetMode = props.presetMergeIntoListId ? 'merge' : 'new';
             form.mergeIntoListId = props.presetMergeIntoListId;
@@ -322,7 +322,7 @@
         const f = form;
         const wantsAutoFill =
             f.source_low_or_out
-            || f.source_flagged
+            || f.source_essentials
             || f.source_frequently_added;
 
         let targetListId: string | null = null;
@@ -422,7 +422,7 @@
                         out_of_stock: f.source_low_or_out,
                         essentials_only_for_low:
                             f.source_low_or_out && f.source_essentials_only_for_low,
-                        flagged: f.source_flagged,
+                        essentials: f.source_essentials,
                         frequently_added: f.source_frequently_added,
                     },
                 });
@@ -453,7 +453,7 @@
             $q.notify({
                 type: 'positive',
                 position: 'bottom-right',
-                message: createdNew ? 'Empty list created.' : 'No changes — nothing to add.',
+                message: createdNew ? 'Empty list created.' : 'Nothing to add.',
             });
         } else if (autoNothingToAdd && totalAdded === 0) {
             $q.notify({

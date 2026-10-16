@@ -35,8 +35,12 @@ export type BudgetSettings = {
 export default class BudgetApiService {
     private httpClient = new AxiosHttpClient();
 
-    getStatusAsync = async (): Promise<BudgetStatus> =>
-        await this.httpClient.get<BudgetStatus>('/budget/status');
+    /** `on` (YYYY-MM-DD) asks about the budget period containing that date;
+     *  omitted, the current one. */
+    getStatusAsync = async (on?: string): Promise<BudgetStatus> =>
+        await this.httpClient.get<BudgetStatus>(
+            on ? `/budget/status?on=${encodeURIComponent(on)}` : '/budget/status',
+        );
 
     getHistoryAsync = async (periods = 6): Promise<{ rows: BudgetHistoryRow[] }> =>
         await this.httpClient.get<{ rows: BudgetHistoryRow[] }>(

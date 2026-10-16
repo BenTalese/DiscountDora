@@ -34,7 +34,7 @@ and find it non-empty *and* find its edge cases without hand-editing the DB:
     meal planner      a past week fully consumed, this week part-cooked with a
                       cook batch and a shortfall, a future week forked from a
                       template, plus a rotating template set
-    shopping lists    draft / mid-shop / two finished, every `added_via`, a
+    shopping lists    draft / mid-shop / two finished, both provenance states, a
                       planned-vs-purchased store split, a budget-deferred line,
                       a receipt attachment, and price observations harvested
                       from the finished lists exactly as /finish does
@@ -74,8 +74,6 @@ from dora_api.domain.entities.nutrition_food import (
 from dora_api.domain.entities.nutrition_portion import NutritionPortion
 from dora_api.domain.entities.recipe_collection import RecipeCollection
 from dora_api.domain.entities.shopping_list import (
-    ADDED_VIA_AUTO_ESSENTIAL, ADDED_VIA_AUTO_LOW_STOCK,
-    ADDED_VIA_AUTO_MEAL_PLAN, ADDED_VIA_AUTO_RECIPE, ADDED_VIA_MANUAL,
     SHOPPING_LIST_STATUS_DONE, SHOPPING_LIST_STATUS_SHOPPING, ShoppingList)
 from dora_api.domain.entities.shopping_list_template import (
     ShoppingListTemplate, ShoppingListTemplateLine)
@@ -405,7 +403,7 @@ def seed_dense_data(qa_fixtures: bool = False, money_on: bool = True):
     # this item fills it.
     olive_oil = make_item(
         name="Extra Virgin Olive Oil", group=g_pantry, level=low, location=top_shelf,
-        notes=("Vialli from Aldi is the everyday one — the tin from the farmers "
+        notes=("Vialli from Aldi is the everyday one. The tin from the farmers "
                "market is for salads only. Decant into the small bottle by the "
                "stove; the tin lives up here."),
         expiry=today + timedelta(days=120), flagged=True, is_open=True,
@@ -467,7 +465,7 @@ def seed_dense_data(qa_fixtures: bool = False, money_on: bool = True):
     salt = make_item(name="Flaky Sea Salt", group=g_pantry, level=stocked,
                      location=spice_rack)
     rosemary = make_item(name="Rosemary", group=g_fruit, level=stocked, location=None,
-                         notes="The bush by the back door — no need to buy it.")
+                         notes="The bush by the back door.")
     pasta = make_item(name="Spaghetti", group=g_pantry, level=stocked,
                       location=middle_shelf, products=[pasta_barilla])
     passata = make_item(name="Passata", group=g_pantry, level=stocked,
@@ -708,7 +706,7 @@ def seed_dense_data(qa_fixtures: bool = False, money_on: bool = True):
         kcal=680, time_of_day="Dinner", steps_mode="structured",
         last_made=(now - timedelta(days=11)).date(),
         source="https://example.com/sunday-ragu",
-        notes=("Three hours is not negotiable — at two it tastes like bolognese. "
+        notes=("Three hours is not negotiable. At two it tastes like bolognese. "
                "Double it and freeze half; it's better the second week."),
         ingredients=list(ragu_ings.values()),
         # The freeform blob is kept even though `steps_mode` is 'structured'.
@@ -756,7 +754,7 @@ def seed_dense_data(qa_fixtures: bool = False, money_on: bool = True):
             "1. Boil a large pot of well-salted water and cook the spaghetti "
             "until al dente.\n"
             "2. Meanwhile, warm the olive oil with the sliced garlic over a low "
-            "heat until it just turns blond — three or four minutes. Add the "
+            "heat until it just turns blond, three or four minutes. Add the "
             "chilli flakes off the heat.\n"
             "3. Toss the drained pasta through the garlic oil with a splash of "
             "the pasta water and serve immediately."
@@ -887,7 +885,7 @@ def seed_dense_data(qa_fixtures: bool = False, money_on: bool = True):
         ],
         instructions=(
             "Feed the starter. Autolyse. Four sets of folds. Shape, cold retard "
-            "overnight, bake in a hot Dutch oven — twenty minutes covered, "
+            "overnight, bake in a hot Dutch oven: twenty minutes covered, "
             "twenty-five uncovered."
         ),
         notes="Still not as good as the bakery's, but it's a third of the price.",
@@ -976,7 +974,7 @@ def seed_dense_data(qa_fixtures: bool = False, money_on: bool = True):
 
     replace_steps_for_recipe(ragu.id, [
         _step("s1", 0, "Dice the onion, carrot and celery as finely as you can "
-                       "be bothered — a food processor is fine here.",
+                       "be bothered; a food processor is fine here.",
               hint="Aim for 5mm. Bigger and they never disappear into the sauce.",
               ingredients=("onion", "carrot", "celery"),
               step_tools=("Knife & board", "Food processor"), section=_sauce),
@@ -988,7 +986,7 @@ def seed_dense_data(qa_fixtures: bool = False, money_on: bool = True):
         _step("s2b", 1, "Lift the pancetta out and set it aside once it's crisp; "
                         "it goes back in at the end.", parent="s2"),
         _step("s3", 2, "Sweat the soffritto in the pancetta fat until it's soft "
-                       "and sweet — fifteen minutes, no colour.",
+                       "and sweet, fifteen minutes, no colour.",
               hint="If it's browning, the heat is too high.",
               ingredients=("onion", "carrot", "celery"), section=_sauce,
               timer=15),
@@ -1009,8 +1007,8 @@ def seed_dense_data(qa_fixtures: bool = False, money_on: bool = True):
               section=_sauce, timer=180),
         _step("s7a", 0, "Top up with a splash of water any time it looks tight.",
               parent="s7"),
-        _step("s7b", 1, "Around the two-hour mark, stir the warmed milk through — "
-                        "it takes the edge off the tomatoes.",
+        _step("s7b", 1, "Around the two-hour mark, stir the warmed milk through. "
+                        "It takes the edge off the tomatoes.",
               parent="s7", ingredients=("milk",)),
         _step("s7c", 2, "Return the pancetta for the last twenty minutes.",
               parent="s7", ingredients=("pancetta",)),
@@ -1507,29 +1505,26 @@ def seed_dense_data(qa_fixtures: bool = False, money_on: bool = True):
         repo.add(sl)
     repo.save_changes()  # lines FK to list ids
 
-    # Draft — every `added_via` provenance the app can write, a planned-store
-    # split across two shops, a preferred-buy hint, and one line the budget
-    # defence pushed to next week.
+    # Draft — both provenance states (hand-added vs. dropped on by the
+    # low-stock trigger), a planned-store split across two shops, a
+    # preferred-buy hint, and one line the budget defence pushed to next week.
     line(draft.id, milk, 0, qty=2, selected_product=milk_coles,
-         planned_store=coles, added_via=ADDED_VIA_AUTO_LOW_STOCK,
+         planned_store=coles, is_auto_added=True,
          added_at=now - timedelta(hours=6))
-    line(draft.id, bread, 1, added_via=ADDED_VIA_AUTO_ESSENTIAL,
+    line(draft.id, bread, 1, is_auto_added=True,
          added_at=now - timedelta(hours=6),
          preferred_buy_id=_preferred_ids.get(bread.name), planned_store=woolworths)
     line(draft.id, parmesan, 2, selected_product=parmesan_coles,
-         planned_store=coles, added_via=ADDED_VIA_AUTO_RECIPE,
-         added_at=now - timedelta(hours=5))
-    line(draft.id, pancetta, 3, added_via=ADDED_VIA_AUTO_MEAL_PLAN,
-         added_at=now - timedelta(hours=5))
-    line(draft.id, celery, 4, added_via=ADDED_VIA_MANUAL,
-         added_at=now - timedelta(hours=4))
-    line(draft.id, coffee, 5, planned_store=farmers, added_via=ADDED_VIA_MANUAL,
+         planned_store=coles, added_at=now - timedelta(hours=5))
+    line(draft.id, pancetta, 3, added_at=now - timedelta(hours=5))
+    line(draft.id, celery, 4, added_at=now - timedelta(hours=4))
+    line(draft.id, coffee, 5, planned_store=farmers,
          added_at=now - timedelta(hours=4),
          preferred_buy_id=_preferred_ids.get(coffee.name))
     # Deferred by the budget defence — present on the list, deliberately not
     # counted in this week's spend.
     line(draft.id, olive_oil, 6, selected_product=oil_aldi, planned_store=aldi,
-         added_via=ADDED_VIA_AUTO_LOW_STOCK, added_at=now - timedelta(hours=4),
+         is_auto_added=True, added_at=now - timedelta(hours=4),
          deferred_by_budget=True,
          deferred_reason="Would put the week $12 over; the tin can wait.")
 
@@ -1608,7 +1603,7 @@ def seed_dense_data(qa_fixtures: bool = False, money_on: bool = True):
             ))
 
     # ══ ALERTS + SUGGESTION STATE ════════════════════════════════════════
-    # The alerts surface has three per-user states (read / snoozed / dismissed)
+    # The alerts surface has two per-user states (snoozed / dismissed)
     # and a per-kind off switch, none of which exist in either other dataset —
     # so the bell has only ever been seen in its "everything untouched" form.
     alert_pref_table = db.metadata.tables["AlertPreference"]
@@ -1626,27 +1621,31 @@ def seed_dense_data(qa_fixtures: bool = False, money_on: bool = True):
     # fixture that silently does nothing — which is what the first draft of this
     # block did (`expiring_soon:<id>`, scope missing, order reversed). R-003.
     interaction_table = db.metadata.tables["AlertInteraction"]
+    # Keys carry the episode (owner 2026-10-15): the expiry date, or the day
+    # the level changed. Built from the same fields the evaluator reads.
     db.session.execute(interaction_table.insert(), [
-        # Read, not yet acted on.
+        # Pushed, not yet acted on.
         {"id": uuid4(), "user_id": owner.id,
-         "alert_key": stock_alert_key(milk.id, "expiring_soon"),
-         "created_at": now - timedelta(days=1),
-         "read_at": now - timedelta(hours=20), "snoozed_until": None,
+         "alert_key": stock_alert_key(
+             milk.id, f"expiring_soon:{milk.expiry_date.isoformat()}"),
+         "created_at": now - timedelta(days=1), "snoozed_until": None,
          "dismissed_at": None, "last_pushed_at": now - timedelta(hours=21)},
-        # Read and snoozed for two more days.
+        # Snoozed for two more days.
         {"id": uuid4(), "user_id": owner.id,
-         "alert_key": stock_alert_key(ricotta.id, "expired"),
+         "alert_key": stock_alert_key(
+             ricotta.id, f"expired:{ricotta.expiry_date.isoformat()}"),
          "created_at": now - timedelta(days=2),
-         "read_at": now - timedelta(days=2),
          "snoozed_until": now + timedelta(days=2),
          "dismissed_at": None, "last_pushed_at": None},
         # Dismissed outright — on an essential item that is Out, so its
-        # discriminator is `essential_out` while its *kind* is `essential_low`.
-        # That's the discriminator ≠ kind case, pinned by a real fixture.
+        # discriminator is `essential_out:<date>` while its *kind* is
+        # `essential_low`. That's the discriminator ≠ kind case, pinned by a
+        # real fixture.
         {"id": uuid4(), "user_id": owner.id,
-         "alert_key": stock_alert_key(tasty_cheese.id, "essential_out"),
-         "created_at": now - timedelta(days=5),
-         "read_at": now - timedelta(days=5), "snoozed_until": None,
+         "alert_key": stock_alert_key(
+             tasty_cheese.id,
+             f"essential_out:{tasty_cheese.stock_level_last_updated.date().isoformat()}"),
+         "created_at": now - timedelta(days=5), "snoozed_until": None,
          "dismissed_at": now - timedelta(days=5), "last_pushed_at": None},
     ])
 

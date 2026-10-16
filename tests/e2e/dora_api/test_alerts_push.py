@@ -6,7 +6,7 @@ real VAPID keys, no real Mozilla/FCM round-trip. The seam matches the
 production `send_push(endpoint=, p256dh=, auth=, payload=)` signature.
 """
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from uuid import UUID
 
 import pytest
@@ -50,12 +50,15 @@ def _any_stock_level_id() -> str:
 
 
 def _create_expired_item(name: str) -> str:
+    # Expired yesterday: inside the user's alert discard window (the seeded
+    # default is 14 days), so the push job sees it.
+    today = date.fromisoformat(requests.get(f"{BASE}/meal-plans/today").json()["today"])
     resp = requests.post(
         f"{BASE}/stock-items",
         json={
             "name": name,
             "stock_level_id": _any_stock_level_id(),
-            "expiry_date": "2020-01-01",
+            "expiry_date": (today - timedelta(days=1)).isoformat(),
         },
     )
     assert resp.status_code in (200, 201), resp.text

@@ -15,8 +15,8 @@ list history before it says anything, which is why a young install saw only the
 empty state.
 
 This is the present tense of the same idea: the things that changed band most
-recently, which is what a radar is for. `keeps-running-out` is untouched and
-still on the reports page, where a lifetime ranking belongs.
+recently, which is what a radar is for. `keeps-running-out` itself was cut
+from the reports page on 2026-09-27 and deleted.
 
 `stock_level_last_updated` is the clock, not a `ConsumptionEvent` scan: the
 question is "when did this item become out", and that column *is* when its band

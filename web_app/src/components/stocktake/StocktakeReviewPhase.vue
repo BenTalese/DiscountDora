@@ -71,7 +71,11 @@
                         <span :class="tintClassForSequence(beliefSequence(item.belief_band))">
                             {{ bandWord(item.belief_band) }}
                         </span>
-                        <template v-if="item.stock_level_name">
+                        <!-- Owner 2026-10-15: "Dora thinks stocked · but is
+                             currently stocked" read as a contradiction. The
+                             recorded level only earns a mention when it says
+                             something different. -->
+                        <template v-if="item.stock_level_name && !agrees(item)">
                             <span>· but is currently</span>
                             <span :class="tintClassForSequence(levelSequence(item.stock_level_id))">
                                 {{ recordedWord(item) }}
@@ -201,6 +205,11 @@
     function recordedWord(item: StocktakeSessionItem): string {
         const band = BAND_BY_SEQUENCE[levelSequence(item.stock_level_id) ?? -1];
         return band ? bandWord(band) : (item.stock_level_name ?? '');
+    }
+
+    /** True when the recorded level falls in the same band Dora believes. */
+    function agrees(item: StocktakeSessionItem): boolean {
+        return BAND_BY_SEQUENCE[levelSequence(item.stock_level_id) ?? -1] === item.belief_band;
     }
 
     const confirmLabel = computed(() => {

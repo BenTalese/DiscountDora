@@ -20,7 +20,7 @@
             <br />
             <span class="belief-hint__tip-conf">Confidence: {{ belief.confidence_band }}</span>
             <br />
-            <span class="belief-hint__tip-note">Differs from your recorded level — a quick check helps.</span>
+            <span class="belief-hint__tip-note">Differs from your recorded level.</span>
         </BaseTooltip>
     </span>
 </template>

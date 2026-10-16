@@ -74,11 +74,15 @@
                             </q-item-section>
                             <q-item-section>Save week as template…</q-item-section>
                         </q-item>
-                        <q-item v-close-popup clickable @click="emit('openTemplates')">
+                        <!-- Owner 2026-10-15: Apply template is the primary
+                             button below, so the menu carries the one template
+                             action the phone had no way to reach, the same
+                             entry the desktop menu has. -->
+                        <q-item v-close-popup clickable to="/meal-plans/templates">
                             <q-item-section avatar>
-                                <q-icon :name="ICONS.event_repeat" />
+                                <q-icon :name="ICONS.settings" />
                             </q-item-section>
-                            <q-item-section>Apply template…</q-item-section>
+                            <q-item-section>Manage templates…</q-item-section>
                         </q-item>
 
                         <q-separator />
@@ -252,7 +256,7 @@
                 v-if="isPastDay(focusedDayIso) && !entriesFor(focusedDayIso).length"
                 class="dora-text-muted text-center q-py-md text-caption"
             >
-                Past day — read-only.
+                Past day, read-only.
             </div>
         </div>
 
@@ -337,12 +341,12 @@
      *  dots says nothing to a screen reader otherwise. */
     function dayChipLabel(day: WeekDay): string {
         const entries = props.entriesFor(day.iso);
-        if (!entries.length) return `${day.label} ${dayOfMonth(day.iso)} — no meals planned`;
+        if (!entries.length) return `${day.label} ${dayOfMonth(day.iso)}: no meals planned`;
         const short = entries.filter((e) => !e.consumed_at && e.needs_cooking).length;
         const meals = `${entries.length} meal${entries.length === 1 ? '' : 's'}`;
         return short
-            ? `${day.label} ${dayOfMonth(day.iso)} — ${meals}, ${short} short`
-            : `${day.label} ${dayOfMonth(day.iso)} — ${meals}`;
+            ? `${day.label} ${dayOfMonth(day.iso)}: ${meals}, ${short} short`
+            : `${day.label} ${dayOfMonth(day.iso)}: ${meals}`;
     }
 
     // Focused day — defaults to today when today is inside the focused week,

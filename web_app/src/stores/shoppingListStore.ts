@@ -14,7 +14,7 @@ export const useShoppingListStore = defineStore('shoppingList', () => {
     const loading = ref(false);
     const loadError = ref<string | null>(null);
 
-    // Chunk 2: "primary" is inferred — the server returns the quick-add target
+    // Chunk 2: the quick-add target is inferred — the server returns it
     // id only when exactly one DRAFT exists; otherwise it's null and the caller
     // must prompt the user.
     const quickAddTargetListId = computed(

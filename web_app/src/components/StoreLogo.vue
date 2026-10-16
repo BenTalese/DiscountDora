@@ -1,6 +1,8 @@
 <template>
     <!-- store logo. Resolution order:
-         1. The store's uploaded image (when has_image is true).
+         1. The store's uploaded image. Whether it has one comes from the
+            caller's `hasImage` if given, otherwise from the stores list, so a
+            call site whose DTO doesn't carry `has_image` still shows it.
          2. A deterministic hash-swatch + initial pill, so unknown stores
             still render predictably without licensing risk. Dora ships
             zero logos; everything else falls through to the swatch.
@@ -8,15 +10,17 @@
          The pill matches the size used by the previous MerchantLogo so
          existing layouts don't reflow. -->
     <img
-        v-if="previewSrc || hasImage"
+        v-if="previewSrc || (resolvedHasImage && imageUrl)"
         :src="previewSrc || imageUrl"
         :alt="name"
         class="dora-logo-image"
+        :class="{ 'dora-logo--inline': inline }"
         :style="{ height: `${height}px`, width: `auto`, minWidth: `${width}px` }"
     />
     <div
         v-else
         class="dora-logo-placeholder"
+        :class="{ 'dora-logo--inline': inline }"
         :style="placeholderStyle"
         role="img"
         :aria-label="name"
@@ -28,6 +32,7 @@
 <script lang="ts" setup>
     import { resolveBaseURL } from 'src/services/api/axiosHttpClient';
     import { hashSwatch } from 'src/style/storeSwatch';
+    import { useStoresStore } from 'src/stores/storesStore';
     import { computed } from 'vue';
 
     const props = withDefaults(
@@ -37,17 +42,40 @@
             /** Store id; required when `hasImage` is true so the route
              *  can be built. */
             storeId?: string | null | undefined;
-            /** Server's `has_image` flag (StoreDto / LinkedStore). */
-            hasImage?: boolean;
+            /** Server's `has_image` flag, when the caller has it. Omit it and
+             *  the component looks the store up itself (2026-09-27: three
+             *  call sites were passing a hardcoded `false` because their DTOs
+             *  lacked the flag, so those logos never showed). */
+            hasImage?: boolean | undefined;
             /** Local (data-URL) image to show instead of the server's, for
              *  previewing a just-picked logo before it has been saved — at
              *  that point there is no `storeId` to build a URL from. */
             previewSrc?: string | null | undefined;
             height?: number;
             width?: number;
+            /** Sits inside a line of text, beside the store's name. */
+            inline?: boolean;
         }>(),
-        { height: 32, width: 48, hasImage: false, storeId: null, previewSrc: null },
+        {
+            height: 32, width: 48, hasImage: undefined, storeId: null, previewSrc: null,
+            inline: false,
+        },
     );
+
+    // R-016 lazy hydration: pages that never render a logo never fetch stores.
+    const storesStore = useStoresStore();
+    void storesStore.ensureLoadedAsync();
+
+    /** The store this logo is for: by id, else by name (some surfaces only
+     *  carry the name, e.g. an offer's `store_name`). */
+    const known = computed(() => {
+        if (props.storeId) return storesStore.stores.find((s) => s.store_id === props.storeId) ?? null;
+        const key = (props.name || '').trim().toLowerCase();
+        if (!key) return null;
+        return storesStore.stores.find((s) => s.name.trim().toLowerCase() === key) ?? null;
+    });
+
+    const resolvedHasImage = computed(() => props.hasImage ?? known.value?.has_image ?? false);
 
     // The palette + hash moved to `src/style/storeSwatch.ts` so the shopping
     // list's store breakdown draws each store in the same colour this
@@ -60,6 +88,9 @@
         minWidth: `${props.width}px`,
         background: swatch.value.background,
         color: swatch.value.ink,
+        // The initial scales with the pill, so a 16px inline logo doesn't
+        // carry a 15px letter.
+        fontSize: `${Math.min(props.height * 0.5, 15)}px`,
     }));
 
     const initial = computed(() => {
@@ -71,11 +102,12 @@
     });
 
     const imageUrl = computed(() => {
-        if (!props.storeId) return '';
+        const id = props.storeId ?? known.value?.store_id;
+        if (!id) return '';
         // Cache-bust query param: not strictly necessary (the route already
         // sends Cache-Control: no-cache) but it matches the stock-item
         // image pattern (FU-125) for consistency.
-        return `${resolveBaseURL()}/stores/${props.storeId}/image`;
+        return `${resolveBaseURL()}/stores/${id}/image`;
     });
 </script>
 
@@ -86,7 +118,6 @@
         justify-content: center;
         padding: 2px 6px;
         font-weight: 700;
-        font-size: 0.95rem;
         letter-spacing: 0.02em;
         border-radius: 4px;
         user-select: none;
@@ -95,5 +126,11 @@
         display: inline-block;
         border-radius: 4px;
         object-fit: contain;
+    }
+    .dora-logo--inline {
+        vertical-align: middle;
+        margin-right: 4px;
+        padding: 0 3px;
+        border-radius: 3px;
     }
 </style>

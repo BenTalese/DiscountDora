@@ -12,7 +12,7 @@
     -->
     <BaseDialog
         :model-value="modelValue"
-        :title="`Price history — ${itemName}`"
+        :title="`Price history: ${itemName}`"
         closable
         position="bottom"
         card-style="width: 760px; max-width: 96vw"
@@ -54,7 +54,7 @@
             </template>
 
             <div v-else class="dora-text-muted text-body2 q-pa-md text-center">
-                No price history yet — log a price to start building it.
+                No price history yet.
             </div>
         </q-card-section>
     </BaseDialog>

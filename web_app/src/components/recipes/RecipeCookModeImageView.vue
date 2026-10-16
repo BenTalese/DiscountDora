@@ -50,7 +50,7 @@
                     aria-label="Zoom this photo"
                     @click="openZoom()"
                 >
-                    <BaseTooltip>Zoom in — tap the photo too</BaseTooltip>
+                    <BaseTooltip>Zoom in</BaseTooltip>
                 </BaseButton>
             </div>
 
@@ -86,7 +86,7 @@
                         :aria-label="magnified ? 'Fit photo to screen' : 'Magnify photo'"
                         @click="magnified = !magnified"
                     >
-                        <BaseTooltip>{{ magnified ? 'Fit to screen' : 'Magnify — drag to pan' }}</BaseTooltip>
+                        <BaseTooltip>{{ magnified ? 'Fit to screen' : 'Magnify' }}</BaseTooltip>
                     </BaseButton>
                     <BaseButton
                         variant="icon"

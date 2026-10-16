@@ -138,5 +138,8 @@ export type AuthenticatedUser = {
      *  summarising tomorrow's meals and any shopping day that's due. Off by
      *  default, and silent on days with nothing to say. */
     daily_brief_enabled: boolean;
+    /** Owner 2026-10-15 — alerts whose condition began more than this many
+     *  days ago are dropped from the bell. Null keeps them all. */
+    alert_discard_after_days: number | null;
 };
 export type LlmProvider = NonNullable<AuthenticatedUser['llm_provider']>;

@@ -22,8 +22,13 @@
         prop — NO smart per-item defaults ever).
     -->
     <div class="dora-price-entry q-gutter-sm">
+        <!-- Where the seeded numbers came from, and when. The date arrived
+             2026-09-17: "from your last log" reads the same whether that log
+             was on Tuesday or in March, and those are different situations —
+             one you confirm, the other you re-check. -->
         <div v-if="prefill?.source_label" class="text-caption dora-text-muted q-mb-xs">
-            Prefilled {{ prefill.source_label }}
+            Prefilled {{ prefill.source_label }}<template v-if="prefill.observed_at">
+                · {{ formatRelativeDay(prefill.observed_at) }}</template>
         </div>
 
         <div class="row q-gutter-sm items-start">
@@ -125,6 +130,7 @@
     import { SUPPORTED_PRICE_UNITS } from 'src/generated/units_table';
     import { useMeasurementSystem } from 'src/composables/useMeasurementSystem';
     import { quoteUnitPrice } from 'src/helpers/unitPriceDisplay';
+    import { formatRelativeDay } from 'src/composables/useDateFormat';
     import type { PriceEntryPrefill } from 'src/models/stockItemDetail';
     import type { Store } from 'src/models/store';
 

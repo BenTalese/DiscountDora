@@ -6,11 +6,18 @@ same interaction ledger (`AlertInteraction`). The key must be **stable across
 evaluations** so a persisted interaction keeps matching the same recurring
 condition — the same discipline `DoraSuggestionSuppression.dedup_key` follows.
 
-The discriminator is the per-item alert variant (e.g. ``expired``,
-``essential_out``) — it is NOT always equal to the alert ``kind`` (an essential
-item that is out of stock has discriminator ``essential_out`` but kind
-``essential_low``), which is fine: actions route on the request body, and the
-ledger only needs the key to be unique + stable.
+The discriminator is the per-item alert variant plus the **episode** it belongs
+to (e.g. ``expiring_soon:2026-10-20`` for one expiry date, ``essential_out:
+2026-10-14`` for the day the level went out). The episode is what makes the key
+stable across evaluations *and* new when the condition starts again: dismissing
+this week's "apples expire soon" holds for that expiry, and the next pack of
+apples gets its own alert. Owner 2026-10-15 — before this, keys carried no
+episode, so one dismissal silenced an item's alert for good.
+
+The variant is NOT always the alert ``kind`` (an essential item that is out of
+stock has discriminator ``essential_out:<date>`` but kind ``essential_low``),
+which is fine: actions route on the request body, and the ledger only needs the
+key to be unique + stable.
 """
 from dataclasses import dataclass
 from uuid import UUID
@@ -19,6 +26,7 @@ SCOPE_STOCK = "stock"
 SCOPE_MEAL = "meal"
 SCOPE_LIST = "list"
 SCOPE_SYSTEM = "system"
+SCOPE_PRODUCT = "product"
 
 
 def stock_alert_key(stock_item_id: UUID, discriminator: str) -> str:
@@ -27,6 +35,10 @@ def stock_alert_key(stock_item_id: UUID, discriminator: str) -> str:
 
 def list_alert_key(list_id: UUID, discriminator: str) -> str:
     return f"{SCOPE_LIST}:{list_id}:{discriminator}"
+
+
+def product_alert_key(product_id: UUID, discriminator: str) -> str:
+    return f"{SCOPE_PRODUCT}:{product_id}:{discriminator}"
 
 
 def meal_alert_key(discriminator: str) -> str:

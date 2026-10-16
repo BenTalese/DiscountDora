@@ -1,11 +1,13 @@
 """Per-user alert interaction endpoints (C-9.1):
 
-  POST   /api/alerts/<alert_id>/read        — mark read
-  POST   /api/alerts/<alert_id>/unread      — mark unread
   POST   /api/alerts/<alert_id>/snooze      — body { days }  (default 7)
-  POST   /api/alerts/<alert_id>/dismiss     — hide until the condition re-fires
+  POST   /api/alerts/<alert_id>/dismiss     — hide for the rest of this episode
   DELETE /api/alerts/<alert_id>/suppression — undo snooze/dismiss
-  POST   /api/alerts/read-all               — mark every active alert read
+  POST   /api/alerts/dismiss-all            — dismiss every active alert
+
+There is no read state (owner 2026-10-15: *"What's the difference between
+dismiss and mark as read? We only need dismiss right?"*). Read/unread and
+read-all were removed with the `read_at` column.
 
 Alerts are derived from live state, so we don't store them — we store the
 user's *decisions* about them in `AlertInteraction`, keyed by the alert's
@@ -81,13 +83,6 @@ class AlertInteractionHandler:
         self.repository.add(interaction)
         return interaction
 
-    def set_read(self, user_id: UUID, alert_key: str, read: bool) -> None:
-        interaction = self._get_or_create(user_id, alert_key)
-        if interaction is None:
-            return
-        interaction.read_at = datetime.now(timezone.utc) if read else None
-        self.repository.save_changes()
-
     def snooze(self, user_id: UUID, alert_key: str, days: int) -> None:
         interaction = self._get_or_create(user_id, alert_key)
         if interaction is None:
@@ -110,43 +105,24 @@ class AlertInteractionHandler:
             interaction.dismissed_at = None
             self.repository.save_changes()
 
-    def mark_all_read(self, user_id: UUID) -> None:
-        # Server-derived: read the user's current active set and stamp each.
+    def dismiss_all(self, user_id: UUID) -> None:
+        # Server-derived: dismiss exactly the user's current active set.
         alerts = GetAlertsHandler(SqlAlchemyRepository()).handle(user_id)
-        changed = False
+        now = datetime.now(timezone.utc)
         for alert in alerts.items:
             interaction = self._get_or_create(user_id, alert.alert_id)
-            if interaction is not None and interaction.read_at is None:
-                interaction.read_at = datetime.now(timezone.utc)
-                changed = True
-        if changed:
+            if interaction is not None:
+                interaction.dismissed_at = now
+        if alerts.items:
             self.repository.save_changes()
 
 
-@ALERT_ROUTER.route("/read-all", methods=["POST"])
-def read_all_alerts():
+@ALERT_ROUTER.route("/dismiss-all", methods=["POST"])
+def dismiss_all_alerts():
     user_id = _current_user_id()
     if user_id is None:
         return unauthorized()
-    AlertInteractionHandler(SqlAlchemyRepository()).mark_all_read(user_id)
-    return no_content()
-
-
-@ALERT_ROUTER.route("/<alert_id>/read", methods=["POST"])
-def mark_alert_read(alert_id: str):
-    user_id = _current_user_id()
-    if user_id is None:
-        return unauthorized()
-    AlertInteractionHandler(SqlAlchemyRepository()).set_read(user_id, alert_id, True)
-    return no_content()
-
-
-@ALERT_ROUTER.route("/<alert_id>/unread", methods=["POST"])
-def mark_alert_unread(alert_id: str):
-    user_id = _current_user_id()
-    if user_id is None:
-        return unauthorized()
-    AlertInteractionHandler(SqlAlchemyRepository()).set_read(user_id, alert_id, False)
+    AlertInteractionHandler(SqlAlchemyRepository()).dismiss_all(user_id)
     return no_content()
 
 

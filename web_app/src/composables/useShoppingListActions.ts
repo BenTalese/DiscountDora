@@ -156,7 +156,7 @@ export function useShoppingListActions() {
             const result = await api.finishAsync(listId);
             await shoppingListStore.refreshAsync();
             notifyOk(
-                `Shopping finished — ${result.items_restocked} item${
+                `Shopping finished. ${result.items_restocked} item${
                     result.items_restocked === 1 ? '' : 's'
                 } restocked.`,
             );

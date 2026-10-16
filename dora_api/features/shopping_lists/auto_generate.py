@@ -2,54 +2,42 @@
 
   POST /api/shopping-lists/auto-generate
       Generic builder. Each `sources.*` flag pulls candidate stock items
-      from a different angle; the handler dedupes across sources, keeping
-      the highest-priority provenance, and either appends to an existing
-      list (`merge_into_list_id`) or creates a fresh one.
+      from a different angle; the handler dedupes across sources and
+      either appends to an existing list (`merge_into_list_id`) or creates
+      a fresh one.
 
-  POST /api/shopping-lists/<id>/append-low-stock-essentials
-      Convenience wrapper — appends essential items that are low/out to the
-      given list. Reuses the same handler.
+Lines produced here are NOT marked `is_auto_added`. That flag means "no
+user action put this here" — it belongs to the low-stock hook in
+update_stock_item, which fires on its own. Everything below runs because
+the user ticked sources in the New list dialog seconds earlier, so the
+lines are as asked-for as anything they typed by hand.
 
-Provenance priority (highest first), used when an item shows up via more
-than one source:
-
-    auto_recipe > auto_meal_plan > auto_flagged > auto_essential
-      > auto_low_stock > auto_frequently_added
-
-The priority drives which `added_via` chip the line gets in the UI, and
-which subtitle ("from recipe X" / "low stock" / etc) is rendered. The
-ranking favours user-initiated intent (a recipe the user picked beats
-the silent low-stock fallback).
+The per-source provenance this module used to stamp on each line
+(`auto_recipe` / `auto_essential` / …), along with the priority ladder
+that arbitrated between sources claiming the same item, was deleted on
+2026-09-19: it restated the user's own dialog input back at them on every
+row, forever. Dedupe is now just "first source to claim the item wins",
+which is all the ladder ever affected once the labels were gone.
 """
 import logging
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import func, select
 
 from dora_api.domain.entities.meal_plan import MealPlan
-from dora_api.domain.entities.meal_plan_entry import MealPlanEntry
 from dora_api.domain.entities.recipe import Recipe
-from dora_api.domain.entities.recipe_ingredient import RecipeIngredient
-from dora_api.domain.entities.shopping_list import (
-    ADDED_VIA_AUTO_ESSENTIAL,
-    ADDED_VIA_AUTO_FLAGGED,
-    ADDED_VIA_AUTO_FREQUENTLY_ADDED,
-    ADDED_VIA_AUTO_LOW_STOCK,
-    ADDED_VIA_AUTO_MEAL_PLAN,
-    ADDED_VIA_AUTO_RECIPE,
-    SHOPPING_LIST_STATUS_DONE,
-    ShoppingList,
-    ShoppingListLine,
-)
+from dora_api.domain.entities.shopping_list import ShoppingList, ShoppingListLine
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.features.routers import SHOPPING_LIST_ROUTER
-from dora_api.infrastructure.api_response import business_rule_violation, not_found, ok
+from dora_api.features.shopping_lists._frequently_added import (
+    DEFAULT_FREQUENTLY_ADDED_LIMIT, rank_frequently_added_ids)
+from dora_api.infrastructure.api_response import not_found, ok
 from dora_api.infrastructure.decorators import has_request_body
 from dora_api.infrastructure.utils import get_request_body
+from dora_api.features.shopping_lists._line_defaults import apply_line_defaults
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 from dora_api.infrastructure.ports import Repository
@@ -62,19 +50,6 @@ SEQ_OUT = 2
 LOW_OR_OUT = {SEQ_LOW, SEQ_OUT}
 
 
-# Highest priority first. The handler picks the first (= most "intentional")
-# provenance when an item is collected by multiple sources.
-PROVENANCE_PRIORITY: Tuple[str, ...] = (
-    ADDED_VIA_AUTO_RECIPE,
-    ADDED_VIA_AUTO_MEAL_PLAN,
-    ADDED_VIA_AUTO_FLAGGED,
-    ADDED_VIA_AUTO_ESSENTIAL,
-    ADDED_VIA_AUTO_LOW_STOCK,
-    ADDED_VIA_AUTO_FREQUENTLY_ADDED,
-)
-_PRIORITY_INDEX: Dict[str, int] = {p: i for i, p in enumerate(PROVENANCE_PRIORITY)}
-
-
 class AutoGenerateSources(BaseModel):
     model_config = ConfigDict(extra="forbid")
     low_stock: bool = False
@@ -82,10 +57,14 @@ class AutoGenerateSources(BaseModel):
     # When True, only essential (is_essential) items count for the low/out
     # picks above — useful for "shop the staples I'm short on" runs.
     essentials_only_for_low: bool = False
-    flagged: bool = False
+    # Every essential item, whatever its stock level ("always have these
+    # in"). Was called `flagged` until 2026-09-19, which implied a flag
+    # column that has never existed — the collector reads `is_essential`,
+    # the same field `essentials_only_for_low` filters on.
+    essentials: bool = False
     frequently_added: bool = False
     # Top-N count for frequently_added (only consulted when flag is set).
-    frequently_added_limit: int = 10
+    frequently_added_limit: int = DEFAULT_FREQUENTLY_ADDED_LIMIT
     # ISO date naming the start of the meal-plan week to pull ingredients
     # from. Resolution: any MealPlanEntry between [week_start, week_start+6d].
     meal_plan_week: Optional[date] = None
@@ -107,28 +86,9 @@ class AutoGenerateRequest(BaseModel):
 
 
 @dataclass(slots=True)
-class _Candidate:
-    stock_item: StockItem
-    added_via: str
-    # Free-form provenance detail for the UI to render alongside the chip.
-    # Examples: "Tomato Soup" (recipe name), "Mon 1 Jun" (meal plan day).
-    # None means "no extra context, just the chip".
-    detail: Optional[str] = None
-
-    def replace_with(self, other: "_Candidate") -> "_Candidate":
-        # Higher-priority provenance wins. Lower index in PROVENANCE_PRIORITY
-        # = higher priority.
-        if _PRIORITY_INDEX[other.added_via] < _PRIORITY_INDEX[self.added_via]:
-            return other
-        return self
-
-
-@dataclass(slots=True)
 class _LineResult:
     line_id: UUID
     stock_item_id: UUID
-    added_via: str
-    detail: Optional[str]
 
 
 @dataclass(slots=True)
@@ -156,9 +116,9 @@ class AutoGenerateResponse:
 class AutoGenerateHandler:
     """Pulls candidates from each enabled source, dedupes, writes lines.
 
-    The handler intentionally returns the resulting list ID + per-line
-    provenance so the frontend can navigate straight to the new list and
-    render added_via chips without an extra round-trip.
+    The handler returns the resulting list ID + the ids of the lines it
+    wrote so the frontend can navigate straight to the new list without an
+    extra round-trip.
     """
 
     def __init__(self, repository: Repository) -> None:
@@ -182,7 +142,7 @@ class AutoGenerateHandler:
                 return AutoGenerateResponse(list_not_found=True)
 
         # ── Collect candidates ────────────────────────────────────────────
-        candidates: Dict[UUID, _Candidate] = {}
+        candidates: Dict[UUID, StockItem] = {}
         # FU-505 — recipe / meal-plan collectors append here whenever an
         # ingredient can't be turned into a stock-item-anchored line. The
         # SPA renders these as a "you'll need to add these manually" banner.
@@ -191,8 +151,8 @@ class AutoGenerateHandler:
         if request.sources.low_stock or request.sources.out_of_stock:
             self._collect_low_or_out(candidates, request.sources)
 
-        if request.sources.flagged:
-            self._collect_flagged(candidates)
+        if request.sources.essentials:
+            self._collect_essentials(candidates)
 
         if request.sources.recipes:
             self._collect_recipes(candidates, request.sources.recipes, unlinked_skipped)
@@ -232,29 +192,26 @@ class AutoGenerateHandler:
         next_sequence = (max((l.sequence for l in existing_lines), default=-1)) + 1
 
         now = datetime.now(timezone.utc)
-        added: List[_LineResult] = []
+        new_lines: List[ShoppingListLine] = []
         skipped = 0
-        for stock_item_id, cand in candidates.items():
+        for stock_item_id in candidates:
             if stock_item_id in on_list:
                 skipped += 1
                 continue
-            line = ShoppingListLine(
+            new_lines.append(ShoppingListLine(
                 shopping_list_id=target.id,
                 stock_item_id=stock_item_id,
                 quantity=1,
                 sequence=next_sequence,
-                added_via=cand.added_via,
                 added_at=now,
-            )
-            self.repository.add(line)
+            ))
             next_sequence += 1
+        apply_line_defaults(self.repository, new_lines)
+        added: List[_LineResult] = []
+        for line in new_lines:
+            self.repository.add(line)
             added.append(
-                _LineResult(
-                    line_id=line.id,
-                    stock_item_id=stock_item_id,
-                    added_via=cand.added_via,
-                    detail=cand.detail,
-                )
+                _LineResult(line_id=line.id, stock_item_id=line.stock_item_id)
             )
 
         self.repository.save_changes()
@@ -307,7 +264,7 @@ class AutoGenerateHandler:
 
     def _collect_low_or_out(
         self,
-        candidates: Dict[UUID, _Candidate],
+        candidates: Dict[UUID, StockItem],
         sources: AutoGenerateSources,
     ) -> None:
         wanted_seqs = set()
@@ -327,30 +284,21 @@ class AutoGenerateHandler:
                 continue
             if sources.essentials_only_for_low and not item.is_essential:
                 continue
-            via = (
-                ADDED_VIA_AUTO_ESSENTIAL
-                if sources.essentials_only_for_low and item.is_essential
-                else ADDED_VIA_AUTO_LOW_STOCK
-            )
-            self._merge(candidates, item.id, _Candidate(stock_item=item, added_via=via))
+            self._merge(candidates, item.id, item)
 
-    def _collect_flagged(self, candidates: Dict[UUID, _Candidate]) -> None:
-        # "Always include in auto-generated lists" — flagged items go on the
+    def _collect_essentials(self, candidates: Dict[UUID, StockItem]) -> None:
+        # "Always include in auto-generated lists" — essentials go on the
         # list even if currently stocked. The user has explicitly said
         # "always restock this".
         items: List[StockItem] = self.repository.get(StockItem).all(
             EntityField(StockItem, StockItem.Fields.IS_ESSENTIAL).eq(True)
         )
         for item in items:
-            self._merge(
-                candidates,
-                item.id,
-                _Candidate(stock_item=item, added_via=ADDED_VIA_AUTO_FLAGGED),
-            )
+            self._merge(candidates, item.id, item)
 
     def _collect_recipes(
         self,
-        candidates: Dict[UUID, _Candidate],
+        candidates: Dict[UUID, StockItem],
         recipe_ids: List[UUID],
         unlinked_skipped: List[_UnlinkedSkip],
     ) -> None:
@@ -395,19 +343,11 @@ class AutoGenerateHandler:
             for item in items:
                 if item.stock_level is not None and item.stock_level.sequence == SEQ_STOCKED:
                     continue
-                self._merge(
-                    candidates,
-                    item.id,
-                    _Candidate(
-                        stock_item=item,
-                        added_via=ADDED_VIA_AUTO_RECIPE,
-                        detail=recipe.name,
-                    ),
-                )
+                self._merge(candidates, item.id, item)
 
     def _collect_meal_plan_week(
         self,
-        candidates: Dict[UUID, _Candidate],
+        candidates: Dict[UUID, StockItem],
         week_start: date,
         unlinked_skipped: List[_UnlinkedSkip],
     ) -> None:
@@ -469,35 +409,14 @@ class AutoGenerateHandler:
             for item in items:
                 if item.stock_level is not None and item.stock_level.sequence == SEQ_STOCKED:
                     continue
-                self._merge(
-                    candidates,
-                    item.id,
-                    _Candidate(
-                        stock_item=item,
-                        added_via=ADDED_VIA_AUTO_MEAL_PLAN,
-                        detail=f"Meal plan · {week_start.isoformat()}",
-                    ),
-                )
+                self._merge(candidates, item.id, item)
 
     def _collect_frequently_added(
         self,
-        candidates: Dict[UUID, _Candidate],
+        candidates: Dict[UUID, StockItem],
         limit: int,
     ) -> None:
-        # Top-N by historic add count across all lines (ticked + archived
-        # included — past usage signal). Borrowed from the standalone
-        # /frequently-added endpoint but inlined to avoid the round-trip.
-        session = self.repository.session
-        rows = session.execute(
-            select(
-                ShoppingListLine.stock_item_id,
-                func.count().label("add_count"),
-            ).group_by(ShoppingListLine.stock_item_id)
-        ).all()
-        if not rows:
-            return
-        counts: Dict[UUID, int] = {row[0]: int(row[1]) for row in rows}
-        ranked_ids = sorted(counts.keys(), key=lambda i: -counts[i])[: max(1, limit)]
+        ranked_ids = rank_frequently_added_ids(self.repository.session, limit)
         if not ranked_ids:
             return
         items: List[StockItem] = self.repository.get(StockItem).all(
@@ -507,22 +426,19 @@ class AutoGenerateHandler:
             self._merge(
                 candidates,
                 item.id,
-                _Candidate(
-                    stock_item=item, added_via=ADDED_VIA_AUTO_FREQUENTLY_ADDED
-                ),
+                item,
             )
 
     @staticmethod
     def _merge(
-        candidates: Dict[UUID, _Candidate],
+        candidates: Dict[UUID, StockItem],
         stock_item_id: UUID,
-        new_cand: _Candidate,
+        item: StockItem,
     ) -> None:
-        existing = candidates.get(stock_item_id)
-        if existing is None:
-            candidates[stock_item_id] = new_cand
-        else:
-            candidates[stock_item_id] = existing.replace_with(new_cand)
+        # First source to claim an item keeps it. Sources no longer differ
+        # in what they write, so there is nothing left to arbitrate — this
+        # is dedupe, not precedence.
+        candidates.setdefault(stock_item_id, item)
 
 
 def _response_payload(response: AutoGenerateResponse) -> dict:
@@ -535,8 +451,6 @@ def _response_payload(response: AutoGenerateResponse) -> dict:
             {
                 "line_id": l.line_id,
                 "stock_item_id": l.stock_item_id,
-                "added_via": l.added_via,
-                "detail": l.detail,
             }
             for l in response.lines
         ],

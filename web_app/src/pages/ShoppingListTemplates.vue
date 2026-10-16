@@ -1,11 +1,8 @@
 <template>
     <q-page padding>
         <div class="row items-center q-mb-md">
-            <BaseButton variant="icon" :icon="ICONS.arrow_back" @click="goBack" />
-            <div class="q-ml-sm col text-caption dora-text-muted">
-                Saved list shapes you can drop into a new shop in one click.
-                {{ templates.length }} template{{ templates.length === 1 ? '' : 's' }}.
-            </div>
+            <BaseButton variant="icon" :icon="ICONS.arrow_back" aria-label="Back to shopping lists" @click="goBack" />
+            <q-space />
             <BaseButton
                 variant="primary"
                 :icon="ICONS.add"
@@ -36,10 +33,21 @@
                 :key="template.template_id"
                 class="col-12 col-sm-6 col-md-4"
             >
-                <q-card flat bordered class="template-card">
-                    <q-card-section class="row items-start">
-                        <div class="col">
-                            <div class="text-h6">
+                <!-- Tapping a card shows what's on it; using it is the button
+                     beside the menu, one tap from the grid (2026-10-14). -->
+                <q-card
+                    flat
+                    bordered
+                    class="template-card"
+                    role="button"
+                    tabindex="0"
+                    :aria-label="`Show what's on ${template.name}`"
+                    @click="openPreview(template)"
+                    @keydown.enter.self="openPreview(template)"
+                >
+                    <q-card-section class="row items-center no-wrap q-gutter-x-sm">
+                        <div class="col" style="min-width: 0">
+                            <div class="text-h6 ellipsis">
                                 <span v-if="editingId !== template.template_id">
                                     {{ template.name }}
                                 </span>
@@ -49,6 +57,7 @@
                                     dense
                                     outlined
                                     autofocus
+                                    @click.stop
                                     @blur="saveRename(template)"
                                     @keydown.enter.prevent="saveRename(template)"
                                     @keydown.esc.prevent="editingId = null"
@@ -59,23 +68,23 @@
                                 · updated {{ formatDate(template.updated_at) }}
                             </div>
                         </div>
-                        <BaseButton variant="icon" :icon="ICONS.more_vert">
+                        <BaseButton
+                            variant="secondary"
+                            :icon="ICONS.playlist_add_check"
+                            label="Use"
+                            :aria-label="`Use ${template.name}`"
+                            @click.stop="onUse(template)"
+                        >
+                            <BaseTooltip>Start a new list from this template</BaseTooltip>
+                        </BaseButton>
+                        <BaseButton
+                            variant="icon"
+                            :icon="ICONS.more_vert"
+                            aria-label="More actions"
+                            @click.stop
+                        >
                             <q-menu transition-show="jump-down" transition-hide="jump-up">
                                 <q-list dense style="min-width: 200px">
-                                    <q-item
-                                        clickable
-                                        v-close-popup
-                                        @click="onUse(template)"
-                                    >
-                                        <q-item-section avatar>
-                                            <q-icon :name="ICONS.playlist_add_check" color="primary" />
-                                        </q-item-section>
-                                        <q-item-section>
-                                            <q-item-label>Use template</q-item-label>
-                                            <q-item-label caption>Create a new list</q-item-label>
-                                        </q-item-section>
-                                    </q-item>
-                                    <q-separator />
                                     <q-item
                                         clickable
                                         v-close-popup
@@ -89,7 +98,7 @@
                                     <q-item
                                         clickable
                                         v-close-popup
-                                        @click="onView(template)"
+                                        @click="openEditor(template)"
                                     >
                                         <q-item-section avatar>
                                             <q-icon :name="ICONS.open_in_new" />
@@ -116,9 +125,67 @@
             </div>
         </div>
 
-        <!-- Edit-items dialog ──────────────────────────────────────────── -->
-        <BaseDialog v-model="editorOpen" :title="editingDetail?.name ?? 'Loading…'" closable :maximized="$q.screen.lt.sm" card-style="min-width: 480px; max-width: 720px; width: 100%">
-                <q-card-section v-if="editingDetail">
+        <!-- Preview: what's on the template, read-only, with the way to use it. -->
+        <BaseDialog
+            v-model="previewOpen"
+            :title="previewTemplate?.name ?? ''"
+            closable
+            card-style="width: 520px; max-width: 95vw"
+        >
+            <q-card-section v-if="previewDetail" class="tpl-dialog__body">
+                <q-list v-if="previewDetail.lines.length > 0" separator>
+                    <q-item v-for="line in previewDetail.lines" :key="line.line_id" dense class="q-px-none">
+                        <q-item-section style="min-width: 0">
+                            <q-item-label class="ellipsis">{{ choiceLabel(line) }}</q-item-label>
+                            <q-item-label
+                                v-if="choiceLabel(line) !== line.stock_item_name"
+                                caption
+                                class="ellipsis"
+                            >
+                                {{ line.stock_item_name }}
+                            </q-item-label>
+                        </q-item-section>
+                        <q-item-section side class="tpl-preview__qty">
+                            {{ line.quantity == null ? '–' : `× ${line.quantity}` }}
+                        </q-item-section>
+                    </q-item>
+                </q-list>
+                <div v-else class="dora-text-muted text-center q-py-md">
+                    No items on this template yet.
+                </div>
+            </q-card-section>
+            <q-card-section v-else class="text-center q-py-lg">
+                <AppSpinner size="32px" />
+            </q-card-section>
+
+            <template #actions>
+                <BaseButton
+                    variant="ghost"
+                    :icon="ICONS.edit"
+                    label="Edit items"
+                    :disable="!previewTemplate"
+                    @click="onEditFromPreview"
+                />
+                <BaseButton
+                    variant="primary"
+                    :icon="ICONS.playlist_add_check"
+                    label="Use template"
+                    :disable="!previewTemplate"
+                    :loading="using"
+                    @click="onUseFromPreview"
+                />
+            </template>
+        </BaseDialog>
+
+        <!-- Edit-items dialog. A fixed width capped to the viewport rather than
+             a 480px floor, which overran a phone. -->
+        <BaseDialog
+            v-model="editorOpen"
+            :title="editingDetail?.name ?? 'Loading…'"
+            closable
+            card-style="width: 640px; max-width: 95vw"
+        >
+                <q-card-section v-if="editingDetail" class="tpl-dialog__body">
                     <div class="text-caption dora-text-muted q-mb-md">
                         {{ editingDetail.lines.length }} item{{
                             editingDetail.lines.length === 1 ? '' : 's'
@@ -150,52 +217,62 @@
                     </q-select>
 
                     <q-list bordered separator class="q-mt-md">
-                        <q-item
+                        <div
                             v-for="line in editingDetail.lines"
                             :key="line.line_id"
+                            class="tpl-line"
                         >
-                            <q-item-section>
-                                <q-item-label>{{ line.stock_item_name }}</q-item-label>
-                            </q-item-section>
-                            <q-item-section side style="min-width: 130px">
-                                <div class="row items-center q-gutter-xs no-wrap">
-                                    <BaseButton
-                                        variant="icon"
-                                        size="sm"
-                                        :icon="ICONS.remove"
-                                        :disable="(line.quantity ?? 0) <= 0"
-                                        @click="adjustLineQuantity(line, -1)"
-                                    />
-                                    <q-input
-                                        :model-value="line.quantity ?? ''"
-                                        dense
-                                        borderless
-                                        type="number"
-                                        :min="0"
-                                        input-class="text-center"
-                                        style="width: 48px"
-                                        placeholder="—"
-                                        @blur="onTemplateQtyBlur(line, $event)"
-                                        @keydown.enter.prevent="
-                                            ($event.target as HTMLInputElement).blur()
-                                        "
-                                    />
-                                    <BaseButton
-                                        variant="icon"
-                                        size="sm"
-                                        :icon="ICONS.add"
-                                        @click="adjustLineQuantity(line, 1)"
-                                    />
-                                </div>
-                            </q-item-section>
-                            <q-item-section side>
+                            <!-- The list row's picker, so a template's "which
+                                 one" is chosen the same way a list's is. -->
+                            <div class="tpl-line__name">
+                                <LineChoicePicker
+                                    v-if="hasLineChoices(choiceFor(line), productsEnabled)"
+                                    :choice="choiceFor(line)"
+                                    @pick-offer="setLineChoice(line, { selected_product_id: $event })"
+                                    @pick-hint="setLineChoice(line, { preferred_buy_id: $event })"
+                                />
+                                <span v-else class="ellipsis">{{ line.stock_item_name }}</span>
+                            </div>
+                            <div class="row items-center no-wrap tpl-line__qty">
                                 <BaseButton
                                     variant="icon"
-                                    :icon="ICONS.delete_outline"
-                                    @click="onRemoveLine(line.line_id)"
+                                    size="sm"
+                                    :icon="ICONS.remove"
+                                    aria-label="Decrease quantity"
+                                    :disable="(line.quantity ?? 0) <= 0"
+                                    @click="adjustLineQuantity(line, -1)"
                                 />
-                            </q-item-section>
-                        </q-item>
+                                <q-input
+                                    :model-value="line.quantity ?? ''"
+                                    dense
+                                    borderless
+                                    type="number"
+                                    :min="0"
+                                    input-class="text-center"
+                                    style="width: 36px"
+                                    placeholder="–"
+                                    aria-label="Quantity"
+                                    @blur="onTemplateQtyBlur(line, $event)"
+                                    @keydown.enter.prevent="
+                                        ($event.target as HTMLInputElement).blur()
+                                    "
+                                />
+                                <BaseButton
+                                    variant="icon"
+                                    size="sm"
+                                    :icon="ICONS.add"
+                                    aria-label="Increase quantity"
+                                    @click="adjustLineQuantity(line, 1)"
+                                />
+                            </div>
+                            <BaseButton
+                                variant="icon"
+                                class="tpl-line__remove"
+                                :icon="ICONS.delete_outline"
+                                aria-label="Remove"
+                                @click="onRemoveLine(line.line_id)"
+                            />
+                        </div>
                         <q-item v-if="editingDetail.lines.length === 0">
                             <q-item-section class="dora-text-muted text-center">
                                 No items on this template yet.
@@ -217,13 +294,19 @@
     import AppSpinner from 'src/components/AppSpinner.vue';
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
+    import LineChoicePicker from 'src/components/shoppingList/LineChoicePicker.vue';
+    import { useFeatureFlags } from 'src/composables/useFeatureFlags';
+    import { hasLineChoices, pickedLineChoice, type LineChoice } from 'src/models/shoppingList';
     import { useQuasar } from 'quasar';
     import type {
         TemplateDetail,
         TemplateLine,
-        TemplateSummary
+        TemplateSummary,
+        UpdateTemplateLineCommand,
     } from 'src/models/shoppingListTemplate';
     import ShoppingListTemplateApiService from 'src/services/api/shoppingListTemplateApiService';
+    import { useShoppingListStore } from 'src/stores/shoppingListStore';
     import { useStockItemStore } from 'src/stores/stockItemStore';
     import { computed, onMounted, ref } from 'vue';
     import { useRouter } from 'vue-router';
@@ -231,8 +314,10 @@
 
     const $q = useQuasar();
     const router = useRouter();
+    const shoppingListStore = useShoppingListStore();
     const api = new ShoppingListTemplateApiService();
     const stockItemStore = useStockItemStore();
+    const { products: productsEnabled } = useFeatureFlags();
 
     const templates = ref<TemplateSummary[]>([]);
     const loading = ref(false);
@@ -240,6 +325,11 @@
 
     const editingId = ref<string | null>(null);
     const renameDraft = ref('');
+
+    const previewOpen = ref(false);
+    const previewTemplate = ref<TemplateSummary | null>(null);
+    const previewDetail = ref<TemplateDetail | null>(null);
+    const using = ref(false);
 
     const editorOpen = ref(false);
     const editingDetail = ref<TemplateDetail | null>(null);
@@ -361,8 +451,13 @@
     }
 
     async function onUse(template: TemplateSummary) {
+        using.value = true;
         try {
             const result = await api.instantiateAsync(template.template_id, {});
+            // The lists picker reads the shared store, which is already
+            // hydrated, so without this the new list was missing from it
+            // until a reload (owner 2026-10-15).
+            await shoppingListStore.refreshAsync();
             $q.notify({
                 type: 'positive',
                 position: 'bottom-right',
@@ -380,11 +475,76 @@
                 message: 'Could not create list.',
                 caption: toastCaption(err),
             });
+        } finally {
+            using.value = false;
         }
     }
 
-    async function onView(template: TemplateSummary) {
-        await openEditor(template);
+    async function openPreview(template: TemplateSummary) {
+        if (editingId.value === template.template_id) return;
+        previewTemplate.value = template;
+        previewDetail.value = null;
+        previewOpen.value = true;
+        try {
+            previewDetail.value = await api.getDetailAsync(template.template_id);
+        } catch (err) {
+            $q.notify({
+                type: 'negative',
+                position: 'bottom-right',
+                message: 'Could not load template.',
+                caption: toastCaption(err),
+            });
+            previewOpen.value = false;
+        }
+    }
+
+    function onEditFromPreview() {
+        const template = previewTemplate.value;
+        if (!template) return;
+        previewOpen.value = false;
+        void openEditor(template);
+    }
+
+    function onUseFromPreview() {
+        if (previewTemplate.value) void onUse(previewTemplate.value);
+    }
+
+    function choiceFor(line: TemplateLine): LineChoice {
+        return {
+            itemName: line.stock_item_name,
+            offers: line.offers,
+            preferredBuys: line.preferred_buys,
+            selectedProductId: line.selected_product_id,
+            preferredBuyId: line.preferred_buy_id,
+        };
+    }
+
+    /** What the line will be called on the list: the picked offer or
+     *  preferred buy, else the item. */
+    function choiceLabel(line: TemplateLine): string {
+        return pickedLineChoice(choiceFor(line), productsEnabled.value)?.label ?? line.stock_item_name;
+    }
+
+    async function setLineChoice(
+        line: TemplateLine,
+        command: Pick<UpdateTemplateLineCommand, 'selected_product_id' | 'preferred_buy_id'>,
+    ) {
+        if (!editingDetail.value) return;
+        const previous = { product: line.selected_product_id, preferredBuy: line.preferred_buy_id };
+        if ('selected_product_id' in command) line.selected_product_id = command.selected_product_id ?? null;
+        if ('preferred_buy_id' in command) line.preferred_buy_id = command.preferred_buy_id ?? null;
+        try {
+            await api.updateLineAsync(editingDetail.value.template_id, line.line_id, command);
+        } catch (err) {
+            line.selected_product_id = previous.product;
+            line.preferred_buy_id = previous.preferredBuy;
+            $q.notify({
+                type: 'negative',
+                position: 'bottom-right',
+                message: 'Could not update the item.',
+                caption: toastCaption(err),
+            });
+        }
     }
 
     async function openEditor(template: TemplateSummary) {
@@ -507,10 +667,65 @@
 
 <style scoped>
     .template-card {
+        cursor: pointer;
         transition: transform 120ms ease, box-shadow 120ms ease;
+    }
+    .template-card:focus-visible {
+        outline: 2px solid var(--focus-ring);
+        outline-offset: 2px;
     }
     .template-card:hover {
         transform: translateY(-2px);
         box-shadow: 0 4px 14px var(--overlay-active);
+    }
+    /* Name | quantity stepper | remove. The name takes what's left and
+       truncates, so the row fits a phone. */
+    .tpl-line {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto auto;
+        grid-template-areas: "name qty del";
+        align-items: center;
+        gap: var(--space-1);
+        padding: var(--space-1) var(--space-1) var(--space-1) var(--space-3);
+        min-height: 48px;
+    }
+    /* On a phone the name gets its own line, so it isn't cut to a few
+       letters by the stepper. */
+    @media (max-width: 599px) {
+        .tpl-line {
+            grid-template-areas:
+                "name name name"
+                ".    qty  del";
+            row-gap: 0;
+            padding-top: var(--space-2);
+        }
+    }
+    .tpl-line + .tpl-line {
+        border-top: 1px solid var(--divider);
+    }
+    .tpl-line__name {
+        grid-area: name;
+        min-width: 0;
+        display: flex;
+        font-size: calc(var(--font-size-md) * 1rem);
+    }
+    /* The picker is sized for a list row; here it reads at the same size as
+       a plain name beside it. */
+    .tpl-line__name .line-choice {
+        font-size: inherit;
+    }
+    .tpl-line__qty {
+        grid-area: qty;
+    }
+    .tpl-line__remove {
+        grid-area: del;
+    }
+    .tpl-dialog__body {
+        max-height: 70vh;
+        overflow-y: auto;
+    }
+    .tpl-preview__qty {
+        font-variant-numeric: tabular-nums;
+        color: var(--text-secondary);
     }
 </style>

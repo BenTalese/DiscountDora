@@ -5,49 +5,26 @@
         reveals="list details"
     >
         <template #header>
+            <!-- Owner 2026-10-15: slimmer. The figures move up to sit level
+                 with the caret, the status pill drops to the bottom-left, the
+                 lifecycle buttons go side by side, the ring becomes a bar and
+                 "Group by" becomes one dropdown. Three rows at most. -->
             <div class="sl-overview__head">
-                <!-- Identity. The chip leads: it is the one thing on this row
-                     that changes, and reading "Draft · Weekly shop" left to
-                     right says what you're looking at before it says which one.
-                     The name is desktop-only — on a phone the list picker
-                     directly above this card is already showing it, and
-                     printing it twice was the 2026-08-28 complaint. The pencil
-                     follows the name for the same reason. -->
-                <div class="sl-overview__identity">
-                    <span class="sl-status-pill" :class="`sl-status-pill--${detail.status}`">
-                        <q-icon :name="statusIcon" size="14px" />
-                        {{ statusLabel }}
-                    </span>
-                    <span class="text-h5 ellipsis gt-sm sl-overview__name">
-                        {{ detail.display_name }}
-                    </span>
-                    <BaseButton
-                        variant="icon"
-                        class="gt-sm"
-                        :icon="ICONS.edit"
-                        aria-label="Rename list"
-                        @click="emit('rename')"
-                    >
-                        <BaseTooltip>Rename — leave blank to label by date</BaseTooltip>
-                    </BaseButton>
-                </div>
-
-                <!-- The figure. One number, chosen by what the face is for:
-                     planning asks what this will cost, shopping asks what's
-                     left to spend, a receipt asks what it came to. With money
-                     off there is no figure to lead with, so the size of the
-                     list takes the slot rather than the card losing its
-                     headline. -->
+                <!-- Row 1: the facts, label over value. -->
                 <div class="sl-overview__figures">
-                    <div class="sl-overview__figure">
-                        <div class="sl-overview__amount">
+                    <div
+                        v-for="fig in figures"
+                        :key="fig.key"
+                        class="sl-overview__figure"
+                    >
+                        <div class="sl-overview__label">{{ fig.label }}</div>
+                        <div class="sl-overview__amount" :class="fig.tone">
                             <!-- The tilde is the same honesty marker
                                  `StoreSpendCard` already uses on a short
                                  bucket, raised to the figure it qualifies. -->
-                            <span v-if="headlineIsPartial" class="sl-overview__approx">~</span>{{ headlineValue }}
+                            <span v-if="fig.partial" class="sl-overview__approx">~</span>{{ fig.value }}
                         </div>
-                        <div class="text-caption dora-text-muted">{{ headlineLabel }}</div>
-                        <div v-if="headlineIsPartial" class="sl-overview__partial">
+                        <div v-if="fig.partial" class="sl-overview__partial">
                             <q-icon :name="ICONS.info" size="13px" />
                             {{ unpricedCount }} item{{ unpricedCount === 1 ? '' : 's' }}
                             with no price yet
@@ -57,138 +34,161 @@
                             </BaseTooltip>
                         </div>
                     </div>
-
-                    <!-- Mid-shop the ring is the progress, so it sits with the
-                         figure rather than in a footer of its own. -->
-                    <div v-if="face === 'run'" class="sl-overview__progress">
-                        <q-circular-progress
-                            show-value
-                            :value="progressPct"
-                            size="52px"
-                            :thickness="0.18"
-                            color="positive"
-                            track-color="separator"
-                            class="sl-overview__ring text-weight-medium"
-                        >
-                            <span class="text-caption">
-                                {{ tickedCount }}/{{ detail.lines.length }}
-                            </span>
-                        </q-circular-progress>
-                        <span class="text-body2">{{ untickedCount }} left to pick</span>
-                    </div>
-
-                    <q-space />
-
-                    <div class="sl-overview__when">
-                        <div v-if="datelineLabel" class="row items-center no-wrap" :class="datelineClass">
-                            <q-icon :name="datelineIcon" size="14px" class="q-mr-xs" />
-                            {{ datelineLabel }}
-                        </div>
-                        <div class="dora-text-muted">
-                            {{ detail.lines.length }} item{{ detail.lines.length === 1 ? '' : 's' }}
-                        </div>
-                    </div>
                 </div>
 
-                <!-- Controls. The sort control is a view preference that
-                     belongs with the thing it reorders, and the primary action
-                     is the one thing this face is for — both live on the card
-                     rather than in the toolbar band, which was carrying four
-                     mutually-exclusive lifecycle buttons in one slot. -->
-                <div class="sl-overview__controls">
-                    <div v-if="sortModes.length > 1" class="sl-overview__sort">
-                        <span class="text-caption dora-text-muted">Order by</span>
-                        <!-- Four loose ghost buttons became one control. It is
-                             a single choice from a fixed set, which is what a
-                             segmented control is for, and `pill` is the shape
-                             the owner picked for exactly this on 2026-08-31 —
-                             so this doesn't invent a second one (D-015). -->
-                        <!-- No `dense`/`size="sm"`: at that size the pill
-                             collapsed into a single dark blob with the labels
-                             touching, and it is the card's only view control —
-                             it should read as a control, not as a smudge. Also
-                             keeps every segment past D-004's tap floor. -->
-                        <BaseSegmented
-                            class="sl-overview__seg"
-                            :model-value="effectiveMode"
-                            :options="sortOptions"
-                            @update:model-value="emit('update:mode', $event)"
+                <!-- Row 2, mid-shop only: progress as a bar, count inside. -->
+                <div
+                    v-if="face === 'run'"
+                    class="sl-overview__progress"
+                    role="progressbar"
+                    :aria-valuenow="tickedCount"
+                    :aria-valuemin="0"
+                    :aria-valuemax="detail.lines.length"
+                    :aria-label="`${tickedCount} of ${detail.lines.length} collected`"
+                >
+                    <div class="sl-overview__progress-fill" :style="{ width: `${progressPct}%` }" />
+                    <span class="sl-overview__progress-text">
+                        {{ tickedCount }}/{{ detail.lines.length }}
+                    </span>
+                </div>
+
+                <!-- Row 3: identity on the left, controls on the right. -->
+                <div class="sl-overview__foot">
+                    <div class="sl-overview__identity">
+                        <span class="sl-status-pill" :class="`sl-status-pill--${detail.status}`">
+                            <q-icon :name="statusIcon" size="14px" />
+                            {{ statusLabel }}
+                        </span>
+                        <!-- Desktop only: on a phone the list picker directly
+                             above this card already shows the name. Renaming
+                             is draft-only (2026-09-17). -->
+                        <span class="text-subtitle1 text-weight-medium ellipsis gt-sm sl-overview__name">
+                            {{ detail.display_name }}
+                        </span>
+                        <BaseButton
+                            v-if="face === 'plan'"
+                            variant="icon"
+                            class="gt-sm"
+                            :icon="ICONS.edit"
+                            aria-label="Rename list"
+                            @click="emit('rename')"
                         >
-                            <!-- One tooltip for the group rather than one per
-                                 segment: `q-btn-toggle` has no per-option slot
-                                 that isn't a dynamic name per value, and the
-                                 information being preserved is *why* a mode is
-                                 greyed out, which reads fine said once. -->
-                            <BaseTooltip v-if="unavailableLabel">
-                                {{ unavailableLabel }}
-                            </BaseTooltip>
-                        </BaseSegmented>
+                            <BaseTooltip>Rename</BaseTooltip>
+                        </BaseButton>
                     </div>
 
-                    <q-space />
+                    <div class="sl-overview__actions">
+                        <!-- One dropdown for the grouping (was a labelled
+                             four-segment control). It names the current mode
+                             with its glyph; the menu says why a mode is
+                             unavailable. -->
+                        <BaseButton
+                            v-if="sortModes.length > 1"
+                            variant="secondary"
+                            class="sl-overview__group"
+                            :icon="sectionIconFor(effectiveMode)"
+                            :label="$q.screen.gt.xs ? SECTION_MODE_LABELS[effectiveMode] : undefined"
+                            icon-right="mdi-menu-down"
+                            :aria-label="`Grouped by ${SECTION_MODE_LABELS[effectiveMode].toLowerCase()}`"
+                        >
+                            <BaseTooltip>Group by</BaseTooltip>
+                            <q-menu auto-close anchor="bottom right" self="top right">
+                                <q-list dense style="min-width: 180px">
+                                    <q-item
+                                        v-for="opt in sortOptions"
+                                        :key="opt.value"
+                                        clickable
+                                        :disable="opt.disable"
+                                        :active="opt.value === effectiveMode"
+                                        @click="emit('update:mode', opt.value)"
+                                    >
+                                        <q-item-section avatar>
+                                            <q-icon :name="sectionIconFor(opt.value)" size="18px" />
+                                        </q-item-section>
+                                        <q-item-section>{{ opt.label }}</q-item-section>
+                                    </q-item>
+                                    <q-item v-if="unavailableLabel" class="dora-text-muted text-caption">
+                                        <q-item-section>{{ unavailableLabel }}</q-item-section>
+                                    </q-item>
+                                </q-list>
+                            </q-menu>
+                        </BaseButton>
 
-                    <!-- A finished list is a record, so correcting it is an
-                         explicit mode rather than the default state. -->
-                    <BaseButton
-                        v-if="face === 'receipt'"
-                        :variant="amending ? 'secondary' : 'ghost'"
-                        :icon="ICONS.edit"
-                        :label="amending ? 'Done amending' : 'Amend'"
-                        @click="emit('update:amending', !amending)"
-                    >
-                        <BaseTooltip>
-                            Correct the price, store or quantity on a line.
-                            Your pantry isn't restocked again.
-                        </BaseTooltip>
-                    </BaseButton>
+                        <!-- Mid-shop's escape hatch, beside the step it undoes. -->
+                        <BaseButton
+                            v-if="face === 'run'"
+                            variant="secondary"
+                            :icon="draftIcon"
+                            :label="$q.screen.lt.sm ? undefined : 'Draft'"
+                            aria-label="Back to draft"
+                            @click="emit('back-to-draft')"
+                        >
+                            <BaseTooltip>
+                                Started this by accident? Goes back to a draft and
+                                unticks anything you've picked up.
+                            </BaseTooltip>
+                        </BaseButton>
+                        <!-- A finished list is a record, so correcting it is an
+                             explicit mode rather than the default state. -->
+                        <BaseButton
+                            v-else-if="face === 'receipt'"
+                            variant="secondary"
+                            :icon="ICONS.edit"
+                            :label="$q.screen.lt.sm ? undefined : (amending ? 'Done' : 'Amend')"
+                            :aria-label="amending ? 'Done amending' : 'Amend'"
+                            :aria-pressed="amending"
+                            @click="emit('update:amending', !amending)"
+                        >
+                            <BaseTooltip>
+                                Correct the price, store or quantity on a line.
+                                Your pantry isn't restocked again.
+                            </BaseTooltip>
+                        </BaseButton>
 
-                    <BaseButton
-                        v-if="face === 'plan'"
-                        variant="primary"
-                        :icon="ICONS.shopping_cart"
-                        label="Start shopping"
-                        :disable="detail.lines.length === 0"
-                        :loading="starting"
-                        @click="emit('start-shopping')"
-                    >
-                        <BaseTooltip>
-                            Tick items off as you grab them — prices you enter
-                            become the receipt
-                        </BaseTooltip>
-                    </BaseButton>
-                    <!-- Always "Finish", never "Finish early" (2026-08-29:
-                         *"people know if they are finishing early or not"*).
-                         The button was reading the tick count back to someone
-                         who had just been looking at it, and the leftovers are
-                         a real decision made in the dialog, not a warning
-                         needed on the control that opens it. -->
-                    <BaseButton
-                        v-else-if="face === 'run'"
-                        variant="positive"
-                        :icon="ICONS.check"
-                        label="Finish"
-                        :loading="finishing"
-                        @click="emit('finish')"
-                    >
-                        <BaseTooltip>
-                            Marks this shop as done: every ticked item moves
-                            back to Stocked in your pantry, and the list is
-                            archived. Anything you didn't buy can move to
-                            another list on the way out.
-                        </BaseTooltip>
-                    </BaseButton>
-                    <BaseButton
-                        v-else
-                        variant="primary"
-                        :icon="ICONS.inventory_2"
-                        label="Put away"
-                        @click="emit('put-away')"
-                    >
-                        <BaseTooltip>
-                            Ephemeral checklist grouped by kitchen location so
-                            you don't forget a corner. Doesn't save.
-                        </BaseTooltip>
-                    </BaseButton>
+                        <!-- The step forward, always last. -->
+                        <BaseButton
+                            v-if="face === 'plan'"
+                            variant="primary"
+                            :icon="shopIcon"
+                            label="Shop"
+                            aria-label="Start shopping"
+                            :disable="detail.lines.length === 0"
+                            :loading="starting"
+                            @click="emit('start-shopping')"
+                        >
+                            <BaseTooltip>
+                                Tick items off as you grab them
+                            </BaseTooltip>
+                        </BaseButton>
+                        <!-- Always "Finish", never "Finish early" (2026-08-29). -->
+                        <BaseButton
+                            v-else-if="face === 'run'"
+                            variant="positive"
+                            :icon="doneIcon"
+                            label="Finish"
+                            :loading="finishing"
+                            @click="emit('finish')"
+                        >
+                            <BaseTooltip>
+                                Marks this shop as done: every ticked item moves
+                                back to Stocked in your pantry, and the list is
+                                archived. Anything you didn't buy can move to
+                                another list on the way out.
+                            </BaseTooltip>
+                        </BaseButton>
+                        <BaseButton
+                            v-else
+                            variant="primary"
+                            :icon="ICONS.inventory_2"
+                            label="Put away"
+                            @click="emit('put-away')"
+                        >
+                            <BaseTooltip>
+                                Ephemeral checklist grouped by kitchen location so
+                                you don't forget a corner. Doesn't save.
+                            </BaseTooltip>
+                        </BaseButton>
+                    </div>
                 </div>
             </div>
         </template>
@@ -197,13 +197,25 @@
              not one you ask at a glance — which is the whole reason it is
              behind a caret rather than stacked on the page. -->
         <div class="sl-overview__detail">
+            <!-- On every face, in the same place (2026-09-17). It used to be
+                 skipped here on a receipt and rendered as a standalone card
+                 below the sheet instead, so the same information moved to a
+                 different part of the page depending on the list's status —
+                 which is the one thing a summary card must not do. -->
             <StoreSpendCard
-                v-if="face !== 'receipt'"
                 :buckets="detail.totals.by_store"
-                :tense="face === 'run' ? 'shop' : 'plan'"
+                :tense="storeSpendTense"
                 :collapsible="false"
+                flush
             />
 
+            <!-- "Created <date>", "From what you last paid · 3 items" and the
+                 plan face's "Saving" all went on 2026-09-27 (owner: *"these
+                 lines feel useless"*). The first is a fact nobody plans a shop
+                 by; the second narrated where numbers came from; the third was
+                 an advertised RRP gap on a list you hadn't bought yet. What
+                 remains is the trip total mid-shop and the saving on a
+                 receipt, both about money that actually moved. -->
             <div v-if="secondaryFigures.length > 0" class="sl-overview__secondary">
                 <div v-for="fig in secondaryFigures" :key="fig.label" class="sl-overview__stat">
                     <span class="dora-text-muted">{{ fig.label }}</span>
@@ -211,12 +223,6 @@
                 </div>
             </div>
 
-            <!-- Not on the run face at any depth: when you are standing in a
-                 shop, the day you created the list is the least useful fact
-                 the app holds about it. -->
-            <div v-if="face !== 'run'" class="text-caption dora-text-muted">
-                Created {{ formatDate(detail.created_at) }}
-            </div>
         </div>
     </CollapsibleCard>
 </template>
@@ -245,17 +251,19 @@
     import { computed } from 'vue';
     import { ICONS } from 'src/style/icons';
     import BaseButton from 'src/components/BaseButton.vue';
-    import BaseSegmented from 'src/components/BaseSegmented.vue';
     import CollapsibleCard from 'src/components/CollapsibleCard.vue';
     import StoreSpendCard from 'src/components/shoppingList/StoreSpendCard.vue';
     import { formatMoney } from 'src/composables/useMoney';
     import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
-    import { formatDate as formatLocaleDate } from 'src/composables/useDateFormat';
+    import { formatDate as formatLocaleDate, formatRelativeDay } from 'src/composables/useDateFormat';
+    import { daysFromToday } from 'src/helpers/weekDates';
     import {
-        PLAN_SECTION_MODES, SECTION_MODES, SECTION_MODE_LABELS, useLineSections,
-        type SectionMode,
+        PLAN_SECTION_MODES, SECTION_MODES, SECTION_MODE_LABELS, sectionIconFor,
+        useLineSections, type SectionMode,
     } from 'src/composables/useLineSections';
-    import type { ShoppingListDetail, ShoppingListLine } from 'src/models/shoppingList';
+    import {
+        listStatusIcon, type ShoppingListDetail, type ShoppingListLine,
+    } from 'src/models/shoppingList';
 
     const props = defineProps<{
         detail: ShoppingListDetail;
@@ -271,6 +279,7 @@
     const emit = defineEmits<{
         rename: [];
         'start-shopping': [];
+        'back-to-draft': [];
         finish: [];
         'put-away': [];
         'update:amending': [value: boolean];
@@ -303,13 +312,12 @@
 
     /** The pill carries a glyph as well as a colour, so the three states are
      *  still three states in greyscale (D-013 — colour never alone). */
-    const statusIcon = computed(() => {
-        switch (props.detail.status) {
-            case 'shopping': return ICONS.shopping_cart;
-            case 'done': return ICONS.check;
-            default: return ICONS.edit;
-        }
-    });
+    const statusIcon = computed(() => listStatusIcon(props.detail.status));
+
+    /** The lifecycle buttons wear the glyph of the face they lead to. */
+    const draftIcon = listStatusIcon('draft');
+    const shopIcon = listStatusIcon('shopping');
+    const doneIcon = listStatusIcon('done');
 
     // ── The headline figure ───────────────────────────────────────────
     // Server-owned totals, read not derived (R-003).
@@ -322,35 +330,66 @@
     // the same flat thing whether you are planning, mid-aisle or done. Each
     // face has a number it is actually about, and money only changes *which*
     // number, never whether there is one.
-    const headlineValue = computed(() => {
-        if (!moneyEnabled.value) {
-            switch (face.value) {
-                case 'run': return String(untickedCount.value);
-                case 'receipt': return String(tickedCount.value);
-                default: return String(props.detail.lines.length);
-            }
-        }
-        switch (face.value) {
-            case 'run': return formatMoney(props.detail.totals.remaining_price);
-            default: return formatMoney(props.detail.totals.total_price);
-        }
-    });
+    type Figure = { key: string; value: string; label: string; tone: string; partial: boolean };
 
-    const headlineLabel = computed(() => {
-        if (!moneyEnabled.value) {
-            switch (face.value) {
-                case 'run': return 'Left to pick';
-                case 'receipt':
-                    return tickedCount.value === 1 ? 'Item bought' : 'Items bought';
-                default:
-                    return props.detail.lines.length === 1 ? 'Item to buy' : 'Items to buy';
+    /** The card's lead figures, per face and tier. Both `money` and `products`
+     *  default to **false**, so the no-money install is what a fresh install
+     *  looks like: it leads with a count, and the count never appears twice. */
+    const figures = computed<Figure[]>(() => {
+        const out: Figure[] = [];
+        const money = moneyEnabled.value;
+        const totals = props.detail.totals;
+        const count = props.detail.lines.length;
+        const plural = (n: number, one: string, many: string) => (n === 1 ? one : many);
+
+        if (face.value === 'plan') {
+            if (money) {
+                out.push({
+                    key: 'cost', value: formatMoney(totals.total_price),
+                    label: 'Estimated cost', tone: '', partial: headlineIsPartial.value,
+                });
+            } else {
+                out.push({
+                    key: 'count', value: String(count),
+                    label: plural(count, 'Item to buy', 'Items to buy'), tone: '', partial: false,
+                });
             }
+            out.push(shopDayFigure.value);
+            if (money) {
+                out.push({
+                    key: 'count', value: String(count),
+                    label: plural(count, 'Item', 'Items'), tone: '', partial: false,
+                });
+            }
+            return out;
         }
-        switch (face.value) {
-            case 'run': return 'Left to spend';
-            case 'receipt': return 'Spent';
-            default: return 'Estimated cost';
+
+        if (face.value === 'run') {
+            // The progress bar carries the count mid-shop, so the only figure
+            // beside it is the money, and with money off, nothing.
+            if (money) {
+                out.push({
+                    key: 'left', value: formatMoney(totals.remaining_price),
+                    label: 'Left to spend', tone: '', partial: headlineIsPartial.value,
+                });
+            }
+            if (props.detail.planned_shop_date) out.push(shopDayFigure.value);
+            return out;
         }
+
+        // A receipt's money is the sheet's TOTAL row below it; the card keeps
+        // when it happened and how much came home.
+        if (props.detail.completed_at) {
+            out.push({
+                key: 'shopped', value: formatDate(props.detail.completed_at),
+                label: 'Shopped', tone: '', partial: false,
+            });
+        }
+        out.push({
+            key: 'count', value: String(tickedCount.value),
+            label: plural(tickedCount.value, 'Item bought', 'Items bought'), tone: '', partial: false,
+        });
+        return out;
     });
 
     /** How many lines carry no price at all. The server already publishes this
@@ -367,31 +406,15 @@
     );
 
     const tickedCount = computed(() => props.detail.lines.filter((l) => l.is_ticked).length);
-    const untickedCount = computed(() => props.detail.lines.filter((l) => !l.is_ticked).length);
     /** Pure display math over server-owned counts — the sanctioned Type-C case. */
     const progressPct = computed(() => {
         const count = props.detail.lines.length;
         return count === 0 ? 0 : (tickedCount.value / count) * 100;
     });
 
-    // ── The dateline ──────────────────────────────────────────────────
-    // Plain text on every face now. Setting the day is the toolbar's job while
-    // it is still settable, so this stopped being a button — a control and a
-    // fact were sharing one slot, and the fact is what you read here.
-    function todayIso(): string {
-        return new Date().toISOString().slice(0, 10);
-    }
-    function tomorrowIso(): string {
-        const t = new Date();
-        t.setDate(t.getDate() + 1);
-        return t.toISOString().slice(0, 10);
-    }
-    function daysFromToday(iso: string): number {
-        const a = new Date(`${todayIso()}T00:00:00`);
-        const b = new Date(`${iso}T00:00:00`);
-        return Math.round((b.getTime() - a.getTime()) / 86_400_000);
-    }
-
+    // ── The shop day ──────────────────────────────────────────────────
+    // A fact, not a control — setting it is the toolbar's job while it is
+    // still settable.
     function formatDate(iso: string): string {
         try {
             return formatLocaleDate(iso) || iso;
@@ -400,34 +423,19 @@
         }
     }
 
-    /** A finished list reports when it happened; an unfinished one reports when
-     *  it is meant to. "Planned for Saturday" is not what you want to read on a
-     *  receipt. */
-    const datelineLabel = computed(() => {
-        if (face.value === 'receipt') {
-            return props.detail.completed_at
-                ? `Shopped ${formatDate(props.detail.completed_at)}`
-                : null;
+    /** "Today" / "Tomorrow" / the weekday inside a week / the date — the
+     *  shared relative-day wording, which compares *local* midnights (the old
+     *  `toISOString()` comparison named the wrong day before 10am in AEST).
+     *  No "(overdue)" suffix (2026-09-27): a past date already says it, and
+     *  the figure's ink carries the emphasis. */
+    const shopDayFigure = computed<Figure>(() => {
+        const d = props.detail.planned_shop_date;
+        if (!d) {
+            return { key: 'shopday', value: 'Not set', label: 'Shop day', tone: 'dora-text-muted', partial: false };
         }
-        const d = props.detail.planned_shop_date;
-        if (!d) return face.value === 'plan' ? 'No shop day set' : null;
-        if (d === todayIso()) return 'Shop day: today';
-        if (d === tomorrowIso()) return 'Shop day: tomorrow';
-        if (daysFromToday(d) < 0) return `Shop day: ${formatDate(d)} (overdue)`;
-        return `Shop day: ${formatDate(d)}`;
-    });
-
-    const datelineIcon = computed(() =>
-        face.value === 'receipt' ? ICONS.event_available : ICONS.event
-    );
-
-    /** Tone is Dora's own text-colour helper, never a Quasar palette name in
-     *  the template (R-002). Never toned on a receipt: the date is history. */
-    const datelineClass = computed(() => {
-        const d = props.detail.planned_shop_date;
-        if (!d || face.value === 'receipt') return '';
-        if (d === todayIso()) return 'text-positive';
-        return daysFromToday(d) < 0 ? 'text-negative' : '';
+        const diff = daysFromToday(d);
+        const tone = diff === 0 ? 'text-positive' : diff !== null && diff < 0 ? 'text-negative' : '';
+        return { key: 'shopday', value: formatRelativeDay(d), label: 'Shop day', tone, partial: false };
     });
 
     // ── The sort control ──────────────────────────────────────────────
@@ -435,6 +443,15 @@
     // `ShoppingListRunFace` — which is how they were free to drift. The mode
     // lists still differ by face (curating a list is a different job from
     // walking a shop), so that difference is stated here rather than duplicated.
+    /** Plan / shop / receipt — the card's face *is* the tense. */
+    const storeSpendTense = computed<'plan' | 'shop' | 'receipt'>(() => {
+        switch (face.value) {
+            case 'run': return 'shop';
+            case 'receipt': return 'receipt';
+            default: return 'plan';
+        }
+    });
+
     const sortModes = computed<SectionMode[]>(() => {
         if (face.value === 'run') return SECTION_MODES;
         // A receipt is a record. There is nothing to reorder for, and an empty
@@ -468,19 +485,13 @@
     });
 
     // ── The review half ───────────────────────────────────────────────
-    const estimatedCount = computed(() =>
-        props.lines.filter((l) => l.estimate_source === 'historic').length
-    );
-
-    /** The figures that don't earn the headline slot. Built as a list because
-     *  which of them apply is a per-face question, and a template full of
-     *  `v-if`s over three faces is how the old header got the way it was. */
+    /** The figures that don't earn the lead row. */
     const secondaryFigures = computed(() => {
         const figures: { label: string; value: string; tone: string }[] = [];
         if (!moneyEnabled.value) return figures;
         const totals = props.detail.totals;
 
-        // Mid-shop the headline is what's *left*, so the whole trip's figure
+        // Mid-shop the lead figure is what's *left*, so the whole trip's figure
         // moves down here rather than disappearing.
         if (face.value === 'run') {
             figures.push({
@@ -489,24 +500,11 @@
                 tone: '',
             });
         }
-        // Savings render on the receipt for the first time. They were on the
-        // plan face's trip card and nowhere else, so you found out what you
-        // saved while planning the shop and never again after doing it.
-        if (totals.total_savings > 0) {
+        if (face.value === 'receipt' && totals.total_savings > 0) {
             figures.push({
-                label: face.value === 'receipt' ? 'You saved' : 'Saving',
+                label: 'You saved',
                 value: formatMoney(totals.total_savings),
                 tone: 'text-positive',
-            });
-        }
-        // Says out loud when a figure above is built from past purchases rather
-        // than prices entered for this trip, so a rough number is never mistaken
-        // for a firm one.
-        if (estimatedCount.value > 0) {
-            figures.push({
-                label: 'From what you last paid',
-                value: `${estimatedCount.value} item${estimatedCount.value === 1 ? '' : 's'}`,
-                tone: 'dora-text-muted',
             });
         }
         return figures;
@@ -542,17 +540,48 @@
        state: a live list is a coloured band, a finished one is paper. The
        three faces end up differently *material*, not merely differently
        arranged, which is a stronger signal than the status pill alone. */
-    .sl-overview :deep(.collapsible-card__header) {
-        padding: var(--space-4) var(--space-4) var(--space-3) var(--space-5);
+    /* Trimmed 2026-09-17 (owner: the card is *"oversized … could be a bit
+       slimmer"*). It measured 225px at 1440 and 390px on a phone for a draft
+       carrying one figure, one date and two controls. Every cut here is
+       padding, leading or a min-height — no fact left the card. */
+    .sl-overview > :deep(.collapsible-card__header) {
+        padding: var(--space-3) var(--space-3) var(--space-3) var(--space-4);
     }
-    .sl-overview--plan :deep(.collapsible-card__header),
-    .sl-overview--run :deep(.collapsible-card__header) {
+    /* Direct child only. `:deep(.collapsible-card__header)` matched *any*
+       header underneath, and `StoreSpendCard` is itself a `CollapsibleCard` —
+       so the gradient band, and the header padding with it, were being painted
+       a second time inside this card's own body. That second band is most of
+       what made the store breakdown read as a card within a card. */
+    .sl-overview--plan > :deep(.collapsible-card__header),
+    .sl-overview--run > :deep(.collapsible-card__header) {
         background: var(--hero-gradient);
     }
-    .sl-overview :deep(.collapsible-card__body) {
-        padding: var(--space-4) var(--space-5) var(--space-5);
+    /* On `__inner`, not `__body`: the body is the box `q-slide-transition`
+       animates, and padding or a border there is height the animation can't
+       collapse — which is the closing snap. See `CollapsibleCard`. */
+    .sl-overview > :deep(.collapsible-card__body) {
         background: var(--surface-component);
+    }
+    .sl-overview > :deep(.collapsible-card__body) > .collapsible-card__inner {
+        padding: var(--space-3) var(--space-4) var(--space-4);
         border-top: 1px solid var(--divider);
+    }
+    /* The caret sits *over* the header's top-right corner rather than taking a
+       column beside it (2026-09-17). `CollapsibleCard`'s default is a flex row
+       — lead, then caret — which is right for a card whose header is a single
+       title line, but this header is a stack of full-width blocks: the column
+       shortened every one of them by 44px, so the figure, the dateline and the
+       controls all stopped 44px short of the card's right edge while the rows
+       below ran the full width. Only the identity row, which the caret is
+       actually beside, reserves room for it. */
+    .sl-overview > :deep(.collapsible-card__header) {
+        position: relative;
+        display: block;
+    }
+    .sl-overview > :deep(.collapsible-card__header) > .collapsible-card__caret {
+        position: absolute;
+        top: var(--space-2);
+        right: var(--space-2);
     }
     .sl-overview__head {
         display: flex;
@@ -560,36 +589,34 @@
         gap: var(--space-3);
         min-width: 0;
     }
-    .sl-overview__identity {
-        display: flex;
-        align-items: center;
-        gap: var(--space-2);
-        min-width: 0;
-        min-height: 44px;
-    }
-    .sl-overview__name {
-        min-width: 0;
-    }
-    /* Wraps rather than scrolls: this is content, not a control band, and a
-       figure that runs off the edge of a phone is a figure you can't read
-       (D-011). */
+    /* Row 1 sits level with the caret, so it reserves the caret's width. */
     .sl-overview__figures {
         display: flex;
-        align-items: flex-end;
+        align-items: flex-start;
         flex-wrap: wrap;
-        gap: var(--space-3);
+        gap: var(--space-2) var(--space-6);
         min-width: 0;
+        padding-right: 44px;
     }
-    /* Was a magic `1.9rem` off the scale. The figure is the card's headline,
-       so it takes the scale's top rung — and the name beside it stays `text-h5`,
-       which is the hierarchy the owner asked for ("text feels small where it
-       should be big"). */
+    .sl-overview__label {
+        font-size: calc(var(--font-size-xs) * 1rem);
+        color: var(--text-secondary);
+        line-height: 1.3;
+    }
     .sl-overview__amount {
-        font-size: calc(var(--font-size-3xl) * 1rem);
+        font-size: calc(var(--font-size-2xl) * 1rem);
         font-weight: 700;
-        line-height: 1.05;
-        letter-spacing: -0.025em;
+        line-height: 1.1;
+        letter-spacing: -0.02em;
         font-variant-numeric: tabular-nums;
+    }
+    @media (max-width: 599px) {
+        .sl-overview__figures {
+            gap: var(--space-2) var(--space-5);
+        }
+        .sl-overview__amount {
+            font-size: calc(var(--font-size-xl) * 1rem);
+        }
     }
     .sl-overview__approx {
         font-weight: 500;
@@ -603,51 +630,85 @@
         font-size: calc(var(--font-size-xs) * 1rem);
         color: var(--text-secondary);
     }
+    /* Mid-shop progress: a bar the width of the card with the count inside it.
+       R-002 carve-out (carried over from the segmented control it replaces):
+       the track is a white veil over the gradient band, so it belongs to the
+       band in every theme rather than sitting on it as a grey patch. */
     .sl-overview__progress {
+        position: relative;
+        height: 24px;
+        border-radius: var(--radius-pill);
+        background: hsla(0, 0%, 100%, 0.55);
+        border: 1px solid var(--border-default);
+        overflow: hidden;
+    }
+    .sl-overview__progress-fill {
+        position: absolute;
+        inset: 0 auto 0 0;
+        background: var(--semantic-positive);
+        transition: width 320ms ease-out;
+    }
+    @media (prefers-reduced-motion: reduce) {
+        .sl-overview__progress-fill {
+            transition: none;
+        }
+    }
+    .sl-overview__progress-text {
+        position: relative;
         display: flex;
         align-items: center;
-        gap: var(--space-2);
-        padding-bottom: 2px;
-    }
-    .sl-overview__when {
-        text-align: right;
-        font-size: calc(var(--font-size-xs) * 1rem);
-        line-height: 1.5;
-    }
-    /* Sits on the band, so the rule that separates it has to be a veil rather
-       than `--divider` — a fixed hairline colour reads as a scratch across a
-       gradient in some themes and vanishes in others. */
-    .sl-overview__controls {
-        display: flex;
-        align-items: center;
-        flex-wrap: wrap;
-        gap: var(--space-2);
-        padding-top: var(--space-3);
-        border-top: 1px solid var(--overlay-dim);
-    }
-    .sl-overview--receipt .sl-overview__controls {
-        border-top-color: var(--divider);
-    }
-    .sl-overview__sort {
-        display: flex;
-        align-items: center;
-        flex-wrap: wrap;
-        gap: var(--space-2);
-    }
-    /* The track sits on the gradient band, so `--surface-sunken` (the pill's
-       default) reads as a grey patch stuck on the colour. A white veil belongs
-       to the band instead of fighting it, and the receipt's flat face puts the
-       normal sunken track back. */
-    .sl-overview__seg {
-        background: hsla(0, 0%, 100%, 0.5);
-    }
-    .sl-overview--receipt .sl-overview__seg {
-        background: var(--surface-sunken);
-    }
-    .sl-overview__seg :deep(.q-btn) {
-        min-height: 32px;
-        padding: 0 var(--space-3);
+        justify-content: center;
+        height: 100%;
         font-size: calc(var(--font-size-sm) * 1rem);
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+        color: var(--text-primary);
+    }
+    /* Row 3: pill (and, on desktop, the name) left; controls right. Wraps
+       rather than overflowing if a long name meets three buttons. */
+    .sl-overview__foot {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: var(--space-2);
+        min-width: 0;
+    }
+    .sl-overview__identity {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+        min-width: 0;
+        flex: 1 1 auto;
+    }
+    .sl-overview__name {
+        min-width: 0;
+    }
+    .sl-overview__actions {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+        flex: none;
+        margin-left: auto;
+    }
+    /* Icon and caret only on a phone, so the pill and three controls share
+       one row at 375px. */
+    @media (max-width: 599px) {
+        .sl-overview__foot,
+        .sl-overview__actions {
+            gap: var(--space-1);
+        }
+        .sl-overview__actions > .q-btn {
+            padding-left: var(--space-3);
+            padding-right: var(--space-3);
+        }
+        .sl-overview__group :deep(.q-btn__content) {
+            gap: 0;
+        }
+        .sl-overview__actions > .sl-overview__group {
+            padding-left: var(--space-2);
+            padding-right: var(--space-1);
+        }
     }
     .sl-overview__detail {
         display: flex;
@@ -708,17 +769,4 @@
         border-color: var(--semantic-positive);
     }
 
-    .sl-overview__ring :deep(.q-circular-progress__text) {
-        font-variant-numeric: tabular-nums;
-    }
-    /* The arc grows into place as items are picked rather than snapping, so a
-       tick reads as progress. Motion-safe per D-018. */
-    .sl-overview__ring :deep(.q-circular-progress__circle) {
-        transition: stroke-dashoffset 320ms ease-out;
-    }
-    @media (prefers-reduced-motion: reduce) {
-        .sl-overview__ring :deep(.q-circular-progress__circle) {
-            transition: none;
-        }
-    }
 </style>

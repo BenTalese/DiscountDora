@@ -50,7 +50,7 @@
             >
                 <q-icon :name="ICONS.check_circle" color="positive" size="18px" />
                 <span class="text-body2">
-                    {{ section.label }} — all {{ section.total }} picked
+                    {{ section.label }}: all {{ section.total }} picked
                 </span>
             </div>
         </div>
@@ -60,13 +60,29 @@
              mis-tap removed an item with no way to see what had gone. Collapsed
              by default — it is a record, not the job — and it borrows the
              expansion shape the deferred-by-budget section already uses. -->
+        <!-- Owner 2026-10-15: "Collected", with the count in the same circle the
+             rest of the app uses for a count beside a chevron. -->
         <q-expansion-item
             v-if="pickedLines.length > 0"
-            :label="`Picked (${pickedLines.length})`"
-            :caption="moneyEnabled ? `${formatMoney(pickedTotal)} in the trolley` : undefined"
-            :icon="ICONS.check_circle"
             class="q-mt-md sl-panel sl-panel--sunken"
         >
+            <template #header>
+                <q-item-section avatar>
+                    <q-icon :name="ICONS.check_circle" />
+                </q-item-section>
+                <q-item-section>
+                    <q-item-label>Collected</q-item-label>
+                    <q-item-label v-if="moneyEnabled" caption>
+                        {{ formatMoney(pickedTotal) }} in the trolley
+                    </q-item-label>
+                </q-item-section>
+                <q-item-section side>
+                    <MealPlanRailCount
+                        :count="pickedLines.length"
+                        :label="`${pickedLines.length} collected`"
+                    />
+                </q-item-section>
+            </template>
             <ShoppingListRunRow
                 v-for="line in pickedLines"
                 :key="line.line_id"
@@ -96,7 +112,7 @@
             <q-icon :name="ICONS.shopping_cart" size="48px" />
             <div class="text-h6 q-mt-sm">Nothing on this list.</div>
             <div class="text-body2 q-mt-xs">
-                Add something with <strong>Quick add</strong>, or finish up.
+                Add something with <strong>Add item</strong>, or finish up.
             </div>
         </div>
     </div>
@@ -124,6 +140,7 @@
     import { computed, toRef } from 'vue';
     import { ICONS } from 'src/style/icons';
     import ShoppingListRunRow from 'src/components/shoppingList/ShoppingListRunRow.vue';
+    import MealPlanRailCount from 'src/components/MealPlanRailCount.vue';
     import { formatMoney } from 'src/composables/useMoney';
     import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
     import {

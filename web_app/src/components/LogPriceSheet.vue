@@ -9,10 +9,16 @@
              prefilled from the item's last observation).
         Mounted once in MainLayout; any screen pops it via
         useLogPrice().openLogPrice().
+
+        Once an item is picked the title is just its name (owner, 2026-09-17).
+        "Log a price ·" was narrating the dialog back to someone who had opened
+        it on purpose and already taken a step inside it; the form underneath
+        says what it is. The picker step keeps the verb, because there the name
+        doesn't exist yet.
     -->
     <BaseDialog
         v-model="open"
-        :title="selectedItem ? `Log a price · ${selectedItem.name}` : 'Log a price'"
+        :title="selectedItem ? selectedItem.name : 'Log a price'"
         closable
         position="bottom"
         card-style="width: 520px; max-width: 96vw"

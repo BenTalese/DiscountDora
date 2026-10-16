@@ -204,9 +204,9 @@
      *  their names — "imperial" and "US customary" are the same word to most
      *  people, and the difference that matters here is the pint and the cup. */
     const SYSTEM_CHOICES: ReadonlyArray<{ value: MeasurementSystem; label: string }> = [
-        { value: 'metric', label: 'Metric — ml, L, g, kg, 250 ml cup' },
-        { value: 'imperial', label: 'Imperial (UK) — metric plus oz, lb, fl oz, pint' },
-        { value: 'us', label: 'US customary — fl oz, qt, oz, lb, 240 ml cup' },
+        { value: 'metric', label: 'Metric (ml, L, g, kg, 250 ml cup)' },
+        { value: 'imperial', label: 'Imperial (UK): metric plus oz, lb, fl oz, pint' },
+        { value: 'us', label: 'US customary (fl oz, qt, oz, lb, 240 ml cup)' },
     ];
     const currencyDraft = ref<string>('AUD');
     const localeDraft = ref<string>('en-AU');
@@ -293,7 +293,7 @@
             });
             return `${fmt.format(12.5)}  ·  ${fmt.format(1234.56)}`;
         },
-        '—',
+        '–',
     ));
 
     const previewDate = computed(() => safeFormat(
@@ -305,7 +305,7 @@
             }).format(sample);
             return `${short}  ·  ${long}`;
         },
-        '—',
+        '–',
     ));
 
     const previewToday = computed(() => safeFormat(
@@ -313,7 +313,7 @@
             weekday: 'long', day: 'numeric', month: 'long',
             timeZone: timezoneDraft.value,
         }).format(new Date()),
-        '—',
+        '–',
     ));
 
     /** A handful of representative units from the chosen system, so the effect
@@ -487,7 +487,7 @@
         if (detected) await onPickSystem(detected);
         $q.notify({
             type: 'positive', position: 'bottom-right',
-            message: 'Matched to this device. Currency is unchanged — set it below.',
+            message: 'Matched to this device. Currency is unchanged.',
         });
         await offerRatingScheme(language, zone);
     }
@@ -574,10 +574,7 @@
             message:
                 `This device looks like it's ${copy.where}. Dora `
                 + 'can work one out for your recipes.<br><br>'
-                + 'It needs nutrition set to complex, and ratings are estimates — '
-                + 'they\'re scored from the raw weight of the ingredients, not the '
-                + 'finished dish. You can change this any time in Settings → '
-                + 'Nutrition.',
+                + 'It needs nutrition set to complex, and ratings are estimates.',
             html: true,
             ok: { label: 'Turn it on', color: 'primary', noCaps: true },
             cancel: { label: 'No thanks', flat: true, noCaps: true },

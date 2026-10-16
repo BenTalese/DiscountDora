@@ -68,8 +68,7 @@
         <SettingsSection>
             <template #title>Project &amp; support</template>
             <template #description>
-                Dora is a hobby project — free and open-source (MIT).
-                Contributions, bug reports, and a little support all help.
+                Dora is a free, open-source (MIT) hobby project.
             </template>
 
             <q-list class="about-list">
@@ -325,7 +324,7 @@
                 title: 'Change instance URL',
                 message:
                     "Point this app at a different Dora backend. Enter the "
-                    + "full URL you'd type in a browser — we'll add /api "
+                    + "full URL you'd type in a browser. /api is added "
                     + "automatically if you leave it off.",
                 prompt: {
                     model: initial,

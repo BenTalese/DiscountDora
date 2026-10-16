@@ -33,6 +33,7 @@ from dora_api.infrastructure.api_response import (bad_request, no_content,
                                                   not_found, ok)
 from dora_api.infrastructure.decorators import has_request_body
 from dora_api.infrastructure.utils import get_request_body
+from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 
 
@@ -249,13 +250,24 @@ def create_price_alert():
     ).first() is None:
         return not_found("Product", body.product_id)
 
-    row = PriceAlert(
-        user_id=user_id,
-        product_id=body.product_id,
-        threshold_unit_price=float(body.threshold_unit_price),
-        created_at=datetime.now(timezone.utc),
+    # One watch per product per user (owner 2026-10-15): setting a new price
+    # replaces the old one rather than stacking a second row the user has no
+    # way to tell apart from the first.
+    row: PriceAlert | None = repo.get(PriceAlert).one(
+        EntityField(PriceAlert, PriceAlert.Fields.USER_ID).eq(user_id)
+        & EntityField(PriceAlert, PriceAlert.Fields.PRODUCT_ID).eq(body.product_id)
     )
-    repo.add(row)
+    if row is None:
+        row = PriceAlert(
+            user_id=user_id,
+            product_id=body.product_id,
+            threshold_unit_price=float(body.threshold_unit_price),
+            created_at=datetime.now(timezone.utc),
+        )
+        repo.add(row)
+    else:
+        row.threshold_unit_price = float(body.threshold_unit_price)
+        row.last_fired_at = None
     repo.save_changes()
     return ok({
         "price_alert_id": str(row.id),

@@ -172,7 +172,7 @@
             { path: '/settings/kitchen-setup/stores', label: 'Stores', icon: ICONS.store },
         ];
         if (moneyEnabled.value) {
-            base.push({ path: '/settings/money', label: 'Money', icon: ICONS.savings });
+            base.push({ path: '/settings/budget', label: 'Budget', icon: ICONS.savings });
         }
         if (scanningEnabled.value) {
             base.push({ path: '/settings/kitchen-setup/qr-labels', label: 'QR labels', icon: ICONS.qr_code });

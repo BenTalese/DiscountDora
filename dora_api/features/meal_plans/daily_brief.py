@@ -120,7 +120,7 @@ def format_meal_line(
     remainder = len(ordered) - len(named)
     if remainder > 0:
         parts.append(f"+{remainder} more")
-    return "Tomorrow — " + "; ".join(parts) + "."
+    return "Tomorrow · " + "; ".join(parts) + "."
 
 
 def format_shopping_line(shopping_alerts: Sequence[AlertDto]) -> str | None:

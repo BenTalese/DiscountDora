@@ -50,7 +50,7 @@ self.addEventListener('push', (event) => {
         tag: payload.alert_id || undefined,
         renotify: false,
         data: {
-            url: payload.url || '/alerts',
+            url: payload.url || '/#/?alerts=open',
             alert_id: payload.alert_id || null,
         },
     };
@@ -59,7 +59,7 @@ self.addEventListener('push', (event) => {
 
 self.addEventListener('notificationclick', (event) => {
     event.notification.close();
-    const targetUrl = (event.notification.data && event.notification.data.url) || '/alerts';
+    const targetUrl = (event.notification.data && event.notification.data.url) || '/#/?alerts=open';
     event.waitUntil((async () => {
         const allClients = await self.clients.matchAll({
             type: 'window',

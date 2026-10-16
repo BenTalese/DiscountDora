@@ -57,7 +57,7 @@
                 <q-icon :name="ICONS.swap_horiz" size="16px" />
                 <span>
                     You have a substitute in stock for
-                    {{ substitutableNames.join(', ') }} — swap it during cooking.
+                    {{ substitutableNames.join(', ') }}. You can swap it while cooking.
                 </span>
             </div>
         </q-card-section>

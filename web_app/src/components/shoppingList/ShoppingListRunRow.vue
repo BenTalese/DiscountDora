@@ -54,7 +54,7 @@
                 <BaseTooltip>
                     {{
                         line.estimate_source === 'actual'
-                            ? 'The price you entered — tap to change'
+                            ? 'The price you entered'
                             : 'Tap to record what you actually paid'
                     }}
                 </BaseTooltip>

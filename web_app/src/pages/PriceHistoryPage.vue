@@ -61,8 +61,8 @@
                             </q-item-section>
                             <q-item-section>
                                 <q-item-label>{{ p.name }}</q-item-label>
-                                <q-item-label caption>
-                                    {{ p.store_name ?? '' }}
+                                <q-item-label v-if="p.store_name" caption>
+                                    <StoreLogo :name="p.store_name" :height="16" :width="24" inline />{{ p.store_name }}
                                 </q-item-label>
                             </q-item-section>
                         </q-item>
@@ -144,7 +144,7 @@
                         </q-card-section>
                         <q-card-section v-if="s.current" class="q-pt-none">
                             <div class="text-h6">
-                                {{ s.current.unit_price != null ? formatMoney(s.current.unit_price) : '—' }}
+                                {{ s.current.unit_price != null ? formatMoney(s.current.unit_price) : '–' }}
                                 <!-- PH-5/PH-6 — was a `size="sm"` chip reading
                                      "-12%", which is both the smallest and the
                                      only differently-worded spelling of the
@@ -160,9 +160,7 @@
                                     <InfoTip label="What above the all-time low means">
                                         You're paying more than your own usual
                                         price for this product, based on prices
-                                        you've logged. Not a comparison to the
-                                        all-time-low across all stores — it's
-                                        personal.
+                                        you've logged.
                                     </InfoTip>
                                 </span>
                             </div>
@@ -241,7 +239,7 @@
                         <q-item-section>
                             <q-item-label>{{ a.product_name }}</q-item-label>
                             <q-item-label caption>
-                                {{ a.store_name }} ·
+                                <StoreLogo :name="a.store_name" :height="16" :width="24" inline />{{ a.store_name }} ·
                                 notify below
                                 <strong>{{ formatMoney(a.threshold_unit_price) }}</strong>
                             </q-item-label>
@@ -267,6 +265,7 @@
     import { ICONS } from 'src/style/icons';
     import SearchInput from 'src/components/SearchInput.vue';
     import BaseButton from 'src/components/BaseButton.vue';
+    import StoreLogo from 'src/components/StoreLogo.vue';
     import BaseSegmented from 'src/components/BaseSegmented.vue';
     import MoneyInput from 'src/components/MoneyInput.vue';
     import PageToolbar from 'src/components/PageToolbar.vue';

@@ -1,54 +1,48 @@
-// Why the camera is (or isn't) usable on this device — one authority, so the
-// scan overlay and the admin toggle that turns scanning on can't tell the user
-// two different stories (R-003).
+// What to tell the user about the camera on this device. One authority, so the
+// scan overlay and the admin scanning toggle say the same thing (R-003).
 //
-// The rule browsers enforce: `navigator.mediaDevices` is only exposed in a
-// **secure context** — HTTPS, or a localhost origin. A self-hosted Dora reached
-// at `http://192.168.1.20:5174` is neither, so the property is simply absent and
-// any camera call throws "can't access property getUserMedia". That reads as a
-// camera fault and isn't one, which is what the 2026-08-15 bug report was.
+// Browsers normally only expose `navigator.mediaDevices` on a secure origin
+// (HTTPS or localhost), so a self-hosted Dora on `http://192.168.x.x` usually
+// can't open the camera. "Usually" is the point: some browsers and setups allow
+// it anyway (owner, 2026-09-27: it worked for him over http). So Dora never
+// blocks on the origin. It warns, tries, and only explains the http cause once
+// an attempt has actually failed.
 //
-// The native app is NOT affected: Capacitor serves the bundled SPA from
-// `https://localhost` (`androidScheme: "https"` in capacitor.config.json), which
-// IS a secure context, and `allowMixedContent` lets it keep talking to a plain
-// http backend. So on Android the camera works against any instance — which is
-// the most useful thing we can tell someone stuck on the web version.
+// The native app is unaffected: Capacitor serves the SPA from
+// `https://localhost`, which is a secure origin.
 
 import { isNativePlatform } from 'src/services/api/backendUrl';
 
-export type CameraAvailability =
-    /** `navigator.mediaDevices` is present — go ahead and open the camera. */
-    | { kind: 'available' }
-    /** Non-secure origin. Fixable by the operator (HTTPS) or sidestepped (app). */
-    | { kind: 'insecure-context'; message: string }
-    /** Secure context, but the browser still exposes no camera API at all. */
-    | { kind: 'unsupported'; message: string };
+export type CameraUnavailable = {
+    kind: 'insecure-context' | 'unsupported';
+    message: string;
+};
+
+const INSECURE_WARNING =
+    'This page is on plain http, so your browser may not allow the camera.';
 
 const INSECURE_MESSAGE =
-    'Your browser only allows camera access over a secure connection, and this '
-    + 'instance is being served over plain http. Two ways round it: use the '
-    + 'Dashy Dora Android app, which can scan against any instance, or serve '
-    + 'Dora over HTTPS. Typing a barcode below works either way.';
+    'Your browser won\'t allow the camera over plain http. Use the Android app '
+    + 'or serve Dora over HTTPS, or type the barcode below.';
 
 const UNSUPPORTED_MESSAGE =
-    'This browser does not support camera access. Type a barcode below instead.';
+    'This browser doesn\'t support the camera. Type the barcode below.';
 
-export function getCameraAvailability(): CameraAvailability {
-    if (navigator.mediaDevices?.getUserMedia !== undefined) {
-        return { kind: 'available' };
-    }
-    // Native never lands here (its origin is secure), but if it somehow did,
-    // "serve over HTTPS" would be nonsense advice — so route it to the plain
-    // unsupported message.
-    if (window.isSecureContext || isNativePlatform()) {
-        return { kind: 'unsupported', message: UNSUPPORTED_MESSAGE };
-    }
-    return { kind: 'insecure-context', message: INSECURE_MESSAGE };
+function onInsecureOrigin(): boolean {
+    return !window.isSecureContext && !isNativePlatform();
 }
 
-/** True when this install will refuse camera scanning for context reasons.
- *  Used by the admin toggle to warn at the point scanning is switched on,
- *  rather than letting the household discover it at the viewfinder. */
-export function cameraBlockedByInsecureContext(): boolean {
-    return getCameraAvailability().kind === 'insecure-context';
+/** A heads-up to show before trying, or null when there's nothing to say. */
+export function insecureContextWarning(): string | null {
+    return onInsecureOrigin() ? INSECURE_WARNING : null;
+}
+
+/** After a failed start: whether the browser simply has no camera API here,
+ *  and why. Null means the API exists and the failure was something else
+ *  (permission, no device), which the caller reports itself. */
+export function explainCameraFailure(): CameraUnavailable | null {
+    if (navigator.mediaDevices?.getUserMedia !== undefined) return null;
+    return onInsecureOrigin()
+        ? { kind: 'insecure-context', message: INSECURE_MESSAGE }
+        : { kind: 'unsupported', message: UNSUPPORTED_MESSAGE };
 }

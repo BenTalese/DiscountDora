@@ -144,6 +144,12 @@ LLM_PROVIDERS_REQUIRING_API_KEY = (
 )
 
 
+# The discard windows a user can pick (R-010: one closed set, checked once at
+# the PATCH /auth/me boundary). Fourteen is the default: long enough to cover a
+# fortnight away, short enough that the bell never becomes an archive.
+ALERT_DISCARD_DAY_OPTIONS = (7, 14, 30)
+
+
 @dataclass
 class User(BaseEntity):
     email: str | None
@@ -298,6 +304,10 @@ class User(BaseEntity):
     # up, and evening is the only hour where the brief is *actionable* (you
     # can still defrost something or fill a gap in the plan).
     daily_brief_enabled: bool = False
+    # Owner 2026-10-15 — "discard alerts older than X days". Alerts whose
+    # episode began more than this many days ago drop out of this user's bell,
+    # as if dismissed. NULL keeps everything. One of `ALERT_DISCARD_DAY_OPTIONS`.
+    alert_discard_after_days: int | None = 14
     # Chunk 6 / D-4 — when this user last finished a stocktake session. The
     # Sweep phase needs it: it shows items that dropped out of rotation *since
     # your last run*, not the full excluded set (the tin you stopped buying two
@@ -343,4 +353,5 @@ class User(BaseEntity):
         LLM_PROVIDER = "llm_provider"
         SHOW_ASSISTANT = "show_assistant"
         DAILY_BRIEF_ENABLED = "daily_brief_enabled"
+        ALERT_DISCARD_AFTER_DAYS = "alert_discard_after_days"
         STOCKTAKE_LAST_SESSION_AT = "stocktake_last_session_at"

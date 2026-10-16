@@ -39,7 +39,6 @@ class UpdateAppSettingsRequest(BaseModel):
     # no-op, which is the honest failure.
     # C-cross Chunk 1 — install-wide feature flags (proposal §2.6).
     money_enabled: bool | None = None
-    deals_email_enabled: bool | None = None
     # Nutrition, install-wide. `nutrition_mode` is validated against
     # NUTRITION_MODE_VALUES below (R-010 carve-out — one boundary point).
     nutrition_mode: str | None = Field(default=None, max_length=10)
@@ -157,7 +156,6 @@ class UpdateAppSettingsHandler:
         # change; the rest are left alone.
         for _Attr in (
             "money_enabled",
-            "deals_email_enabled",
             "nutrition_off_lookup_enabled",
         ):
             if _Attr in set_fields:
@@ -447,9 +445,9 @@ def _validate_backup_storage_path(path_str: str) -> str | None:
     while not parent.exists() and parent != parent.parent:
         parent = parent.parent
     if not parent.exists():
-        return f"No existing ancestor of '{candidate}' — check the path."
+        return f"No part of '{candidate}' exists. Check the path."
     if not os.access(parent, os.W_OK):
-        return f"Cannot create '{candidate}' — '{parent}' is not writeable."
+        return f"Cannot create '{candidate}': '{parent}' is not writeable."
     return None
 
 

@@ -16,12 +16,16 @@ import type { ShoppingListLine } from 'src/models/shoppingList';
  *    everywhere instead of a run-face special case — on a single-store list it
  *    collapses to one section and disables itself.
  *
- * `manual` is always available: it is the user's own `sequence` ordering and
- * needs no data to exist.
+ * `none` is always available: it is the user's own `sequence` ordering, which
+ * needs no data to exist. It was called `manual` and labelled "Manual" until
+ * 2026-09-17 — but every other member of this set names *what you are grouped
+ * by*, and "Manual" named the mechanism instead, so it read as a fourth way of
+ * grouping rather than as the absence of one (owner: *"Manual should not be a
+ * sort/group mode. It should just say 'none'"*).
  */
-export type SectionMode = 'location' | 'group' | 'store' | 'manual';
+export type SectionMode = 'location' | 'group' | 'store' | 'none';
 
-export const SECTION_MODES: SectionMode[] = ['location', 'group', 'store', 'manual'];
+export const SECTION_MODES: SectionMode[] = ['location', 'group', 'store', 'none'];
 
 /** The plan face offers only these two.
  *
@@ -31,13 +35,13 @@ export const SECTION_MODES: SectionMode[] = ['location', 'group', 'store', 'manu
  *  earns its place because the plan face already shows the store breakdown, and
  *  Manual is the user's own order. The run face keeps all four — mid-shop,
  *  sectioning is how you walk the place. */
-export const PLAN_SECTION_MODES: SectionMode[] = ['store', 'manual'];
+export const PLAN_SECTION_MODES: SectionMode[] = ['store', 'none'];
 
 export const SECTION_MODE_LABELS: Record<SectionMode, string> = {
     location: 'Location',
     group: 'Group',
     store: 'Store',
-    manual: 'Manual',
+    none: 'None',
 };
 
 /** The glyph that names what a section header is grouping by. Lives here
@@ -48,13 +52,13 @@ export function sectionIconFor(mode: SectionMode): string {
         case 'location': return ICONS.place;
         case 'store': return ICONS.storefront;
         case 'group': return ICONS.category;
-        case 'manual': return ICONS.list;
+        case 'none': return ICONS.list;
     }
 }
 
 export type LineSection = {
     key: string;
-    /** `null` only in manual mode, where the list is one unlabelled run. */
+    /** `null` only when grouping is off, where the list is one unlabelled run. */
     label: string | null;
     lines: ShoppingListLine[];
     /** The trailing catch-all for lines with no value in this mode. */
@@ -80,7 +84,7 @@ function keyFor(line: ShoppingListLine, mode: SectionMode): string | null {
             // The resolved store, not the offer's — so this works for someone
             // who has never linked a product but tags items with a usual store.
             return line.resolved_store_name;
-        case 'manual':
+        case 'none':
             return null;
     }
 }
@@ -160,15 +164,15 @@ export function useLineSections(
             location: offered('location') && source.some((l) => locationKeyFor(l) !== null),
             group: offered('group') && source.some((l) => l.stock_group_name !== null),
             store: offered('store') && source.some((l) => l.resolved_store_name !== null),
-            manual: true,
+            none: true,
         };
     });
 
-    /** The mode actually in force. Falls back to manual when the chosen mode
+    /** The mode actually in force. Falls back to ungrouped when the chosen mode
      *  has no data — a stored preference must not strand the user on an empty
      *  control after they clear the field it depended on. */
     const effectiveMode = computed<SectionMode>(() =>
-        availableModes.value[mode.value] ? mode.value : 'manual'
+        availableModes.value[mode.value] ? mode.value : 'none'
     );
 
     const sections = computed<LineSection[]>(() => {
@@ -176,7 +180,7 @@ export function useLineSections(
         const hideTicked = options.hideTicked?.value ?? false;
         const visible = hideTicked ? active.filter((l) => !l.is_ticked) : active;
 
-        if (effectiveMode.value === 'manual') {
+        if (effectiveMode.value === 'none') {
             return [{
                 key: 'all',
                 label: null,
@@ -228,7 +232,7 @@ export function sectionProgress(
     section: LineSection,
     mode: SectionMode,
 ): { total: number; picked: number; cleared: boolean } {
-    const members = mode === 'manual'
+    const members = mode === 'none'
         ? allLines
         : allLines.filter((l) => (keyFor(l, mode) ?? UNSORTED_KEY) === section.key);
     const picked = members.filter((l) => l.is_ticked).length;

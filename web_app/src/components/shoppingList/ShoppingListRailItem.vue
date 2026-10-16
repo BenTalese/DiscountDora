@@ -14,30 +14,24 @@
                 :class="{ 'dora-text-muted': !statusColour }"
             />
         </q-item-section>
+        <!-- The name and nothing under it (owner, 2026-09-27: *"just show list
+             name in the list picker"*). The date caption repeated what a
+             self-labelled list's name already is, and the "next up" marker
+             went entirely; the picker opens on that list anyway. -->
         <q-item-section class="sl-rail-item__main">
-            <q-item-label class="row items-center q-gutter-x-xs no-wrap">
-                <span class="ellipsis sl-rail-item__name">{{ summary.display_name }}</span>
-                <q-badge
-                    v-if="summary.is_next_up"
-                    color="primary"
-                    class="sl-rail-next-badge"
-                >
-                    next up
-                </q-badge>
+            <q-item-label class="ellipsis sl-rail-item__name">
+                {{ summary.display_name }}
             </q-item-label>
-            <!-- A draft can't have ticks any more, so "0/5 ticked" there was
-                 a progress reading that could only ever say zero. Drafts get a
-                 plain count; a list being shopped or finished keeps the ratio,
-                 where it's real. -->
-            <q-item-label caption>
-                {{ effectiveDateLabel }} ·
-                <template v-if="summary.status === 'draft'">
-                    {{ summary.line_count }} item{{ summary.line_count === 1 ? '' : 's' }}
-                </template>
-                <template v-else>
-                    {{ summary.ticked_count }}/{{ summary.line_count }} ticked
-                </template>
-            </q-item-label>
+        </q-item-section>
+        <!-- The size of the list, as a count at the row's end. Absent on an
+             empty list: a "0" chip is a badge for nothing. -->
+        <q-item-section v-if="summary.line_count > 0" side>
+            <span
+                class="sl-rail-item__count"
+                :aria-label="`${summary.line_count} item${summary.line_count === 1 ? '' : 's'}`"
+            >
+                {{ summary.line_count }}
+            </span>
         </q-item-section>
     </q-item>
 </template>
@@ -45,8 +39,7 @@
 <script lang="ts" setup>
     /**
      * One row of the shopping-lists rail / mobile dropdown (UX-v2 §3.1):
-     * status icon, server-resolved display name, "next up" marker, and the
-     * effective date the continuum is ordered by.
+     * status icon, server-resolved display name and the item count.
      *
      * The kebab is gone (2026-08-28). It carried copy-to-new and delete, and
      * both were already reachable from the list you're looking at — so it put
@@ -56,9 +49,7 @@
      * had no second way to copy a list you weren't looking at. Delete stayed
      * on the open list's footer, where you can see what you're deleting.
      */
-    import { ICONS } from 'src/style/icons';
-    import { formatDate as formatLocaleDate } from 'src/composables/useDateFormat';
-    import type { ShoppingListSummary } from 'src/models/shoppingList';
+    import { listStatusIcon, type ShoppingListSummary } from 'src/models/shoppingList';
     import { computed } from 'vue';
 
     const props = defineProps<{
@@ -68,16 +59,8 @@
 
     const emit = defineEmits<{ select: [] }>();
 
-    const statusIcon = computed(() => {
-        switch (props.summary.status) {
-            case 'shopping':
-                return ICONS.shopping_cart_checkout;
-            case 'done':
-                return ICONS.check_circle;
-            default:
-                return ICONS.list;
-        }
-    });
+    /** Shared with the overview card's pill and the phone's picker. */
+    const statusIcon = computed(() => listStatusIcon(props.summary.status));
     // R-002: "done" is the neutral / finished state — null lets the
     // template apply `dora-text-muted` rather than a `grey-N` literal.
     const statusColour = computed<string | null>(() => {
@@ -91,13 +74,6 @@
         }
     });
 
-    const effectiveDateLabel = computed(() => {
-        try {
-            return formatLocaleDate(`${props.summary.effective_date}T00:00:00`);
-        } catch {
-            return props.summary.effective_date;
-        }
-    });
 </script>
 
 <style scoped>
@@ -121,16 +97,24 @@
     .sl-rail-item__main {
         min-width: 0;
     }
-    .sl-rail-item__main :deep(.q-item__label) {
-        min-width: 0;
-    }
     .sl-rail-item__name {
         min-width: 0;
     }
     .sl-rail-item-done {
         opacity: 0.6;
     }
-    .sl-rail-next-badge {
-        font-size: 0.65rem;
+    /* A count, not a status: neutral ink on the sunken tone, sized to the
+       D-003 chip floor. */
+    .sl-rail-item__count {
+        display: inline-block;
+        min-width: 24px;
+        padding: 2px var(--space-2);
+        border-radius: var(--radius-pill);
+        background: var(--surface-sunken);
+        color: var(--text-secondary);
+        font-size: calc(var(--font-size-sm) * 1rem);
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+        text-align: center;
     }
 </style>

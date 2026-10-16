@@ -47,6 +47,34 @@ class LineProductOfferDto:
     is_selected: bool
 
 
+def build_line_offers(item: StockItem | None, selected_product_id: UUID | None) -> List[LineProductOfferDto]:
+    """Every offer linked to the item, cheapest first, then by store name.
+    The item must be loaded with `products.store` and `products.current_offer`.
+    Shared by the list detail and the template detail, which offer the same
+    picker."""
+    if item is None:
+        return []
+    offers = [
+        LineProductOfferDto(
+            product_id = product.id,
+            name = product.name,
+            brand = product.brand,
+            store_id = product.store.id,
+            store_name = product.store.name,
+            size = product.size,
+            price_now = product.current_offer.price_now if product.current_offer else None,
+            price_was = product.current_offer.price_was if product.current_offer else None,
+            is_selected = selected_product_id == product.id,
+        )
+        for product in item.products or []
+    ]
+    offers.sort(key=lambda o: (
+        o.price_now if o.price_now is not None else float("inf"),
+        o.store_name.lower(),
+    ))
+    return offers
+
+
 # a stock item's PreferredBuy label as a pickable shopping hint.
 @dataclass(frozen=True, slots=True)
 class LinePreferredBuyDto:
@@ -70,11 +98,10 @@ class ShoppingListLineDto:
     is_ticked: bool
     selected_product_id: UUID | None
     sequence: int
-    # X5 — line provenance ("manual" by default; one of the auto_* values
-    # when X5 auto-generate or the auto-add-on-low trigger placed it here).
-    # Drives the "auto: low stock" / "auto: recipe Tomato Soup" chip in
-    # ShoppingListDetail.
-    added_via: str
+    # True when the auto-add-on-low trigger placed this line here without
+    # the user asking. Drives the one marker ShoppingListDetail renders on
+    # a row. Auto-generated lines are False — the user picked those sources.
+    is_auto_added: bool
     added_at: datetime | None
     # what the shopper actually paid / where they
     # actually bought it. Both NULL until the user overrides on the line.
@@ -111,13 +138,11 @@ class ShoppingListLineDto:
     stock_group_id: UUID | None = None
     stock_group_name: str | None = None
     # **Money ladder** (R-003 — resolved here, never re-derived client-side):
-    # `actual_unit_price` → the item's last actual purchase → the chosen
-    # offer → nothing. History beats offers deliberately: what you really
-    # paid is truer than an advertised price. `estimate_source` names the
-    # rung so the UI can label the number honestly ("~$5.50, what you last
-    # paid") instead of presenting every price in one flat grammar.
+    # `actual_unit_price` → the offer the user picked on the row → the item's
+    # last actual purchase → nothing. An unpicked offer never prices a line;
+    # see the ladder in the handler. `estimate_source` names the rung.
     estimated_unit_price: float | None = None
-    estimate_source: str = "none"   # 'actual' | 'historic' | 'offer' | 'none'
+    estimate_source: str = "none"   # 'actual' | 'offer' | 'historic' | 'none'
     # The last actual purchase itself, kept alongside the estimate so the
     # price editor can say "you last paid $5.50 at Aldi" even when the user
     # has already typed an override for this trip.
@@ -129,6 +154,12 @@ class ShoppingListLineDto:
     # is where they actually did.
     planned_store_id: UUID | None = None
     planned_store_name: str | None = None
+    # The stock item's standing `usual_store_id`, surfaced so the row's store
+    # picker can *mark* it — "Coles (usual)" — instead of describing it in the
+    # empty option. The picker needs to distinguish "the store I buy this at
+    # normally" from "the store I chose for this list", and only the server
+    # knows the first.
+    usual_store_id: UUID | None = None
     # **Store ladder**: bought-this-trip → **this list's planned store** → the
     # item's `usual_store_id` ("I always buy this here") → the store of the last
     # actual purchase (where you happened to buy it) → the chosen offer's store.
@@ -166,8 +197,8 @@ class StoreSpendDto:
 class ShoppingListTotalsDto:
     """Server-owned list-level money/count aggregates (state-ownership Type B).
 
-    The browser used to sum these across the fetched lines (the dashboard's
-    `primaryListStats`); the server now owns the cross-line totals so the number
+    The browser used to sum these across the fetched lines on the dashboard;
+    the server now owns the cross-line totals so the number
     can't silently disagree. Per-line *display* price stays a client concern
     (the accepted Type-C `priceOfLine` helper) — only the aggregate moved.
 
@@ -219,11 +250,18 @@ def _line_price(line: 'ShoppingListLineDto') -> float:
 
 
 def _line_savings(line: 'ShoppingListLineDto') -> float:
-    """Port of `savingsOfLine`: (chosen offer RRP − paid) × qty, floored at 0."""
+    """(chosen offer RRP − what you paid) × qty, floored at 0.
+
+    Only counts once there is a price the *user* stands behind — an entered
+    price, or one carried from a past purchase. It used to fall back to the
+    offer's own `price_now`, which meant a line could report a saving while
+    contributing nothing to the total it was supposedly saving against
+    (2026-09-17, with the offer rung's removal from the estimate ladder).
+    """
     offer = _chosen_offer(line)
     if offer is None or offer.price_was is None:
         return 0.0
-    paid = line.actual_unit_price if line.actual_unit_price is not None else offer.price_now
+    paid = line.estimated_unit_price
     if paid is None:
         return 0.0
     diff = offer.price_was - paid
@@ -239,7 +277,7 @@ def compute_list_totals(
     brand_colour_by_store: dict[UUID, str | None] | None = None,
 ) -> ShoppingListTotalsDto:
     """Aggregate the per-line price/savings into list-level totals. Single source
-    for the dashboard's primary-list stats (it reads these instead of summing).
+    for the dashboard's list card (it reads these instead of summing).
 
     FU-448 — lines with `deferred_by_budget=True` are not part of the active
     list; they render under the Deferred section and don't count toward
@@ -535,25 +573,7 @@ class GetShoppingListDetailHandler:
         _LineDtos: List[ShoppingListLineDto] = []
         for line in _Lines:
             item = _StockItems.get(line.stock_item_id) if line.stock_item_id else None
-            offers: List[LineProductOfferDto] = []
-            if item is not None:
-                for product in item.products or []:
-                    offers.append(LineProductOfferDto(
-                        product_id = product.id,
-                        name = product.name,
-                        brand = product.brand,
-                        store_id = product.store.id,
-                        store_name = product.store.name,
-                        size = product.size,
-                        price_now = product.current_offer.price_now if product.current_offer else None,
-                        price_was = product.current_offer.price_was if product.current_offer else None,
-                        is_selected = line.selected_product_id == product.id,
-                    ))
-                # Sort offers: cheapest first, then alphabetical by store.
-                offers.sort(key=lambda o: (
-                    o.price_now if o.price_now is not None else float("inf"),
-                    o.store_name.lower(),
-                ))
+            offers = build_line_offers(item, line.selected_product_id)
             # Live anchor first, then the product name for product-only
             # lines, then the name frozen at finish (FU-883) for a historic
             # line whose anchor has since been deleted. "(missing item)"
@@ -581,25 +601,33 @@ class GetShoppingListDetailHandler:
             if _prior is not None:
                 _prefill_price = _prior[1]
                 _prefill_label = "from your last receipt"
-            elif _chosen is not None and _chosen.price_now is not None:
-                _prefill_price = _chosen.price_now
-                _prefill_label = f"from {_chosen.store_name} offer"
 
             # ── Money ladder ─────────────────────────────────────────────
-            # actual → historic → offer → none. Same precedence as the
-            # prefill above (history over offers), applied to the number the
-            # totals and the store card are built from.
+            # actual → picked offer → historic → none.
+            #
+            # The offer rung is an offer the user **picked** on the row, never
+            # the cheapest-offer fallback `_chosen` uses for the store ladder.
+            # 2026-09-17 took offers out of the ladder entirely: history
+            # outranked them, so committing to one changed nothing on any line
+            # you had bought before, and an unpicked offer produced a confident
+            # total from prices nobody had agreed to. The owner's 2026-09-27
+            # call keeps the second half of that and fixes the first: picking
+            # an offer is the agreement, so it outranks what you paid last
+            # time, and un-picking it puts the old figure back. It is still an
+            # estimate; nothing is recorded as spend until a price is entered
+            # in shop mode.
+            _picked = next((o for o in offers if o.is_selected), None)
             _estimate: float | None = None
             _estimate_source = "none"
             if line.actual_unit_price is not None:
                 _estimate = float(line.actual_unit_price)
                 _estimate_source = "actual"
+            elif _picked is not None and _picked.price_now is not None:
+                _estimate = float(_picked.price_now)
+                _estimate_source = "offer"
             elif _prior is not None:
                 _estimate = _prior[1]
                 _estimate_source = "historic"
-            elif _chosen is not None and _chosen.price_now is not None:
-                _estimate = _chosen.price_now
-                _estimate_source = "offer"
 
             # ── Store ladder ─────────────────────────────────────────────
             # Ordering + rationale live in `_line_price.resolve_store_id`, the
@@ -636,7 +664,7 @@ class GetShoppingListDetailHandler:
                 is_ticked = bool(line.is_ticked),
                 selected_product_id = line.selected_product_id,
                 sequence = line.sequence,
-                added_via = line.added_via,
+                is_auto_added = line.is_auto_added,
                 added_at = line.added_at,
                 deferred_by_budget = bool(line.deferred_by_budget),
                 deferred_reason = line.deferred_reason,
@@ -651,6 +679,7 @@ class GetShoppingListDetailHandler:
                     _StoreNameLookup.get(line.planned_store_id)
                     if line.planned_store_id else None
                 ),
+                usual_store_id = item.usual_store_id if item is not None else None,
                 prefill_unit_price = _prefill_price,
                 prefill_source_label = _prefill_label,
                 offers = offers,

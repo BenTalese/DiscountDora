@@ -25,10 +25,19 @@ def seed_purchase(
     stock_item_id: str | None = None,
     tick: bool = True,
     finish: bool = True,
+    price_unrecorded: bool = False,
 ) -> dict:
     """Seed one purchase; returns the ids/names a test needs to find its own
     rows in report/budget aggregates. Pass ``stock_item_id`` to put an
-    existing item on a *second* list (most-bought scenarios)."""
+    existing item on a *second* list (most-bought scenarios).
+
+    ``actual_unit_price`` defaults to ``price_now`` as of 2026-09-17: a
+    purchase is money the user recorded, and an offer price is no longer
+    written onto a line on their behalf, so a seeded purchase has to say what
+    was paid the way a real one does. Pass ``actual_unit_price=None`` **and**
+    ``price_unrecorded=True`` to seed the other case — a ticked line nobody
+    priced — which the coverage figures are about.
+    """
     suffix = uuid.uuid4().hex[:8]
     store_name = f"SpendStore-{suffix}"
 
@@ -83,6 +92,8 @@ def seed_purchase(
         patch["is_ticked"] = True
     if quantity is not None:
         patch["quantity"] = quantity
+    if actual_unit_price is None and not price_unrecorded:
+        actual_unit_price = price_now
     if actual_unit_price is not None:
         patch["actual_unit_price"] = actual_unit_price
     if patch:

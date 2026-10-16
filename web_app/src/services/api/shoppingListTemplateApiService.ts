@@ -1,6 +1,7 @@
 import type {
     TemplateDetail,
-    TemplateSummary
+    TemplateSummary,
+    UpdateTemplateLineCommand,
 } from 'src/models/shoppingListTemplate';
 import AxiosHttpClient from './axiosHttpClient';
 
@@ -81,9 +82,9 @@ export default class ShoppingListTemplateApiService {
     updateLineAsync = async (
         id: string,
         lineId: string,
-        command: { quantity?: number | null },
+        command: UpdateTemplateLineCommand,
     ): Promise<void> =>
-        await this.httpClient.patch<void, { quantity?: number | null }>(
+        await this.httpClient.patch<void, UpdateTemplateLineCommand>(
             `/shopping-list-templates/${id}/lines/${lineId}`,
             command,
         );

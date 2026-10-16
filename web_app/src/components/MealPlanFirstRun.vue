@@ -5,7 +5,7 @@
             <div class="text-h5 q-mb-sm">Add recipes to start planning</div>
             <div class="text-body2 dora-text-muted q-mb-lg" style="max-width: 32rem; margin-inline: auto;">
                 Meal plans build a week from recipes in your cookbook. Add a few
-                recipes first — then come back here to plan them.
+                recipes first, then come back here to plan them.
             </div>
             <BaseButton
                 :icon="ICONS.add"

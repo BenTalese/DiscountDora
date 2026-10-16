@@ -77,7 +77,7 @@
                 <div v-if="isFreeText" class="row items-center q-gutter-xs q-mt-xs">
                     <q-icon :name="ICONS.edit" size="14px" class="dora-text-muted" />
                     <span class="text-caption dora-text-secondary">
-                        “{{ draft.raw_text }}” — free text, so Dora can't tell whether
+                        “{{ draft.raw_text }}” is free text, so Dora can't tell whether
                         you have it.
                     </span>
                     <BaseButton
@@ -166,7 +166,7 @@
             <!-- ── Qualifiers ──────────────────────────────────────────── -->
             <!-- One label, both states: a toggle whose text changes with it
                  makes you read the sentence to work out which way it's set. -->
-            <q-toggle v-model="draft.is_optional" label="Optional — skip it and still cook" />
+            <q-toggle v-model="draft.is_optional" label="Optional" />
 
             <q-input
                 v-model="draft.notes"
@@ -394,7 +394,7 @@
             $q.notify({
                 type: 'negative',
                 position: 'bottom-right',
-                message: 'No stock levels configured — cannot create a pantry item.',
+                message: 'No stock levels configured, so a pantry item can\'t be created.',
             });
             return;
         }

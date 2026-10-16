@@ -204,7 +204,7 @@
 
     const ariaLabel = computed(() => {
         if (props.mode === 'targeting' && props.targetSlot) {
-            return `${props.recipe.name} — add to ${props.targetSlot}`;
+            return `Add ${props.recipe.name} to ${props.targetSlot}`;
         }
         return props.recipe.name;
     });

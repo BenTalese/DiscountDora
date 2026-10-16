@@ -49,17 +49,6 @@
         <section class="audit-filters">
             <div class="row q-col-gutter-sm">
                 <q-select
-                    v-model="filters.source"
-                    :options="sourceOptions"
-                    label="Source"
-                    outlined
-                    dense
-                    clearable
-                    emit-value
-                    map-options
-                    class="col-12 col-sm-3"
-                />
-                <q-select
                     v-model="filters.severity"
                     :options="severityOptions"
                     label="Severity"
@@ -177,13 +166,6 @@
                     </q-chip>
                 </q-td>
             </template>
-            <template #body-cell-source="props">
-                <q-td :props="props">
-                    <q-chip dense size="sm" class="dora-bg-sunken dora-text-secondary">
-                        {{ props.row.source }}
-                    </q-chip>
-                </q-td>
-            </template>
         </q-table>
 
         <div class="row items-center q-gutter-sm q-mt-md">
@@ -244,10 +226,9 @@
                 <q-card-section v-if="detail">
                     <q-list dense separator>
                         <q-item><q-item-section>Action</q-item-section><q-item-section side><code>{{ detail.action }}</code></q-item-section></q-item>
-                        <q-item><q-item-section>Source</q-item-section><q-item-section side>{{ detail.source }}</q-item-section></q-item>
                         <q-item><q-item-section>When</q-item-section><q-item-section side>{{ formatWhen(detail.occurred_at) }}</q-item-section></q-item>
-                        <q-item><q-item-section>Actor</q-item-section><q-item-section side>{{ detail.actor_username || '—' }} <span v-if="detail.actor_user_id" class="dora-text-muted">({{ detail.actor_user_id }})</span></q-item-section></q-item>
-                        <q-item><q-item-section>Actor IP</q-item-section><q-item-section side>{{ detail.actor_ip || '—' }}</q-item-section></q-item>
+                        <q-item><q-item-section>Actor</q-item-section><q-item-section side>{{ detail.actor_username || '–' }} <span v-if="detail.actor_user_id" class="dora-text-muted">({{ detail.actor_user_id }})</span></q-item-section></q-item>
+                        <q-item><q-item-section>Actor IP</q-item-section><q-item-section side>{{ detail.actor_ip || '–' }}</q-item-section></q-item>
                         <q-item v-if="detail.entity_type"><q-item-section>Entity</q-item-section><q-item-section side>{{ detail.entity_type }} <span v-if="detail.entity_id" class="dora-text-muted">({{ detail.entity_id }})</span></q-item-section></q-item>
                         <q-item v-if="detail.request_id"><q-item-section>Request id</q-item-section><q-item-section side><code>{{ detail.request_id }}</code></q-item-section></q-item>
                     </q-list>
@@ -289,13 +270,8 @@
     const $q = useQuasar();
     const auditApi = new AuditApiService();
 
-    const sourceOptions = [
-        { label: 'dapi (backend)', value: 'dapi' },
-        { label: 'mapi (merchant)', value: 'mapi' },
-        { label: 'emailer', value: 'emailer' },
-        { label: 'web (client)', value: 'web' },
-        { label: 'system', value: 'system' },
-    ];
+    // No source filter or column (owner 2026-10-15): every event this install
+    // writes comes from the API, so the field never told anyone anything.
     const severityOptions = [
         { label: 'audit', value: 'audit' },
         { label: 'error', value: 'error' },
@@ -322,10 +298,9 @@
     const columns = [
         { name: 'occurred_at', label: 'When', field: (r: AuditEvent) => formatWhen(r.occurred_at), align: 'left' as const },
         { name: 'severity', label: 'Sev', field: 'severity', align: 'left' as const },
-        { name: 'source', label: 'Source', field: 'source', align: 'left' as const },
         { name: 'action', label: 'Action', field: 'action', align: 'left' as const, classes: 'text-mono' },
-        { name: 'actor', label: 'Actor', field: (r: AuditEvent) => r.actor_username || r.actor_ip || '—', align: 'left' as const },
-        { name: 'entity', label: 'Entity', field: (r: AuditEvent) => r.entity_type ? `${r.entity_type}` : '—', align: 'left' as const },
+        { name: 'actor', label: 'Actor', field: (r: AuditEvent) => r.actor_username || r.actor_ip || '–', align: 'left' as const },
+        { name: 'entity', label: 'Entity', field: (r: AuditEvent) => r.entity_type ? `${r.entity_type}` : '–', align: 'left' as const },
     ];
 
     function severityColour(sev: AuditEvent['severity']): string {
@@ -405,7 +380,7 @@
 
     function exportCsv() {
         const header = [
-            'occurred_at', 'source', 'severity', 'action', 'actor_username',
+            'occurred_at', 'severity', 'action', 'actor_username',
             'actor_user_id', 'actor_ip', 'entity_type', 'entity_id', 'request_id',
             'payload',
         ];
@@ -422,7 +397,6 @@
         for (const row of rows.value) {
             lines.push([
                 row.occurred_at,
-                row.source,
                 row.severity,
                 row.action,
                 row.actor_username ?? '',

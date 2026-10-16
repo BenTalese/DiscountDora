@@ -5,6 +5,7 @@
     <CollapsibleCard
         v-if="buckets.length > 0"
         class="sl-store-card"
+        :class="{ 'sl-store-card--flush': flush }"
         :collapsible="collapsible"
         header-toggles
         reveals="store breakdown"
@@ -12,7 +13,9 @@
         <template #header>
             <div class="row items-center no-wrap q-gutter-x-sm sl-store-card__title">
                 <q-icon :name="ICONS.storefront" size="18px" class="dora-text-secondary" />
-                <span class="text-subtitle2">{{ title }}</span>
+                <span :class="flush ? 'sl-store-card__caption' : 'text-subtitle2'">
+                    {{ title }}
+                </span>
             </div>
         </template>
 
@@ -42,10 +45,15 @@
                         class="sl-store-chip"
                         :class="{ 'sl-store-chip--none': b.store_id === null }"
                     >
+                        <!-- Every bucket in the bar gets a mark in the key,
+                             including the catch-all: it had none, so the one
+                             segment a reader is most likely to query was the
+                             one the legend couldn't identify. The hatch is the
+                             bar's own, shared rather than redrawn. -->
                         <span
-                            v-if="b.store_id !== null"
                             class="sl-store-dot"
-                            :style="{ background: segmentColour(b) }"
+                            :class="{ 'dora-fill-unassigned': b.store_id === null }"
+                            :style="b.store_id === null ? undefined : { background: segmentColour(b) }"
                         />
                         <span class="text-weight-medium q-mr-xs">{{ b.store_name }}</span>
                         <span class="dora-text-muted">
@@ -107,12 +115,26 @@
          * where a second tap to reach the same information is a tax.
          */
         collapsible?: boolean;
+        /**
+         * Drop this card's own surface — no border, no radius, no padding of
+         * its own — for the caller that renders it *inside* another card.
+         *
+         * The plan and shop faces put it in the overview card's disclosure,
+         * where it kept a full bordered box and a 44px gradient header of its
+         * own: a card inside a card, two nested headers, and a second rounded
+         * edge 16px inside the first (owner, 2026-09-17: *"shouldn't be a card
+         * within a card dropdown, looks so odd — make it a continuation of the
+         * dropdown header card"*). Flush, it is a captioned region of the card
+         * it sits in. The receipt face renders it standing alone and keeps the
+         * surface.
+         */
+        flush?: boolean;
         /** Which face is asking. All three tenses are real: a draft hasn't
          *  spent anything, a receipt has spent all of it, and mid-shop is
          *  genuinely neither — some of the trolley is paid for and some isn't,
          *  so past tense there reads as a shop you've already finished. */
         tense?: 'plan' | 'shop' | 'receipt';
-    }>(), { collapsible: true, tense: 'plan' });
+    }>(), { collapsible: true, flush: false, tense: 'plan' });
 
     const { moneyEnabled } = useMoneyEnabled();
 
@@ -194,20 +216,11 @@
         return parts.join(' · ');
     });
 
-    /** Two separate honesty notes, deliberately combined into one line so the
-     *  card doesn't grow a second paragraph: the headline gap between the two
-     *  biggest stores, and how much of the list isn't priced at all. */
+    /** How much of the list isn't priced at all. The "$X more at A than B"
+     *  note that shared this line went on 2026-09-27 (owner: useless). It
+     *  compared two buckets the bar above already draws side by side. */
     const footnote = computed(() => {
         const notes: string[] = [];
-        const real = props.buckets.filter((b) => b.store_id !== null && b.priced_line_count > 0);
-        if (moneyEnabled.value && real.length >= 2) {
-            const gap = real[0]!.subtotal - real[real.length - 1]!.subtotal;
-            if (gap > 0) {
-                notes.push(
-                    `${formatMoney(gap)} more at ${real[0]!.store_name} than ${real[real.length - 1]!.store_name}`
-                );
-            }
-        }
         // Money-gated too: with money off nothing on this card is priced, so
         // "12 items unpriced, not counted" would be describing a total the
         // user can't see and never asked for.
@@ -230,8 +243,32 @@
         border-radius: var(--radius-md);
         background: var(--surface-component);
     }
+    /* A region of its host, not a box inside it. */
+    .sl-store-card--flush {
+        padding: 0;
+        border: none;
+        border-radius: 0;
+        background: none;
+    }
+    /* The 44px is a tap target, and it only exists where the header *is* one.
+       A flush card is rendered non-collapsible, so the header toggles nothing
+       and the height was pure chrome — a heading three times the size of the
+       line of text it introduced. */
     .sl-store-card__title {
         min-height: 44px;
+    }
+    .sl-store-card--flush .sl-store-card__title {
+        min-height: 0;
+    }
+    /* Matches `.sl-section__title`, the label the plan face already puts above
+       a group of rows — so the two headings inside one card read as the same
+       rank rather than as two competing voices. */
+    .sl-store-card__caption {
+        font-size: calc(var(--font-size-sm) * 1rem);
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--text-secondary);
     }
     .sl-store-chip {
         background: var(--surface-sunken);

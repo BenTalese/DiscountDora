@@ -25,7 +25,7 @@ const REASON_COPY: Record<SuggestionReasonChip, string> = {
     favourite: 'A favourite',
     not_made_recently: "Haven't had in a while",
     variety: 'Adds variety',
-    budget_friendly: 'Cheaper — keeps you on budget',
+    budget_friendly: 'Cheaper',
     // The server's neutral fallback: it was picked, but not for a reason worth
     // a sentence. Rendering "picked" would be noise, so the row falls back to
     // its normal meta line.

@@ -25,6 +25,7 @@ from dora_api.infrastructure.api_response import (business_rule_violation,
                                                   no_content, not_found)
 from dora_api.infrastructure.decorators import has_request_body
 from dora_api.infrastructure.utils import get_request_body
+from dora_api.features.shopping_lists._line_defaults import apply_line_defaults
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 from dora_api.infrastructure.ports import Repository
@@ -307,14 +308,16 @@ class UpdateStockItemHandler:
             _StockItem.opened_on = request.opened_on
 
         # Auto-add hook: if this update transitioned the item from "ok" to
-        # low-or-out, drop it onto the current primary list. Whether the
+        # low-or-out, drop it onto the user's open draft list. This is the
+        # only writer of `is_auto_added=True` — the line lands without the
+        # user asking for it, so the list marks it. Whether the
         # transition fires the hook depends on the install-wide
         # `AppSetting.auto_add_mode` (FU-511, replacing the retired per-item
         # `auto_add_when_low` boolean):
         #   `off`             — never.
         #   `essential_only`  — only when the item is `is_essential=True`.
         #   `all`             — always on a low/out transition.
-        # Skipped silently if there's no primary, or if the item is already
+        # Skipped silently if there's no single draft, or if the item is already
         # on ANY non-archived list — the user already knows; double-add
         # would be annoying.
         #
@@ -395,15 +398,14 @@ class UpdateStockItemHandler:
         return bool(stock_item.is_essential)
 
     def _try_auto_add(self, stock_item: StockItem) -> tuple[UUID, UUID] | None:
-        """Adds the stock item to the primary shopping list, X5-style.
+        """Adds the stock item to the user's one open draft list.
 
         Returns (line_id, list_id) on a successful add; None when skipped
-        (no primary, already on any active list, etc). Imported locally
-        because pulling shopping-list entities at module import time
-        creates a cycle.
+        (no unambiguous draft target, already on any active list, etc).
+        Imported locally because pulling shopping-list entities at module
+        import time creates a cycle.
         """
         from dora_api.domain.entities.shopping_list import (
-            ADDED_VIA_AUTO_LOW_STOCK,
             SHOPPING_LIST_STATUS_DONE,
             ShoppingList,
             ShoppingListLine,
@@ -425,9 +427,9 @@ class UpdateStockItemHandler:
         # Auto-add only when there's an unambiguous DRAFT target — if the user
         # has 0 or 2+ drafts, the cart button still does the right thing on the
         # next manual click; we don't silently pick one.
-        from dora_api.features.shopping_lists.primary_target_resolver import \
-            resolve_primary_target
-        outcome = resolve_primary_target(active_lists)
+        from dora_api.features.shopping_lists.quick_add_target_resolver import \
+            resolve_quick_add_target
+        outcome = resolve_quick_add_target(active_lists)
         if outcome.kind != "single":
             return None
         target = next(
@@ -445,9 +447,10 @@ class UpdateStockItemHandler:
             stock_item_id=stock_item.id,
             quantity=1,
             sequence=next_sequence,
-            added_via=ADDED_VIA_AUTO_LOW_STOCK,
+            is_auto_added=True,
             added_at=datetime.now(UTC),
         )
+        apply_line_defaults(self.repository, [line])
         self.repository.add(line)
         return (line.id, target.id)
 

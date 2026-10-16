@@ -279,3 +279,52 @@ def test__auto_build__batch_household_proposes_grouped_cooks(api):
         assert len({e["recipe_id"] for e in batch}) < 6
     finally:
         requests.patch(APP_SETTINGS, json={"batch_features_enabled": False})
+
+
+# ── coverage verdict across a batch (owner 2026-10-15, the affogato report) ─
+
+def test__batch_with_nothing_cooked__cook_day_needs_cooking_and_leftovers_wait(api):
+    """A 2+2 batch with an empty pool: the cook day owes the whole cook, and the
+    leftovers day is neither a cook nor sitting on a ready portion."""
+    today = _household_today()
+    slot = _slot_names()[0]
+    recipe = _make_recipe("Affogato")
+    requests.patch(APP_SETTINGS, json={"batch_features_enabled": True})
+    try:
+        resp = _create([
+            {"recipe_id": recipe, "scheduled_for": (today + timedelta(days=d)).isoformat(),
+             "servings": 2, "slot": slot, "cook_key": "c1"}
+            for d in (1, 2)
+        ])
+        entries = sorted(
+            _by_id(resp.json()["meal_plan_id"])["entries"],
+            key=lambda e: e["scheduled_for"],
+        )
+        cook, leftovers = entries
+        assert cook["is_cook_day"] and cook["needs_cooking"]
+        assert cook["cook_batch_total_servings"] == 4
+        assert cook["cook_batch_pending"] is False
+        assert not leftovers["is_cook_day"]
+        assert leftovers["needs_cooking"] is False
+        assert leftovers["cook_batch_pending"] is True
+    finally:
+        requests.patch(APP_SETTINGS, json={"batch_features_enabled": False})
+
+
+def test__batch_covered_by_the_pool__leftovers_are_not_waiting(api):
+    today = _household_today()
+    slot = _slot_names()[0]
+    recipe = _make_recipe("Covered batch")
+    assert requests.post(f"{RECIPES}/{recipe}/adjust-meals", json={"delta": 4}).status_code == 200
+    requests.patch(APP_SETTINGS, json={"batch_features_enabled": True})
+    try:
+        resp = _create([
+            {"recipe_id": recipe, "scheduled_for": (today + timedelta(days=d)).isoformat(),
+             "servings": 2, "slot": slot, "cook_key": "c1"}
+            for d in (1, 2)
+        ])
+        for e in _by_id(resp.json()["meal_plan_id"])["entries"]:
+            assert e["needs_cooking"] is False
+            assert e["cook_batch_pending"] is False
+    finally:
+        requests.patch(APP_SETTINGS, json={"batch_features_enabled": False})

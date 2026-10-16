@@ -53,7 +53,7 @@ export const LOOP_STAGES: readonly LoopStage[] = [
         key: 'stock',
         label: 'Stock',
         icon: ICONS.inventory_2,
-        sell: 'Everything you keep — levels, locations, expiry — in one place you can actually trust.',
+        sell: 'Everything you keep, with levels, locations and expiry, in one place.',
     },
     {
         key: 'plan',
@@ -77,7 +77,7 @@ export const LOOP_STAGES: readonly LoopStage[] = [
         key: 'restock',
         label: 'Restock',
         icon: ICONS.sync,
-        sell: 'Finishing the shop bumps what you bought back to stocked — no re-counting.',
+        sell: 'Finishing the shop marks what you bought as stocked.',
     },
     {
         key: 'cook',
@@ -96,7 +96,7 @@ export interface LoopCentre {
 
 export const LOOP_CENTRE: LoopCentre = {
     label: 'Dora',
-    sell: 'D.O.R.A. — the brain in the middle, quietly watching over your kitchen and lending a hand at every step.',
+    sell: 'D.O.R.A. watches over your kitchen and helps at every step.',
 };
 
 // LOOP_INSIGHT was the dimmed "Spend smarter" emerging node — removed
@@ -124,7 +124,7 @@ export const NARRATIVE_SCENES: readonly NarrativeScene[] = [
         visual: 'problem',
         kicker: 'The weekly shop',
         headline: 'is detective work.',
-        sub: 'What’s run out? What’s already in the cupboard? What do you cook — and what did it cost?',
+        sub: 'What’s run out? What’s in the cupboard? What do you cook, and what did it cost?',
     },
     {
         id: 'loop',
@@ -137,14 +137,14 @@ export const NARRATIVE_SCENES: readonly NarrativeScene[] = [
         visual: 'brain',
         kicker: 'Dora is the brain',
         headline: 'doing the remembering, so you don’t.',
-        sub: 'Expiry, stock and your questions — quietly watched over.',
+        sub: 'Expiry, stock and your questions.',
     },
     {
         id: 'control',
         visual: 'control',
         kicker: 'You’re in control',
         headline: 'every part of Dora is a toggle.',
-        sub: 'Turn things on as you find you need them. Nothing is locked in — everything lives in Settings.',
+        sub: 'Turn things on when you need them. Everything lives in Settings.',
     },
 ] as const;
 

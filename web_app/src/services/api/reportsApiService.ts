@@ -59,38 +59,6 @@ export interface MostBoughtResponse {
     rows: MostBoughtRow[];
 }
 
-export interface KeepsRunningOutRow {
-    stock_item_id: string;
-    name: string;
-    times_out_when_added: number;
-}
-
-export interface KeepsRunningOutResponse {
-    /** `'all'` when the caller passed no range — the endpoint's default, which
-     *  is what the dashboard's restock radar relies on. Reports passes the
-     *  page's range so the card stops answering an all-time question under a
-     *  control that says "30 days". */
-    range: ReportRange;
-    rows: KeepsRunningOutRow[];
-}
-
-export interface PricePoint {
-    date: string;
-    unit_price: number;
-}
-
-export interface PriceTrendSeries {
-    product_id: string;
-    name: string;
-    store: string;
-    points: PricePoint[];
-}
-
-export interface PriceTrendsResponse {
-    range: ReportRange;
-    series: PriceTrendSeries[];
-}
-
 /** One stock item whose own logged prices moved inside the range (chunk 4 /
  *  FU-703 D3). Every figure is per **canonical unit** and server-derived: the
  *  client never divides a total by a measure (R-003). */
@@ -249,19 +217,6 @@ export default class ReportsApiService {
         this.httpClient.get<MostBoughtResponse>(`/reports/most-bought-items?range=${range}&limit=${limit}`);
 
     /** Omit `range` for all-time (the endpoint's default). */
-    getKeepsRunningOutAsync = (limit = 10, range?: ReportRange) =>
-        this.httpClient.get<KeepsRunningOutResponse>(
-            `/reports/keeps-running-out?limit=${limit}`
-            + (range ? `&range=${range}` : ''),
-        );
-
-    getPriceTrendsAsync = (productIds: string[], range: ReportRange) => {
-        const csv = productIds.join(',');
-        return this.httpClient.get<PriceTrendsResponse>(
-            `/reports/price-trends?product_ids=${encodeURIComponent(csv)}&range=${range}`,
-        );
-    };
-
     getSavingsCapturedAsync = (range: ReportRange) =>
         this.httpClient.get<SavingsCapturedResponse>(`/reports/savings-captured?range=${range}`);
 

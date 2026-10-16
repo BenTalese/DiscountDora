@@ -16,106 +16,99 @@
         [Full history] button is disabled until chunk 6 wires the
         bottom-sheet.
     -->
-    <q-card flat bordered class="dora-your-prices q-pa-md q-mb-md">
-        <div class="row items-center q-mb-sm">
-            <div class="text-subtitle1 col">Your prices</div>
-        </div>
-
-        <!-- Below MIN_SAMPLES / null baseline → calm empty state
-             (distinct from R-029 hide-when-off — this is a not-enough-
-             data case, not an opt-out). -->
-        <template v-if="!yourPrices || yourPrices.baseline == null">
-            <div class="text-body2 dora-text-secondary q-mb-xs">
-                {{ emptyStateCopy }}
-            </div>
-            <div v-if="yourPrices?.current != null" class="text-caption dora-text-muted q-mb-xs">
-                Last seen
-                <strong>{{ formatMoney(yourPrices.current) }}</strong>
-                <span v-if="yourPrices.baseline_unit"> / {{ yourPrices.baseline_unit }}</span>
-                <span v-if="yourPrices.last_observed_at">
-                    · {{ relativeTime(yourPrices.last_observed_at) }}
-                </span>
-                <span v-if="yourPrices.last_seen_store_name">
-                    · {{ yourPrices.last_seen_store_name }}
-                </span>
-            </div>
-        </template>
-
-        <!-- Baseline-ready (chunk 4 lights this up). -->
-        <template v-else>
-            <div class="text-body1 q-mb-xs">
-                Usually
-                <strong>{{ formatMoney(yourPrices.baseline) }}</strong>
-                <span v-if="yourPrices.baseline_unit"> / {{ yourPrices.baseline_unit }}</span>
-                <q-chip
-                    v-if="yourPrices.above_baseline"
-                    color="warning"
-                    text-color="white"
-                    dense
-                    class="q-ml-sm"
-                    icon="mdi-trending-up"
-                >
-                    paying more than usual
-                </q-chip>
-                <span v-else class="dora-text-muted q-ml-sm text-caption">
-                    · about average
-                </span>
-            </div>
-            <div v-if="yourPrices.current != null" class="text-caption dora-text-muted q-mb-xs">
-                Last seen
-                <strong>{{ formatMoney(yourPrices.current) }}</strong>
-                <span v-if="yourPrices.baseline_unit"> / {{ yourPrices.baseline_unit }}</span>
-                <span v-if="yourPrices.last_observed_at">
-                    · {{ relativeTime(yourPrices.last_observed_at) }}
-                </span>
-                <span v-if="yourPrices.last_seen_store_name">
-                    · {{ yourPrices.last_seen_store_name }}
-                </span>
-            </div>
-            <div class="text-caption dora-text-muted q-mb-sm">
-                Based on {{ yourPrices.sample_count }}
-                {{ yourPrices.sample_count === 1 ? 'price' : 'prices' }}
-            </div>
-        </template>
-
-        <!-- LC-2 offers sidecar — separate UI region, never folded into the
-             baseline math. Only renders when products are on AND at least
-             one linked product has a current offer in the same dimension. -->
-        <div
-            v-if="yourPrices && yourPrices.offers_sidecar.length > 0"
-            class="dora-bg-sunken q-pa-sm rounded-borders q-mb-sm"
-        >
-            <div class="text-caption dora-text-secondary q-mb-xs">
-                Current shelf prices
-            </div>
-            <div class="text-body2">
-                <span
-                    v-for="(o, i) in yourPrices.offers_sidecar"
-                    :key="`${o.store_name}-${i}`"
-                >
-                    <span v-if="i > 0"> · </span>
-                    <strong>{{ formatMoney(o.price_per_unit) }}</strong>
-                    <span class="dora-text-muted">/ {{ o.unit }}</span>
-                    at {{ o.store_name }}
-                </span>
-            </div>
-        </div>
-
-        <div class="row justify-end q-gutter-sm q-mt-sm">
+    <!-- Owner 2026-10-15: same place, better dressed. The actions moved up
+         into the header, the usual price became the card's figure, and the
+         recent prices the page lists sit inside the card (default slot)
+         instead of as a second box under it. -->
+    <q-card flat bordered class="dora-your-prices q-mb-md">
+        <div class="dora-your-prices__head">
+            <q-icon :name="ICONS.price_check" size="20px" class="dora-text-secondary" />
+            <div class="dora-your-prices__title">Your prices</div>
             <BaseButton
-                variant="ghost"
+                variant="icon"
                 :icon="ICONS.history"
-                label="Full history"
+                aria-label="Full history"
                 :disable="!stockItemId"
                 @click="historyOpen = true"
-            />
+            >
+                <BaseTooltip>Full history</BaseTooltip>
+            </BaseButton>
             <BaseButton
                 variant="primary"
+                dense
                 :icon="ICONS.cash_plus"
                 label="Log a price"
                 @click="dialogOpen = true"
             />
         </div>
+
+        <div class="dora-your-prices__body">
+            <!-- Below MIN_SAMPLES / null baseline: a calm empty state (a
+                 not-enough-data case, not an opt-out). -->
+            <template v-if="!yourPrices || yourPrices.baseline == null">
+                <div class="text-body2 dora-text-secondary">{{ emptyStateCopy }}</div>
+            </template>
+
+            <template v-else>
+                <div class="dora-your-prices__figure">
+                    <div class="dora-your-prices__label">Usually</div>
+                    <div class="dora-your-prices__amount">
+                        {{ formatMoney(yourPrices.baseline) }}<span
+                            v-if="yourPrices.baseline_unit"
+                            class="dora-your-prices__unit"
+                        > / {{ yourPrices.baseline_unit }}</span>
+                    </div>
+                </div>
+                <span
+                    class="dora-your-prices__verdict"
+                    :class="yourPrices.above_baseline ? 'is-above' : 'is-usual'"
+                >
+                    <q-icon
+                        :name="yourPrices.above_baseline ? ICONS.trending_up : ICONS.check"
+                        size="14px"
+                    />
+                    {{ yourPrices.above_baseline ? 'Paying more than usual' : 'About average' }}
+                </span>
+            </template>
+
+            <div v-if="yourPrices?.current != null" class="dora-your-prices__meta">
+                Last seen
+                <strong>{{ formatMoney(yourPrices.current) }}</strong>
+                <span v-if="yourPrices.baseline_unit"> / {{ yourPrices.baseline_unit }}</span>
+                <span v-if="yourPrices.last_observed_at">
+                    · {{ relativeTime(yourPrices.last_observed_at) }}
+                </span>
+                <span v-if="yourPrices.last_seen_store_name">
+                    · {{ yourPrices.last_seen_store_name }}
+                </span>
+                <span v-if="yourPrices.baseline != null">
+                    · based on {{ yourPrices.sample_count }}
+                    {{ yourPrices.sample_count === 1 ? 'price' : 'prices' }}
+                </span>
+            </div>
+
+            <!-- LC-2 offers sidecar: separate from the baseline math. Only when
+                 a linked product has a current offer in the same dimension. -->
+            <div
+                v-if="yourPrices && yourPrices.offers_sidecar.length > 0"
+                class="dora-your-prices__shelf"
+            >
+                <div class="dora-your-prices__label">Current shelf prices</div>
+                <div class="text-body2">
+                    <span
+                        v-for="(o, i) in yourPrices.offers_sidecar"
+                        :key="`${o.store_name}-${i}`"
+                    >
+                        <span v-if="i > 0"> · </span>
+                        <strong>{{ formatMoney(o.price_per_unit) }}</strong>
+                        <span class="dora-text-muted">/ {{ o.unit }}</span>
+                        at {{ o.store_name }}
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <slot />
 
         <BaseDialog
             v-model="dialogOpen"
@@ -150,6 +143,7 @@
     import { computed, ref } from 'vue';
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
+    import BaseTooltip from 'src/components/BaseTooltip.vue';
     import PriceEntry from 'src/components/dora/PriceEntry.vue';
     import PriceHistoryBottomSheet from 'src/components/dora/PriceHistoryBottomSheet.vue';
     import { ICONS } from 'src/style/icons';
@@ -195,8 +189,8 @@
     // emits up to the parent (which knows how to call the API service).
     const emptyStateCopy = computed(() => {
         const count = props.yourPrices?.sample_count ?? 0;
-        if (count === 0) return 'No prices logged yet — log a few to see your usual.';
-        return 'Not enough price data yet — log a few more.';
+        if (count === 0) return 'No prices logged yet.';
+        return 'Not enough price data yet.';
     });
 
     function onSubmit(value: {
@@ -210,3 +204,76 @@
         dialogOpen.value = false;
     }
 </script>
+
+<style scoped>
+    .dora-your-prices__head {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+        padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
+        border-bottom: 1px solid var(--divider);
+    }
+    .dora-your-prices__title {
+        flex: 1;
+        font-weight: 600;
+    }
+    .dora-your-prices__body {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-end;
+        gap: var(--space-2) var(--space-4);
+        padding: var(--space-3) var(--space-4);
+    }
+    .dora-your-prices__figure {
+        display: flex;
+        flex-direction: column;
+    }
+    .dora-your-prices__label {
+        font-size: calc(var(--font-size-xs) * 1rem);
+        color: var(--text-secondary);
+    }
+    .dora-your-prices__amount {
+        font-size: calc(var(--font-size-2xl) * 1rem);
+        font-weight: 700;
+        line-height: 1.1;
+        font-variant-numeric: tabular-nums;
+    }
+    .dora-your-prices__unit {
+        font-size: calc(var(--font-size-sm) * 1rem);
+        font-weight: 500;
+        color: var(--text-secondary);
+    }
+    .dora-your-prices__verdict {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--space-1);
+        padding: 2px var(--space-2);
+        border-radius: var(--radius-pill);
+        font-size: calc(var(--font-size-sm) * 1rem);
+        font-weight: 600;
+        margin-bottom: 2px;
+    }
+    .dora-your-prices__verdict.is-above {
+        background: var(--semantic-warning-soft);
+        color: var(--text-primary);
+    }
+    .dora-your-prices__verdict.is-usual {
+        background: var(--semantic-positive-soft);
+        color: var(--text-primary);
+    }
+    .dora-your-prices__meta {
+        flex: 1 1 100%;
+        font-size: calc(var(--font-size-sm) * 1rem);
+        color: var(--text-secondary);
+    }
+    .dora-your-prices__shelf {
+        flex: 1 1 100%;
+        background: var(--surface-sunken);
+        border-radius: var(--radius-sm);
+        padding: var(--space-2) var(--space-3);
+    }
+    /* Recent prices the page slots in: flush with the card, a hairline above. */
+    .dora-your-prices :deep(.dora-your-prices__list) {
+        border-top: 1px solid var(--divider);
+    }
+</style>

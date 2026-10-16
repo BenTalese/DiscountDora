@@ -108,7 +108,7 @@ export const THEMES: Record<string, ThemeOption> = {
     },
     'pesto-dark': {
         key: 'pesto-dark', label: 'Pesto Dark',
-        blurb: 'Garden after midnight — forest teal with bright lime pop.',
+        blurb: 'Forest teal with bright lime.',
         swatch: ['hsl(150,75%,55%)', 'hsl(170,28%,30%)', 'hsl(225,100%,93%)'],
         isDark: true,
     },
@@ -116,13 +116,13 @@ export const THEMES: Record<string, ThemeOption> = {
     // ───────── Lemon Tart family ────────────────────────────────────
     'lemon-tart': {
         key: 'lemon-tart', label: 'Lemon Tart',
-        blurb: 'Warm yellow on cream — the original Dora vibe.',
+        blurb: 'Warm yellow on cream, the original Dora look.',
         swatch: ['hsl(40,88%,67%)', 'hsl(189,100%,26%)', 'hsl(48,99%,56%)'],
         isDark: false,
     },
     'lemon-tart-dark': {
         key: 'lemon-tart-dark', label: 'Lemon Tart Dark',
-        blurb: 'Late-night pantry raid — charcoal + golden + sunset orange.',
+        blurb: 'Charcoal, gold and sunset orange.',
         swatch: ['hsl(46,100%,50%)', 'hsl(105,47%,36%)', 'hsl(23,100%,57%)'],
         isDark: true,
     },
@@ -164,7 +164,7 @@ export const THEMES: Record<string, ThemeOption> = {
     },
     'sourdough-dark': {
         key: 'sourdough-dark', label: 'Sourdough Dark',
-        blurb: 'Bake at midnight — warm browns + honey on dark crust.',
+        blurb: 'Warm browns and honey on dark.',
         swatch: ['hsl(33,80%,60%)', 'hsl(28,30%,40%)', 'hsl(45,90%,65%)'],
         isDark: true,
     },
@@ -198,7 +198,7 @@ export const THEMES: Record<string, ThemeOption> = {
     },
     'dragonfruit-dark': {
         key: 'dragonfruit-dark', label: 'Dragonfruit Dark',
-        blurb: 'Rind at night — hot pink and lime on near-black.',
+        blurb: 'Hot pink and lime on near-black.',
         swatch: ['hsl(330,70%,66%)', 'hsl(165,30%,32%)', 'hsl(145,60%,58%)'],
         isDark: true,
     },
@@ -232,7 +232,7 @@ export const THEME_FAMILIES: readonly ThemeFamily[] = [
     {
         key: 'blueberry',
         label: 'Blueberry',
-        blurb: 'Cool cobalt + navy — focused, easy on long-session eyes.',
+        blurb: 'Cool cobalt and navy.',
         light: 'blueberry', dark: 'blueberry-dark', system: 'system-blueberry',
     },
     {
@@ -250,7 +250,7 @@ export const THEME_FAMILIES: readonly ThemeFamily[] = [
     {
         key: 'salt-pepper',
         label: 'Salt & Pepper',
-        blurb: 'The minimal one — plain greys and a single blue, light or dark.',
+        blurb: 'Plain greys and a single blue, light or dark.',
         light: 'salt-pepper', dark: 'salt-pepper-dark', system: 'system-salt-pepper',
     },
     {

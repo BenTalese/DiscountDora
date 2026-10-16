@@ -1,148 +1,89 @@
 <template>
-    <BaseDialog v-model="open" title="Quick add to list" closable position="bottom" card-style="width: 520px; max-width: 96vw" @cancel="onHide">
-            <q-card-section>
-                <!-- Target list -->
-                <q-select
-                    v-model="targetListId"
-                    outlined
-                    dense
-                    emit-value
-                    map-options
-                    label="Add to"
-                    :options="listOptions"
-                    class="q-mb-md"
-                />
+    <BaseDialog v-model="open" title="Add to list" closable position="bottom" card-style="width: 520px; max-width: 96vw" @cancel="onHide">
+        <q-card-section>
+            <!-- Target list -->
+            <BaseSelect
+                v-model="targetListId"
+                emit-value
+                map-options
+                label="Add to"
+                :options="listOptions"
+                class="q-mb-md"
+            />
 
-                <!-- Step 1: pick a stock item -->
-                <template v-if="!selectedItem">
-                    <q-input
-                        v-model="query"
-                        outlined
-                        dense
-                        autofocus
-                        clearable
-                        debounce="150"
-                        label="Search stock items"
-                        prepend-:icon="ICONS.search"
-                    />
-                    <q-list separator class="q-mt-sm quick-add-sheet__results">
-                        <q-item
-                            v-for="item in results"
-                            :key="item.stock_item_id"
-                            clickable
-                            @click="selectItem(item)"
-                        >
-                            <!-- 2026-09-01 feedback (raised on the twin picker
-                                 in LogPriceSheet): a filled 28px avatar with a
-                                 box glyph read as a different kind of thing to
-                                 the level dot every other list uses. R-001:
-                                 shared StockLevelDot, tooltip'd per D-013. -->
-                            <q-item-section side>
-                                <StockLevelDot :sequence="levelSequence(item.stock_level_id)" size="12px">
-                                    <BaseTooltip>{{ levelLabel(item.stock_level_id) }}</BaseTooltip>
-                                </StockLevelDot>
-                            </q-item-section>
-                            <q-item-section>
-                                <div class="row items-center q-gutter-xs">
-                                    <q-icon
-                                        v-if="!query && isFrequent(item.stock_item_id)"
-                                        name="star"
-                                        size="14px"
-                                        color="warning"
-                                    >
-                                        <BaseTooltip>Frequently added</BaseTooltip>
-                                    </q-icon>
-                                    <span>{{ item.name }}</span>
-                                </div>
-                            </q-item-section>
-                            <q-item-section side>
-                                <q-icon :name="ICONS.chevron_right" />
-                            </q-item-section>
-                        </q-item>
-                        <q-item v-if="results.length === 0">
-                            <q-item-section class="dora-text-muted">
-                                {{ query ? 'No matches.' : 'No stock items yet.' }}
-                            </q-item-section>
-                        </q-item>
-                    </q-list>
-                    <div v-if="!query" class="text-caption dora-text-muted q-mt-xs">
-                        {{
-                            frequentlyAdded.length > 0
-                                ? 'Showing what you usually buy, then low/out.'
-                                : 'Showing low/out items first.'
-                        }}
-                    </div>
-                </template>
+            <q-input
+                v-model="query"
+                outlined
+                dense
+                autofocus
+                clearable
+                debounce="150"
+                label="Search stock items"
+                prepend-:icon="ICONS.search"
+            />
 
-                <!-- Step 2: pick quantity + store offer -->
-                <template v-else>
-                    <div class="row items-center q-mb-sm">
-                        <BaseButton variant="icon" :icon="ICONS.arrow_back" @click="clearSelection" />
-                        <div class="text-subtitle1 q-ml-sm">{{ selectedItem.name }}</div>
-                    </div>
-
-                    <q-input
-                        v-model.number="quantity"
-                        type="number"
-                        outlined
-                        dense
-                        min="1"
-                        label="Quantity"
-                        class="q-mb-md"
-                        style="max-width: 140px"
-                    />
-
-                    <div class="text-subtitle2 q-mb-xs">Store offer</div>
-                    <AppSpinner v-if="offersLoading" />
-                    <template v-else>
-                        <q-option-group
-                            v-model="selectedProductId"
-                            :options="offerOptions"
-                            type="radio"
-                            dense
-                        />
-                        <div v-if="offers.length === 0" class="text-caption dora-text-muted">
-                            No linked products — added without a specific offer.
-                        </div>
-                    </template>
-                </template>
-            </q-card-section>
-
-            <template v-if="selectedItem" #actions>
-                <BaseButton variant="ghost" label="Cancel" v-close-popup />
-                <BaseButton
-                    label="Add"
-                    :loading="adding"
-                    :disable="!targetListId"
-                    @click="confirmAdd"
-                />
-            </template>
+            <!-- One tap, one line on the list (owner, 2026-09-17: *"the
+                 additional step after selecting an item makes it a slow/painful
+                 process"*). There was a second screen carrying a quantity field
+                 and a radio group of store offers, and both had a defensible
+                 default nobody wanted to change: quantity 1, and no specific
+                 offer — which is now the *only* behaviour, since an offer no
+                 longer sets a price. Both are editable on the row afterwards,
+                 where you can see the list you're editing. -->
+            <q-list separator class="q-mt-sm quick-add-sheet__results">
+                <q-item
+                    v-for="item in results"
+                    :key="item.stock_item_id"
+                    clickable
+                    :disable="addingId === item.stock_item_id"
+                    @click="addItem(item)"
+                >
+                    <!-- 2026-09-01 feedback (raised on the twin picker
+                         in LogPriceSheet): a filled 28px avatar with a
+                         box glyph read as a different kind of thing to
+                         the level dot every other list uses. R-001:
+                         shared StockLevelDot, tooltip'd per D-013. -->
+                    <q-item-section side>
+                        <StockLevelDot :sequence="levelSequence(item.stock_level_id)" size="12px">
+                            <BaseTooltip>{{ levelLabel(item.stock_level_id) }}</BaseTooltip>
+                        </StockLevelDot>
+                    </q-item-section>
+                    <q-item-section>{{ item.name }}</q-item-section>
+                    <q-item-section side>
+                        <q-spinner v-if="addingId === item.stock_item_id" size="18px" />
+                        <q-icon v-else :name="ICONS.add" />
+                    </q-item-section>
+                </q-item>
+                <q-item v-if="results.length === 0">
+                    <q-item-section class="dora-text-muted">
+                        {{ query ? 'No matches.'
+                            : stockItems.length === 0 ? 'No stock items yet.'
+                                : 'Everything is already on this list.' }}
+                    </q-item-section>
+                </q-item>
+            </q-list>
+        </q-card-section>
     </BaseDialog>
 </template>
 
 <script lang="ts" setup>
     import BaseTooltip from 'src/components/BaseTooltip.vue';
-    import BaseButton from 'src/components/BaseButton.vue';
+    import BaseSelect from 'src/components/BaseSelect.vue';
     import { ICONS } from 'src/style/icons';
     import StockLevelDot from 'src/components/stock/StockLevelDot.vue';
-    import AppSpinner from 'src/components/AppSpinner.vue';
     import { storeToRefs } from 'pinia';
     import BaseDialog from 'src/components/BaseDialog.vue';
     import { useQuickAdd } from 'src/composables/useQuickAdd';
-    import { formatMoney } from 'src/composables/useMoney';
     import { useShoppingListActions } from 'src/composables/useShoppingListActions';
-    import type { LinkedProduct } from 'src/models/stockItemDetail';
     import type { StockItem } from 'src/models/stockItem';
     import ShoppingListApiService, {
         type FrequentlyAddedItem,
     } from 'src/services/api/shoppingListApiService';
-    import StockItemApiService from 'src/services/api/stockItemApiService';
     import { useShoppingListStore } from 'src/stores/shoppingListStore';
     import { useStockItemStore } from 'src/stores/stockItemStore';
     import { useStockLevelStore } from 'src/stores/stockLevelStore';
     import { computed, ref, watch } from 'vue';
 
-    const stockItemApi = new StockItemApiService();
     const shoppingListApi = new ShoppingListApiService();
 
     const { isOpen, presetStockItemId, presetListId, closeQuickAdd } = useQuickAdd();
@@ -153,7 +94,7 @@
     const shoppingListStore = useShoppingListStore();
     const { stockItems } = storeToRefs(stockItemStore);
     const { stockLevels } = storeToRefs(stockLevelStore);
-    const { summaries, quickAddTargetListId } = storeToRefs(shoppingListStore);
+    const { summaries, quickAddTargetListId, membership } = storeToRefs(shoppingListStore);
 
     // Bridge the module-level open flag to a local v-model so q-dialog's hide
     // event can close it cleanly.
@@ -165,13 +106,8 @@
     });
 
     const query = ref('');
-    const selectedItem = ref<StockItem | null>(null);
-    const quantity = ref(1);
-    const offers = ref<LinkedProduct[]>([]);
-    const offersLoading = ref(false);
-    const selectedProductId = ref<string | null>(null);
     const targetListId = ref<string | null>(null);
-    const adding = ref(false);
+    const addingId = ref<string | null>(null);
 
     const listOptions = computed(() =>
         summaries.value
@@ -195,99 +131,73 @@
     // the endpoint hasn't returned yet or fails.
     const frequentlyAdded = ref<FrequentlyAddedItem[]>([]);
 
-    const results = computed(() => {
-        const q = query.value?.trim().toLowerCase() ?? '';
-        const items = [...stockItems.value];
-        if (q) {
-            return items.filter((i) => i.name.toLowerCase().includes(q)).slice(0, 30);
-        }
-        // No query: lead with frequently-added, then top up with low/out
-        // items so first-time users (zero history) still see suggestions.
-        const seen = new Set<string>();
-        const ordered: StockItem[] = [];
-        if (frequentlyAdded.value.length > 0) {
-            const lookup = new Map(items.map((i) => [i.stock_item_id, i]));
-            for (const f of frequentlyAdded.value) {
-                const item = lookup.get(f.stock_item_id);
-                if (item && !seen.has(item.stock_item_id)) {
-                    ordered.push(item);
-                    seen.add(item.stock_item_id);
-                }
-            }
-        }
-        const remaining = items
-            .filter((i) => !seen.has(i.stock_item_id))
-            .sort((a, b) => levelSequence(b.stock_level_id) - levelSequence(a.stock_level_id));
-        return [...ordered, ...remaining].slice(0, 12);
+    /** Frequently-added first, then the most restock-relevant (low/out), and
+     *  **the same ordering under a filter** (owner, 2026-09-17). It used to
+     *  drop straight to `includes()` order the moment you typed, so the item
+     *  you buy every week could sit below one you have never bought. Typing
+     *  narrows the set; it doesn't change what "most useful first" means.
+     *
+     *  The star that used to mark a frequent item is gone with it: the
+     *  ordering already says so, and a row of stars is decoration on a list
+     *  whose whole job is to be scanned. */
+    /** Items already on the list you're adding to (owner, 2026-09-27). The
+     *  server would dedupe the tap anyway, so offering them was a row that did
+     *  nothing. Membership refreshes after every add, so a tapped item leaves
+     *  the results, which doubles as the confirmation it landed. */
+    const onTargetIds = computed(() => {
+        const target = targetListId.value;
+        if (!target) return new Set<string>();
+        return new Set(
+            (membership.value?.items ?? [])
+                .filter((m) => m.unticked_list_ids.includes(target))
+                .map((m) => m.stock_item_id),
+        );
     });
 
-    function isFrequent(stockItemId: string): boolean {
-        return frequentlyAdded.value.some((f) => f.stock_item_id === stockItemId);
-    }
+    const results = computed(() => {
+        const q = query.value?.trim().toLowerCase() ?? '';
+        const candidates = stockItems.value.filter(
+            (i) => !onTargetIds.value.has(i.stock_item_id),
+        );
+        const items = q
+            ? candidates.filter((i) => i.name.toLowerCase().includes(q))
+            : candidates;
 
-    const offerOptions = computed(() => [
-        { label: 'No specific offer', value: null },
-        ...offers.value.map((o) => ({
-            label: offerLabel(o),
-            value: o.product_id,
-        })),
-    ]);
+        const frequentRank = new Map(
+            frequentlyAdded.value.map((f, index) => [f.stock_item_id, index]),
+        );
+        const ordered = [...items].sort((a, b) => {
+            const aRank = frequentRank.get(a.stock_item_id);
+            const bRank = frequentRank.get(b.stock_item_id);
+            if (aRank !== undefined || bRank !== undefined) {
+                if (aRank === undefined) return 1;
+                if (bRank === undefined) return -1;
+                return aRank - bRank;
+            }
+            return levelSequence(b.stock_level_id) - levelSequence(a.stock_level_id);
+        });
+        return ordered.slice(0, q ? 30 : 12);
+    });
 
-    function offerLabel(o: LinkedProduct): string {
-        const price = o.price_now != null ? formatMoney(o.price_now) : 'n/a';
-        const store = o.store_name ? ` · ${o.store_name}` : '';
-        const size = o.size ? ` · ${o.size}` : '';
-        return `${o.name} — ${price}${store}${size}`;
-    }
-
-    async function selectItem(item: StockItem) {
-        selectedItem.value = item;
-        await loadOffers(item.stock_item_id);
-    }
-
-    async function loadOffers(stockItemId: string) {
-        offersLoading.value = true;
-        offers.value = [];
-        selectedProductId.value = null;
-        try {
-            const detail = await stockItemApi.getDetailAsync(stockItemId);
-            // API returns products cheapest-first; default to the cheapest.
-            offers.value = detail.products ?? [];
-            selectedProductId.value = offers.value[0]?.product_id ?? null;
-        } catch {
-            offers.value = [];
-        } finally {
-            offersLoading.value = false;
-        }
-    }
-
-    function clearSelection() {
-        selectedItem.value = null;
-        offers.value = [];
-        selectedProductId.value = null;
-        quantity.value = 1;
-    }
-
-    async function confirmAdd() {
-        if (!selectedItem.value || !targetListId.value) return;
-        adding.value = true;
+    /** Tap = added. Quantity 1, no offer — the two things the second step used
+     *  to ask for, at the values it already defaulted to. The sheet stays open
+     *  so a shop's worth of items is one tap each, and the row reports itself
+     *  through the shared `addItems` toast. */
+    async function addItem(item: StockItem) {
+        if (!targetListId.value || addingId.value) return;
+        addingId.value = item.stock_item_id;
         try {
             await addItems(targetListId.value, [
-                {
-                    stock_item_id: selectedItem.value.stock_item_id,
-                    quantity: quantity.value > 0 ? quantity.value : 1,
-                    selected_product_id: selectedProductId.value,
-                },
+                { stock_item_id: item.stock_item_id, quantity: 1, selected_product_id: null },
             ]);
-            closeQuickAdd();
         } finally {
-            adding.value = false;
+            addingId.value = null;
         }
     }
 
     function onHide() {
         query.value = '';
-        clearSelection();
+        addingId.value = null;
     }
 
     // When the sheet opens, make sure the supporting data is loaded and apply
@@ -323,11 +233,17 @@
         targetListId.value =
             presetListId.value ?? quickAddTargetListId.value ?? fallbackListId;
 
+        // A caller that named an item means "add this one" — with no second
+        // step left, that is the whole interaction, so it happens and the
+        // sheet closes rather than opening onto a list the user didn't ask for.
         if (presetStockItemId.value) {
             const preset = stockItems.value.find(
                 (i) => i.stock_item_id === presetStockItemId.value,
             );
-            if (preset) await selectItem(preset);
+            if (preset) {
+                await addItem(preset);
+                closeQuickAdd();
+            }
         }
     });
 </script>

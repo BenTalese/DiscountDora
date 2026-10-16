@@ -1,14 +1,14 @@
-"""Add / update / delete shopping list lines, plus quick-add to primary.
+"""Add / update / delete shopping list lines, plus quick-add.
 
 Lines are the per-stock-item rows on a list. Endpoints:
 
   POST   /api/shopping-lists/<id>/lines        — add a line
   PATCH  /api/shopping-lists/<id>/lines/<lid>  — tick, quantity, selected_product
   DELETE /api/shopping-lists/<id>/lines/<lid>
-  POST   /api/shopping-lists/primary/lines     — quick-add (DRAFT-count inference)
+  POST   /api/shopping-lists/quick-add/lines     — quick-add (DRAFT-count inference)
 
-P6-01 Chunk 2: "primary" is no longer a stored flag — quick-add resolves the
-target by counting DRAFT lists (see primary_target_resolver.py). The client may
+P6-01 Chunk 2: there is no user-set "main list" flag — quick-add resolves the
+target by counting DRAFT lists (see quick_add_target_resolver.py). The client may
 pass `shopping_list_id` to disambiguate the 2+ case (and remember the pick in
 sessionStorage).
 """
@@ -21,17 +21,17 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from dora_api.domain.entities.product import Product
 from dora_api.domain.entities.product_offer import ProductOffer
-from dora_api.domain.entities.shopping_list import (ADDED_VIA_MANUAL,
-                                                    SHOPPING_LIST_STATUS_DONE,
+from dora_api.domain.entities.shopping_list import (SHOPPING_LIST_STATUS_DONE,
                                                     SHOPPING_LIST_STATUS_DRAFT,
                                                     ShoppingList,
                                                     ShoppingListLine)
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.features.routers import SHOPPING_LIST_ROUTER
+from dora_api.features.shopping_lists._line_defaults import apply_line_defaults
 from dora_api.features.shopping_lists._observation_sync import (
     sync_line_observations)
-from dora_api.features.shopping_lists.primary_target_resolver import (
-    PrimaryTargetCandidate, resolve_primary_target)
+from dora_api.features.shopping_lists.quick_add_target_resolver import (
+    QuickAddTargetCandidate, resolve_quick_add_target)
 from dora_api.infrastructure.api_response import (business_rule_violation, ok,
                                                   no_content, not_found)
 from dora_api.infrastructure.decorators import has_request_body
@@ -52,8 +52,13 @@ class AddLineRequest(BaseModel):
     # whose linked stock item isn't on the list adds as its own row.
     stock_item_id: UUID | None = None
     product_id: UUID | None = None
-    quantity: int | None = Field(default=1, ge=0)
+    quantity: int | None = Field(default=1, ge=1)
     selected_product_id: UUID | None = None
+    # Omitted by every current caller; the handler falls back to the stock
+    # item's `usual_store_id`. Present so a caller that *knows* the store —
+    # a meal-plan build, a template with a store on it — can say so rather
+    # than having the usual one applied over the top of it.
+    planned_store_id: UUID | None = None
 
 
 @dataclass(slots=True)
@@ -81,8 +86,9 @@ class AddLineHandler:
         if lst is None:
             return AddLineResponse(list_not_found=True)
 
+        item: StockItem | None = None
         if request.stock_item_id is not None:
-            item: StockItem | None = self.repository.get(StockItem).by_id(request.stock_item_id)
+            item = self.repository.get(StockItem).by_id(request.stock_item_id)
             if item is None:
                 return AddLineResponse(item_not_found=True)
         if request.product_id is not None:
@@ -118,23 +124,23 @@ class AddLineHandler:
         # Sequence = current max + 1 so new lines append.
         next_sequence = (max((l.sequence for l in sibling_lines), default=-1)) + 1
 
+        # Planned store, preferred buy and picked offer are prefilled from
+        # the item — its usual store, and whatever you chose for it last time
+        # (`_line_defaults`). The usual store is written down rather than
+        # inherited at read time (owner, 2026-09-17) so the row's store picker
+        # shows a real choice and "Any store" keeps meaning *no store*.
         line = ShoppingListLine(
             shopping_list_id = shopping_list_id,
             stock_item_id = request.stock_item_id,
             product_id = request.product_id,
             quantity = request.quantity,
             selected_product_id = request.selected_product_id,
+            planned_store_id = request.planned_store_id,
             sequence = next_sequence,
-            added_via = ADDED_VIA_MANUAL,
             added_at = datetime.now(timezone.utc),
         )
+        apply_line_defaults(self.repository, [line])
         self.repository.add(line)
-        # State-ownership Chunk 6 — snapshot the offer at *add* (not at
-        # tick) so "what did I mean to pay?" stays answerable for lines
-        # that never get ticked, and so a price move between add and
-        # tick doesn't silently overwrite the planning-time intent.
-        if line.selected_product_id is not None:
-            snapshot_offer_price(self.repository, line)
         self.repository.save_changes()
         return AddLineResponse(line_id=line.id)
 
@@ -165,12 +171,51 @@ def add_line(shopping_list_id: UUID):
     })
 
 
-# ───── Price snapshot helper (N6) ─────────────────────────────────────────
+# ───── Price snapshot helpers ─────────────────────────────────────────────
+
+def snapshot_offer_rrp(repository: SqlAlchemyRepository, line: ShoppingListLine) -> None:
+    """Freeze the chosen offer's **was-price** onto a finished line.
+
+    The RRP, and only the RRP (2026-09-17). Its twin below used to freeze the
+    offer's *current* price too, which is what turned an advertised number into
+    recorded spend; that stopped. This one survives because the two values
+    answer different questions: `picked_offer_price` claimed "this is what you
+    paid", while `list_price_at_pick` says "this is what it would have cost at
+    full price" — context for a price the user *did* enter, not a substitute
+    for one.
+
+    So savings stay computable and keep meaning what they say: RRP minus what
+    you actually paid, on lines where you said what you paid. A line finished
+    with no price contributes no saving, the same way it now contributes no
+    spend.
+    """
+    if line.selected_product_id is None or line.actual_unit_price is None:
+        return
+    offer: ProductOffer | None = repository.get(ProductOffer).one(
+        EntityField(ProductOffer, "_product_id").eq(line.selected_product_id)
+    )
+    if offer is None or offer.price_was is None:
+        return
+    line.list_price_at_pick = float(offer.price_was)
+
+
 
 def snapshot_offer_price(repository: SqlAlchemyRepository, line: ShoppingListLine) -> None:
     """Freeze the current offer of `line.selected_product_id` onto the line.
-    No-op when the line has no selection, or no current offer exists for
-    that product. Designed to be called once, when the line first ticks.
+
+    **Nothing calls this any more (2026-09-17.)** It is kept because the
+    columns it writes still hold real history — `picked_offer_price` /
+    `list_price_at_pick` on lines finished before this change, which Reports
+    reads — and deleting the writer would make that data look like it came from
+    nowhere.
+
+    Why it stopped being called: an offer price is the shop's advertised
+    number, not the user's money, and writing it onto a line meant a shop the
+    user never priced still recorded spend they had never confirmed. The owner
+    chose to make pricing explicit instead — nothing is recorded unless it is
+    entered, and the price editor offers a one-tap way to pull an offer's
+    price in when that is genuinely what was paid. A list with no prices
+    entered now records no spend, which is the honest outcome.
     """
     if line.selected_product_id is None:
         return
@@ -187,7 +232,7 @@ def snapshot_offer_price(repository: SqlAlchemyRepository, line: ShoppingListLin
 
 class UpdateLineRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    quantity: int | None = Field(default=None, ge=0)
+    quantity: int | None = Field(default=None, ge=1)
     is_ticked: bool | None = None
     selected_product_id: UUID | None = None
     # `None` for selected_product_id is ambiguous (clear vs unset). Use this
@@ -248,22 +293,11 @@ class UpdateLineHandler:
             line.quantity = request.quantity
             user_edited = True
         if "is_ticked" in set_fields and request.is_ticked is not None:
-            # State-ownership Chunk 6 — ticking is "purchase complete",
-            # NOT "commit to an offer". The snapshot was captured at
-            # add-time / selection-change time and represents the
-            # planning-moment price; ticking leaves it alone. Untick
-            # likewise preserves it (the commit-to-offer moment didn't
-            # un-happen).
-            #
-            # Belt-and-braces for legacy rows that landed before the
-            # add-time snapshot existed and never got one assigned: on
-            # the first tick, fill it from the current offer so reports
-            # have something to read. New rows reach this path with
-            # `picked_offer_price` already set from add/select.
-            became_ticked = request.is_ticked and not line.is_ticked
+            # Ticking is "I put it in the trolley" and nothing more. It does
+            # not record a price: an offer's price is the shop's claim, not
+            # the user's, and since 2026-09-17 nothing writes one on their
+            # behalf (see `snapshot_offer_price`).
             line.is_ticked = request.is_ticked
-            if became_ticked and line.picked_offer_price is None:
-                snapshot_offer_price(self.repository, line)
         if "sequence" in set_fields and request.sequence is not None:
             line.sequence = request.sequence
         if request.clear_selected_product:
@@ -276,17 +310,24 @@ class UpdateLineHandler:
             line.list_price_at_pick = None
             user_edited = True
         elif "selected_product_id" in set_fields and request.selected_product_id is not None:
-            changed = line.selected_product_id != request.selected_product_id
             line.selected_product_id = request.selected_product_id
-            # State-ownership Chunk 6 — re-snapshot whenever the user
-            # commits to a different offer. The price they "meant to
-            # pay" just changed.
-            if changed:
-                snapshot_offer_price(self.repository, line)
+            # No price snapshot. Choosing an offer says *which* product you
+            # mean; it prices the line's estimate (the ladder's offer rung) but
+            # does not say what you paid.
+            #
+            # It does say where you'll buy it (owner, 2026-09-27: picking an
+            # offer "should overwrite the selected store for the shopping
+            # row"). Un-picking leaves the store alone; there is nothing to
+            # restore it to that is truer than what is there.
+            product: Product | None = self.repository.get(Product).include(Product.Fields.STORE).by_id(
+                request.selected_product_id
+            )
+            if product is not None:
+                line.planned_store_id = product.store.id
             user_edited = True
 
-        # actual paid price / store. Editing these doesn't flip
-        # added_via back to manual: they're a shopping-mode capture, not a
+        # actual paid price / store. Editing these doesn't clear
+        # is_auto_added: they're a shopping-mode capture, not a
         # re-curation of how the line came to be on the list.
         if request.clear_actual_unit_price:
             line.actual_unit_price = None
@@ -313,8 +354,8 @@ class UpdateLineHandler:
             line.deferred_by_budget = False
             line.deferred_reason = None
 
-        if user_edited and line.added_via != ADDED_VIA_MANUAL:
-            line.added_via = ADDED_VIA_MANUAL
+        if user_edited and line.is_auto_added:
+            line.is_auto_added = False
 
         # FU-726 — amending a *finished* list (the receipt face) edits the very
         # fields the harvested price observation was built from. The FK is
@@ -488,7 +529,7 @@ def remove_line_by_stock_item(shopping_list_id: UUID, stock_item_id: UUID):
     return ok({"removed": _Response.removed})
 
 
-# ───── Quick-add to inferred primary ──────────────────────────────────────
+# ───── Quick-add to the inferred draft target ─────────────────────────────
 
 class QuickAddRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -507,7 +548,7 @@ class QuickAddResponse:
     line_id: UUID | None = None
     shopping_list_id: UUID | None = None
     already_on_list: bool = False
-    candidates: list[PrimaryTargetCandidate] | None = None
+    candidates: list[QuickAddTargetCandidate] | None = None
 
 
 class QuickAddToPrimaryHandler:
@@ -534,7 +575,7 @@ class QuickAddToPrimaryHandler:
             active_lists = self.repository.get(ShoppingList).all(
                 EntityField(ShoppingList, ShoppingList.Fields.STATUS).ne(SHOPPING_LIST_STATUS_DONE)
             )
-            outcome = resolve_primary_target(active_lists)
+            outcome = resolve_quick_add_target(active_lists)
             if outcome.kind == "none":
                 return QuickAddResponse(result="no_draft")
             if outcome.kind == "ambiguous":
@@ -566,9 +607,9 @@ class QuickAddToPrimaryHandler:
             stock_item_id = request.stock_item_id,
             quantity = 1,
             sequence = next_sequence,
-            added_via = ADDED_VIA_MANUAL,
             added_at = datetime.now(timezone.utc),
         )
+        apply_line_defaults(self.repository, [line])
         self.repository.add(line)
         self.repository.save_changes()
         return QuickAddResponse(
@@ -576,9 +617,9 @@ class QuickAddToPrimaryHandler:
         )
 
 
-@SHOPPING_LIST_ROUTER.route("/primary/lines", methods=["POST"])
+@SHOPPING_LIST_ROUTER.route("/quick-add/lines", methods=["POST"])
 @has_request_body(QuickAddRequest)
-def quick_add_to_primary():
+def quick_add_to_draft():
     _Logger = logging.getLogger(__name__)
     _Request: QuickAddRequest = get_request_body()
     _Response = QuickAddToPrimaryHandler(SqlAlchemyRepository()).handle(_Request)

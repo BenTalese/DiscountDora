@@ -237,7 +237,7 @@ def test__build_reason__names_the_meals_and_the_first_date():
         planned_meals=3, covered_meals=0,
         recipe_names=["Fried Rice"], earliest_needed=date(2026, 9, 5),
     )
-    assert reason.startswith("3 planned meals coming up need this — Fried Rice")
+    assert reason.startswith("3 planned meals coming up need this: Fried Rice")
     assert "First needed Sat 5 Sep" in reason
 
 

@@ -40,7 +40,7 @@
                         <div class="col">
                             <div class="text-caption dora-text-muted">
                                 <template v-if="prefill.source === 'off'">
-                                    Suggested from <strong>Open Food Facts</strong> — review and confirm.
+                                    Suggested from <strong>Open Food Facts</strong>. Check it before saving.
                                 </template>
                                 <template v-else-if="prefill.source === 'product_no_link'">
                                     This barcode matches a known product. Add a stock item to link it.

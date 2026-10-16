@@ -6,30 +6,6 @@ from uuid import UUID
 from dora_api.domain.entities.base_entity import BaseEntity
 
 
-# Provenance of a shopping-list line — why it ended up on the list.
-# Used by the UI to render "auto: low stock" / "auto: recipe X" chips
-# and by analytics to tell user-initiated adds from auto-generated ones.
-# Plain str sentinels (not Enum) so SQLAlchemy stores them as varchar
-# without bind-parameter dancing.
-ADDED_VIA_MANUAL = "manual"
-ADDED_VIA_AUTO_LOW_STOCK = "auto_low_stock"
-ADDED_VIA_AUTO_ESSENTIAL = "auto_essential"
-ADDED_VIA_AUTO_FLAGGED = "auto_flagged"
-ADDED_VIA_AUTO_RECIPE = "auto_recipe"
-ADDED_VIA_AUTO_MEAL_PLAN = "auto_meal_plan"
-ADDED_VIA_AUTO_FREQUENTLY_ADDED = "auto_frequently_added"
-
-ADDED_VIA_VALUES = {
-    ADDED_VIA_MANUAL,
-    ADDED_VIA_AUTO_LOW_STOCK,
-    ADDED_VIA_AUTO_ESSENTIAL,
-    ADDED_VIA_AUTO_FLAGGED,
-    ADDED_VIA_AUTO_RECIPE,
-    ADDED_VIA_AUTO_MEAL_PLAN,
-    ADDED_VIA_AUTO_FREQUENTLY_ADDED,
-}
-
-
 # the single source of truth for where a list is
 # in the shop loop, replacing the old is_archived / is_in_progress flags.
 #   draft    : being assembled / edited (the old "planning", non-archived,
@@ -81,12 +57,15 @@ class ShoppingListLine(BaseEntity):
     is_ticked: bool = False
     selected_product_id: UUID | None = None
     sequence: int = 0
-    # Provenance. "manual" for user-typed adds; one of the auto_* values
-    # when the line came from /auto-generate or the low-stock auto-add
-    # hook (FU-511: fires per AppSetting.auto_add_mode + is_essential). If
-    # a user later edits the line (quantity/product), the caller flips
-    # this back to "manual" so the chip disappears.
-    added_via: str = ADDED_VIA_MANUAL
+    # True only for lines no user action put here directly: the low-stock
+    # auto-add hook in update_stock_item (FU-511: fires per
+    # AppSetting.auto_add_mode + is_essential), which drops an item onto a
+    # list as a knock-on of a stock level changing somewhere else. Lines
+    # the user asked for are False — including every /auto-generate line,
+    # because the user ticked the sources that produced them. If a user
+    # later edits the line (quantity/product), the caller clears this so
+    # the marker disappears.
+    is_auto_added: bool = False
     added_at: datetime | None = None
     # Snapshot pair captured at the *commit-to-offer* moment: when the line
     # is added with a `selected_product_id`, or when the user later sets /
@@ -146,7 +125,7 @@ class ShoppingListLine(BaseEntity):
         IS_TICKED = "is_ticked"
         SELECTED_PRODUCT_ID = "selected_product_id"
         SEQUENCE = "sequence"
-        ADDED_VIA = "added_via"
+        IS_AUTO_ADDED = "is_auto_added"
         ADDED_AT = "added_at"
         PICKED_OFFER_PRICE = "picked_offer_price"
         LIST_PRICE_AT_PICK = "list_price_at_pick"

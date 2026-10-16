@@ -128,3 +128,30 @@ def test__stock_item_price_history__seeded_milk_unions_offers(api):
     # Date-sorted ascending across both sources.
     dates = [p["observed_at"] for p in points]
     assert dates == sorted(dates)
+
+
+# ── Price-entry prefill (2026-09-17) ──────────────────────────────────────
+
+
+def test__price_entry_prefill__carries_the_latest_observations_date(api):
+    """The prefill says *when* the number it seeded came from.
+
+    The widget's "Prefilled from your last log" line reads identically whether
+    that log was yesterday or last March, which is the difference between
+    confirming the price and re-checking it. Pinned because it is a server
+    contract a client can't re-derive: the prefill exposes one observation, not
+    the list, so if `observed_at` stops travelling the UI has no fallback and
+    silently loses the date.
+    """
+    item = _new_stock_item()
+    _log(item, total_price=2.00, total_measure=1.0, unit="L",
+         observed_at="2026-03-02T00:00:00Z")
+    _log(item, total_price=3.50, total_measure=1.0, unit="L",
+         observed_at="2026-09-01T00:00:00Z")
+
+    prefill = requests.get(f"{STOCK_ITEMS}/{item}/detail").json()["price_entry_prefill"]
+
+    # The newest observation is the one that seeds the form, so it is also the
+    # one whose date is reported.
+    assert prefill["total_price"] == 3.50
+    assert prefill["observed_at"].startswith("2026-09-01")

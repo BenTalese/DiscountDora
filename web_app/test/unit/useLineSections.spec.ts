@@ -26,12 +26,13 @@ function line(overrides: Partial<ShoppingListLine> = {}): ShoppingListLine {
         is_ticked: false,
         selected_product_id: null,
         sequence: 0,
-        added_via: 'manual',
+        is_auto_added: false,
         added_at: null,
         actual_unit_price: null,
         purchased_store_id: null,
         purchased_store_name: null,
         planned_store_id: null,
+        usual_store_id: null,
         planned_store_name: null,
         prefill_unit_price: null,
         prefill_source_label: null,
@@ -60,15 +61,15 @@ function setup(lines: ShoppingListLine[], mode: SectionMode, hideTicked = false)
 
 describe('availability — a mode with no data disables itself', () => {
     it('marks every field-backed mode unavailable on a bare list', () => {
-        const { availableModes } = setup([line(), line()], 'manual');
+        const { availableModes } = setup([line(), line()], 'none');
         expect(availableModes.value.location).toBe(false);
         expect(availableModes.value.group).toBe(false);
         expect(availableModes.value.store).toBe(false);
     });
 
-    it('always keeps manual available — it needs no data', () => {
-        const { availableModes } = setup([], 'manual');
-        expect(availableModes.value.manual).toBe(true);
+    it('always keeps the ungrouped mode available — it needs no data', () => {
+        const { availableModes } = setup([], 'none');
+        expect(availableModes.value.none).toBe(true);
     });
 
     it('needs only one line with a value to make a mode available', () => {
@@ -88,9 +89,9 @@ describe('availability — a mode with no data disables itself', () => {
 });
 
 describe('effective mode — a stale preference cannot strand the user', () => {
-    it('falls back to manual when the chosen mode has no data', () => {
+    it('falls back to ungrouped when the chosen mode has no data', () => {
         const { effectiveMode, sections } = setup([line(), line()], 'location');
-        expect(effectiveMode.value).toBe('manual');
+        expect(effectiveMode.value).toBe('none');
         expect(sections.value).toHaveLength(1);
     });
 
@@ -141,11 +142,11 @@ describe('sectioning', () => {
         expect(sections.value[0]!.lines.map((l) => l.stock_item_name)).toEqual(['Beans', 'Rice']);
     });
 
-    it('leaves manual mode as one unlabelled run in sequence order', () => {
+    it('leaves the ungrouped mode as one unlabelled run in sequence order', () => {
         const { sections } = setup([
             line({ stock_item_name: 'Rice' }),
             line({ stock_item_name: 'Beans' }),
-        ], 'manual');
+        ], 'none');
 
         expect(sections.value).toHaveLength(1);
         expect(sections.value[0]!.label).toBeNull();
@@ -158,7 +159,7 @@ describe('hideTicked — the run face shrinks as you shop', () => {
         const { orderedLines } = setup([
             line({ stock_item_name: 'Butter', is_ticked: true }),
             line({ stock_item_name: 'Milk' }),
-        ], 'manual', true);
+        ], 'none', true);
 
         expect(orderedLines.value.map((l) => l.stock_item_name)).toEqual(['Milk']);
     });
@@ -167,7 +168,7 @@ describe('hideTicked — the run face shrinks as you shop', () => {
         const { orderedLines } = setup([
             line({ is_ticked: true }),
             line(),
-        ], 'manual', false);
+        ], 'none', false);
         expect(orderedLines.value).toHaveLength(2);
     });
 });
@@ -219,6 +220,6 @@ describe('sectionProgress — drives the run face collapse', () => {
 
 describe('mode list', () => {
     it('exposes the four agreed modes in order', () => {
-        expect(SECTION_MODES).toEqual(['location', 'group', 'store', 'manual']);
+        expect(SECTION_MODES).toEqual(['location', 'group', 'store', 'none']);
     });
 });

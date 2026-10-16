@@ -101,7 +101,7 @@ describe('RecipeRatingChip — health stars', () => {
         // as "disabled" rather than "approximate".
         expect(wrapper.find('.rating-chip--part').exists()).toBe(false);
         expect(wrapper.find('.tip-stub').text())
-            .toContain('worked out from only part of this recipe');
+            .toContain('from only part of this recipe');
     });
 
     it('says nothing when the recipe has no rating', () => {

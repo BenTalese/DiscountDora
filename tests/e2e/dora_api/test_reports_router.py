@@ -4,7 +4,7 @@ One test per report pinning the response shape plus at least one computed
 value against data seeded through the API:
 
   stock-value-over-time · spend-by-store · most-bought-items ·
-  keeps-running-out · price-trends · savings-captured · price-drops ·
+  savings-captured · price-drops ·
   meals-cooked · spend-by-category · spend-year-over-year
 
 `range=all` is used wherever ranges apply so assertions aren't sensitive to
@@ -198,155 +198,6 @@ def test__most_bought_items__ItemOnTwoArchivedLists__CountsDistinctLists(api):
 
 
 #endregion most-bought items
-
-#region ---------------- keeps running out ----------------
-
-
-def _add_to_new_list(token: str, item_id: str, list_name: str) -> None:
-    list_id = requests.post(
-        f"{BASE}/shopping-lists", json={"name": f"{token} {list_name}"},
-    ).json()["shopping_list_id"]
-    line = requests.post(
-        f"{BASE}/shopping-lists/{list_id}/lines", json={"stock_item_id": item_id},
-    )
-    assert line.status_code in (200, 201), line.text
-
-
-def test__keeps_running_out__ItemDroppedToOutThenAdded__Tallied(api):
-    token = _token()
-    levels = requests.get(f"{BASE}/stock-levels").json()["items"]
-    out_level = next(l for l in levels if l["sequence"] == 2)
-    stocked_level = next(l for l in levels if l["sequence"] == 0)
-    item_resp = requests.post(f"{BASE}/stock-items", json={
-        "name": f"{token} tonic", "stock_level_id": stocked_level["stock_level_id"],
-    })
-    assert item_resp.status_code == 201, item_resp.text
-    item_id = item_resp.json()["stock_item_id"]
-    # Drop to Out via the update endpoint so a StockLevelChange transition is
-    # logged, then add to a list — "added while out" is the report's signal.
-    drop = requests.patch(f"{BASE}/stock-items/{item_id}", json={
-        "stock_level_id": out_level["stock_level_id"],
-    })
-    assert drop.status_code in (200, 204), drop.text
-    _add_to_new_list(token, item_id, "restock")
-
-    rows = requests.get(
-        f"{REPORTS}/keeps-running-out", params={"limit": 50},
-    ).json()["rows"]
-
-    row = next(r for r in rows if r["stock_item_id"] == item_id)
-    assert set(row.keys()) == {"stock_item_id", "name", "times_out_when_added"}
-    assert row["times_out_when_added"] == 1
-
-
-# Regression for the FU-527 fix (2026-07-12): the fallback items query now
-# `.include(STOCK_LEVEL)`, so an item with no change-log history falls back to
-# its current level and is tallied instead of silently dropped.
-def test__keeps_running_out__ItemCreatedOutWithNoLevelHistory__FallbackTallies(api):
-    token = _token()
-    levels = requests.get(f"{BASE}/stock-levels").json()["items"]
-    out_level = next(l for l in levels if l["sequence"] == 2)
-    item_resp = requests.post(f"{BASE}/stock-items", json={
-        "name": f"{token} bitters", "stock_level_id": out_level["stock_level_id"],
-    })
-    assert item_resp.status_code == 201, item_resp.text
-    item_id = item_resp.json()["stock_item_id"]
-    _add_to_new_list(token, item_id, "restock")
-
-    rows = requests.get(
-        f"{REPORTS}/keeps-running-out", params={"limit": 50},
-    ).json()["rows"]
-
-    assert item_id in {r["stock_item_id"] for r in rows}
-
-
-def test__keeps_running_out__Range__BoundsWhichAddsCount(api):
-    # REPORTS_PAGE_REVIEW.md §3.5 / D7 — the card sits directly under the
-    # range picker and used to count all history, forever, while wearing a
-    # label that said "30 days". An add that happened just now is inside every
-    # window; the point of this test is that the parameter is honoured at all
-    # and that an omitted one still means all-time, which is what the
-    # dashboard's restock radar relies on.
-    token = _token()
-    levels = requests.get(f"{BASE}/stock-levels").json()["items"]
-    out_level = next(l for l in levels if l["sequence"] == 2)
-    item_id = requests.post(f"{BASE}/stock-items", json={
-        "name": f"{token} anchovies", "stock_level_id": out_level["stock_level_id"],
-    }).json()["stock_item_id"]
-    _add_to_new_list(token, item_id, "restock")
-
-    bounded = requests.get(
-        f"{REPORTS}/keeps-running-out", params={"limit": 50, "range": "30d"},
-    ).json()
-    unbounded = requests.get(
-        f"{REPORTS}/keeps-running-out", params={"limit": 50},
-    ).json()
-
-    assert bounded["range"] == "30d"
-    assert item_id in {r["stock_item_id"] for r in bounded["rows"]}
-    # No `range` param ⇒ all time, the pre-FU-816 meaning.
-    assert unbounded["range"] == "all"
-    assert item_id in {r["stock_item_id"] for r in unbounded["rows"]}
-
-
-#endregion keeps running out
-
-#region ---------------- price trends ----------------
-
-
-def test__price_trends__ProductWithCurrentOffer__SingleSeriesSinglePoint(api):
-    seeded = seed_purchase(price_now=4.5, finish=False, tick=False)
-
-    body = requests.get(f"{REPORTS}/price-trends", params={
-        "product_ids": seeded["product_id"], "range": "all",
-    }).json()
-
-    assert set(body.keys()) == {"range", "series"}
-    assert len(body["series"]) == 1
-    series = body["series"][0]
-    assert series["product_id"] == seeded["product_id"]
-    assert series["store"] == seeded["store_name"]
-    assert [p["unit_price"] for p in series["points"]] == [4.5]
-
-
-@pytest.mark.parametrize("bounded_range", ["30d", "90d", "1y"])
-def test__price_trends__BoundedRange__DoesNotCrashOnNaiveOfferTimestamps(
-    api, bounded_range,
-):
-    # FU-813 regression. `offered_on` is `DateTime(timezone=True)`, but SQLite
-    # does not preserve tzinfo, so it came back naive and was compared against
-    # an aware `since` — `TypeError`, i.e. a 500 on every range except "All
-    # time". It went unnoticed because the only seeded price-trends test above
-    # passes `range=all`, the one branch where `since is None` and the
-    # comparison never executes. It would also have passed on Postgres, which
-    # makes it a §7.5 portability break as well as a crash.
-    seeded = seed_purchase(price_now=4.5, finish=False, tick=False)
-
-    resp = requests.get(f"{REPORTS}/price-trends", params={
-        "product_ids": seeded["product_id"], "range": bounded_range,
-    })
-
-    assert resp.status_code == 200, resp.text
-    series = resp.json()["series"][0]
-    # The offer was created just now, so a bounded window still contains it.
-    assert [p["unit_price"] for p in series["points"]] == [4.5]
-
-
-def test__price_trends__NoProductIds__EmptySeries(api):
-    body = requests.get(f"{REPORTS}/price-trends").json()
-
-    assert body["series"] == []
-
-
-def test__price_trends__MalformedProductId__BadRequest(api):
-    resp = requests.get(
-        f"{REPORTS}/price-trends", params={"product_ids": "not-a-uuid"},
-    )
-
-    assert_problem(resp, 400, title="Invalid product_ids")
-
-
-#endregion price trends
 
 #region ---------------- savings captured ----------------
 
@@ -814,7 +665,6 @@ _MONEY_GATED = [
     ("savings-captured", {}),
     ("spend-by-category", {}),
     ("spend-year-over-year", {}),
-    ("price-trends", {"product_ids": ""}),
     ("item-price-movers", {}),
 ]
 
@@ -832,7 +682,7 @@ def test__money_reports__MoneyDisabled__Forbidden(api, path, params):
 # `/reports` worth a nav entry on a money-off install, which is why the nav
 # entry stays unconditional.
 @pytest.mark.parametrize(
-    "path", ["most-bought-items", "keeps-running-out", "meals-cooked"],
+    "path", ["most-bought-items", "meals-cooked"],
 )
 def test__counting_reports__MoneyDisabled__StillAnswer(api, path):
     set_money_enabled(False)
@@ -861,14 +711,16 @@ def test__range_window__BoundedToken__NamesItsDatesAndLength(api, token, days):
     assert (end - start).days == days
 
 
-def test__range_window__AllTime__HasNoStartDate(api):
+def test__range_window__AllTime__StartsAtTheEarliestRecord(api):
+    # "All time" names real dates too (2026-09-27), from the oldest record any
+    # report reads. A shopping list guarantees there is one.
+    assert requests.post(f"{BASE}/shopping-lists", json={"name": "window probe"}).status_code == 201
+
     body = requests.get(f"{REPORTS}/range-window", params={"range": "all"}).json()
 
-    # None rather than the epoch: "all time" has no start worth printing, and
-    # inventing one would be a worse answer than none.
-    assert body["start"] is None
+    assert body["start"] is not None
+    assert date.fromisoformat(body["start"]) <= date.fromisoformat(body["end"])
     assert body["days"] is None
-    assert body["end"]
 
 
 def test__range_window__MoneyDisabled__StillAnswers(api):
@@ -882,3 +734,26 @@ def test__range_window__MoneyDisabled__StillAnswers(api):
 
 
 #endregion range window
+
+
+def test__spend_by_store__OfferPickedButNoPriceEntered__RecordsNoSpend(api):
+    """An advertised price is never recorded as money you spent.
+
+    Until 2026-09-17 finishing a list froze the chosen offer's price onto every
+    ticked line, so a shop where the user typed nothing still reported spend —
+    built entirely from what shops were asking that day. The owner's call was
+    to make pricing explicit: "yes this means you can have no spend recorded if
+    you don't record anything. That's up to the user."
+
+    Pinned because the failure mode is silent and flattering: the numbers would
+    simply reappear, and a bigger spend figure is not something anyone
+    investigates.
+    """
+    seeded = seed_purchase(price_now=4.5, quantity=2, price_unrecorded=True)
+
+    body = requests.get(f"{REPORTS}/spend-by-store", params={"range": "all"}).json()
+    row = next((r for r in body["rows"] if r["store_id"] == seeded["store_id"]), None)
+
+    assert row is None, "an offer price must not be recorded as spend"
+    # Not dropped in silence either — it is counted as unpriced coverage.
+    assert body["unpriced_lines"] >= 1

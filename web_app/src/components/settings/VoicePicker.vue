@@ -36,8 +36,8 @@
                  Firefox). Say so, and hide the Preview rather than offering a
                  button that does nothing. -->
             <div v-if="!deviceVoiceUsable" class="voice-card__desc voice-card__desc--warn">
-                Not available in this browser — no text-to-speech voices are
-                installed. Dora will use her neural voice instead.
+                No text-to-speech voices are installed in this browser. Dora will
+                use her neural voice instead.
             </div>
             <div v-if="canPreviewDevice" class="voice-card__actions">
                 <button
@@ -259,10 +259,10 @@
     function downloadLabel(voice: TtsVoice): string {
         const done = voice.downloaded_bytes ?? 0;
         const total = voice.downloaded_bytes_total ?? 0;
-        if (total > 0) return `Downloading — ${sizeMb(done)} of ${sizeMb(total)}`;
+        if (total > 0) return `Downloading ${sizeMb(done)} of ${sizeMb(total)}`;
         // No total to quote, so fall back to the catalogue's advertised size,
         // which is what this card showed before the counters existed.
-        if (done > 0) return `Downloading — ${sizeMb(done)} of ~${sizeMb(voice.size_bytes)}`;
+        if (done > 0) return `Downloading ${sizeMb(done)} of ~${sizeMb(voice.size_bytes)}`;
         return `Downloading… (${sizeMb(voice.size_bytes)})`;
     }
 

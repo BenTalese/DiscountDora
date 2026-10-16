@@ -1,5 +1,9 @@
 """C-9.1 — alerts spine: scoped keys + per-user interaction ledger
-(read / snooze / dismiss) + the single server-derived "what counts".
+(snooze / dismiss) + the single server-derived "what counts".
+
+2026-10-15: keys carry the episode that started the condition, there is no
+read state, a per-user discard window drops old alerts, and two kinds joined
+(`shopping_overdue`, `price_drop`).
 
 NOTE (2026-06-15): authored static-only — this machine has no Python env, so
 the suite was not executed here (see DORA_FOLLOWUPS FU-183). Run on a
@@ -24,17 +28,26 @@ def _any_stock_level_id() -> str:
     return levels[0]["stock_level_id"]
 
 
-def _create_expired_item(name: str) -> None:
+def _yesterday() -> str:
+    today = date.fromisoformat(requests.get(f"{MEAL_PLANS}/today").json()["today"])
+    return (today - timedelta(days=1)).isoformat()
+
+
+def _create_expired_item(name: str, expiry: str | None = None) -> str:
     # Past expiry → a high-severity `expired` alert, independent of stock level.
+    # Yesterday by default: inside every discard window (the seeded user keeps
+    # the 14-day default), so the alert is visible.
+    expiry = expiry or _yesterday()
     resp = requests.post(
         f"{BASE}/stock-items",
         json={
             "name": name,
             "stock_level_id": _any_stock_level_id(),
-            "expiry_date": "2020-01-01",
+            "expiry_date": expiry,
         },
     )
     assert resp.status_code in (200, 201), resp.text
+    return expiry
 
 
 def _alerts():
@@ -52,16 +65,17 @@ def _find(bucket: list, name: str, kind: str = "expired"):
 
 def test__alerts__expired_item_surfaces_with_scoped_key(api):
     name = f"alert-spine-{uuid.uuid4().hex[:8]}"
-    _create_expired_item(name)
+    expiry = _create_expired_item(name)
 
     data = _alerts()
     alert = _find(data["items"], name)
     assert alert is not None, "expired item should surface an active alert"
-    # Generalised scoped key: stock:<uuid>:<discriminator>
+    # Scoped key with the episode: stock:<uuid>:expired:<expiry date>
     assert alert["alert_id"].startswith("stock:")
-    assert alert["alert_id"].endswith(":expired")
+    assert alert["alert_id"].endswith(f":expired:{expiry}")
     assert alert["severity"] == "high"
-    assert alert["read"] is False
+    assert alert["started_on"] == expiry
+    assert "read" not in alert
     assert alert["snoozed_until"] is None
 
 
@@ -94,20 +108,55 @@ def test__alerts__snooze_moves_out_of_active_then_clear_restores(api):
     assert _find(_alerts()["items"], name) is not None, "clearing snooze restores the alert"
 
 
-def test__alerts__mark_read_then_read_all(api):
-    name = f"alert-read-{uuid.uuid4().hex[:8]}"
+def test__alerts__dismiss_all_clears_the_active_set(api):
+    name = f"alert-dismiss-all-{uuid.uuid4().hex[:8]}"
+    _create_expired_item(name)
+    assert _find(_alerts()["items"], name) is not None
+
+    assert requests.post(f"{BASE}/alerts/dismiss-all").status_code == 204
+    data = _alerts()
+    assert data["items"] == []
+    assert data["actionable_count"] == 0
+
+
+def test__alerts__read_endpoints_are_gone(api):
+    assert requests.post(f"{BASE}/alerts/read-all").status_code in (404, 405)
+
+
+def test__alerts__dismissal_holds_for_the_episode_only(api):
+    """Owner 2026-10-15: a dismissed expiry stays dismissed for that expiry
+    date, and a new expiry date is a new alert."""
+    name = f"alert-episode-{uuid.uuid4().hex[:8]}"
     _create_expired_item(name)
     alert_id = _find(_alerts()["items"], name)["alert_id"]
+    assert requests.post(f"{BASE}/alerts/{alert_id}/dismiss").status_code == 204
+    assert _find(_alerts()["items"], name) is None
 
-    read = requests.post(f"{BASE}/alerts/{alert_id}/read")
-    assert read.status_code == 204, read.text
-    assert _find(_alerts()["items"], name)["read"] is True
+    items = requests.get(f"{BASE}/stock-items?limit=500").json()["items"]
+    item_id = next(i["stock_item_id"] for i in items if i["name"] == name)
+    earlier = (date.fromisoformat(_yesterday()) - timedelta(days=1)).isoformat()
+    resp = requests.patch(f"{BASE}/stock-items/{item_id}", json={"expiry_date": earlier})
+    assert resp.status_code in (200, 204), resp.text
 
-    requests.post(f"{BASE}/alerts/{alert_id}/unread")
-    assert _find(_alerts()["items"], name)["read"] is False
+    fresh = _find(_alerts()["items"], name)
+    assert fresh is not None, "a new expiry date is a new episode"
+    assert fresh["alert_id"] != alert_id
 
-    assert requests.post(f"{BASE}/alerts/read-all").status_code == 204
-    assert _find(_alerts()["items"], name)["read"] is True
+
+def test__alerts__discard_window_drops_old_alerts(api):
+    name = f"alert-discard-{uuid.uuid4().hex[:8]}"
+    _create_expired_item(name, expiry="2020-01-01")  # far older than any window
+    assert _find(_alerts()["items"], name) is None, "the default 14-day window drops it"
+    assert requests.patch(f"{BASE}/auth/me", json={"alert_discard_after_days": None}).status_code == 200
+    try:
+        assert _find(_alerts()["items"], name) is not None, "never discarding keeps it"
+    finally:
+        assert requests.patch(f"{BASE}/auth/me", json={"alert_discard_after_days": 14}).status_code == 200
+
+
+def test__alerts__discard_window_rejects_an_unknown_value(api):
+    resp = requests.patch(f"{BASE}/auth/me", json={"alert_discard_after_days": 9})
+    assert resp.status_code == 422, resp.text
 
 
 def test__alerts__dismiss_hides_everywhere(api):
@@ -148,11 +197,12 @@ def test__alerts__action_endpoint_rejects_non_stock_key(api):
 # per-user + persistent, and the threshold is household-wide — no per-test DB
 # isolation yet, FU-169).
 # ─────────────────────────────────────────────────────────────────────────
-# The six survivors of the Step-0 assessment. `out_of_stock`, `low_stock` and
-# `stocktake_overdue` were cut — see `alert_kinds.py`.
+# `out_of_stock`, `low_stock` and `stocktake_overdue` were cut at Step-0;
+# `shopping_overdue` and `price_drop` joined 2026-10-15 — see `alert_kinds.py`.
 ALL_KINDS = (
     "expired", "expiring_soon", "essential_low",
-    "no_planned_meals", "shopping_day", "meal_reconcile_overdue",
+    "no_planned_meals", "shopping_day", "shopping_overdue",
+    "meal_reconcile_overdue", "price_drop",
 )
 
 
@@ -262,23 +312,6 @@ def test__alerts__expiring_soon_window_threshold_re_derives(api):
     assert _find(_alerts()["items"], name, kind="expiring_soon") is not None, "restored window re-fires the alert"
 
 
-def test__alerts__history_lists_dismissed_with_resolved_label(api):
-    # alerts are derived, so "history" is the ledger of decisions; a
-    # dismissed alert surfaces in /history with its stock name resolved.
-    name = f"alert-history-{uuid.uuid4().hex[:8]}"
-    _create_expired_item(name)
-    alert_id = _find(_alerts()["items"], name)["alert_id"]
-    assert requests.post(f"{BASE}/alerts/{alert_id}/dismiss").status_code == 204
-
-    resp = requests.get(f"{BASE}/alerts/history")
-    assert resp.status_code == 200, resp.text
-    entry = next((e for e in resp.json()["entries"] if e["alert_key"] == alert_id), None)
-    assert entry is not None, "a dismissed alert should appear in history"
-    assert entry["state"] == "dismissed"
-    assert entry["label"] == name, "stock item name resolved from the alert key"
-    assert entry["kind"] == "expired"
-
-
 # ─────────────────────────────────────────────────────────────────────────
 # forward-looking nudges: `no_planned_meals` (next week empty) and
 # `shopping_day` (a list's planned shop date is near). Both are non-stock kinds:
@@ -347,7 +380,8 @@ def test__alerts__shopping_day_fires_within_window_and_clears_when_done(api):
     try:
         alert = _find_kind(_alerts(), "shopping_day", target_id=list_id)
         assert alert is not None, "a list two days out should surface a shopping-day nudge"
-        assert alert["alert_id"] == f"list:{list_id}:shopping_day"
+        planned = (today + timedelta(days=2)).isoformat()
+        assert alert["alert_id"] == f"list:{list_id}:shopping_day:{planned}"
         assert alert["tier"] == "fyi"
         assert alert["stock_item_id"] is None
 
@@ -376,12 +410,10 @@ def test__alerts__shopping_day_silent_outside_window(api):
         requests.delete(f"{SHOPPING_LISTS}/{list_id}")
 
 
-def test__alerts__shopping_day_overdue_fires_and_escalates_severity(api):
-    # a not-yet-done list whose planned shop date has already
-    # passed should keep nudging (mirrors the in-page banner's overdue
-    # state). Severity bumps from low → medium so it sorts above plain
-    # upcoming nudges — and since Step-0 Q3 made tier derive from severity,
-    # that promotion also puts it on the bell badge.
+def test__alerts__missed_shop_day_is_its_own_kind(api):
+    # Owner 2026-10-15, "Did you forget your shopping?": a list still open
+    # after its planned day is `shopping_overdue`, medium (so on the badge),
+    # on its own key, so dismissing the upcoming reminder never silenced it.
     today = _household_today()
     created = requests.post(SHOPPING_LISTS, json={
         "name": f"shopping-day-overdue-{uuid.uuid4().hex[:8]}",
@@ -390,21 +422,21 @@ def test__alerts__shopping_day_overdue_fires_and_escalates_severity(api):
     assert created.status_code == 201, created.text
     list_id = created.json()["shopping_list_id"]
     try:
-        alert = _find_kind(_alerts(), "shopping_day", target_id=list_id)
-        assert alert is not None, "an overdue shop day should still nudge"
-        assert alert["alert_id"] == f"list:{list_id}:shopping_day"
-        assert alert["severity"] == "medium", \
-            "overdue bumps the severity from low to medium so it sorts above upcoming"
-        assert alert["tier"] == "actionable", \
-            "tier follows severity — a bumped nudge counts on the badge"
-        assert "2 days ago" in alert["message"], alert["message"]
+        assert _find_kind(_alerts(), "shopping_day", target_id=list_id) is None
+        alert = _find_kind(_alerts(), "shopping_overdue", target_id=list_id)
+        assert alert is not None, "a missed shop day should nudge"
+        planned = (today - timedelta(days=2)).isoformat()
+        assert alert["alert_id"] == f"list:{list_id}:shopping_overdue:{planned}"
+        assert alert["severity"] == "medium"
+        assert alert["tier"] == "actionable"
+        assert alert["message"] == "Did you forget your shopping?"
+        assert "2 days ago" in alert["detail"], alert["detail"]
+        assert alert["started_on"] == (today - timedelta(days=1)).isoformat()
 
-        # Finishing the list clears it (same close condition as the
-        # upcoming case — only status, not the date passing).
         assert requests.post(f"{SHOPPING_LISTS}/{list_id}/start").status_code == 204
         assert requests.post(f"{SHOPPING_LISTS}/{list_id}/finish").status_code == 200
-        assert _find_kind(_alerts(), "shopping_day", target_id=list_id) is None, \
-            "an overdue list still clears the nudge once it's marked done"
+        assert _find_kind(_alerts(), "shopping_overdue", target_id=list_id) is None, \
+            "a finished list stops nudging"
     finally:
         requests.delete(f"{SHOPPING_LISTS}/{list_id}")
 
@@ -527,3 +559,34 @@ def test__upcoming__clamps_excessive_days(api):
     # The window is clamped to a sane max so a caller can't request an
     # unbounded scan (R-003 — one bound, server-side).
     assert _upcoming(days=9999)["days"] == 31
+
+
+# ── price_drop (owner 2026-10-15) ─────────────────────────────────────────
+
+def test__alerts__price_watch_fires_at_or_below_the_threshold(api):
+    requests.patch(APP_SETTINGS, json={"money_enabled": True})
+    try:
+        products = requests.get(f"{BASE}/products?limit=50").json()
+        rows = products.get("items") or products.get("data") or products
+        product = next(p for p in rows if p.get("price_now"))
+        pid, price = product["product_id"], float(product["price_now"])
+
+        # Above the current price: fires.
+        assert requests.post(f"{BASE}/price-history/alerts", json={
+            "product_id": pid, "threshold_unit_price": price + 1,
+        }).status_code == 200
+        alert = _find_kind(_alerts(), "price_drop", target_id=pid)
+        assert alert is not None
+        assert alert["amount"] == price
+        assert alert["alert_id"].startswith(f"product:{pid}:price_drop:")
+
+        # Re-setting the watch replaces it (one per product): below the price,
+        # nothing fires.
+        assert requests.post(f"{BASE}/price-history/alerts", json={
+            "product_id": pid, "threshold_unit_price": max(price - 1, 0.01),
+        }).status_code == 200
+        watches = requests.get(f"{BASE}/price-history/alerts").json()["items"]
+        assert sum(1 for w in watches if w["product_id"] == pid) == 1
+        assert _find_kind(_alerts(), "price_drop", target_id=pid) is None
+    finally:
+        requests.patch(APP_SETTINGS, json={"money_enabled": False})

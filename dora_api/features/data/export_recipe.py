@@ -82,7 +82,7 @@ _PRINT_TEMPLATE = """<!doctype html>
           <span class="item-name">{{ ingredient.stock_item_name }}</span>
           {% set qty_label = format_quantity(ingredient.quantity, ingredient.unit) %}
           {% if qty_label %}
-            — {{ qty_label }}
+            · {{ qty_label }}
           {% endif %}
           {% if ingredient.notes %}
             <div class="item-notes">{{ ingredient.notes }}</div>

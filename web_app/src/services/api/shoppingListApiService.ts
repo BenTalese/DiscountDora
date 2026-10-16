@@ -115,10 +115,10 @@ export type QuickAddCandidate = {
     name: string;
 };
 
-/** Discriminated outcome of POST /api/shopping-lists/primary/lines.
- *  Chunk 2: "primary" is inferred from DRAFT count — the server replies with
- *  `ambiguous` when 2+ drafts exist, expecting the client to pick (and remember
- *  the choice in sessionStorage).
+/** Discriminated outcome of the quick-add endpoint. The target list is
+ *  inferred from DRAFT count — the server replies with `ambiguous` when 2+
+ *  drafts exist, expecting the client to pick (and remember the choice in
+ *  sessionStorage).
  */
 export type QuickAddResult =
     | {
@@ -130,24 +130,12 @@ export type QuickAddResult =
     | { result: 'no_draft' }
     | { result: 'ambiguous'; candidates: QuickAddCandidate[] };
 
-/** X5 — auto-generated shopping list provenance values. Mirrors the
- *  backend ADDED_VIA_* constants. A line on a shopping list always
- *  carries one of these so the UI can render a "why is this here?"
- *  chip; "manual" is the default and means no chip. */
-export type AddedVia =
-    | 'manual'
-    | 'auto_low_stock'
-    | 'auto_essential'
-    | 'auto_flagged'
-    | 'auto_recipe'
-    | 'auto_meal_plan'
-    | 'auto_frequently_added';
-
 export type AutoGenerateSources = {
     low_stock?: boolean;
     out_of_stock?: boolean;
     essentials_only_for_low?: boolean;
-    flagged?: boolean;
+    /** Every essential item, whatever its stock level. */
+    essentials?: boolean;
     frequently_added?: boolean;
     frequently_added_limit?: number;
     /** ISO date (YYYY-MM-DD) marking the start of the meal-plan week. */
@@ -164,8 +152,6 @@ export type AutoGenerateCommand = {
 export type AutoGenerateLine = {
     line_id: string;
     stock_item_id: string;
-    added_via: AddedVia;
-    detail: string | null;
 };
 
 /** FU-505 — a recipe / meal-plan ingredient that couldn't be turned into
@@ -193,9 +179,8 @@ export type MoveUntickedResult = {
     skipped_duplicates: number;
 };
 
-export type RefreshDealsResult = {
-    lines_checked: number;
-    selections_cleared: number;
+export type BackToDraftResult = {
+    unticked_count: number;
 };
 
 export type ClearListResult = {
@@ -305,7 +290,7 @@ export default class ShoppingListApiService {
         await this.httpClient.post<
             QuickAddResult,
             { stock_item_id: string; shopping_list_id?: string }
-        >('/shopping-lists/primary/lines', {
+        >('/shopping-lists/quick-add/lines', {
             stock_item_id: stockItemId,
             ...(shoppingListId ? { shopping_list_id: shoppingListId } : {}),
         });
@@ -360,17 +345,19 @@ export default class ShoppingListApiService {
             { line_ids: lineIds },
         );
 
-    refreshDealsAsync = async (id: string): Promise<RefreshDealsResult> =>
-        await this.httpClient.post<RefreshDealsResult, Record<string, never>>(
-            `/shopping-lists/${id}/refresh-deals`,
-            {},
-        );
-
-    // UX-v2: there is deliberately no stopShoppingAsync — the lifecycle is
-    // Start shopping → Finish & restock (→ Reopen); /stop was removed.
     startShoppingAsync = async (id: string): Promise<void> =>
         await this.httpClient.post<void, Record<string, never>>(
             `/shopping-lists/${id}/start`,
+            {},
+        );
+
+    /** The reverse of `startShoppingAsync` — an undo for pressing the wrong
+     *  button, not the old "pause" endpoint. Unticks every line on the way, and
+     *  reports how many, because a draft has no tick model to return them to.
+     *  A finished list is refused server-side. */
+    backToDraftAsync = async (id: string): Promise<BackToDraftResult> =>
+        await this.httpClient.post<BackToDraftResult, Record<string, never>>(
+            `/shopping-lists/${id}/back-to-draft`,
             {},
         );
 

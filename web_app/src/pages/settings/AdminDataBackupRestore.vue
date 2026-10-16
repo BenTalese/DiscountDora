@@ -2,7 +2,7 @@
     <div class="settings-page">
         <SettingsPageHeader
             title="Backup & restore"
-            description="Snapshot your install to JSON — stock, lists, recipes, meal plans and saved products by default; optional sections (system settings, user accounts, historic offers) can be ticked on per-backup. Passwords are never included."
+            description="Save your install to a JSON file. Passwords are never included."
             :icon="ICONS.cloud_download"
         >
             <template #actions>
@@ -54,7 +54,7 @@
                             >
                                 Sensitive
                                 <BaseTooltip max-width="300px">
-                                    This backup contains {{ sensitiveSectionsLabel(row) }} — handle the file accordingly.
+                                    This backup contains {{ sensitiveSectionsLabel(row) }}.
                                 </BaseTooltip>
                             </q-chip>
                         </div>
@@ -112,7 +112,7 @@
                     <template #avatar>
                         <q-icon name="warning" color="warning" />
                     </template>
-                    This backup will include {{ createSensitiveLabel }} — handle the file accordingly.
+                    This backup will include {{ createSensitiveLabel }}.
                 </q-banner>
                 <q-expansion-item
                     v-for="(group, idx) in backupSectionGroups"
@@ -346,7 +346,7 @@
             </SettingsRow>
             <SettingsRow
                 label="Storage path"
-                help="Absolute path on the server. Blank ⇒ default (DORA_DATA_DIR/backups). External mount / NAS OK — must be writeable."
+                help="Absolute path on the server. Leave blank for DORA_DATA_DIR/backups. Must be writeable."
             >
                 <q-input
                     v-model="storagePathInput"
@@ -869,7 +869,7 @@
         const created = (body as { created?: Record<string, unknown> } | null)?.created ?? {};
         const total = Object.values(created).reduce((a: number, b: unknown) => a + Number(b || 0), 0);
         return total === 0
-            ? 'No new rows — every section skipped as duplicates.'
+            ? 'No new rows. Everything was a duplicate.'
             : `${total} row${total === 1 ? '' : 's'} imported.`;
     }
 

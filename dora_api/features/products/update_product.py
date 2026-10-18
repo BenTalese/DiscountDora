@@ -22,12 +22,28 @@ class UpdateProductRequest(BaseModel):
     is_available: bool | None = None
     price_now: float | None = Field(default = None, gt = 0)
     price_was: float | None = Field(default = None, gt = 0)
+    # Photo — custom products only (owner 2026-10-17: "are we able to set
+    # images for custom products? Should only be able to for those."). Same
+    # contract as Store / User: a `data:image/...;base64,...` string (already
+    # resized + re-encoded by the client's `processImageFile` under the install
+    # image policy, R-003), stored as UTF-8 bytes and served by
+    # `GET /products/<id>/image`; `clear_image=True` removes it and wins over
+    # `image`; `image=None` without the flag leaves the photo untouched.
+    #
+    # An ingested product's picture belongs to its source — the producer
+    # supplies it and the next ingest may restate it — so a hand-set photo
+    # there would be either silently overwritten or silently diverge from the
+    # source. The handler refuses rather than guessing which.
+    image: str | None = Field(default = None, max_length = 6_000_000)
+    clear_image: bool = False
 
 
 @dataclass(slots=True)
 class UpdateProductResponse:
     product_not_found: bool = False
     incomplete_price_info: bool = False
+    image_not_custom: bool = False
+    invalid_image: bool = False
 
 
 class UpdateProductHandler:
@@ -53,11 +69,22 @@ class UpdateProductHandler:
         if _PriceNowSet ^ _PriceWasSet:
             return UpdateProductResponse(incomplete_price_info=True)
 
+        _ImageSet = "image" in _SetFields and request.image is not None
+        if (_ImageSet or request.clear_image) and not _Product.is_custom:
+            return UpdateProductResponse(image_not_custom=True)
+        if _ImageSet and not request.image.startswith("data:image/"):
+            return UpdateProductResponse(invalid_image=True)
+
         if "is_active" in _SetFields and request.is_active is not None:
             _Product.is_active = request.is_active
 
         if "is_available" in _SetFields and request.is_available is not None:
             _Product.is_available = request.is_available
+
+        if request.clear_image:
+            _Product.image = None
+        elif _ImageSet:
+            _Product.image = request.image.encode("utf-8")
 
         if _PriceNowSet and _PriceWasSet:
             _HistoricOffer = ProductHistoricOffer(
@@ -95,6 +122,17 @@ def update_product(product_id: UUID):
     if _Response.incomplete_price_info:
         _Logger.warning("price_now or price_was was set without the other.")
         return business_rule_violation("price_now and price_was must both be set.")
+
+    if _Response.image_not_custom:
+        _Logger.warning(f"Refused a photo change on non-custom product {product_id}.")
+        return business_rule_violation(
+            "Only products you added yourself can have their photo changed."
+        )
+
+    if _Response.invalid_image:
+        return business_rule_violation(
+            "The photo must be a 'data:image/<type>;base64,...' data URL."
+        )
 
     _Logger.info(f"Successfully updated product with ID: {product_id}")
     return no_content()

@@ -3332,6 +3332,24 @@ one-off, or purely product/UX decisions (those go to the Charter check + worklog
   its key.
 - **Established:** 2026-10-15 (alerts rework). See ADR-090.
 
+### R-094 — A token built from themeable tokens is re-declared on every themed subtree
+- **Rule:** a design token whose value is `var(...)` of a token a theme sets
+  (`--seg-active-bg: var(--brand-primary)`) is declared on `:root` **and** in the
+  `[data-theme]` block in `tokens.scss`, so it resolves against the nearest
+  theme, not the document's. Only tokens no theme block overrides go in that
+  block (it sits before `themes.scss` and would clobber a theme's own value).
+- **Why:** custom properties resolve where they are declared. Declared only on
+  `:root`, the derived value is fixed to the document theme and *inherited* as
+  that resolved colour, so a subtree pinned to another theme (onboarding's
+  WelcomeLayout is always Pesto Dark) painted the segmented control with the
+  light theme's track (2026-10-17, onboarding batch).
+- **How to comply:** when adding a derived token to `:root`, add it to the
+  `[data-theme]` block too, unless a theme overrides it. To paint a preview in
+  another theme, put `data-theme="<key>"` on the element and use tokens.
+- **Violation signal:** a light control on the dark onboarding canvas; a
+  `var()`-valued token in `:root` that the `[data-theme]` block lacks.
+- **Established:** 2026-10-17 (onboarding batch). See ADR-091.
+
 
 ### ADR-001 — Adopt engineering standards + mandatory explain-or-flag gate
 - **Date / task:** 2026-06-06 (user request after repeated theme/component regressions)
@@ -6133,3 +6151,18 @@ A non-binding cookbook of solutions to recurring problems. Not rules — just a
   (pre-release, left in place). Ledger rows for finished episodes accumulate; a
   prune is logged as a follow-up rather than built.
 
+### ADR-091 — Derived tokens resolve per themed subtree (promotes R-094)
+- **Date / task:** 2026-10-17 (owner onboarding batch; the font picker on the
+  rebuilt welcome step drew a light track on the dark wizard)
+- **Status:** accepted
+- **Context:** themes are `[data-theme]` blocks, and two surfaces pin a theme
+  below `<html>`: WelcomeLayout (always Pesto Dark) and the welcome step's
+  theme-preview cards. Base tokens follow; derived ones (`--seg-*`,
+  `--lifecycle-cleared`, `--neutral-muted`) did not.
+- **Decision:** re-declare derived tokens in a `[data-theme]` block in
+  `tokens.scss` (R-094).
+- **Alternatives considered:** move every `:root` declaration to
+  `:root, [data-theme]`. That reorders the cascade so the defaults would beat
+  `themes.scss` blocks of equal specificity; rejected.
+- **Consequences:** a new derived token has to be added in two places; R-094
+  names the signal.

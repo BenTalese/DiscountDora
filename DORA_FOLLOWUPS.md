@@ -39,6 +39,70 @@ long session summary. Distinct from the other logs:
 
 ---
 
+## [OPEN] FU-926 — `normalise_unit` idempotence property failed once, passed on rerun
+- **Raised:** 2026-10-17 (full pytest during the owner batch; nothing unit-related changed)
+- **Type:** finding
+- **What:** `tests/test_domain_properties.py::test__normalise_unit__property__idempotent`
+  failed in the full run and passed 26/26 when the file was rerun. Hypothesis
+  found an input once and didn't replay it (cache disabled with
+  `-p no:cacheprovider`), so the falsifying example wasn't captured.
+- **Why deferred:** not reproducible on demand; unrelated to the batch.
+- **Recommended resolution:** opportunistic: run the property with
+  `--hypothesis-seed` sweeps or `max_examples` raised and pin any example found.
+
+## [OPEN] FU-925 — Confirm the reading of "waste replacing recipes" on expired alerts
+- **Raised:** 2026-10-17 (owner batch, alerts)
+- **Type:** finding
+- **What:** the ask "Expired (not expiring) alerts should have an action button
+  for waste replacing recipes button" was built as **Log waste in place of
+  Recipes** on `expired` alerts (`ALERT_KIND_META` in `models/alert.ts`). If the
+  owner meant "recipes that use it up / replace it", it's a one-line swap there.
+- **Why deferred:** ambiguous wording; built the more literal reading.
+- **Recommended resolution:** now (owner confirms).
+
+## [OPEN] FU-924 — Companion has a few pre-existing UI debts (companion repo)
+- **Raised:** 2026-10-17 (owner batch, companion dark theme)
+- **Type:** finding
+- **What:** (a) dark-mode `q-card`s paint Quasar's `$dark` grey rather than
+  `--surface-component` (same in Dora; set `--q-dark` in both); (b) the
+  "OUT OF STOCK" banner is white on `--semantic-negative`, about 2.6:1 on Pesto
+  Dark (D-002 floor); (c) batch save doesn't fill the hearts on saved cards, only
+  single save does; (d) `PROPOSAL_INGESTION_API` §2.2 doesn't list the new
+  optional `products[].image` field.
+- **Why deferred:** outside the asks; found while building them.
+- **Recommended resolution:** opportunistic (next companion pass).
+
+## [OPEN] FU-923 — `get_link_status` keeps its own product→stock-item lookup (R-003)
+- **Raised:** 2026-10-17 (owner batch, price-drop add-to-list)
+- **Type:** leftover
+- **What:** `dora_api/features/products/product_links.py` is now the shared
+  lookup (products list + price_drop alerts use it);
+  `features/ingestion/get_link_status.py::_stamp_linked_stock_items` still has a
+  copy. Point it at `linked_stock_items`.
+- **Why deferred:** a different surface, touched concurrently by the ingest work.
+- **Recommended resolution:** opportunistic.
+
+## [OPEN] FU-922 — Product photo can only be set from the cards view
+- **Raised:** 2026-10-17 (owner batch, My products)
+- **Type:** leftover
+- **What:** the compact `ProductRow.vue` has no overflow menu, so a custom
+  product's photo is only reachable from the cards view or at creation.
+  Sibling stock-detail cards `PlannedDemandCard.vue` / `PantryBeliefCard.vue`
+  also still use off-scale spacing (D-017).
+- **Why deferred:** outside the ask.
+- **Recommended resolution:** opportunistic.
+
+## [OPEN] FU-921 — The welcome step's wizard can't preview the theme it picks
+- **Raised:** 2026-10-17 (owner batch, onboarding)
+- **Type:** finding
+- **What:** WelcomeLayout pins the wizard to Pesto Dark, so choosing Light
+  changes nothing visible except the preview card. A live preview was built and
+  removed: flipping `<html>` while the layout stays dark mixed the two. If the
+  owner wants the canvas to follow the pick, WelcomeLayout's pin has to go
+  (it was added because light-theme users saw light-on-dark cards).
+- **Why deferred:** reversing a deliberate layout decision.
+- **Recommended resolution:** when the owner next reviews onboarding.
+
 ## [OPEN] FU-920 — `MealPlanRailCount` is now the app's general count circle under a planner name
 - **Raised:** 2026-10-15 (owner batch, shopping lists: "a circle with a number in it consistent with elsewhere")
 - **Type:** leftover

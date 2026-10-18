@@ -147,6 +147,38 @@
 
         <hr class="settings-divider" />
 
+        <!-- Third-party art credits. The pre-made profile pictures are
+             Fluent Emoji (MIT); the licence text ships beside the PNGs in
+             src/assets/avatars/. -->
+        <SettingsSection>
+            <template #title>Credits</template>
+
+            <q-list class="about-list">
+                <q-item
+                    clickable
+                    tag="a"
+                    href="https://github.com/microsoft/fluentui-emoji"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                >
+                    <q-item-section avatar>
+                        <q-icon :name="ICONS.palette" size="20px" />
+                    </q-item-section>
+                    <q-item-section>
+                        <q-item-label>Profile picture art</q-item-label>
+                        <q-item-label caption>
+                            Fluent Emoji © Microsoft Corporation, MIT licence
+                        </q-item-label>
+                    </q-item-section>
+                    <q-item-section side>
+                        <q-icon :name="ICONS.open_in_new" size="18px" />
+                    </q-item-section>
+                </q-item>
+            </q-list>
+        </SettingsSection>
+
+        <hr class="settings-divider" />
+
         <SettingsSection>
             <template #title>Technical details</template>
             <template #description>

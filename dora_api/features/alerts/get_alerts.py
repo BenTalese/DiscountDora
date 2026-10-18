@@ -58,6 +58,7 @@ from dora_api.features.alerts.alert_kinds import (SEVERITY_HIGH, SEVERITY_LOW,
                                                   TIER_ACTIONABLE, TIER_FYI,
                                                   is_actionable)
 from dora_api.features.app_settings.clock import household_today
+from dora_api.features.products.product_links import linked_stock_items
 from dora_api.features.stock_items.stock_attention import (is_essential_low,
                                                            is_expired,
                                                            is_expiring_soon)
@@ -102,7 +103,8 @@ class AlertDto:
     message: str
     detail: str | None
     # Stock-scoped alerts carry the owning item; the C-9.4 non-stock kinds
-    # (no_planned_meals / shopping_day) leave these None.
+    # (no_planned_meals / shopping_day) leave these None. price_drop sets
+    # them to the watched product's linked item, when it has one.
     stock_item_id: UUID | None = None
     stock_item_name: str | None = None
     # Deep-link target id for non-stock kinds (e.g. the shopping list uuid for
@@ -512,6 +514,11 @@ class GetAlertsHandler:
             .include(Product.Fields.STORE)
             .all(EntityField(Product, "id").in_(list(threshold_by_product)))
         )
+        # The linked stock item rides along so the bell's add-to-list button
+        # adds the same line My products does for this product (owner
+        # 2026-10-17): via the item, with this product picked. Unlinked
+        # products leave it None and add as a product-only line.
+        links = linked_stock_items(self.repository, [p.id for p in products])
         out: List[AlertDto] = []
         for product in products:
             offer = product.current_offer
@@ -522,12 +529,15 @@ class GetAlertsHandler:
                 continue
             seen_on = offer.offered_on.date().isoformat() if offer.offered_on else None
             store = product.store.name if product.store is not None else None
+            link = links.get(product.id)
             out.append(AlertDto(
                 alert_id = product_alert_key(product.id, f"price_drop:{offer.id}"),
                 kind = "price_drop",
                 severity = SEVERITY_MEDIUM,
                 message = f"{product.name} hit your price",
                 detail = f"At {store}." if store else None,
+                stock_item_id = link.stock_item_id if link else None,
+                stock_item_name = link.name if link else None,
                 target_id = str(product.id),
                 related_date = seen_on,
                 started_on = seen_on,

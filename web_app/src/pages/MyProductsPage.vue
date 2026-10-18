@@ -327,9 +327,12 @@
             <div v-else-if="viewMode === 'grid'" key="prod-grid" class="row q-col-gutter-md">
                 <!-- Owner 2026-10-15: two to a row on a phone (one card was the
                      whole screen). -->
+                <!-- The key carries a photo version so a replaced custom-product
+                     photo refetches: the card's thumb only reloads when the id
+                     or has-image flag changes, and a re-upload changes neither. -->
                 <div
                     v-for="product in filteredProducts"
-                    :key="product.product_id"
+                    :key="`${product.product_id}:${photoVersion.get(product.product_id) ?? 0}`"
                     class="col-6 col-md-4 col-lg-3"
                 >
                     <ProductCard
@@ -344,6 +347,7 @@
                         @unlink="onUnlinkSingle(product)"
                         @toggle-active="onToggleActive(product)"
                         @price-history="onViewPriceHistory(product.product_id)"
+                        @photo="openPhoto(product)"
                         @delete="onDeleteSingle(product)"
                     />
                 </div>
@@ -462,6 +466,12 @@
 
         <CustomProductDialog v-model="customOpen" @created="loadAll" />
 
+        <ProductPhotoDialog
+            v-model="photoOpen"
+            :product="photoTarget"
+            @saved="onPhotoSaved"
+        />
+
         <ProductPriceWatchDialog
             v-model="watchOpen"
             :product="watchTarget"
@@ -520,6 +530,7 @@
     import PageCountsFooter from 'src/components/PageCountsFooter.vue';
     import CustomProductDialog from 'src/components/products/CustomProductDialog.vue';
     import ProductCard from 'src/components/products/ProductCard.vue';
+    import ProductPhotoDialog from 'src/components/products/ProductPhotoDialog.vue';
     import ProductRow from 'src/components/products/ProductRow.vue';
     import ProductPriceWatchDialog from 'src/components/products/ProductPriceWatchDialog.vue';
     import PriceHistoryApiService, { type PriceAlert } from 'src/services/api/priceHistoryApiService';
@@ -1032,6 +1043,22 @@
                 caption: toastCaption(err),
             });
         }
+    }
+
+    // ── Custom-product photo (owner 2026-10-17) ─────────────────────────
+    const photoOpen = ref(false);
+    const photoTarget = ref<Product | null>(null);
+    const photoVersion = ref(new Map<string, number>());
+
+    function openPhoto(product: Product): void {
+        photoTarget.value = product;
+        photoOpen.value = true;
+    }
+
+    async function onPhotoSaved(): Promise<void> {
+        const id = photoTarget.value?.product_id;
+        if (id) photoVersion.value.set(id, (photoVersion.value.get(id) ?? 0) + 1);
+        await loadAll();
     }
 
     function goToStockItem(stockItemId: string) {

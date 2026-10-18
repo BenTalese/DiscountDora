@@ -44,6 +44,16 @@
                     </div>
                 </div>
             </SettingsRow>
+            <SettingsRow stacked>
+                <div class="avatar-presets">
+                    <div class="text-caption dora-text-secondary">Or pick one of ours</div>
+                    <PresetAvatarPicker
+                        :disabled="savingImage"
+                        @pick="onPickPreset"
+                        @error="(m) => (imageError = m)"
+                    />
+                </div>
+            </SettingsRow>
         </SettingsSection>
 
         <hr class="settings-divider" />
@@ -169,6 +179,7 @@
     import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
     import UserAvatar from 'src/components/UserAvatar.vue';
     import ImageEditTile from 'src/components/ImageEditTile.vue';
+    import PresetAvatarPicker from 'src/components/PresetAvatarPicker.vue';
     import type { ProcessedImage } from 'src/services/files/imageService';
     import { useUnsavedChangesGuard } from 'src/composables/useUnsavedChangesGuard';
 
@@ -184,11 +195,21 @@
     const savingImage = ref(false);
     const imageError = ref<string | null>(null);
 
-    async function onPickImage(processed: ProcessedImage) {
+    function onPickImage(processed: ProcessedImage) {
+        void saveImage(processed.dataUrl);
+    }
+
+    // A pre-made picture saves exactly like an upload — it arrives already
+    // encoded, so it goes through the same `image` field.
+    function onPickPreset({ dataUrl }: { dataUrl: string }) {
+        void saveImage(dataUrl);
+    }
+
+    async function saveImage(dataUrl: string) {
         savingImage.value = true;
         imageError.value = null;
         try {
-            await authStore.updateMeAsync({ image: processed.dataUrl });
+            await authStore.updateMeAsync({ image: dataUrl });
             notifySuccess('Profile picture updated.');
         } catch (err) {
             imageError.value = err instanceof Error ? err.message : 'Could not update your profile picture.';
@@ -344,6 +365,13 @@
         flex-direction: column;
         align-items: flex-start;
         gap: 10px;
+    }
+
+    .avatar-presets {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        max-width: 420px;
     }
 
     .account-field {

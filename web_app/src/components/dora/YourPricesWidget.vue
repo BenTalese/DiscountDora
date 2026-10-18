@@ -206,30 +206,45 @@
 </script>
 
 <style scoped>
+    /* Owner 2026-10-17: "style the card for your prices a little better".
+       Card anatomy per D-017 (a card is `--radius-lg` + `--space-4`): a header
+       bar on the sunken surface with the title at the sub-header size, the
+       figure block on one rhythm (`--space-3`), and the slotted recent-prices
+       list as aligned rows whose amounts share a right-hand column (D-018). */
+    .dora-your-prices {
+        border-radius: var(--radius-lg);
+        overflow: hidden;
+    }
     .dora-your-prices__head {
         display: flex;
         align-items: center;
         gap: var(--space-2);
         padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
+        background: var(--surface-sunken);
         border-bottom: 1px solid var(--divider);
     }
     .dora-your-prices__title {
         flex: 1;
-        font-weight: 600;
+        font-size: calc(var(--font-size-lg) * 1rem);
+        font-weight: 700;
+        color: var(--text-primary);
     }
     .dora-your-prices__body {
         display: flex;
         flex-wrap: wrap;
-        align-items: flex-end;
-        gap: var(--space-2) var(--space-4);
-        padding: var(--space-3) var(--space-4);
+        align-items: center;
+        gap: var(--space-3) var(--space-4);
+        padding: var(--space-4);
     }
     .dora-your-prices__figure {
         display: flex;
         flex-direction: column;
+        gap: var(--space-1);
     }
-    .dora-your-prices__label {
+    /* :deep so the page's slotted "Recent prices" label wears it too. */
+    .dora-your-prices :deep(.dora-your-prices__label) {
         font-size: calc(var(--font-size-xs) * 1rem);
+        font-weight: 600;
         color: var(--text-secondary);
     }
     .dora-your-prices__amount {
@@ -247,11 +262,10 @@
         display: inline-flex;
         align-items: center;
         gap: var(--space-1);
-        padding: 2px var(--space-2);
+        padding: var(--space-1) var(--space-3);
         border-radius: var(--radius-pill);
         font-size: calc(var(--font-size-sm) * 1rem);
         font-weight: 600;
-        margin-bottom: 2px;
     }
     .dora-your-prices__verdict.is-above {
         background: var(--semantic-warning-soft);
@@ -265,15 +279,33 @@
         flex: 1 1 100%;
         font-size: calc(var(--font-size-sm) * 1rem);
         color: var(--text-secondary);
+        font-variant-numeric: tabular-nums;
     }
     .dora-your-prices__shelf {
         flex: 1 1 100%;
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-1);
         background: var(--surface-sunken);
-        border-radius: var(--radius-sm);
+        border-radius: var(--radius-md);
         padding: var(--space-2) var(--space-3);
     }
-    /* Recent prices the page slots in: flush with the card, a hairline above. */
-    .dora-your-prices :deep(.dora-your-prices__list) {
+    /* Recent prices the page slots in: flush with the card, a hairline above,
+       the same small label as the figure's, amounts in one right-hand column. */
+    .dora-your-prices :deep(.dora-your-prices__recent) {
         border-top: 1px solid var(--divider);
+    }
+    .dora-your-prices :deep(.dora-your-prices__recent-label) {
+        padding: var(--space-3) var(--space-4) var(--space-1);
+    }
+    .dora-your-prices :deep(.dora-your-prices__list .q-item) {
+        padding-left: var(--space-4);
+        padding-right: var(--space-2);
+    }
+    .dora-your-prices :deep(.dora-your-prices__price) {
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+        text-align: right;
+        color: var(--text-primary);
     }
 </style>

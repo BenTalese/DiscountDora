@@ -119,11 +119,11 @@ export type AlertNavOption = { label: string; icon: string; to: (alert: Alert) =
 // backend and five separate switch sites silently fell through). Add a kind =
 // extend the union + add one row here; the accessors below need no edit.
 //
-// An alert row has two rows of buttons (owner 2026-10-15): the top acts on the
-// thing the alert is about, the bottom on the alert (snooze, dismiss). The
-// top row is built from `actions` (server writes), `nav` (a jump to where the
-// thing is handled) and `stockControls` (the level picker and the cart, for a
-// shortage).
+// An alert card's buttons act on the thing the alert is about; the alert's
+// own snooze / dismiss sit as icons down its right edge (owner 2026-10-17).
+// The thing's buttons are built from `actions` (server writes), `nav` (a jump
+// to where the thing is handled), `stockControls` (the level picker and the
+// cart, for a shortage), `logWaste` and `productCart`.
 export type AlertKindMeta = {
     icon: string;      // row avatar icon
     theme: string;     // plain-language label, e.g. "expiring soon"
@@ -131,6 +131,11 @@ export type AlertKindMeta = {
     nav?: AlertNavOption;
     /** Offer the stock level picker + add-to-list on the row. */
     stockControls?: boolean;
+    /** Offer "Log waste" (the stock row's reason picker) for the item. */
+    logWaste?: boolean;
+    /** Offer add-to-list for the product in `target_id` (via its linked
+     *  stock item when the server sends one, as My products does). */
+    productCart?: boolean;
     // Where tapping the row goes. Stock kinds omit it and fall back to the
     // item route in `linkFor`.
     link?: (alert: Alert) => string;
@@ -142,7 +147,9 @@ const EXPIRY_ACTIONS: AlertActionOption[] = [
     { action: 'reset_expiry', label: 'Clear expiry', icon: ICONS.event_busy },
 ];
 // Owner 2026-10-15: an expiring ingredient's useful question is "what can I
-// cook with it?", so the row jumps to the cookbook filtered to it.
+// cook with it?", so the row jumps to the cookbook filtered to it. Not for an
+// expired one (owner 2026-10-17): that is past cooking, and its row offers
+// "Log waste" in that slot instead.
 const RECIPES_USING: AlertNavOption = {
     label: 'Recipes', icon: ICONS.menu_book,
     to: (a) => (a.stock_item_id ? `/cookbook?usesStockItem=${a.stock_item_id}` : null),
@@ -152,14 +159,14 @@ const OPEN_LIST: AlertNavOption = { label: 'Open list', icon: ICONS.shopping_car
 const priceLink = (a: Alert) => (a.target_id ? `/price-history?product_id=${a.target_id}` : '/price-history');
 
 export const ALERT_KIND_META: Record<AlertKind, AlertKindMeta> = {
-    expired:                { icon: ICONS.event_busy,         theme: 'expired',             actions: EXPIRY_ACTIONS, nav: RECIPES_USING },
+    expired:                { icon: ICONS.event_busy,         theme: 'expired',             actions: EXPIRY_ACTIONS, logWaste: true },
     expiring_soon:          { icon: ICONS.schedule,           theme: 'expiring soon',       actions: EXPIRY_ACTIONS, nav: RECIPES_USING },
     essential_low:          { icon: ICONS.priority_high,      theme: 'essential low',       actions: [], stockControls: true },
     no_planned_meals:       { icon: ICONS.restaurant,         theme: 'meals to plan',       actions: [], nav: { label: 'Plan meals', icon: ICONS.restaurant, to: () => '/meal-plans' }, link: () => '/meal-plans' },
     shopping_day:           { icon: ICONS.shopping_cart,      theme: 'shopping day',        actions: [], nav: OPEN_LIST, link: listLink },
     shopping_overdue:       { icon: ICONS.shopping_cart,      theme: 'forgotten shopping',  actions: [], nav: OPEN_LIST, link: listLink },
     meal_reconcile_overdue: { icon: ICONS.playlist_add_check, theme: 'meals to reconcile',  actions: [], nav: { label: 'Reconcile', icon: ICONS.playlist_add_check, to: () => '/meal-plans/reconcile' }, link: () => '/meal-plans/reconcile' },
-    price_drop:             { icon: ICONS.trending_down,      theme: 'price drops',         actions: [], nav: { label: 'Price history', icon: ICONS.show_chart, to: priceLink }, link: priceLink },
+    price_drop:             { icon: ICONS.trending_down,      theme: 'price drops',         actions: [], productCart: true, nav: { label: 'Price history', icon: ICONS.show_chart, to: priceLink }, link: priceLink },
 };
 
 // Icon per kind so the panel rows render consistently. The `?.` fallbacks in

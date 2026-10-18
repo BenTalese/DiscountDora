@@ -40,7 +40,9 @@
                 </q-banner>
 
                 <div class="alerts-panel-list col scroll">
-                    <q-list separator>
+                    <!-- Owner 2026-10-17: a card per alert with space between,
+                         not one list cut up by separators. -->
+                    <q-list v-if="alerts.items.length > 0" class="alerts-panel-cards">
                         <AlertRow
                             v-for="alert in alerts.items"
                             :key="alert.alert_id"
@@ -50,6 +52,7 @@
                             @navigate="goTo"
                             @action="(action) => applyAction(alert, action)"
                             @set-level="(levelId) => setLevel(alert, levelId)"
+                            @log-waste="openLogWaste(alert)"
                             @snooze="alertStore.snoozeAlert(alert.alert_id)"
                             @dismiss="alertStore.dismissAlert(alert.alert_id)"
                         />
@@ -71,7 +74,7 @@
                         :label="`Snoozed (${snoozedCount})`"
                         header-class="dora-text-secondary"
                     >
-                        <q-list separator>
+                        <q-list class="alerts-panel-cards">
                             <AlertRow
                                 v-for="alert in alerts.snoozed"
                                 :key="alert.alert_id"
@@ -81,6 +84,7 @@
                                 @navigate="goTo"
                                 @action="(action) => applyAction(alert, action)"
                                 @set-level="(levelId) => setLevel(alert, levelId)"
+                                @log-waste="openLogWaste(alert)"
                                 @unsnooze="alertStore.unsnoozeAlert(alert.alert_id)"
                                 @dismiss="alertStore.dismissAlert(alert.alert_id)"
                             />
@@ -89,6 +93,14 @@
                 </div>
             </q-card>
         </q-dialog>
+
+        <!-- An expired alert's "Log waste": the stock row's reason picker and
+             log flow (`useLogWaste`), one dialog for the whole panel. -->
+        <MarkAsWastedDialog
+            v-model="logWasteOpen"
+            :item-name="logWasteTarget?.itemName ?? ''"
+            @submit="onLogWaste"
+        />
     </div>
 </template>
 
@@ -97,6 +109,9 @@
     import BaseButton from 'src/components/BaseButton.vue';
     import { ICONS } from 'src/style/icons';
     import AlertRow from 'src/components/AlertRow.vue';
+    import MarkAsWastedDialog from 'src/components/stock/MarkAsWastedDialog.vue';
+    import { useLogWaste, type LogWasteTarget } from 'src/composables/useLogWaste';
+    import type { WasteReason } from 'src/services/api/wasteApiService';
     import { linkFor, type Alert } from 'src/models/alert';
     import { useAlertActions } from 'src/composables/useAlertActions';
     import { useAlertStore } from 'src/stores/alertStore';
@@ -167,6 +182,33 @@
             stock_level_id: levelId,
         });
         await alertStore.refreshAsync();
+    }
+
+    // Expired alerts → "Log waste". Snapshot the item when the button is
+    // pressed (useLogWaste's contract): logging clears the expiry, which is
+    // what retires the alert, so the bell refreshes after the log and again
+    // after an Undo brings it back.
+    const { logWasteAsync } = useLogWaste(() => alertStore.refreshAsync());
+    const logWasteOpen = ref(false);
+    const logWasteTarget = ref<LogWasteTarget | null>(null);
+
+    function openLogWaste(alert: Alert) {
+        if (!alert.stock_item_id) return;
+        const item = stockItemStore.stockItems.find((s) => s.stock_item_id === alert.stock_item_id);
+        logWasteTarget.value = {
+            stockItemId: alert.stock_item_id,
+            itemName: item?.name ?? alert.stock_item_name ?? 'this item',
+            // An expired alert's related date is the item's expiry; the store
+            // copy wins when it has loaded.
+            originalExpiry: item?.expiry_date ?? alert.related_date,
+        };
+        logWasteOpen.value = true;
+    }
+
+    async function onLogWaste(reason: WasteReason) {
+        const target = logWasteTarget.value;
+        if (!target) return;
+        await logWasteAsync(target, reason);
     }
 
     async function onDismissAll() {
@@ -242,5 +284,11 @@
     .alerts-panel-list {
         max-height: 100%;
         overflow-y: auto;
+    }
+    .alerts-panel-cards {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-2);
+        padding: var(--space-3);
     }
 </style>

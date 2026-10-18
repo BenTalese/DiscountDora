@@ -1,6 +1,6 @@
 ﻿# Dashy Dora — Project State
 
-**Last reviewed: 2026-10-17 (owner batch of ~90 items: alerts rework, companion store mapping, planner/shopping/products fixes; FU-915 needs a decision).** Milestone-progress front door — phase board,
+**Last reviewed: 2026-10-17 (second owner batch: onboarding rebuilt with a features step + food avatars, alerts as cards, companion image + count fixes; FU-915 and FU-925 need a decision).** Milestone-progress front door — phase board,
 workstreams, and what needs your attention. This is *not* a changelog;
 shipped-work history lives in `CHANGELOG.md` + `DORA_WORKLOG.md`.
 

@@ -6,8 +6,8 @@ from flask import request
 from sqlalchemy import select
 
 from dora_api.domain.entities.product import Product
-from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.product_offer import discount_percent
+from dora_api.features.products.product_links import linked_stock_items
 from dora_api.features.routers import PRODUCT_ROUTER
 from dora_api.infrastructure.api_response import bad_request, ok, paginated
 from dora_api.infrastructure.query_options import (InvalidQueryParameter,
@@ -104,33 +104,17 @@ def stamp_has_image(repository, dtos: list[ProductDto]) -> None:
 def stamp_linked_stock_items(repository, dtos: list[ProductDto]) -> None:
     """Stamp `linked_stock_item_*` on each DTO in place via the m2m join.
 
-    One bulk query against the join, then a single StockItem lookup for the
-    names. Shared by the products list and the best-deals query so the
-    enrichment lives in one place.
+    Shared by the products list and the best-deals query so the enrichment
+    lives in one place; the join itself is `product_links.linked_stock_items`
+    (also read by the price_drop alert).
     """
-    if not dtos:
-        return
-    product_ids = [p.product_id for p in dtos]
-    assoc = db.metadata.tables["StockItemProduct"]
-    rows = repository.session.execute(
-        select(assoc.c.product_id, assoc.c.stock_item_id)
-        .where(assoc.c.product_id.in_(product_ids))
-    ).all()
-    product_to_stock: dict[UUID, UUID] = {row[0]: row[1] for row in rows}
-    stock_ids = list({sid for sid in product_to_stock.values()})
-    stock_lookup: dict[UUID, StockItem] = {}
-    if stock_ids:
-        items = repository.get(StockItem).all(
-            EntityField(StockItem, "id").in_(stock_ids)
-        )
-        stock_lookup = {s.id: s for s in items}
+    links = linked_stock_items(repository, [p.product_id for p in dtos])
     for dto in dtos:
-        stock_id = product_to_stock.get(dto.product_id)
-        if stock_id is None:
+        link = links.get(dto.product_id)
+        if link is None:
             continue
-        dto.linked_stock_item_id = stock_id
-        item = stock_lookup.get(stock_id)
-        dto.linked_stock_item_name = item.name if item else None
+        dto.linked_stock_item_id = link.stock_item_id
+        dto.linked_stock_item_name = link.name
 
 
 class GetProductsHandler:

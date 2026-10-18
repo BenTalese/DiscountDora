@@ -137,14 +137,14 @@ export const NARRATIVE_SCENES: readonly NarrativeScene[] = [
         visual: 'brain',
         kicker: 'Dora is the brain',
         headline: 'doing the remembering, so you don’t.',
-        sub: 'Expiry, stock and your questions.',
+        sub: 'Expiry, stock levels, and what’s needed for next week.',
     },
     {
         id: 'control',
         visual: 'control',
         kicker: 'You’re in control',
         headline: 'every part of Dora is a toggle.',
-        sub: 'Turn things on when you need them. Everything lives in Settings.',
+        sub: 'Turn things on when you need them.',
     },
 ] as const;
 

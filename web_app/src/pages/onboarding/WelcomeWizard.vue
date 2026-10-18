@@ -39,75 +39,147 @@
 
             <!-- ══ SETUP — the steps (draft-until-finish; applied on Finish) ══ -->
             <template v-else>
-            <!-- ── Header: on the finish step, a duplicate Finish button so
-                 the user can commit from either the top or the bottom of a
-                 long flow-cards list. The skip-everything hatch now lives in
-                 the slim top row; progress lives in the shared step-rail
-                 there too. ──────────────────────────────────────────── -->
-            <div v-if="isLastStep" class="row justify-end q-mb-md">
-                <BaseButton
-                    variant="primary"
-                    icon-right="check"
-                    label="Finish"
-                    :loading="completing"
-                    @click="advance"
-                />
-            </div>
-
             <q-banner v-if="loadError" class="dora-bg-negative-soft text-negative q-mb-md" dense rounded>
                 {{ loadError }}
             </q-banner>
 
-            <!-- ── Step 1: Welcome + display name + theme + font ──────── -->
-            <q-card
-                v-show="currentStep?.id === 'welcome'"
-                flat
-                bordered
-                class="q-mb-md"
-            >
-                <q-card-section class="row items-center q-gutter-md">
-                    <q-avatar square size="72px">
-                        <img src="../../assets/logo-mascot.png" alt="Dora" />
-                    </q-avatar>
-                    <div class="col">
-                        <div class="text-h6">Hi, I'm Dora.</div>
-                        <div class="text-body2 dora-text-secondary">
-                            I keep your pantry, shopping and cooking in one
-                            place so the weekly shop stops feeling like
-                            detective work. Setup takes about a minute.
+            <!-- ── Step 1: Welcome — say hello, pick a face, pick a look ──
+                 Owner 2026-10-17: the old card (mascot + blurb over two bare
+                 selects) "looks absolutely horrible". Rebuilt as a hero that
+                 previews the user's own avatar, a profile-picture picker
+                 (upload or one of the pre-made food pictures), and visual
+                 theme cards in place of the Theme select (each card paints a
+                 mock-up in its own theme's tokens; the wizard itself stays on
+                 WelcomeLayout's pinned dark canvas, so there's no live
+                 preview). Everything is still a draft applied on Finish (L35). ──────────────────────────────── -->
+            <div v-show="currentStep?.id === 'welcome'" class="welcome-step q-mb-md">
+                <section class="welcome-hero">
+                    <div class="welcome-hero__avatar">
+                        <ImageEditTile
+                            :label="hasDraftAvatar || currentUser?.has_image
+                                ? 'Change your profile picture'
+                                : 'Upload a profile picture'"
+                            :width="104"
+                            :height="104"
+                            @pick="onUploadAvatar"
+                            @error="(m) => (avatarError = m)"
+                        >
+                            <q-avatar v-if="hasDraftAvatar" size="104px">
+                                <img :src="form.avatarDataUrl ?? ''" alt="Your profile picture" />
+                            </q-avatar>
+                            <UserAvatar
+                                v-else-if="currentUser"
+                                :user-id="currentUser.user_id"
+                                :has-image="currentUser.has_image"
+                                size="104px"
+                                fallback="initials"
+                                :username="currentUser.username"
+                                color="accent"
+                                text-color="dark"
+                            />
+                        </ImageEditTile>
+                        <img
+                            src="../../assets/logo-mascot.png"
+                            alt=""
+                            class="welcome-hero__mascot"
+                            aria-hidden="true"
+                        />
+                    </div>
+                    <div class="welcome-hero__copy">
+                        <div class="welcome-hero__kicker">Hi, I'm Dora</div>
+                        <h1 class="welcome-hero__title">
+                            Nice to meet you{{ currentUser?.username ? `, ${currentUser.username}` : '' }}.
+                        </h1>
+                        <p class="welcome-hero__blurb">
+                            I keep your pantry, shopping and cooking in one place so
+                            the weekly shop stops feeling like detective work. Let's
+                            make Dora yours. It takes about a minute.
+                        </p>
+                    </div>
+                </section>
+
+                <section class="welcome-panel">
+                    <div class="welcome-panel__head">
+                        <div class="welcome-panel__title">Pick a profile picture</div>
+                        <div class="welcome-panel__sub">
+                            Tap one of ours, or tap your avatar above to upload a photo.
                         </div>
                     </div>
-                </q-card-section>
-                <q-separator />
-                <q-card-section class="q-gutter-md">
-                    <div class="row q-col-gutter-md">
-                        <q-select
-                            v-model="form.theme"
-                            outlined
+                    <PresetAvatarPicker
+                        :selected-key="form.avatarPresetKey"
+                        @pick="onPickPresetAvatar"
+                        @error="(m) => (avatarError = m)"
+                    />
+                    <div v-if="avatarError || hasDraftAvatar" class="welcome-panel__foot">
+                        <span v-if="avatarError" class="text-caption text-negative">{{ avatarError }}</span>
+                        <q-space />
+                        <BaseButton
+                            v-if="hasDraftAvatar"
+                            variant="ghost"
                             dense
-                            label="Theme"
-                            :options="THEME_OPTIONS"
-                            emit-value
-                            map-options
-                            class="col-12 col-sm-6"
+                            :icon="ICONS.undo"
+                            label="Undo"
+                            @click="clearDraftAvatar"
                         />
-                        <q-select
-                            v-model="form.fontFamily"
-                            outlined
-                            dense
-                            label="Font"
+                    </div>
+                </section>
+
+                <section class="welcome-panel">
+                    <div class="welcome-panel__head">
+                        <div class="welcome-panel__title">Look &amp; feel</div>
+                        <div class="welcome-panel__sub">
+                            More themes live in Settings → Appearance.
+                        </div>
+                    </div>
+                    <div class="welcome-themes" role="radiogroup" aria-label="Theme">
+                        <button
+                            v-for="opt in THEME_OPTIONS"
+                            :key="opt.value"
+                            type="button"
+                            role="radio"
+                            class="welcome-theme"
+                            :class="{ 'welcome-theme--active': form.theme === opt.value }"
+                            :aria-checked="form.theme === opt.value"
+                            @click="form.theme = opt.value"
+                        >
+                            <span class="welcome-theme__preview" aria-hidden="true">
+                                <span
+                                    v-for="themeKey in opt.previews"
+                                    :key="themeKey"
+                                    class="welcome-theme__half"
+                                    :data-theme="themeKey"
+                                >
+                                    <span class="welcome-theme__bar" />
+                                    <span class="welcome-theme__line" />
+                                    <span class="welcome-theme__line welcome-theme__line--short" />
+                                    <span class="welcome-theme__dot" />
+                                </span>
+                            </span>
+                            <span class="welcome-theme__label">
+                                <q-icon :name="opt.icon" size="18px" />
+                                {{ opt.label }}
+                            </span>
+                            <q-icon
+                                v-if="form.theme === opt.value"
+                                :name="ICONS.check_circle"
+                                size="20px"
+                                class="welcome-theme__badge"
+                            />
+                        </button>
+                    </div>
+                    <div class="welcome-font">
+                        <div class="welcome-font__label">Font</div>
+                        <DoraSegmented
+                            :model-value="form.fontFamily"
                             :options="FONT_OPTIONS"
-                            emit-value
-                            map-options
-                            class="col-12 col-sm-6"
+                            @update:model-value="(v) => (form.fontFamily = v)"
                         />
                     </div>
                     <!-- FU-615 — household headcount + cook-style ("I batch-cook")
-                         are install-wide settings now (a household has one of
-                         each), edited by an admin in Settings → System → Cooking.
-                         Onboarding's welcome step is just personal look now. -->
-                </q-card-section>
-            </q-card>
+                         are install-wide settings (Settings → System → Cooking);
+                         batch cooking is offered on the features step instead. -->
+                </section>
+            </div>
 
             <!-- ── Step 2: Admin bootstrap (first user only) ──────────── -->
             <q-card
@@ -153,6 +225,55 @@
                     </q-list>
                 </q-card-section>
             </q-card>
+
+            <!-- ── Step: Build your Dora experience (first user only) ──────
+                 Owner 2026-10-17. The install-wide features as cards; a tap
+                 flips one on or off. Seeded from the install's current
+                 settings and applied on Finish with the rest of the draft
+                 (L35), so a bail changes nothing. Every card is a real admin
+                 toggle that also lives in Settings → System. ──────────── -->
+            <div v-show="currentStep?.id === 'features'" class="features-step q-mb-md">
+                <div class="features-step__head">
+                    <div class="text-h6">Build your Dora experience</div>
+                    <div class="text-body2 dora-text-secondary">
+                        Switch on the parts your household wants. You can change
+                        any of these later.
+                    </div>
+                </div>
+                <div class="feature-grid">
+                    <button
+                        v-for="feature in FEATURE_CARDS"
+                        :key="feature.key"
+                        type="button"
+                        role="switch"
+                        class="feature-card"
+                        :class="{ 'feature-card--on': featurePicks[feature.key] }"
+                        :aria-checked="featurePicks[feature.key]"
+                        :disabled="!featuresLoaded"
+                        @click="featurePicks[feature.key] = !featurePicks[feature.key]"
+                    >
+                        <span class="feature-card__icon" aria-hidden="true">
+                            <q-icon :name="feature.icon" size="24px" />
+                        </span>
+                        <span class="feature-card__body">
+                            <span class="feature-card__title">{{ feature.title }}</span>
+                            <span class="feature-card__desc">{{ feature.description }}</span>
+                        </span>
+                        <span class="feature-card__state">
+                            <q-icon
+                                :name="featurePicks[feature.key] ? ICONS.check_circle : ICONS.circle_outline"
+                                size="22px"
+                            />
+                            <span class="feature-card__state-label">
+                                {{ featurePicks[feature.key] ? 'On' : 'Off' }}
+                            </span>
+                        </span>
+                    </button>
+                </div>
+                <div v-if="!featuresLoaded" class="text-caption dora-text-muted q-mt-sm">
+                    Loading your install's current settings…
+                </div>
+            </div>
 
             <!-- ── Step 3: Seed catalogues ──────────────────────────── -->
             <!-- the two default-catalogue cards are expansions so
@@ -505,62 +626,101 @@ Toilet paper, Toiletries, Bathroom"
                 </q-card-section>
             </q-card>
 
-            <!-- ── Step: Finish — celebrate + flow-cards (C-5.6) ── -->
-            <!-- the loop recap was removed from
-                 Finish — the hero already plays in Story, replaying it here
-                 was repetitive. The loop survives in Story; a help-section
-                 home is tracked separately. -->
+            <!-- ── Step: Finish — celebrate, recap, first steps ─────────
+                 Owner 2026-10-17: "make the finishing page as useful and
+                 polished as you can". Three parts: a hero that greets the
+                 user with the face they just picked; a recap of exactly what
+                 Finish will apply (the wizard is draft-until-finish, so this
+                 is the last look before it lands); and "first steps" tiles,
+                 each of which finishes and opens that screen. The loop recap
+                 stays out — the hero loop already plays in Story. -->
             <div
                 v-show="currentStep?.id === 'finish'"
                 class="finish-step q-mb-md"
             >
                 <OnboardingConfetti v-if="currentStep?.id === 'finish'" />
-                <div class="text-center q-mb-lg">
-                    <div class="text-h5">You're all set! 🎉</div>
-                    <div class="text-body2 dora-text-secondary q-mt-xs">
-                        Pick where to go next.
+                <section class="finish-hero">
+                    <div class="finish-hero__faces" aria-hidden="true">
+                        <q-avatar v-if="hasDraftAvatar" size="72px" class="finish-hero__avatar">
+                            <img :src="form.avatarDataUrl ?? ''" alt="" />
+                        </q-avatar>
+                        <UserAvatar
+                            v-else-if="currentUser"
+                            class="finish-hero__avatar"
+                            :user-id="currentUser.user_id"
+                            :has-image="currentUser.has_image"
+                            size="72px"
+                            fallback="initials"
+                            :username="currentUser.username"
+                            color="accent"
+                            text-color="dark"
+                        />
+                        <DoraMascot mood="super_excited" :size="84" class="finish-hero__mascot" />
                     </div>
-                </div>
-                <div class="row q-col-gutter-md">
-                    <div
-                        v-for="card in flowCards"
-                        :key="card.path"
-                        class="col-12 col-sm-6"
-                    >
-                        <q-card flat bordered class="full-height">
-                            <q-card-section>
-                                <q-icon
-                                    :name="card.icon"
-                                    size="30px"
-                                    color="primary"
-                                    class="q-mb-sm"
-                                />
-                                <div class="text-subtitle1">{{ card.title }}</div>
-                                <div class="text-body2 dora-text-secondary q-mt-xs">
-                                    {{ card.description }}
-                                </div>
-                            </q-card-section>
-                            <q-separator />
-                            <q-card-actions>
-                                <BaseButton
-                                    variant="ghost"
-                                    class="text-primary"
-                                    :label="`Open ${card.shortTitle}`"
-                                    @click="onShowMe(card.path)"
-                                />
-                                <q-space />
-                                <BaseButton
-                                    v-if="card.help"
-                                    variant="ghost"
-                                    class="dora-text-secondary"
-                                    label="Guide"
-                                    :icon-right="ICONS.open_in_new"
-                                    @click="onShowMe(card.help)"
-                                />
-                            </q-card-actions>
-                        </q-card>
+                    <div class="finish-hero__title">
+                        You're all set{{ currentUser?.username ? `, ${currentUser.username}` : '' }}!
                     </div>
-                </div>
+                    <div class="finish-hero__sub">
+                        Tap Finish to save everything, or jump straight into one of
+                        the first steps below.
+                    </div>
+                </section>
+
+                <section v-if="finishRecap.length > 0" class="finish-panel">
+                    <div class="finish-panel__title">What Finish will set up</div>
+                    <ul class="finish-recap">
+                        <li v-for="row in finishRecap" :key="row.key" class="finish-recap__row">
+                            <span class="finish-recap__icon" aria-hidden="true">
+                                <q-icon :name="row.icon" size="18px" />
+                            </span>
+                            <span class="finish-recap__text">{{ row.text }}</span>
+                            <BaseButton
+                                v-if="row.step !== undefined"
+                                variant="ghost"
+                                dense
+                                size="sm"
+                                class="dora-text-secondary"
+                                label="Change"
+                                @click="stepIndex = row.step"
+                            />
+                        </li>
+                    </ul>
+                </section>
+
+                <section class="finish-panel">
+                    <div class="finish-panel__title">First steps</div>
+                    <div class="finish-tiles">
+                        <button
+                            v-for="(card, i) in flowCards"
+                            :key="card.path"
+                            type="button"
+                            class="finish-tile"
+                            :disabled="completing"
+                            @click="onShowMe(card.path)"
+                        >
+                            <span class="finish-tile__icon" aria-hidden="true">
+                                <q-icon :name="card.icon" size="22px" />
+                            </span>
+                            <span class="finish-tile__body">
+                                <span class="finish-tile__title">
+                                    <span v-if="card.numbered" class="finish-tile__num">{{ i + 1 }}</span>
+                                    {{ card.title }}
+                                </span>
+                                <span class="finish-tile__desc">{{ card.description }}</span>
+                            </span>
+                            <q-icon :name="ICONS.chevron_right" size="20px" class="finish-tile__chevron" />
+                        </button>
+                    </div>
+                </section>
+
+                <section class="finish-tip">
+                    <q-icon :name="ICONS.chat_bubble_outline" size="20px" class="finish-tip__icon" />
+                    <span>
+                        Stuck? Dora's help bubble follows you around the app, and the
+                        <router-link to="/help" class="text-primary" @click.prevent="onShowMe('/help')">guides</router-link>
+                        explain each area in depth.
+                    </span>
+                </section>
             </div>
 
             <!-- ── Footer: Back / Next ──────────────────────────────── -->
@@ -588,12 +748,23 @@ Toilet paper, Toiletries, Bathroom"
 <script lang="ts" setup>
     import { ICONS } from 'src/style/icons';
     import BaseButton from 'src/components/BaseButton.vue';
+    import ImageEditTile from 'src/components/ImageEditTile.vue';
+    import PresetAvatarPicker from 'src/components/PresetAvatarPicker.vue';
+    import UserAvatar from 'src/components/UserAvatar.vue';
+    import DoraMascot from 'src/components/dora/DoraMascot.vue';
+    import DoraSegmented from 'src/components/settings/DoraSegmented.vue';
     import OnboardingConfetti from 'src/components/onboarding/OnboardingConfetti.vue';
     import OnboardingStepRail from 'src/components/onboarding/OnboardingStepRail.vue';
     import OnboardingStory from 'src/pages/onboarding/OnboardingStory.vue';
     import { storeToRefs } from 'pinia';
     import { useQuasar } from 'quasar';
     import { fontFamilyOptions, coalesceFontFamily } from 'src/services/themeService';
+    import type { ProcessedImage } from 'src/services/files/imageService';
+    import AppSettingsApiService, {
+        type AppSettings,
+        type UpdateAppSettingsCommand,
+    } from 'src/services/api/appSettingsApiService';
+    import { useFeatureFlags } from 'src/composables/useFeatureFlags';
     import type { FontFamilyPreference, ThemePreference } from 'src/models/auth';
     import type {
         OnboardingCatalog,
@@ -615,6 +786,8 @@ Toilet paper, Toiletries, Bathroom"
     const router = useRouter();
     const onboardingApi = new OnboardingApiService();
     const stockGroupApi = new StockGroupApiService();
+    const appSettingsApi = new AppSettingsApiService();
+    const { refresh: refreshFeatureFlags, money: moneyFlag } = useFeatureFlags();
     const authStore = useAuthStore();
     const stockLocationStore = useStockLocationStore();
 
@@ -636,10 +809,20 @@ Toilet paper, Toiletries, Bathroom"
     // palette catalogue (lemon-tart, blueberry, …) is pickable later in
     // Preferences. Values are real ThemePreference keys so we persist the
     // resolved theme rather than the legacy 'light'/'dark' aliases.
-    const THEME_OPTIONS: { label: string; value: ThemePreference }[] = [
-        { label: 'System', value: 'system' },
-        { label: 'Light', value: 'pesto' },
-        { label: 'Dark', value: 'pesto-dark' },
+    //
+    // 2026-10-17 — drawn as cards rather than a select. `previews` names the
+    // theme(s) each card's mini mock-up is painted in: the halves carry a
+    // `data-theme` attribute, so they read that theme's real tokens rather
+    // than a copied palette (R-002). System shows both, split.
+    const THEME_OPTIONS: {
+        label: string;
+        value: ThemePreference;
+        icon: string;
+        previews: string[];
+    }[] = [
+        { label: 'System', value: 'system', icon: ICONS.brightness_auto, previews: ['pesto', 'pesto-dark'] },
+        { label: 'Light', value: 'pesto', icon: ICONS.light_mode, previews: ['pesto'] },
+        { label: 'Dark', value: 'pesto-dark', icon: ICONS.dark_mode, previews: ['pesto-dark'] },
     ];
     // Font options + the `coalesceFontFamily` fold are the shared FU-614 source
     // in themeService (R-003). The wizard uses the full "Plus Jakarta Sans" label
@@ -647,7 +830,7 @@ Toilet paper, Toiletries, Bathroom"
     const FONT_OPTIONS = fontFamilyOptions();
     // ── Wizard step state ────────────────────────────────────────────
     type StepId =
-        | 'welcome' | 'admin'
+        | 'welcome' | 'admin' | 'features'
         | 'seed' | 'first_item' | 'finish';
     type Step = { id: StepId; title: string };
 
@@ -671,6 +854,7 @@ Toilet paper, Toiletries, Bathroom"
         const steps: Step[] = [{ id: 'welcome', title: 'Welcome' }];
         if (state.value?.first_user) {
             steps.push({ id: 'admin', title: "You're the admin" });
+            steps.push({ id: 'features', title: 'Build your Dora' });
             steps.push({ id: 'seed', title: 'Seed catalogues' });
             steps.push({ id: 'first_item', title: 'First stock item' });
         }
@@ -678,47 +862,43 @@ Toilet paper, Toiletries, Bathroom"
         return steps;
     });
 
-    // ── Finish flow-cards (C-5.6) — persona-relevant key areas, each a
-    // jump-in + a link to the help guides. Copy
-    // kept factual; the sell-copy honesty pass is FU-184.
+    // ── Finish "first steps" (C-5.6, rebuilt 2026-10-17) ─────────────
+    // The loop in the order a new household walks it, numbered, then the
+    // optional extras. Each tile finishes onboarding and lands on its screen.
+    // Price history only shows when spend tracking will be on — after Finish
+    // it'd be a dead end otherwise (P3 Honest).
     const flowCards = computed(() => {
         const cards: {
             path: string;
             title: string;
-            shortTitle: string;
             description: string;
             icon: string;
-            help?: string;
+            numbered: boolean;
         }[] = [
-            { path: '/stock', shortTitle: 'Stock', title: 'Your pantry',
-              description: 'Everything you keep, with levels, locations and expiry.',
-              icon: ICONS.inventory_2, help: '/help' },
-            { path: '/cookbook', shortTitle: 'Recipes', title: 'Cookbook & cook mode',
+            { path: '/stock', title: 'Stock your pantry', numbered: true,
+              description: 'Add what you keep, with levels, locations and expiry.',
+              icon: ICONS.inventory_2 },
+            { path: '/cookbook', title: 'Fill your cookbook', numbered: true,
               description: 'See what you can cook from what’s in, then cook it step by step.',
-              icon: ICONS.menu_book, help: '/help' },
-            { path: '/meal-plans', shortTitle: 'Meals', title: 'Plan the week',
+              icon: ICONS.menu_book },
+            { path: '/meal-plans', title: 'Plan the week', numbered: true,
               description: 'Plan meals and turn the week into a shopping list.',
-              icon: ICONS.event, help: '/help' },
-            { path: '/shopping-lists', shortTitle: 'Shopping', title: 'Shopping lists',
-              description: 'Auto-built from what’s low or out; finish a shop and your stock refills.',
-              icon: ICONS.shopping_cart, help: '/help' },
+              icon: ICONS.event },
+            { path: '/shopping-lists', title: 'Go shopping', numbered: true,
+              description: 'Lists build themselves from what’s low or out; finishing a shop restocks you.',
+              icon: ICONS.shopping_cart },
         ];
-        // Show everything — price history is available whenever the user turns
-        // on spend tracking in Settings (FU-210: no onboarding flag gating).
+        if (willHaveMoney.value) {
+            cards.push({
+                path: '/price-history', title: 'Watch your prices', numbered: false,
+                description: 'See how what you pay moves over time.',
+                icon: ICONS.savings,
+            });
+        }
         cards.push({
-            path: '/price-history', shortTitle: 'Prices', title: 'Price history',
-            description: 'See how your prices have moved over time.',
-            icon: ICONS.savings, help: '/help',
-        });
-        cards.push({
-            path: '/settings/voice', shortTitle: 'voice', title: "Pick Dora's voice",
-            description: "Pick a voice for Dora's chat replies and cook mode.",
+            path: '/settings/voice', title: "Pick Dora's voice", numbered: false,
+            description: "A voice for Dora's chat replies and cook mode.",
             icon: ICONS.record_voice_over,
-        });
-        cards.push({
-            path: '/help', shortTitle: 'guides', title: 'Dora & the guides',
-            description: 'Dora’s help bubble follows you everywhere; the guides explain each area in depth.',
-            icon: ICONS.smart_toy,
         });
         return cards;
     });
@@ -778,6 +958,12 @@ Toilet paper, Toiletries, Bathroom"
         // has to clean up if they didn't actually want demo content.
         seedDemo: boolean;
         stepIndex: number;
+        // 2026-10-17 — profile picture, drafted like everything else and
+        // saved on Finish. `avatarDataUrl` is the encoded picture (an upload
+        // or a rendered preset); `avatarPresetKey` only drives the picker's
+        // selected ring and is null for an upload.
+        avatarDataUrl: string | null;
+        avatarPresetKey: string | null;
     };
 
     // A first stock item the user queued — created on Finish (L35), never
@@ -796,6 +982,163 @@ Toilet paper, Toiletries, Bathroom"
         fontFamily: 'default',
         seedDemo: false,
         stepIndex: 0,
+        avatarDataUrl: null,
+        avatarPresetKey: null,
+    });
+
+    // ── Profile picture (welcome step) ───────────────────────────────
+    const avatarError = ref<string | null>(null);
+    const hasDraftAvatar = computed(() => !!form.avatarDataUrl);
+    function onUploadAvatar(processed: ProcessedImage) {
+        avatarError.value = null;
+        form.avatarDataUrl = processed.dataUrl;
+        form.avatarPresetKey = null;
+    }
+    function onPickPresetAvatar({ key, dataUrl }: { key: string; dataUrl: string }) {
+        avatarError.value = null;
+        form.avatarDataUrl = dataUrl;
+        form.avatarPresetKey = key;
+    }
+    function clearDraftAvatar() {
+        form.avatarDataUrl = null;
+        form.avatarPresetKey = null;
+    }
+
+    // ── Build your Dora experience (features step, first user only) ──
+    // Each card is one install-wide AppSetting the admin can also flip in
+    // Settings → System. The pick is the plain on/off the card shows; the
+    // mapping onto the setting lives in `apply`, so a richer stored value
+    // (nutrition 'complex', auto-add 'all') that reads as "on" survives an
+    // untouched card — `changedFeatureSettings` only sends what moved.
+    type FeatureKey = 'money' | 'nutrition' | 'stocktake' | 'batch' | 'auto_add' | 'scanning';
+    type FeatureCard = {
+        key: FeatureKey;
+        title: string;
+        description: string;
+        icon: string;
+        read: (s: AppSettings) => boolean;
+        apply: (on: boolean) => UpdateAppSettingsCommand;
+    };
+    const FEATURE_CARDS: readonly FeatureCard[] = [
+        {
+            key: 'money', title: 'Spend tracking', icon: ICONS.savings,
+            description: 'Prices, budgets and what each meal costs.',
+            read: (s) => s.money_enabled,
+            apply: (on) => ({ money_enabled: on }),
+        },
+        {
+            key: 'nutrition', title: 'Nutrition', icon: ICONS.monitor_heart,
+            description: 'Calories and macros on your recipes and meal plans.',
+            read: (s) => s.nutrition_mode !== 'off',
+            apply: (on) => ({ nutrition_mode: on ? 'simple' : 'off' }),
+        },
+        {
+            key: 'stocktake', title: 'Stocktakes', icon: ICONS.fact_check,
+            description: 'Gentle reminders to check what’s really in the cupboard.',
+            read: (s) => s.stocktake_enabled,
+            apply: (on) => ({ stocktake_enabled: on }),
+        },
+        {
+            key: 'auto_add', title: 'Auto-add essentials', icon: ICONS.add_shopping_cart,
+            description: 'Essentials go on the shopping list the moment they run low.',
+            read: (s) => s.auto_add_mode !== 'off',
+            apply: (on) => ({ auto_add_mode: on ? 'essential_only' : 'off' }),
+        },
+        {
+            key: 'batch', title: 'Batch cooking', icon: ICONS.mealsPrepared,
+            description: 'Cook once, eat for days: Dora tracks the leftovers.',
+            read: (s) => s.batch_features_enabled,
+            apply: (on) => ({ batch_features_enabled: on }),
+        },
+        {
+            key: 'scanning', title: 'Barcodes & QR labels', icon: ICONS.qr_code_scanner,
+            description: 'Scan products and print QR labels for your shelves.',
+            read: (s) => s.scanning_enabled,
+            apply: (on) => ({ scanning_enabled: on }),
+        },
+    ];
+    const featurePicks = reactive<Record<FeatureKey, boolean>>({
+        money: false, nutrition: false, stocktake: true,
+        auto_add: true, batch: false, scanning: false,
+    });
+    // What the install says right now — the baseline `featurePicks` is
+    // diffed against on Finish. Null until loaded (non-admins never load it).
+    const featureBaseline = ref<Record<FeatureKey, boolean> | null>(null);
+    const featuresLoaded = computed(() => featureBaseline.value !== null);
+    // Picks restored from a saved draft win over the install's values.
+    let savedFeaturePicks: Partial<Record<FeatureKey, boolean>> | null = null;
+
+    async function loadFeatureBaseline() {
+        if (!state.value?.first_user || !currentUser.value?.is_admin) return;
+        try {
+            const settings = await appSettingsApi.getAsync();
+            const baseline = {} as Record<FeatureKey, boolean>;
+            for (const card of FEATURE_CARDS) baseline[card.key] = card.read(settings);
+            featureBaseline.value = baseline;
+            Object.assign(featurePicks, baseline, savedFeaturePicks ?? {});
+        } catch {
+            // Leave the step unloaded (cards disabled); Finish then sends
+            // nothing for it and the admin can use Settings instead.
+        }
+    }
+    const changedFeatureSettings = computed<UpdateAppSettingsCommand>(() => {
+        const base = featureBaseline.value;
+        if (!base) return {};
+        const out: UpdateAppSettingsCommand = {};
+        for (const card of FEATURE_CARDS) {
+            if (featurePicks[card.key] !== base[card.key]) {
+                Object.assign(out, card.apply(featurePicks[card.key]));
+            }
+        }
+        return out;
+    });
+    const willHaveMoney = computed(() =>
+        featureBaseline.value ? featurePicks.money : moneyFlag.value,
+    );
+
+    // ── Finish recap — what Finish is about to apply ─────────────────
+    // Built from the same draft `applyDraft` reads, so it can't promise
+    // something Finish won't do. `step` lets each row jump back to change it.
+    function stepIndexOf(id: StepId): number | undefined {
+        const i = visibleSteps.value.findIndex((st) => st.id === id);
+        return i >= 0 ? i : undefined;
+    }
+    function plural(n: number, one: string, many = `${one}s`): string {
+        return `${n} ${n === 1 ? one : many}`;
+    }
+    const finishRecap = computed(() => {
+        const rows: { key: string; icon: string; text: string; step?: number | undefined }[] = [];
+        if (hasDraftAvatar.value) {
+            rows.push({ key: 'avatar', icon: ICONS.person, text: 'Your new profile picture',
+                step: stepIndexOf('welcome') });
+        }
+        const themeLabel = THEME_OPTIONS.find((o) => o.value === form.theme)?.label;
+        if (themeLabel) {
+            rows.push({ key: 'look', icon: ICONS.palette, step: stepIndexOf('welcome'),
+                text: `${themeLabel} theme, ${FONT_OPTIONS.find((o) => o.value === form.fontFamily)?.label ?? 'default'} font` });
+        }
+        if (featureBaseline.value) {
+            const on = FEATURE_CARDS.filter((c) => featurePicks[c.key]).map((c) => c.title);
+            rows.push({ key: 'features', icon: ICONS.tune, step: stepIndexOf('features'),
+                text: on.length > 0 ? `Features on: ${on.join(', ')}` : 'All optional features off' });
+        }
+        const seedParts: string[] = [];
+        if (groupPickCount.value > 0) seedParts.push(plural(groupPickCount.value, 'stock group'));
+        if (locationPickCount.value > 0) seedParts.push(plural(locationPickCount.value, 'location'));
+        if (seedParts.length > 0) {
+            rows.push({ key: 'seed', icon: ICONS.category, step: stepIndexOf('seed'),
+                text: seedParts.join(' and ') });
+        }
+        const itemCount = selectedPackItemsList.value.length + draftItems.value.length;
+        if (itemCount > 0) {
+            rows.push({ key: 'items', icon: ICONS.inventory_2, step: stepIndexOf('first_item'),
+                text: plural(itemCount, 'stock item') });
+        }
+        if (form.seedDemo) {
+            rows.push({ key: 'demo', icon: ICONS.restaurant_menu, step: stepIndexOf('seed'),
+                text: 'A demo recipe on this week’s meal plan' });
+        }
+        return rows;
     });
 
     // per-name picks over the bundled catalogues. Keys are
@@ -872,6 +1215,7 @@ Toilet paper, Toiletries, Bathroom"
                     packItemSelected: { ...packItemSelected },
                     groupPicks: { ...groupPicks },
                     locationPicks: { ...locationPicks },
+                    featurePicks: { ...featurePicks },
                 }),
             );
         } catch {
@@ -891,6 +1235,7 @@ Toilet paper, Toiletries, Bathroom"
                 packItemSelected?: Record<string, boolean>;
                 groupPicks?: Record<string, boolean>;
                 locationPicks?: Record<string, boolean>;
+                featurePicks?: Partial<Record<FeatureKey, boolean>>;
                 // Legacy pre-FU-195 draft booleans — folded into the pick
                 // maps once the catalogue lands (seedDefaultPicks respects
                 // whatever the pick maps already say).
@@ -905,6 +1250,7 @@ Toilet paper, Toiletries, Bathroom"
                 packItemSelected: savedPacks,
                 groupPicks: savedGroupPicks,
                 locationPicks: savedLocationPicks,
+                featurePicks: savedFeatures,
                 seedGroups: legacySeedGroups,
                 seedLocations: legacySeedLocations,
                 ...formFields
@@ -931,6 +1277,10 @@ Toilet paper, Toiletries, Bathroom"
             if (savedLocationPicks) {
                 Object.assign(locationPicks, savedLocationPicks);
             }
+            if (savedFeatures) {
+                savedFeaturePicks = savedFeatures;
+                Object.assign(featurePicks, savedFeatures);
+            }
             // Legacy pre-FU-195: the booleans became pick maps. If the
             // legacy master was explicitly off, honour that by defaulting
             // any not-yet-populated pick to false (seedDefaultPicks fills
@@ -954,7 +1304,7 @@ Toilet paper, Toiletries, Bathroom"
     watch(
         [
             form, stepIndex, draftItems, view, storySceneIndex,
-            packItemSelected, groupPicks, locationPicks,
+            packItemSelected, groupPicks, locationPicks, featurePicks,
         ],
         saveDraft,
         { deep: true },
@@ -1158,6 +1508,14 @@ Toilet paper, Toiletries, Bathroom"
     // items), so the items resolve against the groups/locations just seeded.
     async function applyDraft() {
         await persistPreferences();
+        // Features before seeding so anything the seed or items pass reads
+        // (e.g. stocktake defaults) sees the household's choice.
+        const featureUpdates = changedFeatureSettings.value;
+        if (Object.keys(featureUpdates).length > 0) {
+            await appSettingsApi.updateAsync(featureUpdates);
+            featureBaseline.value = { ...featurePicks };
+            await refreshFeatureFlags();
+        }
         // send the actual picked names/paths. Master bool is
         // implicit: it's true whenever any pick under it survives.
         const groupsWanted = groupPickCount.value > 0;
@@ -1225,6 +1583,9 @@ Toilet paper, Toiletries, Bathroom"
         }
         if (form.fontFamily !== currentUser.value?.font_family) {
             updates.font_family = form.fontFamily;
+        }
+        if (form.avatarDataUrl) {
+            updates.image = form.avatarDataUrl;
         }
         if (Object.keys(updates).length === 0) return;
         await authStore.updateMeAsync(updates);
@@ -1302,6 +1663,10 @@ Toilet paper, Toiletries, Bathroom"
             // attempt (the guard reads stale null); user only escapes
             // after a hard refresh re-bootstraps the auth state.
             await authStore.refreshAsync();
+            // The picture is saved now; drop the draft copy so a re-run of
+            // the wizard doesn't re-upload it.
+            form.avatarDataUrl = null;
+            form.avatarPresetKey = null;
             clearDraft();
             // Clear any stale "skipped" flag so the dashboard banner
             // doesn't reappear after a proper completion.
@@ -1340,6 +1705,7 @@ Toilet paper, Toiletries, Bathroom"
             form.fontFamily = coalesceFontFamily(currentUser.value.font_family);
         }
         loadDraft();
+        void loadFeatureBaseline();
 
         // Pre-load existing groups/locations (so the first-item name pickers
         // include what's already there) + the starter catalogue (default
@@ -1394,5 +1760,469 @@ Toilet paper, Toiletries, Bathroom"
     }
     .full-height {
         height: 100%;
+    }
+    /* ── Welcome step (2026-10-17 rebuild) ─────────────────────────── */
+    .welcome-step {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-4);
+    }
+    .welcome-hero {
+        display: flex;
+        align-items: center;
+        gap: var(--space-5);
+        padding: var(--space-5);
+        border-radius: var(--radius-lg);
+        background: var(--hero-gradient);
+        border: 1px solid var(--border-default);
+    }
+    .welcome-hero__avatar {
+        position: relative;
+        flex: 0 0 auto;
+    }
+    .welcome-hero__avatar :deep(.image-edit-tile) {
+        box-shadow: 0 0 0 4px var(--surface-component), 0 8px 24px var(--overlay-active);
+        border-radius: 50%;
+    }
+    .welcome-hero__mascot {
+        position: absolute;
+        right: -14px;
+        bottom: -10px;
+        width: 44px;
+        height: 44px;
+        pointer-events: none;
+        filter: drop-shadow(0 2px 4px var(--overlay-active));
+    }
+    .welcome-hero__copy {
+        min-width: 0;
+    }
+    .welcome-hero__kicker {
+        font-size: 0.78rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--brand-secondary);
+    }
+    .welcome-hero__title {
+        margin: 2px 0 6px;
+        font-size: 1.6rem;
+        line-height: 1.2;
+        font-weight: 700;
+        color: var(--text-primary);
+        overflow-wrap: anywhere;
+    }
+    .welcome-hero__blurb {
+        margin: 0;
+        font-size: 0.95rem;
+        line-height: 1.5;
+        color: var(--text-secondary);
+    }
+    .welcome-panel {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-3);
+        padding: var(--space-4) var(--space-5);
+        border-radius: var(--radius-lg);
+        background: var(--surface-component);
+        border: 1px solid var(--border-default);
+    }
+    .welcome-panel__title {
+        font-size: 1rem;
+        font-weight: 700;
+        color: var(--text-primary);
+    }
+    .welcome-panel__sub {
+        font-size: 0.85rem;
+        color: var(--text-muted);
+    }
+    .welcome-panel__foot {
+        display: flex;
+        align-items: center;
+        min-height: 32px;
+    }
+    .welcome-themes {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: var(--space-3);
+    }
+    .welcome-theme {
+        position: relative;
+        appearance: none;
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-2);
+        padding: var(--space-2);
+        border: 1.5px solid var(--border-default);
+        border-radius: var(--radius-md);
+        background: var(--surface-component);
+        color: var(--text-primary);
+        cursor: pointer;
+        text-align: left;
+        transition: border-color var(--motion-fast) var(--motion-ease),
+            transform var(--motion-fast) var(--motion-ease);
+    }
+    .welcome-theme:hover {
+        border-color: var(--border-strong);
+        transform: translateY(-1px);
+    }
+    .welcome-theme:focus-visible {
+        outline: 2px solid var(--accent-mark);
+        outline-offset: 2px;
+    }
+    .welcome-theme--active {
+        border-color: var(--accent-mark);
+        border-width: 2px;
+    }
+    .welcome-theme__preview {
+        display: flex;
+        height: 64px;
+        border-radius: var(--radius-sm);
+        overflow: hidden;
+        border: 1px solid var(--border-default);
+    }
+    /* Each half is painted in its own theme's tokens via `data-theme`. */
+    .welcome-theme__half {
+        flex: 1 1 0;
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        padding: 0 0 6px;
+        background: var(--surface-page);
+        position: relative;
+    }
+    .welcome-theme__bar {
+        height: 12px;
+        background: var(--brand-primary);
+    }
+    .welcome-theme__line {
+        height: 6px;
+        margin: 0 8px;
+        border-radius: 3px;
+        background: var(--surface-component);
+    }
+    .welcome-theme__line--short {
+        width: 45%;
+    }
+    .welcome-theme__dot {
+        position: absolute;
+        right: 8px;
+        bottom: 6px;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: var(--brand-accent);
+    }
+    .welcome-theme__label {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 0.875rem;
+        font-weight: 600;
+    }
+    .welcome-theme__badge {
+        position: absolute;
+        top: 4px;
+        right: 4px;
+        color: var(--accent-mark);
+        background: var(--surface-component);
+        border-radius: 50%;
+    }
+    .welcome-font {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+    .welcome-font__label {
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: var(--text-secondary);
+    }
+
+    /* ── Features step ─────────────────────────────────────────────── */
+    .features-step__head {
+        margin-bottom: var(--space-4);
+    }
+    .feature-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+        gap: var(--space-3);
+    }
+    .feature-card {
+        appearance: none;
+        display: flex;
+        align-items: center;
+        gap: var(--space-3);
+        padding: var(--space-3) var(--space-4);
+        border: 1.5px solid var(--border-default);
+        border-radius: var(--radius-lg);
+        background: var(--surface-component);
+        color: var(--text-primary);
+        text-align: left;
+        cursor: pointer;
+        transition: border-color var(--motion-fast) var(--motion-ease),
+            background var(--motion-fast) var(--motion-ease),
+            transform var(--motion-fast) var(--motion-ease);
+    }
+    .feature-card:hover:not(:disabled) {
+        border-color: var(--border-strong);
+        transform: translateY(-1px);
+    }
+    .feature-card:focus-visible {
+        outline: 2px solid var(--accent-mark);
+        outline-offset: 2px;
+    }
+    .feature-card:disabled {
+        cursor: default;
+        opacity: 0.6;
+    }
+    .feature-card--on {
+        border-color: var(--brand-primary);
+        background: color-mix(in srgb, var(--brand-primary-soft) 45%, var(--surface-component));
+    }
+    .feature-card__icon {
+        flex: 0 0 auto;
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: color-mix(in srgb, var(--text-muted) 16%, var(--surface-component));
+        color: var(--text-secondary);
+        transition: background var(--motion-fast) var(--motion-ease),
+            color var(--motion-fast) var(--motion-ease);
+    }
+    .feature-card--on .feature-card__icon {
+        background: var(--brand-primary-soft);
+        color: var(--brand-primary);
+    }
+    .feature-card__body {
+        flex: 1 1 auto;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+    .feature-card__title {
+        font-size: 0.95rem;
+        font-weight: 700;
+    }
+    .feature-card__desc {
+        font-size: 0.82rem;
+        line-height: 1.4;
+        color: var(--text-secondary);
+    }
+    .feature-card__state {
+        flex: 0 0 auto;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 2px;
+        color: var(--text-muted);
+    }
+    .feature-card--on .feature-card__state {
+        color: var(--brand-primary);
+    }
+    .feature-card__state-label {
+        font-size: 0.7rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+    }
+
+    /* ── Finish step ───────────────────────────────────────────────── */
+    .finish-step {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-4);
+    }
+    .finish-hero {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        gap: var(--space-2);
+        padding: var(--space-5) var(--space-4);
+        border-radius: var(--radius-lg);
+        background: var(--hero-gradient);
+        border: 1px solid var(--border-default);
+    }
+    .finish-hero__faces {
+        display: flex;
+        align-items: flex-end;
+        justify-content: center;
+    }
+    .finish-hero__avatar {
+        box-shadow: 0 0 0 4px var(--surface-component), 0 8px 24px var(--overlay-active);
+        z-index: 1;
+    }
+    .finish-hero__mascot {
+        margin-left: -18px;
+    }
+    .finish-hero__title {
+        font-size: 1.6rem;
+        font-weight: 700;
+        line-height: 1.2;
+        color: var(--text-primary);
+        overflow-wrap: anywhere;
+    }
+    .finish-hero__sub {
+        max-width: 30rem;
+        font-size: 0.95rem;
+        color: var(--text-secondary);
+    }
+    .finish-panel {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-3);
+    }
+    .finish-panel__title {
+        font-size: 0.78rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--text-muted);
+    }
+    .finish-recap {
+        list-style: none;
+        margin: 0;
+        padding: var(--space-1) var(--space-4);
+        border-radius: var(--radius-lg);
+        background: var(--surface-component);
+        border: 1px solid var(--border-default);
+    }
+    .finish-recap__row {
+        display: flex;
+        align-items: center;
+        gap: var(--space-3);
+        min-height: 44px;
+        padding: 4px 0;
+    }
+    .finish-recap__row + .finish-recap__row {
+        border-top: 1px solid var(--divider);
+    }
+    .finish-recap__icon {
+        flex: 0 0 auto;
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--brand-primary-soft);
+        color: var(--brand-primary);
+    }
+    .finish-recap__text {
+        flex: 1 1 auto;
+        min-width: 0;
+        font-size: 0.9rem;
+        color: var(--text-primary);
+    }
+    .finish-tiles {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+        gap: var(--space-3);
+    }
+    .finish-tile {
+        appearance: none;
+        display: flex;
+        align-items: center;
+        gap: var(--space-3);
+        padding: var(--space-3) var(--space-4);
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-lg);
+        background: var(--surface-component);
+        color: var(--text-primary);
+        text-align: left;
+        cursor: pointer;
+        transition: border-color var(--motion-fast) var(--motion-ease),
+            transform var(--motion-fast) var(--motion-ease),
+            box-shadow var(--motion-fast) var(--motion-ease);
+    }
+    .finish-tile:hover:not(:disabled) {
+        border-color: var(--brand-primary);
+        transform: translateY(-2px);
+        box-shadow: 0 6px 16px var(--overlay-active);
+    }
+    .finish-tile:focus-visible {
+        outline: 2px solid var(--accent-mark);
+        outline-offset: 2px;
+    }
+    .finish-tile:disabled {
+        cursor: default;
+        opacity: 0.6;
+    }
+    .finish-tile__icon {
+        flex: 0 0 auto;
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--brand-primary-soft);
+        color: var(--brand-primary);
+    }
+    .finish-tile__body {
+        flex: 1 1 auto;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+    .finish-tile__title {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 0.95rem;
+        font-weight: 700;
+    }
+    .finish-tile__num {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        font-size: 0.7rem;
+        background: var(--brand-primary);
+        color: var(--text-on-primary);
+    }
+    .finish-tile__desc {
+        font-size: 0.82rem;
+        line-height: 1.4;
+        color: var(--text-secondary);
+    }
+    .finish-tile__chevron {
+        flex: 0 0 auto;
+        color: var(--text-muted);
+    }
+    .finish-tip {
+        display: flex;
+        align-items: flex-start;
+        gap: var(--space-2);
+        padding: var(--space-3) var(--space-4);
+        border-radius: var(--radius-md);
+        background: var(--surface-sunken);
+        font-size: 0.875rem;
+        color: var(--text-secondary);
+    }
+    .finish-tip__icon {
+        flex: 0 0 auto;
+        color: var(--brand-secondary);
+    }
+
+    @media (max-width: 599px) {
+        .welcome-hero {
+            flex-direction: column;
+            text-align: center;
+            padding: var(--space-4);
+        }
+        .welcome-panel {
+            padding: var(--space-3) var(--space-4);
+        }
+        .welcome-themes {
+            gap: var(--space-2);
+        }
     }
 </style>

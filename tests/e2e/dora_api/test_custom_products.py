@@ -173,3 +173,60 @@ def test__the_sync_list_still_offers_ingested_products():
     ).json()["items"]
 
     assert listed, "no ingested products offered — the exclusion is too broad"
+
+
+# ── Photos: settable on custom products only (owner 2026-10-17) ─────────────
+
+# 1x1 transparent PNG — the shape `processImageFile` hands the API.
+_PNG_DATA_URL = (
+    "data:image/png;base64,"
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII="
+)
+
+
+def test__a_custom_product_photo_can_be_set_served_and_cleared():
+    product_id = _create_custom()
+
+    resp = requests.patch(f"{BASE}/products/{product_id}", json={"image": _PNG_DATA_URL})
+    assert resp.status_code == 204, resp.text
+    assert _fetch(product_id)["has_image"] is True
+    image = requests.get(f"{BASE}/products/{product_id}/image")
+    assert image.status_code == 200
+    assert image.headers["content-type"].startswith("image/png")
+
+    resp = requests.patch(f"{BASE}/products/{product_id}", json={"clear_image": True})
+    assert resp.status_code == 204, resp.text
+    assert _fetch(product_id)["has_image"] is False
+
+
+def test__an_ingested_product_photo_cannot_be_changed():
+    """The picture of a scraped product belongs to its source; a hand-set one
+    would be overwritten by (or silently diverge from) the next ingest."""
+    items = requests.get(f"{BASE}/products").json()["items"]
+    ingested = next(p for p in items if not p["is_custom"])
+
+    set_resp = requests.patch(
+        f"{BASE}/products/{ingested['product_id']}", json={"image": _PNG_DATA_URL},
+    )
+    clear_resp = requests.patch(
+        f"{BASE}/products/{ingested['product_id']}", json={"clear_image": True},
+    )
+
+    assert set_resp.status_code == 422, set_resp.text
+    assert clear_resp.status_code == 422, clear_resp.text
+    assert _fetch(ingested["product_id"])["has_image"] is ingested["has_image"]
+
+
+def test__a_custom_product_photo_must_be_an_image_data_url():
+    product_id = _create_custom()
+
+    resp = requests.patch(f"{BASE}/products/{product_id}", json={"image": "not-a-data-url"})
+
+    assert resp.status_code == 422, resp.text
+    assert _fetch(product_id)["has_image"] is False
+
+
+def test__a_custom_product_can_be_created_with_a_photo():
+    product_id = _create_custom(image=_PNG_DATA_URL)
+
+    assert _fetch(product_id)["has_image"] is True

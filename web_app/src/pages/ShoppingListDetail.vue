@@ -157,12 +157,44 @@
                             :icon="ICONS.event"
                             :label="compactToolbar ? undefined : 'Shop day'"
                             aria-label="Set shop day"
-                            @click="openPlannedDateEditor"
                         >
-                            <BaseTooltip>
+                            <!-- Hidden while the calendar is open: the cursor is
+                                 still on the button, so the tip would sit over
+                                 the calendar's own title. -->
+                            <BaseTooltip v-if="!plannedDateOpen">
                                 Set the day you plan to shop this list. Helps Dora pick
                                 which list is your active one, and drives shop-day reminders.
                             </BaseTooltip>
+                            <!-- Owner feedback 2026-10-17: "the plan this shop for
+                                 modal slows the process down — just make the
+                                 calendar appear immediately". The calendar now
+                                 hangs straight off the button (q-popup-proxy: a
+                                 menu on desktop, a dialog on phones), and picking a
+                                 day commits it — the same pick-to-save shape as the
+                                 stock row's expiry popup. Clear lives inside the
+                                 calendar so un-planning is one tap too. -->
+                            <q-popup-proxy
+                                v-model="plannedDateOpen"
+                                transition-show="scale"
+                                transition-hide="scale"
+                            >
+                                <q-date
+                                    :model-value="detail?.planned_shop_date ?? null"
+                                    mask="YYYY-MM-DD"
+                                    title="Shop day"
+                                    @update:model-value="onPickPlannedDate"
+                                >
+                                    <div class="row items-center justify-end q-gutter-sm">
+                                        <BaseButton
+                                            v-if="detail?.planned_shop_date"
+                                            variant="danger-ghost"
+                                            label="Clear"
+                                            @click="clearPlannedDate"
+                                        />
+                                        <BaseButton variant="ghost" label="Cancel" v-close-popup />
+                                    </div>
+                                </q-date>
+                            </q-popup-proxy>
                         </BaseButton>
                         <!-- Bulk select is gone. Of its four actions, Tick and
                              Untick went with draft ticking, and "Move to list"
@@ -780,9 +812,6 @@
             @assigned="onPutAwayAssigned"
         />
 
-        <!-- planned-shop-date editor. Sets/changes/clears
-             the planned day for this list. Sort + next-up + button tone
-             all read from it. -->
         <!-- "See older" — the finished lists the picker doesn't keep inline.
              Searchable rather than merely scrollable: the whole reason they're
              behind a door is that there are too many to scan, so a longer
@@ -863,42 +892,6 @@
             </template>
         </BaseDialog>
 
-        <BaseDialog v-model="plannedDateOpen" title="Plan this shop for" closable card-style="min-width: 280px">
-            <q-card-section>
-                <div class="text-caption dora-text-muted">
-                    Sets which list opens first on shopping day, and labels
-                    self-named lists with the date.
-                </div>
-            </q-card-section>
-            <q-card-section>
-                <q-input
-                    v-model="plannedDateDraft"
-                    type="date"
-                    outlined
-                    dense
-                    autofocus
-                    label="Shop day"
-                    clearable
-                    @keydown.enter.prevent="savePlannedDate"
-                />
-            </q-card-section>
-            <template #actions>
-                <BaseButton variant="ghost" label="Cancel" v-close-popup />
-                <BaseButton
-                    v-if="detail?.planned_shop_date"
-                    variant="ghost"
-                    label="Clear"
-                    class="text-negative"
-                    @click="clearPlannedDate"
-                />
-                <BaseButton
-                    variant="primary"
-                    label="Save"
-                    :disable="!plannedDateDraft"
-                    @click="savePlannedDate"
-                />
-            </template>
-        </BaseDialog>
 
         <!-- The line editor for the run and receipt faces. A bottom sheet, not
              a popover: mid-shop the phone is one-handed and the keyboard eats
@@ -1824,24 +1817,22 @@
     }
 
     // ── Planned shop date (Chunk 7 / UX-v2 §4) ───────────────────────
-    // The page owns *setting* the date (a toolbar button opens this dialog);
+    // The page owns *setting* the date (a toolbar button pops a calendar);
     // the overview card owns *reading* it, including the today/overdue/tomorrow
     // wording and the tone. They were one control before — a button whose label
     // was the fact — and splitting them is what let the fact stay visible
     // mid-shop while the control disappears with the decision.
     const plannedDateOpen = ref(false);
-    const plannedDateDraft = ref<string | null>(null);
 
     const sectionIcon = computed(() => sectionIconFor(effectiveMode.value));
 
-    function openPlannedDateEditor() {
-        plannedDateDraft.value = detail.value?.planned_shop_date ?? null;
-        plannedDateOpen.value = true;
-    }
-
-    async function savePlannedDate() {
-        if (!detail.value || !plannedDateDraft.value) return;
-        const next = plannedDateDraft.value;
+    // Picking a day saves it. A null pick is q-date's "tap the selected day
+    // again to deselect" — ignored rather than read as a clear, because the
+    // explicit Clear button is the one way to un-plan and a stray re-tap
+    // shouldn't silently drop the date.
+    async function onPickPlannedDate(value: string | null) {
+        if (!detail.value || !value || value === detail.value.planned_shop_date) return;
+        const next = value;
         try {
             await api.updateAsync(listId.value, { planned_shop_date: next });
             await refreshAllQuietly();

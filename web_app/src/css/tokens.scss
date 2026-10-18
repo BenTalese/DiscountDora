@@ -306,3 +306,25 @@
     --elevation-card: 0 6px 18px -16px hsla(168, 30%, 10%, 0.4);
     --elevation-card-hover: 0 14px 32px -18px hsla(168, 30%, 10%, 0.45);
 }
+
+/*
+ * Tokens defined in terms of OTHER themeable tokens are resolved where they
+ * are declared — on :root, against the document's theme. A subtree that pins
+ * its own theme with `data-theme` (the onboarding layout is always Pesto
+ * Dark; its theme-preview cards paint other themes) would otherwise inherit
+ * the root's already-resolved values: the segmented control showed a light
+ * track on the dark wizard canvas (2026-10-17). Re-declaring them on every
+ * themed element makes them resolve against the nearest theme (R-094). Only tokens
+ * no theme block overrides belong here — this block sits before themes.scss,
+ * so it would otherwise clobber a theme's own value.
+ */
+[data-theme] {
+    --seg-track-bg: var(--surface-sunken);
+    --seg-track-border: var(--border-default);
+    --seg-ink: var(--text-secondary);
+    --seg-ink-hover: var(--accent-ink);
+    --seg-active-bg: var(--brand-primary);
+    --seg-active-ink: var(--text-on-primary);
+    --lifecycle-cleared: var(--text-muted);
+    --neutral-muted: var(--text-muted);
+}

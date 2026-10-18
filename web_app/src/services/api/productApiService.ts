@@ -80,4 +80,9 @@ export type UpdateProductCommand = {
     price_now?: number;
     price_was?: number;
     product_id: string;
+    /** Custom products only — the API 422s on an ingested one. A
+     *  `data:image/...;base64,...` string from `processImageFile`. */
+    image?: string;
+    /** Custom products only. Wins over `image`. */
+    clear_image?: boolean;
 };

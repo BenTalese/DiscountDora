@@ -579,6 +579,11 @@ def test__alerts__price_watch_fires_at_or_below_the_threshold(api):
         assert alert is not None
         assert alert["amount"] == price
         assert alert["alert_id"].startswith(f"product:{pid}:price_drop:")
+        # The bell's add-to-list goes through the linked stock item when there
+        # is one (owner 2026-10-17), so the alert carries the same link the
+        # products list reports.
+        assert alert["stock_item_id"] == product.get("linked_stock_item_id")
+        assert alert["stock_item_name"] == product.get("linked_stock_item_name")
 
         # Re-setting the watch replaces it (one per product): below the price,
         # nothing fires.

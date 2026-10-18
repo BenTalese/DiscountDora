@@ -46,8 +46,11 @@
 
             <SettingsRow v-for="pref in visiblePrefs" :key="pref.kind" inline>
                 <template #label>
+                    <!-- The bell's own kind icon in its severity circle, so a
+                         toggle reads as the alert it controls (owner
+                         2026-10-17). -->
                     <span class="row items-center no-wrap q-gutter-x-sm">
-                        <q-icon :name="iconFor(pref.kind)" size="18px" class="dora-text-secondary" />
+                        <AlertKindAvatar :kind="pref.kind" :severity="pref.severity" />
                         <span>{{ kindLabel(pref.kind) }}</span>
                     </span>
                 </template>
@@ -276,7 +279,8 @@
     import { formatMoney } from 'src/composables/useMoney';
     import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
     import { useReconcilePolicy } from 'src/composables/useReconcilePolicy';
-    import { iconFor, kindTheme, type AlertKind } from 'src/models/alert';
+    import AlertKindAvatar from 'src/components/AlertKindAvatar.vue';
+    import { kindTheme, type AlertKind } from 'src/models/alert';
     import { useAlertPrefsStore } from 'src/stores/alertPrefsStore';
     import { useAlertStore } from 'src/stores/alertStore';
     import PriceHistoryApiService, { type PriceAlert } from 'src/services/api/priceHistoryApiService';

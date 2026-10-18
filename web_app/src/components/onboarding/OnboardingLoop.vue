@@ -54,7 +54,9 @@
         <!-- Detail panel — what the focused stage does. Announced politely.
              Node/centre labels are already on the buttons themselves, so the
              detail block only shows the sell sentence and cross-fades between
-             selections. -->
+             selections. Owner 2026-10-17: no "click or tap" hint before the
+             first pick, but the panel keeps a fixed height (sized for the
+             longest sell) so the loop doesn't jump when the first one lands. -->
         <div class="loop-detail" role="status" aria-live="polite">
             <transition name="loop-detail-swap" mode="out-in">
                 <p
@@ -62,9 +64,6 @@
                     :key="focusedKey"
                     class="loop-detail-body"
                 >{{ detail.body }}</p>
-                <p v-else key="hint" class="loop-detail-hint">
-                    Click or tap on a feature to see how it works.
-                </p>
             </transition>
         </div>
     </div>
@@ -294,7 +293,9 @@
     }
     /* ── Detail panel ──────────────────────────────────────────────── */
     .loop-detail {
-        min-height: 4.5em;
+        /* Three lines of `.loop-detail-body` — the longest sell wraps to
+           three on a phone — so an empty panel reserves the same space. */
+        min-height: calc(3 * 1.05rem * 1.45);
         max-width: 30rem;
         text-align: center;
         display: flex;
@@ -306,11 +307,6 @@
         font-size: 1.05rem;
         line-height: 1.45;
         color: var(--text-primary);
-    }
-    .loop-detail-hint {
-        margin: 0;
-        font-size: 0.95rem;
-        color: var(--text-muted);
     }
 
     /* Sleek out-in cross-fade when the focused node changes. */

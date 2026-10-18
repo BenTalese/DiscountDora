@@ -6,6 +6,33 @@ semver — major bumps signal schema or breaking-config changes.
 ## [Unreleased]
 
 ### Changed
+- **Onboarding, rebuilt (2026-10-17).** The first setup screen greets you with
+  your own avatar, offers 18 food pictures to pick from (or upload a photo), and
+  picks a theme from preview cards instead of a dropdown. A new "Build your Dora
+  experience" step (first admin only) turns spend tracking, nutrition,
+  stocktakes, auto-add, batch cooking and barcodes on or off with a tap. The
+  finish page shows exactly what Finish will set up, with a Change link on each
+  row, and numbered first steps that take you straight there. The story's loop
+  no longer asks you to tap, and doesn't jump when you do; copy trimmed.
+- **Profile pictures (2026-10-17).** Settings → Account offers the same food
+  pictures. Credited in Settings → About (Fluent Emoji, MIT).
+- **Alerts as cards (2026-10-17).** Each alert is its own rounded card, icon
+  centred, with slimmer text buttons; snooze and dismiss are stacked icons on
+  the right. The stock level button reads "Level: Low". Expired items get Log
+  waste (with Undo) in place of Recipes; price drops can go on a shopping list.
+  Settings → Notifications shows each kind's coloured icon again.
+- **Shopping list shop day (2026-10-17).** Shop day opens the calendar straight
+  away: pick a day and it saves; Clear removes it.
+- **Stock detail, Your prices (2026-10-17).** More space above, a proper header,
+  and recent prices in a tidy right-aligned column.
+- **Custom product photos (2026-10-17).** Products you added yourself can have
+  a photo (when adding, or from the card's menu). Scraped products keep the
+  store's picture, which the companion now actually sends.
+- **Companion (2026-10-17).** Saving one product says "Saved: 1" (it counted the
+  product and its price separately). Product pictures reach Dora, including on
+  the next sync for products saved earlier. Light/dark switch in Settings →
+  Appearance (Pesto Dark). Cards are less square, and long names wrap before the
+  heart.
 - **Alerts, reworked (2026-10-15).** The Alerts page is gone: the bell lists
   everything, closes when you tap outside it, and keeps snoozed alerts in their
   own section. Each alert has two rows of buttons, one for the thing it is

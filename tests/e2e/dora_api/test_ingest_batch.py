@@ -352,3 +352,60 @@ def test__ingest__rejects_price_observations_field(api):
     assert resp.status_code == 400, resp.text
     detail = (resp.json().get("errors") or "") + (resp.json().get("detail") or "")
     assert "price_observations" in detail.lower() or "extra" in detail.lower(), resp.text
+
+
+def test__ingest__product_image_round_trips_and_serves(api):
+    """Owner 2026-10-17 — a product saved from the companion arrives with its
+    picture. `image` is a data URL stored on the product and served by
+    `GET /products/<id>/image`; a later push replaces it, a push without one
+    leaves it, and one that isn't a data URL is dropped without failing the
+    record."""
+    import base64
+
+    sid, key = _mint_key()
+    store_id = _seeded_store_id()
+    _map_store(sid, "ImageStore", store_id)
+
+    png = b"\x89PNG\r\n\x1a\n" + b"first"
+    stockcode = uuid.uuid4().hex[:10]
+    product = {
+        "ref": "p1",
+        "name": f"Pictured {uuid.uuid4().hex[:6]}",
+        "store": "ImageStore",
+        "merchant_stockcode": stockcode,
+        "image": "data:image/png;base64," + base64.b64encode(png).decode(),
+    }
+    resp = _post_ingest(key, {"products": [product]})
+    assert resp.status_code == 200, resp.text
+    product_id = resp.json()["accepted"][0]["id"]
+
+    served = requests.get(f"{BASE}/products/{product_id}/image")
+    assert served.status_code == 200, served.text
+    assert served.headers["Content-Type"].startswith("image/png")
+    assert served.content == png
+
+    # No image on a re-push: the stored one stays.
+    resp = _post_ingest(key, {"products": [{**product, "image": None}]})
+    assert resp.status_code == 200, resp.text
+    assert requests.get(f"{BASE}/products/{product_id}/image").content == png
+
+    # Not a data URL: dropped, the record still accepted, the image unchanged.
+    resp = _post_ingest(key, {"products": [{**product, "image": "https://cdn.example/x.png"}]})
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["accepted"][0]["kind"] == "product"
+    assert requests.get(f"{BASE}/products/{product_id}/image").content == png
+
+    # A new picture replaces the old one.
+    jpeg = b"\xff\xd8\xff" + b"second"
+    replaced = {**product, "image": "data:image/jpeg;base64," + base64.b64encode(jpeg).decode()}
+    resp = _post_ingest(key, {"products": [replaced]})
+    assert resp.status_code == 200, resp.text
+    served = requests.get(f"{BASE}/products/{product_id}/image")
+    assert served.headers["Content-Type"].startswith("image/jpeg")
+    assert served.content == jpeg
+
+    # The product list reports it, which is what My products keys the thumb on.
+    listed = requests.get(
+        f"{BASE}/products", params={"filter": f"product_id:eq:{product_id}"},
+    ).json()["items"]
+    assert len(listed) == 1 and listed[0]["has_image"] is True, listed

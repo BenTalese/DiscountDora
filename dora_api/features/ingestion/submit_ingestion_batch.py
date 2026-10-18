@@ -35,6 +35,7 @@ the batch — `{ accepted: [...], skipped: [...], failed: [...] }`.
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Literal
@@ -95,6 +96,14 @@ class _ProductIn(BaseModel):
     merchant_stockcode: str | None = Field(default=None, max_length=255)
     web_url: str | None = Field(default=None, max_length=500)
     source: str | None = Field(default=None, max_length=64)
+    # The product picture as a `data:image/...;base64,...` URL, the form every
+    # product image is stored in and `GET /products/<id>/image` decodes (same
+    # cap as create_product). An ingested product's image comes only from
+    # here: the producer supplies it, and a later push with one replaces it.
+    # Absent leaves the stored image alone (owner 2026-10-17: images saved
+    # from the companion never reached My products, because this field didn't
+    # exist and the companion never sent one).
+    image: str | None = Field(default=None, max_length=6_000_000)
 
     @model_validator(mode="after")
     def _one_store(self) -> "_ProductIn":
@@ -111,6 +120,20 @@ class _OfferIn(BaseModel):
     price_was: float | None = Field(default=None, gt=0)
     observed_at: datetime
     source: str | None = Field(default=None, max_length=64)
+
+
+_IMAGE_DATA_URL_RE = re.compile(r"^data:image/[\w.+-]+;base64,")
+
+
+def _ingested_image(value: str | None) -> bytes | None:
+    """The stored form of a pushed image, or None to leave the image alone.
+
+    Not a field validator: a bad record never fails the batch, so an image
+    that isn't a data URL (which the image route could only 404) is dropped
+    and the product itself still lands."""
+    if not value or not _IMAGE_DATA_URL_RE.match(value):
+        return None
+    return value.encode("utf-8")
 
 
 # `_PriceObservationIn` removed. Observations are an
@@ -356,6 +379,11 @@ class SubmitIngestionBatchHandler:
             existing.size_value = raw.size_value or existing.size_value
             existing.pack_count = raw.pack_count or existing.pack_count
             existing.web_url = raw.web_url or existing.web_url
+            # Never a custom product here (`not_custom` above), so the
+            # producer's picture is the product's picture.
+            image = _ingested_image(raw.image)
+            if image is not None:
+                existing.image = image
             existing.is_active = True
             ctx.products_by_ref[raw.ref] = existing
             ctx.result.accepted.append(_AcceptedRecord(
@@ -375,7 +403,7 @@ class SubmitIngestionBatchHandler:
             brand=raw.brand,
             current_offer=initial_offer,
             historic_offers=[],
-            image=None,
+            image=_ingested_image(raw.image),
             is_active=True,
             is_available=True,
             store=store,

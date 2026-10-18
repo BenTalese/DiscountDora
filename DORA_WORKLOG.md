@@ -41,6 +41,53 @@ next.
 
 ---
 
+## 2026-10-17: **Owner batch: onboarding rebuild, alert cards, companion fixes (14 items)**
+
+**Status: built, gated, driven live (except where noted in DORA_VERIFY).**
+Split four ways: onboarding (main session), alerts + Notifications icons,
+shopping/stock-detail/product photos, companion (three subagents).
+Gates: vue-tsc + eslint src clean; vitest 747/66; backend pytest 2395 passed
+(the four FU-762 reds + one Hypothesis flake, FU-926, green on rerun);
+companion pytest 84 passed (1 skipped), vue-tsc + vite build clean.
+Driven on a throwaway seeded backend (5171, Playwright + local Chrome):
+onboarding story/welcome/features/finish at 1280 and 390 (no h-scroll; the
+loop measured identical before/after the first tap), a full single-session
+Finish (PATCH /auth/me with theme + image, PATCH /app-settings
+`money_enabled`, seed, complete; avatar shows in the header), bell cards,
+Notifications icons, Account presets, Your prices card, Shop day calendar
+(pick saves + closes, Clear PATCHes null).
+
+**Onboarding.** New `features` step (first user only) with six install-wide
+toggles, diffed against the install's current AppSettings and sent on Finish
+(only changed fields; nutrition 'complex' / auto-add 'all' survive an untouched
+card). Welcome step rebuilt (hero, preset/upload avatar, theme preview cards
+painted via nested `data-theme`, font segmented). Finish rebuilt (recap of what
+Finish applies with Change links, numbered first steps, help tip). Duplicate top
+Finish button removed. Preset art: Fluent Emoji 3D (MIT, owner-approved
+download), `src/assets/avatars/` + licence file + About credit; shared
+`PresetAvatarPicker` also on Account.
+
+**Found on the way.** WelcomeLayout pins Pesto Dark, and derived tokens
+(`--seg-*` etc.) resolved at `:root` so the segmented control drew light on
+the dark canvas: new **R-094 / ADR-091** (`[data-theme]` re-declaration block
+in tokens.scss). The live theme preview was built then removed (FU-921).
+
+**Agents' calls worth reviewing.** Expired alerts: "Log waste" replaces
+"Recipes" (FU-925 asks the owner). Companion "accepted 2" = product + price
+records counted separately; now a per-offer summary. Images never crossed:
+companion didn't send them and Dora's ingest had no `image` field; both fixed,
+size-capped. Custom-product photos: `PATCH /products/<id>` takes image /
+clear_image, 422 for ingested products; no migration.
+
+**Line endings:** Windows Python wrote CRLF into several files mid-unit; all
+normalised to LF (repo convention). Use `newline='
+'` in patch scripts.
+
+**Next up:** owner answers FU-925 / FU-921; walk the 2026-10-17 DORA_VERIFY
+block; FU-915 decision still pending.
+
+---
+
 ## 2026-10-15: **Owner batch: ~90 items across 14 surfaces + companion**
 
 **Status: built, gated, mostly driven live; ledger close-out partial (usage limit).**

@@ -171,6 +171,17 @@
                             </q-item-section>
                             <q-item-section>Price history</q-item-section>
                         </q-item>
+                        <!-- Owner 2026-10-17: photos for custom products
+                             only. An ingested product's picture comes from
+                             its source (and the API refuses a change). -->
+                        <q-item v-if="product.is_custom" clickable @click="emit('photo')">
+                            <q-item-section avatar>
+                                <q-icon :name="ICONS.photo_camera" size="18px" />
+                            </q-item-section>
+                            <q-item-section>
+                                {{ product.has_image ? 'Change photo' : 'Add photo' }}
+                            </q-item-section>
+                        </q-item>
                         <q-separator />
                         <q-item clickable @click="emit('delete')">
                             <q-item-section avatar>
@@ -224,6 +235,7 @@
         (e: 'toggle-active'): void;
         (e: 'price-history'): void;
         (e: 'watch-price'): void;
+        (e: 'photo'): void;
         (e: 'delete'): void;
     }>();
 

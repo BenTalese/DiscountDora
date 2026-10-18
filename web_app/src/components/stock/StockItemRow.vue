@@ -328,7 +328,7 @@
     import StockItemRowPriceButton from 'src/components/stock/StockItemRowPriceButton.vue';
     import StockLevelPicker from 'src/components/stock/StockLevelPicker.vue';
     import MarkAsWastedDialog from 'src/components/stock/MarkAsWastedDialog.vue';
-    import WasteApiService from 'src/services/api/wasteApiService';
+    import { useLogWaste } from 'src/composables/useLogWaste';
     import type { WasteReason } from 'src/services/api/wasteApiService';
     import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
     import { useMicroFeedback } from 'src/composables/useMicroFeedback';
@@ -647,13 +647,13 @@
     }
 
     // ── Mark as wasted (C-waste) ────────────────────────────────────────
-    // Capture is reason-only (PROPOSAL_WASTE_MINIMISATION §5). Submit
-    // posts the event + clears the row's expiry; a 5s Undo toast reverts
-    // both. The dialog is owned by the row so the Undo closure can
-    // remember the original expiry date independently of any prop
-    // refresh that may overwrite the row during the toast window.
+    // Capture is reason-only (PROPOSAL_WASTE_MINIMISATION §5). The log, the
+    // expiry clear and the 5s Undo are `useLogWaste` (shared with the bell's
+    // expired alerts); the row owns the dialog and snapshots the item when
+    // the user picks a reason, so the Undo remembers the original expiry
+    // independently of any prop refresh during the toast window.
     const markAsWastedOpen = ref(false);
-    const wasteApi = new WasteApiService();
+    const { logWasteAsync } = useLogWaste();
     const markAsWastedSubline = computed<string | null>(() => {
         const parts: string[] = [];
         if (levelName.value) parts.push(levelName.value);
@@ -664,70 +664,11 @@
         markAsWastedOpen.value = true;
     }
     async function onMarkAsWasted(reason: WasteReason) {
-        // Capture into a local before any await — the row's props may
-        // re-render with stale data while the request is in flight.
-        const stockItemId = props.item.stock_item_id;
-        const itemName = props.item.name;
-        const originalExpiry = props.item.expiry_date ?? null;
-        try {
-            const { event_id } = await wasteApi.logEventAsync({
-                stock_item_id: stockItemId,
-                reason,
-            });
-            if (originalExpiry) {
-                await stockItemStore.updateStockItemAsync({
-                    stock_item_id: stockItemId,
-                    expiry_date: null,
-                });
-            }
-            $q.notify({
-                type: 'info',
-                position: 'bottom-right',
-                message: `Logged "${itemName}" as wasted.`,
-                timeout: 5000,
-                actions: [
-                    {
-                        // No `color` — an info toast is a light elevated
-                        // surface now, so a white Undo would be invisible on
-                        // it. Quasar's default for notification actions is
-                        // `var(--q-primary)`, which follows the theme.
-                        label: 'Undo',
-                        handler: () => {
-                            void (async () => {
-                                try {
-                                    await wasteApi.deleteEventAsync(event_id);
-                                    if (originalExpiry) {
-                                        await stockItemStore.updateStockItemAsync({
-                                            stock_item_id: stockItemId,
-                                            expiry_date: originalExpiry,
-                                        });
-                                    }
-                                    $q.notify({
-                                        type: 'positive',
-                                        position: 'bottom-right',
-                                        message: 'Undone.',
-                                    });
-                                } catch (err) {
-                                    $q.notify({
-                                        type: 'negative',
-                                        position: 'bottom-right',
-                                        message: 'Could not undo.',
-                                        caption: toastCaption(err),
-                                    });
-                                }
-                            })();
-                        },
-                    },
-                ],
-            });
-        } catch (err) {
-            $q.notify({
-                type: 'negative',
-                position: 'bottom-right',
-                message: 'Could not log as wasted.',
-                caption: toastCaption(err),
-            });
-        }
+        await logWasteAsync({
+            stockItemId: props.item.stock_item_id,
+            itemName: props.item.name,
+            originalExpiry: props.item.expiry_date ?? null,
+        }, reason);
     }
 </script>
 

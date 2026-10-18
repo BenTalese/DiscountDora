@@ -22,6 +22,13 @@ top-to-bottom.
 
 ---
 
+## Owner batch 2026-10-17
+- [ ] Bell, expired alert (none in the seed): Log waste opens the reason picker; logging removes the alert and Undo brings it back.
+- [ ] Bell on a phone: snooze/dismiss column and wrapped action rows don't overlap or mis-tap.
+- [ ] My products: a custom product's ⋮ menu offers Add photo; add, change (no reload), remove. An ingested product has no photo item.
+- [ ] Companion against real Dora: saving one product says "Saved: 1"; its picture shows in My products; Sync fills pictures for products saved earlier.
+- [ ] Companion Settings → Appearance → Dark, reload: no light flash; fields, menus and header readable; long names wrap before the heart on a phone.
+
 ## Owner batch 2026-10-15 (not driven live)
 - [ ] Cook mode, fresh household: Finish says "Enjoy your meal."; an ingredient note reads italic behind a note glyph.
 - [ ] Dashboard budget: a list dated next week is not in "still to buy on your open lists".

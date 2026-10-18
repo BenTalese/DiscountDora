@@ -755,7 +755,11 @@
                                  PriceEntry dialog. Chunk 4 lights up the
                                  real baseline; chunk 6 wires Full history. -->
                             <template v-if="moneyEnabled">
+                                <!-- q-mt-lg: owner 2026-10-17, "a bit more
+                                     top margin" — it sat tight under the
+                                     basics list / preferred buys. -->
                                 <YourPricesWidget
+                                    class="q-mt-lg"
                                     :your-prices="detail.your_prices ?? null"
                                     :prefill="detail.price_entry_prefill ?? null"
                                     :stores="storesList"
@@ -764,38 +768,42 @@
                                     :item-name="detail.name"
                                     @submit="addObservation"
                                 >
-                                <q-list
-                                    v-if="priceObservations.length"
-                                    separator
-                                    class="dora-your-prices__list"
-                                >
-                                    <q-item
-                                        v-for="obs in priceObservations"
-                                        :key="obs.observation_id"
-                                    >
-                                        <q-item-section>
-                                            <q-item-label>
+                                <!-- Owner 2026-10-17 restyle: a labelled
+                                     section, amounts in one right-hand column
+                                     (D-018), the measure + when/where as the
+                                     row's text. -->
+                                <div v-if="priceObservations.length" class="dora-your-prices__recent">
+                                    <div class="dora-your-prices__label dora-your-prices__recent-label">Recent prices</div>
+                                    <q-list separator class="dora-your-prices__list">
+                                        <q-item
+                                            v-for="obs in priceObservations"
+                                            :key="obs.observation_id"
+                                        >
+                                            <q-item-section>
+                                                <q-item-label>{{ formatObsMeasure(obs) }}</q-item-label>
+                                                <q-item-label caption>
+                                                    {{ relativeTime(obs.observed_at) }}
+                                                    <span v-if="obs.store_name"> · {{ obs.store_name }}</span>
+                                                    <span v-if="obs.shopping_list_name"> · from {{ obs.shopping_list_name }}</span>
+                                                </q-item-label>
+                                            </q-item-section>
+                                            <q-item-section side class="dora-your-prices__price">
                                                 {{ formatMoney(obs.total_price) }}
-                                                <span class="dora-text-muted">for {{ formatObsMeasure(obs) }}</span>
-                                            </q-item-label>
-                                            <q-item-label caption>
-                                                {{ relativeTime(obs.observed_at) }}
-                                                <span v-if="obs.store_name"> · {{ obs.store_name }}</span>
-                                                <span v-if="obs.shopping_list_name"> · from {{ obs.shopping_list_name }}</span>
-                                            </q-item-label>
-                                        </q-item-section>
-                                        <q-item-section side>
-                                            <BaseButton
-                                                variant="icon"
-                                                :icon="ICONS.delete_outline"
-                                                :disable="busy"
-                                                @click="deleteObservation(obs)"
-                                            >
-                                                <BaseTooltip>Remove</BaseTooltip>
-                                            </BaseButton>
-                                        </q-item-section>
-                                    </q-item>
-                                </q-list>
+                                            </q-item-section>
+                                            <q-item-section side>
+                                                <BaseButton
+                                                    variant="icon"
+                                                    :icon="ICONS.delete_outline"
+                                                    :disable="busy"
+                                                    aria-label="Remove price"
+                                                    @click="deleteObservation(obs)"
+                                                >
+                                                    <BaseTooltip>Remove</BaseTooltip>
+                                                </BaseButton>
+                                            </q-item-section>
+                                        </q-item>
+                                    </q-list>
+                                </div>
                                 </YourPricesWidget>
                             </template>
                         </div>

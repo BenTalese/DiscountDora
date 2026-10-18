@@ -13,6 +13,7 @@
         it (R-001 second-consumer threshold). (Stock-item image *editing* was
         removed — items show their linked product's image, not a user upload —
         so the old FU-126 stock-item consumer no longer exists; see FU-607.)
+        Current consumer: the custom-product create dialog (2026-10-17).
     -->
     <div class="image-upload-field">
         <div class="image-upload-field__preview" :style="previewUrl ? '' : placeholderStyle">
@@ -90,7 +91,7 @@
     .image-upload-field__preview {
         width: 100%;
         height: 180px;
-        border-radius: 10px;
+        border-radius: var(--radius-lg);
         overflow: hidden;
         display: flex;
         align-items: center;
@@ -101,8 +102,11 @@
         height: 100%;
         object-fit: cover;
     }
+    /* R-002 carve-out: the placeholder sits on the name-hashed hsl fill set
+       inline above, not on a themed surface, so its ink is the fixed
+       near-white that holds against every hue that hash can produce. */
     .image-upload-field__placeholder {
-        font-size: 3rem;
+        font-size: calc(var(--font-size-3xl) * 1rem);
         font-weight: 700;
         color: rgba(255, 255, 255, 0.92);
     }

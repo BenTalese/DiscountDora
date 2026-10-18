@@ -11,17 +11,23 @@
         `select` and never touches a store, because the two callers persist
         differently (the overview row writes immediately, the finish modal
         batches on confirm).
+
+        `variant="text"` (owner 2026-10-17, the bell's alert cards) swaps the
+        square for a labelled secondary button that sits with the other text
+        buttons on a card; the menu is the same one. Its visible label is its
+        accessible name there (WCAG 2.5.3), so `label` is not applied.
     -->
     <BaseButton
-        variant="ghost"
-        dense
-        :class="[
+        :variant="variant === 'text' ? 'secondary' : 'ghost'"
+        :dense="variant !== 'text'"
+        :label="variant === 'text' ? textLabel : undefined"
+        :class="variant === 'text' ? undefined : [
             'stock-level-picker',
             levelButtonClass,
             { 'stock-level-picker--uncertain': uncertain },
         ]"
-        :style="levelButtonStyle"
-        :aria-label="ariaLabel"
+        :style="variant === 'text' ? undefined : levelButtonStyle"
+        :aria-label="variant === 'text' ? undefined : ariaLabel"
         @click.stop
     >
         <BaseTooltip>
@@ -92,8 +98,11 @@
             /** Overrides the derived aria-label (the overview row folds its
              *  uncertainty reason in). */
             label?: string | undefined;
+            /** `swatch` — the coloured square (default); `text` — a labelled
+             *  button naming the current level. */
+            variant?: 'swatch' | 'text';
         }>(),
-        { uncertain: false },
+        { uncertain: false, variant: 'swatch' },
     );
 
     const emit = defineEmits<{ (e: 'select', stockLevelId: string): void }>();
@@ -111,6 +120,8 @@
         if (!props.levelId) return null;
         return stockLevels.value.find((l) => l.stock_level_id === props.levelId)?.sequence ?? null;
     });
+
+    const textLabel = computed(() => (levelName.value ? `Level: ${levelName.value}` : 'Set level'));
 
     const ariaLabel = computed(
         () => props.label ?? `Stock level: ${levelName.value || 'unset'}`,

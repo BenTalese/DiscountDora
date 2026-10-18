@@ -67,7 +67,9 @@
          Renders the shared BaseButton (secondary) so it sits flush with the
          other toolbar actions on the detail/recipe pages. The cart-state
          icon still swaps to signal on/off-list; the popover anchors to it
-         on `on_multiple`. -->
+         on `on_multiple`. Anchored on `productId` alone (an unlinked
+         product's price-drop alert, owner 2026-10-17) it takes the
+         inline-product flow, drawn as a labelled button. -->
     <BaseButton
         v-else-if="variant === 'toolbar'"
         variant="secondary"
@@ -75,7 +77,7 @@
         :label="toolbarLabel"
         :loading="busy"
         :aria-label="toolbarLabel"
-        @click.stop="onPrimaryClick"
+        @click.stop="stockItemId ? onPrimaryClick() : onInlineProductClick()"
     >
         <q-popup-proxy
             v-if="multiPopoverOpen"

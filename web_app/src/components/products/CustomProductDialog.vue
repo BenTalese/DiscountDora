@@ -77,6 +77,17 @@
                     />
                 </div>
             </div>
+
+            <!-- Owner 2026-10-17: custom products can carry a photo (an
+                 ingested one's comes from its source). Optional, so it sits
+                 last; the card's menu can add or change it later. -->
+            <ImageUploadField
+                :preview-url="form.image"
+                :name="form.name"
+                :alt="form.name ? `Photo of ${form.name}` : 'Product photo'"
+                @pick="form.image = $event"
+                @clear="form.image = null"
+            />
         </q-card-section>
 
         <template #actions>
@@ -100,14 +111,17 @@
      *  a product they couldn't create.
      *
      *  Deliberately fewer fields than the shape `POST /products` accepts. A
-     *  scraper fills stockcode, availability, image and a was-price because it
+     *  scraper fills stockcode, availability and a was-price because it
      *  has them; asking a person to type them would be asking for data they
      *  don't have to make the form look complete. `size_value`/`size_unit` are
      *  split out of the single "Size" box here rather than asked for twice.
+     *  (A photo *is* offered, optionally — owner 2026-10-17 — since a phone
+     *  camera makes it easy and only custom products can carry one.)
      */
     import BaseButton from 'src/components/BaseButton.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
     import BaseSelect from 'src/components/BaseSelect.vue';
+    import ImageUploadField from 'src/components/ImageUploadField.vue';
     import MoneyInput from 'src/components/MoneyInput.vue';
     import StoreLogo from 'src/components/StoreLogo.vue';
     import ProductApiService from 'src/services/api/productApiService';
@@ -132,6 +146,7 @@
         storeName: null as string | null,
         priceNow: null as number | null,
         size: '',
+        image: null as string | null,
     });
     const errors = reactive({
         name: '', storeName: '', priceNow: '', size: '',
@@ -148,6 +163,7 @@
         form.storeName = null;
         form.priceNow = null;
         form.size = '';
+        form.image = null;
         Object.keys(errors).forEach((k) => { errors[k as keyof typeof errors] = ''; });
         try {
             stores.value = (await storesApi.listAsync()).items;
@@ -222,7 +238,7 @@
                 size_unit: size.unit,
                 is_active: true,
                 is_available: true,
-                image: null,
+                image: form.image,
                 merchant_stockcode: null,
                 web_url: null,
             });

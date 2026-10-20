@@ -187,8 +187,12 @@
     const REASON_TITLES: Record<RecipeCostUnpricedReason, string> = {
         no_link: 'Not linked to a pantry item',
         no_price: 'No price recorded yet',
-        unit_mismatch: "Units don't match the price",
         no_quantity: 'No amount on the ingredient',
+        unit_no_pack_count: "Priced by weight, and we don't know how many come in a pack",
+        unit_no_pack_size: "Priced per pack, and the pack size isn't recorded",
+        unit_unknown_density: "Can't convert between weight and volume for this ingredient",
+        unit_wrong_food: "That unit doesn't apply to this ingredient",
+        unit_mismatch: "Units don't match the price",
     };
 
     const unpricedGroups = computed(() => {

@@ -30,6 +30,11 @@ from dora_api.infrastructure.ports import Repository
 class UpdateMealPlanEntryRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    # FU-878 — the saved entry this row edits. A forward entry of this plan
+    # with this id is updated in place and keeps its id; anything else (no id,
+    # an id from another plan, a past entry's id, or one already claimed by an
+    # earlier row) is created as a new entry.
+    meal_plan_entry_id: UUID | None = None
     recipe_id: UUID
     scheduled_for: date
     servings: int = Field(default = 1, ge = 1)
@@ -157,10 +162,10 @@ class UpdateMealPlanHandler:
             if _MissingIds:
                 return UpdateMealPlanResponse(missing_recipe_ids = tuple(_MissingIds))
 
-            # PROPOSAL_MEAL_PLANS_PART_2 — the forward portion is replaced, so its
-            # CookBatches are too. Keep only batches still referenced by a preserved
-            # (past/consumed) entry; delete the rest of this plan's batches. Their
-            # forward entries are about to be delete-orphaned; the SET NULL FK means
+            # PROPOSAL_MEAL_PLANS_PART_2 — forward CookBatches are rebuilt from the
+            # resent cook_keys. Keep only batches still referenced by a preserved
+            # (past/consumed) entry; delete the rest of this plan's batches. Forward
+            # entries that pointed at one are re-pointed below; the SET NULL FK means
             # deleting a batch first can't trip an FK error.
             _PreservedBatchIds = {
                 _Entry.cook_batch_id for _Entry in _PreservedExisting
@@ -206,20 +211,38 @@ class UpdateMealPlanHandler:
             if _NewBatches:
                 self.repository.flush()
 
-            _NewEntries: List[MealPlanEntry] = []
+            # Match-and-update (FU-878). The forward portion used to be deleted
+            # and re-inserted, so every entry's id changed on any save. Now a
+            # row naming one of this plan's forward entries edits it in place;
+            # forward entries no row names are dropped by the reassignment below.
+            _PreservedIds = {_Entry.id for _Entry in _PreservedExisting}
+            _ForwardById = {
+                _Entry.id: _Entry for _Entry in (_Plan.entries or [])
+                if _Entry.id not in _PreservedIds
+            }
+            _ForwardEntries: List[MealPlanEntry] = []
             for _EntryRequest in request.entries:
                 _Batch = _BatchByKey.get(_EntryRequest.cook_key) if _EntryRequest.cook_key else None
-                _NewEntries.append(MealPlanEntry(
-                    recipe = _RecipeById[_EntryRequest.recipe_id],
-                    scheduled_for = _EntryRequest.scheduled_for,
-                    servings = _EntryRequest.servings,
-                    slot = _EntryRequest.slot,
-                    cook_batch_id = _Batch.id if _Batch else None,
-                    cook_fresh = _EntryRequest.cook_fresh,
-                ))
-            for _Entry in _NewEntries:
-                self.repository.add(_Entry)
-            _Plan.entries = _PreservedExisting + _NewEntries
+                _Entry = _ForwardById.pop(_EntryRequest.meal_plan_entry_id, None)
+                if _Entry is None:
+                    _Entry = MealPlanEntry(
+                        recipe = _RecipeById[_EntryRequest.recipe_id],
+                        scheduled_for = _EntryRequest.scheduled_for,
+                        servings = _EntryRequest.servings,
+                        slot = _EntryRequest.slot,
+                        cook_batch_id = _Batch.id if _Batch else None,
+                        cook_fresh = _EntryRequest.cook_fresh,
+                    )
+                    self.repository.add(_Entry)
+                else:
+                    _Entry.recipe = _RecipeById[_EntryRequest.recipe_id]
+                    _Entry.scheduled_for = _EntryRequest.scheduled_for
+                    _Entry.servings = _EntryRequest.servings
+                    _Entry.slot = _EntryRequest.slot
+                    _Entry.cook_batch_id = _Batch.id if _Batch else None
+                    _Entry.cook_fresh = _EntryRequest.cook_fresh
+                _ForwardEntries.append(_Entry)
+            _Plan.entries = _PreservedExisting + _ForwardEntries
 
         self.repository.save_changes()
         return UpdateMealPlanResponse()

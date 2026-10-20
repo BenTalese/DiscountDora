@@ -40,7 +40,7 @@ export function displayDenominatorFor(
     // temperature reaching here would be a bug upstream, but an unreadable
     // label is a worse answer than an unscaled one).
     if (!rule) return COUNT_DENOMINATOR;
-    return measureInCanonical >= rule.flipAt ? rule.full : rule.sub;
+    return rule.flipAt !== null && measureInCanonical >= rule.flipAt ? rule.full : rule.sub;
 }
 
 /**
@@ -90,12 +90,11 @@ export function quoteUnitPrice(
  * The same convention applied to a price that already *is* per-unit, where
  * the pack size behind it is unknown — the recipe cost breakdown's case.
  *
- * The size-aware flip has no pack size to read here, so it reads **one of the
- * unit the price is quoted in** instead. That is a real signal rather than a
- * stand-in: the cost DTO quotes per the linked product's own `size_unit`, and
- * a pack labelled in grams is a sub-kilo pack. So `$0.004 / g` becomes
- * `$0.40 / 100g` while `$6.90 / kg` and `$2.50 / ea` are left exactly as they
- * are — which is how each of the three reads on a shelf.
+ * A size-aware convention (US) has no pack size to read here, so it reads
+ * **one of the unit the price is quoted in** instead: the cost DTO quotes per
+ * the linked product's own `size_unit`, and a pack labelled in ounces is a
+ * sub-pound pack. Under the fixed AU convention `$0.004 / g` and `$6.90 / kg`
+ * both land on `/100g`; `$2.50 / ea` is left as it is.
  */
 export function requoteUnitPrice(
     pricePerUnit: number,

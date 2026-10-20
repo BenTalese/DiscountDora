@@ -300,13 +300,21 @@ def test__display_denominator_for__FollowsTheMeasurementSystem():
     rather than kept alongside."""
     assert units.display_denominator_for(
         units.MASS, 1.0, system=units.METRIC,
-    )[0] == "kg"
+    )[0] == "100g"
     assert units.display_denominator_for(
         units.MASS, 1.0, system=units.US_CUSTOMARY,
     )[0] == "lb"
     assert units.display_denominator_for(
         units.MASS, 1.0, system=units.IMPERIAL,
-    )[0] == "kg"
+    )[0] == "100g"
+
+
+def test__display_denominator_for__AuNeverFlips():
+    """FU-914 — a 500 g and a 2 kg pack quote in the same unit, so two prices
+    for the same thing can be compared without converting in your head."""
+    for measure in (0.2, 1.0, 2.0, 10.0):
+        assert units.display_denominator_for(units.MASS, measure)[0] == "100g"
+        assert units.display_denominator_for(units.VOLUME, measure)[0] == "100ml"
 
 
 def test__unit_systems__EveryCanonicalUnit__IsOfferedBySomething():

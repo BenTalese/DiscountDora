@@ -445,9 +445,9 @@ def display_denominator_for_series(
     `display_denominator_for`'s own docstring exists to prevent. Found by
     driving it (R-003).
 
-    Mirrors the YourPrices rule: use the latest observation's measure in
-    canonical units to decide whether to flip to the smaller unit
-    (AU /100ml / /100g, US /fl oz / /oz). If there are no observations
+    Mirrors the YourPrices rule: AU is always /100ml / /100g; US uses the
+    latest observation's measure in canonical units to decide whether to flip
+    to the smaller unit (/fl oz / /oz). If there are no observations
     (offer-only series — e.g. a linked product with no in-app obs yet),
     fall back to the first usable linked-product size so the chart axis
     still picks an appropriate denominator.

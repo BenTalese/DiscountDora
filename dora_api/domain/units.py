@@ -155,12 +155,12 @@ def display_denominator_for(
     :data:`CANONICAL_PRICE_UNIT` (compute unit) must be divided to land in
     that denominator.
 
-    Size-aware: the flip kicks in only once the latest observation reaches a
-    full target unit (≥ 1 L / ≥ 1 kg under AU; ≥ 1 qt / ≥ 1 lb under US).
-    Below that, the convention is the smaller denominator
-    ("$1.75 / 100ml" reads more naturally than "$17.50 / L" for a 500 ml
-    bottle; same for "$0.50 / fl oz" vs "$16.00 / qt"). Count stays "ea"
-    (no fractional convention either way).
+    AU is fixed: always ``/100g`` and ``/100ml``, whatever the pack size, so
+    a 500 g and a 2 kg pack of the same thing quote in the same unit and can be
+    compared at a glance (owner, FU-914). US stays size-aware: the flip kicks in
+    once the latest observation reaches a full target unit (≥ 1 qt / ≥ 1 lb),
+    and below that the smaller denominator reads more naturally ("$0.50 / fl oz"
+    vs "$16.00 / qt"). Count stays "ea" (no fractional convention either way).
 
     The system is resolved server-side from ``AppSetting.measurement_system``
     — single source so the chart axis, sidecar entries, widget headline, and
@@ -173,7 +173,8 @@ def display_denominator_for(
     if active_dim == COUNT:
         return (COUNT_DENOMINATOR.label, COUNT_DENOMINATOR.factor)
     rule = PRICE_DISPLAY_RULES[pricing_convention_for(system)][active_dim]
-    chosen = rule.full if latest_measure_in_canonical >= rule.flip_at else rule.sub
+    flips = rule.flip_at is not None and latest_measure_in_canonical >= rule.flip_at
+    chosen = rule.full if flips else rule.sub
     return (chosen.label, chosen.factor)
 
 
@@ -189,12 +190,12 @@ class DisplayDenominator:
 class DenominatorRule:
     """The pair of denominators one convention uses for one dimension, and the
     pack size (in the dimension's canonical unit) at which the larger one takes
-    over. Data rather than branches so `scripts/dump_units.py` can mirror the
+    over. ``flip_at=None`` means it never does. Data rather than branches so `scripts/dump_units.py` can mirror the
     rule to the SPA instead of the client restating it (R-003) — the price-entry
     widget previews a denominator while you type, which can't round-trip."""
     full: DisplayDenominator
     sub: DisplayDenominator
-    flip_at: float
+    flip_at: float | None
 
 
 # Count has no fractional convention either way, so it sits outside the table.
@@ -209,16 +210,17 @@ _US_FLIP_QT_L = 0.946352946
 _US_FLIP_LB_KG = 0.45359237
 
 PRICE_DISPLAY_RULES: dict[str, dict[str, DenominatorRule]] = {
+    # Fixed /100g and /100ml, the Australian shelf-tag unit (FU-914).
     "AU": {
         VOLUME: DenominatorRule(
             full=DisplayDenominator("L", 1.0),
             sub=DisplayDenominator("100ml", 10.0),
-            flip_at=1.0,
+            flip_at=None,
         ),
         MASS: DenominatorRule(
             full=DisplayDenominator("kg", 1.0),
             sub=DisplayDenominator("100g", 10.0),
-            flip_at=1.0,
+            flip_at=None,
         ),
     },
     "US": {

@@ -39,6 +39,7 @@ from dora_api.features.recipes.recipe_step_image_access import (
 from dora_api.features.recipes.recipe_section_access import (
     get_section_count_for_recipes, get_sections_for_recipe,
 )
+from dora_api.features.stock_items._level_access import resolve_levels_by_item
 from dora_api.features.stock_items.inference_overlay import (
     SURFACE_RECIPES, IngredientRow, recipe_hint, resolve_divergence,
 )
@@ -806,18 +807,29 @@ def load_recipe_cookability(
       (Chunk 4). Callers gate the cookable-now count on this being zero:
       a recipe with any unlinked required ingredient is tri-state None,
       not True, and is excluded from the dashboard tally.
+
+    Levels are resolved by id rather than through an eager include: if the
+    request already loaded these StockItems, the identity map returns them
+    with ``stock_level`` unset and every ingredient would read as missing
+    (FU-872, R-032). Safe to call at any point in a request.
     """
     recipes = (
         repository
         .get(Recipe)
         .include(Recipe.Fields.INGREDIENTS)
             .then_include(RecipeIngredient.Fields.STOCK_ITEM)
-            .then_include(StockItem.Fields.STOCK_LEVEL)
         .all()
     )
+    items = {
+        ing.stock_item.id: ing.stock_item
+        for r in recipes
+        for ing in (r.ingredients or [])
+        if ing.stock_item is not None
+    }
+    levels_by_item = resolve_levels_by_item(repository, list(items.values()))
     return {
         r.id: (
-            missing_count_for(r.ingredients),
+            missing_count_for(r.ingredients, levels_by_item),
             len(r.ingredients or []),
             unlinked_count_for(r.ingredients),
         )

@@ -126,8 +126,8 @@ def _emit_price_display_rules() -> str:
         "    readonly full: DisplayDenominator;",
         "    readonly sub: DisplayDenominator;",
         "    /** Pack size, in the dimension's canonical price unit, at or above",
-        "     *  which `full` takes over from `sub`. */",
-        "    readonly flipAt: number;",
+        "     *  which `full` takes over from `sub`; null means it never does. */",
+        "    readonly flipAt: number | null;",
         "}",
         "",
         "export type PricingConvention = 'AU' | 'US';",
@@ -161,7 +161,7 @@ def _emit_price_display_rules() -> str:
                 f"        {_ts_string(dim)}: {{ "
                 f"full: {{ label: {_ts_string(rule.full.label)}, factor: {rule.full.factor!r} }}, "
                 f"sub: {{ label: {_ts_string(rule.sub.label)}, factor: {rule.sub.factor!r} }}, "
-                f"flipAt: {rule.flip_at!r} }},"
+                f"flipAt: {'null' if rule.flip_at is None else repr(rule.flip_at)} }},"
             )
         lines.append("    },")
     lines.append("};")

@@ -19,7 +19,10 @@ from dataclasses import dataclass
 import pytest
 
 from dora_api.features.recipes.recipe_cost import (
-    UNPRICED_NO_QUANTITY, UnitPrice, _cost_one, _line_cost, _key,
+    UNPRICED_NO_QUANTITY, UNPRICED_UNIT_MISMATCH, UNPRICED_UNIT_NO_PACK_COUNT,
+    UNPRICED_UNIT_NO_PACK_SIZE, UNPRICED_UNIT_UNKNOWN_DENSITY,
+    UNPRICED_UNIT_WRONG_FOOD, UnitPrice, _cost_one, _line_cost, _key,
+    _price_line,
 )
 
 
@@ -257,3 +260,24 @@ def test__line_cost__NoPortionRows__BehavesExactlyAsBefore():
     assert _line_cost(
         _ing("Chicken Thighs", 800, "g"), UnitPrice(0.011, "g"), [],
     ) == pytest.approx(8.80)
+
+
+# ── Why a line is unpriced (FU-875) ───────────────────────────────────────
+
+
+@pytest.mark.parametrize("ingredient, price, reason", [
+    (_ing("Eggs", 3, None), UnitPrice(0.0079, "g"), UNPRICED_UNIT_NO_PACK_COUNT),
+    (_ing("Eggs", 3, "yolks"), UnitPrice(0.0079, "g"), UNPRICED_UNIT_NO_PACK_COUNT),
+    (_ing("Rice", 250, "g"), UnitPrice(4.00, "ea"), UNPRICED_UNIT_NO_PACK_SIZE),
+    (_ing("Dijon Mustard", 2, "tsp"), UnitPrice(0.019, "g"), UNPRICED_UNIT_UNKNOWN_DENSITY),
+    (_ing("Celery", 2, "sticks"), UnitPrice(0.004, "g"), UNPRICED_UNIT_WRONG_FOOD),
+    (_ing("Garlic", 3, "cloves"), UnitPrice(1.00, "ea"), UNPRICED_UNIT_MISMATCH),
+])
+def test__price_line__NamesTheGap(ingredient, price, reason):
+    assert _price_line(ingredient, price) == (None, reason)
+
+
+def test__price_line__APricedLine__HasNoReason():
+    cost, reason = _price_line(_ing("Chicken Thighs", 800, "g"), UnitPrice(0.011, "g"))
+    assert cost == pytest.approx(8.80)
+    assert reason is None

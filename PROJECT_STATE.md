@@ -1,6 +1,6 @@
 ﻿# Dashy Dora — Project State
 
-**Last reviewed: 2026-10-17 (second owner batch: onboarding rebuilt with a features step + food avatars, alerts as cards, companion image + count fixes; FU-915 and FU-925 need a decision).** Milestone-progress front door — phase board,
+**Last reviewed: 2026-10-21 (owner decisions batch: 12 FUs closed, five backlog fixes; production deploy confirmed healthy on altair).**
 workstreams, and what needs your attention. This is *not* a changelog;
 shipped-work history lives in `CHANGELOG.md` + `DORA_WORKLOG.md`.
 
@@ -106,26 +106,19 @@ tests every gate has been run around (**FU-762**).
 
 ## ⚠️ Needs your attention now
 
-**The products program is COMPLETE and has nothing open** — all eight batches, all four decisions closed (2026-09-08). ⚠️ **One action for you:** the companion 403s until ingestion is switched on — Settings → Admin → Data & access.
+**The products program is COMPLETE and has nothing open** — all eight batches, all four decisions closed (2026-09-08). 
 
 
 **Total open backlog is ~208 items in `DORA_FOLLOWUPS.md`**; the list below is the slice
 that wants a decision or a running-app check now.
 
-**Decisions the owner owns**
+**Decisions the owner owns** (refreshed 2026-10-21; FU-866/790/762/875/774/703/860/872/878/758/915/921/925 closed)
 
-1. 🔴 **FU-866 — `companion_ingestion_enabled` gates nothing, and the new copy says it does.** `submit_ingestion_batch()` authenticates the bearer token and proceeds without ever reading the flag — the second instance of exactly what R-081 was written for, on the same page as the first. The fix is a one-line 403, but the column **defaults to `False`**, so guarding it breaks every install already pushing data (including yours). *Guard it and accept existing pushers must switch it on, or flip the default for existing rows in the same migration.* **Resolution: now.**
-2. 🔴 **FU-790 — `name: dashy-dora` in `compose.yml` orphans the deployed stack.** The server was deployed under the directory-derived project `discountdora`; pinning the name strands it, and `container_name` makes it fatal. **Blocks deploying.** Pairs with the still-unapplied one-character `--exclude='data'` deploy-script fix.
-3. 🔴 **FU-762 — four buy-verdict e2e tests are red** (`test_list_buy_verdicts.py`, all four 403 against the money gate). Every gate this week ran with these excluded, and they were re-confirmed pre-existing against a stashed tree. Likely a one-line fixture change; a red suite blocks everyone.
-4. 🟡 **FU-875 — the cost breakdown says "Units don't match the price" for four unrelated situations.** Unblocked: its stated blocker (FU-874) is resolved, so the bucket no longer mostly hides a known bug, and 09-09 added a fourth case it conflates (a food-specific unit on the wrong food). `no_quantity` landed the same day and is the shape this proposes, so the copy map and the closed union are already set up to take more. **Resolution: now-ish.**
-5. 🔴 **FU-774 — may a planned meal change a buy verdict?** Nothing built; gates FU-775 and FU-776 and the whole axis.
-6. 🔴 **FU-703 — the fate of the product price axis** (`/price-history`, My Products). Reports chunk 4 built the "trend in Reports" half, so the call is better-informed but still open, and still scopes FU-704..708.
-7. 🔴 **FU-860 — with products off, Dora sends no scheduled email at all.** The Email block is `v-if="productsEnabled"` because the deals mail is the only scheduled mail. Which second email earns being unprompted? The evening brief is cheapest — it exists, it's scheduled, only the channel is missing.
-8. 🔴 **Theme colour cluster — FU-622 is the vehicle, FU-621 / FU-674 / FU-801 / FU-777 are the decisions.** `--brand-secondary` measured **1.10:1** on Cherry-Cola-Dark; `--text-on-primary` fails the D-002 floor in three themes; `--brand-primary` fails the same ink test. These want an options board and your eye, not a blind swap.
-9. 🟡 **FU-872 — `load_recipe_cookability` returns confidently wrong numbers depending on what ran before it.** The eager include can't populate `StockItem.stock_level` (`lazy="noload"`) once those rows are in the session, so every ingredient reads unstocked — it made Kitchen health announce *"none of your 6 planned meals can be cooked"* beside a card offering to cook five. Fixed **only by ordering** in `_gather_inputs`, which any future edit can silently undo (**R-082/ADR-079**). Four recipe surfaces read this helper. **Do this before anything else touches it.** Its sibling **FU-873** is the same trap sitting armed in `frequently_added.py`.
-10. 🟡 **FU-878 — `PATCH /meal-plans` re-mints every forward entry id on every save.** The UI symptom (a menu destroying itself mid-edit) is fixed at the rendering layer, but the write shape still churns ids, which makes any future id-keyed UI or client cache quietly wrong. Converting replace-the-week to match-and-update is a real refactor with its own defect history — worth scheduling deliberately, not folding into a UI batch.
-11. 🟡 **FU-855 — the ADR-073 cost narrowing.** "2 tins" of a `400 g` product with no `pack_count` now reads *unpriced* where it used to guess. Deliberate, but it's a loss of coverage — walk a costed recipe and say whether it reads acceptably. Its other half is **FU-856** (`pack_count` isn't accepted by the products API at all).
-12. 🟡 **FU-758 — the four `.claude/launch.json` verify configs still point at `:5170` with `DORA_ALLOW_DESTRUCTIVE=true`**, next to the proven-safe 5171 pair. One mis-launch away from the real DB.
+1. 🟢 **Deploy today's work and run onboarding on production.** Prod has an admin account and an empty pantry; spend tracking off, timezone UTC.
+2. 🟡 **Buy-verdict plan axis is live with no flag** (FU-774/775/776 closed). Adherence gating from the brief was deliberately left out.
+3. 🟡 **FU-704..708 — price-history polish.** FU-703 answered keep, so these are now polish on a surviving page.
+4. 🔴 **Theme colour cluster — FU-622 is the vehicle, FU-621 / FU-674 / FU-801 / FU-777 are the decisions.** Needs an options board and your eye.
+5. 🟢 **FU-918 — confirm a companion push lands on production.** No switch needed; the deploy mints the companion's key.
 
 **Running-app checks**
 
@@ -270,7 +263,7 @@ IMPL_PLAN_*); INV prompts produced their reports.
 | PROPOSAL_BARCODE_SCANNING | Proposal (P6-02) | ➗ carve-outs | Fix scan data model, gate off-by-default | Implemented; §5.2 ingestion auto-populate deferred |
 | PROPOSAL_BUDGET_AWARE_LISTS | Proposal (P2-05 tail) | 🔵 designed | Budget-aware auto shopping-list optimizer | Header "Draft"; no budget logic in `auto_generate.py` |
 | PROPOSAL_BUDGET_DEFENSE_SWAPS | Design brief (FU-451/450) | ➗ carve-outs | Over-budget swaps + deal-quality signal | `swap_suggestions.py`/`deal_quality.py` shipped; good_deal alert + product swaps CUT |
-| BRIEF_BUY_VERDICT_PLAN_AXIS | Design brief (2026-08-28) | 🔴 needs-a-decision | A fourth `plan` axis feeding the buy verdict from planned meals | No code; blocked on FU-774 (collides with the 2026-08-17 "shortfall is unchanged" directive). FU-775/776 downstream |
+| BRIEF_BUY_VERDICT_PLAN_AXIS | Design brief (2026-08-28) | ➗ built without the section 5 adherence gate (2026-10-21) | A fourth `plan` axis feeding the buy verdict from planned meals | No code; blocked on FU-774 (collides with the 2026-08-17 "shortfall is unchanged" directive). FU-775/776 downstream |
 | PROPOSAL_BUY_VERDICT_ORACLE | Proposal (P8-05) | ✅ done | In-aisle "should I buy this?" verdict | Leaned on as shipped by adjacent docs |
 | PROPOSAL_CART_BUTTON | Proposal (C-7) | ✅ done | Unify all add-to-list controls | `IMPL_PLAN_CART_BUTTON.md` |
 | PROPOSAL_CONFIG_AND_OPTINS | Design brief (C-cross) | ➗ carve-outs | Cross-cutting config/opt-in editors | Chunks shipped; chunk 6 verify-only |
@@ -317,7 +310,7 @@ IMPL_PLAN_*); INV prompts produced their reports.
 | RECIPE_COMPARISON_ASSESSMENT (INV-6) | INV memo | ✅ closed-actioned | Compare tool — verdict CUT | Comparison UI gone from RecipesOverview; §4 cut |
 | COMMAND_PALETTE_ASSESSMENT (INV-9) | INV memo | ✅ closed-actioned | Ctrl-K palette — SHRINK→CUT | Palette/registry/recents removed (FU-029) |
 | CROWD_PRICES_ASSESSMENT (INV-11) | INV memo | ✅ closed-actioned | P8-04 crowd price graph — verdict CUT | RECONCILED §7 Decision 6; unblocked FU-438 |
-| PRICES_SURFACE_UX_ASSESSMENT | INV memo | 🔴 needs-a-decision | "My prices" + price-history UX; the product/stock axis split | 2026-08-21; D2/D3/D4 answered, D1 open as FU-703; defects FU-704..708 |
+| PRICES_SURFACE_UX_ASSESSMENT | INV memo | 🟡 open (FU-703 keep, 2026-10-21) | "My prices" + price-history UX; the product/stock axis split | 2026-08-21; D2/D3/D4 answered, D1 open as FU-703; defects FU-704..708 |
 | MAGIC_BEHAVIOUR_AUDIT (FU-092) | Audit | ✅ closed-actioned | All implicit "magic" behaviours; spun FU-315..319 | "Complete; verdicts gathered 2026-06-28" |
 | ORPHANED_FIELDS_AUDIT (INV-1) | Audit | ➗ closed-with-carve-outs | Fields set-but-unread; delta-checked FU-416 | Feeds DATA_MODEL_SANITY_SWEEP |
 | STOCK_OVERVIEW_PERF (INV-2) | INV memo | ➗ closed-with-carve-outs | Mount cost + latent page-1-only fetch bug (logged FU) | Broader scale cleared by FU-388 |

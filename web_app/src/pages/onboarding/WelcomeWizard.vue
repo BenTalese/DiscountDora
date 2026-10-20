@@ -181,51 +181,6 @@
                 </section>
             </div>
 
-            <!-- ── Step 2: Admin bootstrap (first user only) ──────────── -->
-            <q-card
-                v-show="currentStep?.id === 'admin'"
-                flat
-                bordered
-                class="q-mb-md"
-            >
-                <q-card-section>
-                    <div class="text-h6 q-mb-sm">You're the admin</div>
-                    <div class="text-body2 dora-text-secondary q-mb-md">
-                        First user on a fresh install gets the admin role
-                        automatically, so all the global settings (stores,
-                        stock levels, user management) are unlocked for you
-                        out of the gate. There's nothing to change here, but
-                        a couple of pointers:
-                    </div>
-                    <q-list bordered class="rounded-borders">
-                        <q-item>
-                            <q-item-section avatar>
-                                <q-icon :name="ICONS.storefront" color="primary" />
-                            </q-item-section>
-                            <q-item-section>
-                                <q-item-label>Curate the stores you shop at</q-item-label>
-                                <q-item-label caption>
-                                    Settings → Stores. Add the stores you actually
-                                    use; upload a logo so they're recognisable.
-                                </q-item-label>
-                            </q-item-section>
-                        </q-item>
-                        <q-item>
-                            <q-item-section avatar>
-                                <q-icon :name="ICONS.people" color="primary" />
-                            </q-item-section>
-                            <q-item-section>
-                                <q-item-label>Invite teammates later</q-item-label>
-                                <q-item-label caption>
-                                    Settings → Users. Sharing is opt-in;
-                                    a solo household never needs it.
-                                </q-item-label>
-                            </q-item-section>
-                        </q-item>
-                    </q-list>
-                </q-card-section>
-            </q-card>
-
             <!-- ── Step: Build your Dora experience (first user only) ──────
                  Owner 2026-10-17. The install-wide features as cards; a tap
                  flips one on or off. Seeded from the install's current
@@ -240,6 +195,59 @@
                         any of these later.
                     </div>
                 </div>
+                <section class="welcome-panel q-mb-md">
+                    <div class="welcome-panel__head">
+                        <div class="welcome-panel__title">Your household</div>
+                        <div class="welcome-panel__sub">
+                            Shared by everyone in Dora. Settings → System has the rest.
+                        </div>
+                    </div>
+                    <!-- `dark` on each field: see OnboardingPickPanel. -->
+                    <div class="household-fields">
+                        <label class="household-field">
+                            <span class="household-field__label">People you cook for</span>
+                            <q-input
+                                dark
+                                v-model.number="household.headcount"
+                                outlined
+                                dense
+                                type="number"
+                                :min="1"
+                                :max="99"
+                                placeholder="Per recipe"
+                                clearable
+                                :disable="!featuresLoaded"
+                                class="household-field__headcount"
+                            />
+                        </label>
+                        <label class="household-field household-field--grow">
+                            <span class="household-field__label">Timezone</span>
+                            <q-select
+                                dark
+                                v-model="household.timezone"
+                                :options="timezoneOptions"
+                                outlined
+                                dense
+                                use-input
+                                hide-selected
+                                fill-input
+                                input-debounce="0"
+                                options-dense
+                                :disable="!featuresLoaded"
+                                @filter="onTimezoneFilter"
+                            />
+                        </label>
+                    </div>
+                    <div class="welcome-font household-units">
+                        <div class="welcome-font__label">Units</div>
+                        <DoraSegmented
+                            :model-value="household.measurementSystem"
+                            :options="UNIT_OPTIONS"
+                            :disabled="!featuresLoaded"
+                            @update:model-value="(v) => (household.measurementSystem = v)"
+                        />
+                    </div>
+                </section>
                 <div class="feature-grid">
                     <button
                         v-for="feature in FEATURE_CARDS"
@@ -275,356 +283,76 @@
                 </div>
             </div>
 
-            <!-- ── Step 3: Seed catalogues ──────────────────────────── -->
-            <!-- the two default-catalogue cards are expansions so
-                 the user can pick individual names, not just all-or-none.
-                 Master checkbox on each expansion header is tri-state:
-                 unchecked = none picked, indeterminate = some, checked =
-                 all. Clicking it toggles all names on/off. Individual
-                 rows toggle themselves. -->
-            <div
-                v-show="currentStep?.id === 'seed'"
-                class="row q-col-gutter-md q-mb-md"
-            >
-                <div class="col-12 col-md-6">
-                    <q-card flat bordered class="seed-card"
-                        :class="{ 'seed-card--picked': groupPickCount > 0 }">
-                        <q-expansion-item :model-value="groupPickCount > 0">
-                            <template #header>
-                                <q-item-section avatar>
-                                    <q-icon :name="ICONS.category" size="28px" color="primary" />
-                                </q-item-section>
-                                <q-item-section>
-                                    <q-item-label class="text-subtitle1">
-                                        Use Dora's default stock groups
-                                    </q-item-label>
-                                    <q-item-label caption class="dora-text-muted">
-                                        {{ groupPickCount }} of {{ catalog?.groups?.length ?? 0 }} chosen
-                                    </q-item-label>
-                                </q-item-section>
-                                <q-item-section side>
-                                    <q-checkbox
-                                        :model-value="groupMasterState"
-                                        toggle-indeterminate
-                                        @update:model-value="toggleAllGroups($event)"
-                                        @click.stop
-                                    />
-                                </q-item-section>
-                            </template>
-                            <q-list dense>
-                                <q-item
-                                    v-for="name in catalog?.groups ?? []"
-                                    :key="name"
-                                    tag="label"
-                                    dense
-                                >
-                                    <q-item-section>
-                                        <q-item-label>{{ name }}</q-item-label>
-                                    </q-item-section>
-                                    <q-item-section side>
-                                        <q-checkbox v-model="groupPicks[name.toLowerCase()]" />
-                                    </q-item-section>
-                                </q-item>
-                            </q-list>
-                        </q-expansion-item>
-                    </q-card>
-                </div>
-                <div class="col-12 col-md-6">
-                    <q-card flat bordered class="seed-card"
-                        :class="{ 'seed-card--picked': locationPickCount > 0 }">
-                        <q-expansion-item :model-value="locationPickCount > 0">
-                            <template #header>
-                                <q-item-section avatar>
-                                    <q-icon :name="ICONS.place" size="28px" color="primary" />
-                                </q-item-section>
-                                <q-item-section>
-                                    <q-item-label class="text-subtitle1">
-                                        Use Dora's default locations
-                                    </q-item-label>
-                                    <q-item-label caption class="dora-text-muted">
-                                        {{ locationPickCount }} of {{ locationLeafPaths.length }} chosen
-                                    </q-item-label>
-                                </q-item-section>
-                                <q-item-section side>
-                                    <q-checkbox
-                                        :model-value="locationMasterState"
-                                        toggle-indeterminate
-                                        @update:model-value="toggleAllLocations($event)"
-                                        @click.stop
-                                    />
-                                </q-item-section>
-                            </template>
-                            <q-list dense>
-                                <template v-for="zone in catalog?.locations ?? []" :key="zone.name">
-                                    <q-item tag="label" dense>
-                                        <q-item-section>
-                                            <q-item-label>{{ zone.name }}</q-item-label>
-                                            <q-item-label caption class="dora-text-muted">Zone</q-item-label>
-                                        </q-item-section>
-                                        <q-item-section side>
-                                            <q-checkbox v-model="locationPicks[zone.name.toLowerCase()]" />
-                                        </q-item-section>
-                                    </q-item>
-                                    <q-item
-                                        v-for="child in zone.children"
-                                        :key="`${zone.name}/${child.name}`"
-                                        tag="label"
-                                        dense
-                                        class="q-pl-lg"
-                                    >
-                                        <q-item-section>
-                                            <q-item-label>{{ child.name }}</q-item-label>
-                                            <q-item-label caption class="dora-text-muted">
-                                                Under {{ zone.name }}
-                                            </q-item-label>
-                                        </q-item-section>
-                                        <q-item-section side>
-                                            <q-checkbox
-                                                v-model="locationPicks[`${zone.name}/${child.name}`.toLowerCase()]"
-                                            />
-                                        </q-item-section>
-                                    </q-item>
-                                </template>
-                            </q-list>
-                        </q-expansion-item>
-                    </q-card>
-                </div>
-
-                <!-- inline "paste rows" affordance so bulk
-                     ingest doesn't demand a nav-out to the full importer.
-                     Rows queue into draftItems and flow through the
-                     existing seed-items pipeline on Finish, after the
-                     groups/locations seed lands (so group/location names
-                     resolve). Full spreadsheet importer still one click
-                     away for anything richer. -->
-                <div class="col-12">
-                    <q-expansion-item
-                        icon="content_paste"
-                        label="Paste rows to bulk-add items"
-                        caption="One per line: Name, Group?, Location?"
-                        class="seed-paste"
-                    >
-                        <div class="q-pa-sm">
-                            <q-input
-                                v-model="pasteRowsText"
-                                type="textarea"
-                                outlined
-                                dense
-                                autogrow
-                                :input-style="{ minHeight: '110px' }"
-                                placeholder="Milk, Dairy, Fridge
-Olive oil, Pantry
-Toilet paper, Toiletries, Bathroom"
-                            />
-                            <div class="row items-center justify-between q-mt-sm">
-                                <div class="text-caption dora-text-muted">
-                                    <template v-if="pasteRowsParsed.length > 0">
-                                        {{ pasteRowsParsed.length }} row{{ pasteRowsParsed.length === 1 ? '' : 's' }}
-                                        ready, added on Finish.
-                                    </template>
-                                    <template v-else-if="pasteRowsText.trim().length > 0">
-                                        Every row needs at least a name.
-                                    </template>
-                                    <template v-else>
-                                        Group + location are optional. Unknown names create
-                                        an item without a group or location.
-                                    </template>
-                                </div>
-                                <BaseButton
-                                    variant="ghost"
-                                    class="text-primary"
-                                    :disable="pasteRowsParsed.length === 0"
-                                    :label="`Queue ${pasteRowsParsed.length || ''} row${pasteRowsParsed.length === 1 ? '' : 's'}`"
-                                    @click="queuePastedRows"
-                                />
-                            </div>
-                        </div>
-                    </q-expansion-item>
-                </div>
-
-                <div class="col-12 text-caption dora-text-muted q-mt-xs">
-                    Bringing in a full spreadsheet?
-                    <router-link to="/settings/admin/data/import" class="text-primary">
-                        Open the full importer instead →
-                    </router-link>
-                </div>
-
-                <!-- opt-in demo dataset. Plain rows (no
-                     `is_demo` marking) so the user deletes them like any
-                     other recipe / item / plan if they aren't useful. -->
-                <div class="col-12">
-                    <q-card
-                        flat
-                        bordered
-                        class="seed-card"
-                        :class="{ 'seed-card--picked': form.seedDemo }"
-                        @click="form.seedDemo = !form.seedDemo"
-                    >
-                        <q-card-section class="row items-center">
-                            <q-icon :name="ICONS.restaurant_menu" size="28px" class="q-mr-sm" color="primary" />
-                            <div class="col">
-                                <div class="text-subtitle1">Add a demo recipe + this-week meal plan</div>
-                                <div class="text-caption dora-text-muted">
-                                    Off by default. Creates a working
-                                    "Spaghetti Aglio e Olio" recipe (with the
-                                    three pantry items it needs) and schedules
-                                    it for dinner this week, so the cookbook +
-                                    planner aren't empty on first open.
-                                    Rename or delete it like any other entry.
-                                </div>
-                            </div>
-                            <q-checkbox v-model="form.seedDemo" @click.stop />
-                        </q-card-section>
-                    </q-card>
-                </div>
-
-                <!-- Starter packs (L37) — tick a pack to add its common items. -->
-                <div v-if="(catalog?.packs?.length ?? 0) > 0" class="col-12">
-                    <div class="text-subtitle1 q-mt-sm">Starter packs</div>
-                    <div class="text-caption dora-text-muted q-mb-sm">
-                        Tick a pack to add its common items (already grouped + located).
-                        Expand one to choose individual items.
+            <!-- ── Step: Your stock (first user only) ─────────────────────
+                 Owner 2026-10-21: one page for where things live, how they're
+                 grouped, and what you usually keep. Each panel ticks Dora's
+                 defaults on or off and takes your own; all of it is drafted
+                 and created on Finish (L35). -->
+            <div v-show="currentStep?.id === 'stock'" class="stock-step q-mb-md">
+                <div class="features-step__head">
+                    <div class="text-h6">Set up your stock</div>
+                    <div class="text-body2 dora-text-secondary">
+                        Where you keep things, how you group them, and what you
+                        usually have. Untick what doesn't fit and add your own.
                     </div>
-                    <q-list bordered class="rounded-borders">
-                        <q-expansion-item
-                            v-for="pack in catalog?.packs ?? []"
-                            :key="pack.key"
-                        >
-                            <template #header>
-                                <q-item-section avatar>
-                                    <q-checkbox
-                                        :model-value="packState(pack)"
-                                        toggle-indeterminate
-                                        @update:model-value="togglePack(pack, $event)"
-                                        @click.stop
-                                    />
-                                </q-item-section>
-                                <q-item-section>
-                                    <q-item-label>{{ pack.label }}</q-item-label>
-                                    <q-item-label caption>
-                                        {{ pack.blurb }} ·
-                                        {{ packSelectedCount(pack) }}/{{ pack.items.length }} chosen
-                                    </q-item-label>
-                                </q-item-section>
-                            </template>
-                            <q-list>
-                                <q-item
-                                    v-for="item in pack.items"
-                                    :key="item.name"
-                                    tag="label"
-                                    dense
-                                >
-                                    <q-item-section>
-                                        <q-item-label>{{ item.name }}</q-item-label>
-                                        <q-item-label
-                                            v-if="item.group || item.location"
-                                            caption
-                                        >
-                                            {{ [item.group, item.location].filter(Boolean).join(' · ') }}
-                                        </q-item-label>
-                                    </q-item-section>
-                                    <q-item-section side>
-                                        <q-checkbox v-model="packItemSelected[item.name]" />
-                                    </q-item-section>
-                                </q-item>
-                            </q-list>
-                        </q-expansion-item>
-                    </q-list>
                 </div>
-            </div>
-
-            <!-- ── Step 4: First stock item ─────────────────────────── -->
-            <q-card
-                v-show="currentStep?.id === 'first_item'"
-                flat
-                bordered
-                class="q-mb-md"
-            >
-                <q-card-section>
-                    <div class="text-h6 q-mb-sm">Add your first stock item</div>
-                    <div class="text-body2 dora-text-secondary q-mb-md">
-                        Pick a staple you always have on hand. You can add the
-                        rest later.
-                    </div>
-                    <q-form @submit.prevent="onAddFirstItem" class="q-gutter-md">
-                        <q-input
-                            v-model="firstItem.name"
+                <OnboardingPickPanel
+                    title="Stock locations"
+                    sub="The places in your home where things are kept."
+                    :icon="ICONS.place"
+                    :sections="locationSections"
+                    :model-value="locationPicks"
+                    add-placeholder="Add a location, e.g. Garage"
+                    @update:model-value="(v) => Object.assign(locationPicks, v)"
+                    @add="(name) => addOwnName('locations', name)"
+                    @remove="(key) => removeOwnName('locations', key)"
+                />
+                <OnboardingPickPanel
+                    title="Stock groups"
+                    sub="How items are sorted on your stock page."
+                    :icon="ICONS.category"
+                    :sections="groupSections"
+                    :model-value="groupPicks"
+                    add-placeholder="Add a group, e.g. Baking"
+                    @update:model-value="(v) => Object.assign(groupPicks, v)"
+                    @add="(name) => addOwnName('groups', name)"
+                    @remove="(key) => removeOwnName('groups', key)"
+                />
+                <OnboardingPickPanel
+                    title="Stock items"
+                    sub="Things you usually keep. Each starts as fully stocked."
+                    :icon="ICONS.inventory_2"
+                    :sections="itemSections"
+                    :model-value="packItemSelected"
+                    add-placeholder="Add an item, e.g. Coffee"
+                    @update:model-value="(v) => Object.assign(packItemSelected, v)"
+                    @add="addOwnItem"
+                    @remove="removeOwnItem"
+                >
+                    <template #add-fields>
+                        <q-select
+                            dark
+                            v-model="ownItem.group_name"
+                            :options="groupNameOptions"
                             outlined
                             dense
-                            label="Name"
-                            placeholder="e.g. Milk, Olive oil, Pasta"
-                            autofocus
-                            :rules="[(v: string) => !!v || 'Give it a name']"
+                            clearable
+                            label="Group"
+                            class="stock-step__own-select"
                         />
-                        <div class="row q-col-gutter-sm">
-                            <q-select
-                                v-model="firstItem.group_name"
-                                outlined
-                                dense
-                                label="Group"
-                                :options="groupNameOptions"
-                                clearable
-                                class="col-12 col-sm-6"
-                            />
-                            <q-select
-                                v-model="firstItem.location_name"
-                                outlined
-                                dense
-                                label="Location"
-                                :options="locationNameOptions"
-                                clearable
-                                class="col-12 col-sm-6"
-                            />
-                        </div>
-                        <div class="row justify-end q-gutter-sm">
-                            <BaseButton
-                                variant="ghost"
-                                class="dora-text-secondary"
-                                label="I'll do this later"
-                                @click="advance"
-                            />
-                            <BaseButton
-                                variant="primary"
-                                :icon="ICONS.add"
-                                :label="draftItems.length > 0
-                                    ? `Add another (${draftItems.length} added)`
-                                    : 'Add stock item'"
-                                type="submit"
-                            />
-                        </div>
-                    </q-form>
-
-                    <!-- Slim "added" list (L36) — the queued first items. -->
-                    <q-list
-                        v-if="draftItems.length > 0"
-                        bordered
-                        class="rounded-borders q-mt-md"
-                    >
-                        <q-item-label header class="q-pb-xs">
-                            Added ({{ draftItems.length }}), saved when you finish
-                        </q-item-label>
-                        <q-item v-for="(item, idx) in draftItems" :key="idx">
-                            <q-item-section>
-                                <q-item-label>{{ item.name }}</q-item-label>
-                                <q-item-label
-                                    v-if="item.group_name || item.location_name"
-                                    caption
-                                >
-                                    {{ [item.group_name, item.location_name].filter(Boolean).join(' · ') }}
-                                </q-item-label>
-                            </q-item-section>
-                            <q-item-section side>
-                                <BaseButton
-                                    variant="icon"
-                                    :icon="ICONS.delete"
-                                    aria-label="Remove"
-                                    @click="removeDraftItem(idx)"
-                                />
-                            </q-item-section>
-                        </q-item>
-                    </q-list>
-                </q-card-section>
-            </q-card>
+                        <q-select
+                            dark
+                            v-model="ownItem.location_name"
+                            :options="locationNameOptions"
+                            outlined
+                            dense
+                            clearable
+                            label="Location"
+                            class="stock-step__own-select"
+                        />
+                    </template>
+                </OnboardingPickPanel>
+            </div>
 
             <!-- ── Step: Finish — celebrate, recap, first steps ─────────
                  Owner 2026-10-17: "make the finishing page as useful and
@@ -685,6 +413,38 @@ Toilet paper, Toiletries, Bathroom"
                             />
                         </li>
                     </ul>
+                </section>
+
+                <section v-if="state?.first_user" class="finish-panel">
+                    <div class="finish-panel__title">Extras</div>
+                    <button
+                        type="button"
+                        role="switch"
+                        class="feature-card"
+                        :class="{ 'feature-card--on': form.seedDemo }"
+                        :aria-checked="form.seedDemo"
+                        @click="form.seedDemo = !form.seedDemo"
+                    >
+                        <span class="feature-card__icon" aria-hidden="true">
+                            <q-icon :name="ICONS.restaurant_menu" size="24px" />
+                        </span>
+                        <span class="feature-card__body">
+                            <span class="feature-card__title">Add a demo recipe</span>
+                            <span class="feature-card__desc">
+                                Spaghetti Aglio e Olio on this week's meal plan, so the
+                                cookbook and planner aren't empty. Delete it any time.
+                            </span>
+                        </span>
+                        <span class="feature-card__state">
+                            <q-icon
+                                :name="form.seedDemo ? ICONS.check_circle : ICONS.circle_outline"
+                                size="22px"
+                            />
+                            <span class="feature-card__state-label">
+                                {{ form.seedDemo ? 'On' : 'Off' }}
+                            </span>
+                        </span>
+                    </button>
                 </section>
 
                 <section class="finish-panel">
@@ -754,10 +514,10 @@ Toilet paper, Toiletries, Bathroom"
     import DoraMascot from 'src/components/dora/DoraMascot.vue';
     import DoraSegmented from 'src/components/settings/DoraSegmented.vue';
     import OnboardingConfetti from 'src/components/onboarding/OnboardingConfetti.vue';
+    import OnboardingPickPanel, { type PickSection } from 'src/components/onboarding/OnboardingPickPanel.vue';
     import OnboardingStepRail from 'src/components/onboarding/OnboardingStepRail.vue';
     import OnboardingStory from 'src/pages/onboarding/OnboardingStory.vue';
     import { storeToRefs } from 'pinia';
-    import { useQuasar } from 'quasar';
     import { fontFamilyOptions, coalesceFontFamily } from 'src/services/themeService';
     import type { ProcessedImage } from 'src/services/files/imageService';
     import AppSettingsApiService, {
@@ -765,11 +525,15 @@ Toilet paper, Toiletries, Bathroom"
         type UpdateAppSettingsCommand,
     } from 'src/services/api/appSettingsApiService';
     import { useFeatureFlags } from 'src/composables/useFeatureFlags';
+    import { refreshCookingPolicy } from 'src/composables/useCookingPolicy';
+    import { useMeasurementSystem } from 'src/composables/useMeasurementSystem';
+    import type { DoraSegmentedOption } from 'src/components/settings/DoraSegmented.vue';
+    import { MEASUREMENT_SYSTEM_CHOICES, TIMEZONE_CHOICES } from 'src/models/regionChoices';
+    import type { MeasurementSystem } from 'src/generated/units_table';
     import type { FontFamilyPreference, ThemePreference } from 'src/models/auth';
     import type {
         OnboardingCatalog,
         OnboardingState,
-        StarterPack,
         StarterPackItem,
     } from 'src/models/onboarding';
     import { NARRATIVE_SCENES } from 'src/pages/onboarding/onboardingContent';
@@ -782,12 +546,12 @@ Toilet paper, Toiletries, Bathroom"
     import { computed, onMounted, reactive, ref, watch } from 'vue';
     import { useRouter } from 'vue-router';
 
-    const $q = useQuasar();
     const router = useRouter();
     const onboardingApi = new OnboardingApiService();
     const stockGroupApi = new StockGroupApiService();
     const appSettingsApi = new AppSettingsApiService();
     const { refresh: refreshFeatureFlags, money: moneyFlag } = useFeatureFlags();
+    const { reload: reloadMeasurementSystem } = useMeasurementSystem();
     const authStore = useAuthStore();
     const stockLocationStore = useStockLocationStore();
 
@@ -829,9 +593,7 @@ Toilet paper, Toiletries, Bathroom"
     // (it has room), so no override.
     const FONT_OPTIONS = fontFamilyOptions();
     // ── Wizard step state ────────────────────────────────────────────
-    type StepId =
-        | 'welcome' | 'admin' | 'features'
-        | 'seed' | 'first_item' | 'finish';
+    type StepId = 'welcome' | 'features' | 'stock' | 'finish';
     type Step = { id: StepId; title: string };
 
     const state = ref<OnboardingState | null>(null);
@@ -845,18 +607,16 @@ Toilet paper, Toiletries, Bathroom"
     const storySceneIndex = ref(0);
 
     // Two tracks. First user of an install (fresh self-host or first user in a
-    // new SaaS household) walks the full setup — admin bootstrap, seed the
-    // household-scoped groups/locations/catalogues, add a first stock item.
+    // new SaaS household) walks the full setup: household + features, then
+    // the household-scoped locations, groups and starting stock.
     // Every subsequent user joins an already-configured household, so they only
     // set personal prefs (display name / theme / font / headcount on the
     // welcome step) and land in the app.
     const visibleSteps = computed<Step[]>(() => {
         const steps: Step[] = [{ id: 'welcome', title: 'Welcome' }];
         if (state.value?.first_user) {
-            steps.push({ id: 'admin', title: "You're the admin" });
             steps.push({ id: 'features', title: 'Build your Dora' });
-            steps.push({ id: 'seed', title: 'Seed catalogues' });
-            steps.push({ id: 'first_item', title: 'First stock item' });
+            steps.push({ id: 'stock', title: 'Your stock' });
         }
         steps.push({ id: 'finish', title: "You're all set" });
         return steps;
@@ -966,7 +726,7 @@ Toilet paper, Toiletries, Bathroom"
         avatarPresetKey: string | null;
     };
 
-    // A first stock item the user queued — created on Finish (L35), never
+    // A stock item the user added themselves: created on Finish (L35), never
     // on each Add, so a mid-wizard bail leaves nothing behind.
     type DraftItem = {
         name: string;
@@ -1064,6 +824,60 @@ Toilet paper, Toiletries, Bathroom"
     // What the install says right now — the baseline `featurePicks` is
     // diffed against on Finish. Null until loaded (non-admins never load it).
     const featureBaseline = ref<Record<FeatureKey, boolean> | null>(null);
+
+    // ── Your household (features step) ───────────────────────────────
+    // Three install-wide values every household should set once. Diffed
+    // against `householdBaseline` on Finish like the feature cards. A fresh
+    // install's timezone is UTC, which puts "today" on the wrong day for most
+    // people, so it starts on this device's timezone instead.
+    type HouseholdDraft = {
+        headcount: number | null;
+        timezone: string;
+        measurementSystem: MeasurementSystem;
+    };
+    const household = reactive<HouseholdDraft>({
+        headcount: null, timezone: 'UTC', measurementSystem: 'metric',
+    });
+    const householdBaseline = ref<HouseholdDraft | null>(null);
+    let savedHousehold: Partial<HouseholdDraft> | null = null;
+    const UNIT_OPTIONS: DoraSegmentedOption<MeasurementSystem>[] =
+        MEASUREMENT_SYSTEM_CHOICES.map((c) => ({ label: c.short, value: c.value }));
+    const timezoneOptions = ref<string[]>([...TIMEZONE_CHOICES]);
+    function onTimezoneFilter(val: string, update: (cb: () => void) => void) {
+        update(() => {
+            const needle = val.toLowerCase();
+            timezoneOptions.value = needle
+                ? TIMEZONE_CHOICES.filter((t) => t.toLowerCase().includes(needle))
+                : [...TIMEZONE_CHOICES];
+        });
+    }
+    function deviceTimezone(): string {
+        try {
+            return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+        } catch {
+            return 'UTC';
+        }
+    }
+    function normaliseHeadcount(value: number | null): number | null {
+        if (value === null || value === undefined || !Number.isFinite(value) || value < 1) {
+            return null;
+        }
+        return Math.min(99, Math.floor(value));
+    }
+    const changedHouseholdSettings = computed<UpdateAppSettingsCommand>(() => {
+        const base = householdBaseline.value;
+        if (!base) return {};
+        const out: UpdateAppSettingsCommand = {};
+        const headcount = normaliseHeadcount(household.headcount);
+        if (headcount !== base.headcount) out.household_headcount = headcount;
+        if (household.timezone && household.timezone !== base.timezone) {
+            out.timezone = household.timezone;
+        }
+        if (household.measurementSystem !== base.measurementSystem) {
+            out.measurement_system = household.measurementSystem;
+        }
+        return out;
+    });
     const featuresLoaded = computed(() => featureBaseline.value !== null);
     // Picks restored from a saved draft win over the install's values.
     let savedFeaturePicks: Partial<Record<FeatureKey, boolean>> | null = null;
@@ -1076,6 +890,15 @@ Toilet paper, Toiletries, Bathroom"
             for (const card of FEATURE_CARDS) baseline[card.key] = card.read(settings);
             featureBaseline.value = baseline;
             Object.assign(featurePicks, baseline, savedFeaturePicks ?? {});
+            const householdNow: HouseholdDraft = {
+                headcount: settings.household_headcount,
+                timezone: settings.timezone,
+                measurementSystem: settings.measurement_system,
+            };
+            householdBaseline.value = householdNow;
+            Object.assign(household, householdNow, {
+                timezone: settings.timezone === 'UTC' ? deviceTimezone() : settings.timezone,
+            }, savedHousehold ?? {});
         } catch {
             // Leave the step unloaded (cards disabled); Finish then sends
             // nothing for it and the admin can use Settings instead.
@@ -1117,25 +940,32 @@ Toilet paper, Toiletries, Bathroom"
             rows.push({ key: 'look', icon: ICONS.palette, step: stepIndexOf('welcome'),
                 text: `${themeLabel} theme, ${FONT_OPTIONS.find((o) => o.value === form.fontFamily)?.label ?? 'default'} font` });
         }
+        if (householdBaseline.value) {
+            const headcount = normaliseHeadcount(household.headcount);
+            rows.push({ key: 'household', icon: ICONS.people, step: stepIndexOf('features'),
+                text: `${headcount ? plural(headcount, 'person', 'people') : 'Recipe servings'}, ${household.timezone}, ${UNIT_OPTIONS.find((o) => o.value === household.measurementSystem)?.label ?? ''} units` });
+        }
         if (featureBaseline.value) {
             const on = FEATURE_CARDS.filter((c) => featurePicks[c.key]).map((c) => c.title);
             rows.push({ key: 'features', icon: ICONS.tune, step: stepIndexOf('features'),
                 text: on.length > 0 ? `Features on: ${on.join(', ')}` : 'All optional features off' });
         }
         const seedParts: string[] = [];
-        if (groupPickCount.value > 0) seedParts.push(plural(groupPickCount.value, 'stock group'));
-        if (locationPickCount.value > 0) seedParts.push(plural(locationPickCount.value, 'location'));
+        const groupCount = groupPickCount.value + customGroups.value.length;
+        const locationCount = locationPickCount.value + customLocations.value.length;
+        if (groupCount > 0) seedParts.push(plural(groupCount, 'stock group'));
+        if (locationCount > 0) seedParts.push(plural(locationCount, 'location'));
         if (seedParts.length > 0) {
-            rows.push({ key: 'seed', icon: ICONS.category, step: stepIndexOf('seed'),
+            rows.push({ key: 'seed', icon: ICONS.category, step: stepIndexOf('stock'),
                 text: seedParts.join(' and ') });
         }
         const itemCount = selectedPackItemsList.value.length + draftItems.value.length;
         if (itemCount > 0) {
-            rows.push({ key: 'items', icon: ICONS.inventory_2, step: stepIndexOf('first_item'),
+            rows.push({ key: 'items', icon: ICONS.inventory_2, step: stepIndexOf('stock'),
                 text: plural(itemCount, 'stock item') });
         }
         if (form.seedDemo) {
-            rows.push({ key: 'demo', icon: ICONS.restaurant_menu, step: stepIndexOf('seed'),
+            rows.push({ key: 'demo', icon: ICONS.restaurant_menu,
                 text: 'A demo recipe on this week’s meal plan' });
         }
         return rows;
@@ -1148,23 +978,20 @@ Toilet paper, Toiletries, Bathroom"
     const groupPicks = reactive<Record<string, boolean>>({});
     const locationPicks = reactive<Record<string, boolean>>({});
 
-    // L30 inline paste-rows affordance state.
-    const pasteRowsText = ref('');
-
     // honoured when the catalogue lands + the
     // pick maps get seeded, so a pre-FU-195 "seedGroups=false" resumes as
     // "no groups picked".
     let legacyGroupsOff = false;
     let legacyLocationsOff = false;
 
-    const firstItem = reactive({
-        name: '',
+    // The user's own entries on the stock step, created on Finish.
+    const customGroups = ref<string[]>([]);
+    const customLocations = ref<string[]>([]);
+    const draftItems = ref<DraftItem[]>([]);
+    const ownItem = reactive({
         group_name: null as string | null,
         location_name: null as string | null,
     });
-
-    // Queued first items, awaiting creation on Finish.
-    const draftItems = ref<DraftItem[]>([]);
 
     // starter catalogue (default groups/locations + packs), fetched on
     // mount, and the pack items the user has ticked (keyed by item name).
@@ -1191,13 +1018,9 @@ Toilet paper, Toiletries, Bathroom"
             const key = name.toLowerCase();
             if (!(key in groupPicks)) groupPicks[key] = groupsDefault;
         }
-        for (const zone of catalog.value.locations) {
-            const zoneKey = zone.name.toLowerCase();
-            if (!(zoneKey in locationPicks)) locationPicks[zoneKey] = locationsDefault;
-            for (const child of zone.children) {
-                const childKey = `${zone.name}/${child.name}`.toLowerCase();
-                if (!(childKey in locationPicks)) locationPicks[childKey] = locationsDefault;
-            }
+        for (const path of locationLeafPaths.value) {
+            const key = path.toLowerCase();
+            if (!(key in locationPicks)) locationPicks[key] = locationsDefault;
         }
     }
 
@@ -1216,6 +1039,9 @@ Toilet paper, Toiletries, Bathroom"
                     groupPicks: { ...groupPicks },
                     locationPicks: { ...locationPicks },
                     featurePicks: { ...featurePicks },
+                    household: { ...household },
+                    customGroups: customGroups.value,
+                    customLocations: customLocations.value,
                 }),
             );
         } catch {
@@ -1236,6 +1062,9 @@ Toilet paper, Toiletries, Bathroom"
                 groupPicks?: Record<string, boolean>;
                 locationPicks?: Record<string, boolean>;
                 featurePicks?: Partial<Record<FeatureKey, boolean>>;
+                household?: Partial<HouseholdDraft>;
+                customGroups?: string[];
+                customLocations?: string[];
                 // Legacy pre-FU-195 draft booleans — folded into the pick
                 // maps once the catalogue lands (seedDefaultPicks respects
                 // whatever the pick maps already say).
@@ -1251,6 +1080,9 @@ Toilet paper, Toiletries, Bathroom"
                 groupPicks: savedGroupPicks,
                 locationPicks: savedLocationPicks,
                 featurePicks: savedFeatures,
+                household: savedHouseholdDraft,
+                customGroups: savedCustomGroups,
+                customLocations: savedCustomLocations,
                 seedGroups: legacySeedGroups,
                 seedLocations: legacySeedLocations,
                 ...formFields
@@ -1281,6 +1113,12 @@ Toilet paper, Toiletries, Bathroom"
                 savedFeaturePicks = savedFeatures;
                 Object.assign(featurePicks, savedFeatures);
             }
+            if (savedHouseholdDraft) {
+                savedHousehold = savedHouseholdDraft;
+                Object.assign(household, savedHouseholdDraft);
+            }
+            if (Array.isArray(savedCustomGroups)) customGroups.value = savedCustomGroups;
+            if (Array.isArray(savedCustomLocations)) customLocations.value = savedCustomLocations;
             // Legacy pre-FU-195: the booleans became pick maps. If the
             // legacy master was explicitly off, honour that by defaulting
             // any not-yet-populated pick to false (seedDefaultPicks fills
@@ -1305,12 +1143,13 @@ Toilet paper, Toiletries, Bathroom"
         [
             form, stepIndex, draftItems, view, storySceneIndex,
             packItemSelected, groupPicks, locationPicks, featurePicks,
+            household, customGroups, customLocations,
         ],
         saveDraft,
         { deep: true },
     );
 
-    // ── Starter-pack helpers + first-item name options ───────────────
+    // ── Stock step: picks, own entries, and the panels' sections ─────
     function uniqueSorted(values: (string | null | undefined)[]): string[] {
         const set = new Set<string>();
         for (const v of values) {
@@ -1335,143 +1174,123 @@ Toilet paper, Toiletries, Bathroom"
         return out;
     });
 
-    // First-item group/location pickers offer NAMES (resolved server-side on
-    // Finish — FU-191): the actually-picked seed defaults (FU-195) + any
-    // pack groups + whatever already exists.
+    // A location pick is a leaf: a zone's children ("Kitchen/Fridge"), or the
+    // zone itself when it has none. Picking a child creates its zone too
+    // (the server does that), so a zone is never a separate tick.
+    const locationLeafPaths = computed<string[]>(() => {
+        const out: string[] = [];
+        for (const zone of catalog.value?.locations ?? []) {
+            if (zone.children.length === 0) out.push(zone.name);
+            for (const child of zone.children) out.push(`${zone.name}/${child.name}`);
+        }
+        return out;
+    });
+    const pickedLocationPaths = computed<string[]>(() =>
+        locationLeafPaths.value.filter((path) => locationPicks[path.toLowerCase()]),
+    );
+    const locationPickCount = computed(() => pickedLocationPaths.value.length);
+    const pickedLocationNames = computed<string[]>(() =>
+        pickedLocationPaths.value.flatMap((path) => path.split('/')),
+    );
     const pickedGroupNames = computed<string[]>(() =>
         (catalog.value?.groups ?? []).filter((n) => groupPicks[n.toLowerCase()]),
     );
-    const pickedLocationNames = computed<string[]>(() => {
-        const out: string[] = [];
-        for (const zone of catalog.value?.locations ?? []) {
-            if (locationPicks[zone.name.toLowerCase()]) out.push(zone.name);
-            for (const child of zone.children) {
-                if (locationPicks[`${zone.name}/${child.name}`.toLowerCase()]) {
-                    out.push(child.name);
-                }
-            }
-        }
-        return out;
-    });
-    // Paths in the "Zone" / "Zone/Child" form the server expects — passed
-    // straight through to /onboarding/seed's location_paths filter.
-    const pickedLocationPaths = computed<string[]>(() => {
-        const out: string[] = [];
-        for (const zone of catalog.value?.locations ?? []) {
-            if (locationPicks[zone.name.toLowerCase()]) out.push(zone.name);
-            for (const child of zone.children) {
-                const path = `${zone.name}/${child.name}`;
-                if (locationPicks[path.toLowerCase()]) out.push(path);
-            }
-        }
-        return out;
-    });
+    const groupPickCount = computed(() => pickedGroupNames.value.length);
+
+    // Item group/location pickers offer NAMES (resolved server-side on
+    // Finish, FU-191): what the user picked or added on this step, plus
+    // whatever already exists.
     const groupNameOptions = computed(() =>
         uniqueSorted([
             ...pickedGroupNames.value,
-            ...selectedPackItemsList.value.map((it) => it.group),
+            ...customGroups.value,
             ...stockGroups.value.map((g) => g.name),
         ]),
     );
     const locationNameOptions = computed(() =>
         uniqueSorted([
             ...pickedLocationNames.value,
-            ...selectedPackItemsList.value.map((it) => it.location),
+            ...customLocations.value,
             ...stockLocationStore.stockLocations.map((l) => l.name),
         ]),
     );
 
-    function packSelectedCount(pack: StarterPack): number {
-        return pack.items.filter((it) => packItemSelected[it.name]).length;
-    }
-    function packState(pack: StarterPack): boolean | null {
-        const n = packSelectedCount(pack);
-        if (n === 0) return false;
-        if (n === pack.items.length) return true;
-        return null; // some selected → indeterminate
-    }
-    function togglePack(pack: StarterPack, value: boolean | null) {
-        const on = value === true;
-        for (const item of pack.items) packItemSelected[item.name] = on;
-    }
-
-    // per-name pick helpers for the default groups / locations
-    // cards. Master checkbox is tri-state: false = none picked, null =
-    // some (indeterminate), true = all. Clicking cycles all-off ⇄ all-on.
-    const groupPickCount = computed(() => {
-        const names = catalog.value?.groups ?? [];
-        return names.filter((n) => groupPicks[n.toLowerCase()]).length;
-    });
-    const groupMasterState = computed<boolean | null>(() => {
-        const total = catalog.value?.groups.length ?? 0;
-        const picked = groupPickCount.value;
-        if (total === 0 || picked === 0) return false;
-        if (picked === total) return true;
-        return null;
-    });
-    function toggleAllGroups(value: boolean | null) {
-        const on = value === true;
-        for (const n of catalog.value?.groups ?? []) {
-            groupPicks[n.toLowerCase()] = on;
-        }
-    }
-    // Location paths ("zone" or "zone/child") the user has ticked, in
-    // the same order the catalogue lists them.
-    const locationLeafPaths = computed<string[]>(() => {
-        const out: string[] = [];
-        for (const zone of catalog.value?.locations ?? []) {
-            out.push(zone.name);
-            for (const child of zone.children) {
-                out.push(`${zone.name}/${child.name}`);
-            }
-        }
-        return out;
-    });
-    const locationPickCount = computed(
-        () => locationLeafPaths.value.filter((p) => locationPicks[p.toLowerCase()]).length,
-    );
-    const locationMasterState = computed<boolean | null>(() => {
-        const total = locationLeafPaths.value.length;
-        const picked = locationPickCount.value;
-        if (total === 0 || picked === 0) return false;
-        if (picked === total) return true;
-        return null;
-    });
-    function toggleAllLocations(value: boolean | null) {
-        const on = value === true;
-        for (const p of locationLeafPaths.value) locationPicks[p.toLowerCase()] = on;
-    }
-
-    // parse the paste-rows textarea. One row per line;
-    // fields comma-separated: Name, Group?, Location?. Empty lines and
-    // rows without a Name are dropped silently.
-    const pasteRowsParsed = computed<DraftItem[]>(() => {
-        const rows: DraftItem[] = [];
-        for (const rawLine of pasteRowsText.value.split(/\r?\n/)) {
-            const line = rawLine.trim();
-            if (!line) continue;
-            const parts = line.split(',').map((p) => p.trim());
-            const name = parts[0] ?? '';
-            if (!name) continue;
-            rows.push({
-                name,
-                group_name: parts[1] ? parts[1] : null,
-                location_name: parts[2] ? parts[2] : null,
+    const OWN_SECTION_LABEL = 'Your own';
+    const locationSections = computed<PickSection[]>(() => {
+        const sections: PickSection[] = (catalog.value?.locations ?? []).map((zone) => ({
+            key: zone.name,
+            label: zone.name,
+            options: zone.children.length === 0
+                ? [{ key: zone.name.toLowerCase(), label: zone.name }]
+                : zone.children.map((child) => ({
+                    key: `${zone.name}/${child.name}`.toLowerCase(),
+                    label: child.name,
+                })),
+        }));
+        if (customLocations.value.length > 0) {
+            sections.push({
+                key: 'own',
+                label: OWN_SECTION_LABEL,
+                options: customLocations.value.map((name) => ({ key: name, label: name, removable: true })),
             });
         }
-        return rows;
+        return sections;
     });
-    function queuePastedRows() {
-        const rows = pasteRowsParsed.value;
-        if (rows.length === 0) return;
-        draftItems.value.push(...rows);
-        const n = rows.length;
-        pasteRowsText.value = '';
-        $q.notify({
-            type: 'positive',
-            position: 'bottom-right',
-            message: `Queued ${n} row${n === 1 ? '' : 's'}, saved when you finish.`,
+    const groupSections = computed<PickSection[]>(() => [{
+        key: 'defaults',
+        options: [
+            ...(catalog.value?.groups ?? []).map((name) => ({ key: name.toLowerCase(), label: name })),
+            ...customGroups.value.map((name) => ({ key: name, label: name, removable: true })),
+        ],
+    }]);
+    const itemSections = computed<PickSection[]>(() => {
+        const sections: PickSection[] = (catalog.value?.packs ?? []).map((pack) => ({
+            key: pack.key,
+            label: pack.label,
+            options: pack.items.map((item) => ({ key: item.name, label: item.name })),
+        }));
+        if (draftItems.value.length > 0) {
+            sections.push({
+                key: 'own',
+                label: OWN_SECTION_LABEL,
+                options: draftItems.value.map((item) => {
+                    const caption = [item.group_name, item.location_name].filter(Boolean).join(' · ');
+                    return {
+                        key: item.name, label: item.name, removable: true,
+                        ...(caption ? { caption } : {}),
+                    };
+                }),
+            });
+        }
+        return sections;
+    });
+
+    function hasName(names: string[], name: string): boolean {
+        const needle = name.toLowerCase();
+        return names.some((n) => n.toLowerCase() === needle);
+    }
+    type OwnKind = 'groups' | 'locations';
+    function ownList(kind: OwnKind) {
+        return kind === 'groups' ? customGroups : customLocations;
+    }
+    function addOwnName(kind: OwnKind, name: string) {
+        const list = ownList(kind);
+        if (!hasName(list.value, name)) list.value.push(name);
+    }
+    function removeOwnName(kind: OwnKind, name: string) {
+        const list = ownList(kind);
+        list.value = list.value.filter((n) => n !== name);
+    }
+    function addOwnItem(name: string) {
+        if (hasName(draftItems.value.map((d) => d.name), name)) return;
+        draftItems.value.push({
+            name,
+            group_name: ownItem.group_name,
+            location_name: ownItem.location_name,
         });
+    }
+    function removeOwnItem(name: string) {
+        draftItems.value = draftItems.value.filter((d) => d.name !== name);
     }
 
     // ── Navigation ───────────────────────────────────────────────────
@@ -1511,10 +1330,16 @@ Toilet paper, Toiletries, Bathroom"
         // Features before seeding so anything the seed or items pass reads
         // (e.g. stocktake defaults) sees the household's choice.
         const featureUpdates = changedFeatureSettings.value;
-        if (Object.keys(featureUpdates).length > 0) {
-            await appSettingsApi.updateAsync(featureUpdates);
+        const householdUpdates = changedHouseholdSettings.value;
+        if (Object.keys(featureUpdates).length > 0 || Object.keys(householdUpdates).length > 0) {
+            const saved = await appSettingsApi.updateAsync({ ...featureUpdates, ...householdUpdates });
             featureBaseline.value = { ...featurePicks };
-            await refreshFeatureFlags();
+            householdBaseline.value = {
+                headcount: saved.household_headcount,
+                timezone: saved.timezone,
+                measurementSystem: saved.measurement_system,
+            };
+            await Promise.all([refreshFeatureFlags(), refreshCookingPolicy(), reloadMeasurementSystem()]);
         }
         // send the actual picked names/paths. Master bool is
         // implicit: it's true whenever any pick under it survives.
@@ -1537,7 +1362,8 @@ Toilet paper, Toiletries, Bathroom"
                     ? pickedLocationPaths.value : null,
             });
         }
-        // Pack picks + first items, created by NAME (server resolves group /
+        await createOwnGroupsAndLocations();
+        // Pack picks + own items, created by NAME (server resolves group /
         // location against the just-seeded catalogues — FU-191 — and dedupes).
         const items = [
             ...selectedPackItemsList.value.map((it) => ({
@@ -1561,6 +1387,28 @@ Toilet paper, Toiletries, Bathroom"
         // exists) so a re-finish never duplicates.
         if (form.seedDemo) {
             await onboardingApi.seedDemoAsync();
+        }
+    }
+
+    // The user's own groups and locations, through the same create endpoints
+    // the stock pages use. Runs after the defaults are seeded so a name that
+    // now exists (seeded, or there from before) is skipped, not duplicated.
+    async function createOwnGroupsAndLocations() {
+        if (customGroups.value.length > 0) {
+            await loadStockGroups();
+            const existing = stockGroups.value.map((g) => g.name);
+            for (const name of customGroups.value) {
+                if (!hasName(existing, name)) await stockGroupApi.createAsync({ name });
+            }
+        }
+        if (customLocations.value.length > 0) {
+            await stockLocationStore.getStockLocationsAsync();
+            const existing = stockLocationStore.stockLocations.map((l) => l.name);
+            for (const name of customLocations.value) {
+                if (!hasName(existing, name)) {
+                    await stockLocationStore.createStockLocationAsync({ name });
+                }
+            }
         }
     }
 
@@ -1589,27 +1437,6 @@ Toilet paper, Toiletries, Bathroom"
         }
         if (Object.keys(updates).length === 0) return;
         await authStore.updateMeAsync(updates);
-    }
-
-    function onAddFirstItem() {
-        const name = firstItem.name.trim();
-        if (!name) return;
-        // Queue, don't persist — created on Finish so a bail leaves nothing (L35).
-        draftItems.value.push({
-            name,
-            group_name: firstItem.group_name,
-            location_name: firstItem.location_name,
-        });
-        firstItem.name = '';
-        $q.notify({
-            type: 'positive',
-            position: 'bottom-right',
-            message: 'Added. Saved when you finish.',
-        });
-    }
-
-    function removeDraftItem(index: number) {
-        draftItems.value.splice(index, 1);
     }
 
     function onShowMe(path: string) {
@@ -1705,6 +1532,7 @@ Toilet paper, Toiletries, Bathroom"
             form.fontFamily = coalesceFontFamily(currentUser.value.font_family);
         }
         loadDraft();
+        stepIndex.value = Math.min(stepIndex.value, visibleSteps.value.length - 1);
         void loadFeatureBaseline();
 
         // Pre-load existing groups/locations (so the first-item name pickers
@@ -1742,24 +1570,6 @@ Toilet paper, Toiletries, Bathroom"
     /* Bounds the absolutely-positioned finish confetti to the step. */
     .finish-step {
         position: relative;
-    }
-    .seed-card {
-        cursor: pointer;
-        transition: outline-color 120ms ease, transform 120ms ease,
-            box-shadow 120ms ease;
-        outline: 2px solid transparent;
-        outline-offset: -2px;
-        height: 100%;
-    }
-    .seed-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 14px var(--overlay-active);
-    }
-    .seed-card--picked {
-        outline-color: var(--q-primary);
-    }
-    .full-height {
-        height: 100%;
     }
     /* ── Welcome step (2026-10-17 rebuild) ─────────────────────────── */
     .welcome-step {
@@ -2028,6 +1838,46 @@ Toilet paper, Toiletries, Bathroom"
         font-weight: 700;
         text-transform: uppercase;
         letter-spacing: 0.06em;
+    }
+
+    .household-fields {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--space-3);
+    }
+    .household-field {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+    .household-field--grow {
+        flex: 1 1 220px;
+        min-width: 0;
+    }
+    .household-field__label {
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: var(--text-secondary);
+    }
+    .household-units {
+        align-items: flex-start;
+    }
+    .household-field__headcount {
+        width: 140px;
+    }
+
+    /* ── Stock step ────────────────────────────────────────────────── */
+    .stock-step {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-4);
+    }
+    .stock-step .features-step__head {
+        margin-bottom: 0;
+    }
+    .stock-step__own-select {
+        flex: 1 1 140px;
+        min-width: 0;
     }
 
     /* ── Finish step ───────────────────────────────────────────────── */

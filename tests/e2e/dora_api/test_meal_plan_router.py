@@ -311,6 +311,69 @@ def test__update_meal_plan__ReplacingEntries__FutureEntriesReplaced(api):
     assert _After["entries"][0]["scheduled_for"] == (_Today + timedelta(days=3)).isoformat()
 
 
+def test__update_meal_plan__ResendingEntryIds__KeepsThemAndEditsInPlace(api):
+    """FU-878 — a save used to delete and re-insert the forward week, so every
+    entry got a new id even when only a different meal changed."""
+    _Today = _household_today()
+    _Slot = _slot_names()[0]
+    _RecipeA = _make_recipe("MealPlan Keep A")
+    _RecipeB = _make_recipe("MealPlan Keep B")
+    _Plan = _make_plan(entries=[
+        {"recipe_id": _RecipeA, "scheduled_for": _Today.isoformat(), "slot": _Slot},
+        {"recipe_id": _RecipeB, "scheduled_for": (_Today + timedelta(days=1)).isoformat(), "slot": _Slot},
+    ])
+    _Before = {e["recipe_id"]: e for e in _by_id(_Plan["meal_plan_id"])["entries"]}
+    _NewRecipe = _make_recipe("MealPlan Keep New")
+
+    _PatchResponse = requests.patch(
+        f"{MEAL_PLANS}/{_Plan['meal_plan_id']}",
+        json={"entries": [
+            {
+                "meal_plan_entry_id": _Before[_RecipeA]["meal_plan_entry_id"],
+                "recipe_id": _RecipeA,
+                "scheduled_for": _Today.isoformat(),
+                "servings": 3,
+                "slot": _Slot,
+            },
+            {"recipe_id": _NewRecipe, "scheduled_for": (_Today + timedelta(days=2)).isoformat(), "slot": _Slot},
+        ]},
+    )
+    _After = {e["recipe_id"]: e for e in _by_id(_Plan["meal_plan_id"])["entries"]}
+
+    assert _PatchResponse.status_code == 204
+    assert set(_After) == {_RecipeA, _NewRecipe}
+    assert _After[_RecipeA]["meal_plan_entry_id"] == _Before[_RecipeA]["meal_plan_entry_id"]
+    assert _After[_RecipeA]["servings"] == 3
+    assert _After[_NewRecipe]["meal_plan_entry_id"] not in {
+        e["meal_plan_entry_id"] for e in _Before.values()
+    }
+
+
+def test__update_meal_plan__SameEntryIdTwice__SecondRowIsANewEntry(api):
+    _Today = _household_today()
+    _Slot = _slot_names()[0]
+    _Recipe = _make_recipe("MealPlan Dup")
+    _Plan = _make_plan(entries=[
+        {"recipe_id": _Recipe, "scheduled_for": _Today.isoformat(), "slot": _Slot},
+    ])
+    _EntryId = _by_id(_Plan["meal_plan_id"])["entries"][0]["meal_plan_entry_id"]
+    _Row = {"meal_plan_entry_id": _EntryId, "recipe_id": _Recipe, "slot": _Slot}
+
+    _PatchResponse = requests.patch(
+        f"{MEAL_PLANS}/{_Plan['meal_plan_id']}",
+        json={"entries": [
+            {**_Row, "scheduled_for": _Today.isoformat()},
+            {**_Row, "scheduled_for": (_Today + timedelta(days=1)).isoformat()},
+        ]},
+    )
+    _Ids = [e["meal_plan_entry_id"] for e in _by_id(_Plan["meal_plan_id"])["entries"]]
+
+    assert _PatchResponse.status_code == 204
+    assert len(_Ids) == 2
+    assert _EntryId in _Ids
+    assert len(set(_Ids)) == 2
+
+
 def test__update_meal_plan__ResendingASinceDeletedSlot__IsAccepted(api):
     # Owner report 2026-09-01: "getting errors 'could not update the plan'
     # after fiddling with the meal slot settings."

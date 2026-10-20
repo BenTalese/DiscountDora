@@ -353,7 +353,7 @@ def test__estimated_cost__count_against_a_measured_pack_is_unpriced(api):
     assert _Detail["estimated_cost"] is None
     assert _Detail["estimated_cost_priced_count"] == 0
     _Lines = _Detail["estimated_cost_lines"]
-    assert _Lines[0]["reason"] == "unit_mismatch"
+    assert _Lines[0]["reason"] == "unit_no_pack_count"
     assert _Lines[0]["line_cost"] is None
 
 
@@ -370,7 +370,7 @@ def test__estimated_cost__unbridgeable_units_are_unpriced_not_guessed(api):
     assert _Detail["estimated_cost_priced_count"] == 0
     _Lines = _Detail["estimated_cost_lines"]
     assert len(_Lines) == 1
-    assert _Lines[0]["reason"] == "unit_mismatch"
+    assert _Lines[0]["reason"] == "unit_no_pack_size"
     assert _Lines[0]["line_cost"] is None
     assert _Lines[0]["priced_unit"] == "ea"
 

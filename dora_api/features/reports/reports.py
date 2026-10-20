@@ -1548,8 +1548,8 @@ class ItemPriceMoversHandler:
 
             # Quote it the way the rest of the app quotes it. The per-unit maths
             # runs in the dimension's canonical unit (L / kg / ea), but the shelf
-            # convention flips to the smaller denominator below a full unit —
-            # so a 500ml bottle is "$1.70/100ml", not "$17.00/L". Skipping this
+            # convention quotes per 100ml / 100g (AU), so a bottle is
+            # "$1.70/100ml", not "$17.00/L". Skipping this
             # is what made this report say "$24.00/L" for an item whose own
             # chart, one click away, said "$2.40/100ml": one price, two
             # languages (R-003; found by driving it).

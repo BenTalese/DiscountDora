@@ -221,6 +221,13 @@ Two things are worth separating before the owner rules on it:
    axis.** If no, this brief is closed as *considered and declined* and the
    most that can ship is a non-strength-affecting reason line (§4.3 with item
    1 removed), which is worth much less. → spawned as **FU-774**.
+   **Decided 2026-10-21: yes.** The owner reversed the directive for this
+   surface ("if I planned a meal with eggs and they're low or out, I should
+   buy some"). FU-774 resolved. **Built:** the 2026-10-15 owner batch had
+   already put `planned_demand` into the composer; on 2026-10-21 FU-775 was
+   answered "no flag, always on" and FU-776 "yes" (a listed item gets the
+   reason but no strength). The §5 adherence gate was not built: the owner's
+   call is that a plan always counts.
 2. **Opt-in flag, and which one?** The overlay's per-surface flags live on
    `User` (`inference_meal_plan_enabled` et al.), but the buy verdict is
    gated install-wide by `AppSetting.buy_verdict_enabled` plus the money

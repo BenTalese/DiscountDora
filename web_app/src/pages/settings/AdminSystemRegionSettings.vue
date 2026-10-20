@@ -121,7 +121,7 @@
                 >
                     <q-select
                         :model-value="systemDraft"
-                        :options="SYSTEM_CHOICES"
+                        :options="MEASUREMENT_SYSTEM_CHOICES"
                         outlined
                         dense
                         emit-value
@@ -179,7 +179,9 @@
     import SettingsPageHeader from 'src/components/settings/SettingsPageHeader.vue';
     import { refreshMoneyPolicy } from 'src/composables/useMoney';
     import { useFeatureFlags } from 'src/composables/useFeatureFlags';
-    import { CURRENCY_CHOICES, LOCALE_CHOICES } from 'src/models/regionChoices';
+    import {
+        CURRENCY_CHOICES, LOCALE_CHOICES, MEASUREMENT_SYSTEM_CHOICES, TIMEZONE_CHOICES,
+    } from 'src/models/regionChoices';
     import { unitsForSystem, useMeasurementSystem } from 'src/composables/useMeasurementSystem';
     import type { MeasurementSystem } from 'src/generated/units_table';
     import { useRecipeStore } from 'src/stores/recipeStore';
@@ -200,14 +202,6 @@
     const systemDraft = ref<MeasurementSystem>('metric');
     let lastSavedSystem: MeasurementSystem = 'metric';
 
-    /** The three systems, described by what you'll actually see rather than by
-     *  their names — "imperial" and "US customary" are the same word to most
-     *  people, and the difference that matters here is the pint and the cup. */
-    const SYSTEM_CHOICES: ReadonlyArray<{ value: MeasurementSystem; label: string }> = [
-        { value: 'metric', label: 'Metric (ml, L, g, kg, 250 ml cup)' },
-        { value: 'imperial', label: 'Imperial (UK): metric plus oz, lb, fl oz, pint' },
-        { value: 'us', label: 'US customary (fl oz, qt, oz, lb, 240 ml cup)' },
-    ];
     const currencyDraft = ref<string>('AUD');
     const localeDraft = ref<string>('en-AU');
     const currencyError = ref<string | null>(null);
@@ -348,16 +342,13 @@
         });
     }
 
-    type IntlWithSupported = typeof Intl & { supportedValuesOf?: (key: string) => string[] };
-    const _supportedValuesOf = (Intl as IntlWithSupported).supportedValuesOf;
-    const allTimezones: string[] = _supportedValuesOf ? _supportedValuesOf('timeZone') : ['UTC'];
-    const timezoneOptions = ref<string[]>(allTimezones);
+    const timezoneOptions = ref<string[]>([...TIMEZONE_CHOICES]);
     function onTimezoneFilter(val: string, update: (cb: () => void) => void) {
         update(() => {
             const needle = val.toLowerCase();
             timezoneOptions.value = needle
-                ? allTimezones.filter((t) => t.toLowerCase().includes(needle))
-                : allTimezones;
+                ? TIMEZONE_CHOICES.filter((t) => t.toLowerCase().includes(needle))
+                : [...TIMEZONE_CHOICES];
         });
     }
 

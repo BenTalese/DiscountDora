@@ -183,8 +183,8 @@ export interface DenominatorRule {
     readonly full: DisplayDenominator;
     readonly sub: DisplayDenominator;
     /** Pack size, in the dimension's canonical price unit, at or above
-     *  which `full` takes over from `sub`. */
-    readonly flipAt: number;
+     *  which `full` takes over from `sub`; null means it never does. */
+    readonly flipAt: number | null;
 }
 
 export type PricingConvention = 'AU' | 'US';
@@ -203,8 +203,8 @@ export const COUNT_DENOMINATOR: DisplayDenominator = { label: "ea", factor: 1.0 
 
 export const PRICE_DISPLAY_RULES: Readonly<Record<PricingConvention, Readonly<Record<string, DenominatorRule>>>> = {
     "AU": {
-        "volume": { full: { label: "L", factor: 1.0 }, sub: { label: "100ml", factor: 10.0 }, flipAt: 1.0 },
-        "mass": { full: { label: "kg", factor: 1.0 }, sub: { label: "100g", factor: 10.0 }, flipAt: 1.0 },
+        "volume": { full: { label: "L", factor: 1.0 }, sub: { label: "100ml", factor: 10.0 }, flipAt: null },
+        "mass": { full: { label: "kg", factor: 1.0 }, sub: { label: "100g", factor: 10.0 }, flipAt: null },
     },
     "US": {
         "volume": { full: { label: "qt", factor: 1.0566882094325938 }, sub: { label: "fl oz", factor: 33.81405650328842 }, flipAt: 0.946352946 },

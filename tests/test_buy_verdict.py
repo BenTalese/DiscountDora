@@ -743,3 +743,27 @@ def test__planned_meals_survive_thin_history():
     verdict = compose_verdict(thin)
     assert verdict.verdict == "unsure"
     assert verdict.reasons[0].axis == "plan"
+
+
+def test__planned_shortfall_already_on_a_list__adds_no_strength():
+    """FU-776 — the planner's add-to-list already handled it; lifting the buy
+    again would count the same need twice."""
+    plain = compose_verdict(_rich_history_inputs(stock_level_band="low"))
+    listed = compose_verdict(_rich_history_inputs(
+        stock_level_band="low", planned_demand=_demand("watch"), is_on_open_list=True,
+    ))
+    assert listed.strength == plain.strength
+    assert listed.reasons[0].axis == "plan"
+    assert listed.reasons[0].detail.endswith("Already on a shopping list.")
+
+
+def test__planned_meal_tips_an_unsure_low_item_to_buy():
+    """FU-774 — a planned meal changes the verdict, not just the prose."""
+    plain = compose_verdict(_rich_history_inputs(
+        stock_level_band="low", waste_events_12mo=1,
+    ))
+    planned = compose_verdict(_rich_history_inputs(
+        stock_level_band="low", waste_events_12mo=1, planned_demand=_demand("watch"),
+    ))
+    assert planned.strength > plain.strength
+    assert planned.verdict == "buy"

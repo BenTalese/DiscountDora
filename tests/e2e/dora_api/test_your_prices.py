@@ -59,8 +59,8 @@ def test__your_prices__two_samples__baseline_null_current_set(api):
     assert yp["above_baseline"] is False
     assert yp["sample_count"] == 2
     # Current is still set even below MIN_SAMPLES so the widget can render
-    # "Last seen $X" without a full baseline.
-    assert yp["current"] == 3.0
+    # "Last seen $X" without a full baseline. $3/L quotes as $0.30/100ml.
+    assert yp["current"] == 0.3
 
 
 # ── Median + strict-greater 1.15× threshold ──────────────────────────────
@@ -75,8 +75,8 @@ def test__your_prices__three_samples__median_correct_odd(api):
     _log(item, total_price=5.0, total_measure=1.0, unit="L",
          observed_at="2026-03-01T00:00:00+00:00")
     yp = _yp(item)
-    assert yp["baseline"] == 3.0          # median of [2, 3, 5]
-    assert yp["baseline_unit"] == "L"
+    assert yp["baseline"] == 0.3          # median of [2, 3, 5] per L, per 100ml
+    assert yp["baseline_unit"] == "100ml"
     assert yp["sample_count"] == 3
 
 
@@ -86,8 +86,8 @@ def test__your_prices__four_samples__median_correct_even(api):
         _log(item, total_price=p, total_measure=1.0, unit="L",
              observed_at=f"2026-0{i}-01T00:00:00+00:00")
     yp = _yp(item)
-    # Median of [2, 3, 4, 5] = 3.5
-    assert abs(yp["baseline"] - 3.5) < 1e-6
+    # Median of [2, 3, 4, 5] per L = 3.5, quoted per 100ml
+    assert abs(yp["baseline"] - 0.35) < 1e-6
 
 
 def test__your_prices__current_above_threshold__chip_fires(api):
@@ -104,7 +104,7 @@ def test__your_prices__current_above_threshold__chip_fires(api):
     yp = _yp(item)
     # median of [2, 2, 2, 3] = 2.0; current = 3.0 > 2.0 * 1.15 = 2.3 → above
     assert yp["above_baseline"] is True
-    assert yp["current"] == 3.0
+    assert yp["current"] == 0.3
 
 
 def test__your_prices__current_exactly_at_threshold__not_above(api):
@@ -139,15 +139,16 @@ def test__your_prices__ml_observations_display_per_100ml(api):
     assert abs(yp["baseline"] - 0.6) < 1e-6
 
 
-def test__your_prices__litre_observations_display_per_L(api):
-    """1 L at $3.00 = $3/L. At-or-above 1 L → display denominator stays /L."""
+def test__your_prices__litre_observations_display_per_100ml(api):
+    """1 L at $3.00 = $3/L = $0.30/100ml. The AU convention never flips to /L
+    (FU-914)."""
     item = _new_stock_item()
     for i in range(1, 4):
         _log(item, total_price=3.0, total_measure=1.0, unit="L",
              observed_at=f"2026-0{i}-01T00:00:00+00:00")
     yp = _yp(item)
-    assert yp["baseline_unit"] == "L"
-    assert abs(yp["baseline"] - 3.0) < 1e-6
+    assert yp["baseline_unit"] == "100ml"
+    assert abs(yp["baseline"] - 0.3) < 1e-6
 
 
 def test__your_prices__g_observations_display_per_100g(api):
@@ -162,32 +163,32 @@ def test__your_prices__g_observations_display_per_100g(api):
     assert abs(yp["baseline"] - 2.0) < 1e-6
 
 
-def test__your_prices__kg_observations_display_per_kg(api):
-    """1 kg+ observations stay on /kg (above the flip threshold)."""
+def test__your_prices__kg_observations_display_per_100g(api):
+    """A 1 kg pack quotes per 100g like a 250 g one (FU-914)."""
     item = _new_stock_item()
     for i in range(1, 4):
         _log(item, total_price=10.0, total_measure=1.0, unit="kg",
              observed_at=f"2026-0{i}-01T00:00:00+00:00")
     yp = _yp(item)
-    assert yp["baseline_unit"] == "kg"
-    assert abs(yp["baseline"] - 10.0) < 1e-6
+    assert yp["baseline_unit"] == "100g"
+    assert abs(yp["baseline"] - 1.0) < 1e-6
 
 
-def test__your_prices__display_flip_follows_latest_observation(api):
-    """Latest observation drives the flip — if the user buys a 1L bottle
-    after several 500ml buys, the display shifts to /L."""
+def test__your_prices__bigger_latest_pack_keeps_the_denominator(api):
+    """A 1L bottle after several 500ml buys still quotes per 100ml, so the
+    history stays comparable (FU-914)."""
     item = _new_stock_item()
     # Three 500ml buys → would otherwise be /100ml.
     for i in range(1, 4):
         _log(item, total_price=3.0, total_measure=500.0, unit="ml",
              observed_at=f"2026-0{i}-01T00:00:00+00:00")
-    # Latest = 1L → flips to /L.
+    # Latest = 1L; the denominator doesn't move.
     _log(item, total_price=6.0, total_measure=1.0, unit="L",
          observed_at="2026-04-01T00:00:00+00:00")
     yp = _yp(item)
-    assert yp["baseline_unit"] == "L"
-    # Median over per-L prices [6, 6, 6, 6] = 6.0/L.
-    assert abs(yp["baseline"] - 6.0) < 1e-6
+    assert yp["baseline_unit"] == "100ml"
+    # Median over per-L prices [6, 6, 6, 6] = 6.0/L = 0.60/100ml.
+    assert abs(yp["baseline"] - 0.6) < 1e-6
 
 
 # ── Count dimension (B1) ──────────────────────────────────────────────────
@@ -222,9 +223,9 @@ def test__your_prices__old_observations_excluded_from_window(api):
     _log(item, total_price=4.0, total_measure=1.0, unit="L",
          observed_at="2026-06-01T00:00:00+00:00")
     yp = _yp(item)
-    # Sample count excludes the >12mo outlier; median over the 3 recent obs = 3.
+    # Sample count excludes the >12mo outlier; median over the 3 recent obs = 3/L.
     assert yp["sample_count"] == 3
-    assert abs(yp["baseline"] - 3.0) < 1e-6
+    assert abs(yp["baseline"] - 0.3) < 1e-6
 
 
 # ── Per-dimension grouping (B4) ──────────────────────────────────────────

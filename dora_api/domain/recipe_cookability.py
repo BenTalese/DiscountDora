@@ -49,19 +49,29 @@ def unlinked_count_for(ingredients) -> int:
     )
 
 
-def missing_count_for(ingredients) -> int:
+def missing_count_for(ingredients, levels_by_item=None) -> int:
     """Number of *distinct* stock items in ``ingredients`` that count as missing.
 
     Duck-typed over recipe-ingredient entities: each must expose ``stock_item``
     (with ``id`` + ``stock_level``). Ingredients without a stock item are ignored
     (they can't reference a pantry item to be missing). Optional ingredients are
     ignored entirely (§1.9).
+
+    ``levels_by_item`` (``{stock_item_id: StockLevel | None}``) replaces the
+    ``stock_item.stock_level`` read when given. Callers that resolved levels by
+    id (``resolve_levels_by_item``) pass it so the answer doesn't depend on
+    whether the relationship happened to be hydrated (R-032).
     """
+    def level_of(item):
+        if levels_by_item is None:
+            return item.stock_level
+        return levels_by_item.get(item.id)
+
     return len({
         ingredient.stock_item.id
         for ingredient in _required(ingredients)
         if ingredient.stock_item is not None
-        and is_missing(ingredient.stock_item.stock_level)
+        and is_missing(level_of(ingredient.stock_item))
     })
 
 

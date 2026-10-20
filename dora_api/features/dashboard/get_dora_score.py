@@ -93,22 +93,6 @@ class GetDoraScoreHandler:
         # in both windows — see `_score_plan_coverage` for why that is the
         # accepted trade.
         #
-        # ⚠️ **This runs first, and it has to.** `load_recipe_cookability`
-        # eager-loads `RecipeIngredient → StockItem → StockLevel`, and
-        # `StockItem.stock_level` is `lazy="noload"`. If anything has already
-        # pulled those StockItem rows into the session — and the Freshness
-        # block below does exactly that, with a bare `get(StockItem).all()` —
-        # the identity map hands back the cached instances and the eager load
-        # silently does not populate `stock_level`. Every linked ingredient
-        # then looks unstocked, so `missing_count` is non-zero for every
-        # recipe and coverage scores 0.
-        #
-        # That is the same trap `_level_access.py` was written for (R-032), and
-        # it is invisible: the endpoint returns 200 and the card renders a
-        # confident, wrong number. Found in the 2026-09-04 browser walk, where
-        # the card claimed "None of your 6 planned meals can be cooked right
-        # now" beside a Next-to-cook card offering to cook five of them.
-        #
         # Cookability comes from the shared map (R-003), the same one the
         # dashboard summary's per-entry `missing_count` reads. An entry whose
         # recipe has unlinked ingredients or no ingredients at all is excluded

@@ -50,16 +50,6 @@ long session summary. Distinct from the other logs:
 - **Recommended resolution:** opportunistic: run the property with
   `--hypothesis-seed` sweeps or `max_examples` raised and pin any example found.
 
-## [OPEN] FU-925 — Confirm the reading of "waste replacing recipes" on expired alerts
-- **Raised:** 2026-10-17 (owner batch, alerts)
-- **Type:** finding
-- **What:** the ask "Expired (not expiring) alerts should have an action button
-  for waste replacing recipes button" was built as **Log waste in place of
-  Recipes** on `expired` alerts (`ALERT_KIND_META` in `models/alert.ts`). If the
-  owner meant "recipes that use it up / replace it", it's a one-line swap there.
-- **Why deferred:** ambiguous wording; built the more literal reading.
-- **Recommended resolution:** now (owner confirms).
-
 ## [OPEN] FU-924 — Companion has a few pre-existing UI debts (companion repo)
 - **Raised:** 2026-10-17 (owner batch, companion dark theme)
 - **Type:** finding
@@ -91,17 +81,6 @@ long session summary. Distinct from the other logs:
   also still use off-scale spacing (D-017).
 - **Why deferred:** outside the ask.
 - **Recommended resolution:** opportunistic.
-
-## [OPEN] FU-921 — The welcome step's wizard can't preview the theme it picks
-- **Raised:** 2026-10-17 (owner batch, onboarding)
-- **Type:** finding
-- **What:** WelcomeLayout pins the wizard to Pesto Dark, so choosing Light
-  changes nothing visible except the preview card. A live preview was built and
-  removed: flipping `<html>` while the layout stays dark mixed the two. If the
-  owner wants the canvas to follow the pick, WelcomeLayout's pin has to go
-  (it was added because light-theme users saw light-on-dark cards).
-- **Why deferred:** reversing a deliberate layout decision.
-- **Recommended resolution:** when the owner next reviews onboarding.
 
 ## [OPEN] FU-920 — `MealPlanRailCount` is now the app's general count circle under a planner name
 - **Raised:** 2026-10-15 (owner batch, shopping lists: "a circle with a number in it consistent with elsewhere")
@@ -139,6 +118,7 @@ long session summary. Distinct from the other logs:
 - **Why deferred:** reported defect; per CLAUDE.md it stays open until seen
   fixed against the owner's own setup.
 - **Recommended resolution:** confirm in browser on the owner's companion.
+- **2026-10-21:** server logs on altair show no companion push since the 2026-10-20 production deploy, so still unconfirmed. There is no ingestion switch any more (dropped in `e7a2c4f9b361`); the deploy script mints the companion's key, which is the only gate.
 
 ## [OPEN] FU-917 — `PriceAlert` carries a dead column and a misleading name
 - **Raised:** 2026-10-15 (price watches now fire as the `price_drop` alert)
@@ -162,42 +142,6 @@ long session summary. Distinct from the other logs:
   matches any live alert and that are older than the longest discard window.
 - **Why deferred:** no measurable cost yet.
 - **Recommended resolution:** opportunistic, or when the table passes ~10k rows.
-
-## [OPEN] FU-915 — A standalone no-cook meal in a batch household reads as "needs cooking" (amber)
-- **Raised:** 2026-10-15 (owner: *"I add juice and yoghurt to the meal plan and
-  it still highlights as yellow on the left edge"*)
-- **Type:** finding (needs a decision)
-- **What:** in a batch household a meal that isn't part of a batch is expected
-  to come from cooked portions. Juice has none, so the pool model says it needs
-  cooking and the readiness glyph (the fridge) and the card's edge turn amber.
-  Driven live on the scratch instance: `Orange juice` → `needs_cooking: true`,
-  `entry-chip--trim-alert`. Nothing is broken; the model just has no notion of a
-  meal you don't cook. The existing "Cook fresh" option on the meal's menu takes
-  it out of the pool and clears the amber.
-- **Options:** (a) leave it, and the answer is "mark it Cook fresh";
-  (b) a recipe-level "no cooking needed" flag that always behaves as cook-fresh;
-  (c) readiness stops colouring the edge, so amber only ever means "you can't
-  make this". (c) is the smallest change but reverses the 2026-09-12 rule that
-  amber also means "still has to be cooked".
-- **Recommended resolution:** owner decision, now.
-
-## [OPEN] FU-914: pick one per-unit denominator for log price and comparisons
-- **Raised:** 2026-09-27 (owner question: "for log price I wonder if we over-corrected")
-- **Type:** finding, needs a decision
-- **What:** the log-price preview (`PriceEntry.vue` via `quoteUnitPrice`) flips
-  its denominator by the pack being typed: /100g below 1 kg, /kg at or above
-  (`units.display_denominator_for`, mirrored by R-089). So logging a 500 g and a
-  2 kg pack of the same item quotes them in different units, while the item's
-  price history picks one denominator from its *latest* observation. Two prices
-  you want to compare can land in two units.
-- **Recommendation:** quote a fixed /100g and /100ml everywhere Dora compares
-  prices (the default Australian shelf-tag unit, so it matches most labels),
-  keep /ea for counts, and leave the US convention alone. Option B: keep the
-  flip, but decide it once per stock item rather than per pack.
-- **Why deferred:** it changes an established rule (R-089's convention) across
-  price history, recipe costs and the log sheet; the owner asked a question
-  rather than giving a call.
-- **Recommended resolution:** now, once the owner picks A or B.
 
 ## [OPEN] FU-913 — `auto-generate` still offers two essentials sources that overlap
 - **Raised:** 2026-09-19 (provenance simplification)
@@ -705,26 +649,6 @@ long session summary. Distinct from the other logs:
   touched. Cross-ref: R-003, `get_recipes._hydrate_estimated_cost` (which solved
   the same problem for the cookbook list in two queries).
 
-## [OPEN] FU-878 — `PATCH /meal-plans` re-mints every forward entry id on every save
-- **Raised:** 2026-09-05 (owner meal-planner batch, item 6 / ADR-083)
-- **Type:** finding
-- **What:** the update handler replaces the whole forward portion of a plan —
-  it keeps past/consumed entries, deletes the rest, and inserts brand-new
-  `MealPlanEntry` rows. So an entry's id changes whenever *anything* in the week
-  is saved, including an edit to a different meal on a different day. The
-  client-visible symptom (a `q-menu` closing on every servings tap) is fixed at
-  the rendering layer by R-086's content-identity keys, but the churn itself is
-  still there and is a latent hazard for anything that holds an entry id across
-  an edit.
-- **Why deferred:** the replace-the-week shape is load-bearing for the
-  cook-batch rebuild, which deletes and re-attaches batches around preserved
-  past entries and carries its own defect history (the 2026-09-03 straddling-
-  batch fix). Converting to match-and-update touches that, the past-entry guard
-  and reconcile — a real refactor, not a side effect of a UI fix.
-- **Recommended resolution:** later, as its own unit, ideally next time the
-  cook-batch write path is opened anyway. Cross-ref: R-086, ADR-083,
-  `mealPlanEntryKey.ts`.
-
 ## [OPEN] FU-877 — the 38–40px controls the tap-target sweep deliberately didn't touch
 - **Raised:** 2026-09-05 (tap-target sweep, ADR-082)
 - **Type:** deferred job
@@ -766,28 +690,6 @@ long session summary. Distinct from the other logs:
   open. Not urgent; needs a decision on the rule before any code.
   Cross-ref: `docs/05_investigations/RECIPE_PRICE_UNIT_MISMATCH.md` §5.
 
-## [OPEN] FU-875 — split `unit_mismatch` into reasons the user can act on
-- **Raised:** 2026-09-05 (recipe price-unit investigation, §6 tier 2)
-- **Type:** deferred job (owner decision D4)
-- **What:** the cost breakdown renders one message — "Units don't match the
-  price" — for three unrelated situations: a density we could have looked up
-  (FU-874), a product with no recorded size, and a counted item against a
-  measured pack (FU-855/856). Only the last two have a user action, and the user
-  can't tell which they're looking at. Proposed split:
-  `unit_unknown_density` / `unit_no_pack_size` / `unit_no_pack_count`.
-- **Why deferred:** worth little until FU-874 lands — today most of what lands
-  in this bucket is the fixable case, so splitting first would mostly produce a
-  more precise description of a bug.
-- **Unblocked 2026-09-09:** [[FU-874]] is resolved, so the bucket no longer
-  hides a known bug and the split is now worth making. `no_quantity` was added
-  as a fourth reason the same day, which is the shape this proposes — the copy
-  map and the closed union are already set up to take more. Note the bucket
-  gained a fourth situation to distinguish: a **food-specific unit applied to
-  the wrong food** ("2 sticks" of anything that isn't butter), which is neither
-  a density gap nor a pack-size gap.
-- **Recommended resolution:** now-ish. Owner call (investigation D4,
-  recommended yes).
-
 ## [OPEN] FU-873 — `frequently_added.py` reads a `lazy="noload"` relationship and reports `None`
 - **Raised:** 2026-09-04 (log-price picker ordering)
 - **Type:** finding (R-082 trap, currently harmless)
@@ -804,36 +706,6 @@ long session summary. Distinct from the other logs:
 - **Recommended resolution:** opportunistic — either add the `include` (and
   resolve through `_level_access.py`, per R-082) or drop the field from the DTO
   so it can't be trusted by a future caller. The second is probably right.
-
-## [OPEN] FU-872 — `load_recipe_cookability` silently returns wrong answers if StockItems are already in the session
-- **Raised:** 2026-09-04 (dashboard feedback batch — browser walk)
-- **Type:** finding (data-access trap; R-032 family)
-- **What:** the helper eager-loads `RecipeIngredient → StockItem → StockLevel`,
-  but `StockItem.stock_level` is `lazy="noload"`. If anything earlier in the same
-  request has already pulled those StockItem rows in — a bare
-  `repository.get(StockItem).all()` will do it — the identity map returns the
-  cached instances and the eager load **does not populate `stock_level`**. Every
-  linked ingredient then reads as unstocked, so `missing_count` is non-zero for
-  every recipe. No error, no warning: a 200 and a confidently wrong number.
-- **How it surfaced:** Kitchen health's new `plan_coverage` component rendered
-  *"None of your 6 planned meals can be cooked right now"* beside a Next-to-cook
-  card offering to cook five of them, because the freshness block above it loads
-  every StockItem. Fixed **locally** by hoisting the cookability load to the top
-  of `get_dora_score._gather_inputs`, with a comment saying why it must stay
-  there — which is a fix that a future edit can silently undo by reordering.
-- **Why it isn't fixed properly here:** the real fix is to make the helper
-  independent of session state — resolve levels through the shared
-  `resolve_levels_by_item` idiom (`_level_access.py`) rather than relying on an
-  eager include, exactly as that module was written to do for the same trap. That
-  touches the cookability rule every recipe surface reads (`?cookable`, the
-  recipe DTO, the dashboard summary, this score), so it wants its own unit and
-  its own test rather than a ride-along.
-- **Worth checking while in there:** whether any *other* caller of
-  `load_recipe_cookability` runs after a StockItem load in the same request. The
-  dashboard summary computes it early and is fine; `GetRecipesHandler` uses its
-  own `_base_query`. Neither was verified for ordering here.
-- **Recommended resolution:** later — before any further use of
-  `load_recipe_cookability`, and certainly before a fifth caller appears.
 
 ## [OPEN] FU-871 — Six retired dashboard card ids are still sitting in every user's saved layout
 - **Raised:** 2026-09-04 (dashboard feedback batch)
@@ -1003,27 +875,6 @@ long session summary. Distinct from the other logs:
   two can't disagree — which touches the build/packaging pipeline, not this page.
 - **Recommended resolution:** later during Phase 4 (open-source release), where
   tagging a version is on the critical path anyway.
-
-## [OPEN] FU-860 — With products off, Dora sends no scheduled email at all
-- **Raised:** 2026-09-03 (owner feedback batch — settings/Notifications)
-- **Type:** finding
-- **What:** the owner asked what email notifications exist when products is
-  disabled, and whether the section is hidden. **It is** — the whole Email block
-  is behind `v-if="productsEnabled"`, because the weekly deals email is the only
-  thing Dora mails on a schedule and with no ingested product data it has no deal
-  source. So the answer to "what's left?" is *nothing*, which is the actual
-  finding: an install without products (the default self-host shape) has an empty
-  email channel, and the owner's own follow-on — *"perhaps there is something we
-  could email that users would want/enjoy and we're missing"* — is the open
-  question. Candidates already computed elsewhere: the evening brief (currently
-  push-only, so a user with no push support gets nothing), an expiring-soon
-  digest, a week-ahead meal plan, an end-of-month spend summary.
-- **Why deferred:** designing a second scheduled email is a feature, not a copy
-  fix, and it needs a call on which one earns being unprompted mail. The evening
-  brief is the cheapest — it already exists, is already scheduled, and only the
-  delivery channel is missing.
-- **Recommended resolution:** now-ish — it's a small product decision, and it
-  wants the owner's answer before anything is built.
 
 ## [OPEN] FU-859 — Zone/area/section counts no longer distinguish direct from descendant items
 - **Raised:** 2026-09-03 (owner feedback batch — settings/Stock locations)
@@ -1804,44 +1655,6 @@ long session summary. Distinct from the other logs:
 
 ---
 
-## [OPEN] FU-790 — `name: dashy-dora` orphans the deployed container, and `container_name` makes it fatal
-- **Raised:** 2026-08-29 (owner hit it on a real deploy)
-- **Type:** finding
-- **What:** the uncommitted `name: dashy-dora` in `compose.yml` pins the Compose
-  project name. The server had already been deployed *without* it, so its stack
-  runs under the directory-derived project **`discountdora`**. After the deploy
-  rsyncs the new file, every `docker compose` call addresses the **new** project:
-  `down -v` matches nothing and leaves the old container running, then `up` fails
-  with *Conflict. The container name "/dashy_dora" is already in use*. The
-  conflict is fatal rather than harmless because `container_name: dashy_dora`
-  (compose.yml:30) is a **global** name that ignores Compose's per-project
-  namespace — without it the two projects would coexist as
-  `discountdora-dashy_dora-1` / `dashy-dora-dashy_dora-1`. Compose can't
-  self-heal this: from the new project's view that container is a stranger, not
-  an orphan, so `--remove-orphans` doesn't touch it.
-- **State:** owner chose (2026-08-29) to **keep** `container_name` and harden the
-  deploy script instead of dropping it. A `reclaim_container_name` step was
-  written into `~/Desktop/deploy-dora.sh` — it detects a container holding the
-  name that isn't in `docker compose ps -aq` for the current project, and tears
-  it down through *its own* project (taking that project's volumes too when
-  wiping, so the old `discountdora_*` volumes don't strand).
-  **2026-09-07: the wiring is done.** `reclaim_container_name` is now called
-  from `deploy_dora()` between the teardown and the `up`, and was parameterised
-  to `(container, path, wipe)` so the new companion stack — which pins its own
-  `container_name` for the same reasons — gets identical protection. Verified
-  only by a stubbed dry-run of the script (no server access this session): the
-  call fires in the right order for both stacks.
-- **Why it stays open:** (a) the reclaim path has still never run against a real
-  daemon — the dry-run proves it is *called*, not that it *works*; (b) the
-  one-time server cleanup (`docker compose -p discountdora down -v`) has not
-  been confirmed run; (c) the script remains **only** on the desktop, untracked
-  by this repo (owner chose 2026-09-07 to keep it there), so this hardening is
-  still one `rm` from being lost. Note (c)'s blocker is gone though: the SSH
-  password was moved out to `~/.config/dora-deploy.env` (mode 600) on
-  2026-09-07, so the script now holds no secret and *could* be committed
-  whenever the owner wants it backed up.
-- **Recommended resolution:** now — first real deploy closes (a) and (b).
-
 ## [OPEN] FU-788 — Voice input can't work in Firefox without server-side transcription
 - **Raised:** 2026-08-29 (settings feedback batch)
 - **Type:** follow-up
@@ -2094,64 +1907,6 @@ long session summary. Distinct from the other logs:
   cleanup, so it wasn't taken unasked. Either target fixes the R-002 violation,
   since both are token-driven. Ask which, then it's a one-line change.
 
-## [OPEN] FU-776 — Should the buy verdict's plan axis discount items already on a shopping list?
-- **Raised:** 2026-08-28 (buy-verdict plan-axis brief)
-- **Type:** design question
-- **What:** if the plan axis (see
-  [BRIEF_BUY_VERDICT_PLAN_AXIS.md](docs/04_proposals/BRIEF_BUY_VERDICT_PLAN_AXIS.md))
-  pushes tomato sauce to `buy` for Thursday's Bolognese, but the user already
-  put it on a list via the meal planner's one-shot add, the verdict is noise —
-  the need is handled. Reading open-list membership would suppress that, at the
-  cost of a further cross-entity read in `_gather_inputs`.
-- **Why deferred:** it only matters if the axis is built at all (FU-774 gates it).
-- **Recommended resolution:** **when FU-774 is answered yes** — decide it as part
-  of the implementation plan, not before. Note it must be server-side: a client
-  computing "is this already on a list" is a straight state-ownership violation.
-
-## [OPEN] FU-775 — Pick the gate for the buy-verdict plan axis
-- **Raised:** 2026-08-28 (buy-verdict plan-axis brief)
-- **Type:** design question
-- **What:** the inference overlay's per-surface opt-ins live on `User`
-  (`inference_meal_plan_enabled` et al.), but the buy verdict is gated
-  install-wide by `AppSetting.buy_verdict_enabled` plus the R-058 money
-  prerequisite. A per-user flag on an install-wide surface is a mismatch. The
-  brief recommends a new install-wide `AppSetting.buy_verdict_plan_axis_enabled`
-  defaulting **off**, matching how the overlay's three newer surface flags
-  default.
-- **Why deferred:** downstream of FU-774; pointless to migrate a column for an
-  axis that may not be approved.
-- **Recommended resolution:** **when FU-774 is answered yes.**
-
-## [OPEN] FU-774 — Owner call: may a planned meal change a buy verdict?
-- **Raised:** 2026-08-28 (owner asked whether planned meals should feed the buy verdict)
-- **Type:** decision
-- **What:** the owner's idea — *"high confidence you should buy tomato sauce
-  because you planned spaghetti Bolognese but you're out"* — is a good one, and
-  the brief
-  ([BRIEF_BUY_VERDICT_PLAN_AXIS.md](docs/04_proposals/BRIEF_BUY_VERDICT_PLAN_AXIS.md))
-  argues it is the *strongest* need evidence the oracle can hold, because unlike
-  the recorded level and the cadence estimate it is a stated intention rather
-  than an inference. **But it is currently forbidden.** `inference_overlay.py:23`
-  records an explicit owner directive of 2026-08-17 that "a planned meal's
-  shortfall is unchanged" and that everything plan-derived is additive
-  commentary only. An axis that moves a verdict from `unsure` to `buy` breaks
-  that directly.
-  - Argument for reversing *on this surface*: the directive was written about
-    the inference overlay, whose remarks come from a Dora-generated *belief*.
-    A planned meal is user-entered data, so the directive's stated rationale
-    ("a low-confidence guess contradicting a recorded fact is noise") doesn't
-    obviously reach it.
-  - Argument against: the buy verdict is exactly the surface the directive was
-    protecting, and the overlay's `SURFACE_MEAL_PLAN` flag exists because
-    annotating meal plans at all was thought intrusive enough to need an opt-in.
-  - If the answer is **no**, the fallback is a reason line that names the meal
-    but never affects strength or direction — worth much less, and the brief
-    closes as considered-and-declined.
-- **Why deferred:** it is a product call about how much authority Dora's own
-  plans get over its own advice. Not an agent's to make.
-- **Recommended resolution:** **now** — it gates FU-775 and FU-776 and the whole
-  axis. Nothing was built.
-
 ## [OPEN] FU-773 — The desktop filter row wraps to three lines at 1280px, not the two the owner asked for
 - **Raised:** 2026-08-28 (cookbook rating + kcal batch)
 - **Type:** finding
@@ -2327,26 +2082,6 @@ long session summary. Distinct from the other logs:
 - **Recommended resolution:** when the owner next cooks from a phone — if the step
   card feels too tall in real use, drop it to `text-h5` below `sm`; otherwise close.
 
-## [OPEN] FU-762 — Four buy-verdict e2e tests fail against the (uncommitted) money gate
-- **Raised:** 2026-08-27 (Nutri-Score build — found incidentally)
-- **Type:** finding
-- **What:** `tests/e2e/dora_api/test_list_buy_verdicts.py` fails 4 of 4 —
-  `one_entry_per_line_item`, `match_the_per_item_endpoint`,
-  `empty_list_is_an_empty_map`, `unknown_list_is_404`. All four get a 403
-  *"Buy verdicts need money features, which are turned off for this install"*
-  where they expect 200/404. The money prerequisite added by the previous
-  session's (still uncommitted) buy-verdict work is correct; these four fixtures
-  simply never enabled money, and the unit suite the worklog quotes (**870
-  passed**) does not include the e2e directory, so they went unnoticed.
-- **Verified pre-existing:** stashing *all* uncommitted work makes them pass,
-  and nothing in this unit touches the buy verdict. Not caused by the
-  rating-scheme change.
-- **Why deferred:** R-007 — it is the other work unit's fixture to fix, and
-  guessing at its intent (enable money in the fixture vs. assert the 403) could
-  contradict what that session meant to assert.
-- **Recommended resolution:** **now**, before the buy-verdict work is committed
-  — a red e2e suite blocks everyone. Likely a one-line fixture change.
-
 ## [OPEN] FU-761 — `kcal_to_kj` is imported from the HSR module by a Nutri-Score caller
 - **Raised:** 2026-08-27 (Nutri-Score build)
 - **Type:** finding
@@ -2395,35 +2130,6 @@ long session summary. Distinct from the other logs:
   this diff.
 - **Recommended resolution:** opportunistic — next time either meal-plan file is
   open. Cites **R-003** (one domain fact, one reader) and FU-560.
-
-## [OPEN] FU-758 — `.claude/launch.json` verify configs point at :5170 with `DORA_ALLOW_DESTRUCTIVE=true`
-- **Raised:** 2026-08-27 (buy-verdict money gate)
-- **Type:** finding
-- **What:** all four `dora-verify-backend*` configs bind **port 5170** — the dev
-  backend's port, against the real dev DB — while setting
-  `DORA_ALLOW_DESTRUCTIVE=true`, which drop_alls on boot. The intended isolated
-  verify setup is a **scratch backend on 5171** with the SPA on 5174 (CORS, hash
-  routing, seeded e2e fixture login); an agent following the launch config as
-  written would destroy the dev database instead. This session declined to start
-  a preview for exactly this reason, so the browser pass for the money gate is
-  owed (logged in `DORA_VERIFY.md`).
-- **Why deferred:** it's the owner's local tooling and the safe port/DB pairing
-  is his call — guessing a port and a `DORA_DB_PATH` into a committed config is
-  how the next agent gets a *differently* wrong instance.
-- **Update 2026-08-28 — the safe pairing now exists and is proven, but the four
-  dangerous configs are still there.** The cook-mode session needed a live verify
-  with the owner's backend running on :5170, and added two configs rather than
-  editing his: **`dora-verify-backend-5171-linux`** (`DORA_API_PORT=5171`,
-  `DORA_DB_PATH=data/scratch-verify.db` — gitignored, `DORA_ALLOW_DESTRUCTIVE=true`)
-  and **`dora-spa-5171`** (SPA on 5174 with `VITE_API_BASE_URL` pointed at 5171).
-  Both were driven end to end: fresh DB seeded on boot, login, cook mode at two
-  viewports, screenshots. So the port/DB pairing is no longer a guess. What
-  remains is the owner's call on the **four `dora-verify-backend*` entries that
-  still bind :5170 with destructive mode on** — the footgun is unchanged for
-  anyone who picks one of those by name.
-- **Recommended resolution:** **now-ish** — either point those four at the proven
-  5171 pairing, or delete them in favour of the new pair. One decision, no
-  investigation left to do.
 
 ## [OPEN] FU-757 — "New shopping list → start from a meal plan" still drops unlinked ingredients silently
 - **Raised:** 2026-08-27 (meal-plan add-to-list unification)
@@ -3144,52 +2850,6 @@ Resolved entries carry one extra line, and live in `DORA_FOLLOWUPS_RESOLVED.md`:
   and restarting the backend fixes it; (b) the Add-barcode dialog now names a route
   miss explicitly ("This server has no barcode endpoint at … — its API is older than
   this page"), so the next attempt self-diagnoses. Paired with FU-648.
-
-## [OPEN] FU-703 — Decide the fate of the product price axis (`/price-history`, My Products)
-- **Raised:** 2026-08-21 (prices-surface UX investigation — `docs/05_investigations/PRICES_SURFACE_UX_ASSESSMENT.md`)
-- **Type:** follow-up (structural decision)
-- **What:** Products were demoted to a push-your-own-data niche, but **all** the
-  price *reading* capability — compare up to 5, range control (30d/90d/1y/all),
-  alerts — still lives on the product axis, on `/price-history`, which has **no
-  nav entry at all** (reachable only from a My Products overflow item, a
-  `SubscriptionsPanel` link, and the onboarding tour that calls it "Prices").
-  The everyday user's own data (stock-item observations) gets a single-item
-  modal with no range and no compare, so *"which of my items got more
-  expensive?"* has no surface. Three options were put to the owner: absorb +
-  retire the product surfaces; keep `/price-history` as an explicitly advanced
-  page; or keep both and just fix nav + naming. Owner leans **option 3
-  (keep both, fix nav + naming)** but wants more thought before committing.
-  Answered in the same session and **not** part of this fork: the everyday user's
-  jobs (all four — triage / lookup / capture / trend), placement (a **price lens
-  on Stock overview** + a **trend section in Reports**; no new top-level nav
-  entry), and alerts (**advanced-only, hide cleanly** — they need an inbound feed,
-  so no stock-item watchlist). Those three are recorded as D2/D3/D4 in the memo.
-- **Owner idea added 2026-08-24 — a "Shopping" tab on the stock item.** Rename
-  the stock-item detail page's **Lists** tab to **Shopping**, and gather the
-  money surfaces into it: the buy-verdict collapsible card (today on Overview),
-  usual store, preferred buys, the price widget and the purchase-history log.
-  Owner is "not 100% on this idea" and asked for it to be weighed here rather
-  than built, because it is a **fourth candidate placement** for the everyday
-  price job alongside the memo's D3 (price lens on Stock overview + trend
-  section in Reports). Note the two aren't exclusive — D3 answers *"which of my
-  items got more expensive?"* across the pantry, this answers *"what do I know
-  about buying **this** one?"* on a single item, and it would give the buy
-  verdict a home next to the price history it reasons from. Weigh it when this
-  fork is decided; it changes nothing about the keep/cut call on `/price-history`
-  itself.
-- **PARTIALLY ANSWERED IN CODE 2026-09-02 (Reports chunk 4).** D3's *"trend
-  section in Reports"* half is **built**: `/reports` now carries a **Price
-  changes** card driven by a new `GET /reports/item-price-movers`, which ranks
-  the user's own stock items by per-unit price movement inside the range and
-  opens each one into the shared price chart. That answers the **trend** and
-  **triage** jobs from D2 for a household with no product catalogue at all —
-  which is the strongest evidence yet for the fork below, because the everyday
-  price question now has a home that does not involve `/price-history`. Still
-  open and unchanged: the **keep/cut call on the product-keyed surfaces**, and
-  the D3 *"price lens on Stock overview"* half.
-- **Why deferred:** owner's call; it decides whether FU-704…708 are polish on a
-  surviving page or throwaway work on one that gets retired.
-- **Recommended resolution:** now-ish, before any of FU-704…708 — it sets their scope.
 
 ## [OPEN] FU-704 — `PriceEntry` is desktop-shaped, and all its help is hover-only
 - **Raised:** 2026-08-21 (prices-surface UX investigation)

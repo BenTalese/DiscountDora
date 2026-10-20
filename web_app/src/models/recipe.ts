@@ -400,7 +400,9 @@ export type RecipeVersionSibling = {
  *  `UNPRICED_*` constants in `dora_api/features/recipes/recipe_cost.py`;
  *  the phrasing lives on the client so the server ships facts, not copy. */
 export type RecipeCostUnpricedReason =
-    'no_link' | 'no_price' | 'unit_mismatch' | 'no_quantity';
+    | 'no_link' | 'no_price' | 'no_quantity'
+    | 'unit_no_pack_count' | 'unit_no_pack_size' | 'unit_unknown_density'
+    | 'unit_wrong_food' | 'unit_mismatch';
 
 /** One ingredient's row in the expandable cost breakdown. `line_cost` is
  *  set exactly when `reason` is null. */

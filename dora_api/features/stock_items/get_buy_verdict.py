@@ -549,7 +549,9 @@ def _plan_axis(inputs: _AxisInputs) -> Optional[VerdictReasonDto]:
     never costs confidence and never decides direction on its own. It adds to
     strength only when the recorded level says the plan is at risk (see
     `_PLAN_STRENGTH_MODIFIER`): a planned meal that needs something you're Low
-    or Out of is more reason to buy than the shortage alone.
+    or Out of is more reason to buy than the shortage alone. When the item is
+    already on an open list the need is handled, so the reason says so and adds
+    nothing (FU-776).
     """
     demand = inputs.planned_demand
     if demand is None or demand.planned_meals <= 0:
@@ -563,11 +565,25 @@ def _plan_axis(inputs: _AxisInputs) -> Optional[VerdictReasonDto]:
         label = f"{meals} {'needs' if one else 'need'} it, and you're low"
     else:
         label = f"{meals} {'uses' if one else 'use'} it"
+    detail = demand.reason or None
+    if _plan_is_handled(inputs):
+        detail = f"{detail} Already on a shopping list." if detail else "Already on a shopping list."
     return VerdictReasonDto(
         axis="plan",
         signal=f"planned_{demand.urgency}",
         label=label,
-        detail=demand.reason or None,
+        detail=detail,
+    )
+
+
+def _plan_is_handled(inputs: _AxisInputs) -> bool:
+    """A shortfall the plan exposes is already on an open list, so pushing the
+    buy harder would be double-counting it (FU-776)."""
+    demand = inputs.planned_demand
+    return (
+        demand is not None
+        and demand.urgency in _PLAN_STRENGTH_MODIFIER
+        and inputs.is_on_open_list
     )
 
 
@@ -607,7 +623,7 @@ def compose_verdict(inputs: _AxisInputs) -> BuyVerdictDto:
     strength = _need_strength(inputs, need_signal)
     strength += _PRICE_STRENGTH_MODIFIER.get(price_signal, 0)
     strength += _WASTE_STRENGTH_MODIFIER.get(waste_signal, 0)
-    if inputs.planned_demand is not None:
+    if inputs.planned_demand is not None and not _plan_is_handled(inputs):
         strength += _PLAN_STRENGTH_MODIFIER.get(inputs.planned_demand.urgency, 0)
     if inputs.fake_markdown:
         strength -= 1

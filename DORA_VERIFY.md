@@ -115,6 +115,12 @@ flash, store-group move confirmed). What a headless desktop can't settle:
 
 ---
 
+## Planner + recipe cost (2026-10-21) — origin FU-878, FU-875
+
+- [ ] **Planner edits still save.** Change servings, move a meal, toggle Cook fresh and remove a day of a batch cook; each saves without "Could not update the plan".
+- [ ] **Log price quotes per 100g.** Log a 2 kg pack; the preview reads "per 100g", not "per kg".
+- [ ] **Cost reasons read sensibly.** Open a recipe's cost breakdown with an unpriced line; the group title names the actual gap.
+
 ## Cookbook + recipe view — the 2026-09-09 five-item batch
 
 Built and gated (pytest 2349, vitest 720, `vue-tsc`, `eslint src/`,
@@ -2362,7 +2368,7 @@ _(Appearance/Assistant page structure already agent-verified via read_page — t
 - [ ] **Bulk** add (select several stock items → "Add to list") with 2+ drafts: pick a list once for the first item → the **rest of the batch** lands in that same list.
 
 ## Zero-Input Pantry hint redesign — disagreement-only hint + demo data (2026-08-12)
-_(Needs a destructive re-seed to load the "Belief: …" demo items — restart the backend with `DORA_ALLOW_DESTRUCTIVE=true`, e.g. the `dora-verify-backend-linux` launch config.)_
+_(Needs a destructive re-seed to load the "Belief: …" demo items — restart the backend with `DORA_ALLOW_DESTRUCTIVE=true`, e.g. the `dora-verify-backend-5171-linux` launch config (scratch DB, never the dev one).)_
 - [ ] Stock Overview shows amber **"Dora thinks …"** hints ONLY on the disagreement items — expect: **Belief: Weet-Bix** → "Dora thinks low" (hover: high confidence); **Belief: Tuna Tins** → "Dora thinks out" (medium); **Belief: Greek Yoghurt** → "Dora thinks low" (medium); **Belief: Passata** → "Dora thinks low" (hover reason mentions "cooked with 2× since"); **Belief: Stir-fry Veg** → "Dora thinks out" (low conf, reason mentions cooking); **Belief: Orange Juice** → "Dora thinks stocked" (recorded Out, just restocked).
 - [ ] **Belief: Crackers (agrees, silent)** shows **no** hint — the control proving agreement stays silent. The ~22 ordinary curated items (no purchase cadence) also show no hint.
 - [ ] The hint icon reads as a **lightbulb-with-question** (a hunch), NOT a magic wand.

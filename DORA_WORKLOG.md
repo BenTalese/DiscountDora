@@ -41,6 +41,123 @@ next.
 
 ---
 
+## 2026-10-21 (latest): **Plan axis finished, prices per 100g, commit + push**
+
+**Status: built, gated, pushed.** pytest 2413 passed; vitest 747/66; vue-tsc +
+eslint clean on touched files. Not driven in a browser.
+
+**Plan axis (FU-775/776 resolved).** Owner: no flag, a plan always counts;
+yes, discount items already on an open list. The composer already had the plan
+axis from 10-15; added `_plan_is_handled` so a listed item keeps the reason
+("Already on a shopping list.") but gets no strength. Adherence gating (brief
+section 5) deliberately not built.
+
+**FU-914 option A (resolved).** `PRICE_DISPLAY_RULES['AU']` flip_at is None;
+`DenominatorRule.flip_at` optional; `dump_units.py` emits `flipAt: null`;
+`unitPriceDisplay.ts` honours it. 15 price tests moved to /100g and /100ml.
+
+**Prod setup question.** The deploy script handles infra (profile, secrets,
+CORS, cookies, container TZ, companion key, Product Search URL). Read-only
+check of prod: one admin user, empty pantry, money off, AppSetting timezone
+UTC. In-app setup is the onboarding wizard. FU-918 note corrected: there is no
+ingestion switch any more.
+
+**Close-gate.** R-089 (rule stays data, mirrored by codegen, not restated),
+R-003, R-095 (no migration). No new rule.
+
+**Next up:** deploy (`./deploy-dora.sh`, no `--wipe`), run onboarding on prod.
+
+---
+
+## 2026-10-21 (later): **Owner decisions + five backlog fixes**
+
+**Status: built, backend-green, not driven in a browser.** Gates: pytest
+2410 passed (the four FU-762 reds now green); vue-tsc + eslint clean on touched
+files; vitest 747/66.
+
+**Decisions recorded (resolved):** FU-925 keep Log waste; FU-915 leave (mark
+Cook fresh); FU-921 no preview; FU-774 **yes**, a planned meal may change a
+buy verdict (brief §7 updated; FU-775/776 now "now"); FU-703 **keep** the
+product price pages; FU-860 no change (deals mail is the only scheduled email
+and is already hidden with products off). FU-914 explained to the owner,
+awaiting A/B.
+
+**Server check (FU-790, resolved).** Read-only SSH to altair: `dashy_dora` and
+`dora_companion` healthy under the pinned project names, deployed 2026-10-20
+with a clean migration run, nothing left of `discountdora`. No companion push
+in the logs since, so FU-918 stays open.
+
+**Fixes.** FU-762 money fixture on the bulk buy-verdict tests. FU-872
+`load_recipe_cookability` resolves levels by id (`resolve_levels_by_item`)
+instead of an eager include; the dora-score ordering warning removed;
+regression test fails on the old helper. FU-878 `PATCH /meal-plans` matches
+rows by optional `meal_plan_entry_id` and updates in place; client sends it;
+cook batches still rebuilt from cook_keys. FU-758 no launch config pairs :5170
+with destructive mode (three duplicates removed, two re-pointed to 5171).
+FU-875 `_price_line` returns `(cost, reason)`; four new reasons plus the
+`unit_mismatch` fallback; dialog copy updated.
+
+**Close-gate.** R-003 (one pricing decision tree; cookability rule still in
+`recipe_cookability`), R-032 (levels by id, not relationship hydration), R-095
+(no migration). No new rule. Two verify lines added (planner edits, cost copy).
+
+**Next up:** owner picks FU-914 A/B; build the buy-verdict plan axis
+(FU-775/776); commit today's work.
+
+---
+
+## 2026-10-21: **R-095 live-data rule + onboarding stock step rebuilt**
+
+**Status: built, gated, driven live on the scratch backend (5171 + SPA 5174).**
+Gates: vue-tsc + eslint clean on touched files; vitest 747/66. Backend untouched.
+Driven with Playwright at 1280 and 390 (no h-scroll): features, stock and finish
+steps, then a full Finish that created a custom group, location and item (item
+linked to the custom group), and saved headcount. `/onboarding/state` was
+stubbed to `first_user: true` because the dense seed has several users.
+
+**Engineering standards.** R-095 + ADR-092: the household now uses the
+production deploy, so every migration preserves existing rows (backfill, never
+drop live data). R-007's no-compat-shims stays for code. Working-style memory
+updated to match.
+
+**Onboarding.** Admin step removed. Seed + first-item steps merged into one
+"Set up your stock" step built from a new `OnboardingPickPanel` (defaults as
+tickable chips in sections, plus an add-your-own row): Locations (zone children
+as chips, a child creates its zone), Groups, Items (starter packs as sections,
+own items take group + location). Own groups/locations are created on Finish
+through the normal create endpoints, after the defaults seed, skipping names
+that exist. Paste box, spreadsheet link and the demo card left the step; the
+demo toggle is now an "Extras" card on the finish page. Features step gains
+"Your household" (headcount, timezone defaulting to the device's when the
+install is on UTC, units), applied with the feature cards in one PATCH.
+`MEASUREMENT_SYSTEM_CHOICES` + `TIMEZONE_CHOICES` moved to `regionChoices.ts`
+and shared with Settings → Region. Pre-existing bug fixed: Quasar fields in the
+pinned-dark WelcomeLayout rendered near-black text when the document theme was
+light; wizard fields now take `dark`.
+
+**Close-gate.** R-001 (one panel component, three uses), R-003 (choices shared,
+not copied), D-004 touch floor via `pointer: coarse`. No new FUs or verify items.
+
+---
+
+## 2026-10-19: **Deploy script switched to a production Dora + companion**
+
+**Status: done, tested offline (remote stubbed); not yet run against the server.**
+`~/Desktop/deploy-dora.sh` (outside the repo; backup at
+`~/Desktop/deploy-dora.sh.bak-20261019`) now deploys `PROFILE=production` for
+both Dora and the companion: gunicorn, pinned CORS, no seeding, first visit
+opens /setup for `ADMIN_BOOTSTRAP_EMAIL`. `WIPE_DB` now defaults to false so
+data survives redeploys; `--wipe` wipes for one run, `--dev` restores the old
+development deploy. Dora's `.env` is rewritten on every deploy (so profile
+changes apply) while its two secrets are read back from the server and kept;
+`init-env` is now the explicit rotate. A deploy that changes profile without
+`--wipe` warns that the old data carries over. No repo code changed, no new
+FUs or verify items.
+
+**Next up:** owner runs `./deploy-dora.sh --wipe` once for a clean prod instance.
+
+---
+
 ## 2026-10-17: **Owner batch: onboarding rebuild, alert cards, companion fixes (14 items)**
 
 **Status: built, gated, driven live (except where noted in DORA_VERIFY).**

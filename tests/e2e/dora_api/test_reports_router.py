@@ -483,7 +483,7 @@ def test__item_price_movers__TwoObservations__ReportsTheDriftPerCanonicalUnit(ap
     # report an install with no product catalogue can have (FU-703 D3).
     token = _token()
     item = _stock_item(f"{token} rolled oats")
-    # $4 for 2kg = $2.00/kg, then $6 for 2kg = $3.00/kg. The comparison is
+    # $4 for 2kg = $0.20/100g, then $6 for 2kg = $0.30/100g. The comparison is
     # per-unit, so the pack size is not allowed to look like a price change.
     _observe(item, price=4.0, measure=2.0, unit="kg", on="2026-01-05T00:00:00+00:00")
     _observe(item, price=6.0, measure=2.0, unit="kg", on="2026-02-05T00:00:00+00:00")
@@ -496,10 +496,10 @@ def test__item_price_movers__TwoObservations__ReportsTheDriftPerCanonicalUnit(ap
     }
     row = _row_for(body, item)
     assert row is not None
-    assert row["unit"] == "kg"
-    assert row["first_price"] == 2.0
-    assert row["last_price"] == 3.0
-    assert row["delta"] == 1.0
+    assert row["unit"] == "100g"
+    assert row["first_price"] == 0.2
+    assert row["last_price"] == 0.3
+    assert row["delta"] == 0.1
     assert row["delta_pct"] == 50.0
     assert row["observation_count"] == 2
     assert row["first_observed_on"] == "2026-01-05"
@@ -517,8 +517,8 @@ def test__item_price_movers__SamePricePaidForABiggerPack__ReadsAsAFall(api):
     body = requests.get(f"{REPORTS}/item-price-movers", params={"range": "all"}).json()
 
     row = _row_for(body, item)
-    assert row["first_price"] == 6.0
-    assert row["last_price"] == 3.0
+    assert row["first_price"] == 0.6
+    assert row["last_price"] == 0.3
     assert row["delta_pct"] == -50.0
 
 
@@ -592,9 +592,9 @@ def test__item_price_movers__MixedDimensions__ComparesOnlyTheActiveOne(api):
     body = requests.get(f"{REPORTS}/item-price-movers", params={"range": "all"}).json()
 
     row = _row_for(body, item)
-    assert row["unit"] == "L"
+    assert row["unit"] == "100ml"
     assert row["observation_count"] == 2      # the "ea" reading is not in it
-    assert row["first_price"] == 4.0 and row["last_price"] == 6.0
+    assert row["first_price"] == 0.4 and row["last_price"] == 0.6
     assert body["items_with_mixed_units"] >= 1
 
 

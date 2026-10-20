@@ -6,6 +6,27 @@ semver — major bumps signal schema or breaking-config changes.
 ## [Unreleased]
 
 ### Changed
+- **Prices always per 100g / 100ml (2026-10-21).** Logged prices, price
+  history, reports and recipe costs no longer switch to per kg or per L for
+  bigger packs, so a 500 g and a 2 kg bag read in the same unit. US installs
+  keep their oz / lb convention.
+- **Buy verdict and shopping lists (2026-10-21).** A planned meal no longer
+  pushes the buy harder for something already on an open shopping list; the
+  verdict says it's already on a list instead.
+- **Recipe cost breakdown says why (2026-10-21).** "Units don't match the
+  price" is split into the cases you can tell apart: a pack sold by weight with
+  no count, a pack priced per item with no size, a weight/volume pair Dora
+  can't convert for that ingredient, and a unit that belongs to a different food.
+- **Meal plan entries keep their identity across edits (2026-10-21).** Saving
+  the planner edits meals in place instead of re-creating the whole week.
+- **Onboarding stock setup (2026-10-21).** The "You're the admin" page is gone.
+  Locations, groups and starting items are now one "Set up your stock" page:
+  each section ticks Dora's defaults on or off and lets you add your own (an
+  item can take a group and location). The paste box and spreadsheet link are
+  gone, and the demo recipe moved to the finish page. The features page gains a
+  "Your household" panel for people you cook for, timezone (starts on this
+  device's, not UTC) and units. Text in the wizard's fields is readable on the
+  dark canvas again.
 - **Onboarding, rebuilt (2026-10-17).** The first setup screen greets you with
   your own avatar, offers 18 food pictures to pick from (or upload a photo), and
   picks a theme from preview cards instead of a dropdown. A new "Build your Dora
@@ -277,6 +298,9 @@ semver — major bumps signal schema or breaking-config changes.
   yesterday or in March.
 
 ### Fixed
+- **Kitchen health "can cook" counts (2026-10-21).** Recipe cookability no
+  longer reads every ingredient as out of stock when the same request loaded
+  the pantry first.
 - **Setting "Bought from" with no price saved nothing (2026-09-17).** In the
   price sheet, choosing a store on a line you hadn't priced discarded the store
   along with the blank price, so the row never moved between store groups under

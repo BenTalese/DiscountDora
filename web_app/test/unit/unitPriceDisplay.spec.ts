@@ -25,11 +25,11 @@ describe('toCanonicalPriceUnit', () => {
 });
 
 describe('displayDenominatorFor', () => {
-    it('flips to the full unit only once the pack reaches one of it', () => {
+    it('quotes metric per 100g / 100ml whatever the pack size', () => {
         expect(displayDenominatorFor('mass', 0.5, 'metric').label).toBe('100g');
-        expect(displayDenominatorFor('mass', 1, 'metric').label).toBe('kg');
+        expect(displayDenominatorFor('mass', 2, 'metric').label).toBe('100g');
         expect(displayDenominatorFor('volume', 0.5, 'metric').label).toBe('100ml');
-        expect(displayDenominatorFor('volume', 1, 'metric').label).toBe('L');
+        expect(displayDenominatorFor('volume', 2, 'metric').label).toBe('100ml');
     });
 
     it('follows the install measurement system', () => {
@@ -50,13 +50,13 @@ describe('quoteUnitPrice', () => {
         expect(quoteUnitPrice(3.5, 500, 'g', 'metric')).toEqual({ amount: 0.7, unit: '100g' });
     });
 
-    it('quotes a full-kilo pack per kg', () => {
-        expect(quoteUnitPrice(6.9, 1, 'kg', 'metric')).toEqual({ amount: 6.9, unit: 'kg' });
+    it('quotes a full-kilo pack per 100g', () => {
+        expect(quoteUnitPrice(6.9, 1, 'kg', 'metric')).toEqual({ amount: expect.closeTo(0.69, 10), unit: '100g' });
     });
 
-    it('quotes a bottle per 100ml and a big one per L', () => {
+    it('quotes a bottle and a big one both per 100ml', () => {
         expect(quoteUnitPrice(8.75, 500, 'ml', 'metric')).toEqual({ amount: 1.75, unit: '100ml' });
-        expect(quoteUnitPrice(4, 2, 'L', 'metric')).toEqual({ amount: 2, unit: 'L' });
+        expect(quoteUnitPrice(4, 2, 'L', 'metric')).toEqual({ amount: 0.2, unit: '100ml' });
     });
 
     it('leaves count prices as a plain each', () => {
@@ -76,8 +76,8 @@ describe('requoteUnitPrice', () => {
         expect(quoted?.amount).toBeCloseTo(0.4, 10);
     });
 
-    it('leaves a price already quoted per a full unit alone', () => {
-        expect(requoteUnitPrice(6.9, 'kg', 'metric')).toEqual({ amount: 6.9, unit: 'kg' });
+    it('requotes a per-kg price per 100g and leaves each alone', () => {
+        expect(requoteUnitPrice(6.9, 'kg', 'metric')).toEqual({ amount: expect.closeTo(0.69, 10), unit: '100g' });
         expect(requoteUnitPrice(2.5, 'ea', 'metric')).toEqual({ amount: 2.5, unit: 'ea' });
     });
 });

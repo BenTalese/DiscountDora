@@ -59,7 +59,7 @@ def test__price_history__series_carries_your_prices_and_observations(api):
     assert s["your_prices"] is not None
     assert s["your_prices"]["sample_count"] >= 3
     assert s["your_prices"]["baseline"] is not None
-    assert s["your_prices"]["baseline_unit"] == "L"
+    assert s["your_prices"]["baseline_unit"] == "100ml"
 
     # H2 — observation points present + normalised per-unit.
     assert isinstance(s["observation_points"], list)

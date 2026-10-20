@@ -7,6 +7,9 @@ import AxiosHttpClient from './axiosHttpClient';
 import type { Page } from './queryStringBuilder';
 
 export type MealPlanEntryCommand = {
+    /** The saved entry this row edits; it keeps its id across the save. Omit
+     *  for a new entry. Only honoured on update (FU-878). */
+    meal_plan_entry_id?: string;
     recipe_id: string;
     scheduled_for: string;
     servings: number;
@@ -23,7 +26,7 @@ export type MealPlanEntryCommand = {
 export type CreateMealPlanCommand = {
     name?: string; // optional — the planner creates nameless week-plans.
     start_date: string;
-    entries: MealPlanEntryCommand[];
+    entries: Omit<MealPlanEntryCommand, 'meal_plan_entry_id'>[];
 };
 
 export type UpdateMealPlanCommand = {

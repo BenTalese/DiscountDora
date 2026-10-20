@@ -10,12 +10,24 @@ be worse than the N+1 it replaces.
 """
 from uuid import uuid4
 
+import pytest
 import requests
 
 from tests.factories import make_stock_item
+from tests.support import set_money_enabled
 
 BASE = "http://localhost:5170/api"
 LISTS = f"{BASE}/shopping-lists"
+
+
+@pytest.fixture(autouse=True)
+def _money_on(api):
+    """Buy verdicts are money-gated (R-058) and money is off on a fresh
+    install. The flag is install-wide, so put it back afterwards."""
+    original = requests.get(f"{BASE}/app-settings").json()["money_enabled"]
+    set_money_enabled(True)
+    yield
+    set_money_enabled(original)
 
 
 def _stock_level_id(sequence: int = 0) -> str:

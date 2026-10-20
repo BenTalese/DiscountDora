@@ -11,6 +11,8 @@
  * Ordering is deliberate: the markets Dora is actually used in first, then the
  * rest alphabetically by label.
  */
+import type { MeasurementSystem } from 'src/generated/units_table';
+
 export interface RegionChoice {
     /** What gets saved — the bare code / tag. */
     value: string;
@@ -66,3 +68,24 @@ export const LOCALE_CHOICES: readonly RegionChoice[] = [
     { value: 'sv-SE', label: 'Swedish (Sweden), sv-SE' },
     { value: 'zh-CN', label: 'Chinese (Simplified), zh-CN' },
 ];
+
+/** The three systems, described by what you'll actually see rather than by
+ *  their names: "imperial" and "US customary" are the same word to most
+ *  people, and the difference that matters here is the pint and the cup.
+ *  `short` is for a segmented control with no room for the description. */
+export const MEASUREMENT_SYSTEM_CHOICES: ReadonlyArray<{
+    value: MeasurementSystem;
+    label: string;
+    short: string;
+}> = [
+    { value: 'metric', label: 'Metric (ml, L, g, kg, 250 ml cup)', short: 'Metric' },
+    { value: 'imperial', label: 'Imperial (UK): metric plus oz, lb, fl oz, pint', short: 'Imperial (UK)' },
+    { value: 'us', label: 'US customary (fl oz, qt, oz, lb, 240 ml cup)', short: 'US' },
+];
+
+type IntlWithSupported = typeof Intl & { supportedValuesOf?: (key: string) => string[] };
+const supportedValuesOf = (Intl as IntlWithSupported).supportedValuesOf;
+/** Every IANA timezone this browser knows, or just UTC on one that can't list them. */
+export const TIMEZONE_CHOICES: readonly string[] = supportedValuesOf
+    ? supportedValuesOf('timeZone')
+    : ['UTC'];

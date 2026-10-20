@@ -295,6 +295,7 @@ export function useMealPlanner() {
     // cook, several days) survives every edit. Standalone entries have no key.
     function toCommand(e: MealPlanEntry): MealPlanEntryCommand {
         return {
+            meal_plan_entry_id: e.meal_plan_entry_id,
             recipe_id: e.recipe_id,
             scheduled_for: toIso(e.scheduled_for),
             servings: e.servings,

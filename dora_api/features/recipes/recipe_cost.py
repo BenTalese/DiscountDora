@@ -57,7 +57,14 @@ from dora_api.persistence.field import EntityField
 # answerable without reading the code.
 UNPRICED_NO_LINK = "no_link"            # ingredient isn't linked to a stock item
 UNPRICED_NO_PRICE = "no_price"          # linked, but no offer and no observation
-UNPRICED_UNIT_MISMATCH = "unit_mismatch"  # priced, but the units can't bridge
+# Priced, but the ingredient's amount can't be turned into that price. Split
+# by cause (FU-875) so the breakdown can say which gap it is; the bare
+# `unit_mismatch` remains for a pair none of the specific reasons explain.
+UNPRICED_UNIT_MISMATCH = "unit_mismatch"
+UNPRICED_UNIT_NO_PACK_COUNT = "unit_no_pack_count"  # "3" of a pack sold by weight
+UNPRICED_UNIT_NO_PACK_SIZE = "unit_no_pack_size"    # "250 g" of a pack priced per item
+UNPRICED_UNIT_UNKNOWN_DENSITY = "unit_unknown_density"  # cups vs kg, density unknown
+UNPRICED_UNIT_WRONG_FOOD = "unit_wrong_food"        # "2 sticks" of something not butter
 # "Salt to taste", "oil for frying" — an ingredient with no amount on it. It
 # used to default to a quantity of 1, which against a per-item price billed a
 # whole jar of salt and counted the line as *priced*, flattering the coverage
@@ -248,7 +255,14 @@ def _cheaper(candidate: UnitPrice, incumbent: UnitPrice) -> bool:
 
 
 def _line_cost(ingredient, price: UnitPrice, portions: list | None = None) -> float | None:
-    """What this ingredient contributes, or None when it can't be priced.
+    """What this ingredient contributes, or None when it can't be priced."""
+    return _price_line(ingredient, price, portions)[0]
+
+
+def _price_line(
+    ingredient, price: UnitPrice, portions: list | None = None,
+) -> tuple[float | None, str | None]:
+    """``(cost, None)``, or ``(None, reason)`` naming why it can't be priced.
 
     Recipes measure ingredients two different ways and each needs a different
     half of the price:
@@ -310,9 +324,13 @@ def _line_cost(ingredient, price: UnitPrice, portions: list | None = None) -> fl
         in_price_unit = units.convert(grams, "g", price.unit)
         return None if in_price_unit is None else in_price_unit * price.amount
 
+    def weighed_or(reason: str) -> tuple[float | None, str | None]:
+        cost = by_weight()
+        return (cost, None) if cost is not None else (None, reason)
+
     # A part of a shelf item, never the item. Weight is the only honest route.
     if units.is_sub_item_unit(ing_unit):
-        return by_weight()
+        return weighed_or(UNPRICED_UNIT_MISMATCH)
 
     measured = ing_def is not None and ing_def.dimension != units.COUNT
     if measured:
@@ -322,26 +340,40 @@ def _line_cost(ingredient, price: UnitPrice, portions: list | None = None) -> fl
         # doesn't belong to is unpriced rather than over-billed — unless a
         # portion row can say what this food's stick actually weighs.
         if not units.food_specific_mass_applies(ing_unit, name):
-            return by_weight()
+            return weighed_or(UNPRICED_UNIT_WRONG_FOOD)
         if units.normalise_unit(ing_unit) == units.normalise_unit(price.unit):
-            return qty * price.amount
+            return qty * price.amount, None
         # Weight first when the price is per mass: a measured portion row beats
         # the modelled density, and `resolve_grams` owns that precedence so the
         # cost breakdown and the nutrition panel can't disagree about a cup.
         weighed = by_weight()
         if weighed is not None:
-            return weighed
+            return weighed, None
         converted = units.convert(qty, ing_unit, price.unit, ingredient=name)
-        return None if converted is None else converted * price.amount
+        if converted is not None:
+            return converted * price.amount, None
+        return None, _measured_gap(ing_def, price)
 
     # Counted (no unit, an unrecognised unit, or an explicit count unit).
     if ing_def is not None and ing_def.dimension == units.COUNT:
         qty *= ing_def.factor          # "1 dozen" is twelve items
     if price.pack_amount is not None:
-        return qty * price.pack_amount
+        return qty * price.pack_amount, None
     # No per-item price. "2 leeks" against $6.90/kg used to stop here; if the
     # pantry knows a leek is 89 g, it doesn't have to.
-    return by_weight()
+    return weighed_or(UNPRICED_UNIT_NO_PACK_COUNT)
+
+
+def _measured_gap(ing_def, price: UnitPrice) -> str:
+    """Why a measured amount ("250 g", "2 cups") didn't convert to the price."""
+    price_def = units.find_unit(price.unit)
+    if price_def is None:
+        return UNPRICED_UNIT_MISMATCH
+    if price_def.dimension == units.COUNT:
+        return UNPRICED_UNIT_NO_PACK_SIZE
+    if {ing_def.dimension, price_def.dimension} == {units.MASS, units.VOLUME}:
+        return UNPRICED_UNIT_UNKNOWN_DENSITY
+    return UNPRICED_UNIT_MISMATCH
 
 
 def _line_name(ingredient) -> str:
@@ -387,10 +419,10 @@ def _cost_one(
         if ing.quantity is None:
             lines.append(_unpriced_line(ing, UNPRICED_NO_QUANTITY, unit_price))
             continue
-        line_cost = _line_cost(
+        line_cost, reason = _price_line(
             ing, unit_price, (portions_by_item or {}).get(ing.stock_item_id))
         if line_cost is None:
-            lines.append(_unpriced_line(ing, UNPRICED_UNIT_MISMATCH, unit_price))
+            lines.append(_unpriced_line(ing, reason, unit_price))
             continue
         total += line_cost
         priced += 1

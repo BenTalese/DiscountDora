@@ -3350,6 +3350,30 @@ one-off, or purely product/UX decisions (those go to the Charter check + worklog
   `var()`-valued token in `:root` that the `[data-theme]` block lacks.
 - **Established:** 2026-10-17 (onboarding batch). See ADR-091.
 
+### R-095: Live data is preserved: every migration carries existing rows forward
+- **Rule:** a household uses the production deploy for real, so a schema change
+  must keep the data already in it. A migration that renames, splits, moves or
+  retypes a column backfills the new shape from the old one in the same
+  migration; dropping a column or table is allowed only when its data is truly
+  dead (derived, unused, or moved elsewhere by that migration). "Reseed, don't
+  backfill" is a dev-data tactic, never a migration strategy.
+- **Why:** until 2026-10-20 the posture was pre-release with no real users, so
+  non-preserving migrations were allowed and several open follow-ups planned
+  them. From 2026-10-20 the owner's household runs on the production server,
+  where the DB is kept across deploys and upgraded by Alembic on boot. A
+  migration that drops data there loses real records, and the in-app backups
+  sit in the same volume.
+- **How to comply:** write the backfill into the migration (SQL that works on
+  both SQLite and Postgres, R-005); give the downgrade a real inverse where the
+  data allows it; run the upgrade against a copy of a populated DB, not only a
+  fresh one. Dev resets with `drop_all` (R-006) are unaffected. R-007's "no
+  compat shims" still applies to code; it never licenses dropping stored data.
+- **Violation signal:** a migration that drops or recreates a column with no
+  `UPDATE`/`INSERT ... SELECT` carrying values across; a plan or follow-up that
+  says "no back-fill", "non-preserving", or "pre-release, no real users".
+- **Established:** 2026-10-21 (household starts using the production deploy).
+  See ADR-092.
+
 
 ### ADR-001 — Adopt engineering standards + mandatory explain-or-flag gate
 - **Date / task:** 2026-06-06 (user request after repeated theme/component regressions)
@@ -6166,3 +6190,18 @@ A non-binding cookbook of solutions to recurring problems. Not rules — just a
   `themes.scss` blocks of equal specificity; rejected.
 - **Consequences:** a new derived token has to be added in two places; R-094
   names the signal.
+
+### ADR-092: The production deploy holds real data; migrations preserve it (promotes R-095)
+- **Date / task:** 2026-10-21 (owner: the household starts using the app)
+- **Status:** accepted
+- **Context:** the deploy script now runs the production profile with the DB
+  kept across deploys (`WIPE_DB=false`), so every deploy upgrades a live
+  database through Alembic. The standing pre-release posture allowed clean
+  non-preserving migrations, and some open follow-ups were planned on that basis.
+- **Decision:** end that posture for stored data. Every migration preserves
+  existing rows (R-095). The code-level "no compat shims" rule (R-007) stands.
+- **Alternatives considered:** keep the posture and reset the household's data
+  when a migration needs it. Rejected: it makes the app unusable for real
+  tracking, which is the reason to start using it.
+- **Consequences:** schema changes cost a backfill each. Open follow-ups that
+  plan a non-preserving migration are revisited against R-095 when picked up.

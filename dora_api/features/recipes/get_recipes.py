@@ -116,6 +116,12 @@ class RecipeIngredientDto:
     # set includes expired items); this only splits amber "use it soon" from
     # red "it's gone off", so the client does no date arithmetic of its own.
     is_expired: bool = False
+    # Which one of the stock item the recipe means (`ingredient_choice`).
+    # `label` is the name the recipe shows for it (null: the stock item's
+    # name); the picks are ids only, carried onto a shopping line.
+    label: str | None = None
+    preferred_buy_id: UUID | None = None
+    selected_product_id: UUID | None = None
 
     @classmethod
     def from_entity(cls, ingredient: RecipeIngredient) -> 'RecipeIngredientDto':
@@ -138,6 +144,9 @@ class RecipeIngredientDto:
             is_optional = getattr(ingredient, "is_optional", False),
             raw_text = getattr(ingredient, "raw_text", None),
             expiry_date = _Item.expiry_date.isoformat() if _Item and _Item.expiry_date else None,
+            label = getattr(ingredient, "label", None),
+            preferred_buy_id = getattr(ingredient, "preferred_buy_id", None),
+            selected_product_id = getattr(ingredient, "selected_product_id", None),
         )
 
 

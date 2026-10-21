@@ -63,16 +63,18 @@ def apply_line_defaults(repository: Repository, lines: List[ShoppingListLine]) -
     # unlinking clears it on every line of the item at the source
     # (`unlink_product_from_stock_item`). So the remembered id needs no link
     # check here — only the product itself, for its store.
-    remembered_product_ids = list({
-        p.selected_product_id for p in latest.values() if p.selected_product_id
+    # A caller may arrive with its own pick (a recipe ingredient's product);
+    # its store is loaded alongside the remembered ones.
+    product_ids = list({
+        p.selected_product_id for p in [*latest.values(), *targets] if p.selected_product_id
     })
     products: Dict = {}
-    if remembered_product_ids:
+    if product_ids:
         products = {
             p.id: p
             for p in repository.get(Product)
             .include(Product.Fields.STORE)
-            .all(EntityField(Product, "id").in_(remembered_product_ids))
+            .all(EntityField(Product, "id").in_(product_ids))
         }
 
     for line in targets:
@@ -86,5 +88,8 @@ def apply_line_defaults(repository: Repository, lines: List[ShoppingListLine]) -
                 line.selected_product_id = product.id
                 if line.planned_store_id is None:
                     line.planned_store_id = product.store.id
+        picked = products.get(line.selected_product_id)
+        if line.planned_store_id is None and picked is not None:
+            line.planned_store_id = picked.store.id
         if line.planned_store_id is None and item is not None:
             line.planned_store_id = item.usual_store_id

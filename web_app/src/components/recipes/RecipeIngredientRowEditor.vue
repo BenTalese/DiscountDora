@@ -89,6 +89,38 @@
                 </div>
             </div>
 
+            <!-- ── Which one ─────────────────────────────────────────────
+                 Narrows a pantry item to what this recipe actually means
+                 ("Bega Tasty" under Cheese). A pick from the item's preferred
+                 buys (or, with products, its linked products) fills in Called,
+                 which is what the row shows and can be any words of the
+                 recipe's own. Neither changes whether you can cook it: any
+                 cheese still counts. -->
+            <div v-if="draft.stock_item_id" class="row q-gutter-sm">
+                <BaseSelect
+                    v-if="choiceOptions.length > 0"
+                    v-model="pickedChoice"
+                    class="col"
+                    :label="productsEnabled ? 'Product' : 'Preferred buy'"
+                    :options="choiceOptions"
+                    emit-value
+                    map-options
+                    clearable
+                    :loading="loadingChoices"
+                />
+                <q-input
+                    v-model="draft.label"
+                    class="col"
+                    dense
+                    outlined
+                    clearable
+                    maxlength="255"
+                    label="Called"
+                    :placeholder="labelPlaceholder"
+                    hide-bottom-space
+                />
+            </div>
+
             <!-- ── How much ────────────────────────────────────────────── -->
             <div class="row q-gutter-sm">
                 <q-input
@@ -219,6 +251,9 @@
     import { ICONS } from 'src/style/icons';
     import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';
     import { useUnitOptions } from 'src/composables/useUnitOptions';
+    import { useFeatureFlags } from 'src/composables/useFeatureFlags';
+    import StockItemApiService from 'src/services/api/stockItemApiService';
+    import type { LinkedProduct, PreferredBuy } from 'src/models/stockItemDetail';
     import { useStockItemStore } from 'src/stores/stockItemStore';
     import { useStockLevelStore } from 'src/stores/stockLevelStore';
     import type {
@@ -248,6 +283,8 @@
     const stockLevelStore = useStockLevelStore();
     const { stockItems } = storeToRefs(stockItemStore);
     const { stockLevels } = storeToRefs(stockLevelStore);
+    const { products: productsEnabled } = useFeatureFlags();
+    const stockItemApi = new StockItemApiService();
 
     const open = computed({
         get: () => props.modelValue,
@@ -293,10 +330,92 @@
                 notes: row.notes ?? null,
                 section_client_id: row.section_client_id ?? null,
                 is_optional: row.is_optional ?? false,
+                label: row.label ?? null,
+                preferred_buy_id: row.preferred_buy_id ?? null,
+                selected_product_id: row.selected_product_id ?? null,
             };
         },
         { immediate: true },
     );
+
+    // ── Which one ───────────────────────────────────────────────────────
+    // The item's preferred buys and linked products, fetched when the item is
+    // picked. Which list is offered follows the install, as on a shopping
+    // line: products when it has them, preferred buys otherwise.
+    const preferredBuys = ref<PreferredBuy[]>([]);
+    const linkedProducts = ref<LinkedProduct[]>([]);
+    const loadingChoices = ref(false);
+    let choicesFor: string | null = null;
+
+    watch(
+        () => [draft.value, draft.value?.stock_item_id ?? null] as const,
+        async ([d, itemId], previous) => {
+            // Re-picking the item within one edit makes the old pick
+            // meaningless; the label is the user's own words and survives.
+            // A re-seeded draft (the dialog opening on another row) is not a
+            // re-pick, so the draft's identity is part of the check.
+            const [prevDraft, prevItem] = previous ?? [null, null];
+            if (d && d === prevDraft && prevItem !== null && itemId !== prevItem) {
+                d.preferred_buy_id = null;
+                d.selected_product_id = null;
+            }
+            preferredBuys.value = [];
+            linkedProducts.value = [];
+            choicesFor = itemId;
+            if (!itemId) return;
+            loadingChoices.value = true;
+            try {
+                const detail = await stockItemApi.getDetailAsync(itemId);
+                if (choicesFor !== itemId) return;
+                preferredBuys.value = [...(detail.preferred_buys ?? [])]
+                    .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }));
+                linkedProducts.value = detail.products ?? [];
+            } catch {
+                // No choices is a usable state: the Called field still works.
+            } finally {
+                if (choicesFor === itemId) loadingChoices.value = false;
+            }
+        },
+        { immediate: true },
+    );
+
+    const choiceOptions = computed(() => (productsEnabled.value
+        ? linkedProducts.value.map((p) => ({
+            label: p.size ? `${p.name} · ${p.size}` : p.name,
+            value: p.product_id,
+            name: p.name,
+        }))
+        : preferredBuys.value.map((pb) => ({
+            label: pb.label,
+            value: pb.preferred_buy_id,
+            name: pb.label,
+        }))));
+
+    const pickedChoice = computed<string | null>({
+        get: () => (productsEnabled.value
+            ? draft.value?.selected_product_id
+            : draft.value?.preferred_buy_id) ?? null,
+        set: (id) => {
+            const d = draft.value;
+            if (!d) return;
+            // Picking names the row: the Called field takes the pick's name
+            // unless the user has typed a different one of their own. One
+            // displayed value, so nothing has to choose between label and pick
+            // at read time (R-053).
+            const before = choiceOptions.value.find((o) => o.value === pickedChoice.value)?.name ?? null;
+            const after = choiceOptions.value.find((o) => o.value === id)?.name ?? null;
+            const label = (d.label ?? '').trim();
+            if (label === '' || label === before) d.label = after;
+            if (productsEnabled.value) d.selected_product_id = id;
+            else d.preferred_buy_id = id;
+        },
+    });
+
+    const labelPlaceholder = computed(() => {
+        const name = stockItems.value.find((s) => s.stock_item_id === draft.value?.stock_item_id)?.name;
+        return name ? `e.g. a kind of ${name.toLowerCase()}` : '';
+    });
+
 
     const isFreeText = computed(() => !!draft.value?.raw_text && !draft.value.stock_item_id);
 
@@ -454,6 +573,14 @@
             return;
         }
         const text = (d.raw_text ?? '').trim();
+        // A free-text row has no item to narrow, so it carries no choice.
+        const linked = !!d.stock_item_id;
+        const label = linked ? ((d.label ?? '').trim() || null) : null;
+        const choice = {
+            label,
+            preferred_buy_id: linked ? d.preferred_buy_id : null,
+            selected_product_id: linked ? d.selected_product_id : null,
+        };
         emit('save', {
             ...d,
             // Keep `raw_text` as the readable original for a linked row (a
@@ -462,6 +589,7 @@
             raw_text: text.length > 0 ? text : null,
             unit: (d.unit ?? '').trim() || null,
             notes: (d.notes ?? '').trim() || null,
+            ...choice,
         });
         open.value = false;
     }

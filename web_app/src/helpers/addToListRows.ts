@@ -4,7 +4,7 @@
 // missing, optional, or unlinked (R-003).
 
 import type {
-    AddToListRow, AddToListUnlinked,
+    AddToListRow, AddToListUnlinked, LineChoicePick,
 } from 'src/components/shoppingList/addToListTypes';
 import { formatQuantity } from 'src/helpers/formatQuantity';
 import type { MealPlanIngredient, UnlinkedIngredient } from 'src/models/mealPlan';
@@ -57,6 +57,22 @@ export function rowsFromRecipe(recipe: Recipe | null): AddToListRow[] {
         });
     }
     return sortRows(Array.from(byId.values()));
+}
+
+/** Each item's chosen preferred buy or product, so the shopping line it
+ *  becomes starts with the same pick. The first row of an item that chose
+ *  anything wins, matching the dedupe in `rowsFromRecipe`. */
+export function lineChoicesFromRecipe(recipe: Recipe | null): Map<string, LineChoicePick> {
+    const out = new Map<string, LineChoicePick>();
+    for (const ing of recipe?.ingredients ?? []) {
+        if (ing.stock_item_id === null || out.has(ing.stock_item_id)) continue;
+        if (!ing.preferred_buy_id && !ing.selected_product_id) continue;
+        out.set(ing.stock_item_id, {
+            preferred_buy_id: ing.preferred_buy_id,
+            selected_product_id: ing.selected_product_id,
+        });
+    }
+    return out;
 }
 
 /** The recipe's own unlinked rows, in the dialog's shape. */

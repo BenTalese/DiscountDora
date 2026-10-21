@@ -3,6 +3,7 @@ import { useQuasar } from 'quasar';
 // (add_to_list vs remove_from_list), so every add/remove seam here
 // drops the item's cached verdict.
 import { invalidateBuyVerdict } from 'src/composables/useBuyVerdict';
+import type { LineChoicePick } from 'src/components/shoppingList/addToListTypes';
 import type { AddLineCommand } from 'src/services/api/shoppingListApiService';
 import ShoppingListApiService from 'src/services/api/shoppingListApiService';
 import { useShoppingListStore } from 'src/stores/shoppingListStore';
@@ -67,12 +68,15 @@ export function useShoppingListActions() {
      * target may not exist yet; creating it here keeps both callers from
      * hand-rolling create-then-add in slightly different orders.
      *
+     * `choices` gives an item the preferred buy or product its recipe picked.
+     *
      * Returns the list the items landed on, so a caller can navigate to it.
      */
     async function addStockItemsToList(
         targetListId: string | null,
         stockItemIds: string[],
         newListName: string,
+        choices?: Map<string, LineChoicePick>,
     ): Promise<string | null> {
         let listId = targetListId;
         if (listId === null) {
@@ -84,7 +88,7 @@ export function useShoppingListActions() {
                 return null;
             }
         }
-        await addItems(listId, stockItemIds.map((id) => ({ stock_item_id: id })));
+        await addItems(listId, stockItemIds.map((id) => ({ stock_item_id: id, ...choices?.get(id) })));
         return listId;
     }
 

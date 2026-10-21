@@ -54,6 +54,9 @@ class AddLineRequest(BaseModel):
     product_id: UUID | None = None
     quantity: int | None = Field(default=1, ge=1)
     selected_product_id: UUID | None = None
+    # A recipe ingredient's picked preferred buy, carried onto the line.
+    # Reference-only, like the column.
+    preferred_buy_id: UUID | None = None
     # Omitted by every current caller; the handler falls back to the stock
     # item's `usual_store_id`. Present so a caller that *knows* the store —
     # a meal-plan build, a template with a store on it — can say so rather
@@ -135,6 +138,7 @@ class AddLineHandler:
             product_id = request.product_id,
             quantity = request.quantity,
             selected_product_id = request.selected_product_id,
+            preferred_buy_id = request.preferred_buy_id,
             planned_store_id = request.planned_store_id,
             sequence = next_sequence,
             added_at = datetime.now(timezone.utc),

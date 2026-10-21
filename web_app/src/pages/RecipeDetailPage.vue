@@ -517,6 +517,7 @@
                                         </span>
                                         <span class="rn__ingname">
                                             <span class="rn__ingtext">{{ ingredientLabel(row) }}</span>
+                                            <span v-if="ingredientItemCaption(row)" class="rn__ingitem">{{ ingredientItemCaption(row) }}</span>
                                             <q-chip v-if="row.is_optional" dense square size="sm" class="rn__chip">Optional</q-chip>
                                             <!-- A row with neither an item nor text is
                                                  the one thing that can refuse the save,
@@ -1178,7 +1179,7 @@
     import CookModeGuardDialog from 'src/components/recipes/CookModeGuardDialog.vue';
     import AddToListDialog from 'src/components/shoppingList/AddToListDialog.vue';
     import type { AddToListConfirm } from 'src/components/shoppingList/addToListTypes';
-    import { rowsFromRecipe, unlinkedFromRecipe } from 'src/helpers/addToListRows';
+    import { lineChoicesFromRecipe, rowsFromRecipe, unlinkedFromRecipe } from 'src/helpers/addToListRows';
     import RecipeIngredientRowEditor from 'src/components/recipes/RecipeIngredientRowEditor.vue';
     import RecipeMissingIngredientChip from 'src/components/recipes/RecipeMissingIngredientChip.vue';
     import AddToListButton from 'src/components/AddToListButton.vue';
@@ -1580,12 +1581,27 @@
     // a photo that exists is a photo that renders, so the two collapse.
     const hasPhoto = computed(() => photoUrl.value !== null);
 
+    function stockItemName(row: IngredientForm): string | null {
+        if (!row.stock_item_id) return null;
+        return stockItems.value.find((s) => s.stock_item_id === row.stock_item_id)?.name ?? null;
+    }
+
+    /** The recipe's own name for the row when it has chosen one ("Bega
+     *  Tasty" under Cheese), else the pantry item's. */
     function ingredientLabel(row: IngredientForm): string {
         if (row.stock_item_id) {
-            return stockItems.value.find((s) => s.stock_item_id === row.stock_item_id)?.name
-                ?? row.raw_text ?? 'Unknown item';
+            return row.label || stockItemName(row) || row.raw_text || 'Unknown item';
         }
         return row.raw_text || 'Unnamed ingredient';
+    }
+
+    /** The pantry item under a chosen name, shown beside it so "Bega Tasty"
+     *  still says it is the Cheese the pantry tracks. Null when the label
+     *  already is the item's name. */
+    function ingredientItemCaption(row: IngredientForm): string | null {
+        const item = stockItemName(row);
+        if (!row.label || !item) return null;
+        return row.label.trim().toLowerCase() === item.trim().toLowerCase() ? null : item;
     }
 
     /** Ingredients bucketed by section, in section order, with the unsectioned
@@ -2156,6 +2172,7 @@
                 payload.targetListId,
                 payload.stockItemIds,
                 pickerRef.value?.newListName ?? 'Shopping list',
+                lineChoicesFromRecipe(recipe.value),
             );
             pickerOpen.value = false;
             pickerInitialCheckedIds.value = undefined;
@@ -2511,6 +2528,8 @@
     }
     .rn__ingname { min-width: 0; }
     .rn__ingnote { display: block; font-size: 0.8125rem; color: var(--text-muted); }
+    /* The pantry item under a chosen name: same line, quieter. */
+    .rn__ingitem { margin-left: var(--space-1, 4px); font-size: 0.8125rem; color: var(--text-muted); }
     .rn__chip { margin-left: var(--space-1, 4px); }
     /* The row's one severity signal is `RecipeMissingIngredientChip`, which
        owns its own weight; the wrapper here only spaces it off the name and

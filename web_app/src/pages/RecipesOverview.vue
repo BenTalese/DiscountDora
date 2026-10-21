@@ -558,7 +558,7 @@
     import { useShoppingListActions } from 'src/composables/useShoppingListActions';
     import type { Recipe, RecipeTagCatalogue } from 'src/models/recipe';
     import type { AddToListConfirm } from 'src/components/shoppingList/addToListTypes';
-    import { rowsFromRecipe, unlinkedFromRecipe } from 'src/helpers/addToListRows';
+    import { lineChoicesFromRecipe, rowsFromRecipe, unlinkedFromRecipe } from 'src/helpers/addToListRows';
     import RecipeApiService, { type ImportedRecipe } from 'src/services/api/recipeApiService';
     import RecipeImportDialog from 'src/components/recipes/RecipeImportDialog.vue';
     import { useMealSlotStore } from 'src/stores/mealSlotStore';
@@ -1605,6 +1605,7 @@
                 payload.targetListId,
                 payload.stockItemIds,
                 pickerRef.value?.newListName ?? 'Shopping list',
+                lineChoicesFromRecipe(pickerRecipe.value),
             );
             pickerOpen.value = false;
             pickerRecipe.value = null;

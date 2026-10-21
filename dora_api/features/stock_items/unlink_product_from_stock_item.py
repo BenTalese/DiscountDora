@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from typing import List
 from uuid import UUID
 
+from dora_api.domain.entities.recipe_ingredient import RecipeIngredient
 from dora_api.domain.entities.shopping_list import ShoppingListLine
 from dora_api.domain.entities.shopping_list_template import ShoppingListTemplateLine
 from dora_api.domain.entities.stock_item import StockItem
@@ -67,6 +68,13 @@ class UnlinkProductFromStockItemHandler:
         )
         for template_line in _TemplateLines:
             template_line.selected_product_id = None
+        # So do recipe ingredients. A product links to exactly one stock item
+        # (`uq_stock_item_product_product_id`), so the product id alone is enough.
+        _Ingredients: List[RecipeIngredient] = self.repository.get(RecipeIngredient).all(
+            EntityField(RecipeIngredient, RecipeIngredient.Fields.SELECTED_PRODUCT_ID).eq(product_id)
+        )
+        for ingredient in _Ingredients:
+            ingredient.selected_product_id = None
 
         self.repository.save_changes()
         return UnlinkProductResponse()

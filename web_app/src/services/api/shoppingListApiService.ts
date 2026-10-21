@@ -43,6 +43,7 @@ export type AddLineCommand = {
     product_id?: string | null;
     quantity?: number | null;
     selected_product_id?: string | null;
+    preferred_buy_id?: string | null;
 };
 
 export type UpdateLineCommand = {

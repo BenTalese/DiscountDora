@@ -42,3 +42,10 @@ export type AddToListConfirm = {
     stockItemIds: string[];
     targetListId: string | null;
 };
+
+/** A pick a new line should start with: a recipe ingredient's chosen
+ *  preferred buy or product. */
+export type LineChoicePick = {
+    preferred_buy_id: string | null;
+    selected_product_id: string | null;
+};

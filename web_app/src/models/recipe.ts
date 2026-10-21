@@ -46,6 +46,13 @@ export type RecipeIngredient = {
     /** Already past its date. True implies `is_expiring`; it only splits
      *  amber "use it soon" from red "it's gone off". */
     is_expired: boolean;
+    /** Which one of the stock item this recipe means. `label` is the name the
+     *  recipe shows for it (null: show `stock_item_name`); picking a preferred
+     *  buy or product in the editor fills it in. The picks are ids only, carried
+     *  onto a shopping line when the recipe is added to one. */
+    label: string | null;
+    preferred_buy_id: string | null;
+    selected_product_id: string | null;
 };
 
 /** C-4 Chunk 10 — a named group within a recipe (DEC-3 option A).

@@ -45,6 +45,9 @@ export type IngredientPatch = {
     notes: string | null;
     section_client_id: string | null;
     is_optional: boolean;
+    label: string | null;
+    preferred_buy_id: string | null;
+    selected_product_id: string | null;
 };
 
 export type SectionForm = {
@@ -143,6 +146,9 @@ export function hydrateRecipeForm(form: RecipeForm, source: Recipe): void {
         client_id: i.recipe_ingredient_id,
         section_client_id: i.section_id,
         is_optional: i.is_optional ?? false,
+        label: i.label,
+        preferred_buy_id: i.preferred_buy_id,
+        selected_product_id: i.selected_product_id,
     }));
     const sections: SectionForm[] = (source.sections ?? []).map((s) => ({
         client_id: s.section_id,

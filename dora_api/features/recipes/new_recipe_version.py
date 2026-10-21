@@ -127,6 +127,9 @@ class NewRecipeVersionHandler:
                     unit=ing.unit,
                     is_optional=ing.is_optional,
                     raw_text=ing.raw_text,
+                    label=ing.label,
+                    preferred_buy_id=ing.preferred_buy_id,
+                    selected_product_id=ing.selected_product_id,
                 )
                 cloned_ingredients.append(cloned)
             for ing in cloned_ingredients:

@@ -5,6 +5,15 @@ semver — major bumps signal schema or breaking-config changes.
 
 ## [Unreleased]
 
+### Added
+- **Recipe ingredients can say which one (2026-10-21).** An ingredient linked to
+  a pantry item can carry its own name ("tasty cheddar" under Cheese) and pick
+  one of the item's preferred buys, or one of its linked products on a products
+  install. Picking fills in the name; the recipe and cook mode show it, with the
+  pantry item beside it. Adding the recipe to a shopping list starts each line
+  with the same pick. Whether you can cook it still only asks about the pantry
+  item.
+
 ### Changed
 - **Prices always per 100g / 100ml (2026-10-21).** Logged prices, price
   history, reports and recipe costs no longer switch to per kg or per L for

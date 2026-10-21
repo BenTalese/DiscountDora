@@ -932,6 +932,10 @@ def configure_mappings(db: SQLAlchemy):
         # user pasted / imported it. Backfilled from ``StockItem.name`` for
         # pre-Chunk-4 rows so labels survive unlinking / renaming.
         Column("raw_text", String(500), nullable=True),
+        # Which one of the stock item the recipe means (see the entity).
+        Column("label", String(255), nullable=True),
+        Column("preferred_buy_id", UUIDType, nullable=True),
+        Column("selected_product_id", UUIDType, ForeignKey("Product.id", ondelete="SET NULL"), nullable=True),
         CheckConstraint(
             "stock_item_id IS NOT NULL OR raw_text IS NOT NULL",
             name="recipe_ingredient_anchor",
@@ -1341,6 +1345,7 @@ def configure_mappings(db: SQLAlchemy):
     Index("ix_Recipe_recipe_collection_id", _t["Recipe"].c.recipe_collection_id)
     Index("ix_RecipeIngredient_recipe_id", _t["RecipeIngredient"].c.recipe_id)
     Index("ix_RecipeIngredient_section_id", _t["RecipeIngredient"].c.section_id)
+    Index("ix_RecipeIngredient_selected_product_id", _t["RecipeIngredient"].c.selected_product_id)
     Index("ix_RecipeIngredient_stock_item_id", _t["RecipeIngredient"].c.stock_item_id)
     Index("ix_RecipeStep_section_id", _t["RecipeStep"].c.section_id)
     Index("ix_ShoppingListLine_product_id", _t["ShoppingListLine"].c.product_id)

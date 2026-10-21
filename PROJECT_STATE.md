@@ -1,6 +1,6 @@
 ﻿# Dashy Dora — Project State
 
-**Last reviewed: 2026-10-21 (owner decisions batch: 12 FUs closed, five backlog fixes; production deploy confirmed healthy on altair).**
+**Last reviewed: 2026-10-21 (recipe ingredients gain a "which one" name / preferred buy / product; production deploy confirmed healthy on altair).**
 workstreams, and what needs your attention. This is *not* a changelog;
 shipped-work history lives in `CHANGELOG.md` + `DORA_WORKLOG.md`.
 

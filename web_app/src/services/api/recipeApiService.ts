@@ -45,6 +45,11 @@ export type CreateRecipeIngredientCommand = {
     /** Cookbook revision §1.9 — optional flag. Default false; omitted by
      *  legacy editors (the server defaults to false anyway). */
     is_optional?: boolean;
+    /** Which one of the stock item this recipe means. A preferred buy or
+     *  product must belong to `stock_item_id` (422 otherwise). */
+    label?: string | null;
+    preferred_buy_id?: string | null;
+    selected_product_id?: string | null;
 };
 
 /** C-4 Chunk 10 — a named section on the create/update payload. */

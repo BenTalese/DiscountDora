@@ -412,7 +412,7 @@
                                                 {{ sessionSwaps.get(row.ingredient.stock_item_id)!.substituteName }}
                                             </q-chip>
                                             <span class="text-caption dora-text-muted">
-                                                instead of {{ row.ingredient.stock_item_name }}
+                                                instead of {{ row.ingredient.label ?? row.ingredient.stock_item_name }}
                                             </span>
                                             <BaseButton
                                                 variant="icon"
@@ -425,7 +425,7 @@
                                             </BaseButton>
                                         </template>
                                         <template v-else>
-                                            <span class="ingredient-name">{{ row.ingredient.stock_item_name }}</span>
+                                            <span class="ingredient-name">{{ row.ingredient.label ?? row.ingredient.stock_item_name }}</span>
                                             <span
                                                 v-if="row.ingredient.is_optional"
                                                 class="text-caption dora-text-muted"
@@ -1209,8 +1209,10 @@
             // Chunk 4 — unlinked ingredients have no stock_item_name.
             // Fall back to raw_text for matching so paste-imported
             // recipes still get highlighted where possible.
-            const name = ing.stock_item_name ?? ing.raw_text ?? '';
-            if (name && text.includes(name.toLowerCase())) {
+            // A recipe that calls its cheese "cheddar" says "cheddar" in
+            // its steps, so the chosen name is tried as well as the item's.
+            const names = [ing.label, ing.stock_item_name ?? ing.raw_text];
+            if (names.some((n) => n && text.includes(n.toLowerCase()))) {
                 matched.add(ing.recipe_ingredient_id);
             }
         }
@@ -1644,7 +1646,7 @@
         const stockItemId = ingredient.stock_item_id;
         const swap = stockItemId !== null ? sessionSwaps.value.get(stockItemId) : undefined;
         if (swap) return swap.substituteName;
-        return ingredient.stock_item_name ?? ingredient.raw_text ?? 'an unnamed ingredient';
+        return ingredient.label ?? ingredient.stock_item_name ?? ingredient.raw_text ?? 'an unnamed ingredient';
     }
 
     /** "Ingredients" — read the current step's ingredients, quantities scaled

@@ -41,7 +41,45 @@ next.
 
 ---
 
-## 2026-10-21 (latest): **Plan axis finished, prices per 100g, commit + push**
+## 2026-10-21 (latest): **Recipe ingredient "which one" (label / preferred buy / product)**
+
+**Status: built, gated, driven live, pushed.** pytest 2422 passed; vitest
+747/66; vue-tsc + eslint clean. Driven on the 5171/5174 scratch instance
+(products install): pick a product, Called fills, row shows it with the pantry
+item beside it, survives save, reload and reopen.
+
+**What.** Owner ask: give a recipe ingredient a specific name, from the stock
+item's preferred buys / products or free text. New nullable
+`RecipeIngredient.label` / `preferred_buy_id` / `selected_product_id`
+(migration `f2a6c8e1b4d7`, mirrors the shopping-line choice columns). Write
+rule in `features/recipes/ingredient_choice.py`: a pick must belong to the
+ingredient's item (422 otherwise), none on an unlinked row. Unlinking a product
+clears recipe picks at source. `AddLineRequest.preferred_buy_id` added;
+`_line_defaults` sets the planned store from a caller-picked product. Editor:
+Product / Preferred buy select (follows the install, like `LineChoicePicker`)
+plus a Called field; recipe add-to-list passes picks via
+`lineChoicesFromRecipe`.
+
+**Decisions.** Not reusing `raw_text` for the name: the importer stores the
+whole pasted line there. First cut resolved a server-side `called` ladder
+(product > preferred buy > label) and echoed it client-side before save; that is
+an R-053/R-089 violation, so it was removed. Now picking *fills the label*, the
+label is the one displayed value, and picks are ids carried to shopping lines.
+A renamed preferred buy no longer renames recipes (accepted: the label is the
+recipe's own words). Cookability unchanged. No proposal doc / coverage table:
+owner asked for a direct build of a small, single-surface feature.
+
+**Close-gate.** R-003 (one write rule), R-053 (no client ladder), R-032 (link
+checked via the join table, not a noload include), R-095 (additive nullable
+columns), R-034 (index in the model). No new rule. Two verify lines (products-off
+preferred-buy path, pick reaching the list).
+
+**Next up:** the cookbook import tool (scratchpad, local review page) for
+`Cookbook/`; it can now write `label` per ingredient.
+
+---
+
+## 2026-10-21: **Plan axis finished, prices per 100g, commit + push**
 
 **Status: built, gated, pushed.** pytest 2413 passed; vitest 747/66; vue-tsc +
 eslint clean on touched files. Not driven in a browser.

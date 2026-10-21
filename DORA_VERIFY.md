@@ -115,6 +115,11 @@ flash, store-group move confirmed). What a headless desktop can't settle:
 
 ---
 
+## Recipe ingredient "which one" (2026-10-21)
+
+- [ ] **Preferred buy on a products-off install.** On an ingredient whose item has preferred buys, pick one; Called fills in and the row shows it.
+- [ ] **Pick reaches the list.** Add that recipe's missing items to a list; the line shows the same preferred buy.
+
 ## Planner + recipe cost (2026-10-21) — origin FU-878, FU-875
 
 - [ ] **Planner edits still save.** Change servings, move a meal, toggle Cook fresh and remove a day of a batch cook; each saves without "Could not update the plan".

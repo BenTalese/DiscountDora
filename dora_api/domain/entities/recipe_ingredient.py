@@ -33,6 +33,15 @@ class RecipeIngredient(BaseEntity):
     # deleted. Preserved even when a row is linked — the raw text is
     # often more informative than the bare stock-item name.
     raw_text: str | None = None
+    # Which one of the linked stock item this recipe means: a name of its own
+    # ("tasty cheddar" under Cheese), one of the item's preferred buys, or a
+    # linked product. All optional and independent of cookability, which stays
+    # at the stock-item level. `preferred_buy_id` is reference-only like the
+    # shopping line's; `selected_product_id` is cleared when the product is
+    # unlinked from the item.
+    label: str | None = None
+    preferred_buy_id: UUID | None = None
+    selected_product_id: UUID | None = None
 
     class Fields(BaseEntity.Fields):
         NOTES = "notes"
@@ -42,3 +51,6 @@ class RecipeIngredient(BaseEntity):
         SECTION_ID = "section_id"
         IS_OPTIONAL = "is_optional"
         RAW_TEXT = "raw_text"
+        LABEL = "label"
+        PREFERRED_BUY_ID = "preferred_buy_id"
+        SELECTED_PRODUCT_ID = "selected_product_id"

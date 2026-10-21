@@ -18,6 +18,9 @@ from dora_api.domain.entities.recipe_ingredient import RecipeIngredient
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.features.meal_slots.slot_validation import (
     allowed_slot_names, get_valid_slot_names, invalid_slot_message)
+from dora_api.features.recipes.ingredient_choice import (
+    InvalidIngredientChoice, resolve_ingredient_choice,
+)
 from dora_api.features.recipes.recipe_tag_access import set_tag_ids_for_recipe
 from dora_api.features.recipes.recipe_tool_access import (
     set_tool_ids_for_recipe, sync_recipe_tools_from_steps,
@@ -68,6 +71,10 @@ class UpdateRecipeIngredientRequest(BaseModel):
     section_client_id: str | None = Field(default = None, max_length = 64)
     # Cookbook revision §1.9 — optional flag (default false).
     is_optional: bool = False
+    # Which one of the stock item this recipe means (`ingredient_choice`).
+    label: str | None = Field(default = None, max_length = 255)
+    preferred_buy_id: UUID | None = None
+    selected_product_id: UUID | None = None
 
     @model_validator(mode="after")
     def _require_anchor(self) -> "UpdateRecipeIngredientRequest":
@@ -171,6 +178,7 @@ class UpdateRecipeResponse:
     invalid_step_message: str | None = None
     invalid_section_message: str | None = None
     invalid_vocabulary_message: str | None = None
+    invalid_choice_message: str | None = None
 
 
 # Attributes that may safely be assigned from the request as-is, including
@@ -327,6 +335,13 @@ class UpdateRecipeHandler:
                     if not _StockItem:
                         _MissingIds.append(_IngredientRequest.stock_item_id)
                         continue
+                try:
+                    _Choice = resolve_ingredient_choice(
+                        self.repository, _StockItem, _IngredientRequest.label,
+                        _IngredientRequest.preferred_buy_id, _IngredientRequest.selected_product_id,
+                    )
+                except InvalidIngredientChoice as exc:
+                    return UpdateRecipeResponse(invalid_choice_message = str(exc))
                 _NewIngredient = RecipeIngredient(
                     notes = _IngredientRequest.notes,
                     quantity = _IngredientRequest.quantity,
@@ -335,6 +350,9 @@ class UpdateRecipeHandler:
                     section_id = _resolve_section(_IngredientRequest.section_client_id),
                     is_optional = _IngredientRequest.is_optional,
                     raw_text = (_IngredientRequest.raw_text or None),
+                    label = _Choice.label,
+                    preferred_buy_id = _Choice.preferred_buy_id,
+                    selected_product_id = _Choice.selected_product_id,
                 )
                 _NewIngredients.append(_NewIngredient)
                 _NewPairs.append((_IngredientRequest.client_id, _NewIngredient))
@@ -530,6 +548,10 @@ def update_recipe(recipe_id: UUID):
     if _Response.invalid_section_message:
         _Logger.warning(f"Invalid recipe section on update: {_Response.invalid_section_message}")
         return bad_request(_Response.invalid_section_message)
+
+    if _Response.invalid_choice_message:
+        _Logger.warning(f"Invalid ingredient choice on update: {_Response.invalid_choice_message}")
+        return business_rule_violation(_Response.invalid_choice_message)
 
     if _Response.invalid_vocabulary_message:
         _Logger.warning(f"Invalid recipe vocabulary: {_Response.invalid_vocabulary_message}")

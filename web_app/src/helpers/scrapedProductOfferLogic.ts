@@ -1,62 +1,15 @@
-import type { Product } from 'src/models/product';
-import type { ScrapedProductOffer } from 'src/models/scrapedProductOffer';
-
-/**
- * Finds the saved product matching the merchant name & merchant stockcode of the product offer.
- * If no match, returns undefined.
- * @param offer the product offer
- * @param products all saved products
- * @returns the saved product or undefined
+/** Discount percentage (0–100) when on special, else null. Accepts anything
+ *  with `price_now`/`price_was` (a saved Product, a historic offer, etc) so
+ *  the one rule serves every surface.
+ *
+ *  Survives the Phase D decommission as the only piece of the old
+ *  scraped-offer logic still used (by DashboardPage's best-deals card). The
+ *  filename is retained to keep the import path stable; once a clearer home
+ *  is picked we can rename without churn here.
  */
-export const findSavedProduct = (offer: ScrapedProductOffer, products: Product[] | undefined): Product | undefined =>
-    products?.find(
-        (product: Product) =>
-            product.merchant_stockcode === offer.merchant_stockcode && product.merchant_name === offer.merchant_name
-    );
-
-export const isOfferOnSpecial = (offer: ScrapedProductOffer): boolean =>
-    offer.price_now > 0 && offer.price_now < offer.price_was;
-
-export const sortOffersBySpecialBestToWorst = (offers: ScrapedProductOffer[]): ScrapedProductOffer[] =>
-    offers.sort((offerA, offerB) => {
-        const _OfferA = offerA.price_was - offerA.price_now;
-        const _OfferB = offerB.price_was - offerB.price_now;
-
-        if (_OfferA < _OfferB) return 1;
-        else if (_OfferA > _OfferB) return -1;
-        else return 0;
-    });
-
-export const sortOffersByFullNameAsc = (offers: ScrapedProductOffer[]): ScrapedProductOffer[] =>
-    offers.sort((offerA, offerB) => {
-        const _OfferA = offerA.name.toLowerCase();
-        const _OfferB = offerB.name.toLowerCase();
-
-        if (_OfferA < _OfferB) return -1;
-        else if (_OfferA > _OfferB) return 1;
-        else return 0;
-    });
-
-export const sortOffersByFullNameDesc = (offers: ScrapedProductOffer[]): ScrapedProductOffer[] =>
-    offers.sort((offerA, offerB) => {
-        const _OfferA = offerA.name.toLowerCase();
-        const _OfferB = offerB.name.toLowerCase();
-
-        if (_OfferA < _OfferB) return 1;
-        else if (_OfferA > _OfferB) return -1;
-        else return 0;
-    });
-
-export const sortOffersByPriceHighToLow = (offers: ScrapedProductOffer[]): ScrapedProductOffer[] =>
-    offers.sort((offerA, offerB) => {
-        if (offerA.price_now < offerB.price_now) return 1;
-        else if (offerA.price_now > offerB.price_now) return -1;
-        else return 0;
-    });
-
-export const sortOffersByPriceLowToHigh = (offers: ScrapedProductOffer[]): ScrapedProductOffer[] =>
-    offers.sort((offerA, offerB) => {
-        if (offerA.price_now < offerB.price_now) return -1;
-        else if (offerA.price_now > offerB.price_now) return 1;
-        else return 0;
-    });
+export function discountPercent(offer: { price_now: number; price_was: number }): number | null {
+    if (offer.price_was <= 0 || offer.price_now <= 0 || offer.price_now >= offer.price_was) {
+        return null;
+    }
+    return Math.round(((offer.price_was - offer.price_now) / offer.price_was) * 100);
+}

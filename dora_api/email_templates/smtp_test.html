@@ -1,0 +1,12 @@
+{% extends "_layout.html" %}
+{% block content %}
+<p style="margin:0 0 12px;">Hi {{ display_name or 'admin' }},</p>
+<p style="margin:0 0 12px;">
+  This is a test message from your Dashy Dora install to confirm the SMTP
+  configuration works. If you're reading this in your inbox, outbound email
+  is set up correctly.
+</p>
+<p style="margin:0;">
+  You can safely delete this message.
+</p>
+{% endblock %}

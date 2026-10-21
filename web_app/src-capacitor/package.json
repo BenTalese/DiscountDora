@@ -1,0 +1,17 @@
+{
+  "name": "dashy-dora-capacitor",
+  "version": "1.0.0",
+  "description": "Your grocery explorer!",
+  "author": "BenTalese <ben.talese@gmail.com>",
+  "private": true,
+  "dependencies": {
+    "@capacitor/android": "^8.4.1",
+    "@capacitor/app": "^8.0.0",
+    "@capacitor/cli": "^8.0.0",
+    "@capacitor/core": "^8.0.0",
+    "@capacitor/ios": "^8.4.1",
+    "@capacitor/preferences": "^8.0.1",
+    "@capacitor/splash-screen": "^8.0.1",
+    "@capacitor/status-bar": "^8.0.2"
+  }
+}

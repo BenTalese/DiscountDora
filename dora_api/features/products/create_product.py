@@ -3,125 +3,193 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from uuid import UUID
 
-from pydantic import Base64Bytes, BaseModel, ConfigDict, Field
-from varname import nameof
+from pydantic import BaseModel, ConfigDict, Field
 
-from dora_api.domain.entities.merchant import Merchant
+from dora_api.domain.entities.store import Store
 from dora_api.domain.entities.product import Product
 from dora_api.domain.entities.product_offer import ProductOffer
 from dora_api.domain.types import EMPTY_UUID
-from dora_api.features.products.get_products import ProductDto, get_products
+from dora_api.features.ingestion.offer_mapping import (OfferOutcome,
+                                                       apply_offer_to_product)
+from dora_api.features.products.get_products import get_products
 from dora_api.features.routers import PRODUCT_ROUTER
-from dora_api.infrastructure.api_response import (business_rule_violation,
-                                                  created)
+from dora_api.infrastructure.api_response import business_rule_violation, created
 from dora_api.infrastructure.decorators import has_request_body
-from dora_api.infrastructure.utils import get_container, get_request_body
+from dora_api.infrastructure.utils import get_request_body
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 class CreateProductRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     brand: str | None = Field(default = None, min_length = 1)
-    image: Base64Bytes | None = None
+    # image is a data-URL string ("data:image/...;base64,..."), stored
+    # as UTF-8 bytes on the entity; served back via GET /products/<id>/image.
+    # Matches the stock-item/recipe convention. The old `Base64Bytes` decoded
+    # arbitrary base64 strings to raw bytes that the read path then tried to
+    # `decode('utf-8','ignore')` — corrupting every saved image.
+    image: str | None = Field(default = None, max_length = 6_000_000)
     is_active: bool
     is_available: bool
-    merchant_name: str = Field(min_length = 1)
+    store_name: str = Field(min_length = 1)
+    # `merchant_stockcode` is the producer's SKU on the
+    # offer, retained verbatim per the rename runbook.
     merchant_stockcode: str | None = Field(default = None, min_length = 1)
     name: str = Field(min_length = 1)
     price_now: float = Field(gt = 0)
-    price_was: float = Field(gt = 0)
+    # Optional (OD-2). A hand-entered product usually has no "was" price —
+    # the user knows what the butcher charges, not what it charged last month.
+    # Defaults to `price_now`, which reads as "no markdown"; 0.0 would read as
+    # "was free" and make every custom product look permanently discounted.
+    price_was: float | None = Field(default = None, gt = 0)
     size: str = Field(min_length = 1)
     size_unit: str = Field(min_length = 1)
     size_value: float = Field(gt = 0)
     web_url: str | None = Field(default = None, min_length = 1)
 
 
+# the manual product-add reuses the C-10 shared
+# `apply_offer_to_product` so duplicates append a historic point + move
+# `current_offer` (one offer-append path across `/api/products` and
+# `/api/ingest`). Source string is `"manual"` to distinguish from
+# ingest-provenance points.
+_MANUAL_SOURCE = "manual"
+
+
 @dataclass(slots=True)
 class CreateProductResponse:
-    new_product_id: UUID = EMPTY_UUID
-    product_already_exists: bool = False
+    product_id: UUID = EMPTY_UUID
+    created: bool = False
+    offer_appended: bool = False
+    store_not_found: bool = False
 
 
 class CreateProductHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, request: CreateProductRequest) -> CreateProductResponse:
-        _MerchantName = EntityField(Merchant, nameof(Merchant.name))
-        _ProductName = EntityField(Product, nameof(Product.name))
-        _ProductStockcode = EntityField(Product, nameof(Product.merchant_stockcode))
+        _StoreName = EntityField(Store, Store.Fields.NAME)
+        _ProductName = EntityField(Product, Product.Fields.NAME)
+        _ProductStockcode = EntityField(Product, Product.Fields.MERCHANT_STOCKCODE)
+
+        # strict no-auto-create. Stores are user-curated (managed
+        # in Settings → Stores); the manual product-add path must reject
+        # unknown store names, mirroring what `/api/ingest` already does via
+        # the quarantine queue (FU-190). Case-insensitive trimmed match to
+        # mirror `CreateStoreHandler`'s duplicate-detection semantics so
+        # callers aren't surprised by casing.
+        _NormalisedName = request.store_name.strip().lower()
+        _Store: Store | None = next(
+            (s for s in self.repository.get(Store).all()
+             if s.name.strip().lower() == _NormalisedName),
+            None,
+        )
+        if _Store is None:
+            return CreateProductResponse(store_not_found=True)
 
         _ExistingProduct: Product | None = (
             self.repository
             .get(Product)
-            .include(nameof(Product.merchant))  # TODO: Is this line necessary?
+            .include(Product.Fields.STORE)
+            .include(Product.Fields.CURRENT_OFFER)
             .one(_ProductStockcode.eq(request.merchant_stockcode)
-                 & _MerchantName.eq(request.merchant_name)
+                 & _StoreName.eq(_Store.name)
                  & _ProductName.eq(request.name))
         )
 
-        if _ExistingProduct:
-            return CreateProductResponse(product_already_exists=True)
+        observed_at = datetime.now(UTC)
 
-        _Merchant = self.repository.get(Merchant).one(_MerchantName.eq(request.merchant_name))
-        if not _Merchant:
-            _Merchant = Merchant(request.merchant_name)
-            self.repository.add(_Merchant)
+        if _ExistingProduct is not None:
+            outcome = apply_offer_to_product(
+                self.repository,
+                _ExistingProduct,
+                price_now=request.price_now,
+                price_was=request.price_was or request.price_now,
+                observed_at=observed_at,
+                source=_MANUAL_SOURCE,
+            )
+            self.repository.save_changes()
+            return CreateProductResponse(
+                product_id=_ExistingProduct.id,
+                created=False,
+                offer_appended=outcome.outcome == OfferOutcome.APPENDED,
+            )
 
         _Offer = ProductOffer(
-            offered_on = datetime.now(UTC),
-            price_now = request.price_now,
-            price_was = request.price_was
+            offered_on=observed_at,
+            price_now=request.price_now,
+            price_was=request.price_was or request.price_now,
         )
         _NewProduct = Product(
-            brand = request.brand,
-            current_offer = _Offer,
-            historic_offers = [],
-            image = request.image,
-            is_active = request.is_active,
-            is_available = request.is_available,
-            merchant = _Merchant,
-            merchant_stockcode = request.merchant_stockcode,
-            name = request.name,
-            size = request.size,
-            size_unit = request.size_unit,
-            size_value = request.size_value,
-            web_url = request.web_url
+            brand=request.brand,
+            current_offer=_Offer,
+            historic_offers=[],
+            image=request.image.encode("utf-8") if request.image else None,
+            is_active=request.is_active,
+            is_available=request.is_available,
+            store=_Store,
+            merchant_stockcode=request.merchant_stockcode,
+            name=request.name,
+            size=request.size,
+            size_unit=request.size_unit,
+            size_value=request.size_value,
+            web_url=request.web_url,
+            # OD-2 — this route IS the hand-entry path (its own docstring calls
+            # it "the manual product-add"), so anything created here is custom
+            # by definition. That marking is what keeps the scheduled sync from
+            # trying to refresh it and ingestion from overwriting it.
+            is_custom=True,
         )
 
         self.repository.add(_Offer)
         self.repository.add(_NewProduct)
         self.repository.save_changes()
 
-        return CreateProductResponse(new_product_id = _NewProduct.id)
+        return CreateProductResponse(
+            product_id=_NewProduct.id,
+            created=True,
+            offer_appended=False,
+        )
 
 
 @PRODUCT_ROUTER.route("", methods=["POST"])
 @has_request_body(CreateProductRequest)
 def create_product():
     _Logger = logging.getLogger(__name__)
-    _Logger.info("Received request to create product.")
-    _Handler = get_container().inject(CreateProductHandler)
+    _Handler = CreateProductHandler(SqlAlchemyRepository())
     _Request: CreateProductRequest = get_request_body()
     _Response = _Handler.handle(_Request)
 
-    if _Response.product_already_exists:
+    if _Response.store_not_found:
         _Logger.warning(
-            f"Product already exists with name '{_Request.name}', "
-            f"merchant '{_Request.merchant_name}', and "
-            f"stockcode '{_Request.merchant_stockcode}'."
+            f"Rejected product create — unknown store '{_Request.store_name}'."
         )
         return business_rule_violation(
-            f"Product already exists with name '{_Request.name}', "
-            f"merchant '{_Request.merchant_name}', and "
-            f"stockcode '{_Request.merchant_stockcode}'."
+            f"Store '{_Request.store_name}' does not exist. "
+            "Create it in Settings → Stores first."
         )
 
-    _Logger.info(f"Successfully created product with ID: {_Response.new_product_id}")
+    if _Response.created:
+        _Logger.info(f"Created product {_Response.product_id}")
+    elif _Response.offer_appended:
+        _Logger.info(
+            f"Appended new offer to existing product {_Response.product_id}"
+        )
+    else:
+        _Logger.info(
+            f"Existing product {_Response.product_id} already has this offer; no-op."
+        )
+
     return created(
-        _Response.new_product_id,
-        f"{nameof(PRODUCT_ROUTER)}.{nameof(get_products)}",
-        nameof(ProductDto.product_id)
+        _Response.product_id,
+        f"{PRODUCT_ROUTER.name}.{get_products.__name__}",
+        "product_id",
+        body={
+            "id": _Response.product_id,
+            "created": _Response.created,
+            "offer_appended": _Response.offer_appended,
+        },
     )

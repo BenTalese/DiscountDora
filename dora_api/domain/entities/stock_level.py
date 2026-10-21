@@ -7,3 +7,7 @@ from dora_api.domain.entities.base_entity import BaseEntity
 class StockLevel(BaseEntity):
     name: str
     sequence: int
+
+    class Fields(BaseEntity.Fields):
+        NAME = "name"
+        SEQUENCE = "sequence"

@@ -3,24 +3,22 @@ from dataclasses import dataclass
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
-from varname import nameof
 
 from dora_api.domain.entities.stock_location import StockLocation
-from dora_api.domain.types import UNSET, Unset
 from dora_api.features.routers import STOCK_LOCATION_ROUTER
 from dora_api.infrastructure.api_response import (business_rule_violation,
                                                   no_content, not_found)
 from dora_api.infrastructure.decorators import has_request_body
-from dora_api.infrastructure.utils import (get_container, get_request_body,
-                                           is_set)
+from dora_api.infrastructure.utils import get_request_body
 from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
 
 
 class UpdateStockLocationRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    name: str | Unset = Field(default = UNSET, min_length = 1)
+    name: str | None = Field(default = None, min_length = 1)
 
 
 @dataclass(slots=True)
@@ -30,8 +28,8 @@ class UpdateStockLocationResponse:
 
 
 class UpdateStockLocationHandler:
-    def __init__(self):
-        self.repository = SqlAlchemyRepository()
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
 
     def handle(self, request: UpdateStockLocationRequest, stock_location_id: UUID) -> UpdateStockLocationResponse:
         # Get existing stock location
@@ -40,15 +38,17 @@ class UpdateStockLocationHandler:
             return UpdateStockLocationResponse(stock_location_not_found=True)
 
         # Update name
-        if is_set(request.name):
-            _StockLocationName = EntityField(StockLocation, nameof(StockLocation.name))
+        if "name" in request.model_fields_set and request.name is not None:
+            _StockLocationName = EntityField(StockLocation, StockLocation.Fields.NAME)
             _SameNameStockLocation: StockLocation | None = (
                 self.repository
                 .get(StockLocation)
                 .one(_StockLocationName.eq(request.name))
             )
 
-            if _SameNameStockLocation and _SameNameStockLocation.id != stock_location_id:
+            # str(...) both sides — raw str path param vs UUID id (FU-528
+            # family): a bare `!=` made renaming a location to its own name 422.
+            if _SameNameStockLocation and str(_SameNameStockLocation.id) != str(stock_location_id):
                 return UpdateStockLocationResponse(stock_location_already_exists=True)
 
             _StockLocation.name = request.name
@@ -57,18 +57,18 @@ class UpdateStockLocationHandler:
         return UpdateStockLocationResponse()
 
 
-@STOCK_LOCATION_ROUTER.route("<stock_location_id>", methods=["PATCH"])
+@STOCK_LOCATION_ROUTER.route("<uuid:stock_location_id>", methods=["PATCH"])
 @has_request_body(UpdateStockLocationRequest)
 def update_stock_location(stock_location_id: UUID):
     _Logger = logging.getLogger(__name__)
     _Logger.info("Received request to update stock location.")
-    _Handler = get_container().inject(UpdateStockLocationHandler)
+    _Handler = UpdateStockLocationHandler(SqlAlchemyRepository())
     _Request: UpdateStockLocationRequest = get_request_body()
     _Response = _Handler.handle(_Request, stock_location_id)
 
     if _Response.stock_location_not_found:
         _Logger.warning(f"Stock location not found with ID: {stock_location_id}")
-        return not_found(nameof(StockLocation), stock_location_id)
+        return not_found(StockLocation.__name__, stock_location_id)
 
     if _Response.stock_location_already_exists:
         _Logger.warning(f"Stock location already exists with name: {_Request.name}")

@@ -1,0 +1,4 @@
+---
+description:
+---
+Compact information view?

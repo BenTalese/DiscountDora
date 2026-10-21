@@ -1,0 +1,14 @@
+---
+description:
+---
+- Could be accessible off of the stock location? See what stock items are at this location? Can do via filters though...
+- May be useful as a map to easily remember where things are placed
+- This will be difficult to implement, but a fun challenge
+- Can go with "drawing tools" to make it super customised, or can provide standard layouts
+- Could be a drag and drop experience with the images of the stock items
+- Could provide a list of stock items not yet allocated to the stock location, where you can filter them down
+- Could have a search bar at the top of the page to filter the allocated stock items so you don't have so many displayed
+- Can allow for "shelves" in a top down approach, and allow the user to switch between levels
+	- With this implemented, probably want search to jump between levels to find the item
+	- Alternatively, can search all shelves at the same time
+- Note, everything has a shelf technically, so that may work well (fridge, pantry, freezer)

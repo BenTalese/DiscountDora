@@ -1,0 +1,41 @@
+name: 💡 Feature request / idea
+description: Suggest something new, or an improvement to what's there.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Got an idea for Dora? Love it. 🍔
+
+        One heads-up: Dora leans hard on staying **simple and fast** — keeping
+        clutter out is a core principle, so not every idea will make the cut.
+        But they're all read and considered, so don't let that stop you.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: The problem or need behind the idea — not just the solution. This is the most useful part.
+      placeholder: When I'm doing my weekly shop, I wish Dora could ...
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: Your idea
+      description: How might Dora help? Rough and half-formed is completely fine.
+    validations:
+      required: false
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Anything you've tried or considered?
+      description: Workarounds you're using today, or other ways you thought about solving it.
+    validations:
+      required: false
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues and this isn't already suggested.
+          required: true

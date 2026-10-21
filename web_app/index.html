@@ -7,7 +7,7 @@
     <meta name="description" content="<%= productDescription %>">
     <meta name="format-detection" content="telephone=no">
     <meta name="msapplication-tap-highlight" content="no">
-    <meta name="viewport" content="user-scalable=no, initial-scale=1, maximum-scale=1, minimum-scale=1, width=device-width<% if (ctx.mode.cordova || ctx.mode.capacitor) { %>, viewport-fit=cover<% } %>">
+    <meta name="viewport" content="user-scalable=no, initial-scale=1, maximum-scale=1, minimum-scale=1, width=device-width, interactive-widget=resizes-content<% if (ctx.mode.cordova || ctx.mode.capacitor) { %>, viewport-fit=cover<% } %>">
 
     <!-- Load favicons -->
     <link rel="icon" type="image/png" sizes="192x192" href="icons/android-chrome-192x192.png">
@@ -20,12 +20,41 @@
     <link rel="icon" type="image/png" sizes="96x96" href="icons/favicon-96x96.png">
     <link rel="icon" type="image/ico" href="favicon.ico">
 
-    <!-- Embed Nunito and Urbanist fonts -->
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Nunito:ital,wght@0,200..1000;1,200..1000&family=Urbanist:ital,wght@0,100..900;1,100..900&display=swap');
-    </style>
   </head>
   <body>
+    <!-- Pre-mount splash. Paints the moment HTML parses so cold-load doesn't
+         flash black before Vue/Quasar mount. App.vue's onMounted removes it.
+         Background is hardcoded to match AuthShell's --auth-shell-bg-base
+         (#1f2647) so the pre-mount → shell handoff reads as one moment.
+         C-19: previously tracked prefers-color-scheme; that made cold-load
+         visibly flash light → midnight the instant Vue mounted the shell. -->
+    <style>
+        #pre-mount-splash {
+            position: fixed;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #1f2647;
+            z-index: 10000;
+        }
+        #pre-mount-splash img {
+            width: clamp(120px, 24vw, 200px);
+            height: auto;
+            opacity: 0.85;
+            animation: pre-mount-pulse 1.6s ease-in-out infinite;
+        }
+        @keyframes pre-mount-pulse {
+            0%, 100% { opacity: 0.7; transform: scale(0.96); }
+            50%      { opacity: 1;   transform: scale(1.04); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            #pre-mount-splash img { animation: none; }
+        }
+    </style>
+    <div id="pre-mount-splash">
+        <img src="icons/web-app-manifest-512x512.png" alt="Dashy Dora" />
+    </div>
     <!-- quasar:entry-point -->
   </body>
 </html>

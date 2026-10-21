@@ -1,0 +1,46 @@
+from dataclasses import dataclass
+from uuid import UUID
+
+from dora_api.domain.entities.base_entity import BaseEntity
+
+
+@dataclass
+class RecipeStep(BaseEntity):
+    """C-4 Chunk 6 — one step (or sub-step) of a structured recipe.
+
+    The self-referential `parent_step_id` gives exactly one level of
+    sub-steps: a top-level step has `parent_step_id is None`; a sub-step
+    points at its parent. Validation rejects a sub-step whose parent is
+    itself a sub-step (no depth > 1) — see the access helpers.
+
+    Ingredient + tool links live in association tables
+    (`RecipeStepIngredient`, `RecipeStepTool`); the entity intentionally
+    doesn't hold them so the SQLAlchemy mapping stays minimal. DTOs
+    surface them as id lists hydrated by `recipe_step_access`.
+    """
+    recipe_id: UUID
+    parent_step_id: UUID | None
+    sequence: int
+    text: str
+    hint: str | None
+    # nullable section grouping (DEC-3 option A). Top-level
+    # steps may belong to a named section; sub-steps inherit their parent's
+    # section visually. Stored on every row to keep the read path flat.
+    section_id: UUID | None = None
+    # Owner feedback 2026-09-01 — cook mode used to *guess* a step's timer by
+    # regex over the step text ("simmer for 20 minutes"). A guess is a fair
+    # deal for a free-text method, where there is nowhere to record the fact;
+    # a structured step has a home for it, so it gets one. NULL = no timer on
+    # this step (cook mode then falls back to the text sniff, so nothing that
+    # worked before stops working). Minutes, not seconds: a recipe step is
+    # never timed to the second.
+    timer_minutes: int | None = None
+
+    class Fields(BaseEntity.Fields):
+        RECIPE_ID = "recipe_id"
+        PARENT_STEP_ID = "parent_step_id"
+        SEQUENCE = "sequence"
+        TEXT = "text"
+        HINT = "hint"
+        SECTION_ID = "section_id"
+        TIMER_MINUTES = "timer_minutes"

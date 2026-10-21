@@ -1,15 +1,28 @@
 __pycache__
 !.vscode/launch.json
 !.vscode/tasks.json
+# aldi_products_by_category.json is bundled as a seed; on first boot
+# it's copied into <CACHE_DIR>/ where operators can edit a persistent
+# copy without touching the bundled file. Keep the seed in git.
 !aldi_products_by_category.json
 .DS_Store
 .env
 .env.local*
 .idea
-.image_cache
+# D2: legacy paths retired — runtime state now lives under data/,
+# cache/, and logs/ (configurable via DORA_DATA_DIR / DORA_CACHE_DIR /
+# DORA_LOG_DIR). Keep the directory ignores so a `docker compose run`
+# that bind-mounts ./data into the container doesn't pollute git.
+# Root-anchored so unrelated `data/` subdirs (e.g.
+# `dora_api/features/data/`) aren't silently ignored — that bug bit
+# P8-02 when adding a new file under the features tree.
+/data/
+/cache/
+/logs/
 .quasar
 .thumbs.db
 .venv
+.image_cache
 .vscode
 .vscode/*
 *.cjs
@@ -21,12 +34,14 @@ __pycache__
 *.sln
 *.suo
 *.sw?
+# Editor/tool crash artefacts alongside real source (a full stale copy of
+# StockItemDetailPage.vue was committed this way — FU-696 / FU-651).
+*.tmp.*
 **/__pycache__
 **/.buildozer
 **/*.db
 **/appsettings.json
 **/bin
-**/logs
 *appsettings.json
 /cypress/screenshots/
 /cypress/videos/
@@ -41,6 +56,19 @@ __pycache__
 coverage
 dist
 dist-ssr
+# Desktop bundle artefacts (PyInstaller writes to dist/ + build/ at
+# the repo root; Phase 4 produces *.AppImage in dist/ and caches
+# appimagetool under packaging/.cache/).
+build/
+*.AppImage
+packaging/.cache/
+# Piper binary fetched at build time by packaging/fetch_piper.py — a build
+# artefact, never committed (it's bundled into the PyInstaller output instead).
+packaging/piper/
+# Piper voice models fetched at build time by packaging/fetch_default_voice.py
+# — ~60 MB each, never committed. Bundled into Docker / desktop builds so
+# Dora's neural voice works out of the box on first run.
+packaging/voices/
 web_app_old/.vscode/*
 web_app/.vscode/*
 lerna-debug.log*
@@ -51,3 +79,11 @@ pnpm-debug.log*
 venv
 yarn-debug.log*
 yarn-error.log*
+.coverage
+
+# FU-540 Playwright e2e artifacts
+web_app/test-results/
+web_app/playwright-report/
+web_app/blob-report/
+web_app/e2e/.auth/
+data/dora.e2e.db

@@ -1,22 +1,230 @@
 /*
 STYLE GUIDE:
-    1. Strictly only style using css classes
-    2. Style with quasar's built in classes first and fill in the gaps with custom classes
-    3. Prefix custom global styles with "dora-" and put them in app.scss (or a category e.g. sizes.scss)
-    4. Prefix scoped styles with "dorascoped-" and keep usage of scoped styles within the component they were defined in
-    5. Keep classes in categories of CSS in their own files, e.g. sizes.scss, padding.scss, etc
-    6. Classes are named as "dora-property-value", e.g. "dora-fontWeight-400" for "font-weight: 400;" (abbreviate if too long, e.g. "background-colour" is "bgc")
-    7. If a css class only has one property, make it inline
+    1. Prefer Quasar's built-in classes (q-pa-md, text-weight-regular, col, etc.) first
+    2. Component-specific styling lives in the component as <style scoped> with semantic class names
+    3. Inline style="..." is fine for one-off single properties (e.g. style="flex: 1")
+    4. Global styles in this folder are reserved for design tokens (colours.scss),
+       @font-face declarations, and body/root defaults — not utility classes
 */
 
+// Nunito and Urbanist are loaded via @fontsource-variable in src/boot/fonts.ts.
 @font-face {
     font-family: 'Cute Dino';
-    src: url('/fonts/Cute Dino.ttf') format('truetype');
+    src: url('/fonts/CuteDino.woff2') format('woff2');
     font-weight: normal;
     font-style: normal;
+    font-display: swap;
+}
+
+// The base font-size is driven by the signed-in user's font_size preference
+// (themeService writes --dora-base-font-size on document.documentElement).
+// Falls back to 16px while logged out or for first paint.
+:root {
+    font-size: var(--dora-base-font-size, 16px);
+}
+
+// Theme-coloured browser scrollbars. Firefox honours scrollbar-color directly;
+// Chromium 121+ also supports the standard property. Older Chromium falls back
+// to the default OS scrollbar — no extra rules needed.
+html {
+    scrollbar-color: var(--q-secondary) var(--q-page);
 }
 
 body {
     background-color: var(--q-page);
-    font-family: 'Nunito', 'Urbanist', 'Segoe UI', sans-serif;
+    font-family: 'Nunito Variable', 'Nunito', 'Segoe UI', sans-serif;
+    color: var(--q-text);
+}
+
+// A6 — tooltips are teleported to <body>, so make sure they follow the
+// text-size preference too (rem is relative to the root font-size, which
+// themeService drives from the user's font_size pref).
+// Owner, 2026-09-01: an explanatory tooltip (the stocktake cadence hint, the
+// "Push 3 days" hint) rendered as one ruler-length line across the viewport —
+// Quasar puts no ceiling on tooltip width, so a two-sentence tooltip only wraps
+// when it runs out of screen. Cap it at a readable measure and let it wrap.
+// Global because tooltips are teleported to <body>, and because *every* tooltip
+// with more than a few words wants this — a per-call class would just be the
+// same rule copied at each site (R-003).
+.q-tooltip {
+    font-size: calc(var(--font-size-sm) * 1rem);
+    max-width: 280px;
+    white-space: normal;
+    line-height: 1.35;
+}
+
+// DR-7 (FU-578 #41) — Quasar toasts default to the bottom-right corner, the
+// same corner as the Dora assistant launcher (`DoraBubble`, docked 18px + safe
+// area from the edge, ~88px tall at full size). Success/error toasts were
+// piling directly on top of the mascot. Lift the bottom-right notification
+// column clear of it so toasts stack in one clean column *above* Dora rather
+// than over her. Only the mascot's corner is affected; other positions are
+// untouched. (Toasts are teleported to <body>, so this must be a global rule.)
+.q-notifications__list--bottom-right {
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 112px);
+}
+
+// B7 / D-002 — the `info` toast kind (registered in `boot/notifyTypeRegistration`).
+//
+// Toasts are teleported to <body>, so like the rule above this has to be
+// global; and because the registered type deliberately passes no `color`,
+// Quasar emits no `bg-*` class and `.q-notification`'s own #323232 default
+// would show through. `.q-notification` is one class, so this selector wins
+// on specificity without `!important`.
+//
+// Neutral by spec: success and error carry a semantic fill because the colour
+// *is* the message, but "Swap undone." is not an alarm — info gets the plain
+// elevated surface every other panel in Dora uses, with `--semantic-info`
+// spent only on the icon and a 3px spine. Everything here is a token, so all
+// ten themes (and any future one) are covered without touching this file.
+.q-notification.dora-toast--info {
+    background: var(--surface-elevated);
+    // Owner feedback 2026-09-13: *"I saw a blank blue info toast when I was
+    // offline reconnecting."* Every info toast in the app had been rendering
+    // its message in invisible text since the B7/D-002 change — white on a
+    // 97%-lightness surface. It read as blank because the icon, the left spine
+    // and the progress bar (all `--semantic-info`) were the only things left
+    // to see; hence "blue". Only light themes were affected, which is why it
+    // survived this long.
+    //
+    // `!important` because Quasar seeds every notification with
+    // `textColor: 'white'` and emits it as the class `text-white`, which its
+    // own stylesheet declares `!important`. Nothing short of that wins, and
+    // the alternative (suppressing the seed from the registration) is a cast
+    // past `exactOptionalPropertyTypes`. This is the D-002 "toast ink follows
+    // the theme" rule being enforced against a library default, not a
+    // specificity shortcut.
+    color: var(--text-primary) !important;
+    border-left: 3px solid var(--semantic-info);
+    border-radius: var(--radius-md);
+    box-shadow: var(--elevation-2);
+
+    .q-notification__icon {
+        color: var(--semantic-info);
+    }
+
+    // The progress bar inherits `currentColor`, which is now `--text-primary`
+    // — a near-black bar under a quiet toast. Tie it to the same accent as the
+    // spine instead. (Quasar keeps it at `opacity: .3`, so this reads as a
+    // tint, and its `z-index: -1` paints it above this background but below
+    // the message, which is what we want.)
+    .q-notification__progress {
+        background: var(--semantic-info);
+    }
+
+    // Action buttons are deliberately not restyled: Quasar already sets
+    // `.q-notification__actions { color: var(--q-primary) }`, and
+    // `themeService` keeps `--q-primary` on the active theme — so an override
+    // here would be a second copy of a value that already follows the theme.
+}
+
+// FU-025 — the sibling of the Quasar SCSS-var overrides in
+// `quasar.variables.scss`. Quasar computes `$field-with-bottom-padding-bottom`
+// and `$bar-dense-height` from these font-size vars via `+ 10px` / `+ 8px`
+// arithmetic, so they had to stay in px at compile time. We restore
+// text-scale tracking for the *visible text* of the same components here
+// — the layout math still consumes the original px value, but users see
+// scaled text.
+.q-field__bottom {
+    font-size: 0.75rem;
+}
+.q-field--dense .q-field__bottom {
+    font-size: 0.6875rem;
+}
+.q-bar--dense {
+    font-size: 0.875rem;
+}
+
+// 2026-08-16 — a `use-input` QSelect must not size itself to its own <input>.
+//
+// `use-input` is the one prop that makes QSelect render a real
+// `<input type="search">` instead of a plain div for its value (QSelect.js
+// `getInput`). An <input> carries an intrinsic width of roughly 20 characters
+// (~180px) that has nothing to do with its content — which is why a location
+// picker overflowed identically whether the location list was full or empty.
+//
+// Put that input inside a narrow container and the field wins: `.q-field` has
+// `max-width: none` and, as a flex item in `q-item-section`'s column layout,
+// sizes to content. Measured on the stock-item detail page at 375px: a 236px
+// field inside a 136px section, dropdown arrow landing 27px beyond the
+// viewport. Quasar's own `max-width: 100%` doesn't help — it sits on
+// `.q-field__control`, which resolves 100% against the oversized `.q-field`.
+//
+// Global rather than per-surface: 13 files use `use-input`, three of them
+// location pickers, and every one is a narrow-container overflow waiting to
+// happen. Scoped to `--with-input` so plain selects (which shrink correctly on
+// their own) are untouched.
+//
+// `min-width: 0` is deliberately NOT part of this — Quasar already sets it on
+// both `.q-item__section--main` and `.q-field__native`. It was the first fix
+// tried here and it was a no-op; don't re-add it thinking it helps.
+.q-select--with-input {
+    width: 100%;
+    max-width: 100%;
+}
+
+// ── Touch tap targets in menus and dropdowns (D-004 / B8) ────────────────
+//
+// Owner 2026-09-05, on the stock overview's level picker: *"on mobile the
+// dropdown options are a bit narrow … Good for desktop, bit thicker/bigger for
+// mobile would be better"*, with the note that it is *"could be a more
+// widespread UX issue"*. It is: 38 `q-list dense` menus across 26 files, every
+// one of them 32px rows on a phone.
+//
+// The style guide already says this — B8 ("items min height 44px touch") and
+// D-004 ("≥ 44×44px effective target on touch") — so `dense` inside a menu was
+// never compliant on a phone; it was compliant on the desktop those menus were
+// designed against.
+//
+// **Global, not 38 edits** (R-001). Every one of those call sites wants the
+// same thing for the same reason, and patching them individually would leave
+// the 39th menu to rediscover the bug. `dense` is kept in the markup because it
+// is still correct with a mouse — this restores the floor only where the
+// pointer can't be precise.
+//
+// `pointer: coarse` rather than a width breakpoint, matching the convention
+// already in `ImageSourcePicker`, `NutritionFoodPicker` and the two settings
+// chips: this is about how the user is *pointing*, not how wide the window is.
+// A desktop window dragged narrow keeps its dense menus; a tablet at 1024px
+// gets the bigger ones. Sizing touch affordances off width is what produced the
+// 375px overlap recorded in `ShoppingListPlanRow` — the two queries disagree,
+// so pick the one that means what you want and use it consistently.
+//
+// Menus are `--radius-md` slabs positioned by Quasar, so growing a row pushes
+// the menu taller without reflowing the page behind it.
+@media (pointer: coarse) {
+    .q-menu {
+        .q-item {
+            min-height: 44px;
+        }
+        // `dense` also tightens horizontal padding, which is the other half of
+        // the owner's "narrow": a 44px-tall row with 8px side padding still
+        // reads cramped and still hands you a small horizontal target.
+        .q-item--dense {
+            padding-top: var(--space-2, 8px);
+            padding-bottom: var(--space-2, 8px);
+            padding-left: var(--space-3, 12px);
+            padding-right: var(--space-3, 12px);
+        }
+    }
+}
+
+/* Dialogs stay inside the visible viewport when the on-screen keyboard is up
+   (2026-09-27). `--vv-inset-*` are published by `boot/keyboardInset.ts` and
+   read 0 everywhere except iOS with the keyboard open; see that file for why
+   Android needs nothing here. Offsets rather than padding: Quasar pads these
+   containers with `!important` per position, and moving the box leaves all of
+   that intact. */
+body .q-dialog__inner.fixed-full {
+    top: var(--vv-inset-top, 0px);
+    bottom: var(--vv-inset-bottom, 0px);
+}
+body .q-dialog__inner.fixed-bottom {
+    bottom: var(--vv-inset-bottom, 0px);
+}
+body .q-dialog__inner--minimized > div {
+    max-height: calc(100vh - 48px - var(--vv-inset-top, 0px) - var(--vv-inset-bottom, 0px));
+}
+body .q-dialog__inner--bottom > div {
+    max-height: calc(100vh - var(--vv-inset-top, 0px) - var(--vv-inset-bottom, 0px));
 }

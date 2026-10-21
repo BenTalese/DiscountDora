@@ -1,0 +1,732 @@
+"""F1 — first-run wizard backend.
+
+Four endpoints power the /welcome wizard:
+
+  GET  /api/onboarding/state     — snapshot of what the user has + has done
+  POST /api/onboarding/complete  — stamp onboarding_completed_at = NOW()
+  POST /api/onboarding/seed      — import bundled default groups / locations
+  POST /api/onboarding/seed-demo — one-off demo recipe + meal-plan (FU-194)
+  POST /api/onboarding/restart   — clear the completion timestamp
+
+Seed catalogues live as JSON next to this file so designers can edit
+without touching Python. They're idempotent: a second seed call won't
+duplicate groups/locations that already exist by name (we match on the
+visible label rather than ids — the user is supposed to be able to
+re-import without thinking about the bookkeeping).
+"""
+import json
+import logging
+from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from typing import Any
+from uuid import UUID
+
+from flask import session
+from pydantic import BaseModel, ConfigDict
+
+from dora_api.domain.entities.meal_plan import MealPlan
+from dora_api.domain.entities.meal_plan_entry import MealPlanEntry
+from dora_api.domain.entities.recipe import Recipe
+from dora_api.domain.entities.recipe_ingredient import RecipeIngredient
+from dora_api.domain.entities.store import Store
+from dora_api.domain.entities.stock_group import StockGroup
+from dora_api.domain.entities.stock_item import StockItem
+from dora_api.domain.entities.stock_level import StockLevel
+from dora_api.domain.entities.stock_location import StockLocation
+from dora_api.domain.entities.user import User
+from dora_api.features.app_settings.clock import household_today
+from dora_api.features.auth.register_user import SESSION_USER_ID_KEY
+from dora_api.features.routers import ONBOARDING_ROUTER
+from dora_api.infrastructure.api_response import (no_content, not_found, ok,
+                                                  unauthorized)
+from dora_api.infrastructure.decorators import has_request_body
+from dora_api.infrastructure.utils import get_request_body
+from dora_api.persistence.field import EntityField
+from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+from dora_api.infrastructure.ports import Repository
+
+
+_LOGGER = logging.getLogger(__name__)
+_SEED_DIR = Path(__file__).parent
+
+
+def _load_seed(name: str) -> list[dict[str, Any]]:
+    """Read a bundled seed JSON. Defensive — bad JSON shouldn't 500 the wizard."""
+    try:
+        with open(_SEED_DIR / name, "r", encoding="utf-8") as fh:
+            data = json.load(fh)
+        return data if isinstance(data, list) else []
+    except FileNotFoundError:
+        _LOGGER.warning("Seed file missing: %s", name)
+        return []
+    except json.JSONDecodeError as exc:
+        _LOGGER.error("Seed file invalid JSON (%s): %s", name, exc)
+        return []
+
+
+def _current_user_id() -> UUID | None:
+    raw = session.get(SESSION_USER_ID_KEY)
+    if not raw:
+        return None
+    try:
+        return UUID(str(raw))
+    except (TypeError, ValueError):
+        return None
+
+
+# ─── State ───────────────────────────────────────────────────────────
+
+
+@dataclass(frozen=True, slots=True)
+class StoreStatusDto:
+    """FU-189 — used to surface "you haven't set up any stores yet" hints during
+    onboarding. Post-Phase-D the `enabled` field no longer reflects a scraper
+    toggle (Merchant.is_enabled went away with merchant_api); it now mirrors
+    `total` since every user-curated store is implicitly enabled. Kept for
+    payload compatibility with the SPA's onboarding state shape."""
+    total: int
+    enabled: int
+
+
+@dataclass(frozen=True, slots=True)
+class OnboardingStateDto:
+    completed: bool
+    completed_at: datetime | None
+    first_user: bool
+    store_status: StoreStatusDto
+
+
+class GetOnboardingStateHandler:
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
+
+    def handle(self, user: User) -> OnboardingStateDto:
+        total_users = self.repository.get(User).count()
+        store_total = self.repository.get(Store).count()
+        return OnboardingStateDto(
+            completed = user.onboarding_completed_at is not None,
+            completed_at = user.onboarding_completed_at,
+            first_user = total_users <= 1,
+            store_status = StoreStatusDto(
+                total = store_total,
+                enabled = store_total,
+            ),
+        )
+
+
+@ONBOARDING_ROUTER.route("/state", methods=["GET"])
+def get_onboarding_state():
+    user_id = _current_user_id()
+    if user_id is None:
+        return unauthorized("Sign in to use the onboarding endpoints.")
+    repo = SqlAlchemyRepository()
+    user = repo.get(User).by_id(user_id)
+    if user is None:
+        return not_found("User", user_id)
+    state = GetOnboardingStateHandler(SqlAlchemyRepository()).handle(user)
+    return ok(state)
+
+
+# ─── Complete + restart ──────────────────────────────────────────────
+
+
+@ONBOARDING_ROUTER.route("/complete", methods=["POST"])
+def complete_onboarding():
+    user_id = _current_user_id()
+    if user_id is None:
+        return unauthorized("Sign in to use the onboarding endpoints.")
+    repo = SqlAlchemyRepository()
+    user = repo.get(User).by_id(user_id)
+    if user is None:
+        return not_found("User", user_id)
+    user.onboarding_completed_at = datetime.now(timezone.utc)
+    repo.save_changes()
+    _LOGGER.info("Onboarding completed for user %s", user_id)
+    return no_content()
+
+
+@ONBOARDING_ROUTER.route("/restart", methods=["POST"])
+def restart_onboarding():
+    user_id = _current_user_id()
+    if user_id is None:
+        return unauthorized("Sign in to use the onboarding endpoints.")
+    repo = SqlAlchemyRepository()
+    user = repo.get(User).by_id(user_id)
+    if user is None:
+        return not_found("User", user_id)
+    user.onboarding_completed_at = None
+    repo.save_changes()
+    _LOGGER.info("Onboarding reset requested by user %s", user_id)
+    return no_content()
+
+
+# ─── Seed catalogues ─────────────────────────────────────────────────
+
+
+class SeedRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    groups: bool = False
+    locations: bool = False
+    # optional per-name filter over the bundled defaults. When
+    # None (default) and the corresponding bool is True, seed all defaults
+    # (original behaviour). When a list is provided, seed only those
+    # defaults whose name (or path, for locations) is in the list.
+    #
+    # Location paths use the form "Zone" for a top-level zone alone, or
+    # "Zone/Child" for a child under it. Selecting a child implicitly
+    # creates its parent zone (needed for the FK), even when the parent's
+    # own path is not in the list.
+    group_names: list[str] | None = None
+    location_paths: list[str] | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class SeedResultDto:
+    groups_created: int
+    groups_skipped: int
+    locations_created: int
+    locations_skipped: int
+
+
+class SeedHandler:
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
+
+    def handle(self, request: SeedRequest) -> SeedResultDto:
+        groups_created = groups_skipped = 0
+        locations_created = locations_skipped = 0
+
+        if request.groups:
+            seed_groups = _load_seed("default_stock_groups.json")
+            group_filter: set[str] | None = (
+                {n.strip().lower() for n in request.group_names if (n or "").strip()}
+                if request.group_names is not None
+                else None
+            )
+            existing = {
+                g.name.strip().lower()
+                for g in self.repository.get(StockGroup).all()
+            }
+            for entry in seed_groups:
+                name = (entry.get("name") or "").strip()
+                if not name:
+                    continue
+                if group_filter is not None and name.lower() not in group_filter:
+                    continue
+                if name.lower() in existing:
+                    groups_skipped += 1
+                    continue
+                self.repository.add(StockGroup(name=name))
+                existing.add(name.lower())
+                groups_created += 1
+            # FU-512 unit-of-work: no habit-commit between groups + locations.
+            # Locations may reference already-persisted rows via
+            # `_find_existing`, which does a full `.all()` scan — SQLAlchemy
+            # autoflush surfaces pending StockGroups on that read.
+
+        if request.locations:
+            seed_locations = _load_seed("default_locations.json")
+            path_filter: set[str] | None = (
+                {p.strip().lower() for p in request.location_paths if (p or "").strip()}
+                if request.location_paths is not None
+                else None
+            )
+            # Match the dedupe semantics of groups: skip locations whose
+            # (parent_id, name) pair already exists. Top-level zones are
+            # keyed by name alone.
+            existing_pairs: set[tuple[str | None, str]] = set()
+            for loc in self.repository.get(StockLocation).all():
+                key_parent = str(loc.parent_id) if loc.parent_id else None
+                existing_pairs.add((key_parent, loc.name.strip().lower()))
+
+            for zone in seed_locations:
+                z_name = (zone.get("name") or "").strip()
+                z_kind = zone.get("kind") or "zone"
+                if not z_name:
+                    continue
+
+                # Compute the set of child names under this zone that the
+                # filter accepts (empty when no filter). A zone is created
+                # if it's directly named OR any of its children is named.
+                zone_path = z_name.lower()
+                child_entries = zone.get("children") or []
+                accepted_children: list[dict[str, Any]] = []
+                if path_filter is None:
+                    accepted_children = list(child_entries)
+                    zone_wanted = True
+                else:
+                    zone_wanted = zone_path in path_filter
+                    for child in child_entries:
+                        c_name = (child.get("name") or "").strip()
+                        if not c_name:
+                            continue
+                        c_path = f"{zone_path}/{c_name.lower()}"
+                        if c_path in path_filter:
+                            accepted_children.append(child)
+
+                # If the zone isn't named and no accepted children under
+                # it, skip this zone entirely.
+                if not zone_wanted and not accepted_children:
+                    continue
+
+                key = (None, z_name.lower())
+                if key in existing_pairs:
+                    zone_entity = self._find_existing(z_name, None)
+                    # Only count as "skipped" when the zone itself was
+                    # explicitly requested — otherwise the zone is a
+                    # silent prerequisite for the accepted children.
+                    if zone_wanted:
+                        locations_skipped += 1
+                else:
+                    zone_entity = StockLocation(
+                        name=z_name, kind=z_kind, parent_id=None, sequence=0
+                    )
+                    self.repository.add(zone_entity)
+                    # FU-512 unit-of-work: child StockLocation rows below
+                    # set `parent_id = zone_entity.id`. `add()` assigns the
+                    # UUID client-side, but the child insert is a Core-level
+                    # `db.session.execute(...)` in nothing else in this loop —
+                    # the classic mapper has no `relationship()` between
+                    # StockLocation self-refs, so SQLite `PRAGMA
+                    # foreign_keys=ON` can fire on the child before the
+                    # parent hits the wire. Flush the parent, don't commit
+                    # (see the local contract in
+                    # `sqlalchemy_repository.py:57-67`).
+                    self.repository.flush()
+                    existing_pairs.add(key)
+                    locations_created += 1
+
+                for idx, child in enumerate(accepted_children):
+                    c_name = (child.get("name") or "").strip()
+                    c_kind = child.get("kind") or "area"
+                    if not c_name or zone_entity is None:
+                        continue
+                    pair = (str(zone_entity.id), c_name.lower())
+                    if pair in existing_pairs:
+                        locations_skipped += 1
+                        continue
+                    self.repository.add(StockLocation(
+                        name=c_name,
+                        kind=c_kind,
+                        parent_id=zone_entity.id,
+                        sequence=idx,
+                    ))
+                    existing_pairs.add(pair)
+                    locations_created += 1
+
+        # FU-512 unit-of-work: single final commit across groups + locations.
+        self.repository.save_changes()
+
+        return SeedResultDto(
+            groups_created=groups_created,
+            groups_skipped=groups_skipped,
+            locations_created=locations_created,
+            locations_skipped=locations_skipped,
+        )
+
+    def _find_existing(self, name: str, parent_id: UUID | None) -> StockLocation | None:
+        # Inline lookup so the upsert path can grab the existing zone to
+        # parent children off — saves another all() round-trip.
+        for loc in self.repository.get(StockLocation).all():
+            if loc.name.strip().lower() != name.lower():
+                continue
+            same_parent = (loc.parent_id is None and parent_id is None) or (
+                loc.parent_id is not None
+                and parent_id is not None
+                and loc.parent_id == parent_id
+            )
+            if same_parent:
+                return loc
+        return None
+
+
+@ONBOARDING_ROUTER.route("/seed", methods=["POST"])
+@has_request_body(SeedRequest)
+def seed_onboarding():
+    user_id = _current_user_id()
+    if user_id is None:
+        return unauthorized("Sign in to use the onboarding endpoints.")
+    request: SeedRequest = get_request_body()
+    if not request.groups and not request.locations:
+        # Nothing requested — return zero-counts rather than 400 so the
+        # frontend can call this unconditionally as "advance step 3".
+        return ok(SeedResultDto(0, 0, 0, 0))
+    result = SeedHandler(SqlAlchemyRepository()).handle(request)
+    _LOGGER.info(
+        "Onboarding seed (user %s): groups +%d/-%d, locations +%d/-%d",
+        user_id,
+        result.groups_created, result.groups_skipped,
+        result.locations_created, result.locations_skipped,
+    )
+    return ok(result)
+
+
+# ─── Starter catalogue (C-5.5) ───────────────────────────────────────
+# The default groups/locations + starter packs the wizard previews and lets
+# the user pick from. Served from the bundled JSON (the seed source of truth)
+# so the client never duplicates the catalogue (R-003).
+
+
+@dataclass(frozen=True, slots=True)
+class LocationNodeDto:
+    name: str
+    kind: str
+    children: list["LocationNodeDto"]
+
+
+@dataclass(frozen=True, slots=True)
+class StarterPackItemDto:
+    name: str
+    group: str | None
+    location: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class StarterPackDto:
+    key: str
+    label: str
+    blurb: str
+    items: list[StarterPackItemDto]
+
+
+@dataclass(frozen=True, slots=True)
+class OnboardingCatalogDto:
+    groups: list[str]
+    locations: list[LocationNodeDto]
+    packs: list[StarterPackDto]
+
+
+def _location_nodes(raw: list[dict[str, Any]]) -> list[LocationNodeDto]:
+    nodes: list[LocationNodeDto] = []
+    for zone in raw:
+        name = (zone.get("name") or "").strip()
+        if not name:
+            continue
+        nodes.append(LocationNodeDto(
+            name=name,
+            kind=zone.get("kind") or "zone",
+            children=_location_nodes(zone.get("children") or []),
+        ))
+    return nodes
+
+
+def _starter_packs() -> list[StarterPackDto]:
+    packs: list[StarterPackDto] = []
+    for pack in _load_seed("starter_packs.json"):
+        key = (pack.get("key") or "").strip()
+        if not key:
+            continue
+        items = [
+            StarterPackItemDto(
+                name=(it.get("name") or "").strip(),
+                group=(it.get("group") or None),
+                location=(it.get("location") or None),
+            )
+            for it in (pack.get("items") or [])
+            if (it.get("name") or "").strip()
+        ]
+        packs.append(StarterPackDto(
+            key=key,
+            label=pack.get("label") or key,
+            blurb=pack.get("blurb") or "",
+            items=items,
+        ))
+    return packs
+
+
+@ONBOARDING_ROUTER.route("/catalog", methods=["GET"])
+def onboarding_catalog():
+    user_id = _current_user_id()
+    if user_id is None:
+        return unauthorized("Sign in to use the onboarding endpoints.")
+    groups = [
+        (g.get("name") or "").strip()
+        for g in _load_seed("default_stock_groups.json")
+        if (g.get("name") or "").strip()
+    ]
+    return ok(OnboardingCatalogDto(
+        groups=groups,
+        locations=_location_nodes(_load_seed("default_locations.json")),
+        packs=_starter_packs(),
+    ))
+
+
+# ─── Seed stock items by name (C-5.5) ────────────────────────────────
+# Used for both the starter-pack picks and the wizard's first stock items.
+# Resolves group / location by NAME (against whatever's been created by the
+# groups/locations seed, which the wizard applies first) — this is what lets
+# items reference seeded groups that don't have ids yet at pick time (FU-191).
+# Idempotent: skips items whose name already exists (same discipline as the
+# groups/locations seed).
+
+
+class SeedItemDto(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    name: str
+    group_name: str | None = None
+    location_name: str | None = None
+
+
+class SeedItemsRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    items: list[SeedItemDto] = []
+
+
+@dataclass(frozen=True, slots=True)
+class SeedItemsResultDto:
+    created: int
+    skipped: int
+
+
+class SeedItemsHandler:
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
+
+    def handle(self, request: SeedItemsRequest) -> SeedItemsResultDto:
+        if not request.items:
+            return SeedItemsResultDto(0, 0)
+
+        levels = self.repository.get(StockLevel).all()
+        if not levels:
+            # No stock levels configured — can't create items. Migrations seed
+            # these, so this only happens on a pathological DB; fail soft.
+            _LOGGER.warning("Seed-items skipped: no stock levels configured.")
+            return SeedItemsResultDto(0, 0)
+        # Most-stocked level (lowest sequence) is the sensible default.
+        stocked = sorted(levels, key=lambda lvl: lvl.sequence)[0]
+
+        existing = {
+            item.name.strip().lower()
+            for item in self.repository.get(StockItem).all()
+        }
+        groups = {
+            g.name.strip().lower(): g
+            for g in self.repository.get(StockGroup).all()
+        }
+        locations = {
+            loc.name.strip().lower(): loc
+            for loc in self.repository.get(StockLocation).all()
+        }
+
+        now = datetime.now(timezone.utc)
+        created = skipped = 0
+        for entry in request.items:
+            name = (entry.name or "").strip()
+            if not name:
+                continue
+            if name.lower() in existing:
+                skipped += 1
+                continue
+            group = (
+                groups.get(entry.group_name.strip().lower())
+                if entry.group_name else None
+            )
+            location = (
+                locations.get(entry.location_name.strip().lower())
+                if entry.location_name else None
+            )
+            self.repository.add(StockItem(
+                name=name,
+                notes=None,
+                stock_group=group,
+                stock_level_last_updated=now,
+                stock_level=stocked,
+                stock_location=location,
+                # Same default as a hand-created item (2026-08-17): the
+                # user typed these, so they join the stocktake rotation.
+                stocktake_alerts_are_enabled=True,
+            ))
+            existing.add(name.lower())
+            created += 1
+        self.repository.save_changes()
+        return SeedItemsResultDto(created=created, skipped=skipped)
+
+
+@ONBOARDING_ROUTER.route("/seed-items", methods=["POST"])
+@has_request_body(SeedItemsRequest)
+def seed_items_onboarding():
+    user_id = _current_user_id()
+    if user_id is None:
+        return unauthorized("Sign in to use the onboarding endpoints.")
+    request: SeedItemsRequest = get_request_body()
+    result = SeedItemsHandler(SqlAlchemyRepository()).handle(request)
+    _LOGGER.info(
+        "Onboarding seed-items (user %s): +%d/-%d",
+        user_id, result.created, result.skipped,
+    )
+    return ok(result)
+
+
+# ─── Demo recipe + meal-plan (FU-194 / L38) ──────────────────────────
+# Optional toggle in the wizard's starter-data step. Creates one plain
+# Recipe (Aglio e Olio — three ingredients) with the StockItems it needs
+# (created if missing — RecipeIngredient → StockItem FKs are non-nullable)
+# and a MealPlan for the current household week with one dinner entry.
+# Rows are *unmarked* — the user can rename or delete them like any other,
+# per the FU's "no is_demo marking" rule. Idempotent: if the demo recipe
+# (by name) already exists, the whole call is a no-op so a second click
+# never duplicates anything.
+
+
+# Mirrors the seed.py shape so the demo dataset matches what a dev seed
+# would produce. Quantities/units kept simple — the point is a working
+# end-to-end recipe + plan, not a curated cookbook.
+_DEMO_RECIPE_NAME = "Spaghetti Aglio e Olio"
+_DEMO_INSTRUCTIONS = (
+    "1. Boil a large pot of salted water and cook the spaghetti until al dente.\n"
+    "2. Meanwhile, gently heat the olive oil with the sliced garlic until fragrant, about 3 minutes.\n"
+    "3. Toss the drained pasta through the garlic oil and serve."
+)
+_DEMO_INGREDIENTS = [
+    {"name": "Spaghetti pasta", "quantity": 250.0, "unit": "g"},
+    {"name": "Garlic cloves",   "quantity":   4.0, "unit": "cloves"},
+    {"name": "Olive oil",       "quantity":  60.0, "unit": "ml"},
+]
+
+
+@dataclass(frozen=True, slots=True)
+class SeedDemoResultDto:
+    # `False` means the demo already existed (idempotent no-op); otherwise
+    # the call wrote the rows. `items_created` counts only the StockItems
+    # the demo had to create (existing items by name are reused).
+    seeded: bool
+    items_created: int
+    recipe_created: bool
+    meal_plan_created: bool
+
+
+class SeedDemoHandler:
+    def __init__(self, repository: Repository) -> None:
+        self.repository = repository
+
+    def handle(self) -> SeedDemoResultDto:
+        # Idempotency: skip the whole thing if the demo recipe already
+        # exists (same by-name discipline the other seed endpoints use).
+        if self._find_recipe_by_name(_DEMO_RECIPE_NAME) is not None:
+            return SeedDemoResultDto(False, 0, False, False)
+
+        # StockItems first — RecipeIngredient.stock_item_id is non-nullable.
+        # We reuse existing items by name (so a user who already added
+        # "Spaghetti pasta" in the starter pack doesn't get a duplicate),
+        # and create the ones that don't exist yet.
+        items_created = 0
+        ingredient_items: list[StockItem] = []
+        existing_items = {
+            it.name.strip().lower(): it
+            for it in self.repository.get(StockItem).all()
+        }
+        # Most-stocked level is the sensible default (mirrors seed-items
+        # for the starter packs); migrations always seed at least one row.
+        levels = self.repository.get(StockLevel).all()
+        if not levels:
+            _LOGGER.warning("Seed-demo skipped: no stock levels configured.")
+            return SeedDemoResultDto(False, 0, False, False)
+        stocked = sorted(levels, key=lambda lvl: lvl.sequence)[0]
+        now = datetime.now(timezone.utc)
+        for spec in _DEMO_INGREDIENTS:
+            name = spec["name"]
+            existing = existing_items.get(str(name).strip().lower())
+            if existing is not None:
+                ingredient_items.append(existing)
+                continue
+            item = StockItem(
+                name=str(name),
+                notes=None,
+                stock_group=None,
+                stock_level_last_updated=now,
+                stock_level=stocked,
+                stock_location=None,
+                # Deliberately stays muted while the hand-created default is
+                # on: these are scaffolding for the demo recipe, not items the
+                # user chose to track, so they shouldn't fill the queue.
+                stocktake_alerts_are_enabled=False,
+            )
+            self.repository.add(item)
+            ingredient_items.append(item)
+            items_created += 1
+
+        ingredients = [
+            RecipeIngredient(
+                notes=None,
+                quantity=float(spec["quantity"]),
+                stock_item=item,
+                unit=str(spec["unit"]),
+            )
+            for spec, item in zip(_DEMO_INGREDIENTS, ingredient_items)
+        ]
+        for ri in ingredients:
+            self.repository.add(ri)
+
+        recipe = Recipe(
+            available_meals=0,
+            category=None,
+            cook_time_minutes=15,
+            cuisine=None,
+            difficulty="Easy",
+            image=None,
+            ingredients=ingredients,
+            instructions=_DEMO_INSTRUCTIONS,
+            is_favourite=False,
+            last_made_on=None,
+            name=_DEMO_RECIPE_NAME,
+            prep_time_minutes=5,
+            recipe_collection=None,
+            servings=2,
+            source=None,
+            time_of_day="Dinner",
+            version_group_id=None,
+            kcal=None,
+            steps_mode="freeform",
+            created_at=now,
+        )
+        self.repository.add(recipe)
+
+        # MealPlan anchored on the current household-week's Monday so the
+        # entry lands inside the dashboard's "next 7 days" window.
+        today = household_today(self.repository)
+        monday = today - timedelta(days=today.weekday())
+        # Schedule the entry at "today or later, this week" so the user
+        # sees it in the dashboard's Next-to-cook card immediately. Default
+        # to today's slot when today is mid-week; fall back to Wednesday on
+        # an early-week mount so the entry is visibly *upcoming*.
+        scheduled_for = today if today >= monday else monday
+        entry = MealPlanEntry(
+            recipe=recipe,
+            scheduled_for=scheduled_for,
+            servings=2,
+            slot="Dinner",
+        )
+        self.repository.add(MealPlan(
+            name=None,
+            start_date=monday,
+            entries=[entry],
+        ))
+        self.repository.save_changes()
+        return SeedDemoResultDto(
+            seeded=True,
+            items_created=items_created,
+            recipe_created=True,
+            meal_plan_created=True,
+        )
+
+    def _find_recipe_by_name(self, name: str) -> Recipe | None:
+        target = name.strip().lower()
+        for r in self.repository.get(Recipe).all():
+            if (r.name or "").strip().lower() == target:
+                return r
+        return None
+
+
+@ONBOARDING_ROUTER.route("/seed-demo", methods=["POST"])
+def seed_demo_onboarding():
+    user_id = _current_user_id()
+    if user_id is None:
+        return unauthorized("Sign in to use the onboarding endpoints.")
+    result = SeedDemoHandler(SqlAlchemyRepository()).handle()
+    _LOGGER.info(
+        "Onboarding seed-demo (user %s): seeded=%s items=+%d recipe=%s plan=%s",
+        user_id, result.seeded, result.items_created,
+        result.recipe_created, result.meal_plan_created,
+    )
+    return ok(result)

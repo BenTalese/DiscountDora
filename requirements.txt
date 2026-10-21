@@ -1,19 +1,90 @@
 apscheduler==3.10.4
 beautifulsoup4==4.12.3
-dependency_injector==4.41.0
-Flask_Cors==4.0.0
+# Desktop A: pywebview hosts the SPA in a native window (GTK on
+# Linux, WebView2 on Windows, WKWebView on macOS). platformdirs
+# resolves the per-OS user data / cache / log directories so the
+# bundled app writes to the right place. Both pulled in only by the
+# desktop bootstrap (`desktop_app.py`); the Docker path doesn't
+# import either.
+platformdirs==4.3.6
+pywebview==5.4
+# PyInstaller bundles the desktop app into `dist/Dora/`. Pulled into
+# the main requirements (vs a separate `requirements-dev.txt`) so
+# the GitHub Actions matrix doesn't have to install it separately.
+pyinstaller==6.10.0
+Flask_Cors==6.0.0
 Flask_Migrate==4.0.5
+# FU-549: pin alembic explicitly (it's transitive via Flask-Migrate). The
+# migration chain's batch-mode ops are version-sensitive, so prod must resolve
+# the same alembic dev verified `upgrade head` from empty against.
+alembic==1.14.1
 flask_sqlalchemy==3.1.1
-Flask[Async]==3.0.2
-fuzzywuzzy==0.18.0
-Jinja2==3.1.2
+Flask[Async]==3.1.3
+# FU-397 — production WSGI server for the self-host container (replaces the
+# Flask dev server, which must never front a real deployment). Pure-Python, so
+# it installs everywhere `pip install -r requirements.txt` runs, but only
+# *runs* on POSIX (no fcntl on Windows) — the Docker/Linux self-host is the
+# target. The Windows desktop bundle keeps using werkzeug's make_server
+# (desktop_app.py), and Windows dev uses the Flask dev server, so neither
+# depends on gunicorn actually running. Single-worker gthread by default
+# (see gunicorn.conf.py) so the in-process APScheduler stays singular;
+# multi-worker/horizontal scale needs the worker-split work parked in
+# OPTIONAL_SAAS_AND_MANAGED_DEPLOYMENT.md.
+gunicorn==23.0.0
+# FU-196 (d2) — rapidfuzz replaces the unmaintained fuzzywuzzy. Same
+# `process` + `fuzz` surface, MIT-licensed (fuzzywuzzy is GPL), actively
+# maintained, no python-Levenshtein warning noise.
+rapidfuzz==3.9.6
+ijson==3.2.3
+Jinja2==3.1.6
+openpyxl==3.1.2
+qrcode[pil]==7.4.2
 pydantic==2.6.0
-pytest-asyncio==0.25.3
-pytest==8.3.4
+pytest-asyncio==1.4.0
+pytest==9.0.3
+# FU-169 Phase 1 tail — coverage report on `pytest` runs, no threshold
+# gate. Slows the suite ~10-20%; opt-out with `--no-cov` if that hurts a
+# tight inner-loop. Wired via pytest.ini's addopts + [coverage:*]
+# sections in .coveragerc so `pytest` alone produces a term-missing
+# report without any per-command flags.
+pytest-cov==5.0.0
+# FU-520 item 4 (§5.F) — property-based invariant tests over the pure domain
+# modules (tests/test_domain_properties.py). Test-only dependency.
+hypothesis==6.156.4
 requests_cache==1.1.1
-Requests==2.31.0
+# FU-196 (d1) — CVE-2024-35195 fix requires ≥2.32.4.
+# FU-387 — CVE-2026-25645 fix requires ≥2.33.0.
+Requests==2.33.0
 rich==13.7.0
 SQLAlchemy_Utils==0.41.1
 SQLAlchemy==2.0.25
-typing_extensions==4.9.0
-varname==0.12.2
+# FU-045 — Postgres is the standard datastore for dev + hosted (Decision 5,
+# RECONCILED_FINISHING_PLAN.md §7.5). SQLite is still supported as the
+# lightweight self-host option via `DORA_DB_URL=sqlite:///path/to/dora.db`.
+# psycopg v3 (`psycopg[binary]`) ships a self-contained driver — no system
+# libpq required.
+psycopg[binary]==3.2.3
+typing_extensions==4.16.0
+# zoneinfo named-zone data. The stdlib `zoneinfo` falls back to the OS tz
+# database, which Windows (incl. the bundled desktop build) doesn't ship —
+# needed for the household-timezone "today" boundary (AppSetting.timezone).
+tzdata==2026.2
+# C-9.8 — Web Push (PWA notifications). pywebpush wraps RFC 8030 + VAPID;
+# it pulls in `cryptography`, `http-ece`, and `py-vapid`. The push job is
+# config-gated (DORA_VAPID_*); without them the sender runs in dry-run
+# mode and the install still boots fine.
+pywebpush==2.0.0
+python-dotenv==1.2.2
+# Piper neural TTS gives Dora a natural offline voice for chat replies +
+# cook-mode steps (POST /api/tts, features/tts; bundled Amy/Ryan models in
+# features/tts/voices). It is deliberately NOT pinned here: it's optional at
+# runtime — without it the endpoint returns 503 and the SPA falls back to the
+# browser's built-in speech synthesis, so the app boots and speaks regardless.
+# It also can't be a hard dependency because `piper-tts`'s `piper-phonemize`
+# has no Windows wheel (and Dora ships as a Windows desktop app), so a pin
+# would break `pip install -r requirements.txt` there. To enable the neural
+# voice:
+#   - Linux / macOS: `pip install piper-tts` (puts `piper` on PATH), or
+#   - Windows / any: download the standalone Piper binary from
+#     https://github.com/rhasspy/piper/releases and point DORA_PIPER_BIN at it.
+# See dora_api/features/tts/voices/README.md for the voice models.

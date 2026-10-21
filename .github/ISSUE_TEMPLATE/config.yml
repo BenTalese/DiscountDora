@@ -1,0 +1,15 @@
+# Issue chooser config. Blank issues are off so reports come through a
+# template (better signal); the links below cover the things that AREN'T
+# regular bug/feature issues.
+blank_issues_enabled: false
+contact_links:
+  - name: 🔒 Security vulnerability
+    url: https://github.com/BenTalese/dashy-dora/security/advisories/new
+    about: Please report security issues PRIVATELY here, not as a public issue (see SECURITY.md).
+  # Uncomment once GitHub Discussions is enabled on the repo (FU-608):
+  # - name: 💬 Question or general discussion
+  #   url: https://github.com/BenTalese/dashy-dora/discussions
+  #   about: Not sure it's a bug? Ask here — questions and half-formed ideas welcome.
+  - name: 💗 Support Dora
+    url: https://example.com/PLACEHOLDER-see-FU-608
+    about: Dora is free & open-source. If it's useful, you can chip in — always optional.

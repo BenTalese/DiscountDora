@@ -1,0 +1,9 @@
+[
+    { "name": "Pantry" },
+    { "name": "Fridge" },
+    { "name": "Freezer" },
+    { "name": "Cleaning" },
+    { "name": "Toiletries" },
+    { "name": "Pet" },
+    { "name": "Other" }
+]

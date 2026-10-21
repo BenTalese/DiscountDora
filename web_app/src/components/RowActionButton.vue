@@ -1,0 +1,56 @@
+<template>
+    <!--
+        Round, dense, flat icon button — the standard cluster button for
+        a list row (stock-row, recipe-ingredient row, shopping-list line,
+        etc.). Pins the visual style so every cluster reads as a uniform
+        set; the q-btn pattern (flat + dense + round + size="md") was
+        being copy-pasted four times across stock-row + cart and drifted
+        the first time someone forgot one of the props.
+
+        DR-15 / D-010: `dora-press` (motion.scss) gives every row-cluster
+        button the same 120ms press response. It belongs here rather than on
+        each caller for the same reason the q-btn props do — one definition, no
+        drift, and the cluster keeps reading as one set. Transform-only, so it
+        can't reflow the row it sits in.
+
+        Slots: tooltip goes in the default slot. Use `v-slot="{ menu }"`
+        via the standard q-menu pattern by nesting a q-menu / q-popup-proxy
+        inside the default slot if a menu is needed.
+    -->
+    <BaseButton
+        variant="icon"
+        size="md"
+        class="dora-press"
+        :icon="icon"
+        :color="color"
+        :loading="loading"
+        :disable="disable"
+        :aria-label="ariaLabel"
+        @click.stop="onClick"
+    >
+        <slot />
+    </BaseButton>
+</template>
+
+<script setup lang="ts">
+    import BaseButton from 'src/components/BaseButton.vue';
+
+    withDefaults(
+        defineProps<{
+            icon: string;
+            /** Quasar semantic colour (`primary`, `warning`, `negative`…) or
+             *  unset for the default text colour. */
+            color?: string | undefined;
+            loading?: boolean;
+            disable?: boolean;
+            ariaLabel?: string;
+        }>(),
+        { loading: false, disable: false },
+    );
+
+    const emit = defineEmits<{ (e: 'click', ev: MouseEvent): void }>();
+
+    function onClick(ev: Event) {
+        emit('click', ev as MouseEvent);
+    }
+</script>

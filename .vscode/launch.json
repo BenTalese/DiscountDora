@@ -6,22 +6,7 @@
             "type": "debugpy",
             "request": "launch",
             "module": "dora_api.startup",
-            "console": "integratedTerminal",
-            "justMyCode": true
-        },
-        {
-            "name": "MAPI",
-            "type": "debugpy",
-            "request": "launch",
-            "module": "merchant_api.startup",
-            "console": "integratedTerminal",
-            "justMyCode": true
-        },
-        {
-            "name": "Emailer",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "emailer.startup",
+            "envFile": "${workspaceFolder}/.env",
             "console": "integratedTerminal",
             "justMyCode": true
         },
@@ -80,12 +65,12 @@
     ],
     "compounds": [
         {
-            "name": "Launch All (Firefox)",
-            "configurations": ["DAPI", "MAPI", "Firefox"]
+            "name": "Launch (Firefox)",
+            "configurations": ["DAPI", "Firefox"]
         },
         {
-            "name": "Launch All (Chrome)",
-            "configurations": ["DAPI", "MAPI", "Chrome"]
+            "name": "Launch (Chrome)",
+            "configurations": ["DAPI", "Chrome"]
         }
     ]
 }

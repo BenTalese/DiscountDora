@@ -10,6 +10,149 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-927 — Grocerize's public search returns nothing; keep or drop the provider (companion repo)
+- **Raised:** 2026-10-22 (companion provider rework)
+- **Type:** finding, needs a decision
+- **What:** `grocerize-backend.fly.dev/search` returns `{"items": []}` for every
+  term. Their site now searches a separate engine with an API key embedded in
+  its own frontend, which the companion should not borrow. The provider stays
+  wired (health shows it unhealthy for Coles and Woolworths, tried last), so it
+  costs one quick request per search that nothing else answers. Its
+  `get_product` also still takes the top result rather than matching on
+  stockcode, the bug fixed in SaveOnGroceries.
+- **Why deferred:** removing a provider is the owner's call.
+- **Recommended resolution:** now-ish: owner decides drop it, or keep it in
+  case the public endpoint comes back.
+- **Resolved:** 2026-10-22: owner chose keep. The provider stays wired and is tried last while unhealthy, so it costs one quick request per search.
+
+## [RESOLVED] FU-892 — the companion image has never been built
+- **Raised:** 2026-09-07 (companion dockerisation)
+- **Type:** finding
+- **Repo:** `../dora-companion/` (new `Dockerfile` / `compose.yml` / `nginx.conf`
+  / `startup.sh`).
+- **What:** the container files were written but **the image was never built** —
+  Docker in that session needed a sudo password that a non-interactive agent
+  can't supply. What *was* verified: `docker compose config` parses the stack,
+  and `npm run build` succeeds against the real dependency tree, emitting a flat
+  `dist/` (which is what `nginx.conf` roots at) with both `VITE_*` build args
+  correctly inlined. What is unproven: the `pip install`, the `npm ci` (the
+  Dockerfile uses `ci`, the local check used the existing `node_modules`, so a
+  lockfile drift would only surface in the image), and whether merchant_api boots
+  under `startup.sh` — its `register_routers` globs `Path() / 'merchant_api' /
+  'features'` relative to the **working directory**, which is why the entrypoint
+  runs from `/app`; a wrong CWD would silently register zero routes.
+- **Why deferred:** needs a Docker daemon the session couldn't reach.
+- **Recommended resolution:** now — the first `./deploy-dora.sh` proves or
+  disproves all of it. Verify steps are in `DORA_VERIFY.md`.
+- **Resolved:** 2026-10-22: closed by the owner. The 2026-10-20 production deploy proved it: the image built and `dora_companion` runs healthy on altair under `startup.sh`, so pip/npm ci and the merchant_api CWD all held.
+
+## [RESOLVED] FU-912 — an empty `web_app/PROJECT_STATE.md` is committed alongside the real one
+- **Raised:** 2026-09-13 (cook-mode batch — tripped over, not looked for)
+- **Type:** finding
+- **What:** `web_app/PROJECT_STATE.md` exists, is **0 bytes**, and is tracked
+  (last touched in `df0a2c19`, 2026-08-14). The real front door is
+  `PROJECT_STATE.md` at the repo root. A tool run from inside `web_app/` — which
+  is where every frontend command runs — resolves the relative path to the empty
+  one, reads nothing, and concludes the dashboard has been wiped. That is exactly
+  what happened this session before the absolute path was checked.
+- **Why deferred:** deleting a tracked file the owner may have created for a
+  reason is not something to do silently mid-batch, and it is one `git rm` once
+  confirmed.
+- **Recommended resolution:** now — confirm it is stray and `git rm` it.
+- **Resolved:** 2026-10-22: confirmed stray (0 bytes, never referenced) and removed with `git rm`.
+
+## [RESOLVED] FU-785 — A benign `ResizeObserver` loop warning shows an "Oops" toast **and rolls back optimistic mutations**
+- **Raised:** 2026-08-29 (shopping-list UX v3 verify pass)
+- **Type:** finding
+- **What:** `boot/globalErrorHandler.ts:24` installs a blanket `window.onerror`
+  that calls `executeRollbacks()` and `Notify.create({ type: 'oopsie' })` for
+  *anything* the browser reports. Browsers report **"ResizeObserver loop
+  completed with undelivered notifications"** through that channel — a
+  spec-benign signal meaning an observation was deferred a frame, carrying no
+  `Error` and nothing to act on. The user sees a red *"Oops, something went
+  wrong"* for a successful interaction, and — the worse half — **every
+  registered rollback fires**, so an in-flight optimistic mutation can be
+  reverted by a layout hiccup.
+- **Re-confirmed 2026-09-01** (v4 chunk 3): still live. Fires on `/#/`,
+  `/#/stock` and `/#/shopping-lists/<id>` (plan *and* receipt faces) on any
+  viewport resize; `/#/recipes` did not reproduce. Worth noting for whoever
+  picks this up — it is easy to mistake for a defect in whatever page you are
+  currently working on, which is what happened here before this entry was found.
+- **Reproduction (verified live, 2026-08-29):** resize the viewport across the
+  `md` breakpoint on `/#/shopping-lists/<id>`, `/#/meal-plans` or the dashboard —
+  2 errors, 1 toast, every time. The observer is
+  `components/menu/MainMenuButtonStrip.vue:47`, i.e. app chrome, not any one
+  page. `/#/stock`, `/#/recipes` and the templates page do **not** trip it.
+- **Why deferred:** found while verifying UX-v3 and initially mistaken for its
+  cause; confirmed pre-existing by hiding the new overview card (no change) and
+  by reproducing on two untouched pages. Fixing it means changing app-wide
+  error handling and/or the menu strip's measurement — cross-cutting work that
+  deserves its own consideration, not a drive-by inside a shopping-list unit.
+- **Recommended resolution:** now-ish — the rollback half is a correctness bug,
+  not cosmetics. Smallest honest fix is an ignore-list in `window.onerror` for
+  `ResizeObserver loop` messages (they are unactionable by contract); the
+  better one also stops `MainMenuButtonStrip` from writing layout inside its own
+  observer callback.
+- **Resolved:** 2026-10-22: the `window.onerror` ignore-list for `ResizeObserver loop` had already landed (2026-09-06, `boot/globalErrorHandler.ts`), so no toast or rollback. The other half is now done: `composables/frameResizeObserver.ts` defers every observer callback to the next frame (and coalesces bursts), adopted by all five observers (MainMenuButtonStrip, DoraTabs, ItemPriceMoversCard, PriceHistoryBottomSheet, PriceHistoryPage), so the loop notice is no longer provoked.
+
+## [RESOLVED] FU-856 — `pack_count` can't be recorded through the products API, so R-076's better answer is unreachable
+- **Raised:** 2026-09-03 (recipe-view owner batch, item 13)
+- **Type:** follow-up
+- **What:** the cost fix (ADR-073) makes a bare count priceable whenever
+  `Product.pack_count` is set — "3 eggs" off a 12pk costs $1.38 rather than being
+  reported unpriced. But `CreateProductRequest` / `UpdateProductRequest` are
+  `extra="forbid"` and neither carries `pack_count`, so the only way it gets set
+  today is a seed script assigning the attribute directly. A user who links a
+  multipack product has no way to tell Dora how many are in it, and their counted
+  ingredients stay unpriced forever.
+- **Why deferred:** it's an API + form change on the products surface, which is
+  not what the owner's item was about, and it needs a UI decision (a field on the
+  manual product-add form? inferred from the name's "12pk"?).
+- **Recommended resolution:** now-ish — it is the half of the cost fix that turns
+  a gap back into a number.
+- **Resolved:** 2026-10-22: `pack_count` on `CreateProductRequest` / `UpdateProductRequest` (any product; `null` clears) and `ProductDto`. UI: "Set items in pack" on the product card menu (`ProductPackCountDialog`) and an optional "Items in the pack" field on the custom-product form. Related gaps closed: a price observation's multipack count now yields an item price for recipe costing (`ObservedUnitCost.item_price`), and the companion reads the count off listings ("12 Pack", "6 x 375ml", "dozen") and pushes it.
+
+## [RESOLVED] FU-864 — *Draft my shop* still wears the wand, not the burger
+- **Raised:** 2026-09-03 (meal-planner owner batch)
+- **Type:** follow-up
+- **Narrowed 2026-09-19:** the second site,
+  `components/shoppingList/ShoppingListPlanRow.vue`'s 12px inline hint, is
+  **done** — the provenance rework replaced that wand+caption with a single
+  `dora_voice` burger on auto-added lines. Only `DraftShopCard.vue` is left.
+- **What:** the owner asked for *"the consistent Dora burger icon"* on **Build my
+  week**, which revised the wand/burger split recorded in `style/icons.ts`
+  ("wand = an action she performs; burger = an opinion she holds"). The revised
+  rule — the burger is Dora's mark on anything the user reads as Dora doing or
+  thinking something — is now written into that file, and every meal-planner site
+  flipped (toolbar, empty-week banner, phone, the builder's step icon and its
+  primary button). Two sites did **not**, because they are outside this batch's
+  surface: `components/dashboard/DraftShopCard.vue` (*Draft my shop* — the
+  dashboard's exact counterpart to Build my week).
+  `auto_awesome` legitimately keeps the AI-mode marker (`DoraModeSlider`,
+  `DoraHelpPage`, `SetupAdminPage`), where it means "a model is involved", not
+  "Dora".
+- **Why deferred:** R-007. The dashboard is a surface the owner reviewed and
+  signed off visually across six chunks; changing its card icon now is an
+  unasked visual edit to signed-off work, and it is one line whenever he wants it.
+- **Recommended resolution:** now-ish — one line, but it is the owner's call
+  whether *Draft my shop* should match *Build my week*. Ask before sweeping.
+- **Resolved:** 2026-10-22: moot. `DraftShopCard` was deleted with the dashboard's `draft_shop` card (see `helpers/dashboardCards.ts`); the plan-row hint was already a burger. No wand remains outside the AI-mode markers. Stale note in `style/icons.ts` corrected.
+
+## [RESOLVED] FU-794 — candidate rule: a component-wide style rule must be scoped to the variant it was written for
+- **Raised:** 2026-08-31 (recipe-view feedback batch)
+- **Type:** follow-up (ADR evaluation, per the engineering-standards close-gate)
+- **What:** the page-h-scroll bug fixed this round came from `BaseSelect`'s
+  `:deep(.q-field__native) { flex-wrap: nowrap }` — added 2026-08-21 to make a
+  *single-value* select's text truncate, applied to *every* select in the app,
+  and silently wrong for the chip ones (chips can't ellipsis, so they just ran
+  off the side). A shared component's global rule should be conditioned on the
+  variant that motivated it. Possible new `R-0NN` + ADR; the fix pattern is the
+  `base-select--chips` class now in that file.
+- **Why deferred:** promoting a standing rule is a governance call, not a
+  side-effect of a UI batch.
+- **Recommended resolution:** now — owner decides whether this earns an R-rule.
+- **Resolved:** 2026-10-22: owner approved. Promoted to **R-096** + **ADR-093** in ENGINEERING_STANDARDS (docs only, no visual change).
+
 ## [RESOLVED] FU-914: pick one per-unit denominator for log price and comparisons
 - **Raised:** 2026-09-27 (owner question: "for log price I wonder if we over-corrected")
 - **Type:** finding, needs a decision

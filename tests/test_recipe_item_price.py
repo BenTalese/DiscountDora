@@ -55,3 +55,22 @@ def test__a_dozen_is_twelve_of_them_not_one():
 def test__pack_count_wins_over_the_size_unit():
     # Both recorded: the explicit count is the more specific fact.
     assert _item_price(6.00, 12.0, "ea", 6) == pytest.approx(1.00)
+
+
+def test__an_observation_with_a_pack_count_yields_an_item_price():
+    # FU-856: "$5.50 for 12 eggs, 700 g" logged through the price sheet's
+    # multipack field. The count used to be display-only, so 3 eggs stayed
+    # unpriced against an observation that said exactly how many there were.
+    from datetime import UTC, datetime
+    from types import SimpleNamespace
+
+    from dora_api.domain.stock_status import get_stock_item_unit_cost_with_unit_at
+
+    obs = SimpleNamespace(total_price=5.50, total_measure=700.0, unit="g",
+                          observed_at=datetime.now(UTC), pack_count=12)
+    cost = get_stock_item_unit_cost_with_unit_at([obs])
+
+    assert cost.item_price == pytest.approx(5.50 / 12)
+
+    obs.pack_count = None
+    assert get_stock_item_unit_cost_with_unit_at([obs]).item_price is None

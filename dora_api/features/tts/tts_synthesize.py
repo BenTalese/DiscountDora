@@ -36,6 +36,7 @@ never needs ffmpeg.)
 import logging
 import os
 import shutil
+import struct
 import subprocess
 from pathlib import Path
 
@@ -50,6 +51,14 @@ _LOG = logging.getLogger(__name__)
 
 # Piper's per-voice numeric knobs, in the order we forward them as CLI flags.
 _PIPER_PARAM_KEYS = ("length_scale", "noise_scale", "noise_w", "sentence_silence")
+
+# Silence put in front of every clip (FU-722). A phone's audio output, and a
+# Bluetooth link above all, powers down when idle and swallows the start of
+# the next stream while it wakes, by a varying amount. That is the reported
+# "start of the sentence is cut off, random how much", after the three
+# client-side causes were fixed. With a lead-in, what gets swallowed is
+# silence.
+_LEAD_IN_SECONDS = 0.35
 
 
 def _piper_bin() -> str | None:
@@ -192,7 +201,43 @@ def synthesize():
     if abs(pitch_semitones) > 0.01:
         wav = _pitch_shift(wav, pitch_semitones) or wav
 
-    return Response(wav, mimetype="audio/wav")
+    return Response(with_lead_in(wav, _LEAD_IN_SECONDS), mimetype="audio/wav")
+
+
+def with_lead_in(wav: bytes, seconds: float) -> bytes:
+    """``wav`` with ``seconds`` of silence before the first sample.
+
+    Rebuilt as a plain PCM WAV (RIFF, ``fmt``, ``data``) rather than patched in
+    place, because a WAV written to a pipe can carry placeholder chunk sizes:
+    the ``data`` length is taken as whatever follows its header when the
+    declared one overruns. Anything that isn't uncompressed PCM, or doesn't
+    parse, is returned unchanged so a malformed clip still plays.
+    """
+    if len(wav) < 12 or wav[:4] != b"RIFF" or wav[8:12] != b"WAVE":
+        return wav
+    fmt: bytes | None = None
+    pos = 12
+    while pos + 8 <= len(wav):
+        chunk_id = wav[pos:pos + 4]
+        size = struct.unpack("<I", wav[pos + 4:pos + 8])[0]
+        body = pos + 8
+        if chunk_id == b"fmt ":
+            fmt = wav[body:body + size]
+        elif chunk_id == b"data":
+            if fmt is None or len(fmt) < 16:
+                return wav
+            audio_format, channels, rate, _, block_align, _ = struct.unpack("<HHIIHH", fmt[:16])
+            if audio_format != 1 or block_align == 0:
+                return wav
+            pcm = wav[body:body + size] if body + size <= len(wav) else wav[body:]
+            pcm = pcm[:len(pcm) - len(pcm) % block_align]
+            silence = b"\x00" * (int(rate * seconds) * block_align)
+            data = silence + pcm
+            return (b"RIFF" + struct.pack("<I", 4 + 8 + len(fmt) + 8 + len(data)) + b"WAVE"
+                    + b"fmt " + struct.pack("<I", len(fmt)) + fmt
+                    + b"data" + struct.pack("<I", len(data)) + data)
+        pos = body + size + (size & 1)
+    return wav
 
 
 def _pitch_shift(wav: bytes, semitones: float) -> bytes | None:

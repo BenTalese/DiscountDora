@@ -91,9 +91,14 @@ def get_stock_item_unit_cost_at(observations, when=None):  # noqa: ANN001 — du
 
 @dataclass(frozen=True, slots=True)
 class ObservedUnitCost:
-    """A per-unit cost together with the unit it is *per*."""
+    """A per-unit cost together with the unit it is *per*.
+
+    ``item_price`` is the price of one countable thing in the purchase, when
+    the observation says how many there were ("$5.50 for 12 eggs, 700 g").
+    """
     amount: float
     unit: str
+    item_price: float | None = None
 
 
 def get_stock_item_unit_cost_with_unit_at(observations, when=None):  # noqa: ANN001 — duck-typed observations
@@ -114,9 +119,11 @@ def get_stock_item_unit_cost_with_unit_at(observations, when=None):  # noqa: ANN
     latest = max(candidates, key=lambda o: o.observed_at)
     if not latest.total_measure:
         return None
+    pack_count = getattr(latest, "pack_count", None)
     return ObservedUnitCost(
         amount=latest.total_price / latest.total_measure,
         unit=latest.unit,
+        item_price=latest.total_price / pack_count if pack_count else None,
     )
 
 

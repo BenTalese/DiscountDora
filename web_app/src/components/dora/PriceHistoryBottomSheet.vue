@@ -61,6 +61,7 @@
 </template>
 
 <script lang="ts" setup>
+    import { createFrameResizeObserver, type FrameResizeObserver } from 'src/composables/frameResizeObserver';
     import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
     import AppSpinner from 'src/components/AppSpinner.vue';
     import BaseDialog from 'src/components/BaseDialog.vue';
@@ -98,7 +99,7 @@
     // ── Responsive chart width (mirrors PriceHistoryPage) ───────────────────
     const bodyRef = ref<{ $el?: HTMLElement } | null>(null);
     const chartWidth = ref(720);
-    let resizeObserver: ResizeObserver | null = null;
+    let resizeObserver: FrameResizeObserver | null = null;
 
     function measure(): void {
         const el = bodyRef.value?.$el;
@@ -120,7 +121,7 @@
         measure();
         const el = bodyRef.value?.$el;
         if (el && typeof ResizeObserver !== 'undefined' && !resizeObserver) {
-            resizeObserver = new ResizeObserver(() => measure());
+            resizeObserver = createFrameResizeObserver(measure);
             resizeObserver.observe(el);
         }
     }

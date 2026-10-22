@@ -470,6 +470,7 @@ def test__get_products__GettingProduct__GetsAllExpectedAttributes(api):
     assert _Product['store_name'] == 'Woolworths'
     assert _Product['merchant_stockcode'] == '50332BA'
     assert _Product['name'] == 'Banana Mangoes'
+    assert _Product['pack_count'] is None
     assert _Product['price_now'] == 4.5
     assert _Product['price_was'] == 10.5
     assert is_valid_uuid(_Product['product_id'])
@@ -486,6 +487,7 @@ def test__get_products__GettingProduct__GetsAllExpectedAttributes(api):
         'store_name',
         'merchant_stockcode',
         'name',
+        'pack_count',
         'price_now',
         'price_was',
         'product_id',

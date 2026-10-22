@@ -41,7 +41,77 @@ next.
 
 ---
 
-## 2026-10-21 (latest): **Recipe ingredient "which one" (label / preferred buy / product)**
+## 2026-10-22 (latest): **Follow-up sweep: pack count, resize loop, voice lead-in, companion providers**
+
+**Status: built, gated, not committed. Not driven in a browser** (backend and
+companion driven against live sites). Gates: pytest 2431 passed (products DTO
+snapshot refreshed for `pack_count`); vitest 747/66; vue-tsc + eslint clean on
+touched files. Companion: 99 passed; the 4 Dora round-trip integration tests
+error identically before and after (companion venv lacks `flask_migrate`);
+companion vue-tsc clean.
+
+**Owner calls:** FU-892 close; FU-912 remove; FU-785, FU-856, FU-864, FU-722
+fix; FU-794 yes, as long as nothing looks different; FU-918: aggregators
+treated differently from direct scrapers and Coles not searchable.
+
+**Done.** FU-912 `git rm`. FU-785: the ignore-list had landed already, so the
+remaining half: `composables/frameResizeObserver.ts` (rAF-deferred, coalesced)
+in all five observers. FU-856: `pack_count` on product create/update/DTO,
+card-menu dialog + custom-product field; observation pack counts now give an
+item price (`ObservedUnitCost.item_price`); companion infers it from listings
+and pushes it. FU-864 moot (card deleted). FU-794 is now R-096 + ADR-093. FU-722:
+0.35 s lead-in silence on every Piper WAV (`with_lead_in`), kept open until
+heard on the phone.
+
+**Companion (FU-918 rework).** Root cause: one health flag per provider, the
+check only probed each provider's first merchant, and SaveOnGroceries' ALDI
+translation raised, so it was switched off for Coles too. Coles direct sits
+behind an Incapsula bot check (not bypassed) and Grocerize's public search is
+empty (FU-927). Now health is per (provider, merchant) (`ProviderHealth`), one
+`check_providers` serves cron + button, `providers_for` orders
+healthy-then-priority and keeps unhealthy ones last, and search + sync fall back
+across providers. The Merchants page lists every provider per merchant. SOG
+fixes: ALDI, names, `web_url`, stockcode match on refresh. Deleted the dead
+`get_product_offers.py` (hard-coded :5170, old API, nothing calls it).
+
+**Close-gate.** R-003 (one health routine, one provider-order rule, one
+grouping helper on the companion SPA; pack count read in one place for
+recipes), R-095 (no migration: the column existed), R-096 checked on the new
+dialog (no shared-component style rules added). New rule: R-096 (owner
+approved). No other.
+
+**Next up:** deploy; phone check for FU-722. (FU-927: owner kept Grocerize. Both
+repos committed and pushed.)
+
+---
+
+## 2026-10-22: **Old cookbook import tool (throwaway, outside the repo)**
+
+**Status: built and dry-run proven; owner to run the apply against altair.**
+No repo code changed. The tool lives in the session scratchpad (`cookbook/`):
+`items.txt` (canonical stock items + aliases, `*specific` aliases become the
+ingredient `label`), `recipes/*.txt` (every `Cookbook/` file rewritten by hand
+into a small recipe DSL; `zz_fill_*.txt` are Claude's filled-in versions),
+`build.py` -> `recipes.json`/`items.json`, `server.py` + `review.html` (local
+review page, decisions saved to `decisions.json`), `apply.py` (logs in with a
+password prompt, creates missing stock items at the lowest level, creates
+recipes into an "Old cookbook" collection, skips existing names; dry run by
+default).
+
+**Owner decisions:** 205 import (119 as written, 79 filled by Claude, 7 from
+splitting two multi-recipe files), 21 chucked, 10 left for later (lists, tips,
+a PDF-only jerky, an empty Fan Shu Wan). Full apply against the 5171 scratch
+backend: 321 items + 205 recipes, 0 errors.
+
+**Close-gate.** No repo code touched, so no R-rule exposure. `Cookbook/` stays
+untracked (personal data). No new FU or verify item.
+
+**Next up:** owner runs `apply.py <altair url> --apply`; afterwards stocktake
+the ~320 new Out of Stock items.
+
+---
+
+## 2026-10-21: **Recipe ingredient "which one" (label / preferred buy / product)**
 
 **Status: built, gated, driven live, pushed.** pytest 2422 passed; vitest
 747/66; vue-tsc + eslint clean. Driven on the 5171/5174 scratch instance

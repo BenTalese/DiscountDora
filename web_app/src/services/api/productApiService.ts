@@ -63,6 +63,7 @@ export type CreateProductCommand = {
      *  has no merchant SKU). The type said otherwise. */
     merchant_stockcode: string | null;
     name: string;
+    pack_count?: number | null;
     price_now: number;
     /** Optional (OD-2): a hand-entered product usually has no "was" price.
      *  Omitted means "no markdown" — the server defaults it to `price_now`. */
@@ -85,4 +86,6 @@ export type UpdateProductCommand = {
     image?: string;
     /** Custom products only. Wins over `image`. */
     clear_image?: boolean;
+    /** Any product. `null` clears it. */
+    pack_count?: number | null;
 };

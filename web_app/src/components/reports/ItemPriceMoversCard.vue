@@ -139,6 +139,7 @@
      * Everything numeric is server-derived — per-unit prices, the deltas, the
      * ranking and the coverage counts (R-003/R-041). This file formats.
      */
+    import { createFrameResizeObserver, type FrameResizeObserver } from 'src/composables/frameResizeObserver';
     import { computed, onBeforeUnmount, ref, watch } from 'vue';
     import { ICONS } from 'src/style/icons';
     import AppSkeleton from 'src/components/AppSkeleton.vue';
@@ -254,7 +255,7 @@
     // the same pattern `/price-history`, the bottom sheet and Price trends use.
     const chartHostRef = ref<HTMLElement | null>(null);
     const chartWidth = ref(560);
-    let observer: ResizeObserver | null = null;
+    let observer: FrameResizeObserver | null = null;
 
     function measure(): void {
         const el = chartHostRef.value;
@@ -267,7 +268,7 @@
         observer = null;
         if (!el || typeof ResizeObserver === 'undefined') return;
         measure();
-        observer = new ResizeObserver(() => measure());
+        observer = createFrameResizeObserver(measure);
         observer.observe(el);
     });
     onBeforeUnmount(() => {

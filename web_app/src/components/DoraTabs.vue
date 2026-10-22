@@ -41,6 +41,7 @@
 </template>
 
 <script setup lang="ts">
+    import { createFrameResizeObserver, type FrameResizeObserver } from 'src/composables/frameResizeObserver';
     import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 
     export interface DoraTab {
@@ -98,12 +99,12 @@
         emit('update:modelValue', name);
     }
 
-    let resizeObserver: ResizeObserver | null = null;
+    let resizeObserver: FrameResizeObserver | null = null;
 
     onMounted(() => {
         void nextTick(measure);
         if (typeof ResizeObserver !== 'undefined' && stripEl.value) {
-            resizeObserver = new ResizeObserver(() => measure());
+            resizeObserver = createFrameResizeObserver(measure);
             resizeObserver.observe(stripEl.value);
         }
         window.addEventListener('resize', measure);

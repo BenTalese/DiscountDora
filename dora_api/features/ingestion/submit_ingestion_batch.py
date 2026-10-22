@@ -88,8 +88,8 @@ class _ProductIn(BaseModel):
     size_value: float | None = Field(default=None, gt=0)
     # Multipack metadata (FU-232). `size_value` remains the TOTAL across
     # the bundle (e.g. 4×125g yoghurt → size_value=500); `pack_count` is
-    # informational, drives the "4 × 125g" obs-list label and the
-    # multipack disclosure in PriceEntry. NULL = single-pack.
+    # what recipe costing divides by to price a bare "3 eggs" (ADR-073). The
+    # companion reads it off the listing ("12 Pack"). NULL = single-pack.
     pack_count: int | None = Field(default=None, gt=0)
     # `merchant_stockcode` carve-out: the producer's SKU code, kept
     # verbatim across the rename per the runbook.

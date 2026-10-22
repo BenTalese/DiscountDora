@@ -260,6 +260,7 @@
 </template>
 
 <script lang="ts" setup>
+    import { createFrameResizeObserver, type FrameResizeObserver } from 'src/composables/frameResizeObserver';
     import BaseTooltip from 'src/components/BaseTooltip.vue';
     import InfoTip from 'src/components/help/InfoTip.vue';
     import { ICONS } from 'src/style/icons';
@@ -321,7 +322,7 @@ const alertInputs = reactive<Record<string, number | null | undefined>>({});
     // left a gap on wide screens and overflowed on narrow ones.
     const chartCardRef = ref<{ $el?: HTMLElement } | null>(null);
     const chartWidth = ref(720);
-    let chartResizeObserver: ResizeObserver | null = null;
+    let chartResizeObserver: FrameResizeObserver | null = null;
 
     function measureChart(): void {
         const el = chartCardRef.value?.$el;
@@ -450,7 +451,7 @@ const alertInputs = reactive<Record<string, number | null | undefined>>({});
         measureChart();
         const el = chartCardRef.value?.$el;
         if (el && typeof ResizeObserver !== 'undefined') {
-            chartResizeObserver = new ResizeObserver(() => measureChart());
+            chartResizeObserver = createFrameResizeObserver(measureChart);
             chartResizeObserver.observe(el);
         }
     });

@@ -46,8 +46,9 @@ class StockItemPriceObservation(BaseEntity):
     # purchase that's `500.0`. ``pack_count`` captures the "4" so the obs
     # list can render "4 × 125g" instead of "500g flat" without losing the
     # multipack context. None ⇒ single pack / free-weight (the common case).
-    # Math (per-unit cost, baseline, sidecar) reads only total_price /
-    # total_measure — pack_count is informational, never load-bearing.
+    # Per-unit cost, baseline and sidecar read only total_price /
+    # total_measure. The one reader of pack_count is recipe costing, which
+    # needs the price of one item to bill a bare "3 eggs" (FU-856).
     pack_count: int | None = None
 
     class Fields(BaseEntity.Fields):

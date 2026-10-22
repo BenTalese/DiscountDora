@@ -348,6 +348,7 @@
                         @toggle-active="onToggleActive(product)"
                         @price-history="onViewPriceHistory(product.product_id)"
                         @photo="openPhoto(product)"
+                        @pack-count="openPackCount(product)"
                         @delete="onDeleteSingle(product)"
                     />
                 </div>
@@ -472,6 +473,12 @@
             @saved="onPhotoSaved"
         />
 
+        <ProductPackCountDialog
+            v-model="packCountOpen"
+            :product="packCountTarget"
+            @saved="loadAll"
+        />
+
         <ProductPriceWatchDialog
             v-model="watchOpen"
             :product="watchTarget"
@@ -530,6 +537,7 @@
     import PageCountsFooter from 'src/components/PageCountsFooter.vue';
     import CustomProductDialog from 'src/components/products/CustomProductDialog.vue';
     import ProductCard from 'src/components/products/ProductCard.vue';
+    import ProductPackCountDialog from 'src/components/products/ProductPackCountDialog.vue';
     import ProductPhotoDialog from 'src/components/products/ProductPhotoDialog.vue';
     import ProductRow from 'src/components/products/ProductRow.vue';
     import ProductPriceWatchDialog from 'src/components/products/ProductPriceWatchDialog.vue';
@@ -1043,6 +1051,15 @@
                 caption: toastCaption(err),
             });
         }
+    }
+
+    // ── Items in the pack (FU-856) ──────────────────────────────────────
+    const packCountOpen = ref(false);
+    const packCountTarget = ref<Product | null>(null);
+
+    function openPackCount(product: Product): void {
+        packCountTarget.value = product;
+        packCountOpen.value = true;
     }
 
     // ── Custom-product photo (owner 2026-10-17) ─────────────────────────

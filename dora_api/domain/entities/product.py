@@ -28,10 +28,10 @@ class Product(BaseEntity):
     web_url: str | None
     # Multipack count (FU-227 follow-up). ``size_value`` keeps the existing
     # convention of being the TOTAL measure across the whole bundle (so the
-    # per-unit math stays unchanged); ``pack_count`` is informational —
-    # captures "this is a 4-pack of 125g" so the obs / row UI can render
-    # "$4.20 for 4 × 125g" rather than "500g flat". ``None`` ⇒ single
-    # pack / free-weight, the common case.
+    # per-unit math stays unchanged); ``pack_count`` captures "this is a
+    # 4-pack of 125g", which is what lets recipe costing price a bare count
+    # off a pack sold by weight (ADR-073). Settable through the products API
+    # (FU-856). ``None`` ⇒ single pack / free-weight, the common case.
     pack_count: int | None = None
     # OD-2 — hand-entered rather than ingested. A custom product records a
     # price for a shop no scraper covers (a butcher, a market stall, an IGA

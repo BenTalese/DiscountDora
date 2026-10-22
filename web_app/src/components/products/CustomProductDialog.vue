@@ -78,6 +78,21 @@
                 </div>
             </div>
 
+            <!-- FU-856: a pack sold by weight doesn't say how many are in it,
+                 so a recipe's "3 eggs" can't be priced without this. -->
+            <q-input
+                v-model.number="form.packCount"
+                type="number"
+                min="1"
+                step="1"
+                outlined
+                dense
+                label="Items in the pack"
+                hint="Optional. For eggs or a multipack, e.g. 12"
+                :error="!!errors.packCount"
+                :error-message="errors.packCount"
+            />
+
             <!-- Owner 2026-10-17: custom products can carry a photo (an
                  ingested one's comes from its source). Optional, so it sits
                  last; the card's menu can add or change it later. -->
@@ -146,10 +161,11 @@
         storeName: null as string | null,
         priceNow: null as number | null,
         size: '',
+        packCount: null as number | string | null,
         image: null as string | null,
     });
     const errors = reactive({
-        name: '', storeName: '', priceNow: '', size: '',
+        name: '', storeName: '', priceNow: '', size: '', packCount: '',
     });
 
     const storeOptions = computed(
@@ -163,6 +179,7 @@
         form.storeName = null;
         form.priceNow = null;
         form.size = '';
+        form.packCount = null;
         form.image = null;
         Object.keys(errors).forEach((k) => { errors[k as keyof typeof errors] = ''; });
         try {
@@ -198,6 +215,14 @@
         return { value, unit: match[2]!.toUpperCase() };
     }
 
+    /** Blank is fine (most products are one item or free weight). */
+    function packCountValue(): number | null | undefined {
+        const raw = form.packCount;
+        if (raw === null || raw === '') return null;
+        const n = Number(raw);
+        return Number.isInteger(n) && n >= 1 ? n : undefined;
+    }
+
     function validate(): { value: number; unit: string } | null {
         Object.keys(errors).forEach((k) => { errors[k as keyof typeof errors] = ''; });
         let ok = true;
@@ -206,6 +231,11 @@
         if (!form.storeName) { errors.storeName = 'Pick a store.'; ok = false; }
         if (form.priceNow === null || form.priceNow <= 0) {
             errors.priceNow = 'Enter what it costs.';
+            ok = false;
+        }
+
+        if (packCountValue() === undefined) {
+            errors.packCount = 'Use a whole number, 1 or more, or leave it blank.';
             ok = false;
         }
 
@@ -236,6 +266,7 @@
                 size: form.size.trim(),
                 size_value: size.value,
                 size_unit: size.unit,
+                pack_count: packCountValue() ?? null,
                 is_active: true,
                 is_available: true,
                 image: form.image,

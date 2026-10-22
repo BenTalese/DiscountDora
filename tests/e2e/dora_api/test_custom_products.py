@@ -230,3 +230,56 @@ def test__a_custom_product_can_be_created_with_a_photo():
     product_id = _create_custom(image=_PNG_DATA_URL)
 
     assert _fetch(product_id)["has_image"] is True
+
+
+# ── pack_count (FU-856) ──────────────────────────────────────────────────
+
+
+def test__pack_count_is_kept_when_created():
+    product_id = _create_custom(
+        name=f"Free Range Eggs-{uuid4().hex[:8]}",
+        size="700g", size_unit="G", size_value=700.0, pack_count=12,
+    )
+
+    assert _fetch(product_id)["pack_count"] == 12
+
+
+def test__pack_count_defaults_to_none():
+    assert _fetch(_create_custom())["pack_count"] is None
+
+
+def test__pack_count_must_be_positive_on_create():
+    body = {
+        "name": f"Eggs-{uuid4().hex[:8]}", "store_name": _store_name(),
+        "is_active": True, "is_available": True, "price_now": 5.5,
+        "size": "700g", "size_unit": "G", "size_value": 700.0, "pack_count": 0,
+    }
+
+    assert requests.post(f"{BASE}/products", json=body).status_code == 400
+
+
+def test__pack_count_can_be_set_and_cleared_on_an_ingested_product():
+    """The case the field exists for: a scraped carton of eggs whose source
+    never said how many are in it."""
+    items = requests.get(f"{BASE}/products").json()["items"]
+    product_id = next(p for p in items if not p["is_custom"])["product_id"]
+
+    set_resp = requests.patch(f"{BASE}/products/{product_id}", json={"pack_count": 6})
+    assert set_resp.status_code == 204, set_resp.text
+    assert _fetch(product_id)["pack_count"] == 6
+
+    untouched = requests.patch(f"{BASE}/products/{product_id}", json={"is_active": True})
+    assert untouched.status_code == 204
+    assert _fetch(product_id)["pack_count"] == 6
+
+    clear_resp = requests.patch(f"{BASE}/products/{product_id}", json={"pack_count": None})
+    assert clear_resp.status_code == 204
+    assert _fetch(product_id)["pack_count"] is None
+
+
+def test__pack_count_must_be_positive_on_update():
+    product_id = _create_custom()
+
+    resp = requests.patch(f"{BASE}/products/{product_id}", json={"pack_count": 0})
+
+    assert resp.status_code == 400

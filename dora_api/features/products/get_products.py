@@ -39,6 +39,7 @@ class ProductDto:
     # verbatim per the rename runbook.
     merchant_stockcode: str | None
     name: str
+    pack_count: int | None
     price_now: float
     price_was: float
     product_id: UUID
@@ -67,6 +68,7 @@ class ProductDto:
             store_name = product.store.name,
             merchant_stockcode = product.merchant_stockcode,
             name = product.name,
+            pack_count = product.pack_count,
             price_now = product.current_offer.price_now,
             price_was = product.current_offer.price_was,
             product_id = product.id,

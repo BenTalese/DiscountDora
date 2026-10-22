@@ -22,6 +22,13 @@ top-to-bottom.
 
 ---
 
+## Follow-up batch 2026-10-22
+- [ ] My products ⋮ → Set items in pack: save 12, the menu then reads "Items in pack: 12"; Clear removes it.
+- [ ] Add a custom product with Items in the pack set; a recipe's "3 eggs" linked to it is priced.
+- [ ] Resize across the md breakpoint on the dashboard and a shopping list: no Oops toast; the nav indicator still sits under the active tab.
+- [ ] Companion Settings → Merchants → Run health check: each merchant lists every provider with its own colour; Coles shows SaveOnGroceries green beside a red coles.com.au.
+- [ ] Companion search, Coles only: results come back; saving an egg 12 pack lands in Dora with 12 in the pack.
+
 ## Owner batch 2026-10-17
 - [ ] Bell, expired alert (none in the seed): Log waste opens the reason picker; logging removes the alert and Undo brings it back.
 - [ ] Bell on a phone: snooze/dismiss column and wrapped action rows don't overlap or mis-tap.
@@ -250,15 +257,11 @@ Then the rest:
 
 ---
 
-## Deploy — the companion stack (2026-09-07) — origin FU-790 / FU-892
+## Deploy — the companion stack (2026-09-07) — origin FU-790
 
-Nothing here ran against a real daemon; the whole path is unproven. Run
-`./deploy-dora.sh` and walk down.
+The 2026-10-20 deploy built the image and both stacks run healthy. Still to
+walk on the server:
 
-- [ ] The **companion image builds** — `pip install`, `npm ci` and `npm run
-      build` all clear inside the container.
-- [ ] Both stacks report healthy: `docker compose ps` in `~/DiscountDora` and in
-      `~/dora-companion`.
 - [ ] **merchant_api registered its routes** — `docker compose logs
       dora_companion` shows no zero-route startup, and
       `http://<server>:5172/api` answers.
@@ -1587,8 +1590,8 @@ order — the engine reading is what makes the rest interpretable.
 - [ ] **Sous Chef "?" popover → "Voice:" line** reads Piper or Browser fallback.
 - [ ] **Sous Chef on, enter cook mode:** step 1 is announced without pressing
       Next.
-- [ ] **Does the sentence start still get clipped?** Three candidate causes were
-      closed (FU-722/FU-723); if it still clips, that's new information.
+- [ ] **Does the sentence start still get clipped?** Piper clips now start
+      with 0.35 s of silence (2026-10-22). Note the engine if it still clips.
 - [ ] **Barge-in still works:** say "next" while she's mid-sentence and it's
       heard (the mic-restart fix must not have muted listening).
 - [ ] **Same clipping in Dora chat?** No continuous mic there, so clipping in

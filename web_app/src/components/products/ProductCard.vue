@@ -171,6 +171,14 @@
                             </q-item-section>
                             <q-item-section>Price history</q-item-section>
                         </q-item>
+                        <q-item clickable @click="emit('pack-count')">
+                            <q-item-section avatar>
+                                <q-icon :name="ICONS.inventory_2" size="18px" />
+                            </q-item-section>
+                            <q-item-section>
+                                {{ product.pack_count != null ? `Items in pack: ${product.pack_count}` : 'Set items in pack' }}
+                            </q-item-section>
+                        </q-item>
                         <!-- Owner 2026-10-17: photos for custom products
                              only. An ingested product's picture comes from
                              its source (and the API refuses a change). -->
@@ -236,6 +244,7 @@
         (e: 'price-history'): void;
         (e: 'watch-price'): void;
         (e: 'photo'): void;
+        (e: 'pack-count'): void;
         (e: 'delete'): void;
     }>();
 

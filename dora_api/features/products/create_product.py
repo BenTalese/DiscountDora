@@ -38,6 +38,10 @@ class CreateProductRequest(BaseModel):
     # offer, retained verbatim per the rename runbook.
     merchant_stockcode: str | None = Field(default = None, min_length = 1)
     name: str = Field(min_length = 1)
+    # How many countable things the pack holds ("12" eggs in a 700 g carton).
+    # `size_value` stays the total measure; this is what lets a recipe's bare
+    # "3 eggs" be priced off the pack (ADR-073, FU-856).
+    pack_count: int | None = Field(default = None, gt = 0)
     price_now: float = Field(gt = 0)
     # Optional (OD-2). A hand-entered product usually has no "was" price —
     # the user knows what the butcher charges, not what it charged last month.
@@ -133,6 +137,7 @@ class CreateProductHandler:
             store=_Store,
             merchant_stockcode=request.merchant_stockcode,
             name=request.name,
+            pack_count=request.pack_count,
             size=request.size,
             size_unit=request.size_unit,
             size_value=request.size_value,

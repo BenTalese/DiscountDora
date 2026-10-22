@@ -18,6 +18,9 @@ export type Product = {
     // producer's SKU code, retained verbatim.
     merchant_stockcode: string;
     name: string;
+    /** How many countable things the pack holds (12 eggs in a 700 g carton).
+     *  Null for a single pack or free weight. */
+    pack_count: number | null;
     price_now: number;
     price_was: number;
     product_id: string;

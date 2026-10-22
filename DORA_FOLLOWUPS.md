@@ -119,6 +119,19 @@ long session summary. Distinct from the other logs:
   fixed against the owner's own setup.
 - **Recommended resolution:** confirm in browser on the owner's companion.
 - **2026-10-21:** server logs on altair show no companion push since the 2026-10-20 production deploy, so still unconfirmed. There is no ingestion switch any more (dropped in `e7a2c4f9b361`); the deploy script mints the companion's key, which is the only gate.
+- **2026-10-22 (owner: Coles not searchable, aggregators treated differently):**
+  root cause was provider health being one flag per provider. The check probed
+  SaveOnGroceries with ALDI only, its ALDI translation raised, and that switched
+  it off for Coles too; with coles.com.au behind an Incapsula bot check and
+  Grocerize returning nothing, Coles had no provider. Companion now tracks
+  health per (provider, merchant), probes every merchant a provider serves,
+  tries unhealthy providers last instead of dropping them, and the settings page
+  lists every provider under each merchant (no URL substring guess, no "Other
+  providers" bucket). SaveOnGroceries fixed: ALDI translation, names ("| 700g"
+  junk), `web_url` (was overwritten with the stockcode), refresh matches on
+  stockcode instead of the first result. Driven against the live sites: a Coles
+  search returns Coles products with real Coles stockcodes via SaveOnGroceries.
+  The push itself is still unconfirmed against the owner's setup.
 
 ## [OPEN] FU-917 — `PriceAlert` carries a dead column and a misleading name
 - **Raised:** 2026-10-15 (price watches now fire as the `price_drop` alert)
@@ -158,20 +171,6 @@ long session summary. Distinct from the other logs:
 - **Recommended resolution:** opportunistic — next time the New list dialog is
   open for other reasons. Likely shape: one "essentials" control with a
   low/out-only modifier, rather than two peer checkboxes.
-
-## [OPEN] FU-912 — an empty `web_app/PROJECT_STATE.md` is committed alongside the real one
-- **Raised:** 2026-09-13 (cook-mode batch — tripped over, not looked for)
-- **Type:** finding
-- **What:** `web_app/PROJECT_STATE.md` exists, is **0 bytes**, and is tracked
-  (last touched in `df0a2c19`, 2026-08-14). The real front door is
-  `PROJECT_STATE.md` at the repo root. A tool run from inside `web_app/` — which
-  is where every frontend command runs — resolves the relative path to the empty
-  one, reads nothing, and concludes the dashboard has been wiped. That is exactly
-  what happened this session before the absolute path was checked.
-- **Why deferred:** deleting a tracked file the owner may have created for a
-  reason is not something to do silently mid-batch, and it is one `git rm` once
-  confirmed.
-- **Recommended resolution:** now — confirm it is stray and `git rm` it.
 
 ## [OPEN] FU-911 — `unit_price` on the product price axis is a *pack* price
 - **Raised:** 2026-09-13 (shelf-denominator batch)
@@ -465,26 +464,6 @@ long session summary. Distinct from the other logs:
 - **Recommended resolution:** opportunistic, and a good standalone chunk — it is
   cheap, mechanical, and each hit is a shipped lie removed. Cross-ref R-078 /
   ADR-075, [[FU-866]] (resolved).
-
-## [OPEN] FU-892 — the companion image has never been built
-- **Raised:** 2026-09-07 (companion dockerisation)
-- **Type:** finding
-- **Repo:** `../dora-companion/` (new `Dockerfile` / `compose.yml` / `nginx.conf`
-  / `startup.sh`).
-- **What:** the container files were written but **the image was never built** —
-  Docker in that session needed a sudo password that a non-interactive agent
-  can't supply. What *was* verified: `docker compose config` parses the stack,
-  and `npm run build` succeeds against the real dependency tree, emitting a flat
-  `dist/` (which is what `nginx.conf` roots at) with both `VITE_*` build args
-  correctly inlined. What is unproven: the `pip install`, the `npm ci` (the
-  Dockerfile uses `ci`, the local check used the existing `node_modules`, so a
-  lockfile drift would only surface in the image), and whether merchant_api boots
-  under `startup.sh` — its `register_routers` globs `Path() / 'merchant_api' /
-  'features'` relative to the **working directory**, which is why the entrypoint
-  runs from `/app`; a wrong CWD would silently register zero routes.
-- **Why deferred:** needs a Docker daemon the session couldn't reach.
-- **Recommended resolution:** now — the first `./deploy-dora.sh` proves or
-  disproves all of it. Verify steps are in `DORA_VERIFY.md`.
 
 ## [OPEN] FU-891 — a never-checked scraper reports "healthy" (companion repo)
 - **Raised:** 2026-09-07 (products program, batch E)
@@ -788,31 +767,6 @@ long session summary. Distinct from the other logs:
 - **Recommended resolution:** opportunistic — next time anything touches
   `app.scss` or the theming layer. Cheap, cosmetic, low risk.
 
-## [OPEN] FU-864 — *Draft my shop* still wears the wand, not the burger
-- **Raised:** 2026-09-03 (meal-planner owner batch)
-- **Type:** follow-up
-- **Narrowed 2026-09-19:** the second site,
-  `components/shoppingList/ShoppingListPlanRow.vue`'s 12px inline hint, is
-  **done** — the provenance rework replaced that wand+caption with a single
-  `dora_voice` burger on auto-added lines. Only `DraftShopCard.vue` is left.
-- **What:** the owner asked for *"the consistent Dora burger icon"* on **Build my
-  week**, which revised the wand/burger split recorded in `style/icons.ts`
-  ("wand = an action she performs; burger = an opinion she holds"). The revised
-  rule — the burger is Dora's mark on anything the user reads as Dora doing or
-  thinking something — is now written into that file, and every meal-planner site
-  flipped (toolbar, empty-week banner, phone, the builder's step icon and its
-  primary button). Two sites did **not**, because they are outside this batch's
-  surface: `components/dashboard/DraftShopCard.vue` (*Draft my shop* — the
-  dashboard's exact counterpart to Build my week).
-  `auto_awesome` legitimately keeps the AI-mode marker (`DoraModeSlider`,
-  `DoraHelpPage`, `SetupAdminPage`), where it means "a model is involved", not
-  "Dora".
-- **Why deferred:** R-007. The dashboard is a surface the owner reviewed and
-  signed off visually across six chunks; changing its card icon now is an
-  unasked visual edit to signed-off work, and it is one line whenever he wants it.
-- **Recommended resolution:** now-ish — one line, but it is the owner's call
-  whether *Draft my shop* should match *Build my week*. Ask before sweeping.
-
 ## [OPEN] FU-863 — A cook batch straddling today loses its link when only one forward day is left
 - **Raised:** 2026-09-03 (meal-planner owner batch — found during the multi-day QA walk)
 - **Type:** finding
@@ -923,22 +877,6 @@ long session summary. Distinct from the other logs:
   ordinals for real, since the app now draws them) is a data-shape call.
 - **Recommended resolution:** opportunistic — or now, if the doubled numbering
   turns up in a recipe the strip doesn't catch.
-
-## [OPEN] FU-856 — `pack_count` can't be recorded through the products API, so R-076's better answer is unreachable
-- **Raised:** 2026-09-03 (recipe-view owner batch, item 13)
-- **Type:** follow-up
-- **What:** the cost fix (ADR-073) makes a bare count priceable whenever
-  `Product.pack_count` is set — "3 eggs" off a 12pk costs $1.38 rather than being
-  reported unpriced. But `CreateProductRequest` / `UpdateProductRequest` are
-  `extra="forbid"` and neither carries `pack_count`, so the only way it gets set
-  today is a seed script assigning the attribute directly. A user who links a
-  multipack product has no way to tell Dora how many are in it, and their counted
-  ingredients stay unpriced forever.
-- **Why deferred:** it's an API + form change on the products surface, which is
-  not what the owner's item was about, and it needs a UI decision (a field on the
-  manual product-add form? inferred from the name's "12pk"?).
-- **Recommended resolution:** now-ish — it is the half of the cost fix that turns
-  a gap back into a number.
 
 ## [OPEN] FU-855 — Counted ingredients against a measured pack lost coverage they used to have
 - **Raised:** 2026-09-03 (recipe-view owner batch, item 13)
@@ -1599,20 +1537,6 @@ long session summary. Distinct from the other logs:
   conversion, not a patch.
 - **Recommended resolution:** opportunistic — when either page is next touched.
 
-## [OPEN] FU-794 — candidate rule: a component-wide style rule must be scoped to the variant it was written for
-- **Raised:** 2026-08-31 (recipe-view feedback batch)
-- **Type:** follow-up (ADR evaluation, per the engineering-standards close-gate)
-- **What:** the page-h-scroll bug fixed this round came from `BaseSelect`'s
-  `:deep(.q-field__native) { flex-wrap: nowrap }` — added 2026-08-21 to make a
-  *single-value* select's text truncate, applied to *every* select in the app,
-  and silently wrong for the chip ones (chips can't ellipsis, so they just ran
-  off the side). A shared component's global rule should be conditioned on the
-  variant that motivated it. Possible new `R-0NN` + ADR; the fix pattern is the
-  `base-select--chips` class now in that file.
-- **Why deferred:** promoting a standing rule is a governance call, not a
-  side-effect of a UI batch.
-- **Recommended resolution:** now — owner decides whether this earns an R-rule.
-
 ## [OPEN] FU-793 — the dense seed has no missing ingredient that also carries substitutes
 - **Raised:** 2026-08-31 (recipe-view feedback batch)
 - **Type:** finding
@@ -1720,39 +1644,6 @@ long session summary. Distinct from the other logs:
   recipe importer is open. Worth a count of what's actually in the wild first:
   `SELECT unit, COUNT(*) FROM RecipeIngredient WHERE unit IS NOT NULL GROUP BY 1`
   names the words users have really typed.
-
-## [OPEN] FU-785 — A benign `ResizeObserver` loop warning shows an "Oops" toast **and rolls back optimistic mutations**
-- **Raised:** 2026-08-29 (shopping-list UX v3 verify pass)
-- **Type:** finding
-- **What:** `boot/globalErrorHandler.ts:24` installs a blanket `window.onerror`
-  that calls `executeRollbacks()` and `Notify.create({ type: 'oopsie' })` for
-  *anything* the browser reports. Browsers report **"ResizeObserver loop
-  completed with undelivered notifications"** through that channel — a
-  spec-benign signal meaning an observation was deferred a frame, carrying no
-  `Error` and nothing to act on. The user sees a red *"Oops, something went
-  wrong"* for a successful interaction, and — the worse half — **every
-  registered rollback fires**, so an in-flight optimistic mutation can be
-  reverted by a layout hiccup.
-- **Re-confirmed 2026-09-01** (v4 chunk 3): still live. Fires on `/#/`,
-  `/#/stock` and `/#/shopping-lists/<id>` (plan *and* receipt faces) on any
-  viewport resize; `/#/recipes` did not reproduce. Worth noting for whoever
-  picks this up — it is easy to mistake for a defect in whatever page you are
-  currently working on, which is what happened here before this entry was found.
-- **Reproduction (verified live, 2026-08-29):** resize the viewport across the
-  `md` breakpoint on `/#/shopping-lists/<id>`, `/#/meal-plans` or the dashboard —
-  2 errors, 1 toast, every time. The observer is
-  `components/menu/MainMenuButtonStrip.vue:47`, i.e. app chrome, not any one
-  page. `/#/stock`, `/#/recipes` and the templates page do **not** trip it.
-- **Why deferred:** found while verifying UX-v3 and initially mistaken for its
-  cause; confirmed pre-existing by hiding the new overview card (no change) and
-  by reproducing on two untouched pages. Fixing it means changing app-wide
-  error handling and/or the menu strip's measurement — cross-cutting work that
-  deserves its own consideration, not a drive-by inside a shopping-list unit.
-- **Recommended resolution:** now-ish — the rollback half is a correctness bug,
-  not cosmetics. Smallest honest fix is an ignore-list in `window.onerror` for
-  `ResizeObserver loop` messages (they are unactionable by contract); the
-  better one also stops `MainMenuButtonStrip` from writing layout inside its own
-  observer callback.
 
 ## [OPEN] FU-784 — `DoraBubble` has no placement budget against page-level bottom chrome
 - **Raised:** 2026-08-29 (shopping-list UX v3 audit)
@@ -2621,6 +2512,15 @@ Resolved entries carry one extra line, and live in `DORA_FOLLOWUPS_RESOLVED.md`:
   rules the FU-723 mechanism out and points at the engine)? If it still clips
   with the engine known, that's new information and this entry should be rewritten
   rather than extended — three plausible mechanisms have now been closed.
+- **2026-10-22:** owner confirms it still clips sometimes. Fourth candidate
+  shipped, the only one left that fits "random how much, only the start":
+  the phone's audio output (Bluetooth above all) sleeping when idle and
+  swallowing the head of a new stream while it wakes. `POST /api/tts` now
+  puts 0.35 s of silence before every clip (`with_lead_in` in
+  `tts_synthesize.py`), so what is lost is silence. Piper only; the browser
+  voice can't be padded. Still open until heard on the phone: if it clips with
+  "Voice: Piper (server)" showing, the cause is something else; if the popover
+  says "Browser fallback", that engine is the one to chase.
 
 ## [OPEN] FU-721 — revive `.github/workflows/` (CI + Release) and prove they actually work
 - **Raised:** 2026-08-23 (owner request)

@@ -3374,6 +3374,26 @@ one-off, or purely product/UX decisions (those go to the Charter check + worklog
 - **Established:** 2026-10-21 (household starts using the production deploy).
   See ADR-092.
 
+### R-096: A shared component's style rule is scoped to the variant that needed it
+- **Rule:** a style rule added to a shared `Base*` component (or any component
+  used across surfaces) to fix one variant is conditioned on that variant, by a
+  modifier class or prop-driven class (`.base-select--chips`), not written
+  against the component's root or a `:deep()` Quasar internal for every use.
+- **Why:** `BaseSelect` gained `:deep(.q-field__native) { flex-wrap: nowrap }`
+  on 2026-08-21 so a single-value select would truncate. It applied to every
+  select in the app, and on the chip variant (chips can't ellipsis) it pushed
+  the chips off the side and scrolled the whole page sideways (fixed
+  2026-08-31, FU-794).
+- **How to comply:** name the variant the fix is for, give it a class bound to
+  the prop or state that defines it, and scope the rule to that class. If the
+  rule really is for every variant, check each one renders correctly and say
+  so in the comment.
+- **Violation signal:** an unconditioned `:deep(.q-*)` rule in a shared
+  component whose comment names one use ("so the single select truncates");
+  a fix on one page that changes layout on another.
+- **Established:** 2026-10-22 (FU-794, from the 2026-08-31 recipe-view batch).
+  See ADR-093.
+
 
 ### ADR-001 — Adopt engineering standards + mandatory explain-or-flag gate
 - **Date / task:** 2026-06-06 (user request after repeated theme/component regressions)
@@ -6205,3 +6225,16 @@ A non-binding cookbook of solutions to recurring problems. Not rules — just a
   tracking, which is the reason to start using it.
 - **Consequences:** schema changes cost a backfill each. Open follow-ups that
   plan a non-preserving migration are revisited against R-095 when picked up.
+
+### ADR-093: Shared-component style fixes are variant-scoped (promotes R-096)
+- **Date / task:** 2026-10-22 (owner approved FU-794)
+- **Status:** accepted
+- **Context:** the page-level horizontal scroll fixed in the 2026-08-31
+  recipe-view batch came from a `BaseSelect` rule written for one variant and
+  applied to all of them. The fix introduced the `base-select--chips` class.
+- **Decision:** style rules in shared components are scoped to the variant
+  they were written for (R-096). Existing scoped rules stand; no restyle.
+- **Alternatives considered:** leave it to review. Rejected: the bug only
+  showed on a surface nobody was working on, so review of the change that
+  caused it could not have seen it.
+- **Consequences:** one extra class per variant-specific fix. No visual change.

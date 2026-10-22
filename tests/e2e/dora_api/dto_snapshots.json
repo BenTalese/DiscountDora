@@ -207,6 +207,7 @@
       "linked_stock_item_name",
       "merchant_stockcode",
       "name",
+      "pack_count",
       "price_now",
       "price_was",
       "product_id",

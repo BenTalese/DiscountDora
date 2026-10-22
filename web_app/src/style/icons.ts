@@ -88,10 +88,9 @@ export const ICONS = {
     //   Dora doing or thinking something, action or opinion. The wand is left
     //   with the AI-mode marker, where it means "a model is involved", not
     //   "Dora".
-    //   Still on the wand and NOT changed here, because they are surfaces this
-    //   batch had no mandate over: `DraftShopCard` (dashboard) and
-    //   `ShoppingListPlanRow`'s inline hint. Logged as a follow-up rather than
-    //   swept — see DORA_FOLLOWUPS.
+    //   The two sites left on the wand after that batch are gone: the plan
+    //   row's hint became a burger, and the dashboard's Draft my shop card was
+    //   deleted (FU-864).
     // Not to be confused with `menu` (mdi-menu) — MDI's hamburger is a drawn
     // sesame-bun burger, not three bars, and the two never appear together.
     dora_voice: 'mdi-hamburger',

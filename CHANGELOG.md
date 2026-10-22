@@ -6,6 +6,11 @@ semver — major bumps signal schema or breaking-config changes.
 ## [Unreleased]
 
 ### Added
+- **How many in the pack (2026-10-22).** A product can record how many items
+  its pack holds: from its menu on My products, or when adding a custom
+  product. A recipe's "3 eggs" against a 700 g carton of 12 is now priced. A
+  multipack count logged with a price counts too, and the companion reads it
+  off listings like "12 Pack" when you save a product.
 - **Recipe ingredients can say which one (2026-10-21).** An ingredient linked to
   a pantry item can carry its own name ("tasty cheddar" under Cheese) and pick
   one of the item's preferred buys, or one of its linked products on a products
@@ -15,6 +20,18 @@ semver — major bumps signal schema or breaking-config changes.
   item.
 
 ### Changed
+- **Companion searches Coles again (2026-10-22).** Coles' own site now blocks
+  the scraper, and a broken ALDI parse in SaveOnGroceries had switched that
+  provider off for every supermarket. Provider health is now tracked per
+  supermarket, so Coles searches go through SaveOnGroceries. The Merchants page
+  lists every provider under each supermarket it serves, each with its own
+  health. SaveOnGroceries also returns ALDI results, clean names, real product
+  links, and matches saved products by id when refreshing.
+- **Dora's voice starts with a short pause (2026-10-22).** A beat of silence
+  before each spoken line, so a phone or Bluetooth speaker waking up no longer
+  eats the first words.
+- **No more "Oops" on resize (2026-10-22).** Size measurements wait a frame, so
+  resizing the window no longer trips the browser's resize-loop notice.
 - **Prices always per 100g / 100ml (2026-10-21).** Logged prices, price
   history, reports and recipe costs no longer switch to per kg or per L for
   bigger packs, so a 500 g and a 2 kg bag read in the same unit. US installs

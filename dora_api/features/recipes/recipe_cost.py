@@ -229,13 +229,14 @@ def _unit_price_map(repository, stock_item_ids: list) -> tuple[dict, dict]:
             continue
         # A count observation ("$9 for 3 punnets") already *is* a per-item
         # price. A measure observation ("$6 for 4 L") spans an unknown number
-        # of packs, so it can't yield one.
+        # of packs, so it can't yield one, unless the user recorded the pack
+        # count with it ("$5.50 for 12 eggs, 700 g"; FU-856).
         found = units.find_unit(cost.unit)
         # `/ factor` for the same reason `_item_price` divides: "$60 per dozen"
         # is a per-item price of $5, not $60.
         pack = (cost.amount / found.factor
                 if found is not None and found.dimension == units.COUNT
-                else None)
+                else cost.item_price)
         obs_cost_by_item[sid_key] = UnitPrice(cost.amount, cost.unit, pack)
 
     return offer_by_item, obs_cost_by_item

@@ -36,6 +36,10 @@ class UpdateProductRequest(BaseModel):
     # source. The handler refuses rather than guessing which.
     image: str | None = Field(default = None, max_length = 6_000_000)
     clear_image: bool = False
+    # Settable on any product, ingested or custom: a scraper rarely knows how
+    # many eggs are in the carton, and ingest only restates it when its source
+    # does (a null push never clobbers). Sending `null` clears it (FU-856).
+    pack_count: int | None = Field(default = None, gt = 0)
 
 
 @dataclass(slots=True)
@@ -80,6 +84,9 @@ class UpdateProductHandler:
 
         if "is_available" in _SetFields and request.is_available is not None:
             _Product.is_available = request.is_available
+
+        if "pack_count" in _SetFields:
+            _Product.pack_count = request.pack_count
 
         if request.clear_image:
             _Product.image = None

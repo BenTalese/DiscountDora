@@ -275,7 +275,6 @@
             });
             $q.notify({
                 type: 'positive',
-                position: 'bottom-right',
                 message: 'Custom product added.',
             });
             open.value = false;
@@ -283,7 +282,6 @@
         } catch (err) {
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: 'Could not add the product.',
                 caption: toastCaption(err),
             });

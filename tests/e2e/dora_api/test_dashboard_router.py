@@ -64,12 +64,11 @@ def test__dashboard_summary__ResponseShape__CarriesEveryCardPayload(api):
     # nothing renders again.
     _Body = _summary()
 
-    assert _Body.keys() == {
-        "stock_items", "shopping_lists", "recipes", "meal_plan",
-    }
+    # Finalisation 08-R2 dropped `shopping_lists` and `recipes` whole: their
+    # last reader (the hero's empty-cookbook nudge) went on 2026-09-04 and
+    # AboutSettings reads `/usage-stats`.
+    assert _Body.keys() == {"stock_items", "meal_plan"}
     assert _Body["stock_items"].keys() == {"total", "out_of_stock", "low_stock"}
-    assert _Body["shopping_lists"].keys() == {"total"}
-    assert _Body["recipes"].keys() == {"total"}
     assert _Body["meal_plan"].keys() == {"upcoming_entries"}
     assert isinstance(_Body["meal_plan"]["upcoming_entries"], list)
 
@@ -120,14 +119,8 @@ def test__dashboard_summary__CreatingLowStockItem__LowCountIncreases(api):
 # contract belongs to the recipes router's own suite, not this one.
 
 
-def test__dashboard_summary__CreatingRecipe__RecipeTotalIncreases(api):
-    # `recipes.total` survives the FU-826 trim: AboutSettings' at-a-glance block
-    # renders it, and the dashboard hero reads it for the empty-cookbook nudge.
-    _Before = _summary()["recipes"]["total"]
-
-    _make_recipe("Dashboard Recipe Total")
-
-    assert _summary()["recipes"]["total"] == _Before + 1
+# `test__dashboard_summary__CreatingRecipe__RecipeTotalIncreases` went with
+# `recipes.total` (finalisation 08-R2).
 
 #endregion recipe card
 

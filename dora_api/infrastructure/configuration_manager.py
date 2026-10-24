@@ -231,6 +231,18 @@ class DoraConfig:
             return [o.strip() for o in raw.split(",") if o.strip()]
         return list(_PROFILE_DEFAULTS[current_profile()]["cors_origins"])
 
+    def get_trusted_proxy_hops(self) -> int:
+        """How many reverse proxies sit in front of the API, i.e. how many
+        `X-Forwarded-For` entries to trust (`DORA_TRUSTED_PROXY_HOPS`).
+
+        0 (the default) = no proxy: `request.remote_addr` is the client. Set
+        to 1 behind one proxy (nginx / Caddy / Traefik / a Cloudflare tunnel)
+        so the login rate limit and the audit log see the real client address
+        instead of the proxy's. Never set it higher than the proxies you
+        actually control — each hop you trust is an address a direct client
+        can forge. Negative or unparseable values are treated as 0."""
+        return max(0, _env_int("DORA_TRUSTED_PROXY_HOPS", 0))
+
     def is_seed_allowed(self) -> bool:
         """Dev seed only runs in development; production refuses
         regardless of DORA_ALLOW_DESTRUCTIVE."""

@@ -14,7 +14,7 @@ import logging
 import re
 import statistics
 from collections import Counter
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Callable
 from uuid import UUID
 
@@ -26,10 +26,10 @@ from dora_api.domain.entities.recipe import Recipe
 from dora_api.domain.entities.recipe_ingredient import RecipeIngredient
 from dora_api.domain.entities.shopping_list import (
     SHOPPING_LIST_STATUS_DONE, ShoppingList, ShoppingListLine)
-from dora_api.domain.entities.stock_group import StockGroup
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.entities.stock_level import StockLevel
 from dora_api.domain.entities.stock_location import StockLocation
+from dora_api.domain.entities.stock_item_waste_event import StockItemWasteEvent
 from dora_api.domain.entities.app_setting import AppSetting
 # the assistant now honours the admin-configured expiring-soon window
 # (AppSetting.expiring_soon_window_days), matching alerts + the location
@@ -45,7 +45,7 @@ from dora_api.features.alerts.get_alerts import GetAlertsHandler
 from dora_api.features.shopping_lists._line_price import line_paid_unit_price
 from dora_api.persistence.bool_operation import BoolOperation
 from dora_api.persistence.field import EntityField
-from dora_api.features.app_settings.clock import household_today
+from dora_api.features.app_settings.clock import household_timezone, household_today
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 
 _Logger = logging.getLogger(__name__)
@@ -1407,7 +1407,9 @@ def suggest_substitution(args: dict) -> list[dict]:
     if not raw:
         return [{"error": "ingredient is required"}]
     # Strip filler words and trailing 's' before lookup.
-    cleaned = re.sub(r"^(some|any|a|an)\s+", "", raw).rstrip("s")
+    # One trailing "s", not every one — `rstrip("s")` turned "molasses"
+    # into "molasse" and "cress" into "cre" (finalisation 11-R7).
+    cleaned = re.sub(r"s$", "", re.sub(r"^(some|any|a|an)\s+", "", raw))
     if cleaned not in _SUBSTITUTES:
         cleaned_plural = cleaned + "s"
         canonical = _SUBSTITUTE_ALIASES.get(cleaned) or _SUBSTITUTE_ALIASES.get(cleaned_plural) or _SUBSTITUTE_ALIASES.get(raw)
@@ -2121,12 +2123,16 @@ def waste_insights(args: dict) -> list[dict]:
     except (TypeError, ValueError):
         window_days = 90
     window_days = max(7, min(window_days, 365))
-    cutoff = datetime.now(timezone.utc) - timedelta(days=window_days)
-
-    from dora_api.domain.entities.stock_item_waste_event import (
-        StockItemWasteEvent,
-    )
     repo = SqlAlchemyRepository()
+    # R-021 — the window is a household calendar span, anchored on the
+    # household's midnight, not a UTC instant (finalisation 11-R2; this
+    # line also used to NameError because `timezone` was never imported
+    # at module scope).
+    cutoff = datetime.combine(
+        household_today(repo) - timedelta(days=window_days),
+        datetime.min.time(),
+        tzinfo=household_timezone(repo),
+    ).astimezone(timezone.utc)
     events: list[StockItemWasteEvent] = repo.get(StockItemWasteEvent).all(
         EntityField(
             StockItemWasteEvent, StockItemWasteEvent.Fields.OCCURRED_AT
@@ -2604,7 +2610,6 @@ def recipe_for_occasion(args: dict) -> list[dict]:
 # handlers so the assistant answers recall questions from the same
 # aggregation logic the /reports page renders (single source, R-003).
 def meals_cooked_in_range(args: dict) -> list[dict]:
-    from datetime import datetime, timedelta, timezone
     from dora_api.features.reports.reports import (
         MealsCookedHandler, _parse_range,
     )
@@ -2643,7 +2648,6 @@ def spend_by_category(args: dict) -> list[dict]:
 
 
 def spend_year_over_year(args: dict) -> list[dict]:
-    from datetime import datetime, timedelta, timezone
     from dora_api.features.reports.reports import (
         SpendYoYHandler, _range_days,
     )
@@ -2701,28 +2705,32 @@ _TOOLS: dict[str, Callable[[dict], list[dict]]] = {
     "spend_year_over_year": spend_year_over_year,
 }
 
-# Where the UI should offer to navigate after answering, per tool.
+# Where the UI should offer to navigate after answering, per tool. Every
+# path here must be a live SPA route — `/recipes` and `/product-search`
+# were retired and 11 hints sent the "See it" button to the 404 page
+# (finalisation 11-R3); `test_assistant_tool_registry` pins them against
+# `routes.ts` now.
 _TOOL_NAV: dict[str, dict[str, str]] = {
     "search_stock": {"path": "/stock", "label": "See it on the Stock page"},
-    "search_products": {"path": "/product-search", "label": "Open product search"},
-    "search_recipes": {"path": "/recipes", "label": "Browse recipes"},
-    "suggest_recipes": {"path": "/recipes", "label": "Browse recipes"},
+    "search_products": {"path": "/my-products", "label": "Open My products"},
+    "search_recipes": {"path": "/cookbook", "label": "Browse recipes"},
+    "suggest_recipes": {"path": "/cookbook", "label": "Browse recipes"},
     "whats_expiring": {"path": "/stock", "label": "See it on the Stock page"},
-    "find_deals": {"path": "/product-search", "label": "Open product search"},
+    "find_deals": {"path": "/my-products", "label": "Open My products"},
     "pantry_health": {"path": "/stock", "label": "Open Stock"},
     "meal_plan_for_date": {"path": "/meal-plans", "label": "Open Meal Plans"},
-    "meals_in_pool": {"path": "/recipes", "label": "Open Recipes"},
+    "meals_in_pool": {"path": "/cookbook", "label": "Open Recipes"},
     "meals_shortfall": {"path": "/meal-plans", "label": "Open Meal Plans"},
-    "recipes_using_item": {"path": "/recipes", "label": "Browse recipes"},
+    "recipes_using_item": {"path": "/cookbook", "label": "Browse recipes"},
     "get_alerts": {"path": "/stock", "label": "See on Stock"},
     "stock_item_detail": {"path": "/stock", "label": "Open Stock"},
-    "recipe_detail": {"path": "/recipes", "label": "Browse recipes"},
+    "recipe_detail": {"path": "/cookbook", "label": "Browse recipes"},
     "shopping_list_contents": {"path": "/shopping-lists", "label": "Open Shopping Lists"},
-    "meal_detail": {"path": "/recipes", "label": "Open Recipes"},
+    "meal_detail": {"path": "/cookbook", "label": "Open Recipes"},
     "find_location": {"path": "/stock", "label": "See it on the Stock page"},
-    "compare_prices": {"path": "/product-search", "label": "Open product search"},
+    "compare_prices": {"path": "/my-products", "label": "Open My products"},
     "purchase_price_stats": {"path": "/reports", "label": "Open Reports"},
-    "budget_status": {"path": "/settings/preferences", "label": "Adjust budget"},
+    "budget_status": {"path": "/settings/budget", "label": "Adjust budget"},
     # C-waste W6 — the /waste page is gone. Rescue intent ("what's
     # expiring?") now lives on the stock overview's "Expires soonest"
     # sort and on the dashboard's Needs-your-attention card; the
@@ -2731,7 +2739,7 @@ _TOOL_NAV: dict[str, dict[str, str]] = {
     "expiry_rescue": {"path": "/stock", "label": "Open Stock"},
     # list_suggestions intentionally has no nav target — the SPA reads
     # primary_action off each suggestion and routes from there.
-    "recipe_for_occasion": {"path": "/recipes", "label": "Browse recipes"},
+    "recipe_for_occasion": {"path": "/cookbook", "label": "Browse recipes"},
     # recall queries hand the user off to the /reports Memory
     # section for the full timeline / bars / drill-down. The chat itself
     # already carries the answer; the nav is the "and see more" affordance.

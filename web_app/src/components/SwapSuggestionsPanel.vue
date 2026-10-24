@@ -220,12 +220,12 @@
             });
             lastLedgerId.value = result.swap_ledger_id;
             previewOpen.value = false;
-            $q.notify({ type: 'positive', position: 'bottom-right', message: 'Swap applied.' });
+            $q.notify({ type: 'positive', message: 'Swap applied.' });
             emit('changed');
             await load();
         } catch (err) {
             $q.notify({
-                type: 'negative', position: 'bottom-right',
+                type: 'negative', 
                 message: 'Could not apply the swap.', caption: toastCaption(err),
             });
         } finally {
@@ -239,12 +239,12 @@
         try {
             await api.undoSwapAsync(props.mealPlanId, lastLedgerId.value);
             lastLedgerId.value = null;
-            $q.notify({ type: 'info', position: 'bottom-right', message: 'Swap undone.' });
+            $q.notify({ type: 'info', message: 'Swap undone.' });
             emit('changed');
             await load();
         } catch (err) {
             $q.notify({
-                type: 'negative', position: 'bottom-right',
+                type: 'negative', 
                 message: 'Could not undo the swap.', caption: toastCaption(err),
             });
         } finally {

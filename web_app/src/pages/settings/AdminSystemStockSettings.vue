@@ -137,13 +137,13 @@
             scanningDraft.value = result.scanning_enabled;
             await Promise.all([refreshScanning(), featureFlags$refresh()]);
             $q.notify({
-                type: 'positive', position: 'bottom-right',
+                type: 'positive', 
                 message: value ? 'Scanning & QR labels enabled.' : 'Scanning & QR labels disabled.',
             });
         } catch (err) {
             scanningDraft.value = !value;
             $q.notify({
-                type: 'negative', position: 'bottom-right',
+                type: 'negative', 
                 message: 'Could not save scanning setting.',
                 caption: toastCaption(err),
             });
@@ -157,13 +157,13 @@
             savedMode = result.auto_add_mode;
             modeDraft.value = savedMode;
             $q.notify({
-                type: 'positive', position: 'bottom-right',
+                type: 'positive', 
                 message: 'Auto-add mode saved.',
             });
         } catch (err) {
             modeDraft.value = savedMode;
             $q.notify({
-                type: 'negative', position: 'bottom-right',
+                type: 'negative', 
                 message: 'Could not save auto-add mode.',
                 caption: toastCaption(err),
             });

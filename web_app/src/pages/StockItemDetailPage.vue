@@ -192,8 +192,8 @@
                                              row into `PantryBeliefCard` at the top of
                                              the tab (feedback 2026-08-16), where it can
                                              show the reasoning for agreeing as well as
-                                             for disagreeing. The row form
-                                             (`PantryBeliefChip`) is still what the stock
+                                             for disagreeing. The row form (the level
+                                             picker's ring + menu header) is what the stock
                                              overview uses. -->
                                     </q-item-section>
                                 </q-item>
@@ -496,7 +496,7 @@
                                                 aria-label="Set expiry date"
                                                 @click="expiryDialogOpen = true"
                                             >
-                                                {{ detail.expiry_date || '–' }}
+                                                {{ detail.expiry_date ? formatDate(detail.expiry_date) : '–' }}
                                             </button>
                                             <q-space />
                                             <!-- Feedback 2026-08-08: Clear sits at the left
@@ -535,7 +535,7 @@
                                                 @update:model-value="onToggleOpen"
                                             />
                                             <span v-if="detail.is_open && detail.opened_on" class="dora-text-secondary text-caption">
-                                                Opened {{ detail.opened_on }}
+                                                Opened {{ formatDate(detail.opened_on) }}
                                             </span>
                                             <q-icon :name="ICONS.info_outline" size="16px" class="dora-text-secondary">
                                                 <BaseTooltip max-width="320px">
@@ -1377,7 +1377,7 @@
 <script lang="ts" setup>
     import BaseTooltip from 'src/components/BaseTooltip.vue';
     import { ICONS } from 'src/style/icons';
-    import { formatDateTime as formatLocaleDateTime } from 'src/composables/useDateFormat';
+    import { formatDate, formatDateTime as formatLocaleDateTime } from 'src/composables/useDateFormat';
     import SearchInput from 'src/components/SearchInput.vue';
     import AppSkeleton from 'src/components/AppSkeleton.vue';
     import BaseButton from 'src/components/BaseButton.vue';
@@ -2224,7 +2224,6 @@
             addBarcodeOpen.value = false;
             $q.notify({
                 type: 'positive',
-                position: 'bottom-right',
                 message: 'Barcode added.',
             });
         } catch (err) {
@@ -2259,13 +2258,11 @@
             await withBusyReload(() => barcodeApi.deleteAsync(barcodeId));
             $q.notify({
                 type: 'positive',
-                position: 'bottom-right',
                 message: 'Barcode removed.',
             });
         } catch (err) {
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: 'Could not remove barcode.',
                 caption: toastCaption(err),
             });
@@ -2457,7 +2454,8 @@
             let title: string;
             let body: string | null = null;
             let color: string;
-            const fmt = (iso: string | null) => (iso ? iso : '–');
+            // D-006 — install-locale dates, not raw ISO (finalisation 06-R2).
+            const fmt = (iso: string | null) => (iso ? formatDate(iso) : '–');
             if (e.kind === 'cleared') {
                 title = 'Cleared expiry';
                 body = e.previous_expiry_date
@@ -2476,7 +2474,7 @@
                 color = 'lifecycle-expiry-changed';
             } else {
                 title = 'Set expiry';
-                body = e.new_expiry_date;
+                body = fmt(e.new_expiry_date);
                 color = 'lifecycle-expiry-changed';
             }
             const entry: LifecycleEvent = {
@@ -2584,7 +2582,7 @@
 
     // ── Helpers ──────────────────────────────────────────────────────────
     function notifyErr(message: string, err: unknown) {
-        $q.notify({ type: 'negative', position: 'bottom-right', message, caption: toastCaption(err) });
+        $q.notify({ type: 'negative', message, caption: toastCaption(err) });
     }
     function formatDateTime(iso: string): string {
         if (!iso) return '';

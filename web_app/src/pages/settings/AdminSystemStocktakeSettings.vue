@@ -148,13 +148,13 @@
             enabledDraft.value = savedEnabled;
             await featureFlags$refresh();
             $q.notify({
-                type: 'positive', position: 'bottom-right',
+                type: 'positive', 
                 message: savedEnabled ? 'Stocktake is on.' : 'Stocktake is off.',
             });
         } catch (err) {
             enabledDraft.value = savedEnabled;
             $q.notify({
-                type: 'negative', position: 'bottom-right',
+                type: 'negative', 
                 message: 'Could not save the stocktake switch.',
                 caption: toastCaption(err),
             });
@@ -174,7 +174,7 @@
             // the dialog keeps offering the old default until a full reload.
             await refreshStocktakePolicy();
             $q.notify({
-                type: 'positive', position: 'bottom-right',
+                type: 'positive', 
                 message: savedOptIn
                     ? 'New items will join the stocktake rotation.'
                     : 'New items start out of the stocktake rotation.',
@@ -182,7 +182,7 @@
         } catch (err) {
             optInDraft.value = savedOptIn;
             $q.notify({
-                type: 'negative', position: 'bottom-right',
+                type: 'negative', 
                 message: 'Could not save the new-item default.',
                 caption: toastCaption(err),
             });
@@ -198,13 +198,13 @@
             savedBand = result.stocktake_default_cadence_band;
             bandDraft.value = savedBand;
             $q.notify({
-                type: 'positive', position: 'bottom-right',
+                type: 'positive', 
                 message: 'Default cadence saved.',
             });
         } catch (err) {
             bandDraft.value = savedBand;
             $q.notify({
-                type: 'negative', position: 'bottom-right',
+                type: 'negative', 
                 message: 'Could not save cadence.',
                 caption: toastCaption(err),
             });
@@ -220,13 +220,13 @@
             savedAuto = result.stocktake_auto_tuning_enabled;
             autoDraft.value = savedAuto;
             $q.notify({
-                type: 'positive', position: 'bottom-right',
+                type: 'positive', 
                 message: savedAuto ? 'Auto self-tuning on.' : 'Auto self-tuning off.',
             });
         } catch (err) {
             autoDraft.value = savedAuto;
             $q.notify({
-                type: 'negative', position: 'bottom-right',
+                type: 'negative', 
                 message: 'Could not save Auto setting.',
                 caption: toastCaption(err),
             });

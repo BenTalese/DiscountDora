@@ -336,3 +336,10 @@ export const SUPPORTED_PRICE_UNITS: ReadonlyArray<CanonicalUnitChoice> = [
     { canonical: "pack", label: "pack", dimension: "count" },
     { canonical: "dozen", label: "dozen", dimension: "count" },
 ];
+
+/** DEC-3: units written tight against the number ("250g"). */
+export const NO_SPACE_UNITS: ReadonlySet<string> = new Set(["floz", "g", "kg", "l", "lb", "mg", "ml", "oz", "pt", "qt"]);
+
+/** Units a quantity is counted in — scaling rounds these to whole numbers.
+ *  Singular forms; `isCountableUnit` also accepts the plural. */
+export const COUNTABLE_UNITS: ReadonlySet<string> = new Set(["bunch", "can", "clove", "egg", "floret", "head", "knob", "leaf", "piece", "pinch", "rasher", "scoop", "slice", "sprig", "stalk", "stick", "wedge"]);

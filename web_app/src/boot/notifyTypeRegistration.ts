@@ -3,6 +3,13 @@ import { Notify } from 'quasar';
 
 // See possible options: https://quasar.dev/quasar-plugins/notify/
 
+// Placement is set once in `quasar.config.ts` (`framework.config.notify.position
+// = 'bottom-right'`), not per call — 273 call sites used to restate it
+// (finalisation 20-R10). D-009 allows one floating layer per edge: the
+// bottom-right edge is every ordinary toast; the **top** edge is reserved for
+// *system* notices — connection lost/restored, PWA update ready, install
+// prompt — which pass `position: 'top'` explicitly. Don't add a third edge, and
+// don't send an ordinary toast to the top.
 Notify.setDefaults({});
 
 // Visual defaults only — callers always supply their own `message` (and

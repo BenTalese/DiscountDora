@@ -1,4 +1,5 @@
 import { acceptHMRUpdate, defineStore } from 'pinia';
+import { nameCollator } from 'src/composables/useMoney';
 import StockLocationApiService, {
     type CreateStockLocationCommand,
     type StockLocation,
@@ -11,7 +12,8 @@ const stockLocationApiService = new StockLocationApiService();
 
 export const useStockLocationStore = defineStore('stockLocation', () => {
     const stockLocations: Ref<StockLocation[]> = ref([]);
-    const collator = new Intl.Collator('en', { sensitivity: 'base' });
+    // Locale-aware collation from the locale authority (finalisation 20-R7).
+    const collator = { compare: (a: string, b: string) => nameCollator().compare(a, b) };
 
     const sort = () =>
         stockLocations.value.sort((a, b) => collator.compare(a.name, b.name));

@@ -145,7 +145,7 @@
         }).catch((err: unknown) => {
             Notify.create({
                 type: 'negative',
-                position: 'bottom-right',
+                
                 message: describeQrFailure(err),
             });
         });

@@ -67,14 +67,22 @@ class GetMembershipHandler:
         quick_add_target_id = outcome.target_list_id if outcome.kind == "single" else None
         active_ids = {l.id for l in active_lists}
 
-        # All unticked lines. We bucket in Python.
+        if not active_ids:
+            return MembershipDto(items=[], quick_add_target_list_id=quick_add_target_id)
+
+        # Unticked lines on the active lists — filtered at the query, not
+        # after loading every unticked line ever (finalisation 03-R4).
         unticked_lines: List[ShoppingListLine] = self.repository.get(ShoppingListLine).all(
             EntityField(ShoppingListLine, ShoppingListLine.Fields.IS_TICKED).eq(False)
+            & EntityField(ShoppingListLine, ShoppingListLine.Fields.SHOPPING_LIST_ID).in_(list(active_ids))
         )
 
         per_item: Dict[UUID, List[UUID]] = {}
         for line in unticked_lines:
-            if line.shopping_list_id not in active_ids:
+            # A product-only line (stock_item_id NULL) is not a stock item's
+            # membership; bucketing it under None serialised a DTO that lied
+            # about its type.
+            if line.stock_item_id is None:
                 continue
             per_item.setdefault(line.stock_item_id, []).append(line.shopping_list_id)
 

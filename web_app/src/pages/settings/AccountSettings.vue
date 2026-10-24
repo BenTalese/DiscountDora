@@ -302,12 +302,11 @@
     useUnsavedChangesGuard(isDirty);
 
     function notifySuccess(message: string) {
-        $q.notify({ type: 'positive', position: 'bottom-right', message });
+        $q.notify({ type: 'positive', message });
     }
     function notifyError(message: string, err?: unknown) {
         $q.notify({
             type: 'negative',
-            position: 'bottom-right',
             message,
             caption: toastCaption(err),
         });

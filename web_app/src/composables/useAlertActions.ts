@@ -36,12 +36,11 @@ export function useAlertActions() {
         try {
             await api.applyActionAsync(alert.alert_id, action);
             await (opts?.refresh ? opts.refresh() : alertStore.refreshAsync());
-            $q.notify({ type: 'positive', position: 'bottom-right', message: 'Done.' });
+            $q.notify({ type: 'positive', message: 'Done.' });
             return true;
         } catch (err) {
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: 'Could not apply.',
                 caption: toastCaption(err),
             });

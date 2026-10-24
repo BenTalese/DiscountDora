@@ -65,6 +65,19 @@ class Section:
     # Columns to drop on export AND skip on restore. Used for password
     # hashes and any other "exported should never be a credential" data.
     excluded_columns: frozenset[str] = field(default_factory=frozenset)
+    # Flagged on the API access / backup page so an admin sees that a backup
+    # carries data Dora doesn't want written to disk casually (accounts,
+    # system settings, pricing history). Not blocked — a full-fidelity dump is
+    # a legitimate migration need — just visible.
+    sensitive: bool = False
+
+    @property
+    def pickable(self) -> bool:
+        """Whether the restore tree offers this section's rows one by one.
+        Sections with a natural duplicate key are the user-facing tables; the
+        link/line tables ride along with their parents (CHILD_AUTO_INCLUDE)
+        and are never picked directly."""
+        return self.duplicate_key_fn is not None
 
 
 # Order matters — both the export dump and the restore iterator walk this
@@ -118,6 +131,7 @@ SECTIONS: tuple[Section, ...] = (
             "smtp_password_encrypted",
             "vapid_private_key_encrypted",
         }),
+        sensitive=True,
     ),
     Section(
         "users", "User", "User accounts (no passwords)", "Optional", False,
@@ -132,9 +146,11 @@ SECTIONS: tuple[Section, ...] = (
         excluded_columns=frozenset({
             "password_hash",
         }),
+        sensitive=True,
     ),
     Section(
         "product_historic_offers", "ProductHistoricOffer", "Historic product offers", "Optional", False,
+        sensitive=True,
     ),
     # Real-world barcodes (FU-056 hybrid — can attach to a Product, a
     # StockItem, or both). On by default; small table, useful to round-trip
@@ -214,14 +230,15 @@ REQUIRED_FKS: set[tuple[str, str]] = {
     ("recipe_step_ingredients", "recipe_ingredient_id"),
     ("recipe_step_tools", "step_id"),
     ("recipe_step_tools", "tool_id"),
-    ("meal_plan_entries", "meal_id"),
+    # `meal_id` → `recipe_id` with the meals→recipes rework; the `Meal` /
+    # `MealRecipe` sections went with it. `restore_backup.validate_fk_maps`
+    # now refuses to import with a stale entry here (finalisation 18-R1).
+    ("meal_plan_entries", "recipe_id"),
     ("meal_plan_entries", "meal_plan_id"),
     ("product_stock_item_links", "stock_item_id"),
     ("product_stock_item_links", "product_id"),
     ("stock_item_substitutes", "stock_item_a_id"),
     ("stock_item_substitutes", "stock_item_b_id"),
-    ("meal_recipes", "meal_id"),
-    ("meal_recipes", "recipe_id"),
     ("product_historic_offers", "product_id"),
     ("barcodes", "product_id"),
     ("barcodes", "stock_item_id"),

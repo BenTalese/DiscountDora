@@ -333,7 +333,7 @@
                 <div
                     v-for="product in filteredProducts"
                     :key="`${product.product_id}:${photoVersion.get(product.product_id) ?? 0}`"
-                    class="col-6 col-md-4 col-lg-3"
+                    class="col-6 col-md-4"
                 >
                     <ProductCard
                         :product="product"
@@ -840,7 +840,6 @@
         if (bulkAddCandidates.value.length === 0) {
             $q.notify({
                 type: 'info',
-                position: 'bottom-right',
                 message: 'Nothing to add. Those products need a linked stock item.',
             });
             return;
@@ -883,7 +882,6 @@
         if (targets.length === 0) {
             $q.notify({
                 type: 'info',
-                position: 'bottom-right',
                 message: 'None of the selected products are linked.',
             });
             return;
@@ -904,14 +902,12 @@
             await loadAll();
             $q.notify({
                 type: 'positive',
-                position: 'bottom-right',
                 message: `Unlinked ${targets.length} product${targets.length === 1 ? '' : 's'}.`,
             });
             exitBulkMode();
         } catch (err) {
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: 'Could not unlink everything.',
                 caption: toastCaption(err),
             });
@@ -926,7 +922,6 @@
         if (targets.length === 0) {
             $q.notify({
                 type: 'info',
-                position: 'bottom-right',
                 message: 'None of those are being tracked.',
             });
             return;
@@ -941,14 +936,12 @@
             await loadAll();
             $q.notify({
                 type: 'positive',
-                position: 'bottom-right',
                 message: `Stopped tracking ${targets.length} product${targets.length === 1 ? '' : 's'}.`,
             });
             exitBulkMode();
         } catch (err) {
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: 'Could not update.',
                 caption: toastCaption(err),
             });
@@ -973,12 +966,11 @@
             await productApi.deleteAsync(product.product_id);
             await loadAll();
             $q.notify({
-                type: 'positive', position: 'bottom-right', message: 'Product deleted.',
+                type: 'positive', message: 'Product deleted.',
             });
         } catch (err) {
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: 'Could not delete the product.',
                 caption: toastCaption(err),
             });
@@ -1002,14 +994,12 @@
             await loadAll();
             $q.notify({
                 type: 'positive',
-                position: 'bottom-right',
                 message: `Deleted ${targets.length} product${targets.length === 1 ? '' : 's'}.`,
             });
             exitBulkMode();
         } catch (err) {
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: 'Could not delete everything.',
                 caption: toastCaption(err),
             });
@@ -1026,11 +1016,10 @@
                 product.linked_stock_item_id, product.product_id,
             );
             await loadAll();
-            $q.notify({ type: 'positive', position: 'bottom-right', message: 'Unlinked.' });
+            $q.notify({ type: 'positive', message: 'Unlinked.' });
         } catch (err) {
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: 'Could not unlink.',
                 caption: toastCaption(err),
             });
@@ -1046,7 +1035,6 @@
         } catch (err) {
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: 'Could not update.',
                 caption: toastCaption(err),
             });
@@ -1123,12 +1111,11 @@
             linkOpen.value = false;
             await loadAll();
             $q.notify({
-                type: 'positive', position: 'bottom-right', message: 'Product linked.',
+                type: 'positive', message: 'Product linked.',
             });
         } catch (err) {
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: 'Could not link the product.',
                 caption: toastCaption(err),
             });

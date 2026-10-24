@@ -22,6 +22,44 @@ top-to-bottom.
 
 ---
 
+## Finalisation Stage 2 — units 1–10, browser-verify owed (2026-10-23) — origin FU-929
+Backup & restore
+- [ ] Settings → Data → Backup: *New backup* with the default sections is accepted; the section list (labels, "sensitive" badges) comes from the server.
+- [ ] Restore selection: pick one stock item from a backup, restore, the item reappears; no error toast.
+Offline / PWA (built SPA)
+- [ ] DevTools → Application → Service Workers shows **one** registration (`sw.js`); opening Settings → Notifications does not add a second one, evict the cache, or show the "new version" banner.
+- [ ] Docker image: `dist/spa/sw.js` + `manifest.json` present in the built container; install prompt appears over https.
+Dashboard
+- [ ] With a saved layout that pre-dates Kitchen health, the card appears at its registry position (second), not last.
+- [ ] Delete a stock level that items still used (or null one by hand) → the restock radar card still renders.
+Dora assistant
+- [ ] "Tick off milk", "add <recipe> to my list", "trim my list to budget" return a confirm card (no "something went wrong").
+- [ ] Every "See it" / "Open …" button under an answer lands on a live page (Cookbook, My products, Settings → Budget).
+- [ ] Basic mode: "where is the rice" names the zone (Pantry / Fridge), not "(no location)".
+- [ ] Settings → Dora assistant with the API down: a "Couldn't load your provider settings." toast shows.
+Reports / budget
+- [ ] Set the household timezone to Pacific/Kiritimati, finish a shop: the budget card counts it in the current period.
+- [ ] Reports window label reads install-locale dates ("3 Aug 2026 – 2 Sep 2026"), no US ordering.
+- [ ] Waste card reason tiles read "Bought too much", matching the Mark-as-wasted dialog.
+Shopping lists
+- [ ] Save as template on a list carrying a product-only line: succeeds; the template has the item lines only.
+- [ ] Finish → "move unticked to a new list" with product-only lines: they move.
+- [ ] Quick-add sheet shows the search icon in the field.
+Meal plans
+- [ ] Duplicate to next week on a week with a cook batch: next week keeps the batch (one cook, N meals) and the fresh marks.
+- [ ] Meal plan print view and shopping list print view open from the Capacitor shell / a cross-site deploy (no 401 tab).
+Cook mode / recipes
+- [ ] Cook-mode guard dialog names a labelled ingredient ("tasty cheddar") the same as the recipe page.
+- [ ] iOS Safari / WKWebView: no CSP violation logged on load; speech output works after the first tap.
+- [ ] Finish a cook with the API down for one level write: a "Couldn't update 1 stock level." toast precedes the celebration.
+Stock
+- [ ] Stock overview peek opens at 50 %.
+- [ ] Stock-item page: expiry, "Opened", and timeline dates are formatted (no raw `2026-10-23`).
+Cross-cutting
+- [ ] Toasts all sit bottom-right; offline/online and PWA update toasts still arrive at the top.
+- [ ] Focus ring halo follows the theme (Tab through buttons in blueberry and sourdough-dark — no Pesto green).
+- [ ] Cook-mode scaling: "2 rashers" at 1.5× → 3 (whole), "1 handful" stays continuous.
+
 ## Follow-up batch 2026-10-22
 - [ ] My products ⋮ → Set items in pack: save 12, the menu then reads "Items in pack: 12"; Clear removes it.
 - [ ] Add a custom product with Items in the pack set; a recipe's "3 eggs" linked to it is priced.
@@ -2060,21 +2098,12 @@ sticky `:hover` and mobile URL-bar viewport behaviour need a real handset.)_
 - [ ] **Touch: the mascot doesn't sit permanently full-size.** After the above,
       scroll the page — she should stay shrunk (no latched hover).
 
-## Offline sync + Retry, end to end (2026-08-17 later 7)
+## Offline Retry + Docker env (2026-08-17 later 7; sync bullets retired 2026-10-23)
 
-_(The transport bugs are pinned by Vitest, but the whole point is that mocked
-transports never enforced CSRF — so the only real proof is a round trip against
-a running server. DevTools → Network → Offline is enough; no need for a real
-signal drop.)_
+_(The two "sync actually lands" / "sync on re-open" bullets that opened this section were retired: offline is
+**read-only** since 2026-08-23 (R-052) and the write queue they described no longer exists — see the
+"Offline is read-only (2026-08-23)" section above for the current checks. The Retry and Docker bullets still stand.)_
 
-- [ ] **The sync actually lands.** Go offline (DevTools throttling), change two
-      stock levels and tick a shopping-list line, go back online. The banner
-      clears, you get "Synced everything", and — the part that matters —
-      **reload and confirm the server kept all three**. This is the bug: it
-      used to report success and lose the lot.
-- [ ] **Sync on re-open.** Queue a change offline, **close the tab**, restore
-      the connection, open the app fresh. It should sync on sign-in without
-      you toggling the network again.
 - [ ] **Retry.** With the server stopped but the network up, press Retry —
       expect a spinner and then "Still can't reach the server". Start the
       server, press Retry again — the banner should clear immediately rather

@@ -646,7 +646,6 @@
             foodFact.value = null;
             $q.notify({
                 type: 'warning',
-                position: 'bottom-right',
                 message: "Couldn't fetch a food fact right now."
             });
         } finally {

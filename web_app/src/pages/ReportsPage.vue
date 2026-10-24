@@ -145,6 +145,7 @@
     import { paletteToken } from 'src/composables/useThemePalette';
     import { useFeatureFlags } from 'src/composables/useFeatureFlags';
     import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
+    import { formatDate } from 'src/composables/useDateFormat';
     import ReportsApiService, {
         type StoreSpendResponse,
         type MostBoughtResponse,
@@ -366,10 +367,10 @@
     const windowLabel = computed(() => {
         const w = rangeWindow.value;
         if (!w || !w.start) return '\u00a0';
-        const fmt = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString(undefined, {
-            day: 'numeric', month: 'short', year: 'numeric',
-        });
-        return `${fmt(w.start)} – ${fmt(w.end)}`;
+        // Install locale via the formatting authority (D-006), not the
+        // browser's (finalisation 12-R7 / 20-R6).
+        const opts = { day: 'numeric', month: 'short', year: 'numeric' } as const;
+        return `${formatDate(w.start, opts)} – ${formatDate(w.end, opts)}`;
     });
 
     async function loadWaste() {

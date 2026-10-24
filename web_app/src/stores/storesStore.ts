@@ -1,4 +1,5 @@
 import { acceptHMRUpdate, defineStore } from 'pinia';
+import { nameCollator } from 'src/composables/useMoney';
 import type { Store } from 'src/models/store';
 import StoresApiService, {
     type CreateStoreCommand,
@@ -17,7 +18,9 @@ export const useStoresStore = defineStore('stores', () => {
     let hydrated = false;
     let inflight: Promise<void> | null = null;
 
-    const collator = new Intl.Collator('en', { sensitivity: 'base' });
+    // Locale-aware collation from the locale authority (finalisation 20-R7).
+
+    const collator = { compare: (a: string, b: string) => nameCollator().compare(a, b) };
 
     const listAsync = (): Promise<void> =>
         storesApiService.listAsync().then((page) => {

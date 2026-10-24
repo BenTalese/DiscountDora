@@ -815,6 +815,7 @@
     import { useStockItemStore } from 'src/stores/stockItemStore';
     import { useStockLevelStore } from 'src/stores/stockLevelStore';
     import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+    import { useShortcut } from 'src/composables/useShortcut';
     import { useRoute, useRouter } from 'vue-router';
 
     const route = useRoute();
@@ -1561,9 +1562,19 @@
                     };
                 })
                 .filter((u): u is NonNullable<typeof u> => u !== null);
-            await Promise.allSettled(
+            const settled = await Promise.allSettled(
                 updates.map((u) => stockItemStore.updateStockLevelAsync(u)),
             );
+            const failed = settled.filter((r) => r.status === 'rejected').length;
+            if (failed > 0) {
+                // Fail-soft is right for the batch, silent is not: say which
+                // part didn't land before the celebration (finalisation 04-R5).
+                $q.notify({
+                    type: 'negative',
+                    message: `Couldn't update ${failed} stock level${failed === 1 ? '' : 's'}.`,
+                    caption: 'Check them on the Stock page.',
+                });
+            }
 
             let mealsCooked = 0;
             if (recipe.value) {
@@ -1574,7 +1585,6 @@
             // Celebration. Copy reads off `meals_cooked` per L337 / DEC-5.
             $q.notify({
                 type: 'positive',
-                position: 'bottom-right',
                 timeout: 4000,
                 // A fresh household never sets aside meals, so "all eaten" only
                 // makes sense where saving some was an option.
@@ -1594,26 +1604,15 @@
 
     function exitCookMode() {
         pauseTimer();
-        if (typeof window !== 'undefined') window.speechSynthesis?.cancel();
+        // Through the composable (R-003) so a Piper `<audio>` stops with the
+        // Web Speech voice — a raw `speechSynthesis.cancel()` left it playing
+        // until unmount (finalisation 04-R3).
+        speechOut.cancel();
         stopListening();
         // L298 — exit returns to the recipe's detail page (where the user
         // came from), not all the way back to the cookbook overview.
         const id = route.params.id as string;
         void router.push(id ? `/cookbook/${id}` : '/cookbook');
-    }
-
-    function handleKeydown(event: KeyboardEvent) {
-        if (event.key === 'ArrowRight' || event.key === ' ') {
-            event.preventDefault();
-            nextStep();
-        } else if (event.key === 'ArrowLeft') {
-            event.preventDefault();
-            prevStep();
-        } else if (event.key === 'Escape') {
-            exitCookMode();
-        } else if (event.key.toLowerCase() === 'r') {
-            speakCurrent();
-        }
     }
 
     // ── P2-13 voice command dispatcher ──────────────────────────────────
@@ -1763,12 +1762,21 @@
         if (speechEnabled.value && currentStepIndex.value === 0) speakCurrent();
     }, { immediate: true });
 
-    onMounted(async () => {
-        // speechRecognitionAvailable is a computed off the composable
-        // now, so no manual seeding required.
-        window.addEventListener('keydown', handleKeydown);
-
-        const recipeId = route.params.id as string;
+    /** Load (or re-load) the recipe for a route id, resetting the cook
+     *  session — step position, timer, swaps, the first-step announcement
+     *  and a latched "not found" (FU-765 / finalisation 04-R1). Vue reuses
+     *  this component across `/cookbook/A/cook` → `/cookbook/B/cook`, so
+     *  fetching only in `onMounted` kept recipe A on screen under B's URL. A
+     *  different recipe id *is* a different cook, so resetting is the honest
+     *  behaviour rather than mutating a live session. */
+    async function loadRecipe(recipeId: string) {
+        loading.value = true;
+        recipe.value = null;
+        currentStepIndex.value = 0;
+        resetTimer();
+        sessionSwaps.value = new Map();
+        announcedFirstStep = false;
+        finishDialogOpen.value = false;
         try {
             await recipeStore.ensureLoadedAsync();
             // the list endpoint doesn't return `steps[]`
@@ -1781,6 +1789,30 @@
         } finally {
             loading.value = false;
         }
+    }
+
+    watch(() => route.params.id, (id, previous) => {
+        if (typeof id === 'string' && id && id !== previous) void loadRecipe(id);
+    });
+
+    // Keyboard through the shared layer (finalisation 04-R7): the raw
+    // `window` listener kept stepping the recipe underneath the finish
+    // dialog and the swap picker, and the keys never reached the `?`
+    // cheatsheet. Blocked while either overlay is open — the overlay owns
+    // Escape and the arrows then.
+    const overlayOpen = () => finishDialogOpen.value || swapPickerOpen.value;
+    useShortcut([
+        { keys: 'arrowright', scope: 'Cook mode', description: 'Next step', handler: (e) => { if (overlayOpen()) return; e.preventDefault(); nextStep(); } },
+        { keys: 'space', scope: 'Cook mode', description: 'Next step', handler: (e) => { if (overlayOpen()) return; e.preventDefault(); nextStep(); } },
+        { keys: 'arrowleft', scope: 'Cook mode', description: 'Previous step', handler: (e) => { if (overlayOpen()) return; e.preventDefault(); prevStep(); } },
+        { keys: 'r', scope: 'Cook mode', description: 'Read this step again', handler: () => { if (!overlayOpen()) speakCurrent(); } },
+        { keys: 'escape', scope: 'Cook mode', description: 'Exit cook mode', handler: () => { if (!overlayOpen()) exitCookMode(); } },
+    ]);
+
+    onMounted(async () => {
+        // speechRecognitionAvailable is a computed off the composable
+        // now, so no manual seeding required.
+        await loadRecipe(route.params.id as string);
 
         // Warm the locations tree so ingredient breadcrumbs render without
         // a flash. Fire-and-forget — cook mode is usable without it.
@@ -1800,10 +1832,7 @@
     onBeforeUnmount(() => {
         pauseTimer();
         stopListening();
-        if (typeof window !== 'undefined') {
-            window.speechSynthesis?.cancel();
-            window.removeEventListener('keydown', handleKeydown);
-        }
+        speechOut.cancel();
     });
 </script>
 

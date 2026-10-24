@@ -41,7 +41,296 @@ next.
 
 ---
 
-## 2026-10-22 (latest): **Follow-up sweep: pack count, resize loop, voice lead-in, companion providers**
+## 2026-10-23 (latest): **Finalisation Stage 1 — all 20 chunks analysed; master docs assembled; Stage 2 started**
+
+**Status: Stage 1 complete. Stage 2 (test-guarded execution) in progress — see the end of this entry for exactly
+where it stopped. Nothing committed (owner: commit only when asked).** Overnight solo run (owner: no subagents) through
+`docs/01_charter/FINALISATION_PLAN.md`, continued across two usage-limit cut-offs.
+
+**Stage 1 — what exists now.**
+- **20 chunk files** `docs/05_investigations/finalisation/CHUNK_01…20_*.md` in the `_CHUNK_TEMPLATE.md` shape (FST walk · help
+  entries · senior review `NN-Rk` findings · lean test plan · §E follow-ups · §F feedback coverage). Register
+  `docs/01_charter/FINALISATION_COVERAGE.md`: every row FST/Help/Review/Tests ✅, **Applied ⬜** (Stage 2 flips it).
+- **Five master documents assembled** by `scratchpad/assemble_masters.py` (verbatim per-chunk sections under one front matter;
+  re-runnable): `docs/04_proposals/FULL_SYSTEMS_TEST.md` (1,396 lines; release-gate roll-up of every A6),
+  `docs/05_investigations/FINALISATION_REVIEW.md` (2,326; **§0 cross-chunk consolidation table + the Stage-2 opening order +
+  the owner-decision list**), `docs/04_proposals/TEST_PLAN_INVENTORY.md` (35 must-write rows rolled up),
+  `docs/05_investigations/HELP_CONTENT.md` (100 entry drafts), `docs/05_investigations/HANDROLLED_VS_LIBRARIES.md`
+  (127 verdicts, 6 replace/wrap).
+- **Totals:** 729 findings, 576 execute, ~60 verified bugs (each `path:line` + exact change), 100 help entries, 35 must-write
+  tests. Chunk headlines are in the register; the verified-bug list is `FINALISATION_REVIEW.md §0`.
+- **Ledgers:** umbrella **FU-929** opened (same shape as QA's FU-928) pointing at the register; the duplicate iOS `FU-640`
+  renumbered **FU-930**; **FU-660 + FU-661 moved to RESOLVED** (superseded by R-052 — they described the deleted offline queue);
+  notes appended to FU-719/720/923/671/836/010/224/924/389/640/716/919. Proposal close-outs: `PROPOSAL_AUTH_SHELL §7`,
+  `PROPOSAL_ONBOARDING §2.3/§3.2.a`, `IMPL_PLAN_ONBOARDING §0` (superseded), `PROPOSAL_WASTE D12` (reversed in practice),
+  `PROPOSAL_LOCALE_I18N §3-2` (vue-i18n de-facto removed), `FINALISATION_PLAN` offline-queue wording, `COVERAGE_GAPS` REPORTS
+  pointer, `CHUNK_05` 05-R41 cross-filed; `DORA_VERIFY` stale "Offline sync" bullets retired (R-052), Retry/Docker kept.
+
+**Headline verified bugs (Stage-2 opening order, `FINALISATION_REVIEW.md §0`):** 18-R1 *Restore selection* 500s
+(`KeyError 'meal_recipes'`); 18-R2/R3 UI *New backup* with defaults is refused (`product_barcodes`) and UI backups omit recipe
+steps/tools/tags/vocab (stale SPA section mirror); 16-R2 idempotency replay after TTL → 500; 16-R8 `link-status` hands out
+custom-product ids → companion unsave deletes them; 19-R1 Docker image built without `-m pwa`; 19-R2 `web_app/.env` baked into
+the image; 19-R3 version check targets `BenTalese/DashyDora`; 13-R1 invalid `nutrition_mode` → 500; 13-R3 last-admin guard
+ignores `is_active`; 14-R1 demo seed inserts a second week; 15-R2 DEBUG request logging captures login bodies; 17-R1 two
+service workers at one scope (false "new version" banner); 20-R1/R2 dead error installer + dead vue-i18n.
+
+**Owner decisions outstanding** (all listed in `FINALISATION_REVIEW.md §0`): the biggest is **20-D4 Help information
+architecture** (gates the 100 drafted entries) and **11-D1** (`app_help` tool vs in-prompt guide); then 13-D4 text-size range,
+16-D1 (=FU-919) name-based store mapping, 17-D2, 18-D2, 19-D1 compose cookie default, 19-D4 (=FU-640), 20-D2 toast tiers.
+
+**Standards close-gate (Stage 1):** no code changed → nothing to flag. **ADR candidates for Stage 2:** (a) "install-wide facts a
+non-admin needs ride `/health`, never `/app-settings`" (13-R4); (b) "a domain list the SPA needs is codegen'd from the server
+module, never hand-mirrored" (18-R3 section catalogue, 20-R3/R4 unit lists — `dump_units.py` is the precedent); (c) "handler
+errors are typed results/exceptions, never `str` returns dispatched by `startswith`" (13-R1, 16-R28, 18-R11).
+
+**Baseline note:** the `.venv` interpreter on this box lacks `python-dotenv`; the system `python` (3.11) has the deps and runs
+pytest — use `python -m pytest`. Baseline held: pytest 2429 passed / 2 order-dependent flakes (QA2-40 names one), vitest 747/66.
+
+**Stage 2 — progress log (appended as units land; each unit = fix + test, baseline file green before and after):**
+- **Unit 1 — 18-R1 / 18-R2 / 18-R3 (backup & restore), done.** `restore_backup.py`: the m2m ride-along loop derives its section
+  list from the catalogue (`_join_table_sections`) instead of a literal tuple that still named `meal_recipes` → partial restore no
+  longer `KeyError`s; new `validate_fk_maps()` runs at import and refuses a stale section/column in any FK-policy map;
+  `restore_shared.py`: `REQUIRED_FKS` fixed (`meal_plan_entries.recipe_id`, the two `meal_recipes` rows dropped), `Section` gains
+  `sensitive` + a `pickable` property; `backup_library.py`: new admin `GET /api/data/backup/sections` serving the catalogue;
+  SPA `AdminDataBackupRestore.vue` reads it (the stale 20-key mirror with `product_barcodes` is gone — create dialog, sensitive
+  warnings, restore tree and report all render from the server list) via new `services/api/dataApiService.ts` (the first
+  `AxiosHttpClient` service on this page; FU-716's remaining raw fetches move here later). Tests: `test_data_router.py` +3
+  (partial-mode restore, FK-map structural guard, sections catalogue ⇔ `SECTIONS` + a default create accepted), route-auth
+  pinned list +1. **`test_data_router` 55→58 + `test_route_auth_enforcement` 6: 64 passed; `vue-tsc` + eslint clean.**
+  Browser-verify owed: *New backup* with defaults succeeds and *Restore selection* works (DORA_VERIFY).
+- **Unit 2 — 16-R2 / 16-R3 / 16-R7 / 16-R8 (ingestion seam), done.** New `features/ingestion/product_identity.py`
+  (`find_ingested_product`: stockcode-first, name fallback, never custom) is the one lookup both `_apply_product` and
+  `link-status._find_product` use — the read side had no OD-2 filter, so a hand-typed product read as "already in Dora" and the
+  companion's unsave could delete it. `submit_ingestion_batch`: an expired `Idempotency-Key` row is refreshed in place (was a
+  second insert → unique-index 500 after the batch had been applied, losing it), past-TTL rows are swept on every keyed push
+  (table was unbounded), the product result note is plain `created`. `get_link_status._stamp_linked_stock_items` now calls
+  `product_links.linked_stock_items` instead of its 40-line copy (raw `StockItemProduct` select gone — one fewer FU-923 site).
+  `DELETE /api/ingest/products/<id>` refuses a custom product with 403 (defence in depth). Tests: `test_ingest_batch` +2
+  (expired key reprocessed + refreshed; sweep leaves live keys), `test_ingest_link_status` +1 (custom product never resolved,
+  push creates its own row, bearer delete 403), `test_delete_product` bearer test now deletes an *ingested* product (the
+  hand-made one it used is custom by definition). **9 ingestion/product/delete suites: 115 → 118 passed.**
+- **Unit 3 — 19-R1 / 19-R2 / 19-R3 / 19-R4 + C9 `_semver_tuple` (ops), done.** `Dockerfile` builds the SPA via `npm run build`
+  (PWA mode) and refuses to build without `dist/spa/sw.js` + `manifest.json`; `.dockerignore` excludes `web_app/.env` /
+  `.env.*` (keeps `.env.example`), `compose*.yml`; `version_info.GITHUB_REPO = "BenTalese/dashy-dora"` + `GITHUB_URL` are the one
+  slug — `get_version` (was `DashyDora`, a repo that never existed → every update check 404'd), `support_channel`, and the
+  dataset-import User-Agent (was `DiscountDora`) read it; `get_version._is_newer` uses `packaging.version` (pre-release tags
+  ordered correctly; `packaging>=23.0` added to `requirements.txt`); README (`merchant_api` port, "no packaged release", Postgres
+  vs SQLite posture, CI claim), `.env.example` (name, appsettings path), `nginx.conf`, `build-linux.sh` naming fixed. Tests: new
+  `tests/test_deploy_files.py` (2 structural pins), `test_help_router` +2 (slug is the one constant; `_is_newer` ordering).
+- **Unit 4 — 13-R1 / 13-R2 / 13-R3 (settings + users admin), done.** `update_app_settings`: invalid `nutrition_mode` returns
+  `UpdateAppSettingsResponse(invalid_reason=…)` (was a bare tuple → 500); new `features/users/admin_guards.other_usable_admins`
+  is the one "last usable admin" bar for demote / deactivate (`update_user_as_admin`) **and** delete (`delete_user_as_admin`,
+  which counted `is_admin` rows alone); the admin email edit now normalises, validates, checks uniqueness (422) and clears
+  `email_verified` on change. Tests: `test_app_settings_router` +1 (bogus mode → 400), `test_users_admin` +2 (email rules;
+  the active-only bar pinned on the helper, since the DELETE scenario is unreachable through the API). **Units 3+4: 7 suites,
+  138 passed.**
+- **Unit 5 — 14-R1 / 14-R2 (onboarding demo seed), done.** The demo joins an existing `MealPlan` for this Monday instead of
+  inserting a second plan for the same week (entry scheduled for today; the dead `today if today >= monday` branch is gone);
+  ingredient names now match the starter pack (`Pasta`, `Garlic`, `Olive oil`) so the demo reuses the wizard's items.
+  `meal_plan_created` keeps its contract meaning. Tests: `test_onboarding_seed_demo` +1 (plan count unchanged, one entry added),
+  names updated.
+- **Unit 6 — 15-R2 / 15-R1 (auth/ops hygiene), done.** `middleware.redact_sensitive` masks `password/secret/token/key/
+  authorization` keys at any depth before the DEBUG body dump (which used to print `/auth/login` bodies into the log file);
+  `DoraConfig.get_trusted_proxy_hops()` + `DORA_TRUSTED_PROXY_HOPS` (0 default; documented in `.env.example` + `compose.yml`)
+  wraps the app in Werkzeug `ProxyFix` so the login rate limit and audit log see the real client behind a reverse proxy. Tests:
+  new `tests/test_request_logging_redaction.py` (3).
+- **Unit 7 — 17-R1 / R2 / R3 / R6 / R7 / R8 / R9 / R15 (PWA), done (browser-verify owed).** One service worker: the Workbox
+  worker imports `public/push-sw.js` (`cfg.importScripts`) and `usePushSubscription.resolvePushRegistration` attaches to the
+  existing registration, registering `/push-sw.js` standalone only in SPA/dev — opening Settings → Notifications no longer
+  evicts the offline cache or fires a false "new version" banner. Deleted `public/offline.html` (never served; promised the
+  removed sync) and `src-pwa/custom-service-worker.ts` (FU-724 → resolve at close; eslint blocks for it removed; pwa-block
+  comment names the generated worker as the only one). Dead runtime-cache alternations (`merchant-images`, `/data/images/`)
+  dropped; `clearApiResponseCache` also evicts `dora-stock-images`; dead `AxiosHttpClient.request()` removed; `.gitignore`
+  gets `web_app/src-capacitor/{www,node_modules,android/app/build}` (`git rm --cached web_app/src-capacitor/www/index.html`
+  still owed — index untouched by this session); About hides "Install as an app" inside the Capacitor shell. Tests: new
+  `test/unit/usePushSubscription.spec.ts` (2). **Units 5–7: pytest 70 passed across 6 suites; vitest 5/5 on the two specs.**
+- **Unit 8 — chunks 8 / 11 / 12 verified bugs (dashboard, assistant, reports/budget/waste), done.** 08-R1 restock radar
+  skips an unlevelled item instead of 500-ing (`if level is not None`); 08-R2 `/dashboard/summary` drops `shopping_lists` +
+  `recipes` (no reader; DTO snapshot refreshed); 08-R3/R4 Dora Score freshness counts `expiry_date <= household_today` via two
+  `count()` queries (was a full pantry load against the UTC date, twice); 08-R5 `handle()` loses the unread `user_id`; 08-R7
+  `parseLayout` lifted to `helpers/dashboardLayout.ts` and a card missing from a saved layout is **inserted at its registry
+  position** (the comment promised it, the loop appended — Kitchen health shipped last for every saved layout). 11-R1 the three
+  proposers that queried the dropped `is_primary` column (tick / add-recipe / trim → `/ask` 500) now import
+  `shopping_actions._primary_list`; 11-R2 `waste_insights` had a `NameError` on `timezone` + a UTC window → household-midnight
+  cutoff, module-level imports; 11-R3 11 nav hints pointed at retired routes (`/recipes`, `/product-search`,
+  `/settings/preferences`) → `/cookbook`, `/my-products`, `/settings/budget`; 11-R4 Basic-mode "where is X" resolves the zone
+  from the location tree (was `locationName: null` for every item); 11-R5 provider-list load failure now toasts; 11-R6 About-
+  Dora link → `/settings/assistant`; 11-R7 `rstrip("s")` → one trailing s; 11-R8 `ConfirmActionType` names all 10 proposers;
+  11-R33 chat "today" = server household today. 12-R1 `StockValueOverTimeHandler` + route + SPA types deleted (no consumer;
+  noload-broken); 12-R2 budget window bounds at the **household's** midnight and history buckets by household day (a shop
+  finished Monday 08:00 in a +10 household no longer lands in last week); 12-R3 report ranges anchor on household today /
+  midnight; 12-R4 "Bought most" counts ticked lines only; 12-R5 value-at-risk picks the latest *added* priced line (was by
+  per-list `sequence`); 12-R6 WasteCard imports the one reason vocabulary; 12-R7 window label via `formatDate`; 12-R8/R9
+  stale comment + rescue horizon default from the admin `expiring_soon_window_days`. Tests: insight cards +1, assistant
+  registry +4 (every proposer runs; every data tool runs; nav hints vs `routes.ts`; `ConfirmActionType` ⇔ `PROPOSERS`),
+  reports +1 (unticked not counted) −1 (stock-value), budget +1 (UTC+14 boundary), dashboard shape updated,
+  `dashboardLayout.spec.ts` (6). Deferred from these chunks: 08-R6 (usage-stats → repo + `lifetime_spend`, FU-923 sweep),
+  08-R8 (`isToday` from `/alerts/upcoming`, with chunk 9).
+- **Unit 9 — chunks 1–7 verified bugs (S-blast), done.** 01-R1 `helpers/recipeIngredientLabel.ingredientDisplayName`
+  (`label` → item name → raw text) shared by the recipe page, cook-mode guard and add-to-list rows (+spec); 01-R2 the
+  ingredient editor anchors to the entity `createStockItemAsync` returns (name re-find could miss); 01-R4 stale route comments;
+  02-R2 duplicate-to-next-week keeps `cook_key`/`cook_fresh` (built from `toCommand`); 02-R34 day chip reads the day off the ISO
+  string; 02-R35 reconcile "Cooked later" max = household today; 02-R36 + chunk 3 FU-682 meal-plan and shopping-list print views
+  go through `openHtmlDocumentAsync` (new `usePrintDocument.openPrintDocument`, specs rewritten/added); 03-R2 template snapshot
+  uses `display_name` ("Template from None") and skips product-only lines (`skipped_product_lines`, was IntegrityError 500);
+  03-R3 move-lines dedupes on `(stock_item_id, product_id)` via new `_line_anchor.line_anchor_key` (product-only lines never
+  moved); 03-R4 membership skips product-only lines + filters to active lists in the query; 03-R7 QuickAddSheet search icon
+  (`prepend-:icon` typo); 03-R8 auto-list + instantiate names via `format_list_date(household_today)`; 04-R2 CSP gains
+  `media-src 'self' blob: data:` (FU-853 re-diagnosed: the iOS autoplay primer, not the chime); 04-R3 cook mode silences via
+  `speechOut.cancel()`; 04-R5 failed level writes on Finish are toasted; 05-R3 stocktake level colour by id; 05-R41 peek opens at
+  50 % (`PEEK_OPEN_PCT`); 06-R2 four raw ISO dates → `formatDate`; 06-R7 one line fetch for both history feeds; 06-R8 barcodes
+  by two targeted queries (was a full-table scan); 06-R9 recently-priced loads only observed items; 06-R15
+  `measurement_system_from_repo` → `get_or_create_app_setting`; 07-R1 belief dates bucket in the household zone
+  (`_as_date(value, tz)`); 07-R3 `PantryBeliefChip.vue` deleted + 5 comments reworded (resolves FU-686/FU-695 at close).
+  **05-R30 did not reproduce:** `EntityField.eq` lowers String columns by default and `test_stock_item_router` already pins the
+  mixed-case duplicate → no change (chunk finding was wrong). Tests: snapshot +2, product-lines +2 (move, membership),
+  security headers directive, `test_pantry_belief` +1, `test_reports_memory` range test rewritten for household midnight,
+  vitest `ingredientDisplayName.spec` (3), `useShoppingListExport.spec` (2). **Full backend after unit 9: 2495 passed / 1 skip /
+  1 xfail; vitest 760/70.**
+- **Unit 10 — 20-R1…R10 cross-cutting (+ R18/R19/R21, FU-836), done.** 20-R1 dead `installGlobalErrorReporting` + stale
+  docstring deleted; 20-R2 vue-i18n removed (`boot/i18n.ts`, `src/i18n/`, boot entry, Vite plugin, `npm uninstall vue-i18n
+  @intlify/unplugin-vue-i18n`; `useMoney` comment fixed; PROPOSAL_LOCALE_I18N §2.3 records (b) in practice); 20-R3/R4
+  `NO_SPACE_UNITS` + new `COUNTABLE_UNITS` (= discrete sub-item parts ∪ count words; vague amounts stay continuous) live in
+  `units.py` and are emitted by `dump_units.py` → `formatQuantity.ts`/`scaleQuantity.ts` import the generated lists
+  (`isCountableUnit` accepts plurals); new `tests/test_units_table_generated.py` pins the committed file is current; 20-R5
+  MealPlanBuilderDialog `money` → `formatMoney`; 20-R7 `useMoney.nameCollator()` (locale authority) replaces five `'en'`
+  collators; 20-R8 `--ring-focus` defined once at `:root` as `color-mix(brand 35%)`, 11 per-theme pairs removed (pesto-dark
+  keeps its 45 % with a comment; the 33-site rename to one token pair is left for the design sweep); 20-R9 client-log buckets
+  evict stale keys, `SESSION_USER_ID_KEY`, two lying comments fixed (+1 test); 20-R10 `framework.config.notify.position =
+  'bottom-right'` and **273 `position: 'bottom-right'` restatements removed** (the 23 `top` system toasts and 2 `bottom` kept —
+  decision: `top` is the system-toast edge, documented in the notify type registration); 20-R18 cheatsheet border token;
+  20-R19 duplicate `/` shortcut on Stock overview dropped (Global routes/focuses); 20-R21 PageErrorState icons via `ICONS`
+  (`not_found_explore`, `blocked`, `error_outline` added) + inline style → class; FU-836 `col-lg-*` ×2 removed. **vitest 760/70,
+  vue-tsc clean, `npm run lint` clean; backend units+client-logs 80 passed.** Line endings: the worktree had CRLF on disk
+  against an LF index; every modified file was normalised back to LF so the diff reads as content, not churn.
+
+- **Unit 11 — S-blast leftovers from chunks 2–5 + 8, done.** 05-R7 `POST /shopping-lists/<id>/review/complete` deleted
+  (rule-bypassing raw `UPDATE`, zero callers; SPA `reviewCompleteAsync`, 3 tests, fuzz row and the module docstring went with it;
+  dead imports trimmed; the file's stray BOM removed). 05-R5 the stocktake runner writes levels / mutes / deletes through
+  `stockItemStore` (R-074) — `/stock` no longer shows pre-stocktake levels until a reload and the auto-add toast fires;
+  `updateStockLevelAsync` persists for an id the cache hasn't loaded instead of silently returning (spec updated). 04-R1 / FU-765
+  cook mode has `loadRecipe(id)` + a `watch` on `route.params.id` that resets the session (step, timer, swaps, first-step
+  announcement, latched not-found); 04-R7 the raw `keydown` listener is now five `useShortcut` entries scoped "Cook mode",
+  blocked while the finish dialog or swap picker is open (they reach the `?` cheatsheet). 02-R1 the sweep binds the receipt id
+  in the same shape as the entry id (bytes on SQLite) — receipts load through the ORM again (+1 test). 08-R6 usage-stats counts
+  go through the repository and lifetime spend has one home (`_line_price.lifetime_spend`, R-005 carve-out comment; the
+  spend-by-store agreement test still pins it). 03-R5 quick-add delegates to `AddLineHandler` (a nested product line no longer
+  reads as "already on list"; +1 test). 03-R6/R14 `/frequently-added` returns ranked ids only (the `stock_level_id` it carried
+  was always None — a `noload` read — and nothing read the rest; SPA type trimmed; +1 shape test). Backend: 138 passed across
+  the 14 touched suites; vitest 760/70 after the spec update; vue-tsc + eslint clean.
+
+**Close-gate (units 8–10, 2026-10-23):** full backend suite **2495 passed / 1 skipped / 1 xfail** after unit 9 and again after
+unit 10; vitest 760/70; `vue-tsc` + `npm run lint` clean. **Standards:** every rule touched was fixed in place (R-003 ×many,
+R-021 ×8, R-032, R-045 ×3, R-056, R-057 ×3, D-006 ×3, D-009, R-002, R-034) or carries an inline comment naming the rule;
+no new silent violations. **ADR evaluation:** the three Stage-2 candidates each already have a rule — (a) install-wide facts
+non-admins need ride `/health` = R-038; (b) client-applied conventions are generated from the server module = R-089 (20-R3/R4
+executed under it); (c) typed handler results, never `str`/tuple dispatched by `startswith` = R-010 (13-R1 executed under it)
+— so no new ADR this unit. **FUs:** resolved FU-682 (all three print views, incl. `useStockOverviewExport`), FU-686, FU-695,
+FU-724, FU-836 (+ A8 note in the design guide), FU-853 → `DORA_FOLLOWUPS_RESOLVED.md`; FU-929 carries a progress line.
+**DORA_VERIFY:** new "Finalisation Stage 2 — units 1–10" section (27 checks). **PROJECT_STATE** dashboard row + stamp
+hand-edited (register rows unchanged). **CHANGELOG `[Unreleased]`** gains a "Fixed — Finalisation sweep, Stage 2" block.
+
+**Next up:** the §0 opening order is exhausted (every verified bug in rows 1–11 is landed or explicitly deferred above). What
+remains of Stage 2 is the per-chunk execute lists beyond C1 — in order of value: (a) the S-blast leftovers still open after
+unit 11 (06-R3…R6 level-sequence DTOs + one invalidation path + one mark-restocked, 06-R16 dirty-form hydrate, 08-R8 `isToday`
+with the chunk-9 alerts pass, 07-R2 overlay via `levels_by_item`, 01-R3 waived); (b) the §0 sweeps
+(`useConfirm` ×50, icons ×48, `outline: none` ×21, FU-671 ×24, raw `fetch` ×21 / FU-716, image cap ×9, settings CSS, FU-654
+session key, `useLocalePolicy` rename 20-R25); (c) the M-blast refactors (06-R10/R11 detail sub-resources, 05-R2+06-R1
+push-expiry endpoint, 05-R11 flat location API, 04-R8 `useCookTimer`, 01-R5/R6 vocab-CRUD factory). Flip `Applied` ✅ per chunk
+when its execute-list is done (➗ now = C1 landed); `CHANGELOG.md [Unreleased]` + `PROJECT_STATE.md` at each close-gate; FU-929
+closes when all 20 Applied cells are ✅. Browser-verify owed on units 7–10 (DORA_VERIFY has the checklist).
+
+---
+
+## 2026-10-23: **Independent QA run — agent 2**
+
+**Status: done, report only. No product code changed.** This is a second independent QA pass, run in
+parallel with QA agent 1 and the finalisation session. Deliverable:
+`docs/05_investigations/QA_RUN_2_2026-10-23.md`, with 44 numbered findings (9 High, 16 Medium,
+15 Low, 4 decisions) plus about 35 static-only leads. Each finding is tagged LIVE / CODE / STATIC. The
+report includes a **de-duplication table against QA1's report**.
+
+**What ran.** Everything ran from a detached worktree at `%TEMP%\qa2wt`, because the shared
+`web_app/dist` was being rebuilt by another session mid-run.
+- **Gates:** pytest 2430 passed, 1 failed (a Hypothesis `too_slow` flake under load, QA2-40); vitest
+  747/66; vue-tsc and eslint clean; spa build ok.
+- **Browser sweep:** a Playwright crawl of 75 routes at desktop and phone width, plus interactive flows.
+- **API probes:** all 304 routes, 768 calls: real, random and junk ids, and empty, malformed and
+  wrong-type bodies. That produced 0 × 5xx; the 5xx in QA2-11 needed specific payload shapes.
+- **Other probes:** a member privilege probe, delete-cascade checks, and a migrations-from-empty fresh
+  install walked through setup and onboarding.
+- **Static sub-audits:** four read-only agents covered auth, money, units and dates.
+
+**Headline findings only QA2 has.**
+- QA2-05: the stock-value report is inverted; it skips sequence 0 = Stocked.
+- QA2-06: trim-to-budget's meal-demand loader reads a `noload` relationship, so it never sees meals.
+- QA2-08: the expiry icon parses dates as UTC and turns red at 10:00 on the expiry day.
+- QA2-09: the CSP has no `media-src`, so `blob:` server-voice audio can't play. This extends FU-853.
+- QA2-10: plaintext passwords in the debug request log (live).
+- QA2-12: a fresh install defaults the timezone to UTC, so server "today" lags a day in AU mornings (live).
+- QA2-21: the SPA's default API base is `:5170` even when the app is served single-origin.
+
+**Shared with QA1, now also confirmed live by QA2:** stored XSS via image mimetype, open
+self-registration, reset-link `Origin` poisoning (the dry-run email carried an evil-host link), and
+password change not revoking other sessions.
+
+**Ledgers.**
+- **FU-928:** an umbrella FU pointing at the report, not 44 separate FUs, to avoid id collisions with
+  the concurrent sessions. The fixer should split it as items are picked up.
+- **Not touched:** `DORA_VERIFY.md` (no new verify items). `PROJECT_STATE.md` was left to the
+  finalisation session, which is editing it right now. Add QA2's High items under Needs-attention at
+  its next regeneration.
+
+**Close-gate.**
+- **R-rules:** no code touched.
+- **ADR evaluation:** no new rule. Candidates for the fixer: "household-local date helper is the only
+  way to turn a UTC timestamp into a date" (QA2-12/13/25, R-021) and "every icon-only `BaseButton`
+  needs an `aria-label`" (QA2-28).
+
+**Next up:** the fixing agent works through QA1 and QA2 together using the overlap table. Start with
+SEC-1/QA2-01, QA2-03, QA2-04, then QA2-05/06/07.
+
+---
+
+## 2026-10-23: **Independent QA run — agent 1**
+
+**Status: done, report only. No product code changed.** The owner asked for an independent QA pass written up for a later fixing agent, while another agent works on the finalisation plan. Deliverable: `docs/05_investigations/QA_RUN_AGENT1_2026-10-22.md`.
+
+**What ran.**
+- **Gates, all green:** pytest 2431 passed; vitest 747/66; vue-tsc and eslint clean; pwa build ok.
+- **Browser sweep:** Playwright over all 80 SPA routes, desktop 1366×900 and phone 390×844, against a seeded throwaway backend on :5347 serving a copied build.
+- **API probes:** anonymous access; about 2,400 garbage-body and query-abuse requests; a member (non-admin) account; semantic flows.
+- **Static review:** five parallel read-only code reviews, one per surface.
+- **Live confirmation:** the top static findings were reproduced against the running server.
+
+**Headline findings, confirmed live.**
+- SEC-1: image endpoints serve stored `data:text/html` as same-origin HTML under the `unsafe-inline` CSP. That is stored XSS, and an escalation path to admin.
+- SEC-3: open self-registration gives immediate access to all household data.
+- QA1-5: re-finishing a done list restocks its items again.
+- SL-3 / SL-8: a finished list can be cleared, added to, or reopened to draft.
+- AD-1: invalid `nutrition_mode` returns 500.
+- S-9: linking an already-linked product returns 500.
+- RC-3: negative recipe servings are accepted.
+- SEC-7: anonymous client-log writes are unbounded.
+- QA1-1: unauthenticated `/health` exposes the budget.
+
+Plus about 70 traced-in-code findings across every surface. All are listed with IDs, files and repros.
+
+**Not done.**
+- **Ledgers not updated:** findings are not yet in `DORA_FOLLOWUPS.md` or `DORA_VERIFY.md`. I left them alone to avoid colliding with the concurrent finalisation session. The fixing agent should triage the report into FUs.
+- **PROJECT_STATE:** only one line was added, under Needs-attention.
+
+**Process notes.**
+- **Concurrency:** two sessions on one box collide on `data/dora.test.db` (QA1-2) and can co-bind the same e2e port (QA1-3). Pick unusual ports and run pytest serially.
+- **Close-gate:**
+  - **R-rules:** no code was touched, so there's nothing to explain or flag.
+  - **ADR evaluation:** no new rule proposed. Candidates for the fixing agent are "one image-MIME validator at every writer" (an R-003 instance) and "mutations on a done list are refused server-side".
+
+**Next up:** triage the QA report into FUs, fixing SEC-1, SEC-3, SEC-2, SEC-4 and QA1-5/SL-3 first.
+
+---
+
+## 2026-10-22: **Follow-up sweep: pack count, resize loop, voice lead-in, companion providers**
 
 **Status: built, gated, not committed. Not driven in a browser** (backend and
 companion driven against live sites). Gates: pytest 2431 passed (products DTO

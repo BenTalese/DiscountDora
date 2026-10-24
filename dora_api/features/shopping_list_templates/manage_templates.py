@@ -24,12 +24,13 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from dora_api.domain.entities.preferred_buy import PreferredBuy
 from dora_api.domain.entities.product import Product
-from dora_api.domain.entities.shopping_list import (ShoppingList,
+from dora_api.domain.entities.shopping_list import (ShoppingList, format_list_date,
                                                     ShoppingListLine)
 from dora_api.domain.entities.shopping_list_template import (
     ShoppingListTemplate, ShoppingListTemplateLine,
 )
 from dora_api.domain.entities.stock_item import StockItem
+from dora_api.features.app_settings.clock import household_today
 from dora_api.features.routers import SHOPPING_LIST_TEMPLATE_ROUTER
 from dora_api.features.shopping_lists._line_defaults import apply_line_defaults
 from dora_api.features.shopping_lists.get_shopping_list_detail import (
@@ -536,7 +537,11 @@ class InstantiateTemplateHandler:
             return InstantiateTemplateResponse(not_found=True)
 
         now = datetime.now(timezone.utc)
-        name = (request.name or "").strip() or f"{template.name} · {now.strftime('%a %d %b')}"
+        # Household date through `format_list_date` (R-021 / R-056) — this
+        # was a server-local `strftime`, a second copy of that format
+        # (finalisation 03-R8).
+        today = household_today(self.repository)
+        name = (request.name or "").strip() or f"{template.name} · {format_list_date(today, today)}"
 
         new_list = ShoppingList(name=name, created_at=now)
         self.repository.add(new_list)
@@ -631,6 +636,10 @@ class SnapshotResponse:
     template_id: UUID | None = None
     source_not_found: bool = False
     line_count: int = 0
+    # Product-only source lines have no stock item and a template line is
+    # item-anchored (NOT NULL), so they are skipped rather than 500-ing the
+    # snapshot (finalisation 03-R2). Reported so the SPA can say so.
+    skipped_product_lines: int = 0
 
 
 class SnapshotFromListHandler:
@@ -643,8 +652,10 @@ class SnapshotFromListHandler:
             return SnapshotResponse(source_not_found=True)
 
         now = datetime.now(timezone.utc)
+        # `display_name`, not `name`: a self-labelled list has `name=None` and
+        # the fallback read "Template from None" (finalisation 03-R2).
         template = ShoppingListTemplate(
-            name = (request.name or "").strip() or f"Template from {source.name}",
+            name = (request.name or "").strip() or f"Template from {source.display_name}",
             created_at = now,
             updated_at = now,
         )
@@ -658,19 +669,26 @@ class SnapshotFromListHandler:
         source_lines.sort(key=lambda l: l.sequence)
 
         added = 0
-        for idx, sl in enumerate(source_lines):
+        skipped_product_lines = 0
+        for sl in source_lines:
+            if sl.stock_item_id is None:
+                skipped_product_lines += 1
+                continue
             self.repository.add(ShoppingListTemplateLine(
                 template_id = template.id,
                 stock_item_id = sl.stock_item_id,
                 quantity = sl.quantity if sl.quantity is not None else 1,
-                sequence = idx,
+                sequence = added,
                 selected_product_id = sl.selected_product_id,
                 preferred_buy_id = sl.preferred_buy_id,
             ))
             added += 1
         # FU-512 unit-of-work: single commit.
         self.repository.save_changes()
-        return SnapshotResponse(template_id=template.id, line_count=added)
+        return SnapshotResponse(
+            template_id=template.id, line_count=added,
+            skipped_product_lines=skipped_product_lines,
+        )
 
 
 @SHOPPING_LIST_TEMPLATE_ROUTER.route("/from-list/<uuid:source_list_id>", methods=["POST"])
@@ -688,4 +706,5 @@ def snapshot_from_list(source_list_id: UUID):
     return ok({
         "template_id": _Response.template_id,
         "line_count": _Response.line_count,
+        "skipped_product_lines": _Response.skipped_product_lines,
     })

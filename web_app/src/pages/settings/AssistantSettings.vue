@@ -362,6 +362,7 @@
     } from 'src/services/api/assistantApiService';
     import { useAuthStore } from 'src/stores/authStore';
     import { computed, onMounted, reactive, ref } from 'vue';
+    import { useQuasar } from 'quasar';
     import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';
     import { useMoneyEnabled } from 'src/composables/useMoneyEnabled';
     import { useSettingsSave } from 'src/composables/useSettingsSave';
@@ -373,6 +374,7 @@
 
     const authStore = useAuthStore();
     const { currentUser } = storeToRefs(authStore);
+    const $q = useQuasar();
     const assistantApi = new AssistantApiService();
     const { update } = useSettingsSave();
 
@@ -470,8 +472,13 @@
             seedFrom(providers);
         } catch (err) {
             // Non-fatal — the page still renders with empty fields the user
-            // can fill; the toast explains the fetch failure.
-            toastCaption(err);
+            // can fill; the toast explains the fetch failure. (`toastCaption`
+            // only formats — calling it for effect showed nothing, 11-R5.)
+            $q.notify({
+                type: 'negative',
+                message: "Couldn't load your provider settings.",
+                caption: toastCaption(err),
+            });
         }
     });
 

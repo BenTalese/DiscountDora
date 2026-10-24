@@ -230,6 +230,10 @@ export const ICONS = {
     chevron_right: 'mdi-chevron-right',
     cloud_download: 'mdi-cloud-download',
     cloud_off: 'mdi-cloud-off-outline',
+    // PageErrorState variants (finalisation 20-R21 / R-034).
+    not_found_explore: 'mdi-map-search-outline',
+    blocked: 'mdi-cancel',
+    error_outline: 'mdi-alert-circle-outline',
     cloud_upload: 'mdi-cloud-upload',
     code: 'mdi-code-tags',
     compare_arrows: 'mdi-compare-horizontal',

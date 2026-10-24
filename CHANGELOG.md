@@ -5,6 +5,57 @@ semver — major bumps signal schema or breaking-config changes.
 
 ## [Unreleased]
 
+### Fixed
+- **Finalisation sweep, Stage 2 (2026-10-23).** The first pass over the
+  finalisation review's verified bugs:
+  - *Backup & restore:* restoring a selection of sections no longer fails
+    (a stale section name), "New backup" with the default sections is accepted
+    again, and the backup page reads the section list from the server so UI
+    backups include recipe steps, tools, tags and vocab.
+  - *Companion / ingestion:* re-sending a batch after its idempotency key
+    expired no longer fails; link status never resolves to a hand-entered
+    custom product, so unsaving in the companion can't delete one.
+  - *Self-host:* the Docker image builds the PWA (service worker + manifest),
+    a build-host `web_app/.env` is no longer baked in, and the update check
+    looks at the right repository. `DORA_TRUSTED_PROXY_HOPS` lets a reverse
+    proxy pass the real client address; DEBUG request logging redacts
+    passwords and tokens.
+  - *Settings:* an invalid nutrition mode is a 422, admin email edits are
+    validated and unique, and the last-admin guard ignores deactivated admins.
+  - *Onboarding:* the demo seed joins the current week's plan instead of
+    creating a second one, and its ingredients use the pack's names.
+  - *Offline / PWA:* one service worker. Opening Settings → Notifications no
+    longer evicts the offline cache or shows a false "new version" banner.
+  - *Dashboard:* the restock radar copes with an item whose level was
+    deleted; a card that shipped after you saved your layout appears at its
+    proper place instead of last; Kitchen health counts "expired" against
+    your household's today.
+  - *Dora:* ticking a line, adding a recipe to a list and trimming to budget
+    work again from chat; "See it" buttons open live pages; Basic-mode
+    "where is X" names the zone; waste insights no longer error.
+  - *Reports / budget:* the budget week starts at your midnight, not UTC's
+    (early-week shops counted against last week); "Bought most" counts only
+    what was bought; report ranges and the window label follow the household
+    calendar; the waste reasons read the same on the card and the dialog.
+  - *Recipes & cook mode:* the cook-mode warning names an ingredient the way
+    the recipe page does; finishing a cook reports a level that failed to
+    save; speech stops cleanly on exit; the audio primer is no longer blocked
+    by the content-security policy on iOS.
+  - *Meal plans:* duplicating a week keeps cook batches and fresh marks; the
+    day strip and the "cooked later" date use your calendar day; the meal-plan
+    and shopping-list print views open from the app shell and cross-site
+    deployments.
+  - *Shopping lists:* product-only lines survive "Save as template" (skipped
+    and counted), move with "move unticked", and don't confuse the cart
+    button; a self-labelled list no longer yields "Template from None"; the
+    quick-add search shows its icon; auto-list names use your date.
+  - *Stock:* dates on the item page are formatted for your locale; the
+    split-view peek opens at 50 %; the "Dora thinks" dates follow your
+    timezone.
+  - *Everywhere:* toasts share one position; the focus ring follows every
+    theme; sorting follows the install's locale; the unit spelling and
+    counting rules come from one source.
+
 ### Added
 - **How many in the pack (2026-10-22).** A product can record how many items
   its pack holds: from its menu on My products, or when adding a custom

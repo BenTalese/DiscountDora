@@ -1,6 +1,6 @@
 # Finalisation Plan — Dashy Dora
 
-**Status:** 🔵 designed, not started
+**Status:** 🟡 Stage 1 in progress (overnight run started 2026-10-22; see §8)
 **Owner:** the last stretch of the project, before Phase 4 launch readiness closes out.
 **Companion register:** [FINALISATION_COVERAGE.md](FINALISATION_COVERAGE.md) — the
 per-chunk × per-track status matrix. Update it every session; it's what makes
@@ -209,7 +209,7 @@ Per chunk, one section with these buckets:
     (`household_today`), fuzzy-matching wrappers around RapidFuzz.
   - **Frontend:** drag-drop composables (`useDragDropList`) vs vue-draggable /
     dnd-kit; toast/notify wrappers; the shortcut registry (`useShortcut`); the
-    offline queue (`useOfflineQueue`) vs Workbox background sync; the rollback
+    read-only offline cache (`useNetworkStatus` + the `dora-api` NetworkFirst rule — the write queue was removed 2026-08-23, R-052) vs Workbox background sync; the rollback
     registry vs a proper undo/redo stack lib.
   - **Ops:** log rotation (time-based already), scheduling (APScheduler in place),
     rate limiting (flag if hand-rolled), config layering (`ConfigurationManager`)
@@ -310,7 +310,7 @@ time on first.
 | 14 | **Onboarding** | Fresh-install flow, per-name picks, paste-rows, seed-items (FU-514 fix). |
 | 15 | **Auth shell** | Login / register / reset / setup-admin / change-email / password policy (FU-442), CSRF (FU-197), rate limits. |
 | 16 | **Ingestion API + companion seam** | `/api/ingest` bearer lane, admin keys page, standalone companion round-trip. |
-| 17 | **Offline / PWA / native** | Service worker (FU-336 — first!), install banner, offline queue, wake-lock, Capacitor Android/iOS shells, backend-URL runtime picker. |
+| 17 | **Offline / PWA / native** | Service worker (FU-336 — first!), install banner, read-only offline cache (R-052), wake-lock, Capacitor Android/iOS shells, backend-URL runtime picker. |
 | 18 | **Backup & restore + Import** | Library, restore-preview, credential exclusion (FU-387), CSV templates (FU-343/348), the two data pages' shared design language (FU-359). |
 | 19 | **Ops / self-host** | The `2` env vars, migrations up/down (SQLite + Postgres), desktop first-run, log rotation, APScheduler jobs, security-audit.sh. |
 | 20 | **Cross-cutting concerns** | i18n/locale/currency (FU-043), text-scale + component-internal text (FU-025), theme system (feeds FU-010), color-usage patterns (feeds FU-224), keyboard shortcuts + cheatsheet, PWA shortcuts. |
@@ -466,3 +466,37 @@ This plan closes when:
 6. The plan doc itself gets a "Closed" banner + a link from
    `PROJECT_STATE.md` moves from the workstreams table to the
    "recently shipped" section.
+
+---
+
+## 8. Execution notes — 2026-10-22 overnight run
+
+Owner directive (2026-10-22): *"work through the finalisation plan overnight;
+do as much as you can on your own."* Context given with it: the owner has
+walked every page at least once as product owner and is **≥90 % happy with the
+app as it is**. Consequences for how the plan is run:
+
+- **Per-chunk analysis files.** Stage 1 runs as parallel analysts, one per
+  chunk, each writing `docs/05_investigations/finalisation/CHUNK_NN_<slug>.md`
+  to the contract in `_CHUNK_TEMPLATE.md` there. The four master documents
+  named in §3 (`FULL_SYSTEMS_TEST.md`, `FINALISATION_REVIEW.md`,
+  `TEST_PLAN_INVENTORY.md`, plus `HELP_CONTENT.md` for Track 2) are
+  **assembled from the chunk files** — the chunk files are the source; the
+  masters are regenerated, not hand-edited. The §5 "one chunk per session"
+  pacing was written for a single sequential session and does not apply to a
+  parallel run; the depth guard is the template's evidence rules instead.
+- **Track 4 amended to the 2026-07-20 testing stance.** Tests are listed only
+  where they pin a stable, low-churn contract that is expensive to re-check by
+  hand; backend pytest + Vitest only; **no Playwright feature-flow specs**
+  (the e2e layer stays a 3-spec smoke layer). The §3.4 e2e example row is
+  therefore historical.
+- **No redesigns.** With the owner ≥90 % happy, §C of each chunk executes the
+  maintainability class + verified bugs only; design-level observations are
+  recorded (§C8) and stop there.
+- **Stage 2 sequencing.** Per §3.5's "owner's call": execution runs per chunk
+  once that chunk's analysis is written, smallest-blast-radius first,
+  test-guarded against the baseline recorded at run start (pytest 2429 passed /
+  2 order-dependent flakes that pass in isolation; vitest 747/66; `vue-tsc`
+  and `eslint` clean). Findings marked **FU** or **waive** are not executed.
+- **FU ids are allocated by the orchestrator**, not by analysts, so parallel
+  chunks cannot collide on numbering.

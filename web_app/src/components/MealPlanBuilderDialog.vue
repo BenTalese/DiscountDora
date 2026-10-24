@@ -487,6 +487,7 @@
     import MealPlanIngredientRow from 'src/components/MealPlanIngredientRow.vue';
     import MealPlanRecipePicker from 'src/components/MealPlanRecipePicker.vue';
     import { useCookingPolicy } from 'src/composables/useCookingPolicy';
+    import { formatMoney } from 'src/composables/useMoney';
     import type {
         AutoBuildEmphasis, AutoBuildReason, MealPlanIngredient, ProposedEntry,
         UnlinkedIngredient,
@@ -693,9 +694,9 @@
     // here: which items need buying is a read of the stock levels behind the
     // aggregate, and a price is the server's to quote (R-003). The client used
     // to count the to-buy rows itself through `useStockStatus`.
-    function money(n: number): string {
-        return `$${n.toFixed(2)}`;
-    }
+    // Money renders through the formatting authority (R-003 / D-006 /
+    // FU-043) — this was the one hand-rolled `$x.xx` left (finalisation 20-R5).
+    const money = formatMoney;
     async function refreshPreview() {
         if (proposed.value.length === 0) {
             previewIngredients.value = [];
@@ -767,7 +768,6 @@
             // error — surface a friendly toast rather than crashing the dialog.
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: "Couldn't build a plan. Try again.",
             });
         } finally {

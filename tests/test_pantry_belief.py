@@ -189,3 +189,22 @@ def test__believed_band_is_always_coarse():
         ))
         assert belief.believed_band in ("out", "low", "stocked")
         assert 0.0 <= belief.confidence <= 1.0
+
+
+def test__as_date__buckets_a_stored_utc_instant_in_the_household_zone():
+    """Finalisation 07-R1 (R-021, the FU-525 class): a level changed at 22:00
+    UTC is 08:00 *tomorrow* in Sydney — "Updated today", not "1 day ago". Naive
+    values are stored UTC."""
+    from datetime import date as _date, datetime as _dt, timezone as _tz
+    from zoneinfo import ZoneInfo as _Zone
+    from dora_api.features.stock_items.pantry_belief import _as_date
+
+    sydney = _Zone("Australia/Sydney")
+    aware = _dt(2026, 1, 1, 22, 0, tzinfo=_tz.utc)
+    naive = _dt(2026, 1, 1, 22, 0)
+
+    assert _as_date(aware, sydney) == _date(2026, 1, 2)
+    assert _as_date(naive, sydney) == _date(2026, 1, 2)
+    assert _as_date(naive, _Zone("UTC")) == _date(2026, 1, 1)
+    assert _as_date(_date(2026, 1, 1), sydney) == _date(2026, 1, 1)
+    assert _as_date(None, sydney) is None

@@ -479,11 +479,15 @@ def normalise_unit(unit: str) -> str:
     return unit.lower().replace("°", "").strip()
 
 
-# server mirror of `web_app/src/helpers/formatQuantity.ts`.
-# Inclusion list MUST stay in sync with `NO_SPACE_UNITS` over there.
-_NO_SPACE_UNITS: frozenset[str] = frozenset({
+# DEC-3 unit-spacing rule: these sit tight against the number ("250g",
+# "2ml"); everything else gets a space ("2 cloves"). The SPA's
+# `formatQuantity.ts` reads this list from the generated `units_table.ts`
+# (`scripts/dump_units.py`) — it used to hold its own copy with a comment
+# asking humans to keep the two in sync (finalisation 20-R3, R-003).
+NO_SPACE_UNITS: frozenset[str] = frozenset({
     "ml", "g", "kg", "l", "mg", "oz", "lb", "floz", "pt", "qt",
 })
+_NO_SPACE_UNITS = NO_SPACE_UNITS
 
 
 def format_quantity(quantity: Any, unit: Any) -> str:
@@ -630,6 +634,20 @@ SUB_ITEM_UNITS: frozenset[str] = frozenset({
     "splash",
     "drizzle",
     "handful",
+})
+
+
+# Units a recipe quantity is *counted* in, so cook-mode scaling rounds them to
+# whole numbers ("2 rashers", never "2.5 rashers"). Two purposes, one list
+# each: `SUB_ITEM_UNITS` above answers "is this a part of a shelf item?" for
+# pricing; this answers "is this a discrete thing?" for scaling. They overlap
+# on the discrete parts but not on the vague amounts — a "handful" or
+# "splash" is unpriceable *and* continuous (1.5 handfuls is fine). Emitted to
+# the SPA via `scripts/dump_units.py` for `scaleQuantity.isCountableUnit` —
+# the client used to carry a different list (finalisation 20-R4, R-003).
+_VAGUE_AMOUNTS: frozenset[str] = frozenset({"splash", "drizzle", "handful"})
+COUNTABLE_UNITS: frozenset[str] = (SUB_ITEM_UNITS - _VAGUE_AMOUNTS) | frozenset({
+    "egg", "scoop", "piece", "stick", "can", "bunch", "pinch", "head",
 })
 
 

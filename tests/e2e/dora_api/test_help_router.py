@@ -28,6 +28,38 @@ VERSION_KEYS = {
 #region ---------------- version ----------------
 
 
+def test__version_check__repo_slug_is_the_one_constant():
+    """Finalisation 19-R3 — the update check pointed at `BenTalese/DashyDora`
+    (never existed) while the support channel and README said `dashy-dora`.
+    Every URL that names the repository now reads `version_info.GITHUB_REPO`."""
+    from dora_api.features.help import get_version
+    from dora_api.features.help.version_info import GITHUB_REPO, GITHUB_URL
+    from dora_api.features.nutrition.dataset_import import _USER_AGENT
+    from dora_api.features.support.support_channel import _DEFAULT_SUPPORT_URL
+
+    assert GITHUB_REPO == "BenTalese/dashy-dora"
+    assert get_version._GITHUB_RELEASE_URL == f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
+    assert _DEFAULT_SUPPORT_URL.startswith(GITHUB_URL)
+    assert GITHUB_URL in _USER_AGENT
+    for stale in ("DashyDora/", "DiscountDora"):
+        assert stale not in get_version._GITHUB_RELEASE_URL
+        assert stale not in _DEFAULT_SUPPORT_URL
+        assert stale not in _USER_AGENT
+
+
+def test__version_check__is_newer_orders_pre_releases_correctly():
+    """The hand-rolled tuple parse this replaces read `0.8.0-rc.1` as
+    `(0, 8, 0, 1)` — newer than the final `0.8.0`. PEP 440 ordering now."""
+    from dora_api.features.help.get_version import _is_newer
+
+    assert _is_newer("0.8.0", "0.7.0") is True
+    assert _is_newer("0.10.0", "0.9.0") is True
+    assert _is_newer("0.7.0", "0.7.0") is False
+    assert _is_newer("0.8.0-rc.1", "0.7.0") is True
+    assert _is_newer("0.8.0-rc.1", "0.8.0") is False
+    assert _is_newer("not-a-version", "0.7.0") is False
+
+
 def test__get_version__Shape__MatchesContractAndCurrentVersion(api):
     resp = requests.get(f"{HELP}/version")
 

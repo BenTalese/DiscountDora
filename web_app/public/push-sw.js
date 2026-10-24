@@ -1,8 +1,14 @@
-/* C-9.8 — Push-only service worker.
+/* C-9.8 — Push handlers.
  *
- * Standalone from Quasar's PWA Workbox SW (when the app is built in
- * PWA mode the two coexist at different paths; in SPA mode this one
- * runs alone). Handles two events only:
+ * In the PWA build this file is pulled INTO the Workbox worker (`sw.js`)
+ * via `importScripts` (quasar.config.ts) — one worker, one registration.
+ * It used to be registered on its own, and because a registration is keyed
+ * by scope (both default to `/`) that replaced the Workbox worker every
+ * time Settings → Notifications opened (finalisation 17-R1). In SPA / dev
+ * mode, where there is no `sw.js`, `usePushSubscription` still registers
+ * this file standalone, so the `install` / `activate` handlers below stay:
+ * inside the Workbox worker they are harmless duplicates of what Workbox
+ * already does (`skipWaiting` / `clientsClaim`). Handles two events:
  *
  *   - `push`              show a notification from the payload
  *   - `notificationclick` focus an existing tab on the right route or

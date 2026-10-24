@@ -17,19 +17,11 @@
 // rows). The two helpers stay separate so the spacing convention
 // (`formatQuantity`) doesn't get tangled with the rounding convention here.
 
-const COUNTABLE_UNITS: ReadonlySet<string> = new Set([
-    'egg', 'eggs',
-    'clove', 'cloves',
-    'scoop', 'scoops',
-    'slice', 'slices',
-    'piece', 'pieces',
-    'sprig', 'sprigs',
-    'stick', 'sticks',
-    'knob', 'knobs',
-    'can', 'cans',
-    'bunch', 'bunches',
-    'pinch', 'pinches',
-]);
+// The countable-unit list is the server's (`units.py` `COUNTABLE_UNITS`,
+// singular forms) via the generated table — the client used to carry a
+// different list, so "2 rashers" scaled to "2.5" here while the server
+// treated a rasher as a counted sub-item (finalisation 20-R4, R-003).
+import { COUNTABLE_UNITS } from 'src/generated/units_table';
 
 const FRACTION_GLYPHS: ReadonlyArray<readonly [number, string]> = [
     [0.25, '¼'],
@@ -45,7 +37,10 @@ export function isCountableUnit(unit: string | null | undefined): boolean {
     if (unit === null || unit === undefined) return true;
     const trimmed = unit.trim().toLowerCase();
     if (!trimmed) return true;
-    return COUNTABLE_UNITS.has(trimmed);
+    // The generated list holds singular forms; recipes write plurals
+    // ("3 cloves", "2 bunches").
+    const singular = trimmed.replace(/(ch|sh|x|z)es$/, '$1').replace(/s$/, '');
+    return COUNTABLE_UNITS.has(trimmed) || COUNTABLE_UNITS.has(singular);
 }
 
 function nearestFractionGlyph(decimal: number): string | null {

@@ -362,7 +362,7 @@ const alertInputs = reactive<Record<string, number | null | undefined>>({});
         } else {
             if (selectedIds.value.length >= 5) {
                 $q.notify({
-                    type: 'warning', position: 'bottom-right',
+                    type: 'warning', 
                     message: 'Up to 5 products at a time.',
                 });
                 return;
@@ -385,7 +385,7 @@ const alertInputs = reactive<Record<string, number | null | undefined>>({});
             series.value = result.series;
         } catch (err) {
             $q.notify({
-                type: 'negative', position: 'bottom-right',
+                type: 'negative', 
                 message: "Couldn't load price history.",
                 caption: err instanceof Error ? err.message : String(err),
             });
@@ -407,12 +407,12 @@ const alertInputs = reactive<Record<string, number | null | undefined>>({});
             await refreshAlerts();
             alertInputs[productId] = null;
             $q.notify({
-                type: 'positive', position: 'bottom-right',
+                type: 'positive', 
                 message: "We'll notify you when it drops.",
             });
         } catch (err) {
             $q.notify({
-                type: 'negative', position: 'bottom-right',
+                type: 'negative', 
                 message: "Couldn't set the alert.",
                 caption: err instanceof Error ? err.message : String(err),
             });
@@ -425,7 +425,7 @@ const alertInputs = reactive<Record<string, number | null | undefined>>({});
             await refreshAlerts();
         } catch (err) {
             $q.notify({
-                type: 'negative', position: 'bottom-right',
+                type: 'negative', 
                 message: "Couldn't remove the alert.",
                 caption: err instanceof Error ? err.message : String(err),
             });

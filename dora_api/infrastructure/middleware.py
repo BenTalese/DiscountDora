@@ -165,6 +165,11 @@ _DEFAULT_CSP = "; ".join([
     "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob: https:",
+    # No `media-src` meant `default-src 'self'` governed audio, which blocked
+    # `audioUnlock.ts`'s silent `data:` WAV — the iOS/WKWebView autoplay primer
+    # speech output relies on — on every load (FU-853 / finalisation 04-R2).
+    # `blob:` is Piper's synthesised clip; the timer chime is WebAudio.
+    "media-src 'self' blob: data:",
     "font-src 'self' data:",
     "connect-src 'self' https:",
     "frame-ancestors 'none'",
@@ -271,6 +276,32 @@ def require_csrf_if_protected(endpoint_name: str):
     )
 
 
+# Body keys whose values never reach a log line. Matched case-insensitively
+# as substrings so `password`, `new_password`, `current_password`,
+# `smtp_password`, `api_key`, `vapid_private_key`, `token`, `secret` and the
+# raw ingestion `key` are all covered without listing every field. The DEBUG
+# body dump below is the dev default (`logging_setup`: DEBUG when `debug=True`)
+# and used to print `/auth/login` bodies — username *and* password — into the
+# rotating log file (finalisation 15-R2).
+_SENSITIVE_KEY_FRAGMENTS = ("password", "secret", "token", "key", "authorization")
+REDACTED = "***"
+
+
+def redact_sensitive(value):
+    """A copy of `value` with every secret-looking key's value replaced by
+    `***`, recursing into nested dicts and lists. Non-container values pass
+    through unchanged."""
+    if isinstance(value, dict):
+        return {
+            k: (REDACTED if isinstance(k, str) and any(f in k.lower() for f in _SENSITIVE_KEY_FRAGMENTS)
+                else redact_sensitive(v))
+            for k, v in value.items()
+        }
+    if isinstance(value, list):
+        return [redact_sensitive(v) for v in value]
+    return value
+
+
 def audit_incoming_request():
     _Logger.debug(
         "Incoming request | method=%s path=%s endpoint=%s ip=%s",
@@ -279,9 +310,8 @@ def audit_incoming_request():
         request.endpoint,
         request.remote_addr,
     )
-    _Logger.debug(
-        f"body: {request.get_json(silent=True)}" if request.is_json else ""
-    )
+    if request.is_json and _Logger.isEnabledFor(logging.DEBUG):
+        _Logger.debug("body: %s", redact_sensitive(request.get_json(silent=True)))
 
 
 def deserialise_web_request(request_endpoint: str):

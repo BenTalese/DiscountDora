@@ -127,7 +127,7 @@
             void refreshImagePolicy();
             $q.notify({
                 type: 'positive',
-                position: 'bottom-right',
+                
                 message: 'Image settings saved.',
                 caption: 'Applies to new uploads; existing images are unchanged.',
                 timeout: 3000,
@@ -136,7 +136,7 @@
             reset();
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
+                
                 message: "Couldn't save image settings.",
                 caption: toastCaption(err),
             });
@@ -156,7 +156,7 @@
         } catch (err) {
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
+                
                 message: "Couldn't load image settings.",
                 caption: toastCaption(err),
             });

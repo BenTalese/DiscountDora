@@ -71,7 +71,7 @@
         min-width: 22px;
         text-align: center;
         padding: 2px 6px;
-        border: 1px solid var(--q-grey-5, var(--border-strong));
+        border: 1px solid var(--border-strong);
         border-bottom-width: 2px;
         border-radius: 4px;
         font-family: monospace;

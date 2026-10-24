@@ -512,19 +512,20 @@
         if (!wellStocked) {
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: 'No stock levels configured, so a pantry item can\'t be created.',
             });
             return;
         }
         creating.value = true;
         try {
-            await stockItemStore.createStockItemAsync({
+            // The store returns the created entity; a name lookup missed when
+            // the server normalised the name and left the row unanchored
+            // (finalisation 01-R2).
+            const created = await stockItemStore.createStockItemAsync({
                 name,
                 stock_level_id: wellStocked.stock_level_id,
                 stock_location_id: null,
             });
-            const created = stockItems.value.find((s) => s.name === name);
             if (created) {
                 draft.value.stock_item_id = created.stock_item_id;
                 draft.value.raw_text = null;
@@ -541,14 +542,12 @@
                 // on the Stock overview.
                 $q.notify({
                     type: 'positive',
-                    position: 'bottom-right',
                     message: `Added "${name}" to your pantry.`,
                 });
             }
         } catch (err) {
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: 'Could not create the pantry item.',
                 caption: toastCaption(err),
             });

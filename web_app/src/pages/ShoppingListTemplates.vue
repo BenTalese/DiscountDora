@@ -392,7 +392,6 @@
         } catch (err) {
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: 'Could not create template.',
                 caption: toastCaption(err),
             });
@@ -416,7 +415,6 @@
         } catch (err) {
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: 'Could not rename.',
                 caption: toastCaption(err),
             });
@@ -443,7 +441,6 @@
         } catch (err) {
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: 'Could not delete.',
                 caption: toastCaption(err),
             });
@@ -460,7 +457,6 @@
             await shoppingListStore.refreshAsync();
             $q.notify({
                 type: 'positive',
-                position: 'bottom-right',
                 message: `Created list with ${result.line_count} item${
                     result.line_count === 1 ? '' : 's'
                 }.`,
@@ -471,7 +467,6 @@
         } catch (err) {
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: 'Could not create list.',
                 caption: toastCaption(err),
             });
@@ -490,7 +485,6 @@
         } catch (err) {
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: 'Could not load template.',
                 caption: toastCaption(err),
             });
@@ -540,7 +534,6 @@
             line.preferred_buy_id = previous.preferredBuy;
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: 'Could not update the item.',
                 caption: toastCaption(err),
             });
@@ -555,7 +548,6 @@
         } catch (err) {
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: 'Could not load template.',
                 caption: toastCaption(err),
             });
@@ -586,7 +578,6 @@
         } catch (err) {
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: 'Could not add item.',
                 caption: toastCaption(err),
             });
@@ -605,7 +596,6 @@
             line.quantity = previous;
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: 'Could not update quantity.',
                 caption: toastCaption(err),
             });
@@ -652,7 +642,6 @@
         } catch (err) {
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: 'Could not remove item.',
                 caption: toastCaption(err),
             });

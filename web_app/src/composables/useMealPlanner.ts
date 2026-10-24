@@ -250,7 +250,7 @@ export function useMealPlanner() {
     }
     function selectSlot(dayIso: string, slot: string) {
         if (isPastDay(dayIso)) {
-            $q.notify({ type: 'warning', position: 'bottom-right', message: 'Past days are read-only.' });
+            $q.notify({ type: 'warning', message: 'Past days are read-only.' });
             return;
         }
         focusedTarget.value = isTargeted(dayIso, slot) ? null : { dayIso, slot };
@@ -333,7 +333,6 @@ export function useMealPlanner() {
     function notifyPlanError(err: unknown) {
         $q.notify({
             type: 'negative',
-            position: 'bottom-right',
             message: 'Could not update the plan.',
             caption: toastCaption(err),
         });
@@ -406,7 +405,7 @@ export function useMealPlanner() {
                 notifyPlanError(err);
                 return;
             }
-            $q.notify({ type: 'positive', position: 'bottom-right', message: 'Added to plan.' });
+            $q.notify({ type: 'positive', message: 'Added to plan.' });
             return;
         }
         const plan = focusedPlan.value;
@@ -420,7 +419,7 @@ export function useMealPlanner() {
             cmds.push({ recipe_id: recipeId, scheduled_for: dayIso, servings: 1, slot });
         }
         if (await persistEntries(plan.meal_plan_id, cmds)) {
-            $q.notify({ type: 'positive', position: 'bottom-right', message: 'Added to plan.' });
+            $q.notify({ type: 'positive', message: 'Added to plan.' });
         }
     }
 
@@ -629,7 +628,6 @@ export function useMealPlanner() {
         if (await persistEntries(plan.meal_plan_id, cmds)) {
             $q.notify({
                 type: 'positive',
-                position: 'bottom-right',
                 message: next
                     ? `${entry.recipe_name} is cooked fresh on the day.`
                     : `${entry.recipe_name} is back on the cooked pool.`,
@@ -783,7 +781,6 @@ export function useMealPlanner() {
         } catch (err) {
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: 'Could not update meals.',
                 caption: toastCaption(err),
             });
@@ -910,11 +907,11 @@ export function useMealPlanner() {
                 source_meal_plan_id: focusedPlan.value.meal_plan_id,
                 ...(description.trim() ? { description: description.trim() } : {}),
             });
-            $q.notify({ type: 'positive', position: 'bottom-right', message: 'Saved this week as a template.' });
+            $q.notify({ type: 'positive', message: 'Saved this week as a template.' });
             return true;
         } catch (err) {
             $q.notify({
-                type: 'negative', position: 'bottom-right',
+                type: 'negative', 
                 message: 'Could not save the template.',
                 caption: toastCaption(err),
             });
@@ -956,17 +953,17 @@ export function useMealPlanner() {
             });
             await refreshAfterMutation();
             if (result.added_count === 0) {
-                $q.notify({ type: 'info', position: 'bottom-right', message: 'Nothing added. Those days are in the past.' });
+                $q.notify({ type: 'info', message: 'Nothing added. Those days are in the past.' });
                 return;
             }
             let message = `Added ${result.added_count} meal${result.added_count === 1 ? '' : 's'}.`;
             if (result.skipped_past_count) {
                 message += ` ${result.skipped_past_count} past day${result.skipped_past_count === 1 ? '' : 's'} skipped.`;
             }
-            $q.notify({ type: 'positive', position: 'bottom-right', message });
+            $q.notify({ type: 'positive', message });
         } catch (err) {
             $q.notify({
-                type: 'negative', position: 'bottom-right',
+                type: 'negative', 
                 message: 'Could not apply the template.',
                 caption: toastCaption(err),
             });
@@ -982,7 +979,7 @@ export function useMealPlanner() {
     async function loadRecurringSources(): Promise<boolean> {
         await Promise.all([mealPlanTemplateStore.getTemplatesAsync(), mealPlanTemplateSetStore.getSetsAsync()]);
         if (recurringSourceOptions.value.length === 0) {
-            $q.notify({ type: 'info', position: 'bottom-right', message: 'Save a template first.' });
+            $q.notify({ type: 'info', message: 'Save a template first.' });
             return false;
         }
         return true;
@@ -1004,12 +1001,12 @@ export function useMealPlanner() {
             let message = `Planned ${result.weeks_applied} week${result.weeks_applied === 1 ? '' : 's'} `
                 + `(${result.total_added} meal${result.total_added === 1 ? '' : 's'}).`;
             if (result.total_skipped_past) message += ` ${result.total_skipped_past} past day(s) skipped.`;
-            $q.notify({ type: 'positive', position: 'bottom-right', message });
+            $q.notify({ type: 'positive', message });
             if (result.first_meal_plan_id) focusedMonday.value = mondayOf(args.startMonday);
             return true;
         } catch (err) {
             $q.notify({
-                type: 'negative', position: 'bottom-right',
+                type: 'negative', 
                 message: 'Could not apply the recurring plan.',
                 caption: toastCaption(err),
             });
@@ -1028,7 +1025,7 @@ export function useMealPlanner() {
         const upcoming = newCmds.filter((c) => !isPastDay(c.scheduled_for));
         if (upcoming.length === 0) {
             $q.notify({
-                type: 'warning', position: 'bottom-right',
+                type: 'warning', 
                 message: 'No upcoming meals to add.',
             });
             throw new Error('no upcoming entries');
@@ -1056,14 +1053,16 @@ export function useMealPlanner() {
     // entries are overwritten, not merged, so "duplicate" produces a week that
     // actually matches the one you copied. Past + consumed entries are never
     // sent (FU-595's rule); the server preserves those on its own.
+    // Built from `toCommand` so a duplicated week keeps `cook_key` and
+    // `cook_fresh` — the hand-rolled mapping turned every cook batch into N
+    // standalone meals and un-marked fresh meals, silently (finalisation
+    // 02-R2). The entry id is dropped: these are *new* entries next week.
     function nextWeekCommands(): MealPlanEntryCommand[] {
         return (focusedPlan.value?.entries ?? [])
-            .map((e) => ({
-                recipe_id: e.recipe_id,
-                scheduled_for: shiftDays(toIso(e.scheduled_for), 7),
-                servings: e.servings,
-                slot: e.slot,
-            }))
+            .map((e) => {
+                const { meal_plan_entry_id: _id, ...command } = toCommand(e);
+                return { ...command, scheduled_for: shiftDays(command.scheduled_for, 7) };
+            })
             .filter((c) => !isPastDay(c.scheduled_for));
     }
 
@@ -1072,7 +1071,7 @@ export function useMealPlanner() {
         const commands = nextWeekCommands();
         if (commands.length === 0) {
             $q.notify({
-                type: 'info', position: 'bottom-right',
+                type: 'info', 
                 message: 'This week has no meals to duplicate.',
             });
             return;
@@ -1109,7 +1108,7 @@ export function useMealPlanner() {
             }
         }
         $q.notify({
-            type: 'positive', position: 'bottom-right',
+            type: 'positive', 
             message: `Copied ${commands.length} meal${commands.length === 1 ? '' : 's'} to next week.`,
         });
         // Land the user on what they just created rather than making them

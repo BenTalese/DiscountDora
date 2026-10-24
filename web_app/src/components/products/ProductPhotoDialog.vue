@@ -120,7 +120,6 @@
         } catch (err) {
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: failure,
                 caption: toastCaption(err),
             });

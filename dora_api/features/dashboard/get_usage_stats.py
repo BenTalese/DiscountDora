@@ -27,11 +27,17 @@ rendering "—".
 import logging
 from dataclasses import dataclass
 
-from dora_api.app import db
-from dora_api.domain.entities.shopping_list import SHOPPING_LIST_STATUS_DONE
+from dora_api.domain.entities.cook_event import CookEvent
+from dora_api.domain.entities.meal_plan_entry import MealPlanEntry
+from dora_api.domain.entities.recipe import Recipe
+from dora_api.domain.entities.shopping_list import SHOPPING_LIST_STATUS_DONE, ShoppingList
+from dora_api.domain.entities.stock_item import StockItem
+from dora_api.domain.entities.stock_item_price_observation import StockItemPriceObservation
 from dora_api.features.app_settings.access import money_features_enabled
 from dora_api.features.routers import DASHBOARD_ROUTER
+from dora_api.features.shopping_lists._line_price import lifetime_spend
 from dora_api.infrastructure.api_response import ok
+from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 
 
@@ -52,68 +58,31 @@ class GetUsageStatsHandler:
     def __init__(self, repository: SqlAlchemyRepository) -> None:
         self.repository = repository
 
-    def _count(self, table_name: str, where=None) -> int:
-        from sqlalchemy import func, select
-        table = db.metadata.tables[table_name]
-        stmt = select(func.count()).select_from(table)
-        if where is not None:
-            stmt = stmt.where(where)
-        return int(db.session.execute(stmt).scalar() or 0)
-
-    def _total_spend(self) -> float:
-        """Lifetime spend, on exactly the definition `/reports/spend-by-store`
-        uses — ticked lines on completed lists, priced `actual` first and
-        `picked_offer` second, times quantity.
-
-        Deliberately the same rule rather than a new one (R-003): if About says
-        one number and the reports page says another for the same install, one
-        of them is wrong and the user has no way to tell which. What is dropped
-        here is only the *store attribution* — that report's remaining
-        complexity is entirely about deciding which shop a line belongs to, and
-        a single total doesn't ask.
-
-        Lines with neither price are skipped, not counted as zero — the same
-        silent-skip the report applies. That makes this a floor rather than a
-        true total, which is the honest reading of "spend *tracked*".
-        """
-        from sqlalchemy import func, select
-        lists = db.metadata.tables["ShoppingList"]
-        lines = db.metadata.tables["ShoppingListLine"]
-        unit_price = func.coalesce(
-            lines.c.actual_unit_price, lines.c.picked_offer_price,
-        )
-        stmt = (
-            select(func.sum(unit_price * func.coalesce(lines.c.quantity, 1)))
-            .select_from(lines.join(lists, lists.c.id == lines.c.shopping_list_id))
-            .where(
-                lists.c.status == SHOPPING_LIST_STATUS_DONE,
-                lines.c.is_ticked.is_(True),
-                unit_price.isnot(None),
-            )
-        )
-        return round(float(db.session.execute(stmt).scalar() or 0.0), 2)
-
     def handle(self) -> UsageStatsDto:
-        lists = db.metadata.tables["ShoppingList"]
-        money_on = money_features_enabled(self.repository)
+        # Plain counts through the repository (R-005 — this used to reach for
+        # `db.metadata.tables` + `db.session` for six counts the port already
+        # does; finalisation 08-R6). Lifetime spend lives beside the per-line
+        # price ladder in `_line_price.lifetime_spend` so About and Reports
+        # read one rule.
+        repo = self.repository
+        money_on = money_features_enabled(repo)
+        done = EntityField(ShoppingList, ShoppingList.Fields.STATUS).eq(SHOPPING_LIST_STATUS_DONE)
 
         return UsageStatsDto(
-            stock_items=self._count("StockItem"),
-            recipes=self._count("Recipe"),
+            stock_items=repo.get(StockItem).count(),
+            recipes=repo.get(Recipe).count(),
             # Every entry ever placed on a plan, including past weeks. The
             # dashboard counts only what is upcoming; this is the opposite
             # question and the reason the About block needed its own endpoint.
-            meals_planned=self._count("MealPlanEntry"),
+            meals_planned=repo.get(MealPlanEntry).count(),
             # One row per cook (a batch cook that feeds five days is one
             # event), so this counts cooking sessions, not portions.
-            meals_cooked=self._count("CookEvent"),
-            shopping_lists=self._count("ShoppingList"),
-            shops_completed=self._count(
-                "ShoppingList", lists.c.status == SHOPPING_LIST_STATUS_DONE,
-            ),
-            total_spend=self._total_spend() if money_on else None,
+            meals_cooked=repo.get(CookEvent).count(),
+            shopping_lists=repo.get(ShoppingList).count(),
+            shops_completed=repo.get(ShoppingList).count(done),
+            total_spend=lifetime_spend(repo.session) if money_on else None,
             prices_recorded=(
-                self._count("StockItemPriceObservation") if money_on else None
+                repo.get(StockItemPriceObservation).count() if money_on else None
             ),
         )
 

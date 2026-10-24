@@ -89,7 +89,7 @@
             // (auto) and the runner (manual) without a full reload.
             void refreshReconcilePolicy();
             $q.notify({
-                type: 'positive', position: 'bottom-right',
+                type: 'positive', 
                 message: savedAutoDrain
                     ? 'Past meals will auto-drain.'
                     : 'Past meals will wait for you to confirm.',
@@ -97,7 +97,7 @@
         } catch (err) {
             autoDrainDraft.value = savedAutoDrain;
             $q.notify({
-                type: 'negative', position: 'bottom-right',
+                type: 'negative', 
                 message: 'Could not save reconcile setting.',
                 caption: toastCaption(err),
             });

@@ -229,6 +229,98 @@ def test__ingest__idempotency_key_replays_to_noop(api):
     assert second.json()["skipped"] == []
 
 
+def _insert_idempotency_row(source_id: str, key: str, *, expired: bool) -> None:
+    """Plant an `IdempotencyKey` row directly — the only way to put a
+    *past-TTL* row on file without waiting seven days."""
+    from datetime import datetime, timedelta, timezone
+
+    from dora_api.domain.entities.idempotency_key import IdempotencyKey
+
+    now = datetime.now(timezone.utc)
+    delta = -timedelta(days=1) if expired else timedelta(days=7)
+    with app.app_context():
+        repo = SqlAlchemyRepository()
+        repo.add(IdempotencyKey(
+            key=key,
+            source_id=source_id,
+            expires_at=now + delta,
+            created_at=now - timedelta(days=8),
+        ))
+        repo.save_changes()
+
+
+def _idempotency_rows(source_id: str, key: str) -> list:
+    from dora_api.domain.entities.idempotency_key import IdempotencyKey
+
+    with app.app_context():
+        repo = SqlAlchemyRepository()
+        field_key = EntityField(IdempotencyKey, IdempotencyKey.Fields.KEY)
+        field_src = EntityField(IdempotencyKey, IdempotencyKey.Fields.SOURCE_ID)
+        return repo.get(IdempotencyKey).all(field_key.eq(key) & field_src.eq(source_id))
+
+
+def test__ingest__expired_idempotency_key_is_reprocessed_not_500(api):
+    """Finalisation 16-R2 — a key past its 7-day TTL used to be let through
+    *and then* re-inserted, which the unique `(source_id, key)` index rejected
+    at commit: a 500 after the batch had been applied in the session, so the
+    whole batch rolled back. A producer reusing a stable key (the companion's
+    scheduler tick id) hit it a week after first use. The row is refreshed in
+    place now and the batch lands."""
+    sid, key = _mint_key()
+    store_id = _seeded_store_id()
+    _map_store(sid, "ExternalStore", store_id)
+    idem = uuid.uuid4().hex
+    _insert_idempotency_row(sid, idem, expired=True)
+
+    resp = _post_ingest(key, {
+        "products": [{
+            "ref": "p1",
+            "name": f"Stale Key {uuid.uuid4().hex[:6]}",
+            "store": "ExternalStore",
+            "merchant_stockcode": uuid.uuid4().hex[:10],
+        }],
+        "offers": [{
+            "product_ref": "p1",
+            "price_now": 2.00,
+            "observed_at": "2026-06-17T10:00:00+00:00",
+        }],
+    }, idem=idem)
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["idempotent_replay"] is False
+    assert len(resp.json()["accepted"]) == 2, resp.text
+
+    rows = _idempotency_rows(sid, idem)
+    assert len(rows) == 1, "the expired row must be refreshed, not duplicated"
+    expires = rows[0].expires_at
+    from datetime import datetime, timezone
+    if expires.tzinfo is None:
+        expires = expires.replace(tzinfo=timezone.utc)
+    assert expires > datetime.now(timezone.utc)
+
+    # And the refreshed key now short-circuits like any live key.
+    replay = _post_ingest(key, {"products": [], "offers": []}, idem=idem)
+    assert replay.status_code == 200 and replay.json()["idempotent_replay"] is True
+
+
+def test__ingest__stamping_a_key_purges_expired_rows(api):
+    """Finalisation 16-R3 — nothing ever deleted past-TTL rows, so the table
+    grew by one row per keyed push forever. A keyed push now sweeps them."""
+    sid, key = _mint_key()
+    store_id = _seeded_store_id()
+    _map_store(sid, "ExternalStore", store_id)
+    stale_a, stale_b, live = uuid.uuid4().hex, uuid.uuid4().hex, uuid.uuid4().hex
+    _insert_idempotency_row(sid, stale_a, expired=True)
+    _insert_idempotency_row(sid, stale_b, expired=True)
+    _insert_idempotency_row(sid, live, expired=False)
+
+    resp = _post_ingest(key, {"products": [], "offers": []}, idem=uuid.uuid4().hex)
+    assert resp.status_code == 200, resp.text
+
+    assert _idempotency_rows(sid, stale_a) == []
+    assert _idempotency_rows(sid, stale_b) == []
+    assert len(_idempotency_rows(sid, live)) == 1, "a live key must survive the sweep"
+
+
 def test__ingest__bad_record_does_not_fail_batch(api):
     """A bad record returns per-record `failed`, not a 4xx."""
     sid, key = _mint_key()

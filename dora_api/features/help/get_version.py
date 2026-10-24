@@ -13,7 +13,9 @@ from time import time
 from typing import Optional
 from urllib.request import Request, urlopen
 
-from dora_api.features.help.version_info import CURRENT_VERSION
+from packaging.version import InvalidVersion, Version
+
+from dora_api.features.help.version_info import CURRENT_VERSION, GITHUB_REPO
 from dora_api.features.routers import HELP_ROUTER
 from dora_api.infrastructure.api_response import ok
 
@@ -23,7 +25,7 @@ from dora_api.infrastructure.api_response import ok
 _CACHE: dict[str, object] = {"value": None, "fetched_at": 0.0}
 _TTL_SECONDS = 60 * 30
 
-_GITHUB_RELEASE_URL = "https://api.github.com/repos/BenTalese/DashyDora/releases/latest"
+_GITHUB_RELEASE_URL = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
 
 
 @dataclass(frozen=True, slots=True)
@@ -65,27 +67,26 @@ def _fetch_latest_release() -> tuple[Optional[str], Optional[str], Optional[str]
     return result
 
 
-def _semver_tuple(version: str) -> tuple[int, ...]:
-    """Naive semver parse — splits on '.', ignores non-numeric trailing bits.
-    Sufficient for "is the latest tag newer than what's running?" without
-    pulling in a dependency."""
-    parts: list[int] = []
-    for piece in version.split("."):
-        digits = "".join(ch for ch in piece if ch.isdigit())
-        parts.append(int(digits) if digits else 0)
-    return tuple(parts)
+def _is_newer(latest: str, current: str) -> bool:
+    """Is the published tag newer than what's running?
+
+    PEP 440 ordering via `packaging.version` (an explicit dependency now).
+    The hand-rolled tuple parse it replaces compared `0.8.0-rc.1` as
+    `(0, 8, 0, 1)`, i.e. *newer* than the eventual `0.8.0` — and the Release
+    workflow explicitly allows pre-release suffixes (finalisation 19 §C9).
+    Unparseable tags are "not newer" rather than an error: the update banner
+    is a courtesy, never a 500."""
+    try:
+        return Version(latest) > Version(current)
+    except InvalidVersion:
+        return False
 
 
 @HELP_ROUTER.route("/version", methods=["GET"])
 def get_version():
     _Logger = logging.getLogger(__name__)
     latest, release_url, error = _fetch_latest_release()
-    update_available = False
-    if latest:
-        try:
-            update_available = _semver_tuple(latest) > _semver_tuple(CURRENT_VERSION)
-        except Exception:
-            update_available = False
+    update_available = bool(latest) and _is_newer(latest, CURRENT_VERSION)
     _Logger.debug(
         "version=%s latest=%s update=%s err=%s",
         CURRENT_VERSION, latest, update_available, error,

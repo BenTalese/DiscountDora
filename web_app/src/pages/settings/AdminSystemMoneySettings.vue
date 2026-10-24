@@ -68,14 +68,12 @@
             await featureFlags$refresh();
             $q.notify({
                 type: 'positive',
-                position: 'bottom-right',
                 message: next ? 'Money & budgets enabled.' : 'Money & budgets disabled.',
             });
         } catch (err) {
             moneyDraft.value = previous;
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: 'Could not save the money setting.',
                 caption: toastCaption(err),
             });

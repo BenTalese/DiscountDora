@@ -279,13 +279,13 @@
             (saved as Record<EmailField, unknown>)[field] = result[field];
             resetDrafts();
             $q.notify({
-                type: 'positive', position: 'bottom-right',
+                type: 'positive', 
                 message: 'Email settings saved.',
             });
         } catch (err) {
             resetDrafts();
             $q.notify({
-                type: 'negative', position: 'bottom-right',
+                type: 'negative', 
                 message: 'Could not save email settings.',
                 caption: toastCaption(err),
             });
@@ -301,14 +301,14 @@
             passwordConfigured.value = result.smtp_password_configured;
             passwordDraft.value = '';
             $q.notify({
-                type: 'positive', position: 'bottom-right',
+                type: 'positive', 
                 message: nextValue.length === 0
                     ? 'SMTP password cleared.'
                     : 'SMTP password saved.',
             });
         } catch (err) {
             $q.notify({
-                type: 'negative', position: 'bottom-right',
+                type: 'negative', 
                 message: 'Could not save SMTP password.',
                 caption: toastCaption(err),
             });

@@ -80,6 +80,38 @@ def _seed_spend_in_current_period(amount: float) -> dict:
 
 #endregion helpers
 
+#region ---------------- household boundary (R-021) ----------------
+
+
+def _set_timezone(tz: str) -> None:
+    resp = requests.patch(f"{BASE}/app-settings", json={"timezone": tz})
+    assert resp.status_code == 200, resp.text
+
+
+def test__get_budget_status__ShopFinishedAfterHouseholdMidnightButBeforeUtcMidnight__CountsInCurrentPeriod(api):
+    """The period boundary is the *household's* midnight (finalisation
+    12-R2). In a UTC+14 household, 03:00 local on the period's first day is
+    13:00 UTC the day *before*; bounding the window at UTC midnight put that
+    shop in the previous period for the first fourteen hours of every week."""
+    try:
+        _set_timezone("Pacific/Kiritimati")
+        period_start = date.fromisoformat(_status()["period_start"])
+        baseline = _status()["spent"]
+        seeded = seed_purchase(actual_unit_price=7.0)
+        # 03:00 local on period_start == 13:00 UTC on period_start - 1.
+        _set_completed_at(
+            seeded["shopping_list_id"],
+            datetime.combine(period_start - timedelta(days=1), time(13, 0)),
+        )
+
+        assert _status()["spent"] == round(baseline + 7.0, 2)
+        assert _history()[0]["spent"] == round(baseline + 7.0, 2)
+    finally:
+        _set_timezone("UTC")
+
+
+#endregion household boundary
+
 #region ---------------- status ----------------
 
 

@@ -77,6 +77,38 @@ def test__rule1__product_only_line_is_created(api):
     assert lines[0]["stock_item_id"] is None
 
 
+def test__move_unticked__product_only_lines_move_too(api):
+    """Finalisation 03-R3: the move dedupe keyed on `stock_item_id` alone, so a
+    NULL-item product line was "a duplicate" of any other and every product-only
+    line stayed behind. Keyed on (stock_item_id, product_id) they move."""
+    source = _make_draft()
+    target = _make_draft()
+    first, second = _make_product(), _make_product()
+    assert _add_line(source, product_id=first).status_code in (200, 201)
+    assert _add_line(source, product_id=second).status_code in (200, 201)
+
+    resp = requests.post(f"{LISTS}/{source}/move-unticked-to/{target}")
+
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["moved_count"] == 2
+    assert resp.json()["skipped_duplicates"] == 0
+    assert {l["product_id"] for l in _lines(target)} == {first, second}
+    assert _lines(source) == []
+
+
+def test__membership__ignores_product_only_lines(api):
+    """Finalisation 03-R4: a product-only line is not a stock item's
+    membership; bucketing it under `None` serialised a DTO with
+    `stock_item_id: null`, which no caller could match."""
+    draft = _make_draft()
+    assert _add_line(draft, product_id=_make_product()).status_code in (200, 201)
+
+    body = requests.get(f"{LISTS}/membership").json()
+
+    assert all(item["stock_item_id"] is not None for item in body["items"])
+    requests.delete(f"{LISTS}/{draft}")
+
+
 def test__rule1__no_anchor_is_rejected(api):
     # DORA_VERIFY L533 guessed "400 before DB"; the server actually returns a
     # 422 business-rule violation with a clear message (the DB CHECK is the
@@ -220,3 +252,51 @@ def test__back_to_draft__refuses_a_finished_list(api):
     resp = requests.post(f"{LISTS}/{list_id}/back-to-draft")
     assert_problem(resp, 422)
     assert requests.get(f"{LISTS}/{list_id}").json()["status"] == "done"
+
+
+def test__quick_add__nested_product_line_does_not_count_as_already_on_list(api):
+    """Finalisation 03-R5: quick-add re-implemented the add-line dedupe without
+    the `product_id is None` guard, so a product line nested under the item
+    made the item itself read as "already on the list". It now delegates to
+    `AddLineHandler`, whose rule is: a plain item line is a duplicate only of
+    a plain item line."""
+    draft = _make_draft()
+    product_id = _make_product()
+    item_id = requests.post(f"{BASE}/stock-items", json={
+        "name": f"QuickAddNested-{uuid4().hex[:8]}",
+        "stock_level_id": _stock_level_id(),
+    }).json()["stock_item_id"]
+    _link(item_id, product_id)
+    # Nested product line: both anchors set.
+    assert _add_line(draft, stock_item_id=item_id, product_id=product_id).status_code in (200, 201)
+
+    resp = requests.post(f"{LISTS}/quick-add/lines", json={
+        "stock_item_id": item_id, "shopping_list_id": draft,
+    })
+
+    assert resp.status_code in (200, 201), resp.text
+    body = resp.json()
+    assert body["result"] == "added"
+    assert body["already_on_list"] is False
+    plain = [l for l in _lines(draft) if l["stock_item_id"] == item_id and l["product_id"] is None]
+    assert len(plain) == 1
+    requests.delete(f"{LISTS}/{draft}")
+
+
+def test__frequently_added__returns_ranked_ids_only(api):
+    """Finalisation 03-R6 / 03-R14 (R-057): the endpoint hands the sheet the
+    ranked ids; `name` / `stock_level_id` / `add_count` had no reader and
+    `stock_level_id` was always None (a `noload` relationship read)."""
+    draft = _make_draft()
+    item_id = requests.post(f"{BASE}/stock-items", json={
+        "name": f"Frequent-{uuid4().hex[:8]}",
+        "stock_level_id": _stock_level_id(),
+    }).json()["stock_item_id"]
+    assert _add_line(draft, stock_item_id=item_id).status_code in (200, 201)
+
+    rows = requests.get(f"{LISTS}/frequently-added", params={"limit": 50}).json()
+
+    assert rows, "a list line makes its item frequently-added"
+    assert all(set(row.keys()) == {"stock_item_id"} for row in rows)
+    assert item_id in {row["stock_item_id"] for row in rows}
+    requests.delete(f"{LISTS}/{draft}")

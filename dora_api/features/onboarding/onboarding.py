@@ -578,10 +578,15 @@ _DEMO_INSTRUCTIONS = (
     "2. Meanwhile, gently heat the olive oil with the sliced garlic until fragrant, about 3 minutes.\n"
     "3. Toss the drained pasta through the garlic oil and serve."
 )
+# Ingredient names match the starter pack (`starter_packs.json`: "Pasta",
+# "Garlic", "Olive oil") so the demo reuses the items the wizard just
+# created rather than minting near-duplicates beside them ("Spaghetti pasta"
+# next to "Pasta" — finalisation 14-R2). The recipe text still says
+# spaghetti; the pantry item is the generic one.
 _DEMO_INGREDIENTS = [
-    {"name": "Spaghetti pasta", "quantity": 250.0, "unit": "g"},
-    {"name": "Garlic cloves",   "quantity":   4.0, "unit": "cloves"},
-    {"name": "Olive oil",       "quantity":  60.0, "unit": "ml"},
+    {"name": "Pasta",     "quantity": 250.0, "unit": "g"},
+    {"name": "Garlic",    "quantity":   4.0, "unit": "cloves"},
+    {"name": "Olive oil", "quantity":  60.0, "unit": "ml"},
 ]
 
 
@@ -682,27 +687,36 @@ class SeedDemoHandler:
         )
         self.repository.add(recipe)
 
-        # MealPlan anchored on the current household-week's Monday so the
-        # entry lands inside the dashboard's "next 7 days" window.
+        # The entry is scheduled for today so the dashboard's Next-to-cook card
+        # shows it immediately, on the plan for the current household week.
+        # `MealPlan` has no week uniqueness, so a plan for this Monday may
+        # already exist (the owner planned the week before running the demo);
+        # the demo joins it rather than inserting a second plan for the same
+        # week, which the planner then showed as two overlapping weeks
+        # (finalisation 14-R1).
         today = household_today(self.repository)
         monday = today - timedelta(days=today.weekday())
-        # Schedule the entry at "today or later, this week" so the user
-        # sees it in the dashboard's Next-to-cook card immediately. Default
-        # to today's slot when today is mid-week; fall back to Wednesday on
-        # an early-week mount so the entry is visibly *upcoming*.
-        scheduled_for = today if today >= monday else monday
         entry = MealPlanEntry(
             recipe=recipe,
-            scheduled_for=scheduled_for,
+            scheduled_for=today,
             servings=2,
             slot="Dinner",
         )
-        self.repository.add(MealPlan(
-            name=None,
-            start_date=monday,
-            entries=[entry],
-        ))
+        existing_plan: MealPlan | None = self.repository.get(MealPlan).one(
+            EntityField(MealPlan, MealPlan.Fields.START_DATE).eq(monday)
+        )
+        if existing_plan is not None:
+            existing_plan.entries.append(entry)
+            self.repository.add(entry)
+        else:
+            self.repository.add(MealPlan(
+                name=None,
+                start_date=monday,
+                entries=[entry],
+            ))
         self.repository.save_changes()
+        # `meal_plan_created` keeps its contract meaning — "the demo meal is on
+        # this week's plan" — whether the plan row was created or joined.
         return SeedDemoResultDto(
             seeded=True,
             items_created=items_created,

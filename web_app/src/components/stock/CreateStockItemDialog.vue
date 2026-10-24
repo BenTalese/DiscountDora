@@ -441,7 +441,6 @@
                 } catch (regErr) {
                     $q.notify({
                         type: 'warning',
-                        position: 'bottom-right',
                         message: 'Item added, but the barcode was already registered elsewhere.',
                         caption: regErr instanceof Error ? regErr.message : String(regErr),
                     });

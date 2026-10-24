@@ -3,6 +3,7 @@ import {
     isOutOfStockSequence,
 } from 'src/helpers/stockStatus';
 import { colourForSequence } from 'src/helpers/stockLevelLogic';
+import { nameCollator } from 'src/composables/useMoney';
 import type { PageCount } from 'src/components/PageCountsFooter.vue';
 import { cartStateFor, type CartState, type Membership } from 'src/models/shoppingList';
 import type { Recipe } from 'src/models/recipe';
@@ -338,7 +339,9 @@ export function useStockFilters(sources: {
             return true;
         });
 
-        const collator = new Intl.Collator('en', { sensitivity: 'base' });
+        // Locale-aware collation from the locale authority (finalisation 20-R7).
+
+        const collator = { compare: (a: string, b: string) => nameCollator().compare(a, b) };
         const sorted = [...matches];
         // One comparator per AXIS, written in its ascending sense; the
         // direction toggle flips the result. Previously each direction was its

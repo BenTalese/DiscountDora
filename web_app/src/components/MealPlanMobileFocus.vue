@@ -383,8 +383,12 @@
         return `${n} meal${n === 1 ? '' : 's'} planned`;
     });
 
+    // Read the day straight off the ISO string: `new Date(iso)` parses a
+    // date-only string as UTC midnight, so west of Greenwich the chip showed
+    // yesterday's number (R-021; `weekDates.ts` documents the trap —
+    // finalisation 02-R34).
     function dayOfMonth(iso: string): number {
-        return new Date(iso).getDate();
+        return Number(iso.slice(8, 10));
     }
 
     // `onListCount` / `weekStatusCaption` / `addToListLabel` lived here to feed

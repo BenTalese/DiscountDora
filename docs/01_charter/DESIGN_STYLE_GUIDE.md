@@ -210,7 +210,9 @@ the five `--elevation-*` tokens are the whole vocabulary.
 
 - Breakpoints (Quasar): **phone** < 600 · **tablet** 600–1023 · **desktop**
   ≥ 1024. Design mobile-first; the layout must hold from **360px** up with **no
-  horizontal page scroll** (D-011).
+  horizontal page scroll** (D-011). **The grid class for the app's desktop tier
+  is `col-md-*`** — Quasar's `lg` is ≥ 1440 and is *not* one of Dora's tiers, so
+  a `col-lg-*` rule does nothing on an ordinary laptop (FU-836).
 - **Touch target minimum: 44×44px** effective (visual + padding) on any surface
   a finger uses. 32–36px dense controls are allowed *only* in desktop-only
   chrome. The 50×50 in-store tick box is the reference for a gesture that matters

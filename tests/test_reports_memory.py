@@ -45,14 +45,22 @@ class TestRangeParsing:
         assert _range_days(None) == 30
         assert _range_days("") == 30
 
-    def test__parse_range_2y_is_730_days_ago(self):
-        from dora_api.features.reports.reports import _parse_range
-        since = _parse_range("2y")
-        assert since is not None
-        # Allow a small clock-tick drift (the datetime is captured
-        # inside _parse_range on each call).
-        delta = datetime.now(timezone.utc) - since
-        assert 729 <= delta.days <= 730
+    def test__parse_range_2y_is_household_midnight_730_days_ago(self):
+        # R-021 (finalisation 12-R3): the lower bound is the household's
+        # midnight 730 calendar days before the household's today, as a UTC
+        # instant — not `now - 730d`. A +10 household's midnight is 14:00 UTC
+        # the day before.
+        from datetime import date
+        from zoneinfo import ZoneInfo
+        from dora_api.features.reports import reports
+
+        tz = ZoneInfo("Australia/Brisbane")
+        with patch.object(reports, "household_today", return_value=date(2026, 3, 1)), \
+             patch.object(reports, "household_timezone", return_value=tz):
+            since = reports._parse_range("2y", repository=object())
+
+        assert since == datetime(2026, 3, 1, tzinfo=tz).astimezone(timezone.utc) - timedelta(days=730)
+        assert since.tzinfo is timezone.utc
 
 
 # ── Bucket sizing (_bucket_size_days) ────────────────────────────────

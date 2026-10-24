@@ -3,7 +3,7 @@
 One test per report pinning the response shape plus at least one computed
 value against data seeded through the API:
 
-  stock-value-over-time · spend-by-store · most-bought-items ·
+  spend-by-store · most-bought-items ·
   savings-captured · price-drops ·
   meals-cooked · spend-by-category · spend-year-over-year
 
@@ -39,27 +39,9 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-#region ---------------- stock value over time ----------------
+# The stock-value-over-time region went with its endpoint (finalisation
+# 12-R1 — no consumer, and its figure read `noload` relationships).
 
-
-def test__stock_value_over_time__DefaultRange__DailyPointsWithEstimateNote(api):
-    resp = requests.get(f"{REPORTS}/stock-value-over-time")
-
-    assert resp.status_code == 200, resp.text
-    body = resp.json()
-    assert set(body.keys()) == {"range", "estimate_note", "points"}
-    assert body["range"] == "30d"
-    assert "Not accounting" in body["estimate_note"]
-    assert body["points"], "seeded pantry should produce at least one bucket"
-    for point in body["points"]:
-        assert set(point.keys()) == {"date", "value"}
-        assert point["value"] >= 0
-    # Buckets are emitted oldest-first on a stable daily grid.
-    dates = [p["date"] for p in body["points"]]
-    assert dates == sorted(dates)
-
-
-#endregion stock value over time
 
 #region ---------------- spend by store ----------------
 
@@ -195,6 +177,19 @@ def test__most_bought_items__ItemOnTwoArchivedLists__CountsDistinctLists(api):
     assert set(row.keys()) == {"stock_item_id", "name", "appearances"}
     assert row["name"] == first["stock_item_name"]
     assert row["appearances"] == 2
+
+
+def test__most_bought_items__UntickedLineOnArchivedList__DoesNotCount(api):
+    """'Bought most' counts purchases, not list membership: a line added and
+    never ticked before the list was finished is not a purchase
+    (finalisation 12-R4; the FU-768 "on the list != bought" class)."""
+    seeded = seed_purchase(tick=False, finish=True, actual_unit_price=None, price_unrecorded=True)
+
+    rows = requests.get(
+        f"{REPORTS}/most-bought-items", params={"range": "all", "limit": 500},
+    ).json()["rows"]
+
+    assert seeded["stock_item_id"] not in {r["stock_item_id"] for r in rows}
 
 
 #endregion most-bought items
@@ -660,7 +655,6 @@ def test__item_price_movers__Limit__CapsTheRowsButNotTheCounts(api):
 # install that had opted out still got spend by store, savings, spend by
 # category, year-over-year and two dollar-formatted chart axes.
 _MONEY_GATED = [
-    ("stock-value-over-time", {}),
     ("spend-by-store", {}),
     ("savings-captured", {}),
     ("spend-by-category", {}),

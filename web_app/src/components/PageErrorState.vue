@@ -7,7 +7,7 @@
             size="72px"
         />
         <div class="text-h5 q-mb-sm text-center">{{ title }}</div>
-        <div class="text-body2 dora-text-muted text-center" style="max-width: 480px">
+        <div class="page-error-state__description text-body2 dora-text-muted text-center">
             {{ description }}
         </div>
         <div
@@ -117,14 +117,14 @@
     const icon = computed(() => {
         switch (props.variant) {
             case 'not_found':
-                return 'travel_explore';
+                return ICONS.not_found_explore;
             case 'server':
-                return 'cloud_off';
+                return ICONS.cloud_off;
             case 'navigation':
-                return 'block';
+                return ICONS.blocked;
             case 'render':
             default:
-                return 'error_outline';
+                return ICONS.error_outline;
         }
     });
 
@@ -197,6 +197,9 @@
 <style scoped>
     .page-error-state {
         min-height: 60vh;
+    }
+    .page-error-state__description {
+        max-width: 480px;
     }
     .correlation-id code {
         background: var(--overlay-active);

@@ -45,7 +45,6 @@ export function useLogWaste(onChanged?: () => void | Promise<void>) {
             await onChanged?.();
             $q.notify({
                 type: 'info',
-                position: 'bottom-right',
                 message: `Logged "${itemName}" as wasted.`,
                 timeout: 5000,
                 actions: [
@@ -68,13 +67,11 @@ export function useLogWaste(onChanged?: () => void | Promise<void>) {
                                     await onChanged?.();
                                     $q.notify({
                                         type: 'positive',
-                                        position: 'bottom-right',
                                         message: 'Undone.',
                                     });
                                 } catch (err) {
                                     $q.notify({
                                         type: 'negative',
-                                        position: 'bottom-right',
                                         message: 'Could not undo.',
                                         caption: toastCaption(err),
                                     });
@@ -87,7 +84,6 @@ export function useLogWaste(onChanged?: () => void | Promise<void>) {
         } catch (err) {
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: 'Could not log as wasted.',
                 caption: toastCaption(err),
             });

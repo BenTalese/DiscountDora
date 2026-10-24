@@ -178,6 +178,86 @@ def test__restore_backup__roundtrip_all_skip_duplicates__no_changes(api):
         )
 
 
+def test__restore_backup__partial_mode__restores_the_selected_row(api):
+    """Finalisation 18-R1 — `mode=partial` used to raise `KeyError:
+    'meal_recipes'` (500) before touching a row: the m2m ride-along loop
+    kept a hand-written section name the meals→recipes rework had removed,
+    and nothing exercised the partial branch. Back up, delete one stock
+    item, restore just that item by id → it is back, nothing else changes."""
+    _, backup = _create_backup()
+    victim = backup["stock_items"][0]
+    victim_id = victim["id"]
+
+    deleted = requests.delete(f"http://localhost:5170/api/stock-items/{victim_id}")
+    assert deleted.status_code in (200, 204), deleted.text
+
+    response = requests.post(
+        RESTORE_URL,
+        json={
+            "backup": backup,
+            "selection": {"stock_items": [victim_id]},
+            "mode": "partial",
+        },
+    )
+    assert response.status_code == 200, response.text
+    summary = response.json()
+    assert summary["created"]["stock_items"] == 1, summary
+    # Only the picked row (plus whatever rode along for it) was touched —
+    # the groups/levels it points at already existed, so nothing was pulled in.
+    assert summary["created"]["stock_groups"] == 0
+    assert summary["created"]["stock_levels"] == 0
+
+    restored = requests.get(
+        "http://localhost:5170/api/stock-items",
+        params={"filter": f"stock_item_id:eq:{victim_id}"},
+    )
+    assert restored.status_code == 200, restored.text
+    assert len(restored.json()["items"]) == 1, restored.text
+
+
+def test__restore_backup__fk_policy_maps_name_only_live_sections_and_columns():
+    """Finalisation 18-R1 / D6 — the FK policy maps in `restore_shared`
+    (`HARD_FK_PULL_IN`, `SOFT_FK_NULLABLE`, `REQUIRED_FKS`, `CHILD_AUTO_INCLUDE`)
+    must only reference sections that are in `SECTIONS` and columns that exist
+    on their tables. `meal_plan_entries.meal_id` + the `meal_recipes` rows
+    outlived the meals→recipes rework for months; this pins the class, not
+    the instance. The module already asserts this at import — calling it
+    again here makes the failure a named test rather than a collection error."""
+    from dora_api.features.data.restore_backup import validate_fk_maps
+
+    validate_fk_maps()
+
+
+def test__backup_sections__catalogue_matches_restore_shared(api):
+    """Finalisation 18-R2 / 18-R3 — the Backup page renders its section
+    picker, restore tree and report from `GET /api/data/backup/sections`,
+    never from a hand-copied list (the copy named `product_barcodes` and
+    lacked nine sections). Pin the endpoint to the one catalogue."""
+    from dora_api.features.data.restore_shared import SECTIONS
+
+    response = requests.get("http://localhost:5170/api/data/backup/sections")
+    assert response.status_code == 200, response.text
+    rows = response.json()["sections"]
+
+    assert [r["key"] for r in rows] == [s.backup_key for s in SECTIONS]
+    by_key = {r["key"]: r for r in rows}
+    for s in SECTIONS:
+        row = by_key[s.backup_key]
+        assert row["label"] == s.label
+        assert row["category"] == s.category
+        assert row["default_on"] is s.default_on
+        assert row["sensitive"] is s.sensitive
+        assert row["pickable"] is (s.duplicate_key_fn is not None)
+    # The two facts the stale SPA mirror got wrong.
+    assert "barcodes" in by_key and "product_barcodes" not in by_key
+    assert {"recipe_steps", "cuisines", "categories", "tools", "dietary_tags"} <= set(by_key)
+    # A default-selection create built from the catalogue is accepted.
+    default_keys = [r["key"] for r in rows if r["default_on"]]
+    created = requests.post(LIBRARY_URL, json={"sections": default_keys})
+    assert created.status_code == 200, created.text
+    assert set(created.json()["sections"]) == set(default_keys)
+
+
 def test__restore_backup__future_schema__is_rejected(api):
     response = requests.post(
         RESTORE_URL,

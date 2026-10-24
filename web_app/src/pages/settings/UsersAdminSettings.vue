@@ -400,7 +400,6 @@
         } catch (err) {
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: 'Update failed.',
                 caption: toastCaption(err)
             });
@@ -433,7 +432,6 @@
         if (ok) {
             $q.notify({
                 type: 'positive',
-                position: 'bottom-right',
                 message: value
                     ? `"${user.username}" can sign in again.`
                     : `"${user.username}" is deactivated.`,
@@ -487,7 +485,6 @@
             } else {
                 $q.notify({
                     type: 'positive',
-                    position: 'bottom-right',
                     message: `Password changed for "${user.username}".`,
                 });
             }
@@ -533,7 +530,6 @@
             } else {
                 $q.notify({
                     type: 'positive',
-                    position: 'bottom-right',
                     message: `Created "${payload.username}".`,
                 });
             }
@@ -558,7 +554,6 @@
             } else {
                 $q.notify({
                     type: 'negative',
-                    position: 'bottom-right',
                     message: 'Could not create user.',
                     caption: toastCaption(err),
                 });
@@ -585,14 +580,12 @@
             await api.deleteAsync(user.user_id);
             $q.notify({
                 type: 'positive',
-                position: 'bottom-right',
                 message: `Deleted "${user.username}".`,
             });
             await loadUsers();
         } catch (err) {
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: 'Delete failed.',
                 caption: toastCaption(err),
             });
@@ -606,13 +599,11 @@
             await copyToClipboard(generatedPassword.value);
             $q.notify({
                 type: 'positive',
-                position: 'bottom-right',
                 message: 'Copied to clipboard.'
             });
         } catch (err) {
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: 'Could not copy.',
                 caption: toastCaption(err)
             });

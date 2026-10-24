@@ -77,6 +77,71 @@ def test__admin_create_user__malformed_email__rejected_422(api):
     assert "valid email" in resp.text.lower()
 
 
+def _user_entity(user_id: str):
+    from uuid import UUID
+
+    from dora_api.app import app
+    from dora_api.domain.entities.user import User
+    from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+
+    with app.app_context():
+        return SqlAlchemyRepository().get(User).by_id(UUID(user_id))
+
+
+def test__admin_update_user__email__validated_unique_and_unverifies(api):
+    """Finalisation 13-R2 — the admin email edit assigned the raw string with
+    no validation, no uniqueness check and no reset of `email_verified`;
+    create and self-service both apply all three."""
+    taken = f"{_uniq('taken')}@example.com"
+    other = _create(email=taken).json()["user_id"]
+    victim = _create(email=f"{_uniq('mail')}@example.com").json()["user_id"]
+
+    malformed = requests.patch(f"{USERS}/{victim}", json={"email": "not an email"})
+    assert_problem(malformed, 422)
+
+    duplicate = requests.patch(f"{USERS}/{victim}", json={"email": taken.upper()})
+    assert_problem(duplicate, 422)
+    assert _user_entity(other).email == taken  # the other account is untouched
+
+    fresh = f"  {_uniq('New')}@Example.com "
+    changed = requests.patch(f"{USERS}/{victim}", json={"email": fresh})
+    assert changed.status_code == 204, changed.text
+    entity = _user_entity(victim)
+    assert entity.email == fresh.strip().lower()
+    assert entity.email_verified is False
+
+
+def test__admin_guards__usable_admin_bar_counts_active_admins_only(api):
+    """Finalisation 13-R3 — one bar for demote / deactivate / delete: an
+    admin who has been deactivated cannot be the install's "last admin"
+    insurance. Pinned on the shared helper because the DELETE route's own
+    scenario is unreachable through the API (you can't delete yourself and
+    a deactivated admin can't sign in to do it)."""
+    from dora_api.app import app
+    from dora_api.features.users.admin_guards import other_usable_admins
+    from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+
+    me = _me()
+    my_id = me.get("user_id") or me.get("id")
+    active_admin = _create(email=f"{_uniq('a')}@example.com", is_admin=True).json()["user_id"]
+    parked_admin = _create(email=f"{_uniq('b')}@example.com", is_admin=True).json()["user_id"]
+    assert requests.patch(f"{USERS}/{parked_admin}", json={"is_active": False}).status_code == 204
+
+    with app.app_context():
+        repo = SqlAlchemyRepository()
+        # From my seat: the active one counts, the parked one doesn't.
+        assert other_usable_admins(repo, my_id) == 1
+        # From the active admin's seat: me (active) counts, the parked one doesn't.
+        assert other_usable_admins(repo, active_admin) == 1
+        # From the parked admin's seat: two usable admins remain.
+        assert other_usable_admins(repo, parked_admin) == 2
+
+    # Deleting the parked admin is fine (two usable admins remain)…
+    assert requests.delete(f"{USERS}/{parked_admin}").status_code == 204
+    # …and so is deleting the active one (I remain).
+    assert requests.delete(f"{USERS}/{active_admin}").status_code == 204
+
+
 def test__admin_delete_user__self__is_forbidden_403(api):
     me = _me()
     resp = requests.delete(f"{USERS}/{me['user_id']}")

@@ -265,7 +265,7 @@ next reviewer can fast-skip them.
   re-maps L402-421; shop-mode page merged away, rail/dropdown, chip axe).
 - REPORTS — feedback empty (the section holds a literal `?`) and deferred by the
   owner in `FEEDBACK_TRIAGE_AND_PLAN.md` §6. **Reviewed 2026-09-02 —
-  `05_investigations/REPORTS_PAGE_REVIEW.md`** stands in for the missing feedback
+  `05_investigations/REPORTS_PAGE_REVIEW.md`** stands in for the missing feedback; finalisation sweep 2026-10-23: `05_investigations/finalisation/CHUNK_12_reports_memory.md` (32 findings, 10 help entries)
   pass: owner-supplied bullets captured verbally, mapped in that doc's §10. No
   `F`/`L` bullets flip here (there were none to flip); the cross-cutting bullets
   it *does* land on are **L254** (money switchable off) and **L467/L471** (export

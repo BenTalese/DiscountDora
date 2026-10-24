@@ -85,13 +85,13 @@
             savedThresholds.expiring_soon_window_days = result.expiring_soon_window_days;
             resetThresholdDrafts();
             $q.notify({
-                type: 'positive', position: 'bottom-right',
+                type: 'positive', 
                 message: 'Alert thresholds saved.',
             });
         } catch (err) {
             resetThresholdDrafts();
             $q.notify({
-                type: 'negative', position: 'bottom-right',
+                type: 'negative', 
                 message: 'Could not save alert thresholds.',
                 caption: toastCaption(err),
             });

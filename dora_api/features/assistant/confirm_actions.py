@@ -25,7 +25,6 @@ from uuid import UUID
 from flask import session
 
 from dora_api.domain.entities.meal_plan import MealPlan
-from dora_api.domain.entities.meal_plan_entry import MealPlanEntry
 from dora_api.domain.entities.recipe import Recipe
 from dora_api.domain.entities.recipe_ingredient import RecipeIngredient
 from dora_api.domain.entities.shopping_list import (
@@ -37,13 +36,16 @@ from dora_api.domain.stock_status import (StockStatus, is_missing,
                                           level_for_status)
 from dora_api.features.meal_plans.update_meal_plan import (
     UpdateMealPlanEntryRequest, UpdateMealPlanHandler, UpdateMealPlanRequest)
-from dora_api.features.shopping_lists.manage_shopping_list import (
-    UpdateShoppingListHandler, UpdateShoppingListRequest)
 from dora_api.features.shopping_lists.manage_shopping_list_lines import (
     AddLineHandler, AddLineRequest, UpdateLineHandler, UpdateLineRequest)
 from dora_api.features.shopping_lists.trim_to_budget import (
     TrimToBudgetHandler, TrimToBudgetRequest)
 from dora_api.features.app_settings.clock import household_today
+# "Primary" is inferred (exactly one draft list), never stored — this module
+# used to carry its own copy querying the dropped `is_primary` column, which
+# made tick / add-recipe / trim raise AttributeError on propose
+# (finalisation 11-R1). One resolver, in `shopping_actions`.
+from dora_api.features.assistant.shopping_actions import _primary_list
 from dora_api.features.stock_items.move_stock_item import (
     MoveStockItemHandler, MoveStockItemRequest)
 from dora_api.features.stock_items.update_stock_item import (
@@ -308,13 +310,6 @@ def commit_push_expiry(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 # ── tick_shopping_line / untick ───────────────────────────────────────
-
-def _primary_list(repo: SqlAlchemyRepository) -> ShoppingList | None:
-    return repo.get(ShoppingList).one(
-        EntityField(ShoppingList, ShoppingList.Fields.IS_PRIMARY).eq(True)
-        & EntityField(ShoppingList, ShoppingList.Fields.STATUS).ne(SHOPPING_LIST_STATUS_DONE)
-    )
-
 
 def propose_tick_shopping_line(args: dict) -> dict[str, Any]:
     name = str(args.get("item_name") or "").strip()

@@ -226,6 +226,28 @@ def _emit_supported_price_units() -> str:
     return "\n".join(lines)
 
 
+def _emit_unit_word_lists() -> str:
+    """The two unit *word* lists the SPA's quantity helpers read.
+
+    `formatQuantity.ts` (DEC-3 spacing) and `scaleQuantity.ts` (whole-number
+    rounding for counted units) each used to hold their own copy; one source
+    in `units.py`, emitted here (finalisation 20-R3 / 20-R4, R-003).
+    """
+    return "\n".join([
+        "/** DEC-3: units written tight against the number (\"250g\"). */",
+        "export const NO_SPACE_UNITS: ReadonlySet<string> = new Set(["
+        + ", ".join(_ts_string(u) for u in sorted(units.NO_SPACE_UNITS))
+        + "]);",
+        "",
+        "/** Units a quantity is counted in — scaling rounds these to whole numbers.",
+        " *  Singular forms; `isCountableUnit` also accepts the plural. */",
+        "export const COUNTABLE_UNITS: ReadonlySet<string> = new Set(["
+        + ", ".join(_ts_string(u) for u in sorted(units.COUNTABLE_UNITS))
+        + "]);",
+        "",
+    ])
+
+
 def render() -> str:
     parts = [
         HEADER,
@@ -236,6 +258,7 @@ def render() -> str:
         _emit_density_table(),
         _emit_gas_mark(),
         _emit_supported_price_units(),
+        _emit_unit_word_lists(),
     ]
     return "\n".join(parts)
 

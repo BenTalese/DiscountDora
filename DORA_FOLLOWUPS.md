@@ -39,6 +39,58 @@ long session summary. Distinct from the other logs:
 
 ---
 
+## [OPEN] FU-929 — Finalisation Stage 1: 729 review findings across 20 chunks await Stage-2 execution (umbrella)
+- **Raised:** 2026-10-23 (finalisation overnight run; register at `docs/05_investigations/FINALISATION_REVIEW.md`, per-chunk files under `docs/05_investigations/finalisation/`)
+- **Type:** finding (umbrella — same shape as FU-928)
+- **What:** the two-stage finalisation plan's Stage 1 is complete: every one of the 20 chunks has its FST walk
+  (`docs/04_proposals/FULL_SYSTEMS_TEST.md`), help drafts (`docs/05_investigations/HELP_CONTENT.md`, 100 entries), senior
+  review (`FINALISATION_REVIEW.md`: 729 `NN-Rk` findings, 576 marked **execute**, ~60 verified bugs — see its §0
+  "opening order"), lean test plan (`docs/04_proposals/TEST_PLAN_INVENTORY.md`, 35 must-write rows) and hand-rolled-vs-library
+  verdicts (`docs/05_investigations/HANDROLLED_VS_LIBRARIES.md`, 6 replace/wrap). Every finding carries `path:line` + the exact
+  change; `FINALISATION_COVERAGE.md` flips a chunk's **Applied** cell when its execute-list is done. Headline verified bugs:
+  UI *New backup* is refused and *Restore selection* 500s (18-R1/R2/R3); the Docker image is built without `-m pwa` (19-R1);
+  `push-sw.js` evicts the Workbox worker (17-R1); idempotency replay after TTL 500s + `link-status` hands out custom-product ids
+  (16-R2/R8); invalid `nutrition_mode` PATCH 500s, last-admin guard ignores `is_active` (13-R1/R3); DEBUG logging captures
+  login bodies (15-R2); the version check targets the wrong repo slug (19-R3).
+- **Why deferred:** Stage 2 executes per chunk, test-guarded, in the order the register's §0 gives; items not reached stay here.
+  Owner decisions the sweep surfaced are listed in `FINALISATION_REVIEW.md` §0 ("Owner decisions outstanding") — the Help
+  information architecture (20-D4) gates the 100 drafted help entries.
+- **Recommended resolution:** now — Stage 2 runs from this register; close when `FINALISATION_COVERAGE.md` has Applied ✅ on all 20 rows.
+- **Progress (2026-10-23):** Stage 2 units 1–10 landed — the §0 opening order (rows 1–11) is exhausted; every verified bug is fixed and test-guarded or explicitly deferred in the worklog's Stage-2 log (08-R6, 08-R8, 03-R1 owner-veto, the M-blast refactors). Register `Applied` = ➗ on 18 rows. 05-R30 did not reproduce (`EntityField.eq` is case-insensitive; already pinned). Remaining: per-chunk execute lists beyond §C1 and the §0 sweeps.
+
+## [OPEN] FU-930 — iOS Capacitor shell has no `NSCameraUsageDescription`
+- **Raised:** 2026-08-15 (while scoping FU-639). **Renumbered 640 → 930 on 2026-10-23:** two entries carried FU-640; the 4xx-logging one keeps the number (CHUNK_17 17-R5).
+- **Type:** finding
+- **What:** `src-capacitor/ios/App/App/Info.plist` declares no camera usage
+  string. iOS *hard-terminates* an app that touches the camera without one, so
+  the scan overlay would kill the app rather than fail softly. Android's manifest
+  has its `CAMERA` permission; iOS was never given the equivalent.
+- **Why deferred:** the iOS target is unbuilt Capacitor scaffolding — P8-10
+  shipped an **Android** APK only, and nothing has ever run this code on iOS. It
+  is a latent trap, not a live bug.
+- **Recommended resolution:** when an iOS build is first attempted — add the key
+  before the first device run, not after the first crash.
+## [OPEN] FU-928 — QA run 2 findings: 44 numbered items await fixing (9 High)
+- **Raised:** 2026-10-23 (independent QA run 2; report at
+  `docs/05_investigations/QA_RUN_2_2026-10-23.md`)
+- **Type:** finding (umbrella)
+- **What:** a full-app QA pass: 75-route crawl on desktop and phone, a probe of all 304 API routes,
+  a fresh install built by migrations, and four static sub-audits. It produced 44 numbered findings,
+  tagged LIVE / CODE / STATIC, plus ~35 static-only leads.
+  - **High:** QA2-01 stored XSS through image data-URL mimetypes; QA2-02 open self-registration;
+    QA2-03 reset-link `Origin` poisoning; QA2-04 password change keeps old sessions;
+    QA2-05 stock-value report inverted (Stocked counts $0); QA2-06 trim-to-budget never sees meal
+    demand (`noload`); QA2-07 meal-plan aggregate sums mixed units; QA2-08 expiry icon goes red at
+    10:00 on the expiry day; QA2-09 CSP blocks `blob:` media, so server voice can't play (extends
+    FU-853).
+  - **Overlap:** the report has a table mapping duplicates with QA agent 1
+    (`QA_RUN_AGENT1_2026-10-22.md`). Fix each defect once.
+- **Why deferred:** this was a QA-only run by owner instruction ("write your results down for another
+  agent to fix later"). No code was changed.
+- **Recommended resolution:** now / during finalisation. Split into per-surface FUs, or fix in the
+  report's suggested order, as the fixing agent picks them up. Tick items in the report as they land.
+  QA2-41..44 need owner decisions first.
+
 ## [OPEN] FU-926 — `normalise_unit` idempotence property failed once, passed on rerun
 - **Raised:** 2026-10-17 (full pytest during the owner batch; nothing unit-related changed)
 - **Type:** finding
@@ -61,6 +113,7 @@ long session summary. Distinct from the other logs:
   optional `products[].image` field.
 - **Why deferred:** outside the asks; found while building them.
 - **Recommended resolution:** opportunistic (next companion pass).
+- **2026-10-23 (finalisation Stage 1):** two more companion-side notes from CHUNK_16 §E: `dora_ingest.fetch_saved_products` docstring still says the list is filtered to mapped stores (Dora stopped filtering 2026-10-15); `IngestResult.has_pending_store_mappings` only knows `store_not_mapped`, not `store_unknown`. (d) is fixed on Dora's side by 16-R1.
 
 ## [OPEN] FU-923 — `get_link_status` keeps its own product→stock-item lookup (R-003)
 - **Raised:** 2026-10-17 (owner batch, price-drop add-to-list)
@@ -71,6 +124,7 @@ long session summary. Distinct from the other logs:
   copy. Point it at `linked_stock_items`.
 - **Why deferred:** a different surface, touched concurrently by the ingest work.
 - **Recommended resolution:** opportunistic.
+- **2026-10-23 (finalisation Stage 1):** consolidated raw-table reader list is CHUNK_20 **20-R27** (products, app_settings, ingestion ×5 → 4 after 16-R7, import_spreadsheet ×3 to fix, backup_library:268, audit_retention:40, health_check:67 + the dump/restore engine as the documented carve-out).
 
 ## [OPEN] FU-922 — Product photo can only be set from the cards view
 - **Raised:** 2026-10-17 (owner batch, My products)
@@ -104,6 +158,7 @@ long session summary. Distinct from the other logs:
 - **Why deferred:** it is a contract decision (PROPOSAL_INGESTION_API), not a
   cleanup.
 - **Recommended resolution:** owner decision, later during Phase 2.
+- **2026-10-23 (finalisation Stage 1):** recorded as owner decision **16-D1** in CHUNK_16; recommendation: keep the name-based path (third-party producers, the power-user guide). Stage 2's 16-R6 refactor waits on this call.
 
 ## [OPEN] FU-918 — Companion "Push failed (502)" reported; root cause found, confirm with real data
 - **Raised:** 2026-10-15 (owner batch, product search)
@@ -894,25 +949,6 @@ long session summary. Distinct from the other logs:
 - **Recommended resolution:** when the owner has walked a costed recipe and said
   whether the narrower coverage reads acceptably.
 
-## [OPEN] FU-853 — Cook mode's timer chime is blocked by the app's own CSP
-- **Raised:** 2026-09-03 (cook-mode owner batch — observed, not reported)
-- **Type:** finding
-- **What:** driving cook mode live logs, on every load:
-  `Loading media from 'data:audio/wav;base64,…' violates the following Content
-  Security Policy directive: "default-src 'self'". Note that 'media-src' was
-  not explicitly set, so 'default-src' is used as a fallback.` The timer's
-  end-of-countdown sound is a `data:` WAV and the CSP has no `media-src`, so
-  **the chime never plays** — the one piece of feedback a hands-free cook with
-  a pot on the stove is relying on. The visual bar and the toast still fire, so
-  nothing looks broken.
-- **Why deferred:** pre-existing, unrelated to the five reported items, and the
-  fix is a server header change (`media-src 'self' data:`) that wants its own
-  verification — including a check for any other `data:`/blob media the same
-  directive would cover.
-- **Recommended resolution:** opportunistic — next time cook mode or the CSP is
-  touched. Pair with a live listen, since a silent-by-config chime and a
-  silent-by-bug chime look identical in the code.
-
 ## [OPEN] FU-851 — Planned demand goes stale after a plan edit anywhere but the stock detail page
 - **Raised:** 2026-09-03 (owner batch — planned-demand signal)
 - **Type:** finding
@@ -1371,34 +1407,6 @@ long session summary. Distinct from the other logs:
 - **Recommended resolution:** later, with `DASHBOARD_PAGE_REVIEW.md` §7 Chunk 6
   (the design sweep), once Chunk 3 has settled the card pairs. Cross-ref: B4,
   D-011, [[FU-631]] #3.
-
-## [OPEN] FU-836 — `col-lg-*` does not mean "desktop", and the dashboard was the surface that assumed it did
-- **Raised:** 2026-09-02 (dashboard chunk 2 — found while measuring [[FU-631]] #3)
-- **Type:** finding (A8 / breakpoint discipline)
-- **What:** the design guide (A8) defines **desktop as ≥1024px**. Quasar's grid
-  breakpoints are `xs <600 · sm ≥600 · md ≥1024 · lg ≥1440 · xl ≥1920`, so the
-  class meaning "from the app's desktop up" is **`col-md-*`**, not `col-lg-*`.
-  `quasar.config.ts` sets no override — checked; the defaults apply. The dashboard
-  was the one surface reaching for `col-lg-*` (**2** usages app-wide against
-  **14** for `col-md-*` and 25 for `col-sm-*`), and the consequence was
-  measurable: its `col-lg-6` / `col-lg-4` / `col-lg-8` classes **did nothing below
-  1440px**, so on an ordinary 1280px laptop "Needs your attention" and "The week
-  ahead" rendered **full-width** — neither carried a `col-sm-*` step — while every
-  other card was already half. Almost certainly not the intent, and it is why the
-  review's "five dead regions on a default desktop" was wrong below 1440 (two
-  there).
-- **Already handled:** the dashboard no longer uses `col-lg-*` at all (chunk 2),
-  and `helpers/dashboardGrid.ts` carries a ⚠️ comment naming the trap so it isn't
-  re-added.
-- **What's left:** the remaining `col-lg-*` call site in `src/` (2 total, one was
-  the dashboard's — worth one grep), and a decision on whether A8 should say this
-  out loud. A8 lists the app's breakpoints without noting that Quasar's `lg` is
-  *not* one of them, which is precisely the gap that produced this; a one-line
-  note ("the class for the app's desktop tier is `col-md-*` — Quasar's `lg` is
-  ≥1440") is cheaper than any amount of review.
-- **Recommended resolution:** opportunistic — a two-minute A8 edit next time
-  anyone is in `DESIGN_STYLE_GUIDE.md`. Cross-ref: A8, `DASHBOARD_PAGE_REVIEW.md`
-  §4.6 correction.
 
 ## [OPEN] FU-808 — `space` and `u` are advertised in the shortcut cheatsheet on faces where they do nothing
 - **Raised:** 2026-09-01 (v4 chunk 4 — cutover audit)
@@ -2442,30 +2450,6 @@ Resolved entries carry one extra line, and live in `DORA_FOLLOWUPS_RESOLVED.md`:
   touched. One e2e test per rung, asserting `estimate_source` and
   `resolved_store_id`, would cover it.
 
-## [OPEN] FU-724 — `src-pwa/custom-service-worker.ts` is dead code, and it's the file you'd reach for
-- **Raised:** 2026-08-23 (offline read-only work)
-- **Type:** finding.
-- **What:** `web_app/src-pwa/custom-service-worker.ts` is never built. Its own
-  header says it is picked up "ONLY if `workboxMode` is set to `InjectManifest`",
-  and `quasar.config.ts:238` sets `workboxMode: 'GenerateSW'`. The service worker
-  that actually ships is generated from `extendGenerateSWOptions` in
-  `quasar.config.ts` (that's where the `/api/**` `NetworkFirst` rule and the
-  navigate-fallback live).
-- **Why it matters more than ordinary dead code:** now that **offline is
-  read-only (R-052)**, the read cache *is* the offline story — and the file a
-  future agent will open to change offline caching behaviour is the one named
-  `custom-service-worker.ts`. Edits there would have no effect, silently, with
-  no build error and no test failure. That's the same invisible-failure shape as
-  FU-719/FU-720.
-- **Why deferred:** deleting it is a one-liner but it's outside the scope of the
-  read-only change, and it's worth a moment's thought first: either delete it, or
-  switch to `InjectManifest` and move the runtime-caching rules into it (a real
-  choice — `GenerateSW` is the lower-friction route the config comment
-  deliberately picked, so deleting is the likely answer).
-- **Recommended resolution:** opportunistic. If deleting, leave a one-line
-  pointer comment in `quasar.config.ts` saying the SW is generated there, so the
-  next person looks in the right place.
-
 ## [OPEN] FU-722 — voiced text loses the start of the sentence (unconfirmed; two candidate fixes shipped)
 - **Raised:** 2026-08-23 (cook-mode voice feedback)
 - **Type:** finding.
@@ -2587,6 +2571,7 @@ Resolved entries carry one extra line, and live in `DORA_FOLLOWUPS_RESOLVED.md`:
   discovery failure) and belongs with the ops/CI work in FU-405.
 - **Recommended resolution:** opportunistic, or now alongside FU-719 — the two
   are one small hardening pass over `startup.py` / `infrastructure/utils.py`.
+- **2026-10-23 (finalisation Stage 1):** cheapest shape (log the registered route count per blueprint at boot) rides along with 19-R19's `register_jobs`/router wiring tidy — FINALISATION_REVIEW 19-D5.
 
 ## [OPEN] FU-719 — `_iter_submodules` silently swallows a feature subpackage that fails to import
 - **Raised:** 2026-08-23 (chasing FU-717)
@@ -2622,6 +2607,7 @@ Resolved entries carry one extra line, and live in `DORA_FOLLOWUPS_RESOLVED.md`:
   that can't import should fail the boot loudly, not serve a silently
   incomplete API. Whatever the cause of FU-717, this is worth doing on its own
   merit — it is the reason a whole-blueprint hole is invisible.
+- **2026-10-23 (finalisation Stage 1):** execute as part of CHUNK_19 19-R19 (one `onerror=` argument on `walk_packages`, logged at ERROR) — see FINALISATION_REVIEW 19-D5.
 
 ## [OPEN] FU-716 — Backup & Restore page bypasses the API service layer
 - **Raised:** 2026-08-23 (image-quality settings split)
@@ -2642,6 +2628,7 @@ Resolved entries carry one extra line, and live in `DORA_FOLLOWUPS_RESOLVED.md`:
 - **Recommended resolution:** opportunistic — fold in next time this page is
   touched, or immediately after FU-717 is diagnosed, since the correlation id
   is exactly what would have made FU-717 a five-minute answer.
+- **2026-10-23 (finalisation Stage 1):** shape agreed in CHUNK_18 **18-R7**: `services/api/dataApiService.ts` + `uploadsApiService.ts` on `AxiosHttpClient` (blob download, FormData chunks); 21 raw-fetch sites counted app-wide (17 on the two data pages, 4 in `useChunkedUpload`, `useClientLogger`'s is deliberate). Executes in Stage 2.
 
 ## [OPEN] FU-715 — reported "Needs attention filter is broken" did not reproduce
 - **Raised:** 2026-08-22 (stock-overview feedback batch)
@@ -2945,23 +2932,6 @@ Resolved entries carry one extra line, and live in `DORA_FOLLOWUPS_RESOLVED.md`:
   --` a file that `git status` shows as modified; the logs are append-mostly and
   routinely carry uncommitted work.
 
-## [OPEN] FU-695 — `PantryBeliefChip.vue` is orphaned; nothing imports it
-- **Raised:** 2026-08-20 (DR-15 micro-motion pass).
-- **Type:** finding.
-- **What:** `components/stock/PantryBeliefChip.vue` has **no importer left** in
-  `web_app/src` — only comments in `PantryBeliefCard.vue`, `StockItemRow.vue`
-  and `StockItemDetailPage.vue` still refer to it. The row-level belief hint it
-  rendered was folded into the level picker (ring + menu header) during the
-  2026-08-15 Chunk-4 work, and the chip was left behind. Note it *did* receive a
-  real fix afterwards (the DR-8 fade-in) — i.e. dead code that is still being
-  maintained, which is the expensive kind.
-- **Why deferred:** deciding between "delete it" and "it's the intended
-  component for a surface that hasn't been rebuilt yet" is a product call, and
-  the three comments referencing it need rewording either way — more than a
-  ride-along on a motion pass.
-- **Recommended resolution:** now (a delete + three comment edits, if the owner
-  confirms the row-level chip isn't coming back).
-
 ## [OPEN] FU-694 — route-change transitions: the last critique §6 bullet, deliberately deferred
 - **Raised:** 2026-08-20 (DR-15 micro-motion pass).
 - **Type:** deferred job.
@@ -3059,27 +3029,6 @@ Resolved entries carry one extra line, and live in `DORA_FOLLOWUPS_RESOLVED.md`:
   style rather than leaving two conventions in one stylesheet.
 - **Recommended resolution:** **after the `DORA_VERIFY` walk of the merged recipe
   page**, as a standalone tidy with nothing else in the diff.
-
-## [OPEN] FU-686 — `PantryBeliefChip.vue` is orphaned and still described everywhere as the live row form
-- **Raised:** 2026-08-20 (stock-signal consolidation, Chunk 4).
-- **Type:** finding.
-- **What:** `components/stock/PantryBeliefChip.vue` is imported by **nothing**. The
-  row stopped using it on 2026-08-15 when the belief hint moved onto the level picker,
-  and Chunk 4 removed the ring that replaced it. Its own header comment plus comments
-  in `PantryBeliefCard.vue` and `StockItemDetailPage.vue` still describe it as the
-  live *row* form of the belief chip, which will mislead the next reader into thinking
-  the row still shows one.
-  **Correction to this entry (2026-08-20, same day):** it originally also listed
-  `BaseButton`'s `attention` prop as dead. That was true for about an hour — the
-  owner then reinstated the Stocktake glow gated on essentials, so
-  `StockOverview.vue` calls it again and the prop, `dora-btn--attention` and its
-  keyframes are all **live**. Do not delete them. Recorded rather than quietly edited
-  out, because "nothing glows any more" was the wrong conclusion, not just a stale
-  fact — the design landed on *gate the condition*, not *remove the channel*.
-- **Why deferred:** the chip is named by three planning docs, so deleting a component
-  they reference deserves its own line rather than vanishing inside a UI chunk.
-- **Recommended resolution:** opportunistic. Deleting it is a two-line job (the file
-  plus the three stale comments); it carries no behaviour.
 
 ## [OPEN] FU-685 — the row's expiry "soon" band is still a client-side 7 days while the outline reads the server's window
 - **Raised:** 2026-08-20 (stock-signal consolidation, Chunk 4).
@@ -3213,29 +3162,6 @@ Resolved entries carry one extra line, and live in `DORA_FOLLOWUPS_RESOLVED.md`:
 - **Recommended resolution:** **Chunk 4 next** — it is unblocked and its input
   (`attention_severity`) is already on the DTO.
 
-## [OPEN] FU-682 — three more `window.open(apiUrl)` print views still violate R-045
-- **Raised:** 2026-08-19 (recipe view feedback batch)
-- **Type:** finding
-- **What:** the recipe Print button was reported as "404s" and turned out to be a
-  straight R-045 violation — `window.open` on a URL built from `resolveBaseURL()`,
-  which is authenticated only if the browser volunteers the session cookie. Fixed
-  by routing it through the new shared `services/files/printView.openHtmlDocumentAsync`
-  (fetch through `AxiosHttpClient`, tab claimed on the gesture per R-046).
-  **Three siblings were left untouched and have the identical defect:**
-  `useShoppingListExport.ts:22`, `useMealPlanExport.ts:13`,
-  `useStockOverviewExport.ts:51`. All three will fail the same way on a split
-  `app.`/`api.` host and in the Capacitor shell, and will look like a 404 to the user.
-- **Why deferred:** the reported surface was the recipe page; the other three are
-  different pages the owner hasn't reviewed this round, and each needs its own
-  error copy + a walk. The mechanic they need already exists, so each is a ~10-line
-  change.
-- **Fix shape:** replace each `window.open(...)` with `openHtmlDocumentAsync(path, title)`
-  (keep the call a sync entry point — no `await` before it), and give each a toast
-  with `toastCaption(err)` + the `PopupBlockedError` branch, as
-  `useRecipeExport.openPrintView` now does. `useQrLabels` is already migrated.
-- **Recommended resolution:** now-ish — it's a known-broken class with a proven fix
-  sitting next to it. Otherwise opportunistically, whenever each page is next open.
-
 ## [OPEN] FU-680 — the ingredient-unit reconciliation has no density bridge
 - **Raised:** 2026-08-19 (recipe view feedback batch)
 - **Type:** follow-up
@@ -3368,6 +3294,7 @@ Resolved entries carry one extra line, and live in `DORA_FOLLOWUPS_RESOLVED.md`:
 - **Recommended resolution:** now-ish — it's mechanical, and the mixed treatment on the
   recipe page is visible. Worth deciding at the same time whether B2's prescribed
   "`-soft` background + semantic ink" replaces solid semantic chips generally.
+- **2026-10-23 (finalisation Stage 1):** now **24 sites / 16 files** — `AlertKindAvatar, AlertsBell, chips/DiscountChip, dashboard/PriceDropsCard, dora/DoraChat, dora/PriceHistoryBottomSheet, products/ProductCard, recipes/ExpiringChip, DoraHelpPage, PriceHistoryPage, RecipeCookMode, settings/AdminDataBackupRestore, settings/ApiAccessSettings, settings/AuditLogSettings, StockItemDetailPage, StockOverview` (CHUNK_20 §0 table). Pairs with FU-674's `--text-on-*` tokens.
 
 ## [OPEN] FU-670 — At-risk ingredient chips are read-view only (not cook mode / edit rows)
 - **Raised:** 2026-08-17 (expiring-ingredient chips).
@@ -3460,43 +3387,6 @@ Resolved entries carry one extra line, and live in `DORA_FOLLOWUPS_RESOLVED.md`:
 - **Recommended resolution:** later, folded into FU-641. Cheapest compliant shape is
   probably an invisible `::after` hit-area expanding the slider to 44px vertically
   without moving the pill itself.
-
-## [OPEN] FU-660 — Failed offline syncs have nowhere to go — no conflict UI
-- **Raised:** 2026-08-17 (offline-sync audit).
-- **Type:** finding / deferred job.
-- **What:** `useOfflineQueue` maintains a `conflicts` pile for queued mutations the
-  server rejects on replay for a non-network reason (422, 409, a since-deleted item).
-  It's exposed — `conflicts`, `conflictCount`, `discardConflict`, `retryConflict` — and
-  **nothing in the app consumes any of it**. The user gets one 5-second toast and the
-  change is then unreachable: no list, no retry, no way to see what was dropped. This
-  session made the pile survive a reload (it was memory-only, so a refresh erased the
-  record entirely), which turns silent loss into recoverable loss — but only for
-  someone reading localStorage.
-- **Why deferred:** the transport bugs were the blocker (nothing could sync at all —
-  see the same-day CSRF fix), and surfacing conflicts needs a real design call: where
-  does it live (a banner? Settings? a dedicated "unsynced changes" page?), and what are
-  the resolve verbs beyond retry/discard.
-- **Recommended resolution:** later, once the fixed sync path has been exercised in
-  anger — the shape of the UI should follow what conflicts actually turn out to be.
-  Pairs with FU-661.
-
-## [OPEN] FU-661 — Offline coverage is six mutation kinds; is that the right set?
-- **Raised:** 2026-08-17 (offline-sync audit).
-- **Type:** design question.
-- **What:** exactly six things queue offline — `stock_level_update`, `mark_open`,
-  `mark_restocked`, `push_expiry`, `clear_expiry`, `shopping_list_line_tick` — from three
-  call sites (`stockItemStore` ×2, `ShoppingListDetail`). Everything else fails loudly by
-  design (`useOfflineQueue`'s header: creates, deletes and anything identity-changing are
-  excluded because a phantom item appearing an hour later is worse than an error now).
-  That's a defensible line, but it was drawn at F3 and never revisited against how the
-  app is actually used mid-shop. Candidates worth a look: adding an item to a shopping
-  list (a create, but an idempotent-ish one), the stocktake runner's check/snooze (a
-  walk-the-pantry flow, i.e. exactly the "in a cupboard with no signal" case), and
-  cook-mode's finish step.
-- **Why deferred:** each addition needs its own replay-safety argument, and two of the
-  three are creates — the category the current design deliberately excludes.
-- **Recommended resolution:** opportunistic, or when the real-device field test (FU-389)
-  says which of these actually bites.
 
 ## [OPEN] FU-662 — `attempts` is counted on queued mutations but never acted on
 - **Raised:** 2026-08-17 (offline-sync audit).
@@ -3779,6 +3669,7 @@ Resolved entries carry one extra line, and live in `DORA_FOLLOWUPS_RESOLVED.md`:
 - **Recommended resolution:** now-ish — this is the difference between a log
   bundle that answers the question and one that costs a session. Pairs naturally
   with FU-405 (ops/observability).
+- **2026-10-23 (finalisation Stage 1):** policy options restated in CHUNK_19 **19-D4**; the Stage-1 read favours (a) log 4xx on mutating routes at WARNING plus a container default of `INFO` (gunicorn already writes an access line per request). Still the owner's call.
 
 ## [OPEN] FU-639 — Camera scanning needs HTTPS on the **web** build; pick the self-host TLS story
 - **Raised:** 2026-08-15 (stock-overview feedback round)
@@ -3806,19 +3697,6 @@ Resolved entries carry one extra line, and live in `DORA_FOLLOWUPS_RESOLVED.md`:
 - **Recommended resolution:** later during Phase 4 (open-source release
   readiness — bundle with FU-406's README/release work). Not urgent for the owner
   personally: the Android app already covers his phone-scanning case.
-
-## [OPEN] FU-640 — iOS Capacitor shell has no `NSCameraUsageDescription`
-- **Raised:** 2026-08-15 (while scoping FU-639)
-- **Type:** finding
-- **What:** `src-capacitor/ios/App/App/Info.plist` declares no camera usage
-  string. iOS *hard-terminates* an app that touches the camera without one, so
-  the scan overlay would kill the app rather than fail softly. Android's manifest
-  has its `CAMERA` permission; iOS was never given the equivalent.
-- **Why deferred:** the iOS target is unbuilt Capacitor scaffolding — P8-10
-  shipped an **Android** APK only, and nothing has ever run this code on iOS. It
-  is a latent trap, not a live bug.
-- **Recommended resolution:** when an iOS build is first attempted — add the key
-  before the first device run, not after the first crash.
 
 ## [OPEN] FU-638 — Cookbook renders "No recipes match the current filters" while its own footer counts 11 shown
 - **Raised:** 2026-08-14 (FU-637 — spotted while verifying the kcal badge).
@@ -4467,6 +4345,7 @@ Resolved entries carry one extra line, and live in `DORA_FOLLOWUPS_RESOLVED.md`:
 - **What:** P5-04 — real-device mobile / PWA testing pass. Overlaps with [[FU-411]] platform builds + P8-10 native.
 - **Why deferred:** Phase 3-adjacent.
 - **Recommended resolution:** fold into the P8-10 native-app brief; a device-lab pass is a natural gate before deciding native vs PWA-only.
+- **2026-10-23 (finalisation Stage 1):** add to the device pass: Android cleartext to an `http://` LAN backend from the APK is unverified (`usesCleartextTraffic` absent; CHUNK_17 17-R10).
 
 ## [OPEN] FU-363 — Cross-cutting / niche feedback (Bucket C in COVERAGE_GAPS) — 4 of 8 actioned
 - **Raised:** 2026-07-01 (COVERAGE_GAPS sweep).
@@ -4498,6 +4377,7 @@ Resolved entries carry one extra line, and live in `DORA_FOLLOWUPS_RESOLVED.md`:
   explicitly called it out as a separate task to think about.
 - **Recommended resolution:** opportunistic — fold in next time a theming/styling pass
   comes around, or after FU-046 (theme-token compliance) gets another round. **Ride-along with [FINALISATION_PLAN.md](docs/01_charter/FINALISATION_PLAN.md) Track 3** — every chunk's senior-review pass logs any `color="secondary" | info | accent"` sites worth reconsidering against this FU, so by plan close the shortlist is already assembled. Actual resolution still needs eyes-on-the-app judgement, not a code walk — so this FU stays open past plan close.
+- **2026-10-23 (finalisation Stage 1):** Stage 2 produces the `color="secondary"` site list as part of CHUNK_20 20-D5; nothing else in the sweep decides this — it stays the owner's visual pass.
 
 ## [OPEN] FU-010 — Late-game holistic theme / colour / overall-look review
 - **Raised:** 2026-06-05 (user request)
@@ -4522,4 +4402,5 @@ Resolved entries carry one extra line, and live in `DORA_FOLLOWUPS_RESOLVED.md`:
   polish)** or just before **Phase 4 (commercialize)**, once the app is feature-
   complete enough to eyeball holistically. Requires the app actually running
   (deps installed) and ideally a side-by-side across all themes. **Ride-along with [FINALISATION_PLAN.md](docs/01_charter/FINALISATION_PLAN.md) Track 3** — every chunk's senior-review pass logs theme/colour anomalies against this FU so the eventual holistic pass starts with a triaged shortlist instead of a blank slate. Doesn't replace the eyes-on-app judgement pass; complements it.
+- **2026-10-23 (finalisation Stage 1):** measured inputs handed over in CHUNK_20 **20-D5 / C11**: 14 theme blocks, 127 root tokens, `--text-on-primary` pure white in 5 themes (FU-674), `text-color="white"` ×24 (FU-671), `--ring-focus` literal at `:root` recoloured in only 5 themes (20-R8), hex outside the auth ladder in 8 files, the `AuthShell` private ladder (15-R10/R6), banner accent-on-primary pairs (17/19 C11).
 

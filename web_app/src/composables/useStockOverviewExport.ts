@@ -6,6 +6,7 @@
 import { Notify } from 'quasar';
 import { resolveBaseURL } from 'src/services/api/axiosHttpClient';
 import { describeQrFailure, openQrSheetAsync } from 'src/composables/useQrLabels';
+import { openPrintDocument } from 'src/composables/usePrintDocument';
 import { parseFilename, triggerSave } from 'src/services/files/downloadHelpers';
 
 export function useStockOverviewExport() {
@@ -34,7 +35,7 @@ export function useStockOverviewExport() {
         } catch (err) {
             Notify.create({
                 type: 'negative',
-                position: 'bottom-right',
+                
                 message: "Couldn't export the stock overview.",
                 caption: err instanceof Error ? err.message : String(err),
             });
@@ -48,7 +49,8 @@ export function useStockOverviewExport() {
             ids !== undefined
                 ? `?ids=${encodeURIComponent(ids.join(','))}`
                 : '';
-        window.open(`${baseUrl}/stock-items/print-view${idsParam}`, '_blank', 'noopener');
+        // FU-682 / R-045: fetched through the client, not `window.open(baseUrl…)`.
+        openPrintDocument(`/stock-items/print-view${idsParam}`, 'Stock');
     }
 
     // Stays sync-entry so the click's gesture reaches `window.open` (R-046);
@@ -60,7 +62,7 @@ export function useStockOverviewExport() {
         openQrSheetAsync({ layout: 'a4-21up', ids }).catch((err: unknown) => {
             Notify.create({
                 type: 'negative',
-                position: 'bottom-right',
+                
                 message: describeQrFailure(err),
             });
         });

@@ -102,6 +102,17 @@ def test__get_app_settings__CoreFields__PresentAndTyped(api):
 
 #endregion GET shape
 
+
+def test__patch__invalid_nutrition_mode__is_400_not_500(api):
+    """Finalisation 13-R1 — the handler returned a bare `(None, "reason")`
+    tuple for an unknown mode; the route then read `.invalid_reason` off it
+    and 500'd. Every other invalid field answers 400 with the reason."""
+    resp = requests.patch(APP_SETTINGS, json={"nutrition_mode": "bogus"})
+    assert resp.status_code == 400, resp.text
+    assert "Invalid nutrition mode" in resp.text
+    # And the stored mode is untouched.
+    assert _get_settings()["nutrition_mode"] in {"off", "simple", "complex"}
+
 #region ---------------- PATCH round-trip ----------------
 
 

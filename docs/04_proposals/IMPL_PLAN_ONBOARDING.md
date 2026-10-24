@@ -35,6 +35,8 @@ config; flags whose effect needs external setup — SMTP/companion/LLM — degra
 
 ## 0. Verify-state-first: no drift
 
+**Superseded (2026-10-23, finalisation CHUNK_14).** The wizard was rebuilt after this plan (three-step `WelcomeWizard`, FU-210 persona removal, FU-578 #38/#39); the verify-state notes below describe the pre-rebuild code and are kept as history only. Current state: CHUNK_14 §0.
+
 Re-checked 2026-06-15 against `WelcomeWizard.vue`, `onboarding.py`, `seed.py`, the seed JSON,
 `AppSetting`/`User` entities, `SystemSettings.vue`/`PreferencesSettings.vue`, `HelpPage.vue`,
 `RecipeCookMode.vue`, `Merchant`.

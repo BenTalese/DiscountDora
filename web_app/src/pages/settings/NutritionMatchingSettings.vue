@@ -266,7 +266,7 @@
 
     function notifyError(message: string, err: unknown) {
         console.warn(message, err);
-        $q.notify({ type: 'negative', position: 'bottom-right', message });
+        $q.notify({ type: 'negative', message });
     }
 
     async function refresh() {
@@ -333,7 +333,6 @@
             const result = await nutritionApi.acceptAllSuggestionsAsync();
             $q.notify({
                 type: 'positive',
-                position: 'bottom-right',
                 message: result.linked_count === 1
                     ? 'Linked 1 item to its suggested food.'
                     : `Linked ${result.linked_count} items to their suggested foods.`,

@@ -451,7 +451,7 @@
         </div>
 
         <!-- Splitter: item list on the left, in-page detail peek on the right.
-             C-1b.2 (L117, L118): peek opens at 50% (not 58%), and while a peek
+             C-1b.2 (L117, L118): peek opens at `PEEK_OPEN_PCT` (50%), and while a peek
              is open the drag-range is clamped to [40%, 65%] so neither pane
              gets squished to an unusable width. When no peek is open we let
              the list go full-width (100%), so the limits are dynamic. -->
@@ -945,7 +945,10 @@
     const splitterLimits = computed<[number, number]>(() =>
         peekId.value ? [40, 70] : [40, 100],
     );
-    watch(peekId, (v) => (splitPct.value = v ? 58 : 100));
+    // C-1b.2 L117: the owner asked for the peek to open at 50 %. The comment
+    // on the splitter said 50 while this said 58 (finalisation 05-R41).
+    const PEEK_OPEN_PCT = 50;
+    watch(peekId, (v) => (splitPct.value = v ? PEEK_OPEN_PCT : 100));
 
     // two-frame detail nav:
     //   Desktop  → splitter peek (the embedded drawer).
@@ -1009,7 +1012,6 @@
     useShortcut([
         { keys: 'n', scope: 'Stock overview', description: 'New stock item', handler: onCreateClick },
         { keys: 'f', scope: 'Stock overview', description: 'Focus the filter/search', handler: focusSearch },
-        { keys: '/', scope: 'Stock overview', description: 'Focus the filter/search', handler: focusSearch },
         { keys: 'a', scope: 'Stock overview', description: 'Add focused / selected to primary list', handler: addFocusedOrSelected },
         { keys: 'arrowdown', scope: 'Stock overview', description: 'Focus next item', handler: () => moveFocus(1) },
         { keys: 'arrowup', scope: 'Stock overview', description: 'Focus previous item', handler: () => moveFocus(-1) },
@@ -1083,7 +1085,6 @@
             ids.forEach((id) => invalidateBuyVerdict(id));
             $q.notify({
                 type: 'positive',
-                position: 'bottom-right',
                 message: already > 0
                     ? `Added ${added} to your list, ${already} already on it.`
                     : `Added ${added} item${added === 1 ? '' : 's'} to your list.`,
@@ -1092,7 +1093,6 @@
         } catch (err) {
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: 'Could not add all items.',
                 caption: toastCaption(err),
             });
@@ -1109,7 +1109,6 @@
         if (!top) {
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: 'No stock levels configured.',
             });
             return;
@@ -1130,14 +1129,12 @@
             recipeStore.invalidateRecipes();
             $q.notify({
                 type: 'positive',
-                position: 'bottom-right',
                 message: `Marked ${updated_count} item${updated_count === 1 ? '' : 's'} restocked.`,
             });
             cancelBulk();
         } catch (err) {
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: 'Could not restock.',
                 caption: toastCaption(err),
             });
@@ -1194,7 +1191,6 @@
         } catch (err) {
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: 'Could not log any as wasted.',
                 caption: toastCaption(err),
             });
@@ -1207,7 +1203,6 @@
         if (okCount === 0) {
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: 'Could not log any as wasted.',
             });
             return;
@@ -1217,7 +1212,6 @@
             : '';
         $q.notify({
             type: 'info',
-            position: 'bottom-right',
             message: `Logged ${okCount} item${okCount === 1 ? '' : 's'} as wasted${failSuffix}.`,
             timeout: 6000,
             actions: [{
@@ -1238,13 +1232,11 @@
                             await stockItemStore.getStockItemsAsync();
                             $q.notify({
                                 type: 'positive',
-                                position: 'bottom-right',
                                 message: 'Undone.',
                             });
                         } catch (err) {
                             $q.notify({
                                 type: 'negative',
-                                position: 'bottom-right',
                                 message: 'Could not undo.',
                                 caption: toastCaption(err),
                             });
@@ -1276,7 +1268,6 @@
         if (candidates.length === 0) {
             $q.notify({
                 type: 'info',
-                position: 'bottom-right',
                 message: source === 'present-only'
                     ? 'None of the selected items are on a list.'
                     : 'No active lists. Create one first.',
@@ -1313,7 +1304,6 @@
             ids.forEach((id) => invalidateBuyVerdict(id));
             $q.notify({
                 type: 'positive',
-                position: 'bottom-right',
                 message: already_on_list > 0
                     ? `${added} added, ${already_on_list} already on list.`
                     : `${added} added.`,
@@ -1322,7 +1312,6 @@
         } catch (err) {
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: 'Could not add all items.',
                 caption: toastCaption(err),
             });
@@ -1352,14 +1341,12 @@
             )?.display_name ?? 'list';
             $q.notify({
                 type: 'positive',
-                position: 'bottom-right',
                 message: `Removed ${removed_count} from "${listName}".`,
             });
             cancelBulk();
         } catch (err) {
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: 'Could not remove from list.',
                 caption: toastCaption(err),
             });
@@ -1381,7 +1368,6 @@
             await stockItemStore.getStockItemsAsync();
             $q.notify({
                 type: 'positive',
-                position: 'bottom-right',
                 message: 'Items moved.',
             });
             moveDialogOpen.value = false;
@@ -1389,7 +1375,6 @@
         } catch (err) {
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: 'Could not move items.',
                 caption: toastCaption(err),
             });
@@ -1582,7 +1567,6 @@
         } catch (err) {
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: 'Lookup failed.',
                 caption: err instanceof Error ? err.message : String(err),
             });

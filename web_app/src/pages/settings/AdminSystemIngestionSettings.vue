@@ -86,7 +86,7 @@
             savedProductSearchUrl.value = updated.product_search_url;
             productSearchUrlDraft.value = updated.product_search_url;
             await productSearch.refresh();
-            $q.notify({ type: 'positive', position: 'bottom-right', message: 'Product search URL saved.' });
+            $q.notify({ type: 'positive', message: 'Product search URL saved.' });
         } catch (err) {
             productSearchUrlError.value = err instanceof Error ? err.message : 'Save failed.';
         } finally {

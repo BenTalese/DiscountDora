@@ -56,6 +56,55 @@ MODE_PARTIAL = "partial"
 ALLOWED_MODES = (MODE_ALL_SKIP_DUPLICATES, MODE_PARTIAL)
 
 
+def _join_table_sections() -> list[str]:
+    """Backup keys of the pure join (m2m) tables — every section whose table
+    has a composite primary key. Read off the live metadata so the list can
+    never name a section the catalogue no longer has."""
+    return [
+        key for key, table_name in TABLE_NAME_BY_BACKUP_KEY.items()
+        if len(primary_key_columns(db.metadata.tables[table_name])) > 1
+    ]
+
+
+def validate_fk_maps() -> None:
+    """Fail at import, not at restore time, if an FK-policy map in
+    `restore_shared` names a section or a column that no longer exists.
+
+    The maps are the *policy* layer (which FKs pull parents in, which are
+    nulled, which skip the row); the schema is the *plumbing*. They drift
+    apart silently — `meal_plan_entries.meal_id` and the two `meal_recipes`
+    rows outlived the meals→recipes rework for months — and a stale key
+    is inert at best (a check that never fires) and a 500 at worst
+    (finalisation 18-R1). Same shape as `import_spreadsheet.
+    _validate_import_templates`.
+    """
+    def _check(section: str, column: str | None, where: str) -> None:
+        table_name = TABLE_NAME_BY_BACKUP_KEY.get(section)
+        if table_name is None:
+            raise ValueError(
+                f"restore_shared.{where} names section '{section}', which is not in SECTIONS."
+            )
+        if column is not None and column not in db.metadata.tables[table_name].columns:
+            raise ValueError(
+                f"restore_shared.{where} names column '{section}.{column}', "
+                f"which does not exist on table '{table_name}'."
+            )
+
+    for (section, column), target in HARD_FK_PULL_IN.items():
+        _check(section, column, "HARD_FK_PULL_IN")
+        _check(target, None, "HARD_FK_PULL_IN (target)")
+    for section, column in SOFT_FK_NULLABLE:
+        _check(section, column, "SOFT_FK_NULLABLE")
+    for section, column in REQUIRED_FKS:
+        _check(section, column, "REQUIRED_FKS")
+    for parent, child, child_fk in CHILD_AUTO_INCLUDE:
+        _check(parent, None, "CHILD_AUTO_INCLUDE (parent)")
+        _check(child, child_fk, "CHILD_AUTO_INCLUDE (child)")
+
+
+validate_fk_maps()
+
+
 class RestoreBackupRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -190,8 +239,12 @@ class RestoreBackupHandler:
                         changed = True
 
             # m2m join rows where both endpoints land (in DB or in selection)
-            # ride along automatically.
-            for backup_key in ("product_stock_item_links", "stock_item_substitutes", "meal_recipes"):
+            # ride along automatically. Derived from the catalogue rather than
+            # listed by hand: the hand-written tuple kept `meal_recipes` after
+            # the meals→recipes rework removed that section, so every partial
+            # restore raised `KeyError` here before touching a row
+            # (finalisation 18-R1).
+            for backup_key in _join_table_sections():
                 table = db.metadata.tables[TABLE_NAME_BY_BACKUP_KEY[backup_key]]
                 pk_cols = primary_key_columns(table)
                 for row in rows_by_key[backup_key]:

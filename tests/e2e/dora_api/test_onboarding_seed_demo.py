@@ -20,7 +20,8 @@ from dora_api.app import app, db
 BASE = "http://localhost:5170/api"
 SEED_DEMO = f"{BASE}/onboarding/seed-demo"
 
-_DEMO_INGREDIENT_NAMES = ("Spaghetti pasta", "Garlic cloves", "Olive oil")
+# Match the starter pack (finalisation 14-R2) — the demo reuses the wizard's items.
+_DEMO_INGREDIENT_NAMES = ("Pasta", "Garlic", "Olive oil")
 
 
 def _force_fresh_install_state() -> None:
@@ -57,6 +58,36 @@ def test__seed_demo__fresh_install__creates_items_recipe_and_plan(api):
     assert body["items_created"] == len(_DEMO_INGREDIENT_NAMES), body
     assert body["recipe_created"] is True, body
     assert body["meal_plan_created"] is True, body
+
+
+def test__seed_demo__joins_an_existing_plan_for_this_week__never_a_second_one(api):
+    """Finalisation 14-R1 — `MealPlan` has no week uniqueness and the demo
+    always inserted a new plan anchored on this Monday, so a household that
+    had already planned the week saw two overlapping plans. The demo now
+    joins the existing plan: the plan count is unchanged, one entry is added."""
+    from datetime import date, timedelta
+
+    _force_fresh_install_state()
+    today = date.today()
+    monday = today - timedelta(days=today.weekday())
+    created = requests.post(f"{BASE}/meal-plans", json={"start_date": monday.isoformat(), "entries": []})
+    assert created.status_code in (200, 201), created.text
+
+    def _counts() -> tuple[int, int]:
+        with app.app_context():
+            with db.engine.begin() as conn:
+                plans = conn.execute(text('SELECT COUNT(*) FROM "MealPlan"')).scalar_one()
+                entries = conn.execute(text('SELECT COUNT(*) FROM "MealPlanEntry"')).scalar_one()
+            db.session.remove()
+        return int(plans), int(entries)
+
+    plans_before, entries_before = _counts()
+    body = requests.post(SEED_DEMO).json()
+    assert body["seeded"] is True and body["meal_plan_created"] is True, body
+    plans_after, entries_after = _counts()
+
+    assert plans_after == plans_before, "the demo must join this week's plan, not add a second one"
+    assert entries_after == entries_before + 1
 
 
 def test__seed_demo__second_call__is_a_no_op(api):

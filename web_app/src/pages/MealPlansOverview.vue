@@ -958,7 +958,7 @@
         // Same refresh the budget axis uses — one applied-swap path, one reload.
         await onSwapApplied();
         $q.notify({
-            type: 'positive', position: 'bottom-right',
+            type: 'positive', 
             message: 'Swapped for the lighter meal.',
         });
     }
@@ -973,7 +973,7 @@
             .map((d) => ({ label: `${d.label} · ${planner.formatDate(d.iso)}`, value: d.iso }));
         if (items.length < 2) {
             $q.notify({
-                type: 'info', position: 'bottom-right',
+                type: 'info', 
                 message: 'No other upcoming days this week to cook ahead for.',
             });
             return;

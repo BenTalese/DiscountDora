@@ -10,9 +10,8 @@ import HealthApiService from 'src/services/api/healthApiService';
 //
 // Mirrors `useImagePolicy`: module-level state so the health probe runs
 // once per session, a single inflight promise, plain-getter for non-Vue
-// callers. The values are also fed into vue-i18n's `numberFormats` in
-// `boot/i18n.ts` (adopt-lite: we use vue-i18n only for its `Intl`
-// wrappers, not for string translation).
+// callers. This module (with `useDateFormat`) IS the locale authority —
+// direct `Intl` wrappers; vue-i18n was removed in finalisation 20-R2.
 
 export interface MoneyPolicy {
     /** ISO 4217 currency code, e.g. 'AUD', 'USD', 'EUR'. */
@@ -114,6 +113,23 @@ export function currentMoneyPolicy(): MoneyPolicy {
  *  reactive ref, so a template calling it re-renders when the policy loads. */
 export function currentLocale(): string {
     return policy.value.locale;
+}
+
+let cachedCollator: Intl.Collator | null = null;
+let collatorFor = '';
+
+/** Name-sorting collator in the install's locale, cached per locale. Five
+ *  stores and the stock filters each built `new Intl.Collator('en', …)` —
+ *  harmless for the shipped `en-*` locales, but a second opinion about the
+ *  household's locale (R-003; finalisation 20-R7). Read it at sort time, not
+ *  at module load, so a late-loading policy is honoured. */
+export function nameCollator(): Intl.Collator {
+    const locale = currentLocale();
+    if (!cachedCollator || collatorFor !== locale) {
+        cachedCollator = new Intl.Collator(locale, { sensitivity: 'base' });
+        collatorFor = locale;
+    }
+    return cachedCollator;
 }
 
 /** Kick the shared locale/currency probe (idempotent). `useDateFormat` calls

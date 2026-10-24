@@ -2,7 +2,6 @@
 // https://v2.quasar.dev/quasar-cli-vite/quasar-config-file
 
 import { defineConfig } from '#q-app/wrappers';
-import { fileURLToPath } from 'node:url';
 
 // `defineConfig` is over-strict about pwa.extendManifestJson typing —
 // our generic `Record<string, unknown>` callback signature isn't
@@ -23,7 +22,6 @@ export default defineConfig((ctx): any => {
             'keyboardInset',
             'fonts',
             'globalErrorHandler',
-            'i18n',
             'notifyTypeRegistration',
             'pwaLifecycle',
             'theme',
@@ -140,24 +138,12 @@ export default defineConfig((ctx): any => {
             // extendViteConf (viteConf) {},
             // viteVuePluginOptions: {},
 
+            // vue-i18n and its Vite plugin were removed in finalisation 20-R2:
+            // booted with a 12-line message tree and zero `$t`/`useI18n`
+            // consumers. Money and dates are formatted by the `Intl` wrappers in
+            // `composables/useMoney.ts` / `useDateFormat.ts` (the locale
+            // authority); PROPOSAL_LOCALE_I18N §3-2 records the de-facto choice.
             vitePlugins: [
-                [
-                    '@intlify/unplugin-vue-i18n/vite',
-                    {
-                        // if you want to use Vue I18n Legacy API, you need to set `compositionOnly: false`
-                        // compositionOnly: false,
-
-                        // if you want to use named tokens in your Vue I18n messages, such as 'Hello {name}',
-                        // you need to set `runtimeOnly: false`
-                        // runtimeOnly: false,
-
-                        ssr: ctx.modeName === 'ssr',
-
-                        // you need to set i18n resource including paths !
-                        include: [fileURLToPath(new URL('./src/i18n', import.meta.url))]
-                    }
-                ],
-
                 [
                     'vite-plugin-checker',
                     {
@@ -188,6 +174,12 @@ export default defineConfig((ctx): any => {
         framework: {
             config: {
                 dark: false, // TODO: Implement dark mode...
+                // D-009 / B7 — one floating layer per edge. Every ordinary toast
+                // sits bottom-right; only *system* toasts (connection, PWA
+                // update/install) take `position: 'top'` explicitly — see
+                // `notifyTypeRegistration.ts`. 270 call sites restated this
+                // (finalisation 20-R10).
+                notify: { position: 'bottom-right' },
                 loading: {
                     group: "default-group-name",
                     message: "Loading...",
@@ -264,6 +256,13 @@ export default defineConfig((ctx): any => {
         // M1 — Dashy Dora as a real PWA. GenerateSW (Workbox builds the
         // service worker for us at build time) is the lower-friction
         // route since we only need standard runtime-caching rules.
+        //
+        // THE SERVICE WORKER THAT SHIPS IS GENERATED FROM `extendGenerateSWOptions`
+        // BELOW. There is no hand-written worker: `src-pwa/custom-service-worker.ts`
+        // (Quasar's InjectManifest template) was deleted because it was never
+        // built under GenerateSW and was the file an agent would reach for to
+        // change caching behaviour, silently (FU-724). The push handlers in
+        // `public/push-sw.js` are imported into the generated worker.
         pwa: {
             workboxMode: 'GenerateSW',
             swFilename: 'sw.js',
@@ -361,11 +360,25 @@ export default defineConfig((ctx): any => {
                 cfg.clientsClaim = true;
                 cfg.cleanupOutdatedCaches = true;
 
-                // Anything not precached: fall back to /offline.html on
-                // navigation failure (the SPA shell is still the source
-                // of truth — this just stops a bare browser error.)
+                // Anything not precached: fall back to the SPA shell on a
+                // navigation failure. Under R-052 (offline is read-only) the
+                // shell IS the offline page — the `public/offline.html` that
+                // used to exist was never wired here and still promised the
+                // sync that was removed; it is gone (finalisation 17-R2).
                 cfg.navigateFallback = 'index.html';
                 cfg.navigateFallbackDenylist = [/^\/api\//];
+
+                // Web-push handlers ride inside THIS worker. `push-sw.js` used to
+                // be registered on its own by `usePushSubscription`, at the same
+                // scope (`/`) as this one — and a registration is keyed by scope,
+                // so each visit to Settings → Notifications *replaced* the Workbox
+                // worker with the push-only one (offline cache gone until the
+                // next load re-registered sw.js, which then evicted push-sw), and
+                // every swap fired `controllerchange` → a false "A new version of
+                // Dora is ready" banner (finalisation 17-R1). One worker now; the
+                // composable attaches to whatever registration controls the page
+                // and only registers `/push-sw.js` standalone in SPA/dev builds.
+                cfg.importScripts = ['push-sw.js'];
 
                 cfg.runtimeCaching = [
                     {
@@ -384,9 +397,11 @@ export default defineConfig((ctx): any => {
                         },
                     },
                     {
-                        // Merchant product images — CacheFirst, generous
-                        // TTL since SKU images are basically immutable.
-                        urlPattern: /\/products\/.*\/image|merchant-images/,
+                        // Product images — CacheFirst, generous TTL since SKU
+                        // images are basically immutable. (The `merchant-images`
+                        // alternation this pattern carried matched a route that
+                        // left with `merchant_api` in Phase D — 17-R8.)
+                        urlPattern: /\/products\/[^/]+\/image$/,
                         handler: 'CacheFirst',
                         options: {
                             cacheName: 'dora-merchant-images',
@@ -395,9 +410,11 @@ export default defineConfig((ctx): any => {
                         },
                     },
                     {
-                        // Stock-item images served back by dora_api —
-                        // longer TTL.
-                        urlPattern: /\/stock-items\/.*\/image|\/data\/images\//,
+                        // Stock-item images served back by dora_api — longer
+                        // TTL. (`/data/images/` never existed as a route — 17-R8.)
+                        // These are user content: `swCacheEviction` clears this
+                        // cache on sign-out alongside `dora-api` (R-052, 17-R7).
+                        urlPattern: /\/stock-items\/[^/]+\/image$/,
                         handler: 'CacheFirst',
                         options: {
                             cacheName: 'dora-stock-images',

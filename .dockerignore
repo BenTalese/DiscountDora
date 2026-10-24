@@ -1,6 +1,13 @@
 _misc
 .dockerignore
 .env
+# The frontend's own .env is for `quasar dev` only. Copied into the image it
+# bakes VITE_API_BASE_URL (README step 1 sets it to localhost:5170) into the
+# SPA bundle, so every other device talks to the wrong host (finalisation
+# 19-R2). The example file is documentation and may ship.
+web_app/.env
+web_app/.env.*
+!web_app/.env.example
 .git
 .gitignore
 .pytest_cache
@@ -19,7 +26,7 @@ _misc
 **/logs
 **/node_modules
 **/p2ptest
-docker-compose.yml
+compose*.yml
 Dockerfile
 env
 venv

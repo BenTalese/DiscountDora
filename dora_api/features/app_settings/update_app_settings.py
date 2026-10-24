@@ -171,7 +171,12 @@ class UpdateAppSettingsHandler:
         if "nutrition_mode" in set_fields and request.nutrition_mode is not None:
             _Mode = request.nutrition_mode.strip()
             if _Mode not in NUTRITION_MODE_VALUES:
-                return None, f"Invalid nutrition mode '{_Mode}'."
+                # Was `return None, "..."` — a bare tuple the route then read
+                # `.invalid_reason` off, so an invalid mode was a 500 instead
+                # of the 400 every other field gets (finalisation 13-R1).
+                return UpdateAppSettingsResponse(
+                    invalid_reason=f"Invalid nutrition mode '{_Mode}'.",
+                )
             setting.nutrition_mode = _Mode
         if "nutrition_usda_api_key" in set_fields:
             setting.nutrition_usda_api_key = (request.nutrition_usda_api_key or "").strip()

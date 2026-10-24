@@ -28,11 +28,11 @@ from dora_api.domain.entities.audit_event import SEVERITY_AUDIT
 from dora_api.domain.entities.user import User
 from dora_api.features.auth.admin_gate import _require_admin
 from dora_api.features.routers import USER_ROUTER
+from dora_api.features.users.admin_guards import other_usable_admins
 from dora_api.infrastructure.api_response import (business_rule_violation,
                                                   forbidden, no_content,
                                                   not_found)
 from dora_api.infrastructure.audit import emit as audit_emit
-from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 from dora_api.infrastructure.ports import Repository
 
@@ -61,10 +61,12 @@ class AdminDeleteUserHandler:
         if _Target is None:
             return AdminDeleteUserResponse(user_not_found=True)
 
-        if _Target.is_admin:
-            _IsAdminField = EntityField(User, User.Fields.IS_ADMIN)
-            if self.repository.get(User).count(_IsAdminField.eq(True)) <= 1:
-                return AdminDeleteUserResponse(would_remove_last_admin=True)
+        if _Target.is_admin and other_usable_admins(self.repository, user_id) == 0:
+            # "Usable" = active. Counting `is_admin` rows alone let the only
+            # *active* admin be deleted while a deactivated one still counted
+            # (finalisation 13-R3); the PATCH demote / deactivate guards already
+            # applied the active bar — this is the same helper now.
+            return AdminDeleteUserResponse(would_remove_last_admin=True)
 
         for _TableName in _USER_SCOPED_UNCONSTRAINED_TABLES:
             _Table = db.metadata.tables[_TableName]

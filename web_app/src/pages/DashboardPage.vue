@@ -520,6 +520,9 @@
         CARD_DEFS,
         type CardId,
     } from 'src/helpers/dashboardCards';
+    import {
+        KNOWN_CARD_IDS, baseHiddenSet, defaultOrder, parseLayout, type DashLayout,
+    } from 'src/helpers/dashboardLayout';
 
     // FU-821 — every money render goes through `formatMoney`, including the
     // tweened <AnimatedNumber> ones (via its `format` prop). The old
@@ -736,44 +739,9 @@
     // `pantry_value` / `reconcile_pending` — or the renamed `cookable` and
     // `primary_list` — simply drops those entries and appends the new cards at
     // their registry positions.
-    type DashLayout = { order: CardId[]; hidden: CardId[] };
-
-    const KNOWN_CARD_IDS = new Set<CardId>(CARD_DEFS.map((c) => c.id));
-
-    function defaultOrder(): CardId[] {
-        return CARD_DEFS.map((c) => c.id);
-    }
-    function baseHiddenSet(): Set<CardId> {
-        return new Set(CARD_DEFS.filter((c) => c.defaultHidden).map((c) => c.id));
-    }
-    function parseLayout(raw: string | null): DashLayout {
-        if (!raw) return { order: defaultOrder(), hidden: [...baseHiddenSet()] };
-        try {
-            // Untrusted JSON — treat the arrays as raw strings and narrow each
-            // entry to a known CardId at runtime.
-            const parsed = JSON.parse(raw) as { order?: string[]; hidden?: string[] };
-            const order = (parsed.order ?? []).filter(
-                (id): id is CardId => KNOWN_CARD_IDS.has(id as CardId)
-            );
-            // Append any card missing from the stored order (e.g. a card shipped
-            // since the user last saved) at its CARD_DEFS position.
-            for (const def of CARD_DEFS) if (!order.includes(def.id)) order.push(def.id);
-            const hidden = new Set<CardId>(
-                (parsed.hidden ?? []).filter(
-                    (id): id is CardId => KNOWN_CARD_IDS.has(id as CardId)
-                )
-            );
-            // A card the user has never seen inherits its default visibility, so
-            // a new opt-in-by-default card starts hidden even for existing users.
-            const seen = new Set<string>([...(parsed.order ?? []), ...(parsed.hidden ?? [])]);
-            for (const def of CARD_DEFS) {
-                if (def.defaultHidden && !seen.has(def.id)) hidden.add(def.id);
-            }
-            return { order, hidden: [...hidden] };
-        } catch {
-            return { order: defaultOrder(), hidden: [...baseHiddenSet()] };
-        }
-    }
+    // Layout parsing lives in `helpers/dashboardLayout.ts` so the "insert an
+    // unseen card at its registry position" rule has a spec (finalisation
+    // 08-R7 — this page's comment promised it while the loop appended).
 
     const cardOrder = ref<CardId[]>(defaultOrder());
     const hiddenCards = ref<Set<CardId>>(baseHiddenSet());
@@ -1208,8 +1176,9 @@
     // itself is untouched in the planner, which is where a swap is made.
 
     // `loadSpendByStore` and `loadPantryValue` went with their cards (owner,
-    // 2026-09-04). `reportsApi.getSpendByStoreAsync` / `getStockValueAsync` keep
-    // their callers on the reports page, so nothing is orphaned here.
+    // 2026-09-04). `reportsApi.getSpendByStoreAsync` keeps its caller on the
+    // reports page; the stock-value endpoint had none left and was deleted
+    // (finalisation 12-R1).
 
     // price-drops is products-gated (not money-gated); still cheap to
     // load, hides itself when empty.

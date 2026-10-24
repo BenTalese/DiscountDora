@@ -1,68 +1,41 @@
 // @vitest-environment jsdom
 /**
- * FU-520 component/composable layer — useMealPlanExport.
- *
- * The composable is a thin print-view opener (CSV export was removed in
- * FU-168): it resolves the API base URL once and opens
- * `/meal-plans/<id>/print-view` in a new tab. We mock `resolveBaseURL` at
- * the module boundary and spy `window.open`, then assert the URL is built
- * (and the plan id encoded) correctly.
+ * useMealPlanExport — print-view opener. FU-682 / finalisation 02-R36: the
+ * document is fetched through the authenticated client (`openHtmlDocumentAsync`)
+ * rather than `window.open(baseUrl + …)`, which 401'd in the Capacitor shell
+ * and on any cross-site deploy. The spec pins the API path and the encoding.
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-const m = vi.hoisted(() => ({ resolveBaseURL: vi.fn() }));
+const m = vi.hoisted(() => ({ openHtmlDocumentAsync: vi.fn(() => Promise.resolve()) }));
 
-vi.mock('src/services/api/axiosHttpClient', () => ({
-    resolveBaseURL: m.resolveBaseURL,
+vi.mock('src/services/files/printView', () => ({
+    openHtmlDocumentAsync: m.openHtmlDocumentAsync,
+    PopupBlockedError: class extends Error {},
 }));
+vi.mock('quasar', () => ({ Notify: { create: vi.fn() } }));
 
 import { useMealPlanExport } from 'src/composables/useMealPlanExport';
 
 describe('useMealPlanExport', () => {
-    let openSpy: ReturnType<typeof vi.fn>;
+    afterEach(() => vi.clearAllMocks());
 
-    beforeEach(() => {
-        m.resolveBaseURL.mockReturnValue('http://api.test/api');
-        openSpy = vi.fn();
-        vi.stubGlobal('window', { ...window, open: openSpy });
-    });
-
-    afterEach(() => {
-        vi.unstubAllGlobals();
-        vi.clearAllMocks();
-    });
-
-    it('opens the print-view URL in a new noopener tab', () => {
+    it('fetches the print view through the client, by API path', () => {
         useMealPlanExport().openPrintView('plan-1');
 
-        expect(openSpy).toHaveBeenCalledWith(
-            'http://api.test/api/meal-plans/plan-1/print-view',
-            '_blank',
-            'noopener',
-        );
+        expect(m.openHtmlDocumentAsync).toHaveBeenCalledWith('/meal-plans/plan-1/print-view', 'Meal plan');
     });
 
     it('URL-encodes the plan id', () => {
         useMealPlanExport().openPrintView('a b/c?d');
 
-        expect(openSpy).toHaveBeenCalledWith(
-            'http://api.test/api/meal-plans/a%20b%2Fc%3Fd/print-view',
-            '_blank',
-            'noopener',
-        );
+        expect(m.openHtmlDocumentAsync).toHaveBeenCalledWith('/meal-plans/a%20b%2Fc%3Fd/print-view', 'Meal plan');
     });
 
-    it('resolves the base URL once at composable construction', () => {
-        const exporter = useMealPlanExport();
-        m.resolveBaseURL.mockReturnValue('http://changed/api');
-
-        exporter.openPrintView('plan-2');
-
-        // The base was captured on construction, so the later change is ignored.
-        expect(openSpy).toHaveBeenCalledWith(
-            'http://api.test/api/meal-plans/plan-2/print-view',
-            '_blank',
-            'noopener',
-        );
+    it('never builds a window.open URL from the API base', () => {
+        const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+        useMealPlanExport().openPrintView('plan-2');
+        expect(openSpy).not.toHaveBeenCalled();
+        openSpy.mockRestore();
     });
 });

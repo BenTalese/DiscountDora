@@ -25,11 +25,10 @@ export function useShoppingListActions() {
     const shoppingListStore = useShoppingListStore();
 
     const notifyOk = (message: string) =>
-        $q.notify({ type: 'positive', position: 'bottom-right', message });
+        $q.notify({ type: 'positive', message });
     const notifyErr = (message: string, caption?: string) =>
         $q.notify({
             type: 'negative',
-            position: 'bottom-right',
             message,
             ...(caption ? { caption } : {}),
         });

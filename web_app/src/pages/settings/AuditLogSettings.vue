@@ -364,7 +364,6 @@
         } catch (err) {
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: "Couldn't load that event.",
                 caption: err instanceof Error ? err.message : String(err),
             });
@@ -434,13 +433,13 @@
             savedRetention = result.audit_retention_days;
             retentionDraft.value = savedRetention;
             $q.notify({
-                type: 'positive', position: 'bottom-right',
+                type: 'positive', 
                 message: 'Audit retention saved.',
             });
         } catch (err) {
             retentionDraft.value = savedRetention;
             $q.notify({
-                type: 'negative', position: 'bottom-right',
+                type: 'negative', 
                 message: 'Could not save audit retention.',
                 caption: toastCaption(err),
             });

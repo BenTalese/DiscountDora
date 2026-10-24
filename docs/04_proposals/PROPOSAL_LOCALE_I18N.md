@@ -145,7 +145,7 @@ shipped. See `DORA_FOLLOWUPS_RESOLVED.md` FU-043 / FU-368.**
 1. **Currency home (§2.1)** — ✅ **install-wide** currency + locale on `AppSetting`
    (no per-user override). ~~install-wide (recommended) or fully per-user?~~
 2. **vue-i18n fate (§2.3)** — ✅ **adopt-lite** — kept installed, money formatter is a
-   direct `Intl.NumberFormat` wrapper (`useMoney.ts`), not string translation.
+   direct `Intl.NumberFormat` wrapper (`useMoney.ts`), not string translation. **2026-10-23 (finalisation CHUNK_20, 20-R2):** the Intl wrappers were built without vue-i18n; the scaffold (`boot/i18n.ts`, `src/i18n`, the dependency) had zero consumers and was **removed in Stage 2 (2026-10-23)** — i.e. option (b) in practice. Layer C stays a someday; if it is ever greenlit, vue-i18n is re-added then, not kept dormant.
 3. **C-10 currency field (§2.1)** — ✅ **skipped** — single-currency-per-install
    assumption stays; a per-observation currency is a future multi-tenant concern.
 4. **Merchant branding (§2.2)** — ✅ **n/a** — the expected `AldiLogo`/`IgaLogo`

@@ -188,11 +188,10 @@ export type ClearListResult = {
     removed_count: number;
 };
 
+/** Ranked ids only (most-added first) — the sheet holds the items themselves
+ *  (finalisation 03-R14). */
 export type FrequentlyAddedItem = {
     stock_item_id: string;
-    name: string;
-    stock_level_id: string | null;
-    add_count: number;
 };
 
 export default class ShoppingListApiService {

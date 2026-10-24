@@ -1,14 +1,13 @@
 // DEC-3 unit-spacing rule. A handful of metric/imperial units
 // are conventionally written tight against the number ("250g", "2ml");
-// everything else gets a space ("2 cloves", "1 tbsp"). This is the single
-// source of truth for the rule — call sites across cook mode, recipes,
-// and shopping lists should route through here so the convention can never
-// drift between surfaces.
+// everything else gets a space ("2 cloves", "1 tbsp"). Call sites across
+// cook mode, recipes, and shopping lists route through here so the
+// convention can never drift between surfaces.
 //
-// Inclusion list per IMPL_PLAN_COOK_MODE.md §1 Chunk 2 / DEC-3.
-const NO_SPACE_UNITS: ReadonlySet<string> = new Set([
-    'ml', 'g', 'kg', 'l', 'mg', 'oz', 'lb', 'floz', 'pt', 'qt',
-]);
+// The inclusion list is the server's (`dora_api/domain/units.py`
+// `NO_SPACE_UNITS`), emitted into `generated/units_table.ts` — one source,
+// not a mirror kept in sync by hand (finalisation 20-R3, R-003).
+import { NO_SPACE_UNITS } from 'src/generated/units_table';
 
 /** Decimal places a quantity is ever shown to. Two is enough for the
  *  fractions a recipe actually uses (0.25, 0.5, 1.33) and short enough to read

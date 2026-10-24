@@ -31,7 +31,7 @@ import hashlib
 import json
 import logging
 import os
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
 from uuid import UUID, uuid4
@@ -53,6 +53,7 @@ from dora_api.features.data.backup import (
     GetBackupHandler,
     resolve_selected_sections,
 )
+from dora_api.features.data.restore_shared import SECTIONS
 from dora_api.features.data.restore_backup import RestoreBackupHandler, RestoreBackupRequest
 from dora_api.features.routers import DATA_ROUTER
 from dora_api.infrastructure.api_response import (
@@ -235,6 +236,50 @@ def create_backup():
             username_by_id[user_id] = me.username
 
     return ok(_row_to_dto(row, username_by_id))
+
+
+@dataclass(frozen=True, slots=True)
+class BackupSectionDto:
+    """One entry of the section catalogue the Backup page builds its
+    create-dialog, restore tree and report from. Mirrors `restore_shared.
+    Section` minus the server-only parts (table name, key function,
+    excluded columns)."""
+    key: str
+    label: str
+    category: str
+    default_on: bool
+    sensitive: bool
+    pickable: bool
+
+
+@DATA_ROUTER.route("/backup/sections", methods=["GET"])
+def list_backup_sections():
+    """The section catalogue, straight from `restore_shared.SECTIONS`.
+
+    The SPA used to carry a hand-copied mirror of this list and the two
+    drifted: it named `product_barcodes` (the server key is `barcodes`), so
+    every *New backup* with the default selection was refused with
+    "Unknown backup section(s)", and it lacked the nine recipe vocabulary /
+    step / link sections, so a backup made from the page silently omitted
+    recipe steps, tools, tags, cuisines and categories (finalisation
+    18-R2 / 18-R3). One source now; the page renders whatever this returns.
+    """
+    _, err = require_admin()
+    if err is not None:
+        return err
+    return ok({
+        "sections": [
+            asdict(BackupSectionDto(
+                key=s.backup_key,
+                label=s.label,
+                category=s.category,
+                default_on=s.default_on,
+                sensitive=s.sensitive,
+                pickable=s.pickable,
+            ))
+            for s in SECTIONS
+        ],
+    })
 
 
 @DATA_ROUTER.route("/backups", methods=["GET"])

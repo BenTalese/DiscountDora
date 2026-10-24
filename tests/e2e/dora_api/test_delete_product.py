@@ -144,9 +144,30 @@ def test__delete_product__live_list_loses_its_line():
 
 # ── Companion (bearer) door ────────────────────────────────────────────
 
+def _make_ingested_product(key: str, name: str = "Unsaved") -> str:
+    """A product that arrived through `/api/ingest` — the only kind a producer
+    may unsave. `POST /products` marks what it creates as *custom* (OD-2), and
+    the bearer door refuses custom ids (finalisation 16-R8), so the companion
+    path has to be exercised with a companion-made product."""
+    store_id = next(
+        s["store_id"] for s in requests.get(f"{BASE}/stores").json()["items"]
+        if s["name"] == "Woolworths"
+    )
+    suffix = uuid4().hex[:8]
+    resp = requests.post(f"{BASE}/ingest", headers={"Authorization": f"Bearer {key}"}, json={
+        "products": [{
+            "ref": "p0", "name": f"{name}-{suffix}", "store_id": store_id,
+            "merchant_stockcode": f"DEL-{suffix}",
+        }],
+        "offers": [{"product_ref": "p0", "price_now": 2.5, "observed_at": "2026-06-17T10:00:00+00:00"}],
+    })
+    assert resp.status_code == 200, resp.text
+    return next(r["id"] for r in resp.json()["accepted"] if r["kind"] == "product")
+
+
 def test__ingest_delete__with_a_valid_key_deletes():
     key = _mint_key()
-    product_id = _make_product("Unsaved")
+    product_id = _make_ingested_product(key)
 
     resp = requests.delete(
         f"{BASE}/ingest/products/{product_id}",

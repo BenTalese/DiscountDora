@@ -210,3 +210,21 @@ def test__submit_client_log__AnonymousAndAuthedSessions__BucketedSeparately(api)
 
 
 #endregion rate limit
+
+
+def test__rate_limit_buckets__keys_whose_window_passed_are_evicted():
+    """Finalisation 20-R9: one deque per session-id / IP, created on first
+    sight and never removed — a slow leak under anonymous crawlers. A key
+    whose newest stamp is older than the window goes on the next call."""
+    import time
+    from collections import deque
+
+    stale = time.monotonic() - _scl._BUCKET_WINDOW_SECONDS - 1
+    _scl._buckets["old-visitor"] = deque([stale, stale])
+    _scl._buckets["empty-visitor"] = deque()
+
+    assert _scl._allow("fresh-visitor") is True
+
+    assert "old-visitor" not in _scl._buckets
+    assert "empty-visitor" not in _scl._buckets
+    assert "fresh-visitor" in _scl._buckets

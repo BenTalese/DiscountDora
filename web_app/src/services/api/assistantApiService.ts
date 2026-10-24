@@ -29,15 +29,23 @@ export type AddToShoppingListAction = {
 // no action card.
 export type ConfirmActionStatus = 'ready' | 'ambiguous' | 'not_found' | 'invalid';
 
+// Mirrors `confirm_actions.PROPOSERS` on the server, one member per key;
+// `test_assistant_tool_registry` pins the two lists against each other
+// (R-057 — finalisation 11-R8 found three members missing here).
+export type ConfirmActionType =
+    | 'update_stock_level'
+    | 'mark_opened'
+    | 'push_expiry'
+    | 'tick_shopping_line'
+    | 'move_item'
+    | 'plan_meal_for_date'
+    | 'add_recipe_to_list'
+    | 'cook_recipe'
+    | 'adjust_recipe_meals'
+    | 'trim_list_to_budget';
+
 export type ConfirmAction = {
-    type:
-        | 'update_stock_level'
-        | 'mark_opened'
-        | 'push_expiry'
-        | 'tick_shopping_line'
-        | 'move_item'
-        | 'plan_meal_for_date'
-        | 'add_recipe_to_list';
+    type: ConfirmActionType;
     status: ConfirmActionStatus;
     summary: string;
     payload?: Record<string, unknown>;

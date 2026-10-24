@@ -234,10 +234,10 @@
         try {
             await templateStore.updateAsync(id, { name: next });
             cancelRename();
-            $q.notify({ type: 'positive', position: 'bottom-right', message: 'Renamed.' });
+            $q.notify({ type: 'positive', message: 'Renamed.' });
         } catch (err) {
             $q.notify({
-                type: 'negative', position: 'bottom-right',
+                type: 'negative', 
                 message: "Couldn't rename that template.",
                 caption: toastCaption(err),
             });
@@ -307,10 +307,10 @@
                 });
             }
             setEditorOpen.value = false;
-            $q.notify({ type: 'positive', position: 'bottom-right', message: 'Set saved.' });
+            $q.notify({ type: 'positive', message: 'Set saved.' });
         } catch (err) {
             $q.notify({
-                type: 'negative', position: 'bottom-right',
+                type: 'negative', 
                 message: 'Could not save the set.',
                 caption: toastCaption(err),
             });
@@ -331,11 +331,11 @@
         try {
             await action();
             if (successMessage) {
-                $q.notify({ type: 'positive', position: 'bottom-right', message: successMessage });
+                $q.notify({ type: 'positive', message: successMessage });
             }
         } catch (err) {
             $q.notify({
-                type: 'negative', position: 'bottom-right',
+                type: 'negative', 
                 message: 'Something went wrong.',
                 caption: toastCaption(err),
             });

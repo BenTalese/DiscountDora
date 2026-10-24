@@ -75,6 +75,9 @@ services:
       - DORA_SECRET_ENCRYPTION_KEY=${DORA_SECRET_ENCRYPTION_KEY:-}
       - DORA_CORS_ORIGINS=${DORA_CORS_ORIGINS:-}
       - DORA_SECURE_COOKIES=${DORA_SECURE_COOKIES:-false}
+      # Reverse proxies in front of the API (X-Forwarded-For hops to trust).
+      # 0 = none. Set 1 behind nginx / Caddy / Traefik / a Cloudflare tunnel.
+      - DORA_TRUSTED_PROXY_HOPS=${DORA_TRUSTED_PROXY_HOPS:-0}
       - DORA_ALLOW_DESTRUCTIVE=${DORA_ALLOW_DESTRUCTIVE:-false}
 
       # ── Storage paths (match the volume mounts below) ──────────────

@@ -356,7 +356,6 @@
     import { useQuasar } from 'quasar';
     import { storeToRefs } from 'pinia';
     import { computed, onMounted, reactive, ref } from 'vue';
-    import StockItemApiService from 'src/services/api/stockItemApiService';
     import StocktakeApiService, {
         type CadenceBand,
         type StocktakeSessionItem,
@@ -369,6 +368,7 @@
     } from 'src/components/shoppingList/addToListTypes';
     import { formatLocation } from 'src/helpers/locationDisplay';
     import { useStockLevelStore } from 'src/stores/stockLevelStore';
+    import { useStockItemStore } from 'src/stores/stockItemStore';
     import { colourForSequence } from 'src/helpers/stockLevelLogic';
     import {
         LOW_STOCK_SEQUENCE,
@@ -382,7 +382,10 @@
     // own off-state above (the server already resolves an empty queue).
     const { stocktake: stocktakeEnabled } = useFeatureFlags();
     const api = new StocktakeApiService();
-    const stockApi = new StockItemApiService();
+    // Level / mute / delete writes go through the store (R-074; finalisation
+    // 05-R5): writing the API directly left `/stock` showing pre-stocktake
+    // levels until a hard reload and skipped the auto-add toast.
+    const stockItemStore = useStockItemStore();
 
     // FU-609 / R-036 — app-shell height. QPage hands us the layout's live chrome
     // `offset` + viewport `height`, so the full-bleed runner fills exactly the
@@ -496,12 +499,13 @@
     const currentLevelColour = computed(() => {
         const c = current.value;
         if (!c) return null;
-        const level = stockLevels.value.find((l) => l.name === c.stock_level_name);
+        const level = stockLevels.value.find((l) => l.stock_level_id === c.stock_level_id);
         return colourForSequence(level?.sequence);
     });
 
-    // Belief's own words, matching `PantryBeliefChip` on the stock overview so
-    // the phrase a user learns in one place reads the same in the other.
+    // Belief's own words, matching the level picker's belief header on the
+    // stock overview so the phrase a user learns in one place reads the same
+    // in the other.
     const BELIEF_WORD: Record<string, string> = {
         out: 'out',
         low: 'low',
@@ -591,7 +595,7 @@
             sweepKeepId.value = null;
             busy.value = true;
             try {
-                await stockApi.updateAsync({
+                await stockItemStore.updateStockLevelAsync({
                     stock_item_id: stockItemId,
                     stock_level_id: levelId,
                 });
@@ -612,7 +616,7 @@
         const itemName = current.value.name;
         busy.value = true;
         try {
-            await stockApi.updateAsync({
+            await stockItemStore.updateStockLevelAsync({
                 stock_item_id: stockItemId,
                 stock_level_id: levelId,
             });
@@ -691,7 +695,7 @@
             void (async () => {
                 busy.value = true;
                 try {
-                    await stockApi.updateAsync({
+                    await stockItemStore.updateStockItemAsync({
                         stock_item_id: stockItemId,
                         stocktake_alerts_are_enabled: false,
                     });
@@ -787,7 +791,7 @@
             void (async () => {
                 busy.value = true;
                 try {
-                    await stockApi.updateAsync({
+                    await stockItemStore.updateStockItemAsync({
                         stock_item_id: item.stock_item_id,
                         stocktake_alerts_are_enabled: false,
                     });
@@ -820,7 +824,7 @@
             void (async () => {
                 busy.value = true;
                 try {
-                    await stockApi.deleteAsync(item.stock_item_id);
+                    await stockItemStore.deleteStockItemAsync(item.stock_item_id);
                     dropFromSweep(item.stock_item_id);
                 } catch (err) {
                     $q.notify({

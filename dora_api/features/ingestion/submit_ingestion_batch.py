@@ -55,6 +55,7 @@ from dora_api.domain.entities.product_historic_offer import \
 from dora_api.domain.entities.product_offer import ProductOffer
 from dora_api.features.ingestion.offer_mapping import (OfferOutcome,
                                                        apply_offer_to_product)
+from dora_api.features.ingestion.product_identity import find_ingested_product
 from dora_api.features.routers import INGEST_ROUTER
 from dora_api.infrastructure.ingestion_auth import (
     authenticate_ingestion_request, stamp_used)
@@ -213,8 +214,11 @@ class SubmitIngestionBatchHandler:
         idempotency_key: str | None,
         payload: IngestBatchRequest,
     ) -> IngestBatchResult:
-        if idempotency_key and self._already_processed(source.id, idempotency_key):
-            return IngestBatchResult(idempotent_replay=True)
+        idempotency_row: IdempotencyKey | None = None
+        if idempotency_key:
+            idempotency_row = self._find_idempotency_row(source.id, idempotency_key)
+            if idempotency_row is not None and self._is_live(idempotency_row):
+                return IngestBatchResult(idempotent_replay=True)
 
         ctx = _IngestionContext(source, self.repository)
 
@@ -234,40 +238,62 @@ class SubmitIngestionBatchHandler:
         stamp_used(source)
 
         if idempotency_key:
-            self._stamp_idempotency(source.id, idempotency_key)
+            self._stamp_idempotency(source.id, idempotency_key, idempotency_row)
 
         self.repository.save_changes()
         return ctx.result
 
     # — idempotency —
 
-    def _already_processed(self, source_id: UUID, key: str) -> bool:
+    def _find_idempotency_row(self, source_id: UUID, key: str) -> IdempotencyKey | None:
         field_key = EntityField(IdempotencyKey, IdempotencyKey.Fields.KEY)
         field_src = EntityField(IdempotencyKey, IdempotencyKey.Fields.SOURCE_ID)
-        existing = self.repository.get(IdempotencyKey).one(
+        return self.repository.get(IdempotencyKey).one(
             field_key.eq(key) & field_src.eq(str(source_id))
         )
-        if existing is None:
-            return False
+
+    @staticmethod
+    def _is_live(row: IdempotencyKey) -> bool:
         # SQLite drops the tzinfo on roundtrip even when the column is
         # `DateTime(timezone=True)`; coerce a naive read to UTC so the
         # comparison is well-defined.
-        expires = existing.expires_at
+        expires = row.expires_at
         if expires.tzinfo is None:
             expires = expires.replace(tzinfo=timezone.utc)
-        if expires <= datetime.now(timezone.utc):
-            # Expired — let it through, the new write will replace it.
-            return False
-        return True
+        return expires > datetime.now(timezone.utc)
 
-    def _stamp_idempotency(self, source_id: UUID, key: str) -> None:
-        row = IdempotencyKey(
+    def _stamp_idempotency(
+        self, source_id: UUID, key: str, existing: IdempotencyKey | None,
+    ) -> None:
+        """Record `key` as consumed for `source_id`, and keep the table bounded.
+
+        `(source_id, key)` is unique (`ix_idempotency_key_source_key`). An
+        **expired** row for the same key is refreshed in place — the old code
+        added a second row, which the index rejected at commit, so a producer
+        that reused a stable key a week later got a 500 *after* the batch had
+        been applied in the session, and lost it to the rollback (finalisation
+        16-R2). Rows past their TTL are swept here too: nothing else ever
+        deleted them, so the table grew by one row per push forever
+        (16-R3). The sweep is bounded by the TTL and runs only on a keyed
+        push, which is the one path that writes the table.
+        """
+        now = datetime.now(timezone.utc)
+        field_expires = EntityField(IdempotencyKey, IdempotencyKey.Fields.EXPIRES_AT)
+        for stale in self.repository.get(IdempotencyKey).all(field_expires.lt(now)):
+            if existing is not None and stale.id == existing.id:
+                continue  # refreshed below, not dropped
+            self.repository.remove(stale)
+
+        if existing is not None:
+            existing.expires_at = now + _IDEMPOTENCY_TTL
+            existing.created_at = now
+            return
+        self.repository.add(IdempotencyKey(
             key=key,
             source_id=str(source_id),
-            expires_at=datetime.now(timezone.utc) + _IDEMPOTENCY_TTL,
-            created_at=datetime.now(timezone.utc),
-        )
-        self.repository.add(row)
+            expires_at=now + _IDEMPOTENCY_TTL,
+            created_at=now,
+        ))
 
     # — store mapping (FU-190) —
 
@@ -328,47 +354,15 @@ class SubmitIngestionBatchHandler:
                 ))
                 return
 
-        # Dedupe: stockcode-first, name fallback. Source is provenance
-        # only, NOT identity — same product pushed by two sources
-        # collapses into one Product row (shared catalogue).
-        field_name = EntityField(Product, Product.Fields.NAME)
-        field_stockcode = EntityField(Product, Product.Fields.MERCHANT_STOCKCODE)
-        field_store_id = EntityField(Store, Store.Fields.ID)
-
-        # OD-2 — never adopt a hand-entered product. Dedupe falls back to
-        # (store, name) for records without a stockcode, so a scraped "Mince"
-        # would otherwise match a custom "Mince" at the same store and
-        # overwrite its brand, size and price: the user's own figure quietly
-        # replaced by scraped data. A custom product is the user's to edit,
-        # and a scrape that finds the same thing creates its own row.
-        field_is_custom = EntityField(Product, Product.Fields.IS_CUSTOM)
-        not_custom = field_is_custom.eq(False)
-
-        existing: Product | None = None
-        if raw.merchant_stockcode:
-            existing = (
-                self.repository.get(Product)
-                .include(Product.Fields.STORE)
-                .include(Product.Fields.CURRENT_OFFER)
-                .one(
-                    field_stockcode.eq(raw.merchant_stockcode)
-                    & field_store_id.eq(store.id)
-                    & not_custom
-                )
-            )
-        if existing is None:
-            existing = (
-                self.repository.get(Product)
-                .include(Product.Fields.STORE)
-                .include(Product.Fields.CURRENT_OFFER)
-                .one(
-                    field_name.eq(raw.name)
-                    & field_store_id.eq(store.id)
-                    & not_custom
-                )
-            )
-
-        record_source = raw.source or str(ctx.source.id)
+        # Dedupe: stockcode-first, name fallback, never a custom product
+        # (OD-2). Source is provenance only, NOT identity — the same product
+        # pushed by two sources collapses into one Product row (shared
+        # catalogue). The rule itself lives in `product_identity` so the
+        # read side (`/api/ingest/link-status`) can never disagree with it.
+        existing = find_ingested_product(
+            self.repository, store.id, raw.merchant_stockcode, raw.name,
+            includes=(Product.Fields.STORE, Product.Fields.CURRENT_OFFER),
+        )
 
         if existing is not None:
             # Refresh mutable attributes; provenance recorded via the
@@ -418,9 +412,10 @@ class SubmitIngestionBatchHandler:
         self.repository.add(initial_offer)
         self.repository.add(product)
         ctx.products_by_ref[raw.ref] = product
+        # Provenance is recorded on the offer rows (`ProductHistoricOffer.
+        # source`), never smuggled into the product's result note.
         ctx.result.accepted.append(_AcceptedRecord(
-            kind="product", ref=raw.ref, id=str(product.id),
-            note=f"created (provenance: {record_source})",
+            kind="product", ref=raw.ref, id=str(product.id), note="created",
         ))
 
     def _apply_offer(self, ctx: _IngestionContext, raw: _OfferIn) -> None:

@@ -455,6 +455,8 @@ each consumer. Net LOC ≈ -200.
 
 ## 7. Open decisions — for you
 
+**Open decisions — closed (2026-10-23, finalisation CHUNK_15).** Every D1–D10 was recorded as resolved on 2026-07-02 in `IMPL_PLAN_AUTH_SHELL.md §0`; D4's `ConfirmEmailChangePage` was retired by FU-620. No live fork remains — the heading is kept for the trail only.
+
 | # | Decision | Recommendation | Trade-off if we go the other way |
 |---|---|---|---|
 | D1 | Blob palette per screen — same across all four, or per-surface? | **Same across all four** (single `--auth-shell-*` ladder). Per-surface divergence is what caused SetupAdminPage's drift. | If splash needs a distinctly *quieter* palette to read as "loading" not "welcome", we still have the `backdrop="quiet"` mode reducing opacity + freezing motion — a *palette* fork isn't needed to signal state. |

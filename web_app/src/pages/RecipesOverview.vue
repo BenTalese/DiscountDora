@@ -453,7 +453,7 @@
                 <div
                     v-for="recipe in sortedRecipes"
                     :key="recipe.recipe_id"
-                    class="col-12 col-sm-6 col-md-4 col-lg-3"
+                    class="col-12 col-sm-6 col-md-4"
                 >
                     <RecipeCard
                         :recipe="recipeWithExpiringCount(recipe)"
@@ -1352,7 +1352,6 @@
         } catch (err) {
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: 'Could not load expiring-ingredient recipes.',
                 caption: toastCaption(err),
             });
@@ -1477,7 +1476,6 @@
             if (imported.is_degraded) {
                 $q.notify({
                     type: 'warning',
-                    position: 'bottom-right',
                     timeout: 6000,
                     message: 'Couldn’t auto-structure that page',
                     caption:
@@ -1488,7 +1486,6 @@
                 const matchedCount = imported.ingredients.length - unmatchedCount;
                 $q.notify({
                     type: 'positive',
-                    position: 'bottom-right',
                     timeout: 5000,
                     message: `Imported "${imported.name}".`,
                     caption: unmatchedCount === 0
@@ -1500,7 +1497,6 @@
         } catch (err) {
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: 'Could not create the imported recipe.',
                 caption: err instanceof Error ? err.message : String(err),
             });
@@ -1572,7 +1568,6 @@
         if (recipe.ingredients.length === 0) {
             $q.notify({
                 type: 'info',
-                position: 'bottom-right',
                 message: `Nothing to add for "${recipe.name}".`,
             });
             return;
@@ -1588,7 +1583,6 @@
         if (recipe.ingredients.length === 0) {
             $q.notify({
                 type: 'info',
-                position: 'bottom-right',
                 message: `Nothing to add for "${recipe.name}".`,
             });
             return;

@@ -151,7 +151,10 @@
     --border-strong: hsl(168 18% 72%);
     --divider: hsl(168 14% 86%);
     --focus-ring: var(--brand-primary);
-    --ring-focus: hsla(150, 76%, 39%, 0.35);
+    /* Halo derived from the theme's brand at :root, so every theme follows it
+       automatically. Was a Pesto-green literal that 5 of 14 theme blocks
+       overrode and the other 9 inherited (13-R40 / finalisation 20-R8). */
+    --ring-focus: color-mix(in srgb, var(--brand-primary) 35%, transparent);
 
     /* ────────────────────────────── Overlays ─────────────────────── */
     --overlay-scrim: hsla(168, 30%, 10%, 0.55);

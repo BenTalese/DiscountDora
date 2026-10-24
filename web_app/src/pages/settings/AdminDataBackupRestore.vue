@@ -392,6 +392,8 @@
     import { computed, onMounted, ref } from 'vue';
     import { useChunkedUpload } from 'src/composables/useChunkedUpload';
     import { csrfHeader, resolveBaseURL } from 'src/services/api/axiosHttpClient';
+    import DataApiService, { type BackupSection } from 'src/services/api/dataApiService';
+    import { toastCaption } from 'src/services/errorHandling/apiErrorHandler';
     import { useAuthStore } from 'src/stores/authStore';
 
     const $q = useQuasar();
@@ -466,31 +468,29 @@
     // sensitive sections warning. Optional sections carry data
     // Dora doesn't want written to disk casually. Chips + banner surface
     // this so the choice is visible; not blocked (admins may legitimately
-    // need a full-fidelity dump for a migration).
-    const SENSITIVE_SECTIONS = ['users', 'app_settings', 'product_historic_offers'];
-    const SENSITIVE_LABEL_BY_KEY: Record<string, string> = {
-        users: 'user accounts',
-        app_settings: 'system settings',
-        product_historic_offers: 'historic offers',
-    };
+    // need a full-fidelity dump for a migration). Which sections count as
+    // sensitive is the server's `Section.sensitive` flag — read off the
+    // catalogue below, not listed here.
+    const sensitiveKeys = computed(() =>
+        new Set(backupSections.value.filter((s) => s.sensitive).map((s) => s.key)),
+    );
     function sensitiveKeysIn(sections: string[]): string[] {
-        return SENSITIVE_SECTIONS.filter((k) => sections.includes(k));
+        return sections.filter((k) => sensitiveKeys.value.has(k));
+    }
+    function sensitiveLabel(keys: string[]): string {
+        return keys.map((k) => sectionLabel(k).toLowerCase()).join(', ');
     }
     function rowIncludesSensitive(row: BackupRow): boolean {
         return sensitiveKeysIn(row.sections).length > 0;
     }
     function sensitiveSectionsLabel(row: BackupRow): string {
-        const keys = sensitiveKeysIn(row.sections);
-        return keys.map((k) => SENSITIVE_LABEL_BY_KEY[k] ?? k).join(', ');
+        return sensitiveLabel(sensitiveKeysIn(row.sections));
     }
     const createIncludesSensitive = computed(() =>
-        selectedBackupKeys.value.some((k) => SENSITIVE_SECTIONS.includes(k)),
+        sensitiveKeysIn(selectedBackupKeys.value).length > 0,
     );
     const createSensitiveLabel = computed(() =>
-        selectedBackupKeys.value
-            .filter((k) => SENSITIVE_SECTIONS.includes(k))
-            .map((k) => SENSITIVE_LABEL_BY_KEY[k] ?? k)
-            .join(', '),
+        sensitiveLabel(sensitiveKeysIn(selectedBackupKeys.value)),
     );
 
     interface InspectSampleRow {
@@ -511,42 +511,37 @@
         samples: Record<string, InspectSample>;
     }
 
-    // Mirrors dora_api/features/data/restore_shared.SECTIONS. Keep this in
-    // sync if new sections land server-side — the order here drives the
-    // checkbox order in the Create-backup card, and `defaultOn` drives the
-    // initial state of each toggle.
-    interface BackupSection {
-        key: string;
-        label: string;
-        category: string;
-        defaultOn: boolean;
-    }
-    const BACKUP_SECTIONS: BackupSection[] = [
-        { key: 'stock_groups', label: 'Stock groups', category: 'Core data', defaultOn: true },
-        { key: 'stock_levels', label: 'Stock levels', category: 'Core data', defaultOn: true },
-        { key: 'stock_locations', label: 'Stock locations', category: 'Core data', defaultOn: true },
-        { key: 'saved_products', label: 'Saved products', category: 'Core data', defaultOn: true },
-        { key: 'stock_items', label: 'Stock items', category: 'Core data', defaultOn: true },
-        { key: 'product_stock_item_links', label: 'Product ↔ stock-item links', category: 'Core data', defaultOn: true },
-        { key: 'stock_item_substitutes', label: 'Stock-item substitutes', category: 'Core data', defaultOn: true },
-        { key: 'shopping_lists', label: 'Shopping lists', category: 'Core data', defaultOn: true },
-        { key: 'shopping_list_items', label: 'Shopping list items', category: 'Core data', defaultOn: true },
-        { key: 'shopping_list_templates', label: 'Shopping list templates', category: 'Core data', defaultOn: true },
-        { key: 'shopping_list_template_lines', label: 'Template lines', category: 'Core data', defaultOn: true },
-        { key: 'recipe_collections', label: 'Recipe collections', category: 'Core data', defaultOn: true },
-        { key: 'recipes', label: 'Recipes', category: 'Core data', defaultOn: true },
-        { key: 'recipe_ingredients', label: 'Recipe ingredients', category: 'Core data', defaultOn: true },
-        { key: 'meal_plans', label: 'Meal plans', category: 'Core data', defaultOn: true },
-        { key: 'meal_plan_entries', label: 'Meal plan entries', category: 'Core data', defaultOn: true },
-        { key: 'product_barcodes', label: 'Product barcodes', category: 'Core data', defaultOn: true },
-        { key: 'app_settings', label: 'System settings', category: 'Optional', defaultOn: false },
-        { key: 'users', label: 'User accounts (no passwords)', category: 'Optional', defaultOn: false },
-        { key: 'product_historic_offers', label: 'Historic product offers', category: 'Optional', defaultOn: false },
-    ];
+    // The section catalogue — `restore_shared.SECTIONS`, served by
+    // `GET /api/data/backup/sections`. It drives the checkbox order and
+    // defaults in the Create-backup dialog, the restore tree's pickable
+    // sections and labels, the sensitive-data warnings and the restore
+    // report. This page used to carry its own copy of the list and the two
+    // drifted: the copy named `product_barcodes` (server key `barcodes`), so
+    // every default *New backup* was refused, and it lacked the nine recipe
+    // vocabulary / step / link sections, so a backup made here silently
+    // omitted recipe steps (finalisation 18-R2 / 18-R3). One source now.
+    const dataApi = new DataApiService();
+    const backupSections = ref<BackupSection[]>([]);
+    const backupSelected = ref<Record<string, boolean>>({});
 
-    const backupSelected = ref<Record<string, boolean>>(
-        Object.fromEntries(BACKUP_SECTIONS.map((s) => [s.key, s.defaultOn])),
-    );
+    async function loadSections(): Promise<void> {
+        try {
+            backupSections.value = await dataApi.backupSectionsAsync();
+            backupSelected.value = Object.fromEntries(
+                backupSections.value.map((s) => [s.key, s.default_on]),
+            );
+        } catch (e) {
+            $q.notify({
+                type: 'negative',
+                message: "Couldn't load the backup sections.",
+                caption: toastCaption(e),
+            });
+        }
+    }
+
+    function sectionLabel(key: string): string {
+        return backupSections.value.find((s) => s.key === key)?.label ?? key;
+    }
 
     interface BackupSectionGroup {
         category: string;
@@ -554,7 +549,7 @@
     }
     const backupSectionGroups = computed<BackupSectionGroup[]>(() => {
         const byCategory = new Map<string, BackupSection[]>();
-        for (const s of BACKUP_SECTIONS) {
+        for (const s of backupSections.value) {
             const bucket = byCategory.get(s.category) ?? [];
             bucket.push(s);
             byCategory.set(s.category, bucket);
@@ -576,32 +571,16 @@
     }
 
     const selectedBackupKeys = computed(() =>
-        BACKUP_SECTIONS.filter((s) => backupSelected.value[s.key]).map((s) => s.key),
+        backupSections.value.filter((s) => backupSelected.value[s.key]).map((s) => s.key),
     );
 
-    // Labels for the restore tree share the BACKUP_SECTIONS catalogue so the
-    // two stay in sync as sections come and go.
-    const SECTION_LABELS: Record<string, string> = Object.fromEntries(
-        BACKUP_SECTIONS.map((s) => [s.key, s.label]),
-    );
-
-    // Sections the user can pick into in the restore tree. Sub-tables
+    // Sections the user can pick into in the restore tree — the server's
+    // `pickable` flag (the tables with a natural duplicate key). Sub-tables
     // (lines, ingredients, m2m, historic offers) ride along server-side via
-    // CHILD_AUTO_INCLUDE, so we don't surface them.
-    const TOP_LEVEL_KEYS = [
-        'stock_groups',
-        'stock_levels',
-        'stock_locations',
-        'saved_products',
-        'stock_items',
-        'shopping_lists',
-        'shopping_list_templates',
-        'recipe_collections',
-        'recipes',
-        'meal_plans',
-        'app_settings',
-        'users',
-    ];
+    // CHILD_AUTO_INCLUDE, so they are never offered directly.
+    const pickableKeys = computed(() =>
+        backupSections.value.filter((s) => s.pickable).map((s) => s.key),
+    );
 
     // Tree node structure tracks two things:
     //  - `composite` (m2m) entries use "<id>|<id>"; everything else uses the
@@ -624,7 +603,7 @@
         const dupes = preview.value.duplicates;
         const out: TreeNode[] = [];
 
-        for (const section of TOP_LEVEL_KEYS) {
+        for (const section of pickableKeys.value) {
             const sample = preview.value.samples[section];
             const total = preview.value.entity_counts[section] ?? 0;
             if (!sample || total === 0) continue;
@@ -661,7 +640,7 @@
 
             out.push({
                 key: `section:${section}`,
-                label: SECTION_LABELS[section] ?? section,
+                label: sectionLabel(section),
                 count: total,
                 children,
             });
@@ -715,7 +694,6 @@
         } catch (err) {
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: "Couldn't load backups.",
                 caption: err instanceof Error ? err.message : String(err),
             });
@@ -744,7 +722,6 @@
             }
             $q.notify({
                 type: 'positive',
-                position: 'bottom-right',
                 message: 'Backup saved to the library.',
                 timeout: 3000,
             });
@@ -753,7 +730,6 @@
         } catch (err) {
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: "Couldn't create backup.",
                 caption: err instanceof Error ? err.message : String(err),
             });
@@ -777,7 +753,6 @@
         } catch (err) {
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: "Couldn't download backup.",
                 caption: err instanceof Error ? err.message : String(err),
             });
@@ -806,7 +781,6 @@
             }
             $q.notify({
                 type: 'positive',
-                position: 'bottom-right',
                 message: 'Restore complete.',
                 caption: summarizeRestore(body),
                 timeout: 4000,
@@ -814,7 +788,6 @@
         } catch (err) {
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: "Restore failed.",
                 caption: err instanceof Error ? err.message : String(err),
             });
@@ -841,7 +814,6 @@
         } catch (err) {
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: "Couldn't delete backup.",
                 caption: err instanceof Error ? err.message : String(err),
             });
@@ -910,7 +882,6 @@
         } catch (err) {
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: "Couldn't load library settings.",
                 caption: err instanceof Error ? err.message : String(err),
             });
@@ -942,14 +913,12 @@
             storagePath.value = (storagePathInput.value ?? '').trim();
             $q.notify({
                 type: 'positive',
-                position: 'bottom-right',
                 message: 'Library settings saved.',
                 timeout: 2500,
             });
         } catch (err) {
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: "Couldn't save library settings.",
                 caption: err instanceof Error ? err.message : String(err),
             });
@@ -959,7 +928,7 @@
     }
 
     onMounted(async () => {
-        await Promise.all([loadLibrary(), loadLibrarySettings()]);
+        await Promise.all([loadSections(), loadLibrary(), loadLibrarySettings()]);
     });
 
     function parseFilename(header: string | null): string | null {
@@ -985,7 +954,6 @@
         if (file.size > MAX_BACKUP_BYTES) {
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: `That file is over the ${(MAX_BACKUP_BYTES / 1024 / 1024 / 1024).toFixed(0)} GB limit (${(file.size / 1024 / 1024).toFixed(1)} MB).`,
             });
             pickedFile.value = null;
@@ -1012,8 +980,8 @@
             }
             preview.value = await inspectResponse.json();
 
-            // Default expansion: first 3 top-level sections with rows.
-            const sectionsWithRows = TOP_LEVEL_KEYS.filter((k) =>
+            // Default expansion: first 3 pickable sections with rows.
+            const sectionsWithRows = pickableKeys.value.filter((k) =>
                 (preview.value?.entity_counts[k] ?? 0) > 0,
             );
             expandedKeys.value = sectionsWithRows.slice(0, 3).map((k) => `section:${k}`);
@@ -1021,7 +989,6 @@
         } catch (err) {
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: "Couldn't read that backup file.",
                 caption: err instanceof Error ? err.message : String(err),
             });
@@ -1137,7 +1104,7 @@
             // actually saw activity (created or skipped). Sub-tables that
             // were touched by parent auto-include get reported too.
             const rows: ReportRow[] = [];
-            for (const section of BACKUP_SECTIONS) {
+            for (const section of backupSections.value) {
                 const created = summary.created[section.key] ?? 0;
                 const skipped = summary.skipped[section.key] ?? 0;
                 if (created === 0 && skipped === 0) continue;

@@ -38,10 +38,10 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from dora_api.domain.entities.shopping_list import (ShoppingList,
                                                     ShoppingListLine)
-from dora_api.domain.entities.stock_item import StockItem
 from dora_api.features.routers import SHOPPING_LIST_ROUTER
+from dora_api.features.shopping_lists._line_anchor import line_anchor_key
 from dora_api.infrastructure.api_response import (business_rule_violation, ok,
-                                                  no_content, not_found)
+                                                  not_found)
 from dora_api.infrastructure.decorators import has_request_body
 from dora_api.infrastructure.utils import get_request_body
 from dora_api.persistence.field import EntityField
@@ -113,13 +113,18 @@ class MoveLinesHandler:
         target_lines: List[ShoppingListLine] = self.repository.get(ShoppingListLine).all(
             EntityField(ShoppingListLine, "shopping_list_id").eq(target_id)
         )
-        target_item_ids = {l.stock_item_id for l in target_lines}
+        # Dedupe on the line's *anchor* — (stock_item_id, product_id) — not
+        # `stock_item_id` alone: a product-only line has a NULL item id, so
+        # keying on it made every product-only line "a duplicate" of any
+        # other and the first one moved blocked the rest (finalisation 03-R3).
+        target_anchors = {line_anchor_key(l) for l in target_lines}
         next_sequence = (max((l.sequence for l in target_lines), default=-1)) + 1
 
         moved = 0
         skipped = 0
         for line in movable:
-            if line.stock_item_id in target_item_ids:
+            anchor = line_anchor_key(line)
+            if anchor in target_anchors:
                 # Don't merge quantities here — that's a separate UX
                 # decision; the unique-per-line invariant wins for now.
                 # Source line stays put.
@@ -127,7 +132,7 @@ class MoveLinesHandler:
                 continue
             line.shopping_list_id = target_id
             line.sequence = next_sequence
-            target_item_ids.add(line.stock_item_id)
+            target_anchors.add(anchor)
             next_sequence += 1
             moved += 1
 

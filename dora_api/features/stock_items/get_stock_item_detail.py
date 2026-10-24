@@ -598,10 +598,12 @@ class GetStockItemDetailHandler:
         # included — the timeline is about the *item's* history, not the
         # current cart. Look up list names from a tiny cache to avoid
         # N+1 SELECTs. Filter at the field; sort + cap on the result.
-        _Lines = self.repository.get(ShoppingListLine).all(
+        # One fetch for both history feeds (list-adds here, purchases below) —
+        # it used to run the same query twice (finalisation 06-R7).
+        _ItemLines: List[ShoppingListLine] = self.repository.get(ShoppingListLine).all(
             EntityField(ShoppingListLine, ShoppingListLine.Fields.STOCK_ITEM_ID).eq(stock_item_id)
         )
-        _Lines = [l for l in _Lines if l.added_at is not None]
+        _Lines = [l for l in _ItemLines if l.added_at is not None]
         _Lines.sort(key=lambda l: l.added_at, reverse=True)
         _HistoryOlderCount += max(0, len(_Lines) - HISTORY_PER_KIND_CAP)
         _Lines = _Lines[:HISTORY_PER_KIND_CAP]
@@ -630,13 +632,7 @@ class GetStockItemDetailHandler:
         # proxy). Reuses the ShoppingList name cache built above so
         # we don't re-hit the DB.
         _PurchaseEvents: List[PurchaseEventDto] = []
-        _AllLinesForItem = self.repository.get(ShoppingListLine).all(
-            EntityField(ShoppingListLine, ShoppingListLine.Fields.STOCK_ITEM_ID).eq(stock_item_id)
-        )
-        _BoughtLines = [
-            l for l in _AllLinesForItem
-            if l.is_ticked
-        ]
+        _BoughtLines = [l for l in _ItemLines if l.is_ticked]
         if _BoughtLines:
             # Load parent lists for status + completed_at. Separate hit
             # from the recent-list-adds branch's name-only cache because
@@ -870,11 +866,23 @@ class GetStockItemDetailHandler:
         #      lives on the Product when the Products UI ships it.
         from dora_api.domain.entities.barcode import Barcode
         _Barcodes: List[StockItemBarcodeDto] = []
-        _AllBarcodes = self.repository.get(Barcode).all()
         # _StockItem.products is a list of `Product` entities (m2m
         # selectin-loaded), so key off the entity id, not a "product_id"
         # field — that attribute lives on the StockItemProduct join row.
         _LinkedProductIds = {p.id for p in _StockItem.products or []}
+        # Two targeted fetches, not a full-table scan filtered in Python
+        # (finalisation 06-R8).
+        _AllBarcodes = list(self.repository.get(Barcode).all(
+            EntityField(Barcode, Barcode.Fields.STOCK_ITEM_ID).eq(stock_item_id)
+        ))
+        if _LinkedProductIds:
+            _Seen = {b.id for b in _AllBarcodes}
+            _AllBarcodes += [
+                b for b in self.repository.get(Barcode).all(
+                    EntityField(Barcode, Barcode.Fields.PRODUCT_ID).in_(list(_LinkedProductIds))
+                )
+                if b.id not in _Seen
+            ]
         _ProductNamesById: dict = {
             p.id: getattr(p, "name", None) for p in (_StockItem.products or [])
         }

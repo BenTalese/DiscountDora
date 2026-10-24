@@ -364,7 +364,7 @@
         } catch (err) {
             timezoneDraft.value = previous;
             $q.notify({
-                type: 'negative', position: 'bottom-right',
+                type: 'negative', 
                 message: 'Could not save the timezone.',
                 caption: toastCaption(err),
             });
@@ -399,7 +399,7 @@
         } catch (err) {
             currencyError.value = 'Could not save the currency.';
             $q.notify({
-                type: 'negative', position: 'bottom-right',
+                type: 'negative', 
                 message: 'Could not save the currency.',
                 caption: toastCaption(err),
             });
@@ -433,7 +433,7 @@
         } catch (err) {
             localeError.value = 'Could not save the language.';
             $q.notify({
-                type: 'negative', position: 'bottom-right',
+                type: 'negative', 
                 message: 'Could not save the language.',
                 caption: toastCaption(err),
             });
@@ -460,7 +460,7 @@
         } catch (err) {
             systemDraft.value = previous;
             $q.notify({
-                type: 'negative', position: 'bottom-right',
+                type: 'negative', 
                 message: 'Could not save the unit system.',
                 caption: toastCaption(err),
             });
@@ -477,7 +477,7 @@
         const detected = systemForRegion(language);
         if (detected) await onPickSystem(detected);
         $q.notify({
-            type: 'positive', position: 'bottom-right',
+            type: 'positive', 
             message: 'Matched to this device. Currency is unchanged.',
         });
         await offerRatingScheme(language, zone);
@@ -660,7 +660,7 @@
             // or the chip stays blank until a full page reload.
             useRecipeStore().invalidateRecipes();
             $q.notify({
-                type: 'positive', position: 'bottom-right',
+                type: 'positive', 
                 message: scheme === 'health_star'
                     ? 'Health Star Ratings on.'
                     : 'Nutri-Score on.',
@@ -668,7 +668,7 @@
             });
         } catch (err) {
             $q.notify({
-                type: 'negative', position: 'bottom-right',
+                type: 'negative', 
                 message: "Couldn't turn on Health Star Ratings.",
                 caption: toastCaption(err),
             });

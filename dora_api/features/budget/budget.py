@@ -38,19 +38,19 @@ rather than re-deriving it in a second place. R-003 state-ownership.
 import logging
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta, timezone
+from zoneinfo import ZoneInfo
 from typing import Any
 from uuid import UUID
 
 from flask import request, session
 from pydantic import BaseModel, ConfigDict, Field
 
-from dora_api.domain.entities.product import Product
 from dora_api.domain.entities.product_offer import ProductOffer
 from dora_api.domain.entities.shopping_list import (SHOPPING_LIST_STATUS_DONE,
                                                     ShoppingList,
                                                     ShoppingListLine)
 from dora_api.features.app_settings.access import get_or_create_app_setting
-from dora_api.features.app_settings.clock import household_today
+from dora_api.features.app_settings.clock import household_timezone, household_today
 from dora_api.domain.entities.app_setting import (ALLOWED_BUDGET_PERIODS,
                                                   AppSetting,
                                                   BUDGET_PERIOD_MONTHLY,
@@ -66,10 +66,12 @@ from dora_api.infrastructure.ports import Repository
 
 
 # ── Period boundaries ────────────────────────────────────────────────────
-# Date-only arithmetic; the wall-clock "what week / month is it" question
-# doesn't deserve timezone gymnastics for a personal-use app. The
-# completed_at column is timezone-aware, so the comparison happens at
-# datetime level using the start/end converted to UTC midnight.
+# Date-only arithmetic anchored on `household_today`, with the datetime
+# comparison done at the *household's* midnight (R-021). It used to be UTC
+# midnight: in a +10 household a shop finished Monday 08:00 local landed in
+# the previous week's budget for the first ten hours of every period
+# (finalisation 12-R2). `completed_at` is stored as a UTC instant, so a
+# household-midnight boundary is converted to UTC before the query.
 
 def period_bounds(today: date, period: str) -> tuple[date, date]:
     """Return [start, end) for the rolling period containing `today`.
@@ -92,8 +94,16 @@ def period_bounds(today: date, period: str) -> tuple[date, date]:
 
 
 
-def _as_utc_datetime(d: date) -> datetime:
-    return datetime.combine(d, time.min, tzinfo=timezone.utc)
+def _boundary_utc(d: date, tz: ZoneInfo) -> datetime:
+    """The household's midnight starting day `d`, as the UTC instant the
+    `completed_at` column compares against."""
+    return datetime.combine(d, time.min, tzinfo=tz).astimezone(timezone.utc)
+
+
+def _household_date(completed_at: datetime, tz: ZoneInfo) -> date:
+    """Calendar day of a stored (naive-UTC or aware) instant in the household zone."""
+    aware = completed_at if completed_at.tzinfo else completed_at.replace(tzinfo=timezone.utc)
+    return aware.astimezone(tz).date()
 
 
 def _budget_amount(setting: AppSetting) -> float | None:
@@ -126,8 +136,9 @@ def period_spent(
     budget and inflated `period_headroom` by the same amount. This mirrors
     `compute_list_totals`' `spent_only` rule, which a done list's own receipt
     has always applied."""
-    start_dt = _as_utc_datetime(period_start)
-    end_dt = _as_utc_datetime(period_end)
+    tz = household_timezone(repository)
+    start_dt = _boundary_utc(period_start, tz)
+    end_dt = _boundary_utc(period_end, tz)
     archived = repository.get(ShoppingList).all(
         EntityField(ShoppingList, ShoppingList.Fields.STATUS).eq(SHOPPING_LIST_STATUS_DONE)
         & EntityField(ShoppingList, ShoppingList.Fields.COMPLETED_AT).gte(start_dt)
@@ -386,8 +397,9 @@ class GetBudgetHistoryHandler:
         # in one go and bucket by period.
         earliest_start, _ = period_bounds(anchors[-1], period)
         latest_start, latest_end = period_bounds(anchors[0], period)
-        full_start_dt = _as_utc_datetime(earliest_start)
-        full_end_dt = _as_utc_datetime(latest_end)
+        tz = household_timezone(self.repository)
+        full_start_dt = _boundary_utc(earliest_start, tz)
+        full_end_dt = _boundary_utc(latest_end, tz)
 
         archived = self.repository.get(ShoppingList).all(
             EntityField(ShoppingList, ShoppingList.Fields.STATUS).eq(SHOPPING_LIST_STATUS_DONE)
@@ -414,7 +426,7 @@ class GetBudgetHistoryHandler:
                 lst = archived_lookup.get(line.shopping_list_id)
                 if lst is None or lst.completed_at is None:
                     continue
-                completed_date = lst.completed_at.date()
+                completed_date = _household_date(lst.completed_at, tz)
                 if completed_date < start or completed_date >= end:
                     continue
                 qty = line.quantity if line.quantity is not None else 1

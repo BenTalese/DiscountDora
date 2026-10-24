@@ -147,6 +147,12 @@ def _insert_receipt(_Conn, _EntryId, _State: str, *,
     # `_EntryId` may arrive as bytes (SQLite BINARY(16)) or str/UUID; feed it
     # back in the same shape (same pattern as the Recipe.id bind above).
     _EntryBind = _EntryId if isinstance(_EntryId, bytes) else str(_EntryId)
+    # The receipt id takes the *same* shape as the entry id: on SQLite the
+    # column is BINARY(16), and binding `str(uuid4())` here while the verb
+    # path (`reconcile.py`) bound bytes left the table holding a mix of TEXT
+    # and BLOB ids that the ORM could not read back (finalisation 02-R1).
+    _NewId = uuid.uuid4()
+    _IdBind = _NewId.bytes if isinstance(_EntryId, bytes) else str(_NewId)
     _Conn.execute(
         text(
             'INSERT INTO "MealPlanReconcileReceipt" '
@@ -154,7 +160,7 @@ def _insert_receipt(_Conn, _EntryId, _State: str, *,
             'VALUES (:id, :entry_id, :state, :servings, :created_at)'
         ),
         {
-            "id": str(uuid.uuid4()),
+            "id": _IdBind,
             "entry_id": _EntryBind,
             "state": _State,
             "servings": original_servings,

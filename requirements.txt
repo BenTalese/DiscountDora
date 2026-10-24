@@ -88,3 +88,5 @@ python-dotenv==1.2.2
 #   - Windows / any: download the standalone Piper binary from
 #     https://github.com/rhasspy/piper/releases and point DORA_PIPER_BIN at it.
 # See dora_api/features/tts/voices/README.md for the voice models.
+# PEP 440 version ordering for the Help page update check (get_version._is_newer).
+packaging>=23.0

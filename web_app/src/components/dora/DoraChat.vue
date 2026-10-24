@@ -437,6 +437,9 @@
     import { useShoppingListStore } from 'src/stores/shoppingListStore';
     import { useStockItemStore } from 'src/stores/stockItemStore';
     import { useStockLevelStore } from 'src/stores/stockLevelStore';
+    import { useLocationStore } from 'src/stores/locationStore';
+    import type { LocationNode } from 'src/models/location';
+    import { localTodayIso } from 'src/helpers/weekDates';
     import { useSuggestionStore } from 'src/stores/suggestionStore';
     import type { DoraSuggestion } from 'src/services/api/suggestionsApiService';
     import { useAuthStore } from 'src/stores/authStore';
@@ -552,6 +555,7 @@
     const stockItemStore = useStockItemStore();
     const mealStore = useMealPlanStore();
     const stockLevelStore = useStockLevelStore();
+    const locationStore = useLocationStore();
     const shoppingListStore = useShoppingListStore();
     const { recipes } = storeToRefs(recipeStore);
     const { stockItems } = storeToRefs(stockItemStore);
@@ -987,6 +991,19 @@
             getStock: () => {
                 const levels = stockLevels.value;
                 const levelById = new Map(levels.map((l) => [l.stock_level_id, l]));
+                // Zone name per item from the location tree (the display
+                // policy every chip uses — `formatLocation(…, 'zone')`), so
+                // Basic-mode "where is X" answers; it used to stamp null for
+                // every item (finalisation 11-R4).
+                const zoneByItem = new Map<string, string>();
+                const walk = (nodes: LocationNode[], zone: string) => {
+                    for (const node of nodes) {
+                        const zoneName = zone || node.name;
+                        for (const item of node.items) zoneByItem.set(item.stock_item_id, zoneName);
+                        walk(node.children, zoneName);
+                    }
+                };
+                walk(locationStore.tree, '');
                 return stockItems.value.map((s) => {
                     const lvl = levelById.get(s.stock_level_id);
                     return {
@@ -994,9 +1011,7 @@
                         name: s.name,
                         levelName: lvl?.name ?? null,
                         levelSequence: lvl?.sequence ?? null,
-                        // Location names need the location store; if it's
-                        // not loaded the location stays null — not a blocker.
-                        locationName: null,
+                        locationName: zoneByItem.get(s.stock_item_id) ?? null,
                         expiryDate: s.expiry_date ?? null,
                         isEssential: Boolean(s.is_essential),
                         isOpen: Boolean(s.is_open),
@@ -1040,7 +1055,9 @@
                 if (!plans || plans.length === 0) return null;
                 // Plans sorted ascending by start_date — pick the soonest one
                 // that hasn't fully passed. Surface up to 5 next meal names.
-                const today = new Date().toISOString().slice(0, 10);
+                // Household today from the server (R-021), local date before
+                // it loads — never the UTC date (finalisation 11-R33).
+                const today = mealStore.today ?? localTodayIso();
                 const live = plans.find((p) =>
                     p.entries.some((e) => e.scheduled_for >= today),
                 ) ?? plans[plans.length - 1]!;
@@ -1393,6 +1410,7 @@
             stockItemStore.ensureLoadedAsync(),
             stockLevelStore.ensureLoadedAsync(),
             recipeVocabStore.ensureLoadedAsync(),
+            locationStore.ensureLoadedAsync(),
         ]);
     }
 

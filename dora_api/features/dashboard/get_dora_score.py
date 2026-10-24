@@ -25,6 +25,7 @@ from uuid import UUID
 from flask import session
 
 from dora_api.domain.dora_score import (
+    DORA_SCORE_TREND_LAG_DAYS,
     DoraScoreDto,
     DoraScoreInputs,
     compose_with_trend,
@@ -54,14 +55,15 @@ class GetDoraScoreHandler:
     def __init__(self, repository: Repository) -> None:
         self.repository = repository
 
-    def handle(self, user_id: UUID) -> DoraScoreDto:
+    def handle(self) -> DoraScoreDto:
         # Snapshot the wall clock once — every window boundary and
         # every "in the last 30 days" filter uses this exact moment,
         # so the current and lagged windows can't drift apart on a
-        # slow query.
+        # slow query. The score is household-wide, so there is no
+        # per-user input (finalisation 08-R5).
         now = datetime.now(timezone.utc).replace(tzinfo=None)
 
-        current_inputs = self._gather_inputs(user_id, now, lagged=False)
+        current_inputs = self._gather_inputs(now, lagged=False)
         current = compute_score(current_inputs)
 
         # Skip the lagged compute when the composite doesn't exist —
@@ -70,13 +72,12 @@ class GetDoraScoreHandler:
         if current.composite is None:
             return current
 
-        lagged_inputs = self._gather_inputs(user_id, now, lagged=True)
+        lagged_inputs = self._gather_inputs(now, lagged=True)
         lagged = compute_score(lagged_inputs)
         return compose_with_trend(current, lagged)
 
     def _gather_inputs(
         self,
-        user_id: UUID,
         now: datetime,
         lagged: bool,
     ) -> DoraScoreInputs:
@@ -164,14 +165,22 @@ class GetDoraScoreHandler:
 
         # ── Freshness ─────────────────────────────────────────────
         # Total items with an expiry_date set. Expired = expiry_date
-        # on-or-before the window's *end* (i.e. as of "now" for the
-        # current window, or as of 7d ago for the lagged window).
-        as_of = end.date()
-        stock_items: list[StockItem] = self.repository.get(StockItem).all()
-        total_items_with_expiry = sum(1 for s in stock_items if s.expiry_date is not None)
-        expired_item_count = sum(
-            1 for s in stock_items
-            if s.expiry_date is not None and s.expiry_date <= as_of
+        # on-or-before the window's *end* — the household's calendar
+        # today for the current window (R-021; the UTC date was a day
+        # off for every household east of Greenwich in the evening —
+        # finalisation 08-R3), or that date lagged by the trend offset.
+        # Two counts, not a full pantry load (08-R4).
+        household_now = household_today(self.repository)
+        as_of = (
+            household_now - timedelta(days=DORA_SCORE_TREND_LAG_DAYS)
+            if lagged else household_now
+        )
+        expiry_field = EntityField(StockItem, StockItem.Fields.EXPIRY_DATE)
+        total_items_with_expiry = self.repository.get(StockItem).count(
+            expiry_field.is_not_null()
+        )
+        expired_item_count = self.repository.get(StockItem).count(
+            expiry_field.is_not_null() & expiry_field.lte(as_of)
         )
 
         # The unplanned-run-out and stocktake gathers were removed with their
@@ -209,7 +218,7 @@ def get_dora_score():
     user_id = _current_user_id()
     if user_id is None:
         return unauthorized()
-    dto = GetDoraScoreHandler(SqlAlchemyRepository()).handle(user_id)
+    dto = GetDoraScoreHandler(SqlAlchemyRepository()).handle()
     _LOGGER.info(
         "Dora Score user=%s composite=%s trend=%s (delta=%s)",
         user_id,

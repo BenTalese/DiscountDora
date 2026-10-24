@@ -108,13 +108,11 @@
             await navigator.clipboard.writeText(generatedKey.value);
             $q.notify({
                 type: 'positive',
-                position: 'bottom-right',
                 message: 'Key copied to clipboard.',
             });
         } catch {
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: 'Could not copy. Select the key and copy it manually.',
             });
         }

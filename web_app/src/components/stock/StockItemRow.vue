@@ -398,8 +398,8 @@
     const showLocation = computed(() => !!locationName.value && !compact.value);
 
     // ── "Dora thinks" (P8-07) ───────────────────────────────────────────
-    // Same rule PantryBeliefChip applied when this lived in the row as its
-    // own pill: speak up ONLY when a genuine inference DISAGREES with the
+    // Same rule the retired row pill applied when this lived in the row as
+    // its own chip: speak up ONLY when a genuine inference DISAGREES with the
     // recorded level. Agreement carries no new information. The hint is now
     // rendered *by the level picker* (ring + menu header) rather than beside
     // it, because it is a statement about the level, and the picker is the
@@ -564,13 +564,11 @@
             });
             $q.notify({
                 type: 'positive',
-                position: 'bottom-right',
                 message: `Expiry set to ${value}.`,
             });
         } catch (err) {
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: 'Could not set expiry.',
                 caption: toastCaption(err),
             });
@@ -583,11 +581,10 @@
                 stock_item_id: props.item.stock_item_id,
                 expiry_date: null,
             });
-            $q.notify({ type: 'positive', position: 'bottom-right', message: 'Expiry cleared.' });
+            $q.notify({ type: 'positive', message: 'Expiry cleared.' });
         } catch (err) {
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: 'Could not clear expiry.',
                 caption: toastCaption(err),
             });
@@ -615,7 +612,6 @@
             await stockItemStore.updateStockItemAsync(patch);
             $q.notify({
                 type: 'positive',
-                position: 'bottom-right',
                 message: patch.is_open
                     ? `Marked "${props.item.name}" as open.`
                     : `Marked "${props.item.name}" as sealed.`,
@@ -623,7 +619,6 @@
         } catch (err) {
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: 'Could not update.',
                 caption: toastCaption(err),
             });

@@ -6,7 +6,6 @@
                                                     last_checked_at, clears Push)
   POST /api/stock-items/<id>/snooze               — Push 3 days
   POST /api/stocktake/bulk-check                  — body {ids}
-  POST /api/shopping-lists/<id>/review/complete   — ticked lines → Stocked
 
 The band/auto-tuning *logic* is unit-tested in `tests/test_stocktake_cadence.py`
 — this file drives the HTTP lifecycle only. A fresh item's overdue baseline is
@@ -315,68 +314,7 @@ def test__bulk_check__EmptyIds__ValidationFailure(api):
 
 #endregion bulk-check
 
-#region ---------------- shopping-list review/complete ----------------
-
-
-def _item_dto(stock_item_id: str) -> dict:
-    return requests.get(
-        f"{BASE}/stock-items", params={"filter": f"stock_item_id:eq:{stock_item_id}"},
-    ).json()["items"][0]
-
-
-def test__review_complete__TickedLine__ItemSetStockedAndChecked(api):
-    token = _token()
-    levels = requests.get(f"{BASE}/stock-levels").json()["items"]
-    out_level = next(l for l in levels if l["sequence"] == 2)
-    stocked_level = next(l for l in levels if l["sequence"] == 0)
-    item = make_stock_item(
-        stock_level_id=out_level["stock_level_id"], name=f"{token} butter",
-    )
-    list_id = requests.post(
-        f"{BASE}/shopping-lists", json={"name": f"{token} review"},
-    ).json()["shopping_list_id"]
-    line = requests.post(
-        f"{BASE}/shopping-lists/{list_id}/lines",
-        json={"stock_item_id": item["stock_item_id"]},
-    )
-    assert line.status_code in (200, 201), line.text
-    line_id = requests.get(f"{BASE}/shopping-lists/{list_id}").json()["lines"][0]["line_id"]
-    tick = requests.patch(
-        f"{BASE}/shopping-lists/{list_id}/lines/{line_id}", json={"is_ticked": True},
-    )
-    assert tick.status_code == 204, tick.text
-
-    resp = requests.post(f"{BASE}/shopping-lists/{list_id}/review/complete", json={})
-
-    assert resp.status_code == 200, resp.text
-    assert resp.json() == {"set_stocked": 1, "checked": 1}
-    after = _item_dto(item["stock_item_id"])
-    assert after["stock_level_id"] == stocked_level["stock_level_id"]
-    assert after["last_checked_at"] is not None
-
-
-def test__review_complete__NoTickedLines__CountsZero(api):
-    list_id = requests.post(
-        f"{BASE}/shopping-lists", json={"name": f"{_token()} untouched"},
-    ).json()["shopping_list_id"]
-
-    resp = requests.post(f"{BASE}/shopping-lists/{list_id}/review/complete", json={})
-
-    assert resp.status_code == 200, resp.text
-    assert resp.json() == {"set_stocked": 0, "checked": 0}
-
-
-def test__review_complete__UnknownList__NotFound(api):
-    missing_id = uuid4()
-
-    resp = requests.post(f"{BASE}/shopping-lists/{missing_id}/review/complete", json={})
-
-    assert_problem(
-        resp, 404, detail=f"ShoppingList with the ID '{missing_id}' was not found.",
-    )
-
-
-#endregion review/complete
+# The shopping-list review/complete region went with its endpoint (finalisation 05-R7).
 
 #region ---------------- session (Chunk 6 / D-4) ----------------
 

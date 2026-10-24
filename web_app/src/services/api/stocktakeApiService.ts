@@ -162,15 +162,4 @@ export default class StocktakeApiService {
         await this.http.post<{ checked: number }, { ids: string[] }>(
             '/stocktake/bulk-check', { ids },
         );
-
-    reviewCompleteAsync = async (
-        shoppingListId: string, setStocked = true,
-    ): Promise<{ set_stocked: number; checked: number }> =>
-        await this.http.post<
-            { set_stocked: number; checked: number },
-            { set_stocked: boolean }
-        >(
-            `/shopping-lists/${encodeURIComponent(shoppingListId)}/review/complete`,
-            { set_stocked: setStocked },
-        );
 }

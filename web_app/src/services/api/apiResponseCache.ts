@@ -19,19 +19,24 @@
 // a runtime cache name with its own prefix/suffix depending on version and
 // registration scope — a rename or an upgrade must not silently turn this into
 // a no-op.
-const API_CACHE_NAME_FRAGMENT = 'dora-api';
+//
+// R-052's rule is "a cache that holds user content is evicted on sign-out and
+// on 401". Stock-item photos are user content too; only `dora-api` was being
+// cleared (finalisation 17-R7). Product (catalogue) images are shared across
+// the household and stay.
+const USER_CONTENT_CACHE_FRAGMENTS = ['dora-api', 'dora-stock-images'] as const;
 
-/** Delete the cached API GET responses. Best-effort and never throws: the
- *  Cache API is absent in some contexts (Capacitor's WebView with no service
- *  worker, private-mode quirks, non-secure origins) and a failed eviction must
- *  not break signing out. */
+/** Delete the cached API GET responses and stock-item images. Best-effort and
+ *  never throws: the Cache API is absent in some contexts (Capacitor's WebView
+ *  with no service worker, private-mode quirks, non-secure origins) and a
+ *  failed eviction must not break signing out. */
 export async function clearApiResponseCache(): Promise<void> {
     try {
         if (typeof caches === 'undefined') return;
         const names = await caches.keys();
         await Promise.all(
             names
-                .filter((name) => name.includes(API_CACHE_NAME_FRAGMENT))
+                .filter((name) => USER_CONTENT_CACHE_FRAGMENTS.some((f) => name.includes(f)))
                 .map((name) => caches.delete(name)),
         );
     } catch (err) {

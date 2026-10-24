@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 // FU-520 workstream 1 — behavioural coverage for the pantry filter engine.
 //
 // `useStockFilters` owns every filter / sort / summary rule on the stock

@@ -85,6 +85,8 @@ Then: **"Set up in about a minute →"** drops into setup. A persistent **"Skip 
 present from scene 1.
 
 ### 2.3 The hero loop visual (PROVISIONAL — see §6)
+
+**Provisional thread closed (2026-10-23, finalisation CHUNK_14).** The hero-loop visual shipped without the persona variants (FU-210 removed them) and the §6 reconciliation gate was walked at the rebuild; see CHUNK_14 §0/§F.
 The centrepiece of "how it all connects." A ring of stages with **Dora at the centre as the
 brain**. **Interaction = hybrid** (decided from the prototypes): it **auto-plays the reveal
 once** (each stage lights and hands off to the next), then **stays on screen and becomes
@@ -236,6 +238,8 @@ the Products-on model; this step is the primary mitigation, with the help-overla
 glossary (`PROPOSAL_HELP_OVERLAY.md` §2.3) as the secondary surface.
 
 ### 3.2.a Open thread — Products off + money on combination
+
+**Closed (2026-10-23, finalisation CHUNK_14).** Overtaken by PROPOSAL_PRODUCTS_AS_OVERLAY: products is a data-presence overlay and money an install-wide flag, so the combination is not a persona fork any more. No open item remains here.
 The persona table in §3.2 bundles `products` and `money/spend` together (both off in
 Cooking, both on in Spend-tracking). FU-182's resolved decisions accept (B) — money is a
 **separate question** from products, so the (Products off + money on) combination must

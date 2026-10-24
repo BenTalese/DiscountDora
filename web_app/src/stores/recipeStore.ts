@@ -1,4 +1,5 @@
 import { acceptHMRUpdate, defineStore } from 'pinia';
+import { nameCollator } from 'src/composables/useMoney';
 import type { Recipe, RecipeCollection } from 'src/models/recipe';
 import type { CreateRecipeCommand, UpdateRecipeCommand } from 'src/services/api/recipeApiService';
 import RecipeApiService from 'src/services/api/recipeApiService';
@@ -17,7 +18,9 @@ export const useRecipeStore = defineStore('recipe', () => {
     const recipes: Ref<Recipe[]> = ref([]);
     const recipeCollections: Ref<RecipeCollection[]> = ref([]);
 
-    const collator = new Intl.Collator('en', { sensitivity: 'base' });
+    // Locale-aware collation from the locale authority (finalisation 20-R7).
+
+    const collator = { compare: (a: string, b: string) => nameCollator().compare(a, b) };
 
     // Reactive so consumers can distinguish "still hydrating" from
     // "hydrated and the id genuinely doesn't resolve" (FU-109 deep-link chip).

@@ -66,7 +66,7 @@
             $q.notify({ type: 'positive', position: 'top', message: 'Installing Dora…' });
         } else if (outcome === 'dismissed') {
             $q.notify({
-                type: 'info', position: 'bottom-right',
+                type: 'info', 
                 message: 'Install cancelled.',
             });
         }

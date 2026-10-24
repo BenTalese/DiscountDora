@@ -1,4 +1,4 @@
-import type { Axios, AxiosError, AxiosRequestConfig, InternalAxiosRequestConfig } from 'axios';
+import type { Axios, AxiosError, InternalAxiosRequestConfig } from 'axios';
 import axios from 'axios';
 import { Notify } from 'quasar';
 import { getBackendBaseUrl } from 'src/services/api/backendUrl';
@@ -433,17 +433,4 @@ export default class AxiosHttpClient implements HttpClient {
         }
     }
 
-    /** Raw config-bearing call used by the offline queue when draining: we need
-     *  to replay a stored request exactly as it was, without rewrapping. */
-    async request<TResponse = unknown>(config: AxiosRequestConfig): Promise<TResponse> {
-        try {
-            return (await this.axios.request<TResponse>(config)).data;
-        } catch (error) {
-            return this.handleError(
-                error as AxiosError,
-                (config.method ?? 'GET').toUpperCase(),
-                config.url ?? '',
-            );
-        }
-    }
 }

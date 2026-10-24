@@ -12,9 +12,6 @@ from uuid import UUID
 
 from dora_api.domain.entities.meal_plan_entry import MealPlanEntry
 from dora_api.domain.entities.meal_slot import MealSlot
-from dora_api.domain.entities.recipe import Recipe
-from dora_api.domain.entities.shopping_list import (SHOPPING_LIST_STATUS_DONE,
-                                                    ShoppingList)
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.entities.stock_level import StockLevel
 from dora_api.domain.stock_status import StockStatus, level_for_status
@@ -37,35 +34,13 @@ class StockItemSummary:
     low_stock: int
 
 
-@dataclass(frozen=True, slots=True)
-class ShoppingListSummary:
-    # Count of active (non-done) lists. The dashboard's primary-list card
-    # surfaces this as its "+N other active lists" footer link.
-    #
-    # FU-826: `total_items` (unticked lines across every list) was dropped —
-    # nothing in the app read it. It was also the subject of FU-767, a bug
-    # report about the count being wrong because it had no join to list status,
-    # so unticked leftovers on finished lists inflated it forever. The honest
-    # fix for a field no surface renders is deletion, not a status join; that
-    # retires FU-767 too.
-    total: int
-
-
-@dataclass(frozen=True, slots=True)
-class RecipeSummary:
-    # FU-826: `favourites`, `cookable_count` and `needs_linking_count` were all
-    # dropped — no consumer. They were shipped for counter cards that
-    # IMPL_PLAN_DASHBOARD_REBUILD Phase 1 deleted (§2.6, "raw totals answer no
-    # question the user has"); the cards went, the payload behind them did not.
-    #
-    # `total` survives because AboutSettings' "at a glance" block renders it,
-    # and the dashboard's hero line reads it for the "your recipe book's empty"
-    # nudge.
-    #
-    # NOTE: the cookability map is still computed below — the per-entry
-    # `missing_count` on each upcoming meal-plan entry needs it. Only the two
-    # whole-collection *sums* are gone.
-    total: int
+# FU-826 trimmed `ShoppingListSummary` / `RecipeSummary` down to a `total`
+# each; finalisation 08-R2 deleted them outright (R-057). The reader the
+# surviving comments named — the hero's "recipe book's empty" nudge — was cut
+# on 2026-09-04, AboutSettings' at-a-glance block reads `/usage-stats`, and
+# nothing rendered the active-list count. Two `count()` queries per dashboard
+# load for nobody. The cookability map below is still computed: each upcoming
+# meal-plan entry's `missing_count` derives from it.
 
 
 @dataclass(frozen=True, slots=True)
@@ -124,8 +99,6 @@ class DashboardSummaryDto:
     # figures were also a pair of dedicated aggregate queries run on every
     # dashboard load, for nobody.
     stock_items: StockItemSummary
-    shopping_lists: ShoppingListSummary
-    recipes: RecipeSummary
     meal_plan: MealPlanSummary
 
 
@@ -224,14 +197,7 @@ class GetDashboardSummaryHandler:
             if low_stock_id else 0
         )
 
-        # ── Shopping lists ────────────────────────────────────────────────
-        # "Active" = non-archived. The dashboard card surfaces what's
-        # actually in flight; finished shops live on the lists page.
-        status_field = EntityField(ShoppingList, ShoppingList.Fields.STATUS)
-        total_lists = self.repository.get(ShoppingList).count(status_field.ne(SHOPPING_LIST_STATUS_DONE))
-
         # ── Recipes ───────────────────────────────────────────────────────
-        total_recipes = self.repository.get(Recipe).count()
         # Cookability map via the shared query (same rule the recipe DTO and the
         # `?cookable` filter use — R-003). Still needed: each upcoming meal-plan
         # entry below carries a per-recipe `missing_count` derived from it, which
@@ -309,8 +275,6 @@ class GetDashboardSummaryHandler:
                 out_of_stock = out_of_stock_count,
                 low_stock = low_stock_count,
             ),
-            shopping_lists = ShoppingListSummary(total = total_lists),
-            recipes = RecipeSummary(total = total_recipes),
             meal_plan = MealPlanSummary(
                 upcoming_entries = upcoming_entries_dto,
             ),

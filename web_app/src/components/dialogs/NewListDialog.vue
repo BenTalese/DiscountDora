@@ -342,7 +342,6 @@
         } catch (err) {
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: 'Could not create list.',
                 caption: toastCaption(err),
             });
@@ -403,7 +402,6 @@
         } catch (err) {
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: 'Could not pre-fill from the chosen source.',
                 caption: toastCaption(err),
             });
@@ -435,7 +433,6 @@
             } catch (err) {
                 $q.notify({
                     type: 'negative',
-                    position: 'bottom-right',
                     message: 'Could not auto-fill from stock.',
                     caption: toastCaption(err),
                 });
@@ -452,19 +449,16 @@
         if (totalAdded === 0 && !autoNothingToAdd && f.startFrom === 'empty' && !wantsAutoFill) {
             $q.notify({
                 type: 'positive',
-                position: 'bottom-right',
                 message: createdNew ? 'Empty list created.' : 'Nothing to add.',
             });
         } else if (autoNothingToAdd && totalAdded === 0) {
             $q.notify({
                 type: 'info',
-                position: 'bottom-right',
                 message: 'Nothing matched the picked sources.',
             });
         } else {
             $q.notify({
                 type: 'positive',
-                position: 'bottom-right',
                 message:
                     `${createdNew ? 'Created list.' : 'Topped up list.'} `
                     + `${totalAdded} item${totalAdded === 1 ? '' : 's'} added`

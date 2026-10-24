@@ -28,7 +28,6 @@ export function useRecipeExport() {
         } catch (err) {
             Notify.create({
                 type: 'negative',
-                position: 'bottom-right',
                 message: "Couldn't export the recipe.",
                 caption: err instanceof Error ? err.message : String(err),
             });
@@ -61,12 +60,10 @@ export function useRecipeExport() {
             Notify.create(err instanceof PopupBlockedError
                 ? {
                     type: 'negative',
-                    position: 'bottom-right',
                     message: 'Your browser blocked the print tab. Allow pop-ups for Dora and try again.',
                 }
                 : {
                     type: 'negative',
-                    position: 'bottom-right',
                     message: "Couldn't open the print view.",
                     caption: toastCaption(err),
                 });

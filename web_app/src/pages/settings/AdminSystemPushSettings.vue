@@ -127,13 +127,13 @@
             saved[field] = result[field];
             resetDrafts();
             $q.notify({
-                type: 'positive', position: 'bottom-right',
+                type: 'positive', 
                 message: 'Push settings saved.',
             });
         } catch (err) {
             resetDrafts();
             $q.notify({
-                type: 'negative', position: 'bottom-right',
+                type: 'negative', 
                 message: 'Could not save push settings.',
                 caption: toastCaption(err),
             });
@@ -149,14 +149,14 @@
             privateKeyConfigured.value = result.vapid_private_key_configured;
             privateKeyDraft.value = '';
             $q.notify({
-                type: 'positive', position: 'bottom-right',
+                type: 'positive', 
                 message: nextValue.length === 0
                     ? 'VAPID private key cleared.'
                     : 'VAPID private key saved.',
             });
         } catch (err) {
             $q.notify({
-                type: 'negative', position: 'bottom-right',
+                type: 'negative', 
                 message: 'Could not save VAPID private key.',
                 caption: toastCaption(err),
             });

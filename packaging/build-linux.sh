@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build the Discount Dora desktop bundle for Linux.
+# Build the Dashy Dora desktop bundle for Linux.
 #
 # Produces `dist/Dora/Dora` plus a sibling tree of shared libs +
 # bundled data. Phase 4 (AppImage packaging) wraps that directory
@@ -44,7 +44,7 @@ for arg in "$@"; do
     esac
 done
 
-echo "[build] Discount Dora — Linux desktop bundle"
+echo "[build] Dashy Dora — Linux desktop bundle"
 echo "[build] cwd=$(pwd)"
 
 # System deps (libpython*.so for PyInstaller, GTK + WebKit for

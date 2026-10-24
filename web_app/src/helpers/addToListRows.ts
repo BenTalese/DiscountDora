@@ -7,6 +7,7 @@ import type {
     AddToListRow, AddToListUnlinked, LineChoicePick,
 } from 'src/components/shoppingList/addToListTypes';
 import { formatQuantity } from 'src/helpers/formatQuantity';
+import { ingredientDisplayName } from 'src/helpers/recipeIngredientLabel';
 import type { MealPlanIngredient, UnlinkedIngredient } from 'src/models/mealPlan';
 import type { Recipe } from 'src/models/recipe';
 
@@ -48,7 +49,7 @@ export function rowsFromRecipe(recipe: Recipe | null): AddToListRow[] {
         }
         byId.set(ing.stock_item_id, {
             stockItemId: ing.stock_item_id,
-            name: ing.stock_item_name ?? ing.raw_text ?? '',
+            name: ingredientDisplayName(ing),
             isMissing: ing.is_missing,
             isLowStock: ing.is_low_stock,
             isOptional: ing.is_optional,

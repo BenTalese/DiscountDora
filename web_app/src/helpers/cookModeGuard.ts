@@ -16,6 +16,7 @@
  * so callers pass `dirty` and the cookbook simply never sets it.
  */
 import type { Recipe } from 'src/models/recipe';
+import { ingredientDisplayName } from 'src/helpers/recipeIngredientLabel';
 
 /** Distinct reasons to stop and ask. A recipe can trip more than one. */
 export type CookGuardReason =
@@ -38,12 +39,11 @@ export function missingStockItemIds(recipe: Recipe): string[] {
     return [...new Set(ids)];
 }
 
-/** What to call an ingredient row on screen. `raw_text` is what the user
- *  actually typed or pasted, so it wins where it exists (same order the
- *  recipe page's `ingredientLabel` uses); the linked item's name is the
- *  fallback. */
+/** What to call an ingredient row on screen — the shared precedence
+ *  (`label` → item name → raw text), so the guard names a row the same way
+ *  the recipe page does (finalisation 01-R1). */
 function ingredientLabel(ing: Recipe['ingredients'][number]): string {
-    return ing.stock_item_name ?? ing.raw_text ?? 'Unnamed ingredient';
+    return ingredientDisplayName(ing);
 }
 
 /**

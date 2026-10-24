@@ -6,8 +6,9 @@ The handler does a tiny per-session token-bucket rate limit so a runaway
 error loop in the browser doesn't flood the log file (which would also
 roll over noisier sibling messages out of the rotation window).
 
-In a follow-up round (audit log) this will also persist to the
-audit_events table with source=web, action="client.error".
+WARN/ERROR events also persist to the audit log (source=web,
+action="client.error" / "client.warning") for the admin view; INFO beacons
+land there at low severity.
 """
 import logging
 import time
@@ -20,6 +21,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from dora_api.domain.entities.audit_event import (
     SEVERITY_ERROR, SEVERITY_INFO, SEVERITY_WARN, SOURCE_WEB,
 )
+from dora_api.features.auth.register_user import SESSION_USER_ID_KEY
 from dora_api.features.routers import CLIENT_LOGS_ROUTER
 from dora_api.infrastructure.api_response import bad_request, no_content
 from dora_api.infrastructure.audit import emit as audit_emit
@@ -60,15 +62,20 @@ def _client_bucket_key() -> str:
     """Bucket by session id when authed, otherwise by remote IP. Cookies
     aren't a perfect identifier but this is a noise-control bucket, not
     a security perimeter."""
-    return session.get("user_id") or request.remote_addr or "anon"
+    return session.get(SESSION_USER_ID_KEY) or request.remote_addr or "anon"
 
 
 def _allow(key: str) -> bool:
     now = time.monotonic()
+    cutoff = now - _BUCKET_WINDOW_SECONDS
     with _buckets_lock:
+        # Evict keys whose whole window has passed — the dict used to grow by
+        # one entry per session-id / IP ever seen (finalisation 20-R9).
+        for stale_key in [k for k, b in _buckets.items() if not b or b[-1] < cutoff]:
+            if stale_key != key:
+                del _buckets[stale_key]
         bucket = _buckets.setdefault(key, deque())
         # Drop timestamps older than the window so the deque stays small.
-        cutoff = now - _BUCKET_WINDOW_SECONDS
         while bucket and bucket[0] < cutoff:
             bucket.popleft()
         if len(bucket) >= _BUCKET_MAX_EVENTS:
@@ -89,9 +96,10 @@ def submit_client_log():
         )
 
     if not _allow(_client_bucket_key()):
-        # 429 isn't fatal for the SPA — it'll back off and try again
-        # later. We don't bother logging a server-side line about the
-        # drop; that'd defeat the point of the rate limit.
+        # Deliberately 204, not 429: the SPA's own limiter already backs
+        # off, and an error status would make the error logger log an error.
+        # No server-side line about the drop either — that would defeat the
+        # point of the rate limit.
         return no_content()
 
     logger = logging.getLogger("client")

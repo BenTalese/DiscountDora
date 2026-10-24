@@ -14,8 +14,10 @@ from pydantic import BaseModel, ConfigDict, Field
 from dora_api.domain.entities.user import User
 from dora_api.features.auth.admin_gate import _require_admin
 from dora_api.features.routers import USER_ROUTER
+from dora_api.features.users.admin_guards import other_usable_admins
 from dora_api.infrastructure.api_response import (business_rule_violation,
                                                   no_content, not_found)
+from dora_api.infrastructure.auth_helpers import is_valid_email, normalise_email
 from dora_api.infrastructure.decorators import has_request_body
 from dora_api.infrastructure.utils import get_request_body
 from dora_api.persistence.field import EntityField
@@ -47,6 +49,8 @@ class AdminUpdateUserRequest(BaseModel):
 class AdminUpdateUserResponse:
     user_not_found: bool = False
     username_taken: bool = False
+    email_taken: bool = False
+    email_invalid: bool = False
     would_remove_last_admin: bool = False
     would_deactivate_self: bool = False
     would_deactivate_last_admin: bool = False
@@ -57,21 +61,10 @@ class AdminUpdateUserHandler:
         self.repository = repository
 
     def _other_usable_admins(self, user_id: UUID) -> int:
-        """How many admins *other than this one* could still sign in.
-
-        The single authority for both lock-out guards below. With
-        `is_active` in play, "the last admin" has to mean the last admin who
-        can actually get in — otherwise you could deactivate one admin and
-        then demote the other, locking the install out through the side
-        door. Counted in Python over the (household-sized) admin set rather
-        than as a SQL `!=`, so the UUID-vs-str comparison trap FU-528 hit
-        can't reappear here.
-        """
-        admins = self.repository.get(User).all(
-            EntityField(User, User.Fields.IS_ADMIN).eq(True)
-            & EntityField(User, User.Fields.IS_ACTIVE).eq(True)
-        )
-        return sum(1 for a in admins if str(a.id) != str(user_id))
+        """How many admins *other than this one* could still sign in — the
+        shared `admin_guards.other_usable_admins`, which the DELETE guard
+        reads too, so demote / deactivate / delete apply one bar."""
+        return other_usable_admins(self.repository, user_id)
 
     def handle(
         self,
@@ -98,7 +91,23 @@ class AdminUpdateUserHandler:
             _Target.username = request.username
 
         if "email" in _SetFields:
-            _Target.email = request.email
+            # Same rules as self-service `/auth/me` and admin create: normalise,
+            # validate, keep addresses unique, and drop the verified mark on a
+            # change (a new address has not been confirmed). This branch used
+            # to assign the raw string with none of the four (finalisation
+            # 13-R2).
+            _Email = normalise_email(request.email)
+            if _Email is not None and not is_valid_email(_Email):
+                return AdminUpdateUserResponse(email_invalid=True)
+            if _Email is not None:
+                _SameEmail = self.repository.get(User).one(
+                    EntityField(User, User.Fields.EMAIL).eq(_Email)
+                )
+                if _SameEmail and str(_SameEmail.id) != str(user_id):
+                    return AdminUpdateUserResponse(email_taken=True)
+            if _Email != _Target.email:
+                _Target.email_verified = False
+            _Target.email = _Email
 
         if "is_admin" in _SetFields and request.is_admin is not None:
             # Guard against demoting the install's last usable admin — see
@@ -152,6 +161,12 @@ def admin_update_user(user_id: UUID):
     if _Response.username_taken:
         return business_rule_violation(
             f"Username '{_Request.username}' is already taken."
+        )
+    if _Response.email_invalid:
+        return business_rule_violation("That doesn't look like a valid email address.")
+    if _Response.email_taken:
+        return business_rule_violation(
+            f"Email '{_Request.email}' is already used by another account."
         )
     if _Response.would_remove_last_admin:
         return business_rule_violation(

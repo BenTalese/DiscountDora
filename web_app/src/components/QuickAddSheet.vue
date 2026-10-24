@@ -19,8 +19,11 @@
                 clearable
                 debounce="150"
                 label="Search stock items"
-                prepend-:icon="ICONS.search"
-            />
+            >
+                <template #prepend>
+                    <q-icon :name="ICONS.search" />
+                </template>
+            </q-input>
 
             <!-- One tap, one line on the list (owner, 2026-09-17: *"the
                  additional step after selecting an item makes it a slow/painful

@@ -50,7 +50,7 @@ endpoints survive in a reduced form for the cookbook filter and the simplified
 | D9 | Dashboard `Use soon` card cut; `Needs your attention` is the single near-expiry surface. |
 | D10 | `/waste` route deleted with **no redirect** (pre-release, no compat shims per user's working-style memory). |
 | D11 | **No nav slot replacement** — the gap stays empty. |
-| D12 | **No Reports waste card.** The cheap "most/recently wasted" view lives only inside the simplified `waste_insights` Dora tool. |
+| D12 | **No Reports waste card.** *(**Reversed in practice** — a Waste card exists on Reports; recorded 2026-10-23, finalisation CHUNK_12.)* The cheap "most/recently wasted" view lives only inside the simplified `waste_insights` Dora tool. |
 | D13 | `StockItemWasteEvent` schema is **stripped** of `estimated_value`, `note`, and `quantity`. Pre-release migration is a clean `DROP COLUMN` (no idempotent guards per the migrations memory). |
 | D14 | Dora Score reassessment (waste is a pillar per DDCP §§444+ but is being de-emphasised as a UI feature) is logged as a **deferred follow-up**, not in scope here. See `DORA_FOLLOWUPS.md` FU-302. |
 

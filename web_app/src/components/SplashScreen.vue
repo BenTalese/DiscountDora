@@ -113,7 +113,7 @@
         try {
             await setBackendBaseUrl(url);
             $q.notify({
-                type: 'positive', position: 'bottom-right',
+                type: 'positive', 
                 message: 'Instance URL saved. Refreshing…',
                 timeout: 1500,
             });
@@ -121,7 +121,7 @@
             setTimeout(() => window.location.reload(), 400);
         } catch (err) {
             $q.notify({
-                type: 'negative', position: 'bottom-right',
+                type: 'negative', 
                 message: 'Could not save the URL.',
                 caption: toastCaption(err),
             });

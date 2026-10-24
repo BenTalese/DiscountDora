@@ -1,13 +1,15 @@
-﻿"""X1 — Stocktake / Focused Review backend.
+"""X1 — Stocktake / Focused Review backend.
 
   GET  /api/stocktake/queue?limit=50          — items needing a check
   POST /api/stock-items/<id>/check            — bump last_checked_at only
   POST /api/stock-items/<id>/snooze           — Push 3 days
   POST /api/stocktake/bulk-check              — body {ids}
-  POST /api/shopping-lists/<id>/review/complete — bulk-set ticked items
-                                                  to Stocked (used by the
-                                                  shopping-list review
-                                                  mode).
+
+(`POST /shopping-lists/<id>/review/complete` was deleted in finalisation
+05-R7: the shopping-list review mode it served was retired in UX-v2, the SPA
+had no caller, and it wrote `stock_level_id` with a raw UPDATE — no
+`StockLevelChange`, no `ConsumptionEvent`, no auto-add — exactly the bypass
+`bulk_operations.py` refuses.)
 
 Round-19 (2026-07-04) reboots the queue engine for the new stocktake
 design (`docs/04_proposals/PROPOSAL_STOCKTAKE_MODE.md`). Two shifts:
@@ -63,10 +65,7 @@ from dora_api.domain.entities.shopping_list import (
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.entities.stock_level import StockLevel
 from dora_api.domain.entities.stock_level_change import StockLevelChange
-from dora_api.domain.entities.stock_location import StockLocation
-from dora_api.domain.stock_status import (LOW_STOCK_SEQUENCE,
-                                          OUT_OF_STOCK_SEQUENCE, StockStatus,
-                                          level_for_status)
+from dora_api.domain.stock_status import LOW_STOCK_SEQUENCE, OUT_OF_STOCK_SEQUENCE
 from dora_api.features.app_settings.access import get_or_create_app_setting
 from dora_api.features.routers import STOCK_ITEM_ROUTER, STOCKTAKE_ROUTER
 from dora_api.features.stock_items.inference_overlay import (SURFACE_STOCK,
@@ -79,8 +78,7 @@ from dora_api.features.stocktake.cadence import (AUTO_HISTORY_WINDOW_DAYS,
                                                  LOW_OUT_BUMP_WINDOW_DAYS,
                                                  CadenceBand, ItemHistory,
                                                  parse_band, resolve_band)
-from dora_api.infrastructure.api_response import (bad_request, no_content,
-                                                  not_found, ok)
+from dora_api.infrastructure.api_response import bad_request, not_found, ok
 from dora_api.infrastructure.decorators import has_request_body
 from dora_api.infrastructure.utils import get_request_body
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
@@ -576,75 +574,3 @@ def bulk_check():
     )
     db.session.commit()
     return ok({"checked": int(result.rowcount or 0)})
-
-
-# ── /shopping-lists/<id>/review/complete ───────────────────────────────
-
-class ReviewCompleteRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    set_stocked: bool = True
-
-
-def _stocked_level_id(repo: SqlAlchemyRepository) -> UUID | None:
-    """The seeded Stocked level, resolved by status identity (sequence)
-    rather than name — the UUID isn't stable across installs and the label may
-    be renamed."""
-    level = level_for_status(repo.get(StockLevel).all(), StockStatus.STOCKED)
-    return level.id if level else None
-
-
-from dora_api.features.routers import SHOPPING_LIST_ROUTER  # noqa: E402
-
-
-@SHOPPING_LIST_ROUTER.route("/<uuid:shopping_list_id>/review/complete", methods=["POST"])
-@has_request_body(ReviewCompleteRequest)
-def shopping_list_review_complete(shopping_list_id: UUID):
-    """Mark every ticked item on this list as Stocked AND bump both
-    timestamps. Mirrors the existing finish-shopping flow but without
-    archiving the list."""
-    body: ReviewCompleteRequest = get_request_body()
-    repo = SqlAlchemyRepository()
-
-    line_table = db.metadata.tables["ShoppingListLine"]
-    item_table = db.metadata.tables["StockItem"]
-    list_table = db.metadata.tables["ShoppingList"]
-
-    from sqlalchemy import select
-    if db.session.execute(
-        select(list_table.c.id).where(list_table.c.id == shopping_list_id)
-    ).first() is None:
-        return not_found("ShoppingList", shopping_list_id)
-
-    ticked_rows = db.session.execute(
-        select(line_table.c.stock_item_id).where(
-            line_table.c.shopping_list_id == shopping_list_id,
-            line_table.c.is_ticked == True,  # noqa: E712
-        )
-    ).all()
-    item_ids = [r[0] for r in ticked_rows]
-    if not item_ids:
-        return ok({"set_stocked": 0, "checked": 0})
-
-    now = datetime.now(UTC)
-    checked_count = db.session.execute(
-        item_table.update().where(item_table.c.id.in_(item_ids)).values(
-            last_checked_at=now,
-            snoozed_until=None,
-        )
-    ).rowcount or 0
-
-    set_count = 0
-    if body.set_stocked:
-        stocked_id = _stocked_level_id(repo)
-        if stocked_id is None:
-            return bad_request("Stocked level not configured.")
-        result = db.session.execute(
-            item_table.update().where(item_table.c.id.in_(item_ids)).values(
-                stock_level_id=stocked_id,
-                stock_level_last_updated=now,
-            )
-        )
-        set_count = int(result.rowcount or 0)
-
-    db.session.commit()
-    return ok({"set_stocked": set_count, "checked": int(checked_count)})

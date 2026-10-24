@@ -249,6 +249,8 @@
     import { useQuasar } from 'quasar';
     import { computed, onMounted, reactive, ref } from 'vue';
     import { useReconcileQueue } from 'src/composables/useReconcileQueue';
+    import { useMealPlanStore } from 'src/stores/mealPlanStore';
+    import { localTodayIso } from 'src/helpers/weekDates';
     import type {
         ReconcileEntry,
         ReconcileVerb,
@@ -301,7 +303,12 @@
         skipped: 0,
     });
 
-    const todayIso = computed(() => new Date().toISOString().slice(0, 10));
+    // Household today from the server (R-021), local date until it loads —
+    // never `toISOString()`, which is the UTC date and made today un-pickable
+    // east of Greenwich in the evening (finalisation 02-R35).
+    const mealPlanStore = useMealPlanStore();
+    if (!mealPlanStore.today) void mealPlanStore.getTodayAsync();
+    const todayIso = computed(() => mealPlanStore.today ?? localTodayIso());
 
     function formatScheduledFor(iso: string): string {
         // "Mon 7 Jul" — same shape stocktake uses inline.

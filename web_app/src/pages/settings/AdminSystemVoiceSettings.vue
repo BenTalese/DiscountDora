@@ -108,13 +108,13 @@
             saved[field] = result[field];
             resetDrafts();
             $q.notify({
-                type: 'positive', position: 'bottom-right',
+                type: 'positive', 
                 message: 'Voice settings saved.',
             });
         } catch (err) {
             resetDrafts();
             $q.notify({
-                type: 'negative', position: 'bottom-right',
+                type: 'negative', 
                 message: 'Could not save voice settings.',
                 caption: toastCaption(err),
             });

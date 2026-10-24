@@ -374,7 +374,6 @@
         if (drafts.length === 0) {
             $q.notify({
                 type: 'info',
-                position: 'bottom-right',
                 message: 'No draft list yet. Create one first to add this product.',
             });
             return;
@@ -412,7 +411,6 @@
             await shoppingListStore.refreshAsync();
             $q.notify({
                 type: 'positive',
-                position: 'bottom-right',
                 message: result.already_on_list
                     ? 'Already on your list.'
                     : 'Added as product line.',
@@ -420,7 +418,6 @@
         } catch {
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: 'Could not add the product.',
             });
         } finally {
@@ -570,7 +567,6 @@
                             if (candidates.length === 0) {
                                 $q.notify({
                                     type: 'info',
-                                    position: 'bottom-right',
                                     message: 'Already on every active list.',
                                 });
                                 return;

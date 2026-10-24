@@ -90,7 +90,7 @@
         try {
             await api.createAlertAsync(props.product.product_id, threshold.value);
             $q.notify({
-                type: 'positive', position: 'bottom-right',
+                type: 'positive', 
                 message: `Watching for ${formatMoney(threshold.value)} or less.`,
             });
             emit('saved');
@@ -98,7 +98,7 @@
             void alertStore.refreshAsync();
         } catch (err) {
             $q.notify({
-                type: 'negative', position: 'bottom-right',
+                type: 'negative', 
                 message: "Couldn't save the price watch.",
                 caption: toastCaption(err),
             });
@@ -116,7 +116,7 @@
             emit('update:modelValue', false);
         } catch (err) {
             $q.notify({
-                type: 'negative', position: 'bottom-right',
+                type: 'negative', 
                 message: "Couldn't remove the price watch.",
                 caption: toastCaption(err),
             });

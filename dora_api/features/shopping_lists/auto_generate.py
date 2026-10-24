@@ -29,8 +29,10 @@ from pydantic import BaseModel, ConfigDict
 
 from dora_api.domain.entities.meal_plan import MealPlan
 from dora_api.domain.entities.recipe import Recipe
-from dora_api.domain.entities.shopping_list import ShoppingList, ShoppingListLine
+from dora_api.domain.entities.shopping_list import (ShoppingList, ShoppingListLine,
+                                                    format_list_date)
 from dora_api.domain.entities.stock_item import StockItem
+from dora_api.features.app_settings.clock import household_today
 from dora_api.features.routers import SHOPPING_LIST_ROUTER
 from dora_api.features.shopping_lists._frequently_added import (
     DEFAULT_FREQUENTLY_ADDED_LIMIT, rank_frequently_added_ids)
@@ -233,7 +235,10 @@ class AutoGenerateHandler:
             # "Auto 3 · Sun 31 May" — N counts non-archived auto-named lists
             # to keep the sequence stable as old runs get archived.
             n = self._next_auto_index()
-            list_name = f"Auto {n} · {now.strftime('%a %d %b')}"
+            # Household date through `format_list_date` (R-021 / R-056;
+            # finalisation 03-R8) — was a server-local `strftime` copy.
+            today = household_today(self.repository)
+            list_name = f"Auto {n} · {format_list_date(today, today)}"
 
         target = ShoppingList(name=list_name, created_at=now)
         self.repository.add(target)

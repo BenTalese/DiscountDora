@@ -74,8 +74,6 @@
     --border-default: hsl(168 18% 84%);
     --border-strong: hsl(168 18% 72%);
     --divider: hsl(168 14% 86%);
-    --focus-ring: var(--brand-primary);
-    --ring-focus: color-mix(in srgb, var(--brand-primary) 35%, transparent);
 
     --chart-1: hsl(150 76% 39%);
     --chart-2: hsl(189 100% 32%);
@@ -125,7 +123,8 @@
     --border-default: hsl(205 12% 28%);
     --border-strong: hsl(205 12% 40%);
     --divider: hsl(205 12% 24%);
-    --focus-ring: var(--brand-primary);
+    /* Stronger halo than the :root 35 %: the dark Pesto surface swallows the
+       softer wash (the only per-theme focus override — finalisation 20-R8). */
     --ring-focus: color-mix(in srgb, var(--brand-primary) 45%, transparent);
 
     --semantic-positive: hsl(150 48% 40%);
@@ -192,8 +191,6 @@
     --border-default: hsl(40 22% 86%);
     --border-strong: hsl(40 22% 74%);
     --divider: hsl(40 18% 88%);
-    --focus-ring: var(--brand-primary);
-    --ring-focus: color-mix(in srgb, var(--brand-primary) 35%, transparent);
 
     --chart-1: hsl(40 88% 55%);
     --chart-2: hsl(189 100% 32%);
@@ -264,8 +261,6 @@
     --border-default: hsl(38 10% 28%);
     --border-strong: hsl(38 10% 40%);
     --divider: hsl(38 10% 24%);
-    --focus-ring: var(--brand-primary);
-    --ring-focus: color-mix(in srgb, var(--brand-primary) 35%, transparent);
 
     --semantic-positive: hsl(105 47% 50%);
     --semantic-positive-soft: hsla(105, 47%, 50%, 0.16);
@@ -331,8 +326,6 @@
     --border-default: hsl(218 22% 84%);
     --border-strong: hsl(218 22% 70%);
     --divider: hsl(218 18% 86%);
-    --focus-ring: var(--brand-primary);
-    --ring-focus: color-mix(in srgb, var(--brand-primary) 35%, transparent);
 
     --chart-1: hsl(218 76% 56%);
     --chart-2: hsl(195 90% 50%);
@@ -382,8 +375,6 @@
     --border-default: hsl(184 14% 30%);
     --border-strong: hsl(184 14% 42%);
     --divider: hsl(184 14% 26%);
-    --focus-ring: var(--brand-primary);
-    --ring-focus: color-mix(in srgb, var(--brand-primary) 35%, transparent);
 
     --semantic-positive: hsl(150 50% 60%);
     --semantic-positive-soft: hsla(150, 50%, 60%, 0.16);
@@ -449,8 +440,6 @@
     --border-default: hsl(20 22% 86%);
     --border-strong: hsl(20 22% 72%);
     --divider: hsl(20 18% 88%);
-    --focus-ring: var(--brand-primary);
-    --ring-focus: color-mix(in srgb, var(--brand-primary) 35%, transparent);
 
     --chart-1: hsl(352 65% 50%);
     --chart-2: hsl(36 85% 50%);
@@ -504,8 +493,6 @@
     --border-default: hsl(2 16% 28%);
     --border-strong: hsl(2 16% 40%);
     --divider: hsl(2 16% 24%);
-    --focus-ring: var(--brand-primary);
-    --ring-focus: color-mix(in srgb, var(--brand-primary) 35%, transparent);
 
     --semantic-positive: hsl(98 60% 60%);
     --semantic-positive-soft: hsla(98, 60%, 60%, 0.16);
@@ -571,8 +558,6 @@
     --border-default: hsl(33 22% 82%);
     --border-strong: hsl(33 22% 68%);
     --divider: hsl(33 18% 84%);
-    --focus-ring: var(--brand-primary);
-    --ring-focus: color-mix(in srgb, var(--brand-primary) 35%, transparent);
 
     --chart-1: hsl(33 72% 50%);
     --chart-2: hsl(28 50% 36%);
@@ -622,8 +607,6 @@
     --border-default: hsl(28 18% 28%);
     --border-strong: hsl(28 18% 40%);
     --divider: hsl(28 18% 24%);
-    --focus-ring: var(--brand-primary);
-    --ring-focus: color-mix(in srgb, var(--brand-primary) 35%, transparent);
 
     --semantic-positive: hsl(140 55% 60%);
     --semantic-positive-soft: hsla(140, 55%, 60%, 0.16);
@@ -753,8 +736,6 @@
     --border-default: hsl(214 14% 86%);
     --border-strong: hsl(214 12% 70%);
     --divider: hsl(214 12% 89%);
-    --focus-ring: var(--brand-primary);
-    --ring-focus: color-mix(in srgb, var(--brand-primary) 35%, transparent);
 
     /* Neutral overlays + card shadow. The tokens.scss defaults are tinted
        Pesto teal (hue 168), which is a colour this theme does not own. */
@@ -896,8 +877,6 @@
     --border-default: hsl(340 25% 86%);
     --border-strong: hsl(340 25% 73%);
     --divider: hsl(340 20% 89%);
-    --focus-ring: var(--brand-primary);
-    --ring-focus: color-mix(in srgb, var(--brand-primary) 35%, transparent);
 
     --chart-1: hsl(330 72% 50%);
     --chart-2: hsl(168 60% 32%);

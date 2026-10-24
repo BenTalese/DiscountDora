@@ -1298,13 +1298,11 @@
             await refreshAll();
             $q.notify({
                 type: 'positive',
-                position: 'bottom-right',
                 message: 'Shopping started.',
             });
         } catch (err) {
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: 'Could not start shopping.',
                 caption: toastCaption(err),
             });
@@ -1442,7 +1440,6 @@
             if (moved > 0) {
                 $q.notify({
                     type: 'positive',
-                    position: 'bottom-right',
                     message: `${moved} unticked item${
                         moved === 1 ? '' : 's'
                     } moved for later.`,
@@ -1451,7 +1448,6 @@
             if (discarded > 0) {
                 $q.notify({
                     type: 'positive',
-                    position: 'bottom-right',
                     message: `${discarded} unticked item${
                         discarded === 1 ? '' : 's'
                     } discarded.`,
@@ -1463,7 +1459,6 @@
             ]);
             $q.notify({
                 type: 'positive',
-                position: 'bottom-right',
                 message: `Shopping finished. ${result.items_restocked} item${
                     result.items_restocked === 1 ? '' : 's'
                 } restocked.`,
@@ -1471,7 +1466,6 @@
         } catch (err) {
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: 'Could not finish shopping.',
                 caption: toastCaption(err),
             });
@@ -1538,7 +1532,6 @@
                 await load();
                 $q.notify({
                     type: 'negative',
-                    position: 'bottom-right',
                     message: 'Could not reorder.',
                     caption: toastCaption(err),
                 });
@@ -1840,7 +1833,6 @@
         } catch (err) {
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: 'Could not save shop day.',
                 caption: toastCaption(err),
             });
@@ -1856,7 +1848,6 @@
         } catch (err) {
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: 'Could not clear shop day.',
                 caption: toastCaption(err),
             });
@@ -1970,13 +1961,11 @@
             }
             $q.notify({
                 type: 'positive',
-                position: 'bottom-right',
                 message: 'List deleted.',
             });
         } catch (err) {
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: 'Could not delete.',
                 caption: toastCaption(err),
             });
@@ -2111,7 +2100,6 @@
         } catch (err) {
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: 'Could not rename.',
                 caption: toastCaption(err),
             });
@@ -2212,13 +2200,11 @@
             await refreshAllQuietly();
             $q.notify({
                 type: 'positive',
-                position: 'bottom-right',
                 message: `Added ${suggestion.name}.`,
             });
         } catch (err) {
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: `Could not add ${suggestion.name}.`,
                 caption: toastCaption(err),
             });
@@ -2251,7 +2237,6 @@
             await load();
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: 'Could not update line.',
                 caption: toastCaption(err),
             });
@@ -2392,7 +2377,6 @@
             line.planned_store_name = previousName;
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: 'Could not set the store.',
                 caption: toastCaption(err),
             });
@@ -2463,7 +2447,6 @@
             line.purchased_store_name = previousStoreName;
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: 'Could not save the price.',
                 caption: toastCaption(err),
             });
@@ -2527,7 +2510,6 @@
             line.purchased_store_name = previousStoreName;
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: 'Could not save the store.',
                 caption: toastCaption(err),
             });
@@ -2587,7 +2569,6 @@
             line.purchased_store_name = previousStoreName;
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: 'Could not clear the price.',
                 caption: toastCaption(err),
             });
@@ -2604,7 +2585,6 @@
             line.quantity = previous;
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: 'Could not update quantity.',
                 caption: toastCaption(err),
             });
@@ -2638,7 +2618,6 @@
             line.preferred_buy_id = previous;
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: 'Could not set the hint.',
                 caption: toastCaption(err),
             });
@@ -2676,7 +2655,6 @@
             line.selected_product_id = previous;
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: 'Could not set offer.',
                 caption: toastCaption(err),
             });
@@ -2767,14 +2745,12 @@
             if (before) {
                 $q.notify({
                     type: 'positive',
-                    position: 'bottom-right',
                     message: `Removed ${before.stock_item_name}.`,
                 });
             }
         } catch (err) {
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: 'Could not remove line.',
                 caption: toastCaption(err),
             });
@@ -2827,7 +2803,6 @@
         } catch (err) {
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: 'Could not go back to draft.',
                 caption: toastCaption(err),
             });
@@ -2855,13 +2830,11 @@
             await refreshAllQuietly();
             $q.notify({
                 type: 'positive',
-                position: 'bottom-right',
                 message: `Cleared ${result.removed_count} line${result.removed_count === 1 ? '' : 's'}.`,
             });
         } catch (err) {
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: 'Could not clear.',
                 caption: toastCaption(err),
             });
@@ -2914,7 +2887,6 @@
             });
             $q.notify({
                 type: 'positive',
-                position: 'bottom-right',
                 message: `Saved as template with ${result.line_count} item${
                     result.line_count === 1 ? '' : 's'
                 }.`,
@@ -2929,7 +2901,6 @@
         } catch (err) {
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: 'Could not save template.',
                 caption: toastCaption(err),
             });
@@ -2974,7 +2945,6 @@
         } catch (err) {
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: 'Could not attach receipt.',
                 caption: toastCaption(err),
             });
@@ -2989,7 +2959,6 @@
         // scrolled past the picker.
         $q.notify({
             type: 'negative',
-            position: 'bottom-right',
             message: 'Could not read that image.',
             caption: message,
         });
@@ -3010,7 +2979,6 @@
         } catch (err) {
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: 'Could not remove receipt.',
                 caption: toastCaption(err),
             });

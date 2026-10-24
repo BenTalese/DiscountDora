@@ -257,3 +257,26 @@ def test__deleting_a_meal_plan_entry_cascades_to_its_receipts(api):
     resp = requests.delete(f"{MEAL_PLANS}/{plan_id}")
     assert resp.status_code in (200, 204), resp.text
     assert _receipts_for(entry_id) == [], "receipt should have cascaded away"
+
+
+def test__sweep_receipt_ids__round_trip_through_orm(api):
+    """Finalisation 02-R1: the sweep bound the receipt id as `str(uuid4())`
+    while the verb path bound 16 raw bytes, so on SQLite the BINARY(16) column
+    held a mix of TEXT and BLOB ids the ORM could not read back. Every receipt
+    the sweep writes must load through the repository as a real UUID."""
+    from uuid import UUID as _UUID
+    from dora_api.domain.entities.meal_plan_reconcile_receipt import MealPlanReconcileReceipt
+    from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
+
+    recipe = _pick_recipe()
+    _, entry_id = _create_past_day_entry(recipe["recipe_id"], days_ago=1, servings=1)
+    _trigger_sweep()
+    assert _receipts_for(entry_id), "sweep should have written a receipt"
+
+    with app.app_context():
+        receipts = SqlAlchemyRepository().get(MealPlanReconcileReceipt).all()
+        mine = [r for r in receipts if str(r.meal_plan_entry_id) == entry_id]
+
+    assert mine, "the sweep's receipt must be readable through the ORM"
+    for receipt in mine:
+        assert isinstance(receipt.id, _UUID), type(receipt.id)

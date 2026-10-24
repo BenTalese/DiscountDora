@@ -43,14 +43,17 @@ FU that spun off this build.
 """
 import os
 
+from dora_api.features.help.version_info import GITHUB_URL
+
 # ── The switch — edit these and commit. Blank = dormant. ────────────────
 # Points at the public GitHub issue tracker (the open-source support channel,
 # FU-557). Lights up the Help "Report an issue" button, the page-error "Report
 # this" button, and the DoraBot report_issue link. Goes live for outsiders once
 # the repo is public (owner checklist FU-608); until then the URL simply 404s
-# for anyone not signed in with access — the plumbing is correct.
+# for anyone not signed in with access — the plumbing is correct. The repo
+# slug itself is `version_info.GITHUB_REPO` (one place, finalisation 19-R3).
 #   To route elsewhere per-install: set DORA_SUPPORT_URL / DORA_SUPPORT_EMAIL.
-_DEFAULT_SUPPORT_URL: str = "https://github.com/BenTalese/dashy-dora/issues/new/choose"
+_DEFAULT_SUPPORT_URL: str = f"{GITHUB_URL}/issues/new/choose"
 _DEFAULT_SUPPORT_EMAIL: str = ""
 
 

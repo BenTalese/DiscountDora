@@ -2,8 +2,8 @@ import type { BudgetPeriod } from 'src/models/auth';
 import AxiosHttpClient from './axiosHttpClient';
 
 /** P2-05 — cross-shopping-list grocery budget. The settings (amount,
- *  period) live on the User row; this service only reads the computed
- *  status / history. Settings changes go through AuthApiService.updateMeAsync. */
+ *  period) are an install-wide household value on `AppSetting`, edited via
+ *  `PATCH /budget/settings` below; status / history are computed server-side. */
 export type BudgetStatus = {
     enabled: boolean;
     amount: number | null;

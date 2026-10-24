@@ -1,4 +1,5 @@
 import { acceptHMRUpdate, defineStore } from 'pinia';
+import { nameCollator } from 'src/composables/useMoney';
 import { Notify } from 'quasar';
 import type { StockItem } from 'src/models/stockItem';
 import type {
@@ -17,7 +18,8 @@ const stockItemApiService = new StockItemApiService();
 
 export const useStockItemStore = defineStore('stockItem', () => {
     const stockItems: Ref<StockItem[]> = ref([]);
-    const collator = new Intl.Collator('en', { sensitivity: 'base' });
+    // Locale-aware collation from the locale authority (finalisation 20-R7).
+    const collator = { compare: (a: string, b: string) => nameCollator().compare(a, b) };
 
     /** When a level-change PATCH transitions a stock item to Low/Out and
      *  the install-wide auto-add mode says fire (FU-511: `off` never,
@@ -47,7 +49,6 @@ export const useStockItemStore = defineStore('stockItem', () => {
         const listName = listSummary?.display_name ?? 'your list';
         Notify.create({
             type: 'positive',
-            position: 'bottom-right',
             message: `Added ${itemName} to ${listName}.`,
             caption: 'Auto-added because it went low.',
             timeout: 3000,
@@ -118,7 +119,16 @@ export const useStockItemStore = defineStore('stockItem', () => {
         const stockItemIndex = stockItems.value.findIndex(
             (si) => si.stock_item_id == stockItemToUpdate.stock_item_id
         );
-        if (stockItemIndex < 0) return;
+        if (stockItemIndex < 0) {
+            // Not hydrated here (the stocktake runner writes before `/stock`
+            // has been visited): still the one write path — persist, keep the
+            // recipe facts honest and surface the auto-add — just nothing to
+            // move optimistically (finalisation 05-R5).
+            const result = await stockItemApiService.updateAsync(stockItemToUpdate);
+            invalidateDerivedRecipeFacts();
+            await handleAutoAddedResponse(stockItemToUpdate.stock_item_id, result);
+            return;
+        }
 
         const originalStockLevel = stockItems.value[stockItemIndex]!.stock_level_id;
         const nextStockLevel = stockItemToUpdate.stock_level_id!;

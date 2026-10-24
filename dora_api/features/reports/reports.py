@@ -51,20 +51,18 @@ from dora_api.domain.entities.store import Store
 from dora_api.domain.entities.product import Product
 from dora_api.domain.entities.product_historic_offer import \
     ProductHistoricOffer
-from dora_api.domain.entities.product_offer import ProductOffer
 from dora_api.domain.entities.shopping_list import (SHOPPING_LIST_STATUS_DONE,
                                                     ShoppingList,
                                                     ShoppingListLine)
 from dora_api.domain.entities.cook_event import CookEvent
 from dora_api.domain.entities.recipe import Recipe
 from dora_api.domain.entities.stock_item import StockItem
-from dora_api.domain.entities.stock_level import StockLevel
 from dora_api.domain.entities.stock_level_change import StockLevelChange
 from dora_api.domain.entities.stock_item_price_observation import StockItemPriceObservation
 from dora_api.domain.entities.stock_item_waste_event import StockItemWasteEvent
 from dora_api.domain import units
-from dora_api.domain.stock_status import get_stock_item_unit_cost_at
 from dora_api.features.app_settings.access import money_features_enabled
+from dora_api.features.app_settings.clock import household_timezone, household_today
 from dora_api.features.shopping_lists._line_price import resolve_store_id
 from dora_api.features.stock_items.your_prices import (
     active_dim_from_latest, display_denominator_for_series,
@@ -113,16 +111,25 @@ _RANGE_DAYS = {
 }
 
 
-def _parse_range(raw: str | None) -> datetime | None:
+def _parse_range(raw: str | None, repository: Repository | None = None) -> datetime | None:
     """Returns the lower-bound datetime for filtering, or None for 'all'.
     Defaults to 30 days when the param is missing or unrecognised — that's
     the most useful default for the page's initial render.
+
+    R-021 — the bound is the household's midnight `days` calendar days before
+    the household's today, as a UTC instant (finalisation 12-R3). It used to be
+    `now(UTC) - days`, so the window started at an arbitrary time of day and
+    the label could read tomorrow's date east of Greenwich in the evening.
     """
     token = (raw or "30d").strip().lower()
     if token == "all":
         return None
     days = _RANGE_DAYS.get(token, 30)
-    return datetime.now(timezone.utc) - timedelta(days=days)
+    repo = repository or SqlAlchemyRepository()
+    start_day = household_today(repo) - timedelta(days=days)
+    return datetime.combine(
+        start_day, datetime.min.time(), tzinfo=household_timezone(repo),
+    ).astimezone(timezone.utc)
 
 
 def _range_days(raw: str | None) -> int | None:
@@ -170,22 +177,32 @@ def range_window():
     waste endpoint takes. `days` here replaces it.
     """
     raw = request.args.get("range", "30d")
-    since = _parse_range(raw)
-    now = datetime.now(timezone.utc)
+    repository = SqlAlchemyRepository()
+    since = _parse_range(raw, repository)
     # "All time" starts at the household's earliest record, so the label can
     # name real dates on every range (owner, 2026-09-27: "just show the dates
     # it covers always so the UI doesn't shift around"). None only on an
     # install with no history at all.
-    start = since if since is not None else _earliest_activity(SqlAlchemyRepository())
+    start = since if since is not None else _earliest_activity(repository)
     return ok({
         "range": raw,
         "start": start.date().isoformat() if start is not None else None,
-        "end": now.date().isoformat(),
+        "end": household_today(repository).isoformat(),
         # `_range_days` returns None for "all"; the waste report clamps to 365
         # itself and reports the window it actually used, so the client hands it
         # a wide number and renders whatever comes back.
         "days": _range_days(raw),
     })
+
+
+def _as_utc(dt: datetime | None) -> datetime | None:
+    """SQLite drops tzinfo on `DateTime(timezone=True)`; coerce a stored
+    instant back to aware-UTC so it compares against an aware bound."""
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt
 
 
 def _bucket_size_days(since: datetime | None) -> int:
@@ -202,235 +219,14 @@ def _bucket_size_days(since: datetime | None) -> int:
     return 1         # daily for 30d/90d
 
 
-# ───── 1. Stock value over time ───────────────────────────────────────────
-
-@dataclass(slots=True)
-class StockValuePoint:
-    date: str
-    value: float
-
-
-class StockValueOverTimeHandler:
-    """Estimate of total pantry value over time.
-
-    Per-bucket formula: sum over stock items of
-        (stock_level.sequence as-of bucket date) *
-        (cheapest linked-product unit price as-of bucket date)
-
-    Level rank uses StockLevelChange history; price uses ProductOffer +
-    ProductHistoricOffer combined and filtered to "most recent ≤ bucket"
-    per linked product, then the minimum across the item's linked products.
-    Items with no linked-product price as-of a bucket fall back to the item's
-    own price observations (FU-216 — the everyday substrate); items with
-    neither a priced linked product nor an observation contribute zero.
-
-    Cost: O(buckets × items × linked-products-per-item) in Python after one
-    bulk load of changes and offers, which is fine for the pantry sizes this
-    app targets.
-    """
-
-    def __init__(self, repository: Repository) -> None:
-        self.repository = repository
-
-    def handle(self, since: datetime | None) -> List[StockValuePoint]:
-        session = self.repository.session
-        items: List[StockItem] = self.repository.get(StockItem).all()
-        if not items:
-            return []
-
-        # Pre-load level history for every item, sorted ascending. We'll walk
-        # it bucket-by-bucket with a per-item cursor.
-        level_rows = session.execute(
-            select(
-                StockLevelChange.stock_item_id,
-                StockLevelChange.changed_at,
-                StockLevelChange.stock_level_id,
-            ).order_by(StockLevelChange.changed_at.asc())
-        ).all()
-        changes_by_item: Dict[UUID, list] = {}
-        for stock_item_id, changed_at, level_id in level_rows:
-            changes_by_item.setdefault(stock_item_id, []).append((changed_at, level_id))
-
-        # Level rank lookup; items missing from this map (e.g. a level
-        # deleted out from under us) contribute zero rank.
-        levels = self.repository.get(StockLevel).all()
-        rank_by_level: Dict[UUID, int] = {l.id: int(l.sequence) for l in levels}
-        rank_by_current_level: Dict[UUID, int] = {
-            i.id: int(i.stock_level.sequence) if i.stock_level else 0
-            for i in items
-        }
-
-        # Linked products per item (m2m) → most-recent price history. Pull
-        # current + historic offers across every linked product, merge per
-        # product, sort ascending.
-        product_ids_by_item: Dict[UUID, list[UUID]] = {
-            i.id: [p.id for p in (i.products or [])] for i in items
-        }
-        all_product_ids = {pid for ids in product_ids_by_item.values() for pid in ids}
-        prices_by_product: Dict[UUID, list] = {pid: [] for pid in all_product_ids}
-        if all_product_ids:
-            current_rows = session.execute(
-                select(
-                    ProductOffer._product_id,  # noqa: SLF001 — mapped col alias
-                    ProductOffer.offered_on,
-                    ProductOffer.price_now,
-                ).where(ProductOffer._product_id.in_(all_product_ids))
-            ).all()
-            historic_rows = session.execute(
-                select(
-                    ProductHistoricOffer._product_id,  # noqa: SLF001
-                    ProductHistoricOffer.offered_on,
-                    ProductHistoricOffer.price_now,
-                ).where(ProductHistoricOffer._product_id.in_(all_product_ids))
-            ).all()
-            for pid, offered_on, price_now in list(current_rows) + list(historic_rows):
-                if offered_on is None or price_now is None:
-                    continue
-                prices_by_product.setdefault(pid, []).append((offered_on, float(price_now)))
-            for pid in prices_by_product:
-                prices_by_product[pid].sort(key=lambda r: r[0])
-
-        # price observations per item, for the fallback when an item
-        # has no linked-product price as-of a bucket (PROPOSAL §3.2).
-        observations_by_item: Dict[UUID, list] = {}
-        _ItemIds = [i.id for i in items]
-        if _ItemIds:
-            for _Obs in self.repository.get(StockItemPriceObservation).all(
-                EntityField(StockItemPriceObservation, "stock_item_id").in_(_ItemIds)
-            ):
-                # SQLite drops tzinfo on DateTime(timezone=True); coerce so the
-                # observed_at compares cleanly against the tz-aware cursor in
-                # get_stock_item_unit_cost_at.
-                if _Obs.observed_at is not None and _Obs.observed_at.tzinfo is None:
-                    _Obs.observed_at = _Obs.observed_at.replace(tzinfo=timezone.utc)
-                observations_by_item.setdefault(_Obs.stock_item_id, []).append(_Obs)
-
-        # Bucket boundaries.
-        now = datetime.now(timezone.utc)
-        bucket_days = _bucket_size_days(since)
-        start = since or _as_utc(_earliest_change(level_rows)) or (now - timedelta(days=90))
-        if start > now:
-            start = now - timedelta(days=30)
-        # Snap start to a midnight UTC boundary so points line up across reloads.
-        start = start.replace(hour=0, minute=0, second=0, microsecond=0)
-
-        points: List[StockValuePoint] = []
-        cursor = start
-        while cursor <= now:
-            total = 0.0
-            for item in items:
-                # Resolve as-of-cursor level. Falls back to the item's
-                # current level when no change row precedes the bucket
-                # (the change log only logs *transitions*, so the very
-                # first level for an item is implicit).
-                rank = _rank_as_of(
-                    item.id,
-                    cursor,
-                    changes_by_item,
-                    rank_by_level,
-                    rank_by_current_level,
-                )
-                if rank <= 0:
-                    continue
-                linked = product_ids_by_item.get(item.id) or []
-                price = _cheapest_as_of(linked, cursor, prices_by_product) if linked else None
-                if price is None:
-                    # fall back to the item's own price observations
-                    # (everyday substrate; PROPOSAL_PRODUCTS_AS_OVERLAY §3.2)
-                    # when there's no linked-product price as-of this bucket.
-                    price = get_stock_item_unit_cost_at(
-                        observations_by_item.get(item.id, []), when=cursor,
-                    )
-                if price is None:
-                    continue
-                total += rank * price
-            points.append(StockValuePoint(date=cursor.date().isoformat(), value=round(total, 2)))
-            cursor = cursor + timedelta(days=bucket_days)
-
-        return points
-
-
-def _earliest_change(level_rows) -> datetime | None:
-    if not level_rows:
-        return None
-    return level_rows[0][1]
-
-
-def _as_utc(dt: datetime | None) -> datetime | None:
-    if dt is None:
-        return None
-    if dt.tzinfo is None:
-        return dt.replace(tzinfo=timezone.utc)
-    return dt
-
-
-def _rank_as_of(
-    item_id: UUID,
-    cursor: datetime,
-    changes_by_item: Dict[UUID, list],
-    rank_by_level: Dict[UUID, int],
-    rank_by_current_level: Dict[UUID, int],
-) -> int:
-    history = changes_by_item.get(item_id)
-    if not history:
-        return rank_by_current_level.get(item_id, 0)
-    last_level_id = None
-    for changed_at, level_id in history:
-        changed_at = _as_utc(changed_at)
-        if changed_at and changed_at > cursor:
-            break
-        last_level_id = level_id
-    if last_level_id is None:
-        return rank_by_current_level.get(item_id, 0)
-    return rank_by_level.get(last_level_id, 0)
-
-
-def _price_as_of(
-    product_id: UUID,
-    cursor: datetime,
-    prices_by_product: Dict[UUID, list],
-) -> float | None:
-    series = prices_by_product.get(product_id)
-    if not series:
-        return None
-    last_price = None
-    for offered_on, price in series:
-        offered_on = _as_utc(offered_on)
-        if offered_on > cursor:
-            break
-        last_price = price
-    return last_price
-
-
-def _cheapest_as_of(
-    product_ids: list[UUID],
-    cursor: datetime,
-    prices_by_product: Dict[UUID, list],
-) -> float | None:
-    cheapest = None
-    for pid in product_ids:
-        price = _price_as_of(pid, cursor, prices_by_product)
-        if price is None:
-            continue
-        if cheapest is None or price < cheapest:
-            cheapest = price
-    return cheapest
-
-
-@REPORTS_ROUTER.route("/stock-value-over-time", methods=["GET"])
-def stock_value_over_time():
-    if _money_off():
-        return forbidden(MONEY_DISABLED_DETAIL)
-    _Since = _parse_range(request.args.get("range"))
-    _Points = StockValueOverTimeHandler(SqlAlchemyRepository()).handle(_Since)
-    return ok({
-        "range": request.args.get("range", "30d"),
-        "estimate_note": (
-            "Estimate: level rank × cheapest most-recent linked-product price. "
-            "Not accounting."
-        ),
-        "points": [asdict(p) for p in _Points],
-    })
+# ───── 1. (retired) Stock value over time ─────────────────────────────────
+# `StockValueOverTimeHandler` / `GET /reports/stock-value-over-time` were
+# deleted in finalisation 12-R1 (R-057): the Reports card went in C-waste,
+# the dashboard `pantry_value` card on 2026-09-04, and the SPA service method
+# had no caller — while the handler itself read `item.stock_level` and
+# `item.products` off `lazy="noload"` relationships, so every figure it
+# produced was systematically undercounted (R-032). If a pantry-value series
+# is ever revived, include both relationships and reuse `_bucket_size_days`.
 
 
 # ───── 2. Spend by store ──────────────────────────────────────────────────
@@ -651,11 +447,17 @@ class MostBoughtItemsHandler:
 
         # Distinct-(list, item) count, so the same item appearing across
         # five lists scores 5, not 5 × however many times it was edited.
+        # Ticked lines only: the card says "Bought most", and a line added
+        # and never bought is not a purchase (finalisation 12-R4; the FU-768
+        # "on the list ≠ bought" class).
         count_rows = session.execute(
             select(
                 ShoppingListLine.stock_item_id,
                 func.count(func.distinct(ShoppingListLine.shopping_list_id)),
-            ).where(ShoppingListLine.shopping_list_id.in_(list_ids))
+            ).where(
+                ShoppingListLine.shopping_list_id.in_(list_ids),
+                ShoppingListLine.is_ticked == True,  # noqa: E712
+            )
             .group_by(ShoppingListLine.stock_item_id)
         ).all()
         if not count_rows:

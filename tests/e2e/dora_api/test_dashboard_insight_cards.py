@@ -286,4 +286,26 @@ def test__restock_radar__PlannedMeal__FlagsTheRowAsPlanned(api):
     mine = next(r for r in rows if r["stock_item_id"] == item["stock_item_id"])
     assert mine["is_planned"] is True
 
+def test__restock_radar__ItemWithoutLevel__IsSkippedNot500(api):
+    """A deleted level nulls `stock_level_id` (`ondelete="SET NULL"`); the card
+    must skip such an item like `get_planned_demand` does, not 500 on
+    `None.sequence` (finalisation 08-R1). Create requires a level, so the FK
+    is nulled by targeted SQL — the sanctioned state-setup escape hatch."""
+    from sqlalchemy import text
+    from dora_api.app import db
+    from tests.support import uuid_bind
+
+    orphan = _make_item(stock_level_id=_stock_level_id(1))
+    with app.app_context(), db.engine.begin() as conn:
+        conn.execute(
+            text('UPDATE "StockItem" SET stock_level_id = NULL WHERE id = :id'),
+            {"id": uuid_bind(orphan["stock_item_id"])},
+        )
+
+    resp = requests.get(RESTOCK_RADAR)
+
+    assert resp.status_code == 200, resp.text
+    assert orphan["stock_item_id"] not in {r["stock_item_id"] for r in resp.json()["rows"]}
+
+
 #endregion restock radar

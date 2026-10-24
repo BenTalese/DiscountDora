@@ -53,6 +53,18 @@ __pycache__
 /src-cordova/platforms
 /src-cordova/plugins
 /src-cordova/www
+# The six rooted patterns above came from Quasar's template, which assumes the
+# repo root is the Quasar project. Ours is `web_app/`, so they matched nothing
+# and `web_app/src-capacitor/www/index.html` (a build output) got tracked
+# (finalisation 17-R3). `git rm --cached` of that file is still owed.
+web_app/src-capacitor/node_modules/
+web_app/src-capacitor/www/
+web_app/src-capacitor/android/app/build/
+web_app/src-capacitor/android/.gradle/
+web_app/src-cordova/node_modules/
+web_app/src-cordova/platforms/
+web_app/src-cordova/plugins/
+web_app/src-cordova/www/
 coverage
 dist
 dist-ssr

@@ -590,34 +590,20 @@ class QuickAddToPrimaryHandler:
             if target is None:  # defensive; resolver guarantees this id is in `lists`
                 return QuickAddResponse(result="no_draft")
 
-        existing = self.repository.get(ShoppingListLine).one(
-            EntityField(ShoppingListLine, "shopping_list_id").eq(target.id)
-            & EntityField(ShoppingListLine, "stock_item_id").eq(request.stock_item_id)
+        # One dedupe, one construction: `AddLineHandler` owns both. This used
+        # to re-implement them — without the `product_id is None` guard, so a
+        # product line nested under the item counted as "already on the list"
+        # (finalisation 03-R5).
+        added = AddLineHandler(self.repository).handle(
+            AddLineRequest(stock_item_id=request.stock_item_id), target.id,
         )
-        if existing is not None:
-            return QuickAddResponse(
-                result="added",
-                line_id=existing.id,
-                shopping_list_id=target.id,
-                already_on_list=True,
-            )
-
-        siblings = self.repository.get(ShoppingListLine).all(
-            EntityField(ShoppingListLine, "shopping_list_id").eq(target.id)
-        )
-        next_sequence = (max((l.sequence for l in siblings), default=-1)) + 1
-        line = ShoppingListLine(
-            shopping_list_id = target.id,
-            stock_item_id = request.stock_item_id,
-            quantity = 1,
-            sequence = next_sequence,
-            added_at = datetime.now(timezone.utc),
-        )
-        apply_line_defaults(self.repository, [line])
-        self.repository.add(line)
-        self.repository.save_changes()
+        if added.item_not_found:
+            return QuickAddResponse(result="item_not_found")
         return QuickAddResponse(
-            result="added", line_id=line.id, shopping_list_id=target.id
+            result="added",
+            line_id=added.line_id,
+            shopping_list_id=target.id,
+            already_on_list=added.already_on_list,
         )
 
 

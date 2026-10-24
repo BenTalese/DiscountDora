@@ -99,6 +99,7 @@
      */
     import { computed, ref, watch } from 'vue';
     import { ICONS } from 'src/style/icons';
+    import { WASTE_REASON_TILES } from 'src/helpers/wasteReasons';
     import AppSkeleton from 'src/components/AppSkeleton.vue';
     import CardEmpty from 'src/components/CardEmpty.vue';
     import CardLoadError from 'src/components/dashboard/CardLoadError.vue';
@@ -132,17 +133,9 @@
         }
     });
 
-    const WASTE_REASON_TILES: {
-        reason: WasteReason;
-        label: string;
-        icon: string;
-    }[] = [
-        { reason: 'expired', label: 'Expired', icon: ICONS.wasteExpired },
-        { reason: 'spoiled', label: 'Spoiled', icon: ICONS.wasteSpoiled },
-        { reason: 'did_not_like', label: "Didn't like", icon: ICONS.wasteDidNotLike },
-        { reason: 'overbought', label: 'Overbought', icon: ICONS.wasteOverbought },
-        { reason: 'other', label: 'Other', icon: ICONS.wasteOther },
-    ];
+    // One reason vocabulary (R-003): this card used to declare its own tiles
+    // and name one reason differently from the Mark-as-wasted modal
+    // ("Overbought" vs "Bought too much") — finalisation 12-R6.
     const reasonTiles = computed(() =>
         WASTE_REASON_TILES.map((t) => ({
             ...t,

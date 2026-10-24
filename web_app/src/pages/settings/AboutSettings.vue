@@ -47,9 +47,13 @@
             </div>
         </SettingsSection>
 
-        <hr v-if="stats.length" class="settings-divider" />
+        <hr v-if="stats.length && !isNative" class="settings-divider" />
 
-        <SettingsSection>
+        <!-- Inside the Capacitor shell the user IS in the app; the browser
+             install prompt can never fire there and the section fell through
+             to "Install isn't available in this browser. Try Chrome…"
+             (finalisation 17-R9). -->
+        <SettingsSection v-if="!isNative">
             <template #title>Install as an app</template>
             <template #description>
                 Adds a Dora icon to your home screen or launcher.
@@ -375,7 +379,7 @@
             const normalised = await setBackendBaseUrl(url);
             currentBackend.value = normalised;
             $q.notify({
-                type: 'positive', position: 'bottom-right',
+                type: 'positive', 
                 message: 'Instance URL saved. Refreshing…',
                 timeout: 1500,
             });
@@ -389,7 +393,6 @@
         } catch (err) {
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: 'Could not save the URL.',
                 caption: toastCaption(err),
             });

@@ -185,6 +185,7 @@ PINNED_ADMIN_ENDPOINTS: list[tuple[str, str, dict | None]] = [
     # backup library — dora_api/features/data/backup_library.py
     ("POST",   "/api/data/backups", {}),                                # :182
     ("GET",    "/api/data/backups", None),                              # :242
+    ("GET",    "/api/data/backup/sections", None),                      # list_backup_sections (18-R3)
     ("GET",    f"/api/data/backups/{_DUMMY_ID}/download", None),        # :283
     ("POST",   f"/api/data/backups/{_DUMMY_ID}/restore", None),         # :307
     ("DELETE", f"/api/data/backups/{_DUMMY_ID}", None),                 # :345

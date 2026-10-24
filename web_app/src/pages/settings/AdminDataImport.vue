@@ -347,7 +347,6 @@
         } catch (err) {
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: "Couldn't download the template.",
                 caption: err instanceof Error ? err.message : String(err),
             });
@@ -481,7 +480,6 @@
         } catch (err) {
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: 'Upload failed.',
                 caption: err instanceof Error ? err.message : String(err),
             });
@@ -512,7 +510,6 @@
         } catch (err) {
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: "Couldn't read that spreadsheet.",
                 caption: err instanceof Error ? err.message : String(err),
             });
@@ -547,7 +544,6 @@
         if (!columnMap.name) {
             $q.notify({
                 type: 'warning',
-                position: 'bottom-right',
                 message: 'Map a column to "Name" before importing.',
             });
             return;

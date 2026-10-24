@@ -1185,6 +1185,7 @@
     import AddToListButton from 'src/components/AddToListButton.vue';
 
     import { ICONS } from 'src/style/icons';
+    import { ingredientDisplayName } from 'src/helpers/recipeIngredientLabel';
     import { formatQuantity } from 'src/helpers/formatQuantity';
     import { formatDate } from 'src/composables/useDateFormat';
     import { formatMoney } from 'src/composables/useMoney';
@@ -1588,11 +1589,14 @@
 
     /** The recipe's own name for the row when it has chosen one ("Bega
      *  Tasty" under Cheese), else the pantry item's. */
+    // Shared precedence (finalisation 01-R1): `label` → item name → raw text.
     function ingredientLabel(row: IngredientForm): string {
         if (row.stock_item_id) {
-            return row.label || stockItemName(row) || row.raw_text || 'Unknown item';
+            return ingredientDisplayName({
+                label: row.label, stock_item_name: stockItemName(row), raw_text: row.raw_text,
+            });
         }
-        return row.raw_text || 'Unnamed ingredient';
+        return ingredientDisplayName({ raw_text: row.raw_text });
     }
 
     /** The pantry item under a chosen name, shown beside it so "Bega Tasty"
@@ -2062,7 +2066,7 @@
             await recipeStore.toggleFavouriteAsync(recipe.value);
             await loadRecipe();
         } catch (err) {
-            $q.notify({ type: 'negative', position: 'bottom-right', message: "Couldn't update favourite.", caption: toastCaption(err) });
+            $q.notify({ type: 'negative', message: "Couldn't update favourite.", caption: toastCaption(err) });
         }
     }
 
@@ -2104,13 +2108,12 @@
             await recipeStore.getRecipesAsync();
             $q.notify({
                 type: 'positive',
-                position: 'bottom-right',
                 message: 'New version created.',
                 caption: 'Pick either one when planning.',
             });
             if (newId) void router.push(`/cookbook/${newId}`);
         } catch (err) {
-            $q.notify({ type: 'negative', position: 'bottom-right', message: "Couldn't create a new version.", caption: toastCaption(err) });
+            $q.notify({ type: 'negative', message: "Couldn't create a new version.", caption: toastCaption(err) });
         } finally {
             newVersionLoading.value = false;
         }
@@ -2131,7 +2134,7 @@
             await recipeStore.deleteRecipeAsync(recipe.value.recipe_id);
             await router.push('/cookbook');
         } catch (err) {
-            $q.notify({ type: 'negative', position: 'bottom-right', message: "Couldn't delete.", caption: toastCaption(err) });
+            $q.notify({ type: 'negative', message: "Couldn't delete.", caption: toastCaption(err) });
         }
     }
 
@@ -2142,7 +2145,7 @@
             await recipeStore.adjustMealsAsync(recipe.value.recipe_id, delta);
             await loadRecipe();
         } catch (err) {
-            $q.notify({ type: 'negative', position: 'bottom-right', message: 'Could not update meals.', caption: toastCaption(err) });
+            $q.notify({ type: 'negative', message: 'Could not update meals.', caption: toastCaption(err) });
         } finally {
             adjusting.value = false;
         }

@@ -6,17 +6,6 @@ export type ReportRange = '30d' | '90d' | '1y' | '2y' | '5y' | 'all';
 // so callers can't hand the endpoint a range=all it will reject.
 export type YoYReportRange = Exclude<ReportRange, 'all'>;
 
-export interface StockValuePoint {
-    date: string;
-    value: number;
-}
-
-export interface StockValueResponse {
-    range: ReportRange;
-    estimate_note: string;
-    points: StockValuePoint[];
-}
-
 export interface StoreSpendRow {
     store_id: string | null;
     store: string;
@@ -202,9 +191,6 @@ export interface RangeWindow {
 
 export default class ReportsApiService {
     private httpClient = new AxiosHttpClient();
-
-    getStockValueAsync = (range: ReportRange) =>
-        this.httpClient.get<StockValueResponse>(`/reports/stock-value-over-time?range=${range}`);
 
     /** The dates a range token resolves to. Page chrome, so it is ungated. */
     getRangeWindowAsync = (range: ReportRange) =>

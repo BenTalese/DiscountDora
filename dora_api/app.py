@@ -102,6 +102,20 @@ elif _SecureCookiesEnv in ('0', 'false', 'no', 'off'):
 else:
     app.config['SESSION_COOKIE_SECURE'] = is_production()
 
+# Reverse proxy awareness (finalisation 15-R1). A self-host fronted by nginx /
+# Caddy / Traefik / Cloudflare hands Flask the *proxy's* address, so the
+# login rate limit (5/min per IP) throttled the whole household as one
+# client and the audit log recorded the proxy IP for everyone. Opt-in by
+# hop count — trusting `X-Forwarded-*` unconditionally would let any direct
+# client spoof its address, which is worse than the bug. Set
+# `DORA_TRUSTED_PROXY_HOPS=1` for one proxy in front of the API.
+_ProxyHops = config_manager.get_trusted_proxy_hops()
+if _ProxyHops > 0:
+    from werkzeug.middleware.proxy_fix import ProxyFix
+    app.wsgi_app = ProxyFix(  # type: ignore[method-assign]
+        app.wsgi_app, x_for=_ProxyHops, x_proto=_ProxyHops, x_host=_ProxyHops, x_prefix=0,
+    )
+
 db = SQLAlchemy(metadata=MetaData(naming_convention=NAMING_CONVENTION))
 config_manager.get_data_dir().mkdir(parents=True, exist_ok=True)
 db.init_app(app)

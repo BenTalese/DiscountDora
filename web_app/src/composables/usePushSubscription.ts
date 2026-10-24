@@ -46,6 +46,37 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
     return output;
 }
 
+/**
+ * The service-worker registration push attaches to.
+ *
+ * A registration is keyed by **scope**, not script URL, and both `sw.js`
+ * (Workbox, the PWA build) and `/push-sw.js` default to `/`. Registering
+ * `/push-sw.js` while `sw.js` controlled the page therefore *replaced* it:
+ * the offline cache worker was gone until the next full load re-registered
+ * `sw.js` (which then evicted the push worker), and every swap fired
+ * `controllerchange` → a false "A new version of Dora is ready" banner —
+ * simply from opening Settings → Notifications (finalisation 17-R1).
+ *
+ * The PWA build now imports `push-sw.js`'s handlers into the Workbox worker
+ * (`quasar.config.ts` → `importScripts`), so when a registration already
+ * exists it is the one to use. Only when nothing is registered (SPA / dev
+ * mode, which has no `sw.js`) is the push-only worker registered on its own.
+ * `container` is injectable for tests.
+ */
+export async function resolvePushRegistration(
+    container: ServiceWorkerContainer = navigator.serviceWorker,
+): Promise<ServiceWorkerRegistration> {
+    const existing = await container.getRegistration();
+    if (existing) {
+        await container.ready;
+        return existing;
+    }
+    const registered = await container.register(PUSH_SW_URL);
+    // `ready` resolves once the SW is activated and controlling.
+    await container.ready;
+    return registered;
+}
+
 export function usePushSubscription() {
     const state = ref<PushState>('loading');
     const error = ref<string | null>(null);
@@ -56,9 +87,7 @@ export function usePushSubscription() {
     async function ensureRegistration(): Promise<ServiceWorkerRegistration | null> {
         if (registration) return registration;
         try {
-            registration = await navigator.serviceWorker.register(PUSH_SW_URL);
-            // `ready` resolves once the SW is activated and controlling.
-            await navigator.serviceWorker.ready;
+            registration = await resolvePushRegistration();
             return registration;
         } catch (err) {
             error.value = (err as Error).message || 'Service worker failed to register.';

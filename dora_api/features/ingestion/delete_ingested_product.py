@@ -27,7 +27,7 @@ from uuid import UUID
 from dora_api.domain.entities.product import Product
 from dora_api.features.products.delete_product import DeleteProductHandler
 from dora_api.features.routers import INGEST_ROUTER
-from dora_api.infrastructure.api_response import no_content, not_found
+from dora_api.infrastructure.api_response import forbidden, no_content, not_found
 from dora_api.infrastructure.ingestion_auth import (
     authenticate_ingestion_request, stamp_used)
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
@@ -49,6 +49,18 @@ def ingest_delete_product(product_id: UUID):
         return auth_error
 
     repository = SqlAlchemyRepository()
+
+    # OD-2 defence in depth — a hand-entered product is the user's own and is
+    # removed from Dora itself, never by a producer. `link-status` no longer
+    # hands a custom product's id out (finalisation 16-R8), but a producer may
+    # still hold one from before, or guess; refuse rather than delete.
+    target = repository.get(Product).by_id(product_id)
+    if target is not None and target.is_custom:
+        _Logger.warning(
+            "Source %s asked to delete custom product %s; refused.", source.id, product_id,
+        )
+        return forbidden("A hand-entered product can only be removed from Dora itself.")
+
     response = DeleteProductHandler(repository).handle(product_id)
 
     if response.product_not_found:

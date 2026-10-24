@@ -208,12 +208,17 @@ describe('stockItemStore — updateStockLevelAsync (optimistic + rollback)', () 
         expect(levelOf(store, 'SI-1')).toBe('LVL-good');
     });
 
-    it('is a silent no-op for an id that is not in the cache', async () => {
+    it('persists a level write for an id the cache has not loaded, without an optimistic move', async () => {
+        // Finalisation 05-R5: the stocktake runner writes before `/stock` has
+        // ever been visited. The store is still the one write path — persist
+        // and surface the auto-add — there is just no cached row to move.
         const store = await seedStore([item('SI-1', 'Apple')]);
 
         await store.updateStockLevelAsync({ stock_item_id: 'SI-404', stock_level_id: 'LVL-low' });
 
-        expect(m.updateAsync).not.toHaveBeenCalled();
+        expect(m.updateAsync).toHaveBeenCalledTimes(1);
+        expect(m.updateAsync).toHaveBeenCalledWith({ stock_item_id: 'SI-404', stock_level_id: 'LVL-low' });
+        expect(store.stockItems.map((s) => s.stock_item_id)).toEqual(['SI-1']);
     });
 
     it('fires the FU-511 auto-add toast and refreshes the shopping-list store', async () => {

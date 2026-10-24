@@ -1,33 +1,33 @@
-"""GET /api/shopping-lists/frequently-added — top stock items by how often
-they've been added to a shopping list.
+"""GET /api/shopping-lists/frequently-added — stock items by how often they've
+been added to a shopping list, most first.
 
-Used by QuickAddSheet to surface "stuff you usually buy" before the user
-starts typing. We count occurrences across every existing line (active and
-archived) — items the user has added before, regardless of whether they
-ticked them or finished the list, are still good suggestions.
+Used by QuickAddSheet to rank "stuff you usually buy" ahead of the rest before
+the user starts typing. The ranking rule lives in `_frequently_added`
+(shared with the auto-generate dialog, R-003); this endpoint hands the SPA the
+ordered ids and nothing else — the sheet already holds every stock item from
+the store, and the `name` / `stock_level_id` / `add_count` fields it used to
+carry had no reader (`stock_level_id` was also always None: the handler read
+the `noload` relationship — finalisation 03-R6 / 03-R14, R-032 / R-057).
 """
 import logging
 from dataclasses import dataclass
 from typing import List
 from uuid import UUID
 
-from sqlalchemy import func, select
+from flask import request
 
-from dora_api.domain.entities.shopping_list import ShoppingListLine
 from dora_api.domain.entities.stock_item import StockItem
 from dora_api.features.routers import SHOPPING_LIST_ROUTER
+from dora_api.features.shopping_lists._frequently_added import rank_frequently_added_ids
 from dora_api.infrastructure.api_response import ok
-from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 from dora_api.infrastructure.ports import Repository
-from flask import request
+from dora_api.persistence.field import EntityField
+from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 
 
 @dataclass(frozen=True, slots=True)
 class FrequentlyAddedDto:
     stock_item_id: UUID
-    name: str
-    stock_level_id: UUID | None
-    add_count: int
 
 
 class GetFrequentlyAddedHandler:
@@ -35,34 +35,17 @@ class GetFrequentlyAddedHandler:
         self.repository = repository
 
     def handle(self, limit: int) -> List[FrequentlyAddedDto]:
-        session = self.repository.session
-        # One grouped query gets the counts; we only join StockItem for the
-        # name + level so the response is self-contained.
-        rows = session.execute(
-            select(
-                ShoppingListLine.stock_item_id,
-                func.count().label("add_count"),
-            ).group_by(ShoppingListLine.stock_item_id)
-        ).all()
-        if not rows:
+        ranked = rank_frequently_added_ids(self.repository.session, limit)
+        if not ranked:
             return []
-
-        counts: dict[UUID, int] = {row[0]: int(row[1]) for row in rows}
-        items = self.repository.get(StockItem).all()
-        out: List[FrequentlyAddedDto] = []
-        for item in items:
-            count = counts.get(item.id, 0)
-            if count <= 0:
-                continue
-            out.append(FrequentlyAddedDto(
-                stock_item_id = item.id,
-                name = item.name,
-                stock_level_id = item.stock_level.id if item.stock_level else None,
-                add_count = count,
-            ))
-        # Most-added first; alphabetical tiebreak so the order is stable.
-        out.sort(key=lambda r: (-r.add_count, r.name.lower()))
-        return out[:limit]
+        # Lines outlive their item only transiently (cascade), but be honest:
+        # rank only ids that still name a stock item.
+        live = {
+            item.id for item in self.repository.get(StockItem).all(
+                EntityField(StockItem, "id").in_(ranked)
+            )
+        }
+        return [FrequentlyAddedDto(stock_item_id=i) for i in ranked if i in live]
 
 
 @SHOPPING_LIST_ROUTER.route("/frequently-added", methods=["GET"])

@@ -81,7 +81,7 @@
     function notifyError(message: string, err: unknown) {
         $q.notify({
             type: 'negative',
-            position: 'bottom-right',
+            
             message,
             caption: toastCaption(err),
         });

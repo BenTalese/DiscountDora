@@ -33,7 +33,8 @@ point is a robust band, not false precision.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timezone
+from zoneinfo import ZoneInfo
 from uuid import UUID
 
 from dora_api.domain.cadence_math import mean_gap_days
@@ -45,7 +46,7 @@ from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.stock_status import (LOW_STOCK_SEQUENCE,
                                           OUT_OF_STOCK_SEQUENCE,
                                           STOCKED_SEQUENCE)
-from dora_api.features.app_settings.clock import household_today
+from dora_api.features.app_settings.clock import household_timezone, household_today
 from dora_api.features.shopping_lists._line_price import line_paid_unit_price
 from dora_api.features.stock_items._level_access import resolve_levels_by_item
 from dora_api.persistence.field import EntityField
@@ -281,11 +282,19 @@ def _cadence_reason(
 # ── Repo gathering ───────────────────────────────────────────────────────
 
 
-def _as_date(value: datetime | date | None) -> date | None:
+def _as_date(value: datetime | date | None, tz: ZoneInfo) -> date | None:
+    """Calendar day of a stored instant in the household zone (R-021).
+
+    Stored timestamps are UTC (naive on SQLite); taking `.date()` of them put
+    a morning level change on *yesterday* for every household east of
+    Greenwich — "Updated 1 day ago" the moment you set it (finalisation
+    07-R1; the same FU-525 class the buy verdict fixed).
+    """
     if value is None:
         return None
     if isinstance(value, datetime):
-        return value.date()
+        aware = value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+        return aware.astimezone(tz).date()
     return value
 
 
@@ -309,6 +318,7 @@ def gather_beliefs_for_items(
     if not items:
         return {}
     today = household_today(repository)
+    tz = household_timezone(repository)
     item_ids = [i.id for i in items]
     # Resolved by foreign key rather than read off `item.stock_level`: the
     # relationship is `lazy="noload"` and an `.include()` doesn't reliably
@@ -336,7 +346,7 @@ def gather_beliefs_for_items(
             continue
         if line_paid_unit_price(line) is None:
             continue
-        d = _as_date(completed_at)
+        d = _as_date(completed_at, tz)
         if d is not None:
             purchase_dates_by_item.setdefault(line.stock_item_id, set()).add(d)
 
@@ -346,7 +356,7 @@ def gather_beliefs_for_items(
     )
     consumption_dates_by_item: dict[UUID, list[date]] = {}
     for e in events:
-        d = _as_date(e.occurred_at)
+        d = _as_date(e.occurred_at, tz)
         if d is not None:
             consumption_dates_by_item.setdefault(e.stock_item_id, []).append(d)
 
@@ -357,8 +367,8 @@ def gather_beliefs_for_items(
                 levels_by_item[item.id].sequence
                 if levels_by_item.get(item.id) is not None else None
             ),
-            stock_level_last_updated=_as_date(item.stock_level_last_updated),
-            last_checked_at=_as_date(item.last_checked_at),
+            stock_level_last_updated=_as_date(item.stock_level_last_updated, tz),
+            last_checked_at=_as_date(item.last_checked_at, tz),
             purchase_dates=sorted(purchase_dates_by_item.get(item.id, set())),
             consumption_dates=sorted(consumption_dates_by_item.get(item.id, [])),
             today=today,

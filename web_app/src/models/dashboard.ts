@@ -17,17 +17,9 @@ export type StockItemSummary = {
     low_stock: number;
 };
 
-export type ShoppingListSummary = {
-    /** Active (non-done) lists. Drives the primary-list card's
-     *  "+N other active lists" footer link. */
-    total: number;
-};
-
-export type RecipeSummary = {
-    /** Read by AboutSettings' at-a-glance block and the dashboard hero's
-     *  "your recipe book's empty" nudge. */
-    total: number;
-};
+// `ShoppingListSummary` / `RecipeSummary` were deleted in finalisation 08-R2
+// (R-057): nothing rendered them after the 2026-09-04 hero cut, and
+// AboutSettings reads `/usage-stats`.
 
 export type UpcomingMealPlanEntry = {
     recipe_id: string;
@@ -70,7 +62,5 @@ export type MealPlanSummary = {
 
 export type DashboardSummary = {
     stock_items: StockItemSummary;
-    shopping_lists: ShoppingListSummary;
-    recipes: RecipeSummary;
     meal_plan: MealPlanSummary;
 };

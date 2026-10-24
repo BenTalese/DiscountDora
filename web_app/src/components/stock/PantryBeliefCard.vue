@@ -2,9 +2,10 @@
     <!--
         P8-07 — Dora's inferred pantry belief, as a card.
 
-        `PantryBeliefChip` is the *row* form of this and stays deliberately
-        silent when Dora agrees with the recorded level: on a list of 200
-        items, "Dora agrees" 200 times is noise.
+        The *row* form of this is the level picker's dashed ring + menu
+        header (`StockItemRow`), which stays deliberately silent when Dora
+        agrees with the recorded level: on a list of 200 items, "Dora agrees"
+        200 times is noise.
 
         The stock-item detail page is the opposite case. The owner asked
         (2026-08-16) to "always show Dora's opinion so we can see the
@@ -79,7 +80,7 @@
 </script>
 
 <style scoped>
-    /* Same colour reasoning as PantryBeliefChip: the warning tint lives in
+    /* Same colour reasoning as the row's belief ring: the warning tint lives in
        the fill/border and the (graphical, non-text) icon, never in the text
        ink — full-strength warning ink is the D-002 1.98:1 contrast fail. */
     .belief-card {

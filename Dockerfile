@@ -62,8 +62,16 @@ RUN python packaging/fetch_default_voice.py \
     || echo "[build] WARN: default voice fetch failed; image will use browser-voice fallback until a user downloads one"
 
 # ── Frontend build ─────────────────────────────────────────────────────────
+# `npm run build` is the one place the build mode lives (`quasar build -m pwa`,
+# web_app/package.json). This used to call `quasar build` directly, which is
+# SPA mode: the self-host image shipped without the service worker, manifest,
+# install prompt or offline cache that FU-336 added — the mode flip never
+# reached the Dockerfile (finalisation 19-R1). The `test -f` lines make the
+# image fail to build, loudly, if that ever regresses.
 WORKDIR /app/web_app
-RUN quasar build
+RUN npm run build \
+    && test -f dist/spa/sw.js \
+    && test -f dist/spa/manifest.json
 
 # ── nginx site config + drop the stock default ─────────────────────────────
 RUN rm -f /etc/nginx/sites-enabled/default \

@@ -28,7 +28,8 @@ from dora_api.domain.entities.stock_item import StockItem
 from dora_api.domain.entities.stock_item_waste_event import (
     StockItemWasteEvent, WASTE_REASON_VALUES,
 )
-from dora_api.domain.stock_status import is_missing
+from dora_api.domain.stock_status import effective_expiring_soon_window, is_missing
+from dora_api.features.app_settings.access import get_or_create_app_setting
 from dora_api.features.app_settings.clock import household_today
 from dora_api.features.routers import WASTE_ROUTER
 from dora_api.features.shopping_lists._line_price import line_paid_unit_price
@@ -41,10 +42,10 @@ from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 from dora_api.infrastructure.ports import Repository
 
 
-# How far ahead "expiring soon" looks by default. Mirrors the assistant's
-# _EXPIRY_HORIZON_DAYS so an item that's flagged here also appears in
-# Dora's whats_expiring tool.
-_DEFAULT_HORIZON_DAYS = 7
+# How far ahead "expiring soon" looks by default: the admin-configured
+# `expiring_soon_window_days` (`effective_expiring_soon_window`), the same
+# number alerts and the assistant's whats_expiring tool read — it used to be
+# a third fixed copy of 7 (finalisation 12-R9, R-003).
 _MAX_HORIZON_DAYS = 60
 
 # Cap returned rows everywhere — the rescue feed is a one-glance signal,
@@ -104,11 +105,12 @@ class GetWasteRescueHandler:
         )
         items.sort(key=lambda i: i.expiry_date or date.max)
 
-        # Cheapest-last-paid-price per stock item — pulled from archived
-        # shopping list lines (P2-02 capture). Used as the "value at risk"
-        # estimate on the rescue feed so the assistant can frame
-        # what's-about-to-spoil in dollar terms. The waste *event* itself
-        # no longer stores a value (C-waste slim).
+        # Last-paid price per stock item — the "value at risk" estimate on
+        # the rescue feed so the assistant can frame what's-about-to-spoil in
+        # dollar terms. "Last" means the most recently *added* priced line:
+        # this used to pick by `sequence`, which is a per-list position, so
+        # across lists the pick was arbitrary (finalisation 12-R5). The waste
+        # *event* itself no longer stores a value (C-waste slim).
         value_lookup: dict[UUID, float] = {}
         if items:
             item_ids = [i.id for i in items]
@@ -116,7 +118,7 @@ class GetWasteRescueHandler:
                 EntityField(ShoppingListLine, ShoppingListLine.Fields.STOCK_ITEM_ID)
                 .in_(item_ids)
             )
-            for line in sorted(lines, key=lambda l: l.sequence):
+            for line in sorted(lines, key=lambda l: (l.added_at is None, l.added_at)):
                 price = line_paid_unit_price(line)
                 if price is not None:
                     value_lookup[line.stock_item_id] = price
@@ -189,11 +191,13 @@ class GetWasteRescueHandler:
 @WASTE_ROUTER.route("/rescue", methods=["GET"])
 def get_waste_rescue():
     _Logger = logging.getLogger(__name__)
+    repository = SqlAlchemyRepository()
+    default_horizon = effective_expiring_soon_window(get_or_create_app_setting(repository))
     try:
-        horizon = int(request.args.get("horizon_days", _DEFAULT_HORIZON_DAYS))
+        horizon = int(request.args.get("horizon_days", default_horizon))
     except (TypeError, ValueError):
-        horizon = _DEFAULT_HORIZON_DAYS
-    dto = GetWasteRescueHandler(SqlAlchemyRepository()).handle(horizon)
+        horizon = default_horizon
+    dto = GetWasteRescueHandler(repository).handle(horizon)
     _Logger.debug(
         "waste rescue horizon=%d items=%d recipes=%d",
         dto.horizon_days, len(dto.items), len(dto.recipes),

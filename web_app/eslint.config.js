@@ -5,26 +5,12 @@ import pluginVue from 'eslint-plugin-vue'
 import globals from 'globals'
 
 export default defineConfigWithVueTs(
-  {
-    /**
-     * Ignore the following files.
-     * Please note that pluginQuasar.configs.recommended() already ignores
-     * the "node_modules" folder for you (and all other Quasar project
-     * relevant folders and files).
-     *
-     * ESLint requires "ignores" key to be the only one in this object
-     */
-    // FU-336: `src-pwa/custom-service-worker.ts` is Quasar's generated
-    // InjectManifest service-worker template. Our PWA uses GenerateSW mode
-    // (quasar.config `pwa.workboxMode`), so this file is never consumed — but
-    // `src-pwa/` is untracked scaffold that Quasar regenerates from template on
-    // a fresh checkout, reintroducing a `no-floating-promises` hit on
-    // `self.skipWaiting()`. Ignoring the generated template keeps `npm run build`
-    // (which lints via vite-plugin-checker) green on any checkout without
-    // depending on committing generated code. The used registration file
-    // (`register-service-worker.ts`) stays linted.
-    ignores: ['src-pwa/custom-service-worker.ts'],
-  },
+  // `pluginQuasar.configs.recommended()` already ignores node_modules and the
+  // other Quasar project folders. The `src-pwa/custom-service-worker.ts` ignore
+  // that used to sit here went with the file: it was the InjectManifest template
+  // and this project builds its worker with GenerateSW (quasar.config
+  // `pwa.extendGenerateSWOptions`) — see the comment at the top of that block
+  // (FU-724, finalisation 17-R15).
 
   pluginQuasar.configs.recommended(),
   js.configs.recommended,
@@ -90,15 +76,6 @@ export default defineConfigWithVueTs(
 
       // allow debugger during development only
       'no-debugger': process.env.NODE_ENV === 'production' ? 'error' : 'off'
-    }
-  },
-
-  {
-    files: [ 'src-pwa/custom-service-worker.ts' ],
-    languageOptions: {
-      globals: {
-        ...globals.serviceworker
-      }
     }
   },
 

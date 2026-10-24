@@ -320,7 +320,6 @@
         } catch (err) {
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: `Could not preview ${voice.label}.`,
                 caption: toastCaption(err),
             });

@@ -146,8 +146,13 @@ class GetRestockRadarHandler:
         # we don't read the urgency here (every row is already low or out, so it
         # would be non-none by construction and tell us nothing), but passing
         # the levels costs nothing and keeps the call honest.
+        # `resolve_levels_by_item` maps an unlevelled item to None (a deleted
+        # level nulls the FK) — skip it here as `get_planned_demand` does,
+        # instead of 500-ing the whole card (finalisation 08-R1).
         recorded_by_item = {
-            item_id: level.sequence for item_id, level in levels.items()
+            item_id: level.sequence
+            for item_id, level in levels.items()
+            if level is not None
         }
         demand = gather_planned_demand(
             self.repository, recorded_by_item=recorded_by_item,

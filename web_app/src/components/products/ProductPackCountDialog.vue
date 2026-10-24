@@ -101,7 +101,6 @@
         } catch (err) {
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: 'Could not save the pack count.',
                 caption: toastCaption(err),
             });

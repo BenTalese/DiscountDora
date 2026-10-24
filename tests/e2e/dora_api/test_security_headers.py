@@ -26,6 +26,7 @@ def _assert_security_headers(resp) -> None:
         "default-src 'self'",
         "frame-ancestors 'none'",       # clickjacking defence, CSP-native
         "img-src 'self' data: blob: https:",  # base64 blobs + uploads + ext images
+        "media-src 'self' blob: data:",       # autoplay primer (data:) + Piper (blob:) — FU-853
         "base-uri 'self'",
         "form-action 'self'",
     ):

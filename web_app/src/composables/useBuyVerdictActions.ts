@@ -51,7 +51,6 @@ export function useBuyVerdictActions() {
             // so it's a genuine misconfiguration signal, not a UX case.
             Notify.create({
                 type: 'negative',
-                position: 'bottom-right',
                 message: "Couldn't find the most-stocked level. Check Settings → Stock levels.",
                 timeout: 4000,
             });
@@ -67,7 +66,6 @@ export function useBuyVerdictActions() {
             void pantryBeliefs.loadAsync(true);
             Notify.create({
                 type: 'positive',
-                position: 'bottom-right',
                 // FU-572: level names are user-configurable (seed default
                 // "Stocked") — don't hardcode the legacy "Well-Stocked".
                 message: `Marked as ${stockedLevel.name}.`,
@@ -77,7 +75,6 @@ export function useBuyVerdictActions() {
         } catch (err) {
             Notify.create({
                 type: 'negative',
-                position: 'bottom-right',
                 message: "Couldn't update the stock level.",
                 caption: err instanceof Error ? err.message : String(err),
                 timeout: 4000,

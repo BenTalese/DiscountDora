@@ -28,6 +28,7 @@ from dora_api.domain.entities.stock_item_price_observation import \
 from dora_api.features.routers import STOCK_ITEM_ROUTER
 from dora_api.infrastructure.api_response import ok
 from dora_api.infrastructure.ports import Repository
+from dora_api.persistence.field import EntityField
 from dora_api.persistence.sqlalchemy_repository import SqlAlchemyRepository
 
 
@@ -60,7 +61,14 @@ class GetRecentlyPricedHandler:
 
         latest: dict[UUID, datetime] = {row[0]: row[1] for row in rows if row[1] is not None}
         out: List[RecentlyPricedDto] = []
-        for item in self.repository.get(StockItem).all():
+        if not latest:
+            return []
+        # Only the items that have an observation — not the whole pantry to
+        # hydrate at most `limit` names (finalisation 06-R9).
+        priced_items = self.repository.get(StockItem).all(
+            EntityField(StockItem, "id").in_(list(latest))
+        )
+        for item in priced_items:
             observed_at = latest.get(item.id)
             if observed_at is None:
                 continue

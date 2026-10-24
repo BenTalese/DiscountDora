@@ -58,7 +58,7 @@ from dora_api.infrastructure.ports import Repository
 # ingredient `is_expiring` flag below, so a recipe the filter matched can
 # never open with nothing marked (the mismatch the owner hit 2026-08-17).
 #
-# Deliberately NOT the waste feed's 7 (`waste._DEFAULT_HORIZON_DAYS`): that's
+# Deliberately NOT the rescue feed's admin-set `expiring_soon_window_days`: that's
 # a one-glance "rescue this now" signal, this is "plan around it this
 # fortnight". Two horizons, two jobs — but each has exactly one home.
 EXPIRING_HORIZON_DAYS = 14
@@ -1628,13 +1628,9 @@ class GetRecipesHandler:
         if entity is None:
             return None
         dto = RecipeDto.from_entity(entity)
-        # the `/<recipe_id>` route has no `uuid:` converter, so
-        # Flask hands us a `str`. `get_tag_ids_for_recipes` returns a
-        # dict keyed by real UUIDs (SQLAlchemy coerces the IN clause but
-        # the dict's keys come from the result rows). A Python `.get(str)`
-        # against UUID keys always misses, which silently dropped every
-        # tag + tool on the detail endpoint. Look up via the loaded
-        # entity's id (always a UUID) so the keys match.
+        # Keyed by the loaded entity's id (a real UUID) so the lookup matches
+        # the UUID-keyed dict `get_tag_ids_for_recipes` returns whatever type
+        # the caller passed in.
         tag_map = get_tag_ids_for_recipes([entity.id])
         tool_map = get_tool_ids_for_recipes([entity.id])
         step_rows = get_steps_for_recipe(recipe_id)
@@ -1784,12 +1780,9 @@ def _parse_recipe_filters(args) -> RecipeFilters:
 
 
 # ── GET /api/recipes/<id> ───────────────────────────────────────────────
-# Real detail endpoint added in C-4 Chunk 8: the previous SPA path —
-# filtering the list endpoint by id — only returned the list-shape DTO
-# (no `steps[]`, no `version_siblings[]`). Detail views need the fully
-# hydrated DTO that `handle_by_id` builds; this is its first dedicated
-# route. The old filter-by-id path on the list endpoint still works as
-# the cookbook overview's primary call (cheap list shape is fine there).
+# Detail endpoint — the SPA's `recipeApiService.getAsync`. It returns the
+# fully hydrated DTO `handle_by_id` builds (steps, sections, version
+# siblings); the list endpoint's filter-by-id form is unused by the SPA.
 
 @RECIPE_ROUTER.route("/<uuid:recipe_id>", methods=["GET"])
 def get_recipe(recipe_id: UUID):

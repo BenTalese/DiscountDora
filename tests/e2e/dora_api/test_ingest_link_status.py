@@ -221,6 +221,58 @@ def test__link_status__item_without_stockcode_or_name_is_not_found(api):
     assert resp.json()["items"][0]["reason"] == "product_not_found"
 
 
+def test__link_status__never_resolves_a_custom_product__and_bearer_delete_refuses_it(api):
+    """Finalisation 16-R8 — the read side used to look products up without
+    the OD-2 `is_custom` filter the write side dedupes with. A name the user
+    had typed in by hand came back "already in Dora", and the companion's
+    unsave then deleted the user's own product through the bearer door. Now:
+    the lookup says not held, a push of the same name creates its own row,
+    and the bearer delete refuses a custom id outright."""
+    sid, key = _mint_key()
+    store = requests.get(f"{BASE}/stores").json()["items"][0]
+    _map_store(sid, "ExternalStore", store["store_id"])
+    name = f"Butcher Mince {uuid.uuid4().hex[:6]}"
+
+    created = requests.post(f"{BASE}/products", json={
+        "name": name,
+        "store_name": store["name"],
+        "brand": "Local Butcher",
+        "is_active": True,
+        "is_available": True,
+        "price_now": 12.0,
+        "size": "1kg",
+        "size_unit": "KG",
+        "size_value": 1.0,
+    })
+    assert created.status_code == 201, created.text
+    custom_id = created.headers["location"].rsplit(":", 1)[-1]
+
+    # Read side: a custom product is not "held" as far as a producer is told.
+    status = _post_link_status(key, {
+        "items": [{"ref": "a", "store": "ExternalStore", "name": name}],
+    })
+    assert status.status_code == 200, status.text
+    assert status.json()["items"][0]["product_id"] is None
+    assert status.json()["items"][0]["reason"] == "product_not_found"
+
+    # Write side: the same name creates its own row, never adopts the custom one.
+    pushed = _post_ingest(key, {
+        "products": [{"ref": "p", "name": name, "store": "ExternalStore"}],
+        "offers": [],
+    })
+    assert pushed.status_code == 200, pushed.text
+    ingested_id = pushed.json()["accepted"][0]["id"]
+    assert ingested_id != custom_id
+
+    # And a producer holding a custom id (stale or guessed) cannot delete it.
+    refused = requests.Session().delete(
+        f"{INGEST}/products/{custom_id}", headers={"Authorization": f"Bearer {key}"},
+    )
+    assert refused.status_code == 403, refused.text
+    still_there = requests.get(f"{BASE}/products", params={"filter": f"product_id:eq:{custom_id}"})
+    assert len(still_there.json()["items"]) == 1
+
+
 def test__link_status__over_the_item_cap_is_rejected(api):
     _sid, key = _mint_key()
     resp = _post_link_status(key, {

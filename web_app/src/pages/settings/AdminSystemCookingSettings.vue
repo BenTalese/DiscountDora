@@ -123,7 +123,7 @@
             headcountDraft.value = savedHeadcount;
             await refreshCookingPolicy();
             $q.notify({
-                type: 'positive', position: 'bottom-right',
+                type: 'positive', 
                 message: savedHeadcount === null
                     ? 'Cook mode will use each recipe\'s serving size.'
                     : `Cook mode will scale recipes for ${savedHeadcount}.`,
@@ -131,7 +131,7 @@
         } catch (err) {
             headcountDraft.value = savedHeadcount;
             $q.notify({
-                type: 'negative', position: 'bottom-right',
+                type: 'negative', 
                 message: 'Could not save household headcount.',
                 caption: toastCaption(err),
             });
@@ -147,7 +147,7 @@
             batchDraft.value = savedBatch;
             await refreshCookingPolicy();
             $q.notify({
-                type: 'positive', position: 'bottom-right',
+                type: 'positive', 
                 message: savedBatch
                     ? 'Batch tools are on in the meal planner.'
                     : 'Meal planner is back to pure scheduling.',
@@ -155,7 +155,7 @@
         } catch (err) {
             batchDraft.value = savedBatch;
             $q.notify({
-                type: 'negative', position: 'bottom-right',
+                type: 'negative', 
                 message: 'Could not change cooking style.',
                 caption: toastCaption(err),
             });

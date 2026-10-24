@@ -71,7 +71,7 @@
                         <p class="text-caption dora-text-muted q-mb-sm">
                             A local language model (Ollama) handles freeform
                             phrasing and chains tool calls. Set up in
-                            <router-link :to="{ path: '/settings', query: { tab: 'system' } }">Settings → System</router-link>.
+                            <router-link to="/settings/assistant">Settings → Dora assistant</router-link>.
                         </p>
                         <ul class="dora-feature-list">
                             <li>Understands looser phrasing and follow-ups</li>

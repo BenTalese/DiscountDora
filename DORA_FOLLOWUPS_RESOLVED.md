@@ -10,6 +10,184 @@ resolutions go at the **top**.
 
 ---
 
+## [RESOLVED] FU-853 — Cook mode's timer chime is blocked by the app's own CSP
+- **Raised:** 2026-09-03 (cook-mode owner batch — observed, not reported)
+- **Type:** finding
+- **What:** driving cook mode live logs, on every load:
+  `Loading media from 'data:audio/wav;base64,…' violates the following Content
+  Security Policy directive: "default-src 'self'". Note that 'media-src' was
+  not explicitly set, so 'default-src' is used as a fallback.` The timer's
+  end-of-countdown sound is a `data:` WAV and the CSP has no `media-src`, so
+  **the chime never plays** — the one piece of feedback a hands-free cook with
+  a pot on the stove is relying on. The visual bar and the toast still fire, so
+  nothing looks broken.
+- **Why deferred:** pre-existing, unrelated to the five reported items, and the
+  fix is a server header change (`media-src 'self' data:`) that wants its own
+  verification — including a check for any other `data:`/blob media the same
+  directive would cover.
+- **Recommended resolution:** opportunistic — next time cook mode or the CSP is
+  touched. Pair with a live listen, since a silent-by-config chime and a
+  silent-by-bug chime look identical in the code.
+- **RESOLVED 2026-10-23 (finalisation 04-R2, Stage 2 unit 9):** `_DEFAULT_CSP` gains `media-src 'self' blob: data:` (pinned in `test_security_headers`). Re-diagnosis: the chime is a WebAudio oscillator and was never blocked; the violation was `audioUnlock.ts`'s silent `data:` WAV — the iOS/WKWebView autoplay primer speech output relies on. Live listen on iOS still owed (DORA_VERIFY).
+
+## [RESOLVED] FU-836 — `col-lg-*` does not mean "desktop", and the dashboard was the surface that assumed it did
+- **Raised:** 2026-09-02 (dashboard chunk 2 — found while measuring [[FU-631]] #3)
+- **Type:** finding (A8 / breakpoint discipline)
+- **What:** the design guide (A8) defines **desktop as ≥1024px**. Quasar's grid
+  breakpoints are `xs <600 · sm ≥600 · md ≥1024 · lg ≥1440 · xl ≥1920`, so the
+  class meaning "from the app's desktop up" is **`col-md-*`**, not `col-lg-*`.
+  `quasar.config.ts` sets no override — checked; the defaults apply. The dashboard
+  was the one surface reaching for `col-lg-*` (**2** usages app-wide against
+  **14** for `col-md-*` and 25 for `col-sm-*`), and the consequence was
+  measurable: its `col-lg-6` / `col-lg-4` / `col-lg-8` classes **did nothing below
+  1440px**, so on an ordinary 1280px laptop "Needs your attention" and "The week
+  ahead" rendered **full-width** — neither carried a `col-sm-*` step — while every
+  other card was already half. Almost certainly not the intent, and it is why the
+  review's "five dead regions on a default desktop" was wrong below 1440 (two
+  there).
+- **Already handled:** the dashboard no longer uses `col-lg-*` at all (chunk 2),
+  and `helpers/dashboardGrid.ts` carries a ⚠️ comment naming the trap so it isn't
+  re-added.
+- **What's left:** the remaining `col-lg-*` call site in `src/` (2 total, one was
+  the dashboard's — worth one grep), and a decision on whether A8 should say this
+  out loud. A8 lists the app's breakpoints without noting that Quasar's `lg` is
+  *not* one of them, which is precisely the gap that produced this; a one-line
+  note ("the class for the app's desktop tier is `col-md-*` — Quasar's `lg` is
+  ≥1440") is cheaper than any amount of review.
+- **Recommended resolution:** opportunistic — a two-minute A8 edit next time
+  anyone is in `DESIGN_STYLE_GUIDE.md`. Cross-ref: A8, `DASHBOARD_PAGE_REVIEW.md`
+  §4.6 correction.
+- **2026-10-23 (finalisation Stage 1):** the two remaining `col-lg-*` sites are `pages/MyProductsPage.vue:336` and `pages/RecipesOverview.vue:456` → `col-md-*`; close on execution (CHUNK_20 §C10).
+- **RESOLVED 2026-10-23 (finalisation Stage 2 unit 10):** the last two `col-lg-*` call sites (`MyProductsPage`, `RecipesOverview`) now stop at `col-md-*`; A8 in `DESIGN_STYLE_GUIDE.md` says out loud that the desktop tier's class is `col-md-*` (Quasar's `lg` is ≥1440).
+
+## [RESOLVED] FU-724 — `src-pwa/custom-service-worker.ts` is dead code, and it's the file you'd reach for
+- **Raised:** 2026-08-23 (offline read-only work)
+- **Type:** finding.
+- **What:** `web_app/src-pwa/custom-service-worker.ts` is never built. Its own
+  header says it is picked up "ONLY if `workboxMode` is set to `InjectManifest`",
+  and `quasar.config.ts:238` sets `workboxMode: 'GenerateSW'`. The service worker
+  that actually ships is generated from `extendGenerateSWOptions` in
+  `quasar.config.ts` (that's where the `/api/**` `NetworkFirst` rule and the
+  navigate-fallback live).
+- **Why it matters more than ordinary dead code:** now that **offline is
+  read-only (R-052)**, the read cache *is* the offline story — and the file a
+  future agent will open to change offline caching behaviour is the one named
+  `custom-service-worker.ts`. Edits there would have no effect, silently, with
+  no build error and no test failure. That's the same invisible-failure shape as
+  FU-719/FU-720.
+- **Why deferred:** deleting it is a one-liner but it's outside the scope of the
+  read-only change, and it's worth a moment's thought first: either delete it, or
+  switch to `InjectManifest` and move the runtime-caching rules into it (a real
+  choice — `GenerateSW` is the lower-friction route the config comment
+  deliberately picked, so deleting is the likely answer).
+- **Recommended resolution:** opportunistic. If deleting, leave a one-line
+  pointer comment in `quasar.config.ts` saying the SW is generated there, so the
+  next person looks in the right place.
+- **RESOLVED 2026-10-23 (finalisation 17-R15, Stage 2 unit 7):** `src-pwa/custom-service-worker.ts` deleted (GenerateSW is the chosen route); the `pwa` block in `quasar.config.ts` carries the pointer comment naming the generated worker as the only one; the eslint ignore blocks for the file removed.
+
+## [RESOLVED] FU-695 — `PantryBeliefChip.vue` is orphaned; nothing imports it
+- **Raised:** 2026-08-20 (DR-15 micro-motion pass).
+- **Type:** finding.
+- **What:** `components/stock/PantryBeliefChip.vue` has **no importer left** in
+  `web_app/src` — only comments in `PantryBeliefCard.vue`, `StockItemRow.vue`
+  and `StockItemDetailPage.vue` still refer to it. The row-level belief hint it
+  rendered was folded into the level picker (ring + menu header) during the
+  2026-08-15 Chunk-4 work, and the chip was left behind. Note it *did* receive a
+  real fix afterwards (the DR-8 fade-in) — i.e. dead code that is still being
+  maintained, which is the expensive kind.
+- **Why deferred:** deciding between "delete it" and "it's the intended
+  component for a surface that hasn't been rebuilt yet" is a product call, and
+  the three comments referencing it need rewording either way — more than a
+  ride-along on a motion pass.
+- **Recommended resolution:** now (a delete + three comment edits, if the owner
+  confirms the row-level chip isn't coming back).
+- **RESOLVED 2026-10-23 (finalisation 07-R3, Stage 2 unit 9):** `PantryBeliefChip.vue` deleted; the five comments naming it (`PantryBeliefCard` ×2, `StockItemRow`, `StockItemDetailPage`, `StocktakeRunner`) reworded to the live row form (the level picker's ring + menu header). Owner's D-5 answered "is the row chip coming back?" — no.
+
+## [RESOLVED] FU-686 — `PantryBeliefChip.vue` is orphaned and still described everywhere as the live row form
+- **Raised:** 2026-08-20 (stock-signal consolidation, Chunk 4).
+- **Type:** finding.
+- **What:** `components/stock/PantryBeliefChip.vue` is imported by **nothing**. The
+  row stopped using it on 2026-08-15 when the belief hint moved onto the level picker,
+  and Chunk 4 removed the ring that replaced it. Its own header comment plus comments
+  in `PantryBeliefCard.vue` and `StockItemDetailPage.vue` still describe it as the
+  live *row* form of the belief chip, which will mislead the next reader into thinking
+  the row still shows one.
+  **Correction to this entry (2026-08-20, same day):** it originally also listed
+  `BaseButton`'s `attention` prop as dead. That was true for about an hour — the
+  owner then reinstated the Stocktake glow gated on essentials, so
+  `StockOverview.vue` calls it again and the prop, `dora-btn--attention` and its
+  keyframes are all **live**. Do not delete them. Recorded rather than quietly edited
+  out, because "nothing glows any more" was the wrong conclusion, not just a stale
+  fact — the design landed on *gate the condition*, not *remove the channel*.
+- **Why deferred:** the chip is named by three planning docs, so deleting a component
+  they reference deserves its own line rather than vanishing inside a UI chunk.
+- **Recommended resolution:** opportunistic. Deleting it is a two-line job (the file
+  plus the three stale comments); it carries no behaviour.
+- **RESOLVED 2026-10-23 (finalisation 07-R3, Stage 2 unit 9):** same mechanism as FU-695 — file deleted, comments reworded. `BaseButton`'s `attention` prop untouched (live, per this entry's own correction).
+
+## [RESOLVED] FU-682 — three more `window.open(apiUrl)` print views still violate R-045
+- **Raised:** 2026-08-19 (recipe view feedback batch)
+- **Type:** finding
+- **What:** the recipe Print button was reported as "404s" and turned out to be a
+  straight R-045 violation — `window.open` on a URL built from `resolveBaseURL()`,
+  which is authenticated only if the browser volunteers the session cookie. Fixed
+  by routing it through the new shared `services/files/printView.openHtmlDocumentAsync`
+  (fetch through `AxiosHttpClient`, tab claimed on the gesture per R-046).
+  **Three siblings were left untouched and have the identical defect:**
+  `useShoppingListExport.ts:22`, `useMealPlanExport.ts:13`,
+  `useStockOverviewExport.ts:51`. All three will fail the same way on a split
+  `app.`/`api.` host and in the Capacitor shell, and will look like a 404 to the user.
+- **Why deferred:** the reported surface was the recipe page; the other three are
+  different pages the owner hasn't reviewed this round, and each needs its own
+  error copy + a walk. The mechanic they need already exists, so each is a ~10-line
+  change.
+- **Fix shape:** replace each `window.open(...)` with `openHtmlDocumentAsync(path, title)`
+  (keep the call a sync entry point — no `await` before it), and give each a toast
+  with `toastCaption(err)` + the `PopupBlockedError` branch, as
+  `useRecipeExport.openPrintView` now does. `useQrLabels` is already migrated.
+- **Recommended resolution:** now-ish — it's a known-broken class with a proven fix
+  sitting next to it. Otherwise opportunistically, whenever each page is next open.
+- **RESOLVED 2026-10-23 (finalisation 02-R36 + chunk 3 §C10 + Stage 2 unit 10):** all three siblings route through `openHtmlDocumentAsync` via the new shared `composables/usePrintDocument.openPrintDocument` (sync entry, `PopupBlockedError` + `toastCaption` toasts): `useMealPlanExport`, `useShoppingListExport`, `useStockOverviewExport`. Specs: `useMealPlanExport.spec` rewritten, `useShoppingListExport.spec` added.
+
+## [RESOLVED] FU-660 — Failed offline syncs have nowhere to go — no conflict UI
+- **Resolved:** 2026-10-23 — **superseded by R-052** (offline is read-only; the write queue, its conflict pile and the six queued mutation kinds were deleted 2026-08-23 — `grep useOfflineQueue|conflictCount|tryWithQueue web_app/src` → none). Finalisation CHUNK_17 17-R4.
+- **Raised:** 2026-08-17 (offline-sync audit).
+- **Type:** finding / deferred job.
+- **What:** `useOfflineQueue` maintains a `conflicts` pile for queued mutations the
+  server rejects on replay for a non-network reason (422, 409, a since-deleted item).
+  It's exposed — `conflicts`, `conflictCount`, `discardConflict`, `retryConflict` — and
+  **nothing in the app consumes any of it**. The user gets one 5-second toast and the
+  change is then unreachable: no list, no retry, no way to see what was dropped. This
+  session made the pile survive a reload (it was memory-only, so a refresh erased the
+  record entirely), which turns silent loss into recoverable loss — but only for
+  someone reading localStorage.
+- **Why deferred:** the transport bugs were the blocker (nothing could sync at all —
+  see the same-day CSRF fix), and surfacing conflicts needs a real design call: where
+  does it live (a banner? Settings? a dedicated "unsynced changes" page?), and what are
+  the resolve verbs beyond retry/discard.
+- **Recommended resolution:** later, once the fixed sync path has been exercised in
+  anger — the shape of the UI should follow what conflicts actually turn out to be.
+  Pairs with FU-661.
+
+## [RESOLVED] FU-661 — Offline coverage is six mutation kinds; is that the right set?
+- **Resolved:** 2026-10-23 — **superseded by R-052** (offline is read-only; the write queue, its conflict pile and the six queued mutation kinds were deleted 2026-08-23 — `grep useOfflineQueue|conflictCount|tryWithQueue web_app/src` → none). Finalisation CHUNK_17 17-R4.
+- **Raised:** 2026-08-17 (offline-sync audit).
+- **Type:** design question.
+- **What:** exactly six things queue offline — `stock_level_update`, `mark_open`,
+  `mark_restocked`, `push_expiry`, `clear_expiry`, `shopping_list_line_tick` — from three
+  call sites (`stockItemStore` ×2, `ShoppingListDetail`). Everything else fails loudly by
+  design (`useOfflineQueue`'s header: creates, deletes and anything identity-changing are
+  excluded because a phantom item appearing an hour later is worse than an error now).
+  That's a defensible line, but it was drawn at F3 and never revisited against how the
+  app is actually used mid-shop. Candidates worth a look: adding an item to a shopping
+  list (a create, but an idempotent-ish one), the stocktake runner's check/snooze (a
+  walk-the-pantry flow, i.e. exactly the "in a cupboard with no signal" case), and
+  cook-mode's finish step.
+- **Why deferred:** each addition needs its own replay-safety argument, and two of the
+  three are creates — the category the current design deliberately excludes.
+- **Recommended resolution:** opportunistic, or when the real-device field test (FU-389)
+  says which of these actually bites.
+
 ## [RESOLVED] FU-927 — Grocerize's public search returns nothing; keep or drop the provider (companion repo)
 - **Raised:** 2026-10-22 (companion provider rework)
 - **Type:** finding, needs a decision

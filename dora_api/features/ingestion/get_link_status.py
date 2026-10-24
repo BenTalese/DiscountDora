@@ -34,15 +34,13 @@ from uuid import UUID
 
 from flask import request
 from pydantic import BaseModel, ConfigDict, Field, model_validator
-from sqlalchemy import select
 
-from dora_api.app import db
 from dora_api.domain.entities.ingestion_source import IngestionSource
 from dora_api.domain.entities.ingestion_store_mapping import \
     IngestionStoreMapping
 from dora_api.domain.entities.product import Product
-from dora_api.domain.entities.stock_item import StockItem
-from dora_api.domain.entities.store import Store
+from dora_api.features.ingestion.product_identity import find_ingested_product
+from dora_api.features.products.product_links import linked_stock_items
 from dora_api.features.routers import INGEST_ROUTER
 from dora_api.infrastructure.api_response import ok
 from dora_api.infrastructure.ingestion_auth import (
@@ -182,62 +180,34 @@ class GetLinkStatusHandler:
         stockcode: str | None,
         name: str | None,
     ) -> Product | None:
-        """Stockcode-first, name fallback — same order the write side uses,
-        so a caller that pushes with stockcode gets a symmetric lookup."""
-        field_name = EntityField(Product, Product.Fields.NAME)
-        field_stockcode = EntityField(Product, Product.Fields.MERCHANT_STOCKCODE)
-        field_store_id = EntityField(Store, Store.Fields.ID)
-
-        if stockcode:
-            existing = self.repository.get(Product).one(
-                field_stockcode.eq(stockcode) & field_store_id.eq(store_id)
-            )
-            if existing is not None:
-                return existing
-        if name:
-            return self.repository.get(Product).one(
-                field_name.eq(name) & field_store_id.eq(store_id)
-            )
-        return None
+        """The same lookup the write side dedupes with — stockcode-first,
+        name fallback, never a hand-entered product — so a caller that pushes
+        with stockcode gets a symmetric answer and a custom product's id is
+        never handed to a producer (finalisation 16-R8)."""
+        return find_ingested_product(self.repository, store_id, stockcode, name)
 
     def _stamp_linked_stock_items(
         self,
         results: list[_LinkStatusResult],
         resolved: list[tuple[int, Product]],
     ) -> None:
-        """One bulk pass over the StockItemProduct join, then a single
-        StockItem lookup for the names. Mirrors the shape of
-        `products.get_products.stamp_linked_stock_items` — same table, same
-        (product → stock-item) mapping. Not called through the shared
-        helper because that one mutates ProductDto objects; the shape here
-        is a `_LinkStatusResult` dataclass."""
+        """Fill in the linked stock item for every resolved product, through
+        the one product→stock-item join reader the products list, best-deals
+        and the price-drop alert already share (`product_links.
+        linked_stock_items`). This used to be a private 40-line copy of that
+        join (finalisation 16-R7)."""
         if not resolved:
             return
-        product_ids = [p.id for _, p in resolved]
-        assoc = db.metadata.tables["StockItemProduct"]
-        rows = self.repository.session.execute(
-            select(assoc.c.product_id, assoc.c.stock_item_id)
-            .where(assoc.c.product_id.in_(product_ids))
-        ).all()
-        product_to_stock: dict[UUID, UUID] = {row[0]: row[1] for row in rows}
-        stock_ids = list({sid for sid in product_to_stock.values()})
-        stock_lookup: dict[UUID, StockItem] = {}
-        if stock_ids:
-            items = self.repository.get(StockItem).all(
-                EntityField(StockItem, "id").in_(stock_ids)
-            )
-            stock_lookup = {s.id: s for s in items}
-
+        links = linked_stock_items(self.repository, [p.id for _, p in resolved])
         for idx, product in resolved:
-            stock_id = product_to_stock.get(product.id)
-            if stock_id is None:
+            link = links.get(product.id)
+            if link is None:
                 continue
-            item = stock_lookup.get(stock_id)
             results[idx] = _LinkStatusResult(
                 ref=results[idx].ref,
                 product_id=results[idx].product_id,
-                linked_stock_item_id=str(stock_id),
-                linked_stock_item_name=item.name if item else None,
+                linked_stock_item_id=str(link.stock_item_id),
+                linked_stock_item_name=link.name,
             )
 
 

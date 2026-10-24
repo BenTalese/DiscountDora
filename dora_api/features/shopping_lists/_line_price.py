@@ -24,6 +24,40 @@ from dora_api.domain import units
 from dora_api.domain.entities.shopping_list import ShoppingListLine
 
 
+def lifetime_spend(session) -> float:
+    """Lifetime spend: ticked lines on completed lists, priced `actual` first
+    and `picked_offer` second, times quantity — the same ladder
+    `line_paid_unit_price` applies per line and `/reports/spend-by-store`
+    applies per row. One home for the aggregate so About and Reports can't
+    disagree (R-003; finalisation 08-R6). Lines with neither price are
+    skipped, not counted as zero — a floor, which is the honest reading of
+    "spend *tracked*".
+
+    R-005 carve-out: a single-number aggregate over two tables is Core SQL
+    (the documented reports pattern), not a repository walk of every line.
+    """
+    from sqlalchemy import func, select
+
+    from dora_api.domain.entities.shopping_list import (
+        SHOPPING_LIST_STATUS_DONE, ShoppingList,
+    )
+
+    unit_price = func.coalesce(
+        ShoppingListLine.actual_unit_price, ShoppingListLine.picked_offer_price,
+    )
+    stmt = (
+        select(func.sum(unit_price * func.coalesce(ShoppingListLine.quantity, 1)))
+        .select_from(ShoppingListLine)
+        .join(ShoppingList, ShoppingList.id == ShoppingListLine.shopping_list_id)
+        .where(
+            ShoppingList.status == SHOPPING_LIST_STATUS_DONE,
+            ShoppingListLine.is_ticked == True,  # noqa: E712
+            unit_price.isnot(None),
+        )
+    )
+    return round(float(session.execute(stmt).scalar() or 0.0), 2)
+
+
 def line_paid_unit_price(line: ShoppingListLine) -> float | None:
     """The per-unit price actually paid for a shopping line, via the standard
     ladder: the user-entered ``actual_unit_price`` wins, else the

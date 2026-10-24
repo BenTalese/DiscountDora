@@ -38,6 +38,7 @@ from dora_api.domain.entities.nutrition_food import (
     NutritionFood,
 )
 from dora_api.domain.entities.nutrition_portion import NutritionPortion
+from dora_api.features.help.version_info import GITHUB_URL
 from dora_api.features.nutrition.food_categories import normalise_category
 from dora_api.features.nutrition.nutrients import USDA_NUTRIENT_ATTRS
 from dora_api.persistence.field import EntityField as Field
@@ -77,7 +78,7 @@ _WANTED_NUTRIENTS: Dict[Tuple[str, str], str] = USDA_NUTRIENT_ATTRS
 _FETCH_TIMEOUT_SECONDS = 120
 # Identify honestly: this call goes to USDA, so pointing the contact URL at
 # Open Food Facts (copy-paste from the OFF client) was simply wrong.
-_USER_AGENT = "DashyDora (nutrition dataset import; +https://github.com/BenTalese/DiscountDora)"
+_USER_AGENT = f"DashyDora (nutrition dataset import; +{GITHUB_URL})"
 
 
 @dataclass(frozen=True, slots=True)

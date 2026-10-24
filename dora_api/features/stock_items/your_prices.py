@@ -41,6 +41,7 @@ from dora_api.domain.entities.product_offer import ProductOffer
 from dora_api.domain.entities.stock_item_price_observation import \
     StockItemPriceObservation
 from dora_api.domain.entities.store import Store
+from dora_api.features.app_settings.access import get_or_create_app_setting
 from dora_api.persistence.field import EntityField
 
 
@@ -54,10 +55,9 @@ def measurement_system_from_repo(repo) -> str:
     measures in and which denominator its shelf prices are quoted in are one
     fact, and holding it twice is how they drift (R-003).
     """
-    rows = repo.get(AppSetting).all()
-    if not rows:
-        return units.METRIC
-    return getattr(rows[0], "measurement_system", units.METRIC) or units.METRIC
+    # Through the one accessor (R-003 / FU-759 class — finalisation 06-R15);
+    # this used to be a second `AppSetting.all()[0]` read.
+    return get_or_create_app_setting(repo).measurement_system or units.METRIC
 
 
 # Tunable constants — module-level so they're discoverable for review.

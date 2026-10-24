@@ -97,8 +97,9 @@ it useful, [donations](#-support-dora) are hugely appreciated but never required
 
 ## 🚀 Get started
 
-There's no packaged release yet, so run it locally for development or spin up the
-Docker stack for a closer-to-production look.
+Run it locally for development, or spin up the Docker stack (`compose.yml`, SQLite by default) for a
+closer-to-production look. The Docker image and the desktop bundles are built from `Dockerfile` /
+`packaging/`; the Release workflow that publishes them is checked in but currently disabled (see *Releasing*).
 
 ### Prerequisites
 
@@ -132,7 +133,7 @@ cp web_app/.env.example web_app/.env
 
 ### 2 — Backend (Python / Flask)
 
-**Start Postgres first** (the standard datastore — see Decision 5 in `docs/01_charter/RECONCILED_FINISHING_PLAN.md`):
+**Start Postgres first** (the dev and managed-instance datastore — Decision 5 in `docs/01_charter/RECONCILED_FINISHING_PLAN.md`; the single-box Docker image in `compose.yml` runs on SQLite by default, and both stay supported):
 
 ```bash
 docker compose -f compose.dev.yml up -d postgres
@@ -199,8 +200,9 @@ docker compose up --build
 
 Ports exposed:
 - `5170` — dora_api
-- `5172` — merchant_api
 - `5174` — SPA (served by nginx)
+
+(The retailer-scraping companion is a separate stack in the sibling `dora-companion` repo; Dora never calls out to it.)
 
 Data is persisted in named Docker volumes (`dora_data`, `dora_cache`, `dora_logs`). Use `docker compose down -v` to clear them.
 
@@ -276,7 +278,7 @@ Auto-detects Apple Silicon vs Intel. Requires Xcode command-line tools. Data per
 
 ### Releasing (manual, push-the-button)
 
-CI runs on every push and PR ([.github/workflows/ci.yml](.github/workflows/ci.yml)) — frontend lint + typecheck + build, dora_api pytest, merchant + emailer compile-check. **CI never publishes anything.** Releases are explicit:
+The CI and Release workflows ([.github/workflows/ci.yml](.github/workflows/ci.yml), [release.yml](.github/workflows/release.yml)) are checked in but **commented out** for now (owner policy: GitHub free-tier minutes during rapid development — FU-721). When revived, CI runs frontend lint + typecheck + vitest + build and the `dora_api` pytest suite on every push and PR, and **never publishes anything**. Releases are explicit:
 
 1. Land your changes on `main` and confirm CI is green for that SHA.
 2. Update the `## [Unreleased]` block in `CHANGELOG.md` — whatever sits there becomes the GitHub Release body.

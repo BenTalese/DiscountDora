@@ -210,7 +210,6 @@
             console.warn('Failed to load unlinked ingredients', err);
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: 'Could not load unlinked ingredients.',
             });
         } finally {
@@ -229,7 +228,6 @@
             );
             $q.notify({
                 type: 'positive',
-                position: 'bottom-right',
                 message:
                     result.linked_count === 1
                         ? `Linked "${group.raw_text}" in 1 recipe.`
@@ -242,7 +240,6 @@
             console.warn('Bulk-link failed', err);
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: 'Could not link. Try again in a moment.',
             });
         } finally {
@@ -280,7 +277,6 @@
             );
             $q.notify({
                 type: 'positive',
-                position: 'bottom-right',
                 message:
                     result.linked_count === 1
                         ? `Linked "${group.raw_text}" in 1 recipe.`
@@ -293,7 +289,6 @@
             console.warn('Link after create failed', err);
             $q.notify({
                 type: 'negative',
-                position: 'bottom-right',
                 message: 'Item created, but it could not be linked. Pick it above and press Link.',
             });
         } finally {
